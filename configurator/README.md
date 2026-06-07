@@ -32,7 +32,7 @@ The window loads the current config, lets you tweak values across the tabbed sec
 - **Drawing, Arrow, Performance, UI, Board, Capture** – numeric fields with inline validation, toggles, and color editors (RGBA/RGB components).
 - **Default color** – toggle between named colors and custom RGB triples.
 - **Keybindings** – per-action comma-separated shortcut lists that map to `KeybindingsConfig`.
-- **Session** – persistence settings plus named-session catalog management: rename display labels, reveal files, forget metadata, and clear saved data when no overlay/background service is active.
+- **Session** – persistence settings plus named-session catalog management. Rename display labels, reveal files, and forget metadata without touching files. Duplicate, Move, and Clear are disabled while an overlay, manually started daemon, or background service is active.
 - Live dirty-state indicator plus status banner for success/error details.
 
 ## Building Releases

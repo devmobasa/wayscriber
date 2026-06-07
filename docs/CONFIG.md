@@ -892,16 +892,28 @@ Use the CLI helpers for quick maintenance:
 - `wayscriber --daemon --session-file ~/Documents/lecture-04.wayscriber-session` starts a daemon whose overlay activations use that named session target.
 - `wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session` asks the running daemon to launch a hidden overlay with that named session target. If the overlay is already visible with a different target, hide it before switching.
 - `wayscriber --session-info --session-file <path>` and `wayscriber --clear-session --session-file <path>` inspect or remove only that named file and its sidecars.
-- The configurator Session tab also shows recent named sessions from the catalog. It can rename catalog display labels, reveal file locations, and forget catalog metadata without touching files. When no overlay/background service is active, it can duplicate a session by copying its primary file to a new target, move inactive session files and their non-lock sidecars to a new path, and clear saved data.
+
+The overlay Session panel lives in the side toolbar's Settings drawer:
+
+- `Open` loads an existing named session, saves dirty current data first when needed, and records the target in the recent catalog.
+- `Save As` writes the current overlay to another named session and switches the active target. It appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
+- `Info` reports the active session file size, board shape counts, and history status.
+- `Clear` writes a durable empty session boundary for the active target.
+- Recent session rows reopen other named sessions. If a recent target is missing, Wayscriber removes that stale catalog entry after the failed open.
+- `Manager` opens the configurator. Overlay Open/Save As dialogs use `zenity` or `kdialog`.
+
+The configurator Session tab also shows recent named sessions from the catalog, recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog display labels, reveal file locations, and forget catalog metadata without touching files. Duplicate, Move, and Clear are disabled while an overlay, manually started daemon, or background service is active.
 
 Session overrides and recovery:
 
 - CLI flags: `--resume-session` forces persistence on, `--no-resume-session` forces it off for the current run. The environment variable `WAYSCRIBER_RESUME_SESSION=1/0` does the same.
-- `--session-file` implies session persistence for that overlay run and conflicts with `--no-resume-session`. Named sessions use the exact selected file path; Wayscriber does not create missing parent directories or fall back to configured storage.
+- `--session-file` implies session persistence for that overlay run and conflicts with `--no-resume-session`. Named sessions use the exact selected file path; Wayscriber does not create missing parent directories or fall back to configured storage. Foreground/open targets reject directories, symlinks, and special files.
 - Size fallback: if visible drawings fit but persisted undo/redo history would exceed save or restore safety limits, autosave saves the drawings and warns once per run that history was trimmed or omitted.
 - Image paste guard: when a pasted image would push visible session data over `max_file_size_mb`, Wayscriber blocks the paste and points you to `[session] max_file_size_mb`; when only undo history is at risk, the paste is allowed with a warning.
 - Load safety: compressed session files are checked against an internal expanded-size cap while saving and loading. If an existing file expands beyond that cap, wayscriber refuses to load it, leaves the primary session file unchanged, and avoids overwriting it until session data changes.
 - Recovery: if a session file is corrupt or cannot be parsed/decompressed, wayscriber logs a warning, writes a `.bak` copy of the bad file, removes the corrupt file, and continues with defaults. Overrides above still apply after recovery.
+
+For end-to-end CLI, overlay, and configurator flows, see [`examples/session-manager.md`](../examples/session-manager.md).
 
 ### `[keybindings]` - Custom Keybindings
 

@@ -224,9 +224,12 @@ For distro-specific package details, see [Installation](#installation). For keyb
 - Copy to clipboard or save to file
 - Uses `grim`, `slurp`, `wl-clipboard` (installed automatically by deb/rpm/AUR packages; fallback: xdg-desktop-portal)
 
-### Session Persistence
-- Opt-in per board/monitor canvas + tool state restore
-- CLI overrides: `--resume-session` / `--no-resume-session`
+### Session Manager & Persistence
+- Session persistence is enabled by default for boards, undo/redo history, and tool state
+- Per-output default sessions, plus named session files with `--session-file`
+- Overlay Session panel: Open, Save As, Info, Clear, recent sessions, and Manager
+- Configurator Session tab: rename/reveal/forget catalog entries, plus duplicate/move/clear inactive session files
+- CLI overrides: `--resume-session`, `--no-resume-session`, `--session-info`, and `--clear-session`
 - Tray checkmark flips config on disk
 
 ### Toolbars & UI
@@ -788,7 +791,7 @@ ui_animation_fps = 30
 # named boards + backgrounds
 ```
 
-### Session Persistence
+### Session Manager & Persistence
 
 Enable via configurator (<kbd>F11</kbd> → Session tab), CLI flags, or the tray checkmark (writes to config).
 
@@ -798,15 +801,19 @@ wayscriber --no-resume-session   # disable resume for this run
 wayscriber --session-info        # inspect saved sessions
 wayscriber --clear-session       # remove stored boards
 wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session
+wayscriber --freeze --session-file ~/Documents/lecture-04.wayscriber-session
 wayscriber --daemon --session-file ~/Documents/lecture-04.wayscriber-session
 wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session
 wayscriber --session-info --session-file ~/Documents/lecture-04.wayscriber-session
+wayscriber --clear-session --session-file ~/Documents/lecture-04.wayscriber-session
 ```
 
 Notes:
 - When `restore_tool_state` is enabled (default), the last-used tool settings (including arrow head placement) override config defaults on startup. Disable it in the Session tab or clear the session to force config values.
-- `--session-file` uses exactly the selected file, implies persistence for that overlay run, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
-- The configurator Session tab can manage recent named sessions: rename catalog labels, reveal files, and forget metadata. When no overlay/background service is active, it can duplicate a session by copying its primary file, move inactive session files, and clear saved data.
+- `--session-file` uses exactly the selected file, implies persistence for that overlay run, rejects directories/symlinks/special files, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
+- The overlay Session panel lives in the side toolbar's Settings drawer. It can open an existing named session, save the current overlay as another named session, show session info, clear the active session, reopen recent named sessions, and jump to the configurator. The Open/Save As dialogs use `zenity` or `kdialog`; Save As appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
+- The configurator Session tab manages recent named sessions recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog labels, reveal files, and forget metadata without touching files. Duplicate, Move, and Clear are disabled while an overlay, manually started daemon, or background service is active.
+- See [Session manager examples](examples/session-manager.md) for complete CLI, overlay, and configurator workflows.
 
 ### Tablet/Stylus Support
 
@@ -922,7 +929,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Native Wayland layer-shell
 - [x] Daemon mode with system tray
 - [x] Multiple customizable boards/backgrounds
-- [x] Session persistence (with CLI override + tray config toggle)
+- [x] Session manager and persistence (named sessions, overlay actions, configurator catalog, CLI override, tray config toggle)
 - [x] Highlighter & eraser tools
 - [x] Additional shapes (filled shapes)
 - [x] Color picker

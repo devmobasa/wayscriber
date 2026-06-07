@@ -686,6 +686,10 @@ storage = "auto"
 
 # CLI note: --session-file PATH bypasses this storage directory for that run and
 # saves to exactly PATH, without creating missing parent directories.
+# The overlay Session panel can Open, Save As, inspect, clear, and reopen recent
+# named sessions. Save As appends .wayscriber-session when no extension is used.
+# The configurator Session tab can rename/reveal/forget catalog entries, and can
+# duplicate, move, or clear inactive session files when no overlay/daemon is running.
 
 # Store separate sessions per monitor (set false to reuse one file per display)
 per_output = true

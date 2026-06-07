@@ -7,7 +7,7 @@ This document explains how the application boots, how user input travels through
 ## 1. Execution Flow From `main.rs`
 
 1. **CLI parsing (`src/main.rs`)**
-   - Uses `clap` to parse `--daemon`, `--active`, `--mode`, and session management flags.
+   - Uses the manual parser in `src/cli.rs` for `--daemon`, `--active`, `--mode`, named session, and session maintenance flags.
    - Verifies `WAYLAND_DISPLAY` when a Wayland session is required.
 
 2. **Mode selection**
@@ -17,6 +17,7 @@ This document explains how the application boots, how user input travels through
 
 3. **Shared subsystems automatically pulled in**
    - `config`: loads user settings, key bindings, and drawing defaults.
+   - `session`: builds configured or named session targets, validates `--session-file`, loads saved state, and records named-session catalog entries.
 
 ---
 
@@ -133,7 +134,25 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 7. Utility Modules
+## 7. Session Persistence and Named Session Manager
+
+**Modules:**
+- `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, locks, catalog metadata, and inactive file operations.
+- `src/backend/wayland/session/`: runtime Open, Save As, and Clear transactions for the active overlay.
+- `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session panel routing for Open, Save As, Info, Clear, recent sessions, and configurator launch.
+- `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target.
+
+**Flow:**
+1. CLI `--session-file` creates a named target instead of using configured storage. Named targets force persistence for that run, reject `--no-resume-session`, require an existing parent directory for foreground/open flows, and reject directories, symlinks, and special files.
+2. Backend startup builds `SessionOptions` from config plus any named target, then session loading restores boards/history/tool state before rendering begins.
+3. Runtime Open first saves dirty current data when needed, loads the candidate named session without mutating it, replaces board state only after a valid load, and records the open in the named-session catalog.
+4. Runtime Save As validates the target, prompts before replacing existing artifacts, writes the snapshot, switches the active target, and records the save in the catalog.
+5. Runtime Clear writes a durable empty-session boundary so older backup or recovery artifacts do not restore stale drawings.
+6. The configurator reads the same catalog for inactive-session management: rename/reveal/forget metadata, duplicate primary files, move non-lock sidecars, and clear saved data when daemon/overlay locks are absent.
+
+---
+
+## 8. Utility Modules
 
 - **`src/draw/`**: Shape definitions, Cairo helpers, arrow geometry, fonts, and the `CanvasSet` abstraction (with undo/history per board mode).
 - **`src/ui.rs`**: Composes the status bar and help overlay using Cairo.
@@ -143,7 +162,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 8. Directory Map (excluding configurator)
+## 9. Directory Map (excluding configurator)
 
 | Path | Role |
 |------|------|
@@ -155,19 +174,21 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/ui.rs` | Status/help overlays. |
 | `src/capture/` | Screenshot pipeline (manager, dependencies, sources, clipboard/file helpers). |
 | `src/config/` | Config parsing, defaults, keybinding map. |
+| `src/session/` | Configured and named session persistence, snapshots, sidecars, locks, and catalog metadata. |
 | `src/notification.rs` | Desktop notifications for capture results. |
 | `src/util.rs` | Shared math/color utilities. |
 | `tests/` | CLI + rendering integration tests. |
 
 ---
 
-## 9. Putting It Together
+## 10. Putting It Together
 
 1. **Launch** via CLI → choose daemon vs active.
 2. **Daemon** provides lifecycle management, tray integration, and toggles the backend on demand.
 3. **Backend** sets up Wayland surfaces and loops, forwarding input to `InputState`.
 4. **InputState + draw/ui** update the overlay contents and request renders.
 5. **Capture** subsystem handles screenshot actions asynchronously and notifies the user.
-6. **Config** module ensures user preferences are honored everywhere.
+6. **Session** loads and saves configured or named session state, including runtime Open/Save As/Clear transactions.
+7. **Config** module ensures user preferences are honored everywhere.
 
 Use this document to trace any feature: locate the entry point (CLI, tray, keybinding), follow it through the backend/input/capture stacks, and consult the relevant modules listed above for details.
