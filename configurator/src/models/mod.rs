@@ -5,6 +5,7 @@ pub mod daemon;
 pub mod error;
 pub mod fields;
 pub mod keybindings;
+pub(crate) mod search;
 pub mod session;
 pub mod tab;
 pub mod util;
@@ -32,5 +33,6 @@ pub use fields::{
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use keybindings::KeybindingField;
+pub(crate) use search::SearchQuery;
 pub use session::{SessionCatalogActionResult, SessionCatalogItem, SessionCatalogState};
 pub use tab::{KeybindingsTabId, TabId, UiTabId};

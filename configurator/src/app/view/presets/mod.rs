@@ -4,13 +4,17 @@ use wayscriber::config::{PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 
 use crate::messages::Message;
 
+use super::super::search::{SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
 use super::widgets::{SMALL_PICKER_WIDTH, labeled_control};
 
 mod slot;
 
 impl ConfiguratorApp {
-    pub(super) fn presets_tab(&self) -> Element<'_, Message> {
+    pub(super) fn presets_tab(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {
+        let show_all = search.is_none_or(TabSearchSummary::show_all);
+        let show_controls =
+            search.is_none_or(|search| search.area_matches(SearchArea::PresetControls));
         let slot_counts: Vec<usize> = (PRESET_SLOTS_MIN..=PRESET_SLOTS_MAX).collect();
         let slot_picker = pick_list(
             slot_counts,
@@ -28,16 +32,28 @@ impl ConfiguratorApp {
 
         let mut column = Column::new()
             .spacing(12)
-            .push(text("Preset Slots").size(20))
-            .push(slot_count_control);
+            .push(text("Preset Slots").size(20));
+
+        if show_controls || show_all {
+            column = column.push(slot_count_control);
+        }
 
         let slot_limit = self
             .draft
             .presets
             .slot_count
             .clamp(PRESET_SLOTS_MIN, PRESET_SLOTS_MAX);
-        for slot_index in 1..=slot_limit {
-            column = column.push(self.preset_slot_section(slot_index));
+        let slots: Vec<usize> = if show_all {
+            (1..=slot_limit).collect()
+        } else {
+            search
+                .map(TabSearchSummary::preset_slots)
+                .unwrap_or_default()
+                .to_vec()
+        };
+
+        for slot_index in slots {
+            column = column.push(self.preset_slot_section_for_search(slot_index, !show_all));
         }
 
         scrollable(column).into()

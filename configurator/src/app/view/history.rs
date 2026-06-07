@@ -5,6 +5,7 @@ use iced::widget::{column, container, row, scrollable, text};
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
+use super::super::search::{SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
 use super::widgets::{
     labeled_input_state, labeled_input_with_feedback, toggle_row, validate_u64_range,
@@ -12,7 +13,11 @@ use super::widgets::{
 };
 
 impl ConfiguratorApp {
-    pub(super) fn history_tab(&self) -> Element<'_, Message> {
+    pub(super) fn history_tab(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {
+        let show_main = search.is_none_or(|search| search.area_matches(SearchArea::HistoryMain));
+        let show_custom =
+            search.is_none_or(|search| search.area_matches(SearchArea::HistoryCustom));
+        let show_custom_toggle = custom_toggle_visible(show_main, show_custom);
         let custom_enabled = self.draft.history_custom_section_enabled;
         let custom_section = container(
             column![
@@ -81,9 +86,9 @@ impl ConfiguratorApp {
         .padding(12)
         .style(theme::Container::Box);
 
-        scrollable(
-            column![
-                text("History").size(20),
+        let mut content = column![text("History").size(20)].spacing(12);
+        if show_main {
+            content = content.push(
                 row![
                     labeled_input_with_feedback(
                         "Undo all delay (ms)",
@@ -103,16 +108,34 @@ impl ConfiguratorApp {
                     )
                 ]
                 .spacing(12),
-                toggle_row(
-                    "Enable custom undo/redo section",
-                    self.draft.history_custom_section_enabled,
-                    self.defaults.history_custom_section_enabled,
-                    ToggleField::HistoryCustomSectionEnabled,
-                ),
-                custom_section,
-            ]
-            .spacing(12),
-        )
-        .into()
+            );
+        }
+        if show_custom_toggle {
+            content = content.push(toggle_row(
+                "Enable custom undo/redo section",
+                self.draft.history_custom_section_enabled,
+                self.defaults.history_custom_section_enabled,
+                ToggleField::HistoryCustomSectionEnabled,
+            ));
+        }
+        if show_custom {
+            content = content.push(custom_section);
+        }
+
+        scrollable(content).into()
+    }
+}
+
+fn custom_toggle_visible(show_main: bool, show_custom: bool) -> bool {
+    show_main || show_custom
+}
+
+#[cfg(test)]
+mod tests {
+    use super::custom_toggle_visible;
+
+    #[test]
+    fn custom_search_results_keep_custom_toggle_visible() {
+        assert!(custom_toggle_visible(false, true));
     }
 }

@@ -11,7 +11,11 @@ use crate::messages::Message;
 use crate::app::state::ConfiguratorApp;
 
 impl ConfiguratorApp {
-    pub(super) fn preset_slot_section(&self, slot_index: usize) -> Element<'_, Message> {
+    pub(super) fn preset_slot_section_for_search(
+        &self,
+        slot_index: usize,
+        force_expanded: bool,
+    ) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
             return Space::new()
                 .width(Length::Shrink)
@@ -40,7 +44,8 @@ impl ConfiguratorApp {
             .preset_collapsed
             .get(slot_index.saturating_sub(1))
             .copied()
-            .unwrap_or(false);
+            .unwrap_or(false)
+            && !force_expanded;
         if is_collapsed {
             return container(section)
                 .padding(12)

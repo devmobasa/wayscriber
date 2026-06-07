@@ -70,6 +70,10 @@ impl ConfiguratorApp {
             Message::SessionCatalogActionCompleted(result) => {
                 self.handle_session_catalog_action_completed(result)
             }
+            Message::SearchChanged(value) => self.handle_search_changed(value),
+            Message::SearchCleared => self.handle_search_cleared(),
+            Message::SearchFocusRequested => self.handle_search_focus_requested(),
+            Message::KeyboardEvent(event) => self.handle_keyboard_event(event),
             Message::TabSelected(tab) => self.handle_tab_selected(tab),
             Message::UiTabSelected(tab) => self.handle_ui_tab_selected(tab),
             Message::KeybindingsTabSelected(tab) => self.handle_keybindings_tab_selected(tab),

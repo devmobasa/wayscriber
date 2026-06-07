@@ -6,13 +6,14 @@ use crate::models::{
     PressureThicknessEditModeOption, PressureThicknessEntryModeOption, TextField, ToggleField,
 };
 
+use super::super::search::TabSearchSummary;
 use super::super::state::ConfiguratorApp;
 use super::widgets::{
     labeled_control, labeled_input_with_feedback, toggle_row, validate_f64_range,
 };
 
 impl ConfiguratorApp {
-    pub(super) fn tablet_tab(&self) -> Element<'_, Message> {
+    pub(super) fn tablet_tab(&self, _search: Option<&TabSearchSummary>) -> Element<'_, Message> {
         let edit_mode = pick_list(
             PressureThicknessEditModeOption::list(),
             Some(self.draft.tablet_pressure_thickness_edit_mode),

@@ -8,11 +8,13 @@ use super::super::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(super) fn handle_tab_selected(&mut self, tab: TabId) -> Task<Message> {
         self.active_tab = tab;
+        self.align_active_tabs_for_search();
         Task::none()
     }
 
     pub(super) fn handle_ui_tab_selected(&mut self, tab: UiTabId) -> Task<Message> {
         self.active_ui_tab = tab;
+        self.align_active_tabs_for_search();
         Task::none()
     }
 
@@ -21,6 +23,7 @@ impl ConfiguratorApp {
         tab: KeybindingsTabId,
     ) -> Task<Message> {
         self.active_keybindings_tab = tab;
+        self.align_active_tabs_for_search();
         Task::none()
     }
 
