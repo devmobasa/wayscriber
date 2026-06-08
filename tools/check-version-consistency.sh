@@ -14,6 +14,10 @@ Checks that release/version metadata agrees across:
   * packaging/.SRCINFO
   * flake.nix
 
+Repo packaging metadata is a release template and must use sha256sums=('SKIP').
+Release/AUR automation writes the real source archive checksum after the tag
+exists.
+
 When --release-version is provided, it must either match Cargo.toml exactly
 or be a packaging hotfix version of the Cargo version (for example, Cargo
 0.9.19 with release 0.9.19.1). Hotfix releases require packaging/PKGBUILD
@@ -77,6 +81,7 @@ release_version = sys.argv[2] or None
 errors = []
 
 version_re = re.compile(r"^\d+\.\d+\.\d+(?:\.\d+)?$")
+checksum_re = re.compile(r"^[0-9a-fA-F]{64}$")
 
 def read_text(path):
     return (root / path).read_text(encoding="utf-8")
@@ -112,12 +117,46 @@ def srcinfo_version(path):
     match = re.search(r"^\s*pkgver = (.+)$", read_text(path), re.MULTILINE)
     return match.group(1).strip() if match else None
 
+def pkgbuild_sha256sums(path):
+    match = re.search(r"(?ms)^sha256sums=\((.*?)\)", read_text(path))
+    if not match:
+        return []
+
+    values = []
+    for value_match in re.finditer(r"'([^']*)'|\"([^\"]*)\"|(\S+)", match.group(1)):
+        value = next(group for group in value_match.groups() if group is not None)
+        values.append(value.strip())
+    return values
+
+def srcinfo_sha256sums(path):
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"^\s*sha256sums = (.+)$", read_text(path), re.MULTILINE)
+    ]
+
 def is_hotfix_of(version, base):
     return re.fullmatch(re.escape(base) + r"\.\d+", version) is not None
 
 def require_equal(label, actual, expected):
     if actual != expected:
         errors.append(f"{label}: expected {expected}, got {actual or 'missing'}")
+
+def require_template_sha256sums(label, values):
+    if values == ["SKIP"]:
+        return
+
+    if not values:
+        errors.append(f"{label}: expected SKIP template checksum, got missing")
+        return
+
+    actual = ", ".join(values)
+    if any(checksum_re.fullmatch(value) for value in values):
+        errors.append(
+            f"{label}: expected SKIP template checksum, got fixed SHA {actual}; "
+            "release/AUR automation writes the real checksum after the tag exists"
+        )
+    else:
+        errors.append(f"{label}: expected SKIP template checksum, got {actual}")
 
 root_version = cargo_version("Cargo.toml")
 config_version = cargo_version("configurator/Cargo.toml")
@@ -153,6 +192,12 @@ else:
 
 require_equal("packaging/PKGBUILD pkgver", packaging_version, expected_packaging_version)
 require_equal("packaging/.SRCINFO pkgver", srcinfo_pkgver, expected_packaging_version)
+require_template_sha256sums(
+    "packaging/PKGBUILD sha256sums", pkgbuild_sha256sums("packaging/PKGBUILD")
+)
+require_template_sha256sums(
+    "packaging/.SRCINFO sha256sums", srcinfo_sha256sums("packaging/.SRCINFO")
+)
 
 flake_text = read_text("flake.nix")
 if "builtins.fromTOML (builtins.readFile ./Cargo.toml)" not in flake_text:
@@ -164,5 +209,8 @@ if errors:
         print(f"- {error}", file=sys.stderr)
     sys.exit(1)
 
-print(f"Version consistency OK: Cargo={root_version}, packaging={expected_packaging_version}")
+print(
+    f"Version consistency OK: Cargo={root_version}, "
+    f"packaging={expected_packaging_version}, checksum=SKIP"
+)
 PY

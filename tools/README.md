@@ -53,6 +53,7 @@ Helper scripts for development, installation, packaging, and release workflows.
 Packaging-only hotfix policy:
 - Normal releases use one version everywhere: Cargo, package metadata, Git tags, and artifacts all use `X.Y.Z`.
 - Hotfix releases may use `X.Y.Z.N` only when the Cargo version is still `X.Y.Z`. In that case, `packaging/PKGBUILD`, `packaging/.SRCINFO`, release artifacts, and AUR metadata use `X.Y.Z.N`; Cargo manifests and `flake.nix` stay on `X.Y.Z`.
+- Repo `packaging/PKGBUILD` and `packaging/.SRCINFO` are templates and keep `sha256sums=('SKIP')` because the final GitHub tag archive checksum can only be computed after the tag exists. AUR automation writes the real checksum into external AUR metadata.
 - Release builds set `WAYSCRIBER_RELEASE_VERSION`, so packaged binaries report the release artifact version. Nix builds follow Cargo and report `X.Y.Z` unless the Cargo version itself is bumped.
 
 - **create-release-tag.sh** - Create git tag (local only)

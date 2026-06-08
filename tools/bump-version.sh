@@ -15,8 +15,11 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
   * Cargo.lock (via cargo generate-lockfile)
   * configurator/Cargo.lock local package versions
   * flake.nix package version follows Cargo.toml automatically
-  * packaging/PKGBUILD pkgver
+  * packaging/PKGBUILD pkgver and template sha256sums=('SKIP')
   * packaging/.SRCINFO (via makepkg --printsrcinfo)
+
+The repo PKGBUILD is a template: release/AUR automation computes the real
+source archive checksum after the tag exists.
 
 Requires: cargo, jq, makepkg, sed, perl, python3 or python pointing to Python 3.
 EOF
@@ -163,9 +166,10 @@ fi
 
 if [[ -f packaging/PKGBUILD ]]; then
     if $DRY_RUN; then
-        echo "dry-run: would set pkgver=${package_version} in packaging/PKGBUILD and regenerate .SRCINFO"
+        echo "dry-run: would set pkgver=${package_version}, reset sha256sums=SKIP, and regenerate .SRCINFO"
     else
         sed -i "s/^pkgver=.*/pkgver=${package_version}/" packaging/PKGBUILD
+        sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" packaging/PKGBUILD
         (cd packaging && makepkg --printsrcinfo > .SRCINFO)
     fi
 else

@@ -17,6 +17,6 @@ pkgbase = wayscriber
 	depends = grim
 	depends = slurp
 	source = wayscriber-0.9.19.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v0.9.19.tar.gz
-	sha256sums = e0f569b4b6c7d4f1d0735f32cfc71ae4a8304255a51dffb35198ce4f3d86597d
+	sha256sums = SKIP
 
 pkgname = wayscriber

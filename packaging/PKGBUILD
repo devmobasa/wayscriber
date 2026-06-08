@@ -21,7 +21,8 @@ makedepends=(
     'cargo'
 )
 source=("$pkgname-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('e0f569b4b6c7d4f1d0735f32cfc71ae4a8304255a51dffb35198ce4f3d86597d')
+# Template only: release/AUR automation replaces this after the tag exists.
+sha256sums=('SKIP')
 
 prepare() {
     cd "$pkgname-$pkgver"
