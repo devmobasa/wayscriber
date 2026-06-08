@@ -80,9 +80,23 @@ impl ConfiguratorApp {
         iced::widget::operation::focus(SEARCH_INPUT_ID)
     }
 
-    pub(super) fn handle_pointer_pressed(&mut self) -> Task<Message> {
-        self.search_input_focus_hint = false;
+    pub(super) fn handle_startup_search_focus_config_fallback(&mut self) -> Task<Message> {
+        if !self.startup_search_focus_pending {
+            return Task::none();
+        }
+
+        self.startup_search_focus_pending = false;
+        self.handle_search_focus_requested()
+    }
+
+    pub(super) fn handle_search_focus_observed(&mut self, is_focused: bool) -> Task<Message> {
+        self.search_input_focus_hint = is_focused;
         Task::none()
+    }
+
+    pub(super) fn handle_pointer_pressed(&mut self) -> Task<Message> {
+        self.cancel_startup_search_focus();
+        self.observe_search_focus()
     }
 
     pub(super) fn handle_keyboard_event(
@@ -108,20 +122,34 @@ impl ConfiguratorApp {
                 }
             }
             Key::Named(key::Named::Tab) => {
-                self.search_input_focus_hint = false;
-                Task::none()
+                self.cancel_startup_search_focus();
+                self.observe_search_focus()
             }
-            _ => content_scroll_action_for_status(&event, status)
+            _ => content_scroll_action_for_status(&event, status, self.search_input_focus_hint)
                 .map_or_else(Task::none, scroll::ContentScrollAction::task),
         }
+    }
+
+    fn cancel_startup_search_focus(&mut self) {
+        self.startup_search_focus_pending = false;
+    }
+
+    fn observe_search_focus(&self) -> Task<Message> {
+        iced::widget::operation::is_focused(SEARCH_INPUT_ID).map(Message::SearchFocusObserved)
     }
 }
 
 fn content_scroll_action_for_status(
     event: &keyboard::Event,
     status: event::Status,
+    allow_captured_edges: bool,
 ) -> Option<scroll::ContentScrollAction> {
-    (status == event::Status::Ignored)
-        .then(|| scroll::content_scroll_action_for_event(event))
-        .flatten()
+    let action = scroll::content_scroll_action_for_event(event)?;
+    if status == event::Status::Ignored
+        || (allow_captured_edges && action.can_scroll_when_captured())
+    {
+        Some(action)
+    } else {
+        None
+    }
 }

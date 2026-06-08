@@ -49,6 +49,7 @@ pub enum Message {
     SearchChanged(String),
     SearchCleared,
     SearchFocusRequested,
+    SearchFocusObserved(bool),
     KeyboardEvent(iced::keyboard::Event, iced::event::Status),
     PointerPressed,
     TabSelected(TabId),

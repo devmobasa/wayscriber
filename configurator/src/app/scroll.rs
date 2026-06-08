@@ -21,6 +21,10 @@ pub(crate) enum ContentScrollAction {
 }
 
 impl ContentScrollAction {
+    pub(crate) fn can_scroll_when_captured(self) -> bool {
+        matches!(self, ContentScrollAction::Top | ContentScrollAction::Bottom)
+    }
+
     pub(crate) fn task(self) -> Task<Message> {
         match self {
             ContentScrollAction::Top => scroll_by_y(-EDGE_SCROLL_DELTA_Y),

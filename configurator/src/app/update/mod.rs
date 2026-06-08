@@ -73,6 +73,9 @@ impl ConfiguratorApp {
             Message::SearchChanged(value) => self.handle_search_changed(value),
             Message::SearchCleared => self.handle_search_cleared(),
             Message::SearchFocusRequested => self.handle_search_focus_requested(),
+            Message::SearchFocusObserved(is_focused) => {
+                self.handle_search_focus_observed(is_focused)
+            }
             Message::KeyboardEvent(event, status) => self.handle_keyboard_event(event, status),
             Message::PointerPressed => self.handle_pointer_pressed(),
             Message::TabSelected(tab) => self.handle_tab_selected(tab),

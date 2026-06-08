@@ -432,6 +432,9 @@ fn escape_refocus_hint_is_cleared_after_pointer_press() {
     assert!(app.search_input_focus_hint);
 
     let _ = app.handle_pointer_pressed();
+    assert!(app.search_input_focus_hint);
+
+    let _ = app.handle_search_focus_observed(false);
     assert!(!app.search_input_focus_hint);
 
     let _ = app.handle_keyboard_event(
@@ -452,7 +455,84 @@ fn escape_refocus_hint_is_cleared_after_pointer_press() {
 }
 
 #[test]
-fn captured_home_end_do_not_scroll_content() {
+fn startup_config_fallback_consumes_startup_focus_pending_state() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+
+    let _ = app.handle_startup_search_focus_config_fallback();
+
+    assert!(app.search_input_focus_hint);
+    assert!(!app.startup_search_focus_pending);
+}
+
+#[test]
+fn pointer_press_cancels_pending_startup_focus() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+
+    let _ = app.handle_pointer_pressed();
+
+    assert!(!app.startup_search_focus_pending);
+}
+
+#[test]
+fn startup_config_fallback_does_not_focus_after_pointer_press() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+    app.search_input_focus_hint = false;
+
+    let _ = app.handle_pointer_pressed();
+    let _ = app.handle_startup_search_focus_config_fallback();
+
+    assert!(!app.search_input_focus_hint);
+    assert!(!app.startup_search_focus_pending);
+}
+
+#[test]
+fn tab_key_cancels_pending_startup_focus() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+
+    let _ = app.handle_keyboard_event(
+        keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Tab),
+            modified_key: Key::Named(key::Named::Tab),
+            physical_key: key::Physical::Code(key::Code::Tab),
+            location: Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        },
+        Status::Captured,
+    );
+
+    assert!(!app.startup_search_focus_pending);
+}
+
+#[test]
+fn observed_search_focus_allows_captured_home_end() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+    app.search_input_focus_hint = false;
+
+    let _ = app.handle_search_focus_observed(true);
+
+    assert!(app.search_input_focus_hint);
+    for key in [key::Named::Home, key::Named::End] {
+        let event = keyboard::Event::KeyPressed {
+            key: Key::Named(key),
+            modified_key: Key::Named(key),
+            physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+            location: Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        };
+
+        assert!(
+            content_scroll_action_for_status(&event, Status::Captured, app.search_input_focus_hint)
+                .is_some()
+        );
+    }
+}
+
+#[test]
+fn captured_home_end_scroll_only_when_search_focus_hint_is_active() {
     for key in [key::Named::Home, key::Named::End] {
         let event = keyboard::Event::KeyPressed {
             key: Key::Named(key),
@@ -465,10 +545,11 @@ fn captured_home_end_do_not_scroll_content() {
         };
 
         assert_eq!(
-            content_scroll_action_for_status(&event, Status::Captured),
+            content_scroll_action_for_status(&event, Status::Captured, false),
             None
         );
-        assert!(content_scroll_action_for_status(&event, Status::Ignored).is_some());
+        assert!(content_scroll_action_for_status(&event, Status::Captured, true).is_some());
+        assert!(content_scroll_action_for_status(&event, Status::Ignored, false).is_some());
     }
 }
 

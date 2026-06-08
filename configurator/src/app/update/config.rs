@@ -39,7 +39,7 @@ impl ConfiguratorApp {
             }
         }
 
-        Task::none()
+        self.handle_startup_search_focus_config_fallback()
     }
 
     pub(super) fn handle_reload_requested(&mut self) -> Task<Message> {
@@ -196,6 +196,21 @@ mod tests {
             &app.status,
             "Configuration loaded from disk."
         ));
+    }
+
+    #[test]
+    fn handle_config_loaded_uses_startup_search_focus_fallback_once() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+
+        let _ = app.handle_config_loaded(Ok(Arc::new(Config::default())));
+
+        assert!(app.search_input_focus_hint);
+        assert!(!app.startup_search_focus_pending);
+
+        app.search_input_focus_hint = false;
+        let _ = app.handle_config_loaded(Ok(Arc::new(Config::default())));
+
+        assert!(!app.search_input_focus_hint);
     }
 
     #[test]
