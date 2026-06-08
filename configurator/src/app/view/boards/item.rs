@@ -11,11 +11,16 @@ use super::super::super::state::ConfiguratorApp;
 use super::super::widgets::{ColorPickerUi, color_triplet_picker};
 
 impl ConfiguratorApp {
-    pub(super) fn board_item_section(&self, index: usize) -> Element<'_, Message> {
+    pub(super) fn board_item_section_for_search(
+        &self,
+        index: usize,
+        force_expanded: bool,
+    ) -> Element<'_, Message> {
         let Some(item) = self.draft.boards.items.get(index) else {
             return text("Missing board").size(12).into();
         };
-        let is_collapsed = self.boards_collapsed.get(index).copied().unwrap_or(false);
+        let is_collapsed =
+            !force_expanded && self.boards_collapsed.get(index).copied().unwrap_or(false);
 
         let title = if item.name.trim().is_empty() {
             format!("Board {}", index + 1)

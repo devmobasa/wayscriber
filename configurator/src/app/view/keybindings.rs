@@ -3,21 +3,28 @@ use iced::alignment::Horizontal;
 use iced::widget::{Column, Row, button, column, container, row, scrollable, text, text_input};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::KeybindingsTabId;
 
+use super::super::search::TabSearchSummary;
 use super::super::state::ConfiguratorApp;
 use super::widgets::{LABEL_COLUMN_WIDTH, default_value_text};
 
 impl ConfiguratorApp {
-    pub(super) fn keybindings_tab(&self) -> Element<'_, Message> {
-        let tab_bar = KeybindingsTabId::ALL.iter().fold(
+    pub(super) fn keybindings_tab(
+        &self,
+        search: Option<&TabSearchSummary>,
+    ) -> Element<'_, Message> {
+        let tabs = visible_keybinding_tabs(search);
+        let active_tab = active_keybinding_tab(search, self.active_keybindings_tab);
+        let tab_bar = tabs.iter().fold(
             Row::new().spacing(8).align_y(iced::Alignment::Center),
             |row, tab| {
                 let label = tab.title();
                 let button = button(label)
                     .padding([6, 12])
-                    .style(if *tab == self.active_keybindings_tab {
+                    .style(if Some(*tab) == active_tab {
                         theme::Button::Primary
                     } else {
                         theme::Button::Secondary
@@ -29,15 +36,18 @@ impl ConfiguratorApp {
 
         let mut column = Column::new()
             .spacing(8)
-            .push(text("Keybindings (comma-separated)").size(20))
-            .push(tab_bar);
+            .push(text("Keybindings (comma-separated)").size(20));
+
+        if !tabs.is_empty() {
+            column = column.push(tab_bar);
+        }
 
         for entry in self
             .draft
             .keybindings
             .entries
             .iter()
-            .filter(|entry| entry.field.tab() == self.active_keybindings_tab)
+            .filter(|entry| keybinding_row_visible(search, active_tab, entry.field))
         {
             let default_value = self
                 .defaults
@@ -68,6 +78,42 @@ impl ConfiguratorApp {
             );
         }
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
+}
+
+fn visible_keybinding_tabs(search: Option<&TabSearchSummary>) -> Vec<KeybindingsTabId> {
+    match search {
+        Some(summary) if !summary.show_all() => summary.keybinding_tabs().to_vec(),
+        _ => KeybindingsTabId::ALL.to_vec(),
+    }
+}
+
+fn active_keybinding_tab(
+    search: Option<&TabSearchSummary>,
+    preferred: KeybindingsTabId,
+) -> Option<KeybindingsTabId> {
+    match search {
+        Some(summary) if summary.show_all() || summary.keybindings_tab_visible(preferred) => {
+            Some(preferred)
+        }
+        Some(summary) => summary.keybinding_tabs().first().copied(),
+        None => Some(preferred),
+    }
+}
+
+fn keybinding_row_visible(
+    search: Option<&TabSearchSummary>,
+    active_tab: Option<KeybindingsTabId>,
+    field: crate::models::KeybindingField,
+) -> bool {
+    let Some(search) = search else {
+        return active_tab == Some(field.tab());
+    };
+    if search.show_all() {
+        return true;
+    }
+    active_tab == Some(field.tab())
+        && (search.keybinding_field_visible(field)
+            || search.keybinding_tab_title_visible(field.tab()))
 }

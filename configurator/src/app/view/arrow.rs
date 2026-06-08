@@ -1,14 +1,16 @@
 use iced::Element;
 use iced::widget::{column, row, scrollable, text};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
+use super::super::search::TabSearchSummary;
 use super::super::state::ConfiguratorApp;
 use super::widgets::{labeled_input_with_feedback, toggle_row, validate_f64_range};
 
 impl ConfiguratorApp {
-    pub(super) fn arrow_tab(&self) -> Element<'_, Message> {
+    pub(super) fn arrow_tab(&self, _search: Option<&TabSearchSummary>) -> Element<'_, Message> {
         scrollable(
             column![
                 text("Arrow Settings").size(20),
@@ -40,6 +42,7 @@ impl ConfiguratorApp {
             ]
             .spacing(12),
         )
+        .id(CONTENT_SCROLL_ID)
         .into()
     }
 }

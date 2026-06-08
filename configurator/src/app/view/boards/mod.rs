@@ -4,18 +4,23 @@ use crate::app::view::theme;
 use iced::widget::{button, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
+use super::super::search::{SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
 use super::widgets::{
     labeled_control, labeled_input_with_feedback, toggle_row, validate_usize_min,
 };
 
 impl ConfiguratorApp {
-    pub(super) fn boards_tab(&self) -> Element<'_, Message> {
+    pub(super) fn boards_tab(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {
         let defaults = &self.defaults.boards;
         let boards = &self.draft.boards;
+        let show_all = search.is_none_or(TabSearchSummary::show_all);
+        let show_general =
+            search.is_none_or(|search| search.area_matches(SearchArea::BoardsGeneral));
 
         let max_count = labeled_input_with_feedback(
             "Max boards",
@@ -74,18 +79,19 @@ impl ConfiguratorApp {
 
         let add_button = button("Add board").on_press(Message::BoardsAddItem);
 
-        let mut column = column![
-            text("Boards").size(20),
-            max_count,
-            auto_create,
-            show_badge,
-            persist_customizations,
-            default_board_control,
-            row![add_button].spacing(8),
-        ]
-        .spacing(12);
+        let mut column = column![text("Boards").size(20)].spacing(12);
 
-        if self.base_config.boards.is_none() {
+        if show_general || show_all {
+            column = column
+                .push(max_count)
+                .push(auto_create)
+                .push(show_badge)
+                .push(persist_customizations)
+                .push(default_board_control)
+                .push(row![add_button].spacing(8));
+        }
+
+        if (show_general || show_all) && self.base_config.boards.is_none() {
             column = column.push(
                 text("Legacy [board] settings detected. Saving will write [boards].")
                     .size(12)
@@ -93,10 +99,19 @@ impl ConfiguratorApp {
             );
         }
 
-        for index in 0..boards.items.len() {
-            column = column.push(self.board_item_section(index));
+        let indices: Vec<usize> = if show_all {
+            (0..boards.items.len()).collect()
+        } else {
+            search
+                .map(TabSearchSummary::board_indices)
+                .unwrap_or_default()
+                .to_vec()
+        };
+
+        for index in indices {
+            column = column.push(self.board_item_section_for_search(index, !show_all));
         }
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 }

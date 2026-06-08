@@ -23,6 +23,7 @@ pub fn run() -> iced::Result {
         ConfiguratorApp::view,
     )
     .title("Wayscriber Configurator (Iced)")
+    .subscription(ConfiguratorApp::subscription)
     .theme(iced::Theme::Dark)
     .settings(settings)
     .window(window)

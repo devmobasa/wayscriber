@@ -1,0 +1,375 @@
+use crate::models::{TabId, UiTabId};
+
+pub(super) fn tab_aliases(tab: TabId) -> &'static [&'static str] {
+    match tab {
+        TabId::Drawing => &["draw"],
+        TabId::Presets => &["preset", "slot", "tool preset"],
+        TabId::Arrow => &["arrowhead"],
+        TabId::History => &["undo history"],
+        TabId::Performance => &["render performance"],
+        TabId::Ui => &["interface"],
+        TabId::Boards => &["board", "page", "overlay", "whiteboard", "blackboard"],
+        TabId::RenderProfiles => &["render profile", "theme", "color mapping", "color profile"],
+        TabId::Capture => &["capture", "screenshot", "export", "clipboard"],
+        TabId::Daemon => &[
+            "daemon",
+            "background",
+            "background mode",
+            "service",
+            "autostart",
+        ],
+        TabId::Session => &["persistence"],
+        TabId::Keybindings => &["shortcut", "hotkey", "keyboard"],
+        #[cfg(feature = "tablet-input")]
+        TabId::Tablet => &["stylus", "pressure"],
+    }
+}
+
+pub(super) fn tab_scope_aliases(tab: TabId) -> &'static [&'static str] {
+    match tab {
+        TabId::Drawing => &["draw"],
+        TabId::Presets => &["preset", "slot", "tool preset"],
+        TabId::Arrow => &["arrowhead"],
+        TabId::History => &["undo history"],
+        TabId::Performance => &["render performance"],
+        TabId::Ui => &["interface"],
+        TabId::Boards => &["board", "page", "overlay", "whiteboard", "blackboard"],
+        TabId::RenderProfiles => &["render profile", "theme", "color profile"],
+        TabId::Capture => &["screenshot"],
+        TabId::Daemon => &["daemon"],
+        TabId::Session => &[],
+        TabId::Keybindings => &["shortcut", "hotkey", "keyboard"],
+        #[cfg(feature = "tablet-input")]
+        TabId::Tablet => &["stylus", "pressure"],
+    }
+}
+
+pub(super) fn ui_tab_aliases(tab: UiTabId) -> &'static [&'static str] {
+    match tab {
+        UiTabId::Toolbar => &["tools", "palette", "drawer"],
+        UiTabId::StatusBar => &["status", "badge", "indicator"],
+        UiTabId::HelpOverlay => &["help", "quick help", "hints"],
+        UiTabId::ClickHighlight => &["click", "cursor", "highlight"],
+        UiTabId::PresenterMode => &["present", "presentation", "focus"],
+    }
+}
+
+pub(super) fn ui_tab_terms(tab: UiTabId) -> &'static [&'static str] {
+    match tab {
+        UiTabId::Toolbar => UI_TOOLBAR_TERMS,
+        UiTabId::StatusBar => UI_STATUS_BAR_TERMS,
+        UiTabId::HelpOverlay => UI_HELP_OVERLAY_TERMS,
+        UiTabId::ClickHighlight => UI_CLICK_HIGHLIGHT_TERMS,
+        UiTabId::PresenterMode => UI_PRESENTER_MODE_TERMS,
+    }
+}
+
+pub(super) const DRAWING_COLOR_TERMS: &[&str] = &[
+    "color",
+    "pen color",
+    "named color",
+    "rgb color",
+    "custom color name",
+    "rgb",
+];
+pub(super) const DRAWING_DEFAULT_TERMS: &[&str] = &[
+    "drawing",
+    "pen",
+    "thickness",
+    "thickness px",
+    "font size pt",
+    "eraser",
+    "eraser size px",
+    "eraser mode",
+    "polygon",
+    "polygon sides",
+    "shape",
+    "marker",
+    "marker opacity",
+    "fill",
+    "start shapes filled",
+    "enable text background",
+    "hit test",
+    "hit-test tolerance px",
+    "hit-test threshold",
+    "undo stack",
+    "undo stack limit",
+];
+pub(super) const DRAWING_DRAG_TERMS: &[&str] = &["drag", "mouse", "button", "shift", "ctrl", "tab"];
+pub(super) const DRAWING_FONT_TERMS: &[&str] = &[
+    "font",
+    "font family",
+    "font weight",
+    "custom or numeric weight",
+    "font style",
+    "custom style",
+    "text",
+    "family",
+    "weight",
+    "style",
+    "size",
+];
+pub(super) const PRESET_CONTROL_TERMS: &[&str] = &["preset", "visible slots", "slot count"];
+pub(super) const ARROW_TERMS: &[&str] = &[
+    "arrow",
+    "arrowhead",
+    "arrow length px",
+    "arrow angle deg",
+    "place arrowhead at end of line",
+    "length",
+    "angle",
+];
+pub(super) const HISTORY_MAIN_TERMS: &[&str] = &[
+    "history",
+    "undo all delay ms",
+    "redo all delay ms",
+    "undo",
+    "redo",
+    "delay",
+];
+pub(super) const HISTORY_CUSTOM_TERMS: &[&str] = &[
+    "custom",
+    "enable custom undo redo section",
+    "custom section",
+    "custom undo delay ms",
+    "custom redo delay ms",
+    "custom undo steps",
+    "custom redo steps",
+    "undo",
+    "redo",
+    "steps",
+    "delay",
+];
+pub(super) const PERFORMANCE_RENDERING_TERMS: &[&str] = &[
+    "rendering",
+    "buffer",
+    "buffer count",
+    "buffer count 2 4",
+    "vsync",
+    "enable vsync",
+    "fps",
+    "max fps",
+    "max fps vsync off",
+];
+pub(super) const PERFORMANCE_ANIMATION_TERMS: &[&str] = &["animation", "ui animation fps"];
+pub(super) const UI_GENERAL_TERMS: &[&str] = &[
+    "general ui",
+    "preferred output",
+    "gnome fallback",
+    "use fullscreen xdg fallback",
+    "keep open on xdg focus loss",
+    "focus loss",
+    "enable context menu",
+    "show capabilities warning toast",
+    "capabilities warning",
+    "command palette toast",
+];
+pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
+    "toolbar",
+    "layout mode",
+    "pin top toolbar",
+    "pin side toolbar",
+    "use icon-only buttons",
+    "show extended colors",
+    "show presets",
+    "show actions basic",
+    "show zoom actions",
+    "show advanced actions",
+    "show pages section",
+    "show boards section",
+    "show step undo redo",
+    "always show text controls",
+    "show settings section",
+    "show delay sliders",
+    "show marker opacity controls",
+    "show tool preview bubble",
+    "show preset action toasts",
+    "force inline toolbars",
+    "mode overrides",
+    "edit mode",
+    "placement offsets",
+    "top offset x",
+    "top offset y",
+    "side offset x",
+    "side offset y",
+];
+pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
+    "status bar",
+    "show status bar",
+    "show board label",
+    "show page counter",
+    "show overlay badge with status bar",
+    "show frozen badge",
+    "status bar position",
+    "status bar style",
+    "background rgba",
+    "text rgba",
+    "font size",
+    "padding",
+    "dot radius",
+];
+pub(super) const UI_HELP_OVERLAY_TERMS: &[&str] = &[
+    "help overlay",
+    "help overlay style",
+    "filter sections by enabled features",
+    "background rgba",
+    "border rgba",
+    "text rgba",
+    "font family",
+    "font size",
+    "line height",
+    "padding",
+    "border width",
+];
+pub(super) const UI_CLICK_HIGHLIGHT_TERMS: &[&str] = &[
+    "click highlight",
+    "enable click highlight",
+    "show ring while highlight tool is active",
+    "link highlight color to current pen",
+    "force on when entering light mode",
+    "radius",
+    "click highlight radius",
+    "outline thickness",
+    "duration ms",
+    "fill rgba",
+    "outline rgba",
+];
+pub(super) const UI_PRESENTER_MODE_TERMS: &[&str] = &[
+    "presenter mode",
+    "hide status bar",
+    "hide toolbars",
+    "hide tool preview",
+    "close help overlay on entry",
+    "force click highlights on",
+    "tool behavior",
+    "show enter exit toast",
+];
+pub(super) const BOARD_GENERAL_TERMS: &[&str] = &[
+    "boards",
+    "max boards",
+    "default board",
+    "auto-create missing boards",
+    "show board badge",
+    "persist runtime customizations",
+    "add board",
+    "auto create",
+    "badge",
+];
+pub(super) const RENDER_PROFILE_GENERAL_TERMS: &[&str] = &[
+    "render profiles",
+    "startup profile",
+    "canvas export",
+    "canvas export profile",
+    "named export profile",
+    "add profile",
+    "preview canvas",
+    "preview ui",
+];
+pub(super) const CAPTURE_FILE_TERMS: &[&str] = &[
+    "capture",
+    "screenshot",
+    "enable capture shortcuts",
+    "save directory",
+    "filename",
+    "filename template",
+    "capture filename template",
+    "clipboard",
+    "copy to clipboard",
+    "always exit overlay after capture",
+    "format",
+];
+pub(super) const CAPTURE_PDF_TERMS: &[&str] = &[
+    "pdf",
+    "export",
+    "filename template",
+    "pdf filename template",
+    "all boards pdf filename template",
+    "label",
+    "show pdf page labels",
+    "page",
+    "orientation",
+    "fit",
+    "font",
+    "transparent page background",
+    "custom width",
+    "custom height",
+    "content source padding",
+    "label position",
+    "label content",
+    "label template",
+    "label font family",
+    "label font size",
+    "label margin",
+    "label horizontal padding",
+    "label vertical padding",
+    "label text rgba",
+    "label solid background",
+    "label background rgba",
+];
+pub(super) const CAPTURE_PDF_IDENTITY_TERMS: &[&str] = &["pdf", "export", "pdf export"];
+pub(super) const DAEMON_STATUS_TERMS: &[&str] =
+    &["status", "running", "installed", "background mode"];
+pub(super) const DAEMON_SERVICE_TERMS: &[&str] = &[
+    "service",
+    "background mode service",
+    "install",
+    "start",
+    "stop",
+    "background",
+];
+pub(super) const DAEMON_SHORTCUT_TERMS: &[&str] =
+    &["shortcut", "toggle", "keyboard", "super", "ctrl"];
+pub(super) const DAEMON_LIGHT_TERMS: &[&str] = &["light", "passthrough", "freeze", "background"];
+pub(super) const SESSION_PERSISTENCE_TERMS: &[&str] = &[
+    "session",
+    "persistence",
+    "persist transparent mode drawings",
+    "persist whiteboard mode drawings",
+    "persist blackboard mode drawings",
+    "persist undo redo history",
+    "restore tool state on startup",
+    "enable autosave",
+    "per-output persistence",
+    "storage mode",
+    "custom directory",
+    "compression",
+    "autosave idle ms",
+    "autosave interval ms",
+    "autosave failure backoff ms",
+    "max shapes per frame",
+    "max persisted undo depth",
+    "max file size mb",
+    "auto-compress threshold kb",
+    "backup retention count",
+    "save",
+    "autosave",
+    "restore",
+    "storage",
+    "compression",
+    "backup",
+];
+pub(super) const SESSION_CATALOG_TERMS: &[&str] = &[
+    "saved sessions",
+    "catalog",
+    "recent",
+    "rename",
+    "duplicate",
+    "move",
+    "clear",
+];
+#[cfg(feature = "tablet-input")]
+pub(super) const TABLET_TERMS: &[&str] = &[
+    "tablet",
+    "stylus",
+    "enable tablet input",
+    "enable pressure-to-thickness",
+    "auto-switch to eraser",
+    "min thickness",
+    "max thickness",
+    "pressure variation threshold",
+    "pressure thickness scale step",
+    "pressure thickness edit mode",
+    "pressure thickness entry mode",
+    "pressure",
+    "eraser",
+];

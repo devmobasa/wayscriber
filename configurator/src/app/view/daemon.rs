@@ -2,19 +2,39 @@ use crate::app::view::theme;
 use iced::Element;
 use iced::widget::{button, column, row, rule, scrollable, text, text_input};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{DaemonAction, LightShortcutApplyCapability, ShortcutApplyCapability};
 
+use super::super::search::{SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DaemonSection {
+    Install,
+    Shortcut,
+    LightControls,
+    Start,
+    TechnicalDetails,
+}
+
 impl ConfiguratorApp {
-    pub(super) fn daemon_tab(&self) -> Element<'_, Message> {
+    pub(super) fn daemon_tab(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {
         let busy = self.daemon_busy;
         let status_loading = self.daemon_status.is_none();
         let service_installed = self
             .daemon_status
             .as_ref()
             .is_some_and(|status| status.service_installed);
+        let show_all = search.is_none_or(TabSearchSummary::show_all);
+        let show_status =
+            show_all || search.is_some_and(|search| search.area_matches(SearchArea::DaemonStatus));
+        let show_service =
+            show_all || search.is_some_and(|search| search.area_matches(SearchArea::DaemonService));
+        let show_shortcut = show_all
+            || search.is_some_and(|search| search.area_matches(SearchArea::DaemonShortcut));
+        let show_light = show_all
+            || search.is_some_and(|search| search.area_matches(SearchArea::DaemonLightControls));
 
         let mut content = column![].spacing(16);
 
@@ -23,8 +43,9 @@ impl ConfiguratorApp {
             "Run wayscriber in the background and toggle it with a keyboard shortcut.",
         ));
 
-        // ── Overall status summary ──
-        content = content.push(self.daemon_overall_status(busy));
+        if show_status {
+            content = content.push(self.daemon_overall_status(busy));
+        }
 
         // ── Feedback banner ──
         if let Some(feedback) = self.daemon_feedback.as_deref() {
@@ -48,32 +69,26 @@ impl ConfiguratorApp {
                     .size(14)
                     .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             );
-            content = content.push(self.daemon_technical_details(busy));
-            return scrollable(content).into();
+            if show_status || show_service {
+                content = content.push(self.daemon_technical_details(busy));
+            }
+            return scrollable(content).id(CONTENT_SCROLL_ID).into();
         }
 
-        content = content.push(rule::horizontal(1));
+        for section in daemon_sections(show_status, show_service, show_shortcut, show_light) {
+            let body = match section {
+                DaemonSection::Install => self.daemon_step_install(busy),
+                DaemonSection::Shortcut => self.daemon_step_shortcut(busy, service_installed),
+                DaemonSection::LightControls => {
+                    self.daemon_step_light_controls(busy, service_installed)
+                }
+                DaemonSection::Start => self.daemon_step_start(busy, service_installed),
+                DaemonSection::TechnicalDetails => self.daemon_technical_details(busy),
+            };
+            content = content.push(rule::horizontal(1)).push(body);
+        }
 
-        // ── Step 1: Install the service ──
-        content = content.push(self.daemon_step_install(busy));
-        content = content.push(rule::horizontal(1));
-
-        // ── Step 2: Set your shortcut ──
-        content = content.push(self.daemon_step_shortcut(busy, service_installed));
-        content = content.push(rule::horizontal(1));
-
-        // ── Light passthrough controls ──
-        content = content.push(self.daemon_step_light_controls(busy, service_installed));
-        content = content.push(rule::horizontal(1));
-
-        // ── Step 3: Start the service ──
-        content = content.push(self.daemon_step_start(busy, service_installed));
-        content = content.push(rule::horizontal(1));
-
-        // ── Technical details (bottom) ──
-        content = content.push(self.daemon_technical_details(busy));
-
-        scrollable(content).into()
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 
     fn daemon_overall_status(&self, busy: bool) -> Element<'_, Message> {
@@ -448,5 +463,49 @@ impl ConfiguratorApp {
         details = details.push(refresh_button);
 
         details.into()
+    }
+}
+
+fn daemon_sections(
+    show_status: bool,
+    show_service: bool,
+    show_shortcut: bool,
+    show_light: bool,
+) -> Vec<DaemonSection> {
+    let mut sections = Vec::new();
+    if show_service {
+        sections.push(DaemonSection::Install);
+    }
+    if show_shortcut {
+        sections.push(DaemonSection::Shortcut);
+    }
+    if show_light {
+        sections.push(DaemonSection::LightControls);
+    }
+    if show_service {
+        sections.push(DaemonSection::Start);
+    }
+    if show_status || show_service {
+        sections.push(DaemonSection::TechnicalDetails);
+    }
+    sections
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn daemon_sections_keep_default_setup_order() {
+        assert_eq!(
+            daemon_sections(true, true, true, true),
+            vec![
+                DaemonSection::Install,
+                DaemonSection::Shortcut,
+                DaemonSection::LightControls,
+                DaemonSection::Start,
+                DaemonSection::TechnicalDetails,
+            ],
+        );
     }
 }

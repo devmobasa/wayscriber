@@ -1,6 +1,7 @@
 use iced::Element;
 use iced::widget::{column, row, scrollable, text};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
 use crate::models::{ColorPickerId, QuadField, TextField, ToggleField};
@@ -104,6 +105,6 @@ impl ConfiguratorApp {
         ]
         .spacing(12);
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 }

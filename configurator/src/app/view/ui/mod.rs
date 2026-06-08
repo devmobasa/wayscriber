@@ -12,17 +12,21 @@ use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField, UiTabId};
 
+use super::super::search::{SearchArea, TabSearchSummary};
 use super::widgets::{labeled_input, toggle_row};
 
 impl ConfiguratorApp {
-    pub(super) fn ui_tab(&self) -> Element<'_, Message> {
-        let tab_bar = UiTabId::ALL.iter().fold(
+    pub(super) fn ui_tab(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {
+        let show_general = search.is_none_or(|search| search.area_matches(SearchArea::UiGeneral));
+        let tabs = visible_ui_tabs(search);
+        let active_tab = active_ui_tab(search, self.active_ui_tab);
+        let tab_bar = tabs.iter().fold(
             Row::new().spacing(8).align_y(iced::Alignment::Center),
             |row, tab| {
                 let label = tab.title();
                 let button = button(label)
                     .padding([4, 10])
-                    .style(if *tab == self.active_ui_tab {
+                    .style(if Some(*tab) == active_tab {
                         theme::Button::Primary
                     } else {
                         theme::Button::Secondary
@@ -32,12 +36,13 @@ impl ConfiguratorApp {
             },
         );
 
-        let content = match self.active_ui_tab {
-            UiTabId::Toolbar => self.ui_toolbar_tab(),
-            UiTabId::StatusBar => self.ui_status_bar_tab(),
-            UiTabId::HelpOverlay => self.ui_help_overlay_tab(),
-            UiTabId::ClickHighlight => self.ui_click_highlight_tab(),
-            UiTabId::PresenterMode => self.ui_presenter_mode_tab(),
+        let content = match active_tab {
+            Some(UiTabId::Toolbar) => Some(self.ui_toolbar_tab()),
+            Some(UiTabId::StatusBar) => Some(self.ui_status_bar_tab()),
+            Some(UiTabId::HelpOverlay) => Some(self.ui_help_overlay_tab()),
+            Some(UiTabId::ClickHighlight) => Some(self.ui_click_highlight_tab()),
+            Some(UiTabId::PresenterMode) => Some(self.ui_presenter_mode_tab()),
+            None => None,
         };
 
         let general = column![
@@ -84,8 +89,31 @@ impl ConfiguratorApp {
         ]
         .spacing(12);
 
-        column![text("UI Settings").size(20), general, tab_bar, content]
-            .spacing(12)
-            .into()
+        let mut page = column![text("UI Settings").size(20)].spacing(12);
+        if show_general {
+            page = page.push(general);
+        }
+        if !tabs.is_empty() {
+            page = page.push(tab_bar);
+        }
+        if let Some(content) = content {
+            page = page.push(content);
+        }
+        page.into()
+    }
+}
+
+fn visible_ui_tabs(search: Option<&TabSearchSummary>) -> Vec<UiTabId> {
+    match search {
+        Some(summary) if !summary.show_all() => summary.ui_tabs().to_vec(),
+        _ => UiTabId::ALL.to_vec(),
+    }
+}
+
+fn active_ui_tab(search: Option<&TabSearchSummary>, preferred: UiTabId) -> Option<UiTabId> {
+    match search {
+        Some(summary) if summary.show_all() || summary.ui_tab_visible(preferred) => Some(preferred),
+        Some(summary) => summary.ui_tabs().first().copied(),
+        None => Some(preferred),
     }
 }

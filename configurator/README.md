@@ -25,6 +25,7 @@ The window loads the current config, lets you tweak values across the tabbed sec
 - **Reload** – re-read `config.toml` from disk.
 - **Defaults** – drop in the built-in defaults without saving.
 - **Save** – validate inputs (including numeric ranges and color arrays) and write the TOML file. An existing file is backed up with a timestamp.
+- **Search** – filter tabs, sections, saved sessions, boards, render profiles, presets, and keybindings as you type. Press `Ctrl+F` to focus search and `Escape` to clear it.
 - Launch from the main overlay with the default `F11` keybinding (configurable inside the app).
 
 ## UI Coverage

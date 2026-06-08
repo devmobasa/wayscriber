@@ -1,6 +1,7 @@
 use iced::widget::{column, pick_list, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
 use crate::models::{PresenterToolBehaviorOption, ToggleField};
@@ -65,6 +66,6 @@ impl ConfiguratorApp {
         ]
         .spacing(12);
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 }

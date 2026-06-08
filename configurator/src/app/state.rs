@@ -7,7 +7,7 @@ use wayscriber::config::{Config, PRESET_SLOTS_MAX};
 use crate::messages::Message;
 use crate::models::{
     ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingsTabId, SessionCatalogState, TabId, ToolbarLayoutModeOption, UiTabId,
+    KeybindingsTabId, SearchQuery, SessionCatalogState, TabId, ToolbarLayoutModeOption, UiTabId,
 };
 
 use super::daemon_setup::load_daemon_runtime_status;
@@ -47,6 +47,9 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) daemon_latest_status_request_id: u64,
     pub(crate) daemon_preserve_feedback_status_request_id: Option<u64>,
     pub(crate) session_catalog: SessionCatalogState,
+    pub(crate) search_query: SearchQuery,
+    pub(crate) search_input_focus_hint: bool,
+    pub(crate) startup_search_focus_pending: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -122,6 +125,9 @@ impl ConfiguratorApp {
             daemon_latest_status_request_id: 1,
             daemon_preserve_feedback_status_request_id: None,
             session_catalog: SessionCatalogState::loading(),
+            search_query: SearchQuery::default(),
+            search_input_focus_hint: true,
+            startup_search_focus_pending: true,
         };
         app.sync_all_color_picker_hex();
 
@@ -179,6 +185,14 @@ mod tests {
         app.draft.capture_enabled = !app.draft.capture_enabled;
         app.refresh_dirty_flag();
         assert!(app.is_dirty);
+    }
+
+    #[test]
+    fn new_app_starts_with_search_focus_hint() {
+        let (app, _cmd) = ConfiguratorApp::new_app();
+
+        assert!(app.search_input_focus_hint);
+        assert!(app.startup_search_focus_pending);
     }
 
     #[test]

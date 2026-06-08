@@ -3,6 +3,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::view::theme;
 use crate::messages::Message;
 use crate::models::color::rgb_to_hsv;
@@ -12,12 +13,19 @@ use crate::models::{
 };
 use wayscriber::render_profiles::parse_hex_rgb;
 
+use super::super::search::{SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
 use super::widgets::{color_preview_badge, labeled_control, picker_panel};
 
 impl ConfiguratorApp {
-    pub(super) fn render_profiles_tab(&self) -> Element<'_, Message> {
+    pub(super) fn render_profiles_tab(
+        &self,
+        search: Option<&TabSearchSummary>,
+    ) -> Element<'_, Message> {
         let profiles = &self.draft.render_profiles;
+        let show_all = search.is_none_or(TabSearchSummary::show_all);
+        let show_general =
+            search.is_none_or(|search| search.area_matches(SearchArea::RenderProfilesGeneral));
         let profile_ids = profiles.profile_ids();
         let active_selection =
             RenderProfileSelectionOption::from_active(&profiles.active, &profile_ids);
@@ -39,34 +47,37 @@ impl ConfiguratorApp {
         )
         .width(Length::Fill);
 
-        let mut content = column![
-            text("Render Profiles").size(20),
-            row![
-                checkbox(profiles.apply_to_canvas)
-                    .label("Preview canvas")
-                    .on_toggle(Message::RenderProfileApplyCanvasChanged),
-                checkbox(profiles.apply_to_ui)
-                    .label("Preview UI")
-                    .on_toggle(Message::RenderProfileApplyUiChanged),
-            ]
-            .spacing(16)
-            .align_y(Alignment::Center),
-            labeled_control(
-                "Startup profile",
-                active_picker.into(),
-                self.defaults.render_profiles.active.clone(),
-                profiles.active != self.defaults.render_profiles.active,
-            ),
-            labeled_control(
-                "Canvas export profile",
-                export_picker.into(),
-                self.defaults.render_profiles.export.label().to_string(),
-                profiles.export != self.defaults.render_profiles.export,
-            ),
-        ]
-        .spacing(12);
+        let mut content = column![text("Render Profiles").size(20)].spacing(12);
 
-        if profiles.export == RenderProfileExportOption::Profile {
+        if show_general || show_all {
+            content = content
+                .push(
+                    row![
+                        checkbox(profiles.apply_to_canvas)
+                            .label("Preview canvas")
+                            .on_toggle(Message::RenderProfileApplyCanvasChanged),
+                        checkbox(profiles.apply_to_ui)
+                            .label("Preview UI")
+                            .on_toggle(Message::RenderProfileApplyUiChanged),
+                    ]
+                    .spacing(16)
+                    .align_y(Alignment::Center),
+                )
+                .push(labeled_control(
+                    "Startup profile",
+                    active_picker.into(),
+                    self.defaults.render_profiles.active.clone(),
+                    profiles.active != self.defaults.render_profiles.active,
+                ))
+                .push(labeled_control(
+                    "Canvas export profile",
+                    export_picker.into(),
+                    self.defaults.render_profiles.export.label().to_string(),
+                    profiles.export != self.defaults.render_profiles.export,
+                ));
+        }
+
+        if (show_general || show_all) && profiles.export == RenderProfileExportOption::Profile {
             let picker = pick_list(
                 profile_ids,
                 export_selection,
@@ -81,17 +92,35 @@ impl ConfiguratorApp {
             ));
         }
 
-        content = content.push(button("Add profile").on_press(Message::RenderProfileAdd));
-
-        for index in 0..profiles.profiles.len() {
-            content = content.push(self.render_profile_section(index));
+        if show_general || show_all {
+            content = content.push(button("Add profile").on_press(Message::RenderProfileAdd));
         }
 
-        scrollable(content).into()
+        let indices: Vec<usize> = if show_all {
+            (0..profiles.profiles.len()).collect()
+        } else {
+            search
+                .map(TabSearchSummary::render_profile_indices)
+                .unwrap_or_default()
+                .to_vec()
+        };
+
+        for index in indices {
+            content = content.push(self.render_profile_section(index, search));
+        }
+
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 
-    fn render_profile_section(&self, profile_index: usize) -> Element<'_, Message> {
+    fn render_profile_section(
+        &self,
+        profile_index: usize,
+        search: Option<&TabSearchSummary>,
+    ) -> Element<'_, Message> {
         let profile = &self.draft.render_profiles.profiles[profile_index];
+        let show_all = search.is_none_or(TabSearchSummary::show_all);
+        let show_profile_controls =
+            search.is_none_or(|search| search.render_profile_controls_visible(profile_index));
         let header = row![
             text(if profile.name.trim().is_empty() {
                 "Profile"
@@ -108,13 +137,25 @@ impl ConfiguratorApp {
         .align_y(Alignment::Center);
 
         let mut mappings = column![].spacing(8);
-        for mapping_index in 0..profile.mappings.len() {
+        let mapping_indices: Vec<usize> = if show_all || show_profile_controls {
+            (0..profile.mappings.len()).collect()
+        } else {
+            search
+                .map(TabSearchSummary::render_profile_mapping_indices)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|(matched_profile, mapping)| {
+                    (*matched_profile == profile_index).then_some(*mapping)
+                })
+                .collect()
+        };
+        for mapping_index in mapping_indices {
             mappings = mappings.push(self.render_profile_mapping_row(profile_index, mapping_index));
         }
 
-        container(
-            column![
-                header,
+        let mut section = column![header].spacing(10);
+        if show_profile_controls {
+            section = section.push(
                 row![
                     text_input("id", &profile.id)
                         .on_input(move |value| Message::RenderProfileTextChanged(
@@ -132,14 +173,19 @@ impl ConfiguratorApp {
                         .width(Length::FillPortion(2)),
                 ]
                 .spacing(8),
-                mappings,
+            );
+        }
+        section = section.push(mappings);
+        if show_profile_controls {
+            section = section.push(
                 button("Add mapping").on_press(Message::RenderProfileMappingAdd(profile_index)),
-            ]
-            .spacing(10),
-        )
-        .padding(12)
-        .style(theme::Container::Box)
-        .into()
+            );
+        }
+
+        container(section)
+            .padding(12)
+            .style(theme::Container::Box)
+            .into()
     }
 
     fn render_profile_mapping_row(
