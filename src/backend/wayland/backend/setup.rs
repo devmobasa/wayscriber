@@ -18,6 +18,11 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 
 use super::super::state::{WaylandGlobals, WaylandState};
 
+// Freeze/zoom capture currently consumes wl_shm buffer events and ignores linux-dmabuf.
+// Version 3 can negotiate linux-dmabuf-only frames on newer wlroots/NVIDIA stacks, so
+// bind through v2 until dmabuf capture is implemented.
+const MAX_SHM_SCREENCOPY_VERSION: u32 = 2;
+
 pub(super) struct WaylandSetup {
     pub(super) conn: Connection,
     #[cfg(tablet)]
@@ -108,7 +113,11 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         debug!("Pointer constraints global not available");
     }
 
-    let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ()) {
+    let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(
+        &qh,
+        1..=MAX_SHM_SCREENCOPY_VERSION,
+        (),
+    ) {
         Ok(manager) => {
             debug!("Bound zwlr_screencopy_manager_v1");
             Some(manager)
@@ -147,4 +156,14 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         screencopy_manager,
         layer_shell_available,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MAX_SHM_SCREENCOPY_VERSION;
+
+    #[test]
+    fn screencopy_binding_stays_on_wl_shm_compatible_version() {
+        assert_eq!(MAX_SHM_SCREENCOPY_VERSION, 2);
+    }
 }
