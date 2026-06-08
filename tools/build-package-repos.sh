@@ -160,7 +160,10 @@ build_rpm_repo() {
 
     cp "${RPM_MAIN}" "${rpm_root}/"
     [[ -f "${RPM_CFG}" ]] && cp "${RPM_CFG}" "${rpm_root}/"
-    [[ -f "${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.asc" ]] && cp "${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.asc" "${rpm_root}/RPM-GPG-KEY-wayscriber.asc"
+    if [[ -f "${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.asc" ]]; then
+        cp "${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.asc" "${rpm_root}/RPM-GPG-KEY-wayscriber.asc"
+        cp "${OUTPUT_ROOT}/WAYSCRIBER-GPG-KEY.asc" "${rpm_root}/RPM-GPG-KEY-wayscriber"
+    fi
 
     if [[ -n "${ACTIVE_KEY}" && "${SIGN_RPMS}" == "1" ]]; then
         for rpm in "${rpm_root}"/*.rpm; do

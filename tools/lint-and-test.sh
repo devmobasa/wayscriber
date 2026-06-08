@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
 bash tools/check-version-consistency.sh
+bash tools/test-package-repo-layout.sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
