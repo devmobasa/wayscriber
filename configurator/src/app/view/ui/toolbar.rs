@@ -145,10 +145,6 @@ impl ConfiguratorApp {
                 self.defaults.ui_toolbar_force_inline,
                 ToggleField::UiToolbarForceInline,
             ),
-            toolbar_item_visibility_section(
-                &self.draft.ui_toolbar_items,
-                &self.defaults.ui_toolbar_items,
-            ),
             text("Mode overrides").size(16),
             row![text("Edit mode:"), override_mode_pick]
                 .spacing(12)
@@ -223,6 +219,20 @@ impl ConfiguratorApp {
 
         scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
+
+    pub(super) fn ui_toolbar_visibility_tab(&self) -> Element<'_, Message> {
+        let column = column![
+            text("Toolbar Visibility").size(18),
+            text("Checked items are shown. Uncheck an item to hide it from toolbar sizing, drawing, and hit testing. Existing section toggles and mode overrides can still hide checked items.").size(12),
+            toolbar_item_visibility_section(
+                &self.draft.ui_toolbar_items,
+                &self.defaults.ui_toolbar_items,
+            ),
+        ]
+        .spacing(12);
+
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
+    }
 }
 
 fn toolbar_item_visibility_section<'a>(
@@ -231,11 +241,7 @@ fn toolbar_item_visibility_section<'a>(
 ) -> Element<'a, Message> {
     let resolved = items.resolved();
     let default_resolved = defaults.resolved();
-    let mut rows = column![
-        text("Hidden item overrides").size(16),
-        text("Hide individual known toolbar buttons and sections. Existing section toggles and mode overrides can still hide checked-off items.").size(12),
-    ]
-    .spacing(8);
+    let mut rows = column![text("Items").size(16)].spacing(8);
     let mut current_surface = None;
     let mut current_category = None;
 
@@ -276,13 +282,16 @@ fn toolbar_item_visibility_row<'a>(
     defaults: &ResolvedToolbarItems,
 ) -> Element<'a, Message> {
     let id = definition.id;
-    let hidden = resolved.is_hidden(id);
-    let default = format!("default: {}", hidden_override_label(defaults.is_hidden(id)));
+    let visible = !resolved.is_hidden(id);
+    let default = format!(
+        "default: {}",
+        visibility_override_label(!defaults.is_hidden(id))
+    );
 
     row![
-        checkbox(hidden)
-            .label(format!("Hide {}", definition.label))
-            .on_toggle(move |value| Message::ToolbarItemVisibilityChanged(id, !value)),
+        checkbox(visible)
+            .label(definition.label)
+            .on_toggle(move |value| Message::ToolbarItemVisibilityChanged(id, value)),
         text(definition.id.as_str()).size(12).width(Length::Fill),
         text(default).size(12),
     ]
@@ -291,8 +300,8 @@ fn toolbar_item_visibility_row<'a>(
     .into()
 }
 
-fn hidden_override_label(hidden: bool) -> &'static str {
-    if hidden { "hidden" } else { "not hidden" }
+fn visibility_override_label(visible: bool) -> &'static str {
+    if visible { "shown" } else { "hidden" }
 }
 
 fn toolbar_item_surface_label(surface: ToolbarItemSurface) -> &'static str {

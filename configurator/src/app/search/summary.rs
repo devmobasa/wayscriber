@@ -179,7 +179,7 @@ fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
             .collect::<Vec<_>>();
         if query.matches_parts_scoped_to_tab(TabId::Ui, identity_parts.iter().copied())
             || query.matches_parts(full_parts.iter().copied())
-            || (tab == UiTabId::Toolbar && toolbar_item_matches(query))
+            || (tab == UiTabId::ToolbarVisibility && toolbar_item_matches(query))
             || (query.matches_any_raw_text(field_terms)
                 && query.matches_parts_scoped_to_tab(TabId::Ui, full_parts.iter().copied()))
         {

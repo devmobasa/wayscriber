@@ -73,6 +73,7 @@ impl TabId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiTabId {
     Toolbar,
+    ToolbarVisibility,
     StatusBar,
     HelpOverlay,
     ClickHighlight,
@@ -80,8 +81,9 @@ pub enum UiTabId {
 }
 
 impl UiTabId {
-    pub const ALL: [UiTabId; 5] = [
+    pub const ALL: [UiTabId; 6] = [
         UiTabId::Toolbar,
+        UiTabId::ToolbarVisibility,
         UiTabId::StatusBar,
         UiTabId::HelpOverlay,
         UiTabId::ClickHighlight,
@@ -91,6 +93,7 @@ impl UiTabId {
     pub fn title(&self) -> &'static str {
         match self {
             UiTabId::Toolbar => "Toolbar",
+            UiTabId::ToolbarVisibility => "Toolbar Visibility",
             UiTabId::StatusBar => "Status Bar",
             UiTabId::HelpOverlay => "Help Overlay",
             UiTabId::ClickHighlight => "Click Highlight",
