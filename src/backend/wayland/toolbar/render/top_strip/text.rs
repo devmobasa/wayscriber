@@ -40,28 +40,26 @@ pub(super) fn draw_text_strip(
         size: ICON_TOGGLE_FONT_SIZE,
     };
 
-    let tool_buttons = model::top_tool_buttons(is_simple);
-
-    for tool in tool_buttons {
-        let label = tool_label(*tool);
-        let tooltip_label = tool_tooltip_label(*tool);
-        let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
+    for tool in model::visible_top_tool_buttons(is_simple, snapshot) {
+        let label = tool_label(tool);
+        let tooltip_label = tool_tooltip_label(tool);
+        let is_active = snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_w, btn_h, is_active, is_hover);
         draw_label_center(ctx, label_style, x, y, btn_w, btn_h, label);
-        let tooltip = layout.tool_tooltip(*tool, tooltip_label);
+        let tooltip = layout.tool_tooltip(tool, tooltip_label);
         layout.hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
-            event: ToolbarEvent::SelectTool(*tool),
+            event: ToolbarEvent::SelectTool(tool),
             kind: HitKind::Click,
             tooltip: Some(tooltip),
         });
         x += btn_w + gap;
     }
 
-    if is_simple {
+    if model::top_shape_picker_visible(snapshot) && is_simple {
         let shapes_active = snapshot.shape_picker_open || current_shape_tool.is_some();
         let shapes_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
@@ -75,7 +73,7 @@ pub(super) fn draw_text_strip(
             tooltip: Some("Shapes".to_string()),
         });
         x += btn_w + gap;
-    } else {
+    } else if model::top_shape_picker_visible(snapshot) {
         let current_polygon_tool = current_shape_tool.filter(|tool| model::is_polygon_tool(*tool));
         let polygons_active = snapshot.shape_picker_open || current_polygon_tool.is_some();
         let polygons_hover = hover
@@ -92,7 +90,7 @@ pub(super) fn draw_text_strip(
         x += btn_w + gap;
     }
 
-    if fill_tool_active && !snapshot.shape_picker_open {
+    if fill_tool_active && !snapshot.shape_picker_open && model::top_fill_visible(snapshot) {
         let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
         let fill_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, btn_h))
@@ -123,59 +121,63 @@ pub(super) fn draw_text_strip(
         x += fill_w + gap;
     }
 
-    let is_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
-        .unwrap_or(false);
-    draw_button(ctx, x, y, btn_w, btn_h, snapshot.text_active, is_hover);
-    draw_label_center(
-        ctx,
-        label_style,
-        x,
-        y,
-        btn_w,
-        btn_h,
-        action_short_label(Action::EnterTextMode),
-    );
-    layout.hits.push(HitRegion {
-        rect: (x, y, btn_w, btn_h),
-        event: ToolbarEvent::EnterTextMode,
-        kind: HitKind::Click,
-        tooltip: Some(format_binding_label(
-            action_label(Action::EnterTextMode),
-            snapshot
-                .binding_hints
-                .binding_for_action(Action::EnterTextMode),
-        )),
-    });
-    x += btn_w + gap;
+    if model::top_text_visible(snapshot) {
+        let is_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+            .unwrap_or(false);
+        draw_button(ctx, x, y, btn_w, btn_h, snapshot.text_active, is_hover);
+        draw_label_center(
+            ctx,
+            label_style,
+            x,
+            y,
+            btn_w,
+            btn_h,
+            action_short_label(Action::EnterTextMode),
+        );
+        layout.hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::EnterTextMode,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::EnterTextMode),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::EnterTextMode),
+            )),
+        });
+        x += btn_w + gap;
+    }
 
-    let note_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
-        .unwrap_or(false);
-    draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
-    draw_label_center(
-        ctx,
-        label_style,
-        x,
-        y,
-        btn_w,
-        btn_h,
-        action_short_label(Action::EnterStickyNoteMode),
-    );
-    layout.hits.push(HitRegion {
-        rect: (x, y, btn_w, btn_h),
-        event: ToolbarEvent::EnterStickyNoteMode,
-        kind: HitKind::Click,
-        tooltip: Some(format_binding_label(
-            action_label(Action::EnterStickyNoteMode),
-            snapshot
-                .binding_hints
-                .binding_for_action(Action::EnterStickyNoteMode),
-        )),
-    });
-    x += btn_w + gap;
+    if model::top_sticky_note_visible(snapshot) {
+        let note_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+            .unwrap_or(false);
+        draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
+        draw_label_center(
+            ctx,
+            label_style,
+            x,
+            y,
+            btn_w,
+            btn_h,
+            action_short_label(Action::EnterStickyNoteMode),
+        );
+        layout.hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::EnterStickyNoteMode,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::EnterStickyNoteMode),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::EnterStickyNoteMode),
+            )),
+        });
+        x += btn_w + gap;
+    }
 
-    if !is_simple {
+    if !is_simple && model::top_clear_canvas_visible(snapshot) {
         let clear_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
             .unwrap_or(false);
@@ -203,66 +205,60 @@ pub(super) fn draw_text_strip(
         x += btn_w + gap;
     }
 
-    let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
-    let icons_hover = hover.and_then(|(hx, hy)| {
-        if point_in_rect(hx, hy, x, y, icons_w, btn_h) {
-            Some(if hx < x + icons_w / 2.0 { 0 } else { 1 })
-        } else {
-            None
-        }
-    });
-    let icons_active = if snapshot.use_icons { 0 } else { 1 };
-    draw_segmented_control(
-        ctx,
-        x,
-        y,
-        icons_w,
-        btn_h,
-        ("Ico", "Txt"),
-        icons_active,
-        icons_hover,
-        icon_toggle_style,
-    );
-    let half_w = icons_w / 2.0;
-    layout.hits.push(HitRegion {
-        rect: (x, y, half_w, btn_h),
-        event: ToolbarEvent::ToggleIconMode(true),
-        kind: HitKind::Click,
-        tooltip: Some("Icons mode".to_string()),
-    });
-    layout.hits.push(HitRegion {
-        rect: (x + half_w, y, half_w, btn_h),
-        event: ToolbarEvent::ToggleIconMode(false),
-        kind: HitKind::Click,
-        tooltip: Some("Text mode".to_string()),
-    });
-
-    if snapshot.shape_picker_open {
-        let mut shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        draw_picker_text_row(
-            layout,
-            handle_w,
-            shape_y,
-            btn_w,
-            btn_h,
-            label_style,
-            if is_simple {
-                model::common_shape_tools()
+    if model::top_icon_mode_toggle_visible(snapshot) {
+        let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
+        let icons_hover = hover.and_then(|(hx, hy)| {
+            if point_in_rect(hx, hy, x, y, icons_w, btn_h) {
+                Some(if hx < x + icons_w / 2.0 { 0 } else { 1 })
             } else {
-                model::polygon_tools()
-            },
+                None
+            }
+        });
+        let icons_active = if snapshot.use_icons { 0 } else { 1 };
+        draw_segmented_control(
+            ctx,
+            x,
+            y,
+            icons_w,
+            btn_h,
+            ("Ico", "Txt"),
+            icons_active,
+            icons_hover,
+            icon_toggle_style,
         );
-        if is_simple {
+        let half_w = icons_w / 2.0;
+        layout.hits.push(HitRegion {
+            rect: (x, y, half_w, btn_h),
+            event: ToolbarEvent::ToggleIconMode(true),
+            kind: HitKind::Click,
+            tooltip: Some("Icons mode".to_string()),
+        });
+        layout.hits.push(HitRegion {
+            rect: (x + half_w, y, half_w, btn_h),
+            event: ToolbarEvent::ToggleIconMode(false),
+            kind: HitKind::Click,
+            tooltip: Some("Text mode".to_string()),
+        });
+    }
+
+    if snapshot.shape_picker_open && model::top_shape_picker_visible(snapshot) {
+        let mut shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+        let first_row = if is_simple {
+            model::common_shape_tools()
+        } else {
+            model::polygon_tools()
+        };
+        if model::visible_tool_count(first_row, snapshot) > 0 {
+            draw_picker_text_row(layout, handle_w, shape_y, btn_w, btn_h, label_style, first_row);
             shape_y += btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-            draw_picker_text_row(
-                layout,
-                handle_w,
-                shape_y,
-                btn_w,
-                btn_h,
-                label_style,
-                model::polygon_tools(),
-            );
+        }
+        if is_simple {
+            let second_row = model::polygon_tools();
+            if model::visible_tool_count(second_row, snapshot) > 0 {
+                draw_picker_text_row(
+                    layout, handle_w, shape_y, btn_w, btn_h, label_style, second_row,
+                );
+            }
         }
     }
 }
@@ -282,6 +278,9 @@ fn draw_picker_text_row(
     let snapshot = layout.snapshot;
     let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + gap;
     for tool in tools {
+        if !model::tool_visible(snapshot, *tool) {
+            continue;
+        }
         let label = tool_label(*tool);
         let tooltip_label = tool_tooltip_label(*tool);
         let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);

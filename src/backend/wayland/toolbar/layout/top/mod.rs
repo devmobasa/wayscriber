@@ -30,29 +30,29 @@ pub fn build_top_hits(
     let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
     let btn_y = spec.top_pin_button_y(height);
 
-    let pin_x = spec.top_pin_x(width);
-    hits.push(HitRegion {
-        rect: (pin_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
-        kind: HitKind::Click,
-        tooltip: Some(if snapshot.top_pinned {
-            "Unpin".to_string()
-        } else {
-            "Pin".to_string()
-        }),
-    });
+    let mut right_x = width - ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT - btn_size;
+    if model::toolbar_item_visible(snapshot, "top.chrome.close") {
+        hits.push(HitRegion {
+            rect: (right_x, btn_y, btn_size, btn_size),
+            event: ToolbarEvent::CloseTopToolbar,
+            kind: HitKind::Click,
+            tooltip: Some("Close".to_string()),
+        });
+        right_x -= btn_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
+    }
 
-    let close_x = spec.top_close_x(width);
-    hits.push(HitRegion {
-        rect: (close_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::CloseTopToolbar,
-        kind: HitKind::Click,
-        tooltip: Some("Close".to_string()),
-    });
-}
-
-fn tool_buttons(is_simple: bool) -> &'static [Tool] {
-    model::top_tool_buttons(is_simple)
+    if model::toolbar_item_visible(snapshot, "top.chrome.pin") {
+        hits.push(HitRegion {
+            rect: (right_x, btn_y, btn_size, btn_size),
+            event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
+            kind: HitKind::Click,
+            tooltip: Some(if snapshot.top_pinned {
+                "Unpin".to_string()
+            } else {
+                "Pin".to_string()
+            }),
+        });
+    }
 }
 
 fn shape_buttons() -> &'static [Tool] {

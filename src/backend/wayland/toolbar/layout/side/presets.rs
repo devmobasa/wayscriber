@@ -6,6 +6,10 @@ pub(super) fn push_preset_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
+    if ctx.snapshot.side_section_hidden(ToolbarSideSection::Presets) {
+        return y;
+    }
+
     let slot_count = ctx
         .snapshot
         .preset_slot_count

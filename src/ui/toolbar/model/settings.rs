@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 
-use crate::config::{Action, ToolbarLayoutMode, action_label, action_short_label};
+use crate::config::{
+    Action, ToolbarItemId, ToolbarLayoutMode, action_label, action_short_label,
+};
 
-use super::super::{ToolbarEvent, ToolbarSnapshot};
+use super::super::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 use super::activation::{ToolbarActivation, ToolbarControlId};
 use super::control::{ToolbarIcon, ToolbarTooltip};
 
@@ -14,7 +16,8 @@ pub(crate) struct ToolbarSettingsModel {
 
 impl ToolbarSettingsModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        if !snapshot.show_settings_section
+        if snapshot.side_section_hidden(ToolbarSideSection::Settings)
+            || !snapshot.show_settings_section
             || !snapshot.drawer_open
             || snapshot.drawer_tab != crate::input::ToolbarDrawerTab::App
         {
@@ -127,31 +130,34 @@ impl ToolbarSettingsModel {
             ]);
         }
 
-        Some(Self {
-            toggles,
-            buttons: vec![
-                ToolbarSettingsButton {
-                    id: ToolbarControlId::OpenConfigurator,
-                    label: Cow::Borrowed(action_short_label(Action::OpenConfigurator)),
-                    event: ToolbarEvent::OpenConfigurator,
-                    icon: ToolbarIcon::Settings,
-                    tooltip: ToolbarTooltip::Binding {
-                        label: Cow::Borrowed(action_label(Action::OpenConfigurator)),
-                        binding: snapshot
-                            .binding_hints
-                            .binding_for_action(Action::OpenConfigurator)
-                            .map(str::to_string),
-                    },
+        toggles.retain(|toggle| control_visible(snapshot, toggle.id));
+        let buttons: Vec<_> = vec![
+            ToolbarSettingsButton {
+                id: ToolbarControlId::OpenConfigurator,
+                label: Cow::Borrowed(action_short_label(Action::OpenConfigurator)),
+                event: ToolbarEvent::OpenConfigurator,
+                icon: ToolbarIcon::Settings,
+                tooltip: ToolbarTooltip::Binding {
+                    label: Cow::Borrowed(action_label(Action::OpenConfigurator)),
+                    binding: snapshot
+                        .binding_hints
+                        .binding_for_action(Action::OpenConfigurator)
+                        .map(str::to_string),
                 },
-                ToolbarSettingsButton {
-                    id: ToolbarControlId::OpenConfigFile,
-                    label: Cow::Borrowed("Config file"),
-                    event: ToolbarEvent::OpenConfigFile,
-                    icon: ToolbarIcon::File,
-                    tooltip: ToolbarTooltip::text("Config file"),
-                },
-            ],
-        })
+            },
+            ToolbarSettingsButton {
+                id: ToolbarControlId::OpenConfigFile,
+                label: Cow::Borrowed("Config file"),
+                event: ToolbarEvent::OpenConfigFile,
+                icon: ToolbarIcon::File,
+                tooltip: ToolbarTooltip::text("Config file"),
+            },
+        ]
+        .into_iter()
+        .filter(|button| control_visible(snapshot, button.id))
+        .collect();
+
+        (!toggles.is_empty() || !buttons.is_empty()).then_some(Self { toggles, buttons })
     }
 
     pub(crate) fn toggles(&self) -> &[ToolbarSettingsToggle] {
@@ -161,6 +167,32 @@ impl ToolbarSettingsModel {
     pub(crate) fn buttons(&self) -> &[ToolbarSettingsButton] {
         &self.buttons
     }
+}
+
+fn control_visible(snapshot: &ToolbarSnapshot, id: ToolbarControlId) -> bool {
+    control_item_id(id).is_none_or(|item| !snapshot.toolbar_item_hidden(item))
+}
+
+fn control_item_id(id: ToolbarControlId) -> Option<ToolbarItemId> {
+    Some(ToolbarItemId::from_known(match id {
+        ToolbarControlId::SettingsContextAwareUi => "side.settings.context-aware-ui",
+        ToolbarControlId::SettingsTextControls => "side.settings.text-controls",
+        ToolbarControlId::SettingsStatusBar => "side.settings.status-bar",
+        ToolbarControlId::SettingsStatusBoardBadge => "side.settings.status-board-badge",
+        ToolbarControlId::SettingsStatusPageBadge => "side.settings.status-page-badge",
+        ToolbarControlId::SettingsFloatingBadgeAlways => "side.settings.floating-badge-always",
+        ToolbarControlId::SettingsPresetToasts => "side.settings.preset-toasts",
+        ToolbarControlId::SettingsPresets => "side.settings.presets",
+        ToolbarControlId::SettingsActions => "side.settings.actions",
+        ToolbarControlId::SettingsZoomActions => "side.settings.zoom-actions",
+        ToolbarControlId::SettingsAdvancedActions => "side.settings.advanced-actions",
+        ToolbarControlId::SettingsBoards => "side.settings.boards",
+        ToolbarControlId::SettingsPages => "side.settings.pages",
+        ToolbarControlId::SettingsStepControls => "side.settings.step-controls",
+        ToolbarControlId::OpenConfigurator => "side.settings.configurator",
+        ToolbarControlId::OpenConfigFile => "side.settings.config-file",
+        _ => return None,
+    }))
 }
 
 #[derive(Debug, Clone)]

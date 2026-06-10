@@ -1,4 +1,6 @@
+use crate::config::ToolbarItemId;
 use crate::input::Tool;
+use crate::ui::toolbar::ToolbarSnapshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SemanticToolIcon {
@@ -76,6 +78,92 @@ pub(crate) fn top_tool_buttons(simple: bool) -> &'static [Tool] {
     } else {
         &FULL_TOOL_BUTTONS
     }
+}
+
+pub(crate) fn visible_top_tool_buttons(
+    simple: bool,
+    snapshot: &ToolbarSnapshot,
+) -> impl Iterator<Item = Tool> + '_ {
+    visible_tools(top_tool_buttons(simple), snapshot)
+}
+
+pub(crate) fn visible_tools<'a>(
+    tools: &'static [Tool],
+    snapshot: &'a ToolbarSnapshot,
+) -> impl Iterator<Item = Tool> + 'a {
+    tools
+        .iter()
+        .copied()
+        .filter(move |tool| tool_visible(snapshot, *tool))
+}
+
+pub(crate) fn visible_tool_count(tools: &'static [Tool], snapshot: &ToolbarSnapshot) -> usize {
+    visible_tools(tools, snapshot).count()
+}
+
+pub(crate) fn tool_visible(snapshot: &ToolbarSnapshot, tool: Tool) -> bool {
+    toolbar_item_visible(snapshot, toolbar_item_id_for_tool(tool).as_str())
+}
+
+pub(crate) fn toolbar_item_visible(snapshot: &ToolbarSnapshot, id: &'static str) -> bool {
+    !snapshot.toolbar_item_hidden(ToolbarItemId::from_known(id))
+}
+
+pub(crate) fn top_shape_picker_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.shape-picker")
+}
+
+pub(crate) fn top_fill_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.fill")
+}
+
+pub(crate) fn top_text_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.text")
+}
+
+pub(crate) fn top_sticky_note_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.sticky-note")
+}
+
+pub(crate) fn top_clear_canvas_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.clear-canvas")
+}
+
+pub(crate) fn top_highlight_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.highlight")
+}
+
+pub(crate) fn top_highlight_ring_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.highlight-ring")
+}
+
+pub(crate) fn top_icon_mode_toggle_visible(snapshot: &ToolbarSnapshot) -> bool {
+    if snapshot.use_icons {
+        toolbar_item_visible(snapshot, "top.utility.icon-mode-text")
+    } else {
+        toolbar_item_visible(snapshot, "top.utility.icon-mode-icons")
+    }
+}
+
+fn toolbar_item_id_for_tool(tool: Tool) -> ToolbarItemId {
+    ToolbarItemId::from_known(match tool {
+        Tool::Select => "top.tool.select",
+        Tool::Pen => "top.tool.pen",
+        Tool::Line => "top.tool.line",
+        Tool::Rect => "top.tool.rect",
+        Tool::Ellipse => "top.tool.ellipse",
+        Tool::Triangle => "top.tool.triangle",
+        Tool::Parallelogram => "top.tool.parallelogram",
+        Tool::Rhombus => "top.tool.rhombus",
+        Tool::RegularPolygon => "top.tool.regular-polygon",
+        Tool::FreeformPolygon => "top.tool.freeform-polygon",
+        Tool::Arrow => "top.tool.arrow",
+        Tool::Blur => "top.tool.blur",
+        Tool::Marker => "top.tool.marker",
+        Tool::Highlight => "top.utility.highlight",
+        Tool::StepMarker => "top.tool.step-marker",
+        Tool::Eraser => "top.tool.eraser",
+    })
 }
 
 pub(crate) fn shape_tools() -> &'static [Tool] {

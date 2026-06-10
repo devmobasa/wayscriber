@@ -19,14 +19,17 @@ impl ToolbarLayoutSpec {
         let show_actions = ToolbarActionsModel::from_snapshot(snapshot).is_some();
         let show_pages = toolbar_pages_model(snapshot).is_some();
         let show_boards = toolbar_boards_model(snapshot).is_some();
-        let show_presets =
-            snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
+        let show_presets = !snapshot.side_section_hidden(ToolbarSideSection::Presets)
+            && snapshot.show_presets
+            && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section
             && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App;
+            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
+            && !snapshot.side_section_hidden(ToolbarSideSection::StepUndo);
         let show_settings_section = snapshot.show_settings_section
             && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App;
+            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
+            && !snapshot.side_section_hidden(ToolbarSideSection::Settings);
         let show_session_section = ToolbarSessionModel::from_snapshot(snapshot).is_some();
 
         let mut height: f64 = base_height;
@@ -36,7 +39,7 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        if tool_context.needs_color {
+        if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
             let colors_h = self.side_colors_height(snapshot);
             add_section(colors_h, &mut height);
         }
@@ -46,30 +49,46 @@ impl ToolbarLayoutSpec {
         }
 
         if tool_context.needs_thickness {
-            add_section(self.side_thickness_height(snapshot), &mut height);
-            if tool_context.show_eraser_mode {
+            if !snapshot.side_section_hidden(ToolbarSideSection::Thickness) {
+                add_section(self.side_thickness_height(snapshot), &mut height);
+            }
+            if tool_context.show_eraser_mode
+                && !snapshot.side_section_hidden(ToolbarSideSection::EraserMode)
+            {
                 add_section(self.side_eraser_mode_height(snapshot), &mut height);
             }
-            if tool_context.show_polygon_sides_control {
+            if tool_context.show_polygon_sides_control
+                && !snapshot.side_section_hidden(ToolbarSideSection::PolygonSides)
+            {
                 add_section(self.side_polygon_sides_height(snapshot), &mut height);
             }
         }
 
-        if tool_context.show_arrow_labels {
+        if tool_context.show_arrow_labels
+            && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
+        {
             add_section(self.side_arrow_labels_height(snapshot), &mut height);
         }
 
-        if tool_context.show_step_counter {
+        if tool_context.show_step_counter
+            && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
+        {
             add_section(self.side_step_markers_height(snapshot), &mut height);
         }
 
-        if tool_context.show_marker_opacity {
+        if tool_context.show_marker_opacity
+            && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
+        {
             add_section(self.side_marker_opacity_height(snapshot), &mut height);
         }
 
         if tool_context.show_font_controls {
-            add_section(self.side_text_size_height(snapshot), &mut height);
-            add_section(self.side_font_height(snapshot), &mut height);
+            if !snapshot.side_section_hidden(ToolbarSideSection::TextSize) {
+                add_section(self.side_text_size_height(snapshot), &mut height);
+            }
+            if !snapshot.side_section_hidden(ToolbarSideSection::Font) {
+                add_section(self.side_font_height(snapshot), &mut height);
+            }
         }
 
         if snapshot.drawer_open {
@@ -132,6 +151,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_hidden(ToolbarSideSection::Colors) {
+            return 0.0;
+        }
         if snapshot.side_section_collapsed(ToolbarSideSection::Colors) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
@@ -380,6 +402,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_hidden(ToolbarSideSection::StepUndo) {
+            return 0.0;
+        }
         if snapshot.side_section_collapsed(ToolbarSideSection::StepUndo) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
@@ -490,6 +515,9 @@ impl ToolbarLayoutSpec {
         section: ToolbarSideSection,
         expanded_height: f64,
     ) -> f64 {
+        if snapshot.side_section_hidden(section) {
+            return 0.0;
+        }
         if snapshot.side_section_collapsed(section) {
             Self::SIDE_COLLAPSED_SECTION_HEIGHT
         } else {

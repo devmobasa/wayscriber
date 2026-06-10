@@ -32,15 +32,15 @@ pub(super) fn draw_tool_row(
     let mut fill_anchor: Option<(f64, f64)> = None;
     let mut rect_x = None;
     let mut circle_end_x = None;
-    for tool in model::top_tool_buttons(is_simple) {
-        if model::is_fill_tool(*tool) && rect_x.is_none() {
+    for tool in model::visible_top_tool_buttons(is_simple, snapshot) {
+        if model::is_fill_tool(tool) && rect_x.is_none() {
             rect_x = Some(x);
         }
-        if model::is_fill_tool(*tool) {
+        if model::is_fill_tool(tool) {
             circle_end_x = Some(x + btn_size);
         }
 
-        let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
+        let is_active = snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
         let is_hover = layout
             .hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
@@ -52,23 +52,23 @@ pub(super) fn draw_tool_row(
         let icon_y = y + (btn_size - icon_size) / 2.0;
         draw_semantic_tool_icon(
             layout.ctx,
-            model::semantic_icon_for_tool(*tool),
+            model::semantic_icon_for_tool(tool),
             icon_x,
             icon_y,
             icon_size,
         );
 
-        let tooltip = layout.tool_tooltip(*tool, tool_tooltip_label(*tool));
+        let tooltip = layout.tool_tooltip(tool, tool_tooltip_label(tool));
         layout.hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::SelectTool(*tool),
+            event: ToolbarEvent::SelectTool(tool),
             kind: HitKind::Click,
             tooltip: Some(tooltip),
         });
         x += btn_size + gap;
     }
 
-    if is_simple {
+    if model::top_shape_picker_visible(snapshot) && is_simple {
         let shapes_active = snapshot.shape_picker_open || current_shape_tool.is_some();
         let shapes_hover = layout
             .hover
@@ -101,7 +101,7 @@ pub(super) fn draw_tool_row(
         });
         fill_anchor = Some((x, btn_size));
         x += btn_size + gap;
-    } else {
+    } else if model::top_shape_picker_visible(snapshot) {
         let current_polygon_tool = current_shape_tool.filter(|tool| model::is_polygon_tool(*tool));
         let polygons_active = snapshot.shape_picker_open || current_polygon_tool.is_some();
         let polygons_hover = layout

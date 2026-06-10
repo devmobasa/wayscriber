@@ -1,4 +1,4 @@
-use crate::config::{ResolvedToolbarItems, ToolbarLayoutMode};
+use crate::config::{ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode};
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
@@ -339,6 +339,58 @@ pub struct ToolbarSnapshot {
 }
 
 impl ToolbarSnapshot {
+    pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {
+        self.resolved_toolbar_items.is_hidden(item)
+    }
+
+    pub fn toolbar_group_hidden(&self, group: ToolbarGroupId) -> bool {
+        self.toolbar_item_hidden(group.toolbar_item_id())
+    }
+
+    pub fn side_section_hidden(&self, section: ToolbarSideSection) -> bool {
+        let group = match section {
+            ToolbarSideSection::Colors => ToolbarGroupId::Colors,
+            ToolbarSideSection::Presets => ToolbarGroupId::Presets,
+            ToolbarSideSection::Thickness => ToolbarGroupId::Thickness,
+            ToolbarSideSection::EraserMode => ToolbarGroupId::EraserMode,
+            ToolbarSideSection::PolygonSides => ToolbarGroupId::PolygonSides,
+            ToolbarSideSection::ArrowLabels => ToolbarGroupId::ArrowLabels,
+            ToolbarSideSection::StepMarkers => ToolbarGroupId::StepMarkers,
+            ToolbarSideSection::MarkerOpacity => ToolbarGroupId::MarkerOpacity,
+            ToolbarSideSection::TextSize => ToolbarGroupId::TextSize,
+            ToolbarSideSection::Font => ToolbarGroupId::Font,
+            ToolbarSideSection::Actions => ToolbarGroupId::Actions,
+            ToolbarSideSection::Boards => ToolbarGroupId::Boards,
+            ToolbarSideSection::Pages => ToolbarGroupId::Pages,
+            ToolbarSideSection::StepUndo => ToolbarGroupId::StepUndo,
+            ToolbarSideSection::Session => ToolbarGroupId::Session,
+            ToolbarSideSection::Settings => ToolbarGroupId::Settings,
+        };
+        let legacy_item = match section {
+            ToolbarSideSection::Colors => Some("side.tool-options.color"),
+            ToolbarSideSection::Thickness => Some("side.tool-options.thickness"),
+            ToolbarSideSection::EraserMode => Some("side.tool-options.eraser-mode"),
+            ToolbarSideSection::PolygonSides => Some("side.tool-options.polygon-sides"),
+            ToolbarSideSection::ArrowLabels => Some("side.tool-options.arrow-labels"),
+            ToolbarSideSection::StepMarkers => Some("side.tool-options.step-marker-reset"),
+            ToolbarSideSection::MarkerOpacity => Some("side.tool-options.marker-opacity"),
+            ToolbarSideSection::TextSize => Some("side.tool-options.font-size"),
+            ToolbarSideSection::Font => Some("side.tool-options.font-family"),
+            ToolbarSideSection::Presets
+            | ToolbarSideSection::Actions
+            | ToolbarSideSection::Boards
+            | ToolbarSideSection::Pages
+            | ToolbarSideSection::StepUndo
+            | ToolbarSideSection::Session
+            | ToolbarSideSection::Settings => None,
+        };
+
+        self.toolbar_group_hidden(group)
+            || legacy_item.is_some_and(|item| {
+                self.toolbar_item_hidden(ToolbarItemId::from_known(item))
+            })
+    }
+
     pub fn side_section_collapsed(&self, section: ToolbarSideSection) -> bool {
         self.collapsed_side_sections.contains(&section)
     }

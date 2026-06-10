@@ -81,18 +81,22 @@ pub fn render_top_strip(
     let handle_w = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
     let handle_h = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
     let handle_y = ToolbarLayoutSpec::TOP_HANDLE_Y;
-    let handle_hover = layout
-        .hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, handle_y, handle_w, handle_h))
-        .unwrap_or(false);
-    draw_drag_handle(ctx, x, handle_y, handle_w, handle_h, handle_hover);
-    layout.hits.push(HitRegion {
-        rect: (x, handle_y, handle_w, handle_h),
-        event: ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
-        kind: HitKind::DragMoveTop,
-        tooltip: Some("Drag toolbar".to_string()),
-    });
-    x += handle_w + layout.gap;
+    let handle_visible = model::toolbar_item_visible(snapshot, "top.chrome.drag");
+    if handle_visible {
+        let handle_hover = layout
+            .hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, handle_y, handle_w, handle_h))
+            .unwrap_or(false);
+        draw_drag_handle(ctx, x, handle_y, handle_w, handle_h, handle_hover);
+        layout.hits.push(HitRegion {
+            rect: (x, handle_y, handle_w, handle_h),
+            event: ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
+            kind: HitKind::DragMoveTop,
+            tooltip: Some("Drag toolbar".to_string()),
+        });
+        x += handle_w + layout.gap;
+    }
+    let picker_handle_w = if handle_visible { handle_w } else { 0.0 };
 
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let current_shape_tool =
@@ -103,7 +107,7 @@ pub fn render_top_strip(
         icons::draw_icon_strip(
             &mut layout,
             x,
-            handle_w,
+            picker_handle_w,
             is_simple,
             current_shape_tool,
             fill_tool_active,
@@ -112,7 +116,7 @@ pub fn render_top_strip(
         text::draw_text_strip(
             &mut layout,
             x,
-            handle_w,
+            picker_handle_w,
             is_simple,
             current_shape_tool,
             fill_tool_active,
@@ -121,35 +125,39 @@ pub fn render_top_strip(
 
     let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
     let btn_y = layout.spec.top_pin_button_y(height);
-    let pin_x = layout.spec.top_pin_x(width);
-    let pin_hover = layout
-        .hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, btn_y, btn_size, btn_size))
-        .unwrap_or(false);
-    draw_pin_button(ctx, pin_x, btn_y, btn_size, snapshot.top_pinned, pin_hover);
-    layout.hits.push(HitRegion {
-        rect: (pin_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
-        kind: HitKind::Click,
-        tooltip: Some(if snapshot.top_pinned {
-            "Pinned: opens at startup (click to disable)".to_string()
-        } else {
-            "Pin: click to open at startup".to_string()
-        }),
-    });
+    let mut right_x = width - ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT - btn_size;
+    if model::toolbar_item_visible(snapshot, "top.chrome.close") {
+        let close_hover = layout
+            .hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))
+            .unwrap_or(false);
+        draw_close_button(ctx, right_x, btn_y, btn_size, close_hover);
+        layout.hits.push(HitRegion {
+            rect: (right_x, btn_y, btn_size, btn_size),
+            event: ToolbarEvent::CloseTopToolbar,
+            kind: HitKind::Click,
+            tooltip: Some("Close".to_string()),
+        });
+        right_x -= btn_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
+    }
 
-    let close_x = layout.spec.top_close_x(width);
-    let close_hover = layout
-        .hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, btn_y, btn_size, btn_size))
-        .unwrap_or(false);
-    draw_close_button(ctx, close_x, btn_y, btn_size, close_hover);
-    layout.hits.push(HitRegion {
-        rect: (close_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::CloseTopToolbar,
-        kind: HitKind::Click,
-        tooltip: Some("Close".to_string()),
-    });
+    if model::toolbar_item_visible(snapshot, "top.chrome.pin") {
+        let pin_hover = layout
+            .hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))
+            .unwrap_or(false);
+        draw_pin_button(ctx, right_x, btn_y, btn_size, snapshot.top_pinned, pin_hover);
+        layout.hits.push(HitRegion {
+            rect: (right_x, btn_y, btn_size, btn_size),
+            event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
+            kind: HitKind::Click,
+            tooltip: Some(if snapshot.top_pinned {
+                "Pinned: opens at startup (click to disable)".to_string()
+            } else {
+                "Pin: click to open at startup".to_string()
+            }),
+        });
+    }
 
     draw_tooltip_with_delay(
         ctx,

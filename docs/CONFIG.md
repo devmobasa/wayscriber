@@ -555,6 +555,16 @@ side_offset_x = 0.0
 
 # Force inline toolbars even when layer-shell is available
 force_inline = false
+
+[ui.toolbar.items]
+# Hide individual toolbar items or whole side sections by stable ID.
+# Unknown IDs are warned about but preserved across toolbar saves.
+hidden = [
+  "top.tool.blur",
+  "top.utility.clear-canvas",
+  "side.actions.undo-all",
+  "side.group.presets",
+]
 ```
 
 **Behavior:**
@@ -579,6 +589,7 @@ force_inline = false
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
+- **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 
 **Defaults:** all set as above.
 

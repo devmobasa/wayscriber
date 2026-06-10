@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
+use crate::config::ToolbarItemId;
 use crate::input::ToolbarDrawerTab;
 
-use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSnapshot};
+use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
 const MAX_RECENT_SESSIONS: usize = 3;
 pub(crate) const SESSION_BUTTON_COLUMNS: usize = 3;
@@ -18,7 +19,10 @@ pub(crate) struct ToolbarSessionModel {
 
 impl ToolbarSessionModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        if !snapshot.drawer_open || snapshot.drawer_tab != ToolbarDrawerTab::App {
+        if snapshot.side_section_hidden(ToolbarSideSection::Session)
+            || !snapshot.drawer_open
+            || snapshot.drawer_tab != ToolbarDrawerTab::App
+        {
             return None;
         }
 
@@ -32,13 +36,16 @@ impl ToolbarSessionModel {
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "No persisted session target".to_string());
         let target_active = snapshot.active_session_path.is_some();
-        let buttons = vec![
+        let buttons: Vec<_> = vec![
             ToolbarSessionButton::new(ToolbarEvent::OpenSession, "Open", target_active),
             ToolbarSessionButton::new(ToolbarEvent::SaveSessionAs, "Save As", target_active),
             ToolbarSessionButton::new(ToolbarEvent::SessionInfo, "Info", target_active),
             ToolbarSessionButton::new(ToolbarEvent::ClearSession, "Clear", target_active),
             ToolbarSessionButton::new(ToolbarEvent::OpenConfigurator, "Manager", true),
-        ];
+        ]
+        .into_iter()
+        .filter(|button| session_button_visible(snapshot, &button.event))
+        .collect();
         let recents = if target_active {
             snapshot
                 .recent_sessions
@@ -57,7 +64,7 @@ impl ToolbarSessionModel {
                 path: path.clone(),
             });
 
-        Some(Self {
+        (!buttons.is_empty() || !recents.is_empty()).then_some(Self {
             active_name,
             active_path_label,
             buttons,
@@ -136,6 +143,21 @@ fn session_path_label(path: &std::path::Path) -> String {
         .and_then(|name| name.to_str())
         .map(str::to_string)
         .unwrap_or_else(|| path.display().to_string())
+}
+
+fn session_button_visible(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> bool {
+    session_button_item_id(event).is_none_or(|id| !snapshot.toolbar_item_hidden(id))
+}
+
+fn session_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
+    Some(ToolbarItemId::from_known(match event {
+        ToolbarEvent::OpenSession => "side.session.open",
+        ToolbarEvent::SaveSessionAs => "side.session.save-as",
+        ToolbarEvent::SessionInfo => "side.session.info",
+        ToolbarEvent::ClearSession => "side.session.clear",
+        ToolbarEvent::OpenConfigurator => "side.session.manager",
+        _ => return None,
+    }))
 }
 
 #[cfg(test)]

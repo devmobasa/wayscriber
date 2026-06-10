@@ -7,6 +7,13 @@ pub(super) fn push_thickness_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::Thickness)
+    {
+        return y;
+    }
+
     let card_h = ctx.spec.side_thickness_height(ctx.snapshot);
     super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Thickness, hits);
     if ctx
@@ -58,6 +65,13 @@ pub(super) fn push_eraser_mode_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::EraserMode)
+    {
+        return y;
+    }
+
     let card_h = ctx.spec.side_eraser_mode_height(ctx.snapshot);
     super::section_header::push_collapsible_header_hit(
         ctx,
@@ -99,6 +113,13 @@ pub(super) fn push_polygon_sides_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::PolygonSides)
+    {
+        return y;
+    }
+
     let card_h = ctx.spec.side_polygon_sides_height(ctx.snapshot);
     super::section_header::push_collapsible_header_hit(
         ctx,
@@ -142,7 +163,9 @@ pub(super) fn push_text_size_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ToolContext::from_snapshot(ctx.snapshot).show_font_controls {
+    if ctx.snapshot.side_section_hidden(ToolbarSideSection::TextSize)
+        || !ToolContext::from_snapshot(ctx.snapshot).show_font_controls
+    {
         return y;
     }
 
@@ -176,7 +199,11 @@ pub(super) fn push_marker_opacity_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ToolContext::from_snapshot(ctx.snapshot).show_marker_opacity {
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::MarkerOpacity)
+        || !ToolContext::from_snapshot(ctx.snapshot).show_marker_opacity
+    {
         return y;
     }
 
@@ -218,7 +245,9 @@ pub(super) fn push_font_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ToolContext::from_snapshot(ctx.snapshot).show_font_controls {
+    if ctx.snapshot.side_section_hidden(ToolbarSideSection::Font)
+        || !ToolContext::from_snapshot(ctx.snapshot).show_font_controls
+    {
         return y;
     }
 

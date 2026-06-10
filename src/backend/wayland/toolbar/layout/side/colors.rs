@@ -6,6 +6,10 @@ pub(super) fn push_color_picker_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
+    if ctx.snapshot.side_section_hidden(ToolbarSideSection::Colors) {
+        return y;
+    }
+
     let card_h = ctx.spec.side_colors_height(ctx.snapshot);
     super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Colors, hits);
     if ctx

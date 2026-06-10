@@ -28,7 +28,8 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         size: super::super::widgets::constants::FONT_SIZE_LABEL,
     };
 
-    if !snapshot.show_step_section
+    if snapshot.side_section_hidden(ToolbarSideSection::StepUndo)
+        || !snapshot.show_step_section
         || !snapshot.drawer_open
         || snapshot.drawer_tab != ToolbarDrawerTab::App
     {

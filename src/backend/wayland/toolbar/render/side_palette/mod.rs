@@ -19,7 +19,7 @@ use anyhow::Result;
 
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 use crate::ui::toolbar::snapshot::ToolContext;
 
 use std::time::Instant;
@@ -94,14 +94,20 @@ pub fn render_side_palette(
     let mut y = header::draw_header(&mut layout);
 
     // Color section: only show when the tool needs color
-    let colors_info = if tool_context.needs_color {
+    let colors_info = if tool_context.needs_color
+        && !snapshot.side_section_hidden(ToolbarSideSection::Colors)
+    {
         colors::draw_colors_section(&mut layout, &mut y)
     } else {
         None
     };
 
     // Presets section (always shown when enabled)
-    let hover_preset_color = presets::draw_presets_section(&mut layout, &mut y);
+    let hover_preset_color = if snapshot.side_section_hidden(ToolbarSideSection::Presets) {
+        None
+    } else {
+        presets::draw_presets_section(&mut layout, &mut y)
+    };
     if let (Some(color), Some(info)) = (hover_preset_color, &colors_info) {
         colors::draw_preset_hover_highlight(&layout, info, color);
     }
@@ -112,23 +118,33 @@ pub fn render_side_palette(
     }
 
     // Arrow labels: show when arrow tool is active
-    if tool_context.show_arrow_labels {
+    if tool_context.show_arrow_labels
+        && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
+    {
         arrow::draw_arrow_section(&mut layout, &mut y);
     }
 
     // Step marker counter: show when step marker tool is active
-    if tool_context.show_step_counter {
+    if tool_context.show_step_counter
+        && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
+    {
         step_marker::draw_step_marker_section(&mut layout, &mut y);
     }
 
     // Marker opacity: show when marker tool is active
-    if tool_context.show_marker_opacity {
+    if tool_context.show_marker_opacity
+        && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
+    {
         marker::draw_marker_opacity_section(&mut layout, &mut y);
     }
 
     // Text controls: show when text/note mode is active
     if tool_context.show_font_controls {
-        text::draw_text_controls_section(&mut layout, &mut y);
+        if !snapshot.side_section_hidden(ToolbarSideSection::TextSize)
+            || !snapshot.side_section_hidden(ToolbarSideSection::Font)
+        {
+            text::draw_text_controls_section(&mut layout, &mut y);
+        }
     }
 
     // Drawer, actions, and other sections (always available based on settings)

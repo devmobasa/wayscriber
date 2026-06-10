@@ -35,6 +35,7 @@ impl ToolbarItemsConfig {
         }
     }
 
+    #[cfg(test)]
     pub fn set_hidden(&mut self, id: ToolbarItemId, hidden: bool) {
         let mut next = Vec::with_capacity(self.hidden.len() + usize::from(hidden));
         let mut seen_known = BTreeSet::new();
@@ -58,9 +59,6 @@ impl ToolbarItemsConfig {
         self.hidden = next;
     }
 
-    pub fn is_hidden(&self, id: ToolbarItemId) -> bool {
-        self.resolved().is_hidden(id)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -79,6 +77,10 @@ impl ResolvedToolbarItems {
 pub struct ToolbarItemId(&'static str);
 
 impl ToolbarItemId {
+    pub const fn from_known(value: &'static str) -> Self {
+        Self(value)
+    }
+
     pub const fn as_str(self) -> &'static str {
         self.0
     }
@@ -147,6 +149,27 @@ impl ToolbarGroupId {
             Self::Settings => "settings",
             Self::Session => "session",
         }
+    }
+
+    pub const fn toolbar_item_id(self) -> ToolbarItemId {
+        ToolbarItemId::from_known(match self {
+            Self::Colors => "side.group.colors",
+            Self::Thickness => "side.group.thickness",
+            Self::EraserMode => "side.group.eraser-mode",
+            Self::PolygonSides => "side.group.polygon-sides",
+            Self::ArrowLabels => "side.group.arrow-labels",
+            Self::StepMarkers => "side.group.step-markers",
+            Self::StepUndo => "side.group.step-undo",
+            Self::MarkerOpacity => "side.group.marker-opacity",
+            Self::TextSize => "side.group.text-size",
+            Self::Font => "side.group.font",
+            Self::Actions => "side.group.actions",
+            Self::Pages => "side.group.pages",
+            Self::Boards => "side.group.boards",
+            Self::Presets => "side.group.presets",
+            Self::Settings => "side.group.settings",
+            Self::Session => "side.group.session",
+        })
     }
 }
 
