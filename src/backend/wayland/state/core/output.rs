@@ -380,7 +380,7 @@ impl WaylandState {
             if !self.xdg_fullscreen() {
                 self.input_state.set_ui_toast(
                     UiToastKind::Info,
-                    "Enable ui.xdg_fullscreen to switch outputs on xdg fallback",
+                    "Enable fullscreen mode before switching outputs in this session.",
                 );
                 self.input_state.trigger_blocked_feedback();
                 return;

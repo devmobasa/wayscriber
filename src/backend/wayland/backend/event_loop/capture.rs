@@ -97,7 +97,7 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
         );
         state.input_state.set_ui_toast(
             UiToastKind::Warning,
-            "Freeze unavailable: no screenshot backend is available.",
+            "Freeze is unavailable because screen capture is not available.",
         );
     } else if state.frozen.is_in_progress() {
         warn!("Frozen capture already in progress; ignoring toggle");

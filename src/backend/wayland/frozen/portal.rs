@@ -36,7 +36,7 @@ impl FrozenState {
         crate::notification::send_notification_async(
             tokio_handle,
             "Freezing screen".to_string(),
-            "Taking screenshot via portal…".to_string(),
+            "Requesting screen capture...".to_string(),
             Some("camera-photo".to_string()),
         );
         tokio_handle.spawn(async move {
@@ -78,7 +78,7 @@ impl FrozenState {
             warn!("Portal frozen capture timed out; restoring overlay");
             input_state.set_ui_toast(
                 UiToastKind::Error,
-                "Freeze timed out waiting for the screenshot portal",
+                "Freeze timed out while waiting for screen capture.",
             );
             input_state.set_frozen_active(false);
             self.portal_in_progress = false;
@@ -110,10 +110,8 @@ impl FrozenState {
                 }
                 Ok(Err(err)) => {
                     warn!("Portal frozen capture failed: {}", err);
-                    input_state.set_ui_toast(
-                        UiToastKind::Error,
-                        "Freeze failed through the screenshot portal",
-                    );
+                    input_state
+                        .set_ui_toast(UiToastKind::Error, "Freeze could not capture the screen.");
                     input_state.set_frozen_active(false);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
@@ -126,7 +124,7 @@ impl FrozenState {
                     warn!("Portal frozen capture channel disconnected");
                     input_state.set_ui_toast(
                         UiToastKind::Error,
-                        "Freeze failed because the screenshot portal stopped responding",
+                        "Freeze could not capture the screen because the system capture service stopped responding.",
                     );
                     input_state.set_frozen_active(false);
                     self.portal_in_progress = false;

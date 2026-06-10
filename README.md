@@ -178,7 +178,7 @@ For distro-specific package details, see [Installation](#installation). For keyb
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Wayland (layer-shell) | ✅ Supported | Hyprland, Sway, River, Wayfire, Niri/Cosmic, Plasma/KWin |
-| GNOME | ⚠️ Partial | Freeze via portal when available; stock GNOME light passthrough unavailable |
+| GNOME | ⚠️ Partial | Normal overlay and Freeze via portal when available; Light Mode passthrough unavailable |
 | X11 | ❌ | Not supported |
 
 <details>
@@ -510,7 +510,7 @@ Light passthrough controls:
 - <kbd>Ctrl+Shift+L</kbd> is a Wayscriber in-overlay shortcut, not an OS/global shortcut. It works while the overlay is focused.
 - Once light passthrough is active, normal keyboard and pointer input goes to the app underneath. Bind compositor/global shortcuts to `wayscriber --light-toggle` and `wayscriber --light-draw-toggle` for reliable control.
 - Use `wayscriber --light-draw-on` on press and `wayscriber --light-draw-off` on release for draw-while-held shortcuts.
-- Stock GNOME Wayland does not support this regular-app passthrough mode. Use Freeze for still-frame annotation workflows, or a GNOME Shell extension approach for true shell-level passthrough.
+- Stock GNOME Wayland does not support this regular-app passthrough mode. Freeze may still work for still-image capture, but it is not a live passthrough replacement. A GNOME Shell extension approach would be needed for true shell-level passthrough.
 
 Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options:
 - Toggle overlay visibility
@@ -736,7 +736,7 @@ The polygon tools are available from the toolbar picker; their default keybindin
 
 </details>
 
-For light passthrough, <kbd>Ctrl+Shift+L</kbd> is the default Wayscriber-level binding only while the overlay has focus. Use compositor/global shortcuts that run `wayscriber --light-toggle` and related light-draw commands once passthrough is active. On stock GNOME Wayland, regular app windows cannot provide the required click-through shell overlay; Freeze remains the supported GNOME fallback when portal capture is available.
+For light passthrough, <kbd>Ctrl+Shift+L</kbd> is the default Wayscriber-level binding only while the overlay has focus. Use compositor/global shortcuts that run `wayscriber --light-toggle` and related light-draw commands once passthrough is active. On stock GNOME Wayland, regular app windows cannot provide the required click-through shell overlay. Freeze may still work for still-image capture, but it is not a live passthrough replacement.
 
 Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>. Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`). Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`. Blur has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
 

@@ -34,7 +34,7 @@ impl ZoomState {
         crate::notification::send_notification_async(
             tokio_handle,
             "Zoom capture".to_string(),
-            "Taking screenshot via portal...".to_string(),
+            "Requesting screen capture...".to_string(),
             Some("camera-photo".to_string()),
         );
         tokio_handle.spawn(async move {

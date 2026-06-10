@@ -17,15 +17,15 @@ impl InputState {
             caps.freeze_capture,
         ) {
             (DesktopEnvironment::Gnome, ShellMode::XdgFallback, true) => {
-                "Light passthrough is unavailable on stock GNOME Wayland. Use Freeze for a still-frame workflow."
+                "Light Mode passthrough is not supported in this GNOME Wayland session."
             }
             (DesktopEnvironment::Gnome, ShellMode::XdgFallback, false) => {
-                "Light passthrough is unavailable on stock GNOME Wayland. No freeze capture backend is available in this session."
+                "Light Mode passthrough is not supported in this GNOME Wayland session. Screen capture is also unavailable."
             }
             (_, ShellMode::XdgFallback, _) => {
-                "Light passthrough requires compositor overlay support; this session is using the xdg-shell fallback."
+                "Light Mode passthrough is not supported in this desktop session."
             }
-            _ => "Light passthrough requires compositor overlay support.",
+            _ => "Light Mode passthrough is not supported by this compositor.",
         }
     }
 

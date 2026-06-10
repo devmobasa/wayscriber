@@ -167,7 +167,7 @@ pub(super) fn run_event_loop(
                 notification::send_notification_async(
                     &state.tokio_handle,
                     "Wayscriber lost focus".to_string(),
-                    "GNOME could not keep the overlay focused; closing fallback window."
+                    "The desktop could not keep the overlay focused, so Wayscriber closed it."
                         .to_string(),
                     Some("dialog-warning".to_string()),
                 );
