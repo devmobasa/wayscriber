@@ -119,6 +119,9 @@ impl ConfiguratorApp {
             Message::ToolbarOverrideChanged(field, option) => {
                 self.handle_toolbar_override_changed(field, option)
             }
+            Message::ToolbarItemVisibilityChanged(id, visible) => {
+                self.handle_toolbar_item_visibility_changed(id, visible)
+            }
             Message::BoardsAddItem => self.handle_boards_add_item(),
             Message::BoardsRemoveItem(index) => self.handle_boards_remove_item(index),
             Message::BoardsMoveItemUp(index) => self.handle_boards_move_item(index, true),

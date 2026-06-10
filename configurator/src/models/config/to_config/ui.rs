@@ -37,6 +37,7 @@ impl ConfigDraft {
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
+        config.ui.toolbar.items = self.ui_toolbar_items.clone();
         config.ui.toolbar.show_presets = self.ui_toolbar_show_presets;
         config.ui.toolbar.show_actions_section = self.ui_toolbar_show_actions_section;
         config.ui.toolbar.show_actions_advanced = self.ui_toolbar_show_actions_advanced;

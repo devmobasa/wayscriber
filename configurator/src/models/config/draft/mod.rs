@@ -14,7 +14,7 @@ use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
 use super::render_profiles::RenderProfilesDraft;
 use super::toolbar_overrides::ToolbarModeOverridesDraft;
-use wayscriber::config::MouseDragToolsConfig;
+use wayscriber::config::{MouseDragToolsConfig, ToolbarItemsConfig};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigDraft {
@@ -76,6 +76,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
+    pub ui_toolbar_items: ToolbarItemsConfig,
     pub ui_toolbar_show_presets: bool,
     pub ui_toolbar_show_actions_section: bool,
     pub ui_toolbar_show_actions_advanced: bool,

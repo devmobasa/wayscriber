@@ -261,6 +261,7 @@ fn parent_scoped_ui_queries_match_concrete_nested_tabs() {
     let cases = [
         ("ui toolbar", UiTabId::Toolbar),
         ("ui layout mode", UiTabId::Toolbar),
+        ("ui toolbar blur", UiTabId::Toolbar),
         ("interface presenter", UiTabId::PresenterMode),
         ("interface status bar position", UiTabId::StatusBar),
     ];
@@ -285,6 +286,8 @@ fn parent_scoped_ui_queries_match_concrete_nested_tabs() {
 fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
     let cases = [
         ("layout mode", UiTabId::Toolbar),
+        ("top.tool.blur", UiTabId::Toolbar),
+        ("side.group.presets", UiTabId::Toolbar),
         ("status bar position", UiTabId::StatusBar),
         ("click highlight radius", UiTabId::ClickHighlight),
     ];
