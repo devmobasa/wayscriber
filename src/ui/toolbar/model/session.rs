@@ -21,7 +21,7 @@ impl ToolbarSessionModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
         if snapshot.side_section_hidden(ToolbarSideSection::Session)
             || !snapshot.drawer_open
-            || snapshot.drawer_tab != ToolbarDrawerTab::App
+            || snapshot.drawer_tab != ToolbarDrawerTab::Session
         {
             return None;
         }
@@ -169,7 +169,7 @@ mod tests {
     fn app_snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
         state.toolbar_drawer_open = true;
-        state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+        state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
     }
 

@@ -19,6 +19,7 @@ use anyhow::Result;
 
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::input::ToolbarDrawerTab;
 use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 use crate::ui::toolbar::snapshot::ToolContext;
 
@@ -92,6 +93,29 @@ pub fn render_side_palette(
     let tool_context = ToolContext::from_snapshot(snapshot);
 
     let mut y = header::draw_header(&mut layout);
+
+    if snapshot.drawer_open
+        && (snapshot.customize_items_open
+            || snapshot.drawer_tab == ToolbarDrawerTab::Customize
+            || snapshot.drawer_tab == ToolbarDrawerTab::Session)
+    {
+        drawer::draw_drawer_tabs(&mut layout, &mut y);
+        if snapshot.drawer_tab == ToolbarDrawerTab::Session {
+            session::draw_session_section(&mut layout, &mut y);
+        } else {
+            settings::draw_settings_section(&mut layout, &mut y);
+        }
+        draw_tooltip_with_delay(
+            ctx,
+            layout.hits,
+            layout.hover,
+            width,
+            height,
+            false,
+            hover_start,
+        );
+        return Ok(());
+    }
 
     // Color section: only show when the tool needs color
     let colors_info = if tool_context.needs_color

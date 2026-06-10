@@ -72,6 +72,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::UndoAllDelayed => Some(Action::UndoAllDelayed),
         ToolbarEvent::RedoAllDelayed => Some(Action::RedoAllDelayed),
         ToolbarEvent::ClearCanvas => Some(Action::ClearCanvas),
+        ToolbarEvent::CaptureScreenshot => Some(Action::CaptureSelection),
         ToolbarEvent::PagePrev => Some(Action::PagePrev),
         ToolbarEvent::PageNext => Some(Action::PageNext),
         ToolbarEvent::PageNew => Some(Action::PageNew),
@@ -185,7 +186,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::TogglePresetToasts(_)
         | ToolbarEvent::ToggleToolPreview(_)
         | ToolbarEvent::ToggleDelaySliders(_)
-        | ToolbarEvent::SetToolbarLayoutMode(_) => ToolbarPersistence::Persist(Toolbar),
+        | ToolbarEvent::SetToolbarLayoutMode(_)
+        | ToolbarEvent::SetToolbarItemHidden(_, _)
+        | ToolbarEvent::ResetToolbarItemHiddenOverrides => ToolbarPersistence::Persist(Toolbar),
         ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Persist(History),
         ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Persist(Ui(StatusBar)),
         ToolbarEvent::ToggleStatusBoardBadge(_) => {

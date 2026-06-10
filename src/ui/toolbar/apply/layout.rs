@@ -1,6 +1,6 @@
-use crate::config::ToolbarLayoutMode;
+use crate::config::{ToolbarItemId, ToolbarLayoutMode};
 use crate::input::{InputState, ToolbarDrawerTab};
-use crate::ui::toolbar::ToolbarSideSection;
+use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
     pub(super) fn apply_toolbar_toggle_custom_section(&mut self, enable: bool) -> bool {
@@ -247,6 +247,10 @@ impl InputState {
     pub(super) fn apply_toolbar_toggle_drawer(&mut self, open: bool) -> bool {
         if self.toolbar_drawer_open != open {
             self.toolbar_drawer_open = open;
+            if !open {
+                self.toolbar_customize_items_open = false;
+                self.toolbar_customize_items_group = None;
+            }
             self.needs_redraw = true;
             true
         } else {
@@ -259,6 +263,26 @@ impl InputState {
         if self.toolbar_drawer_tab != tab {
             self.toolbar_drawer_tab = tab;
             changed = true;
+        }
+        match tab {
+            ToolbarDrawerTab::Customize => {
+                if !self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some()
+                {
+                    self.toolbar_customize_items_open = true;
+                    self.toolbar_customize_items_group = None;
+                    changed = true;
+                }
+            }
+            ToolbarDrawerTab::View
+            | ToolbarDrawerTab::App
+            | ToolbarDrawerTab::Session
+            | ToolbarDrawerTab::Sections => {
+                if self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some() {
+                    self.toolbar_customize_items_open = false;
+                    self.toolbar_customize_items_group = None;
+                    changed = true;
+                }
+            }
         }
         if !self.toolbar_drawer_open {
             self.toolbar_drawer_open = true;
@@ -297,6 +321,49 @@ impl InputState {
         } else {
             false
         }
+    }
+
+    pub(super) fn apply_toolbar_set_item_hidden(
+        &mut self,
+        id: ToolbarItemId,
+        hidden: bool,
+    ) -> bool {
+        self.set_toolbar_item_hidden(id, hidden)
+    }
+
+    pub(super) fn apply_toolbar_reset_item_hidden_overrides(&mut self) -> bool {
+        self.reset_toolbar_item_hidden_overrides()
+    }
+
+    pub(super) fn apply_toolbar_set_item_customization_open(&mut self, open: bool) -> bool {
+        if self.toolbar_customize_items_open == open {
+            return false;
+        }
+        self.toolbar_customize_items_open = open;
+        if !open {
+            self.toolbar_customize_items_group = None;
+        }
+        self.toolbar_drawer_open = true;
+        self.toolbar_drawer_tab = ToolbarDrawerTab::App;
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(super) fn apply_toolbar_set_item_customization_group(
+        &mut self,
+        group: Option<ToolbarItemCustomizeGroup>,
+    ) -> bool {
+        if self.toolbar_customize_items_group == group && self.toolbar_customize_items_open {
+            return false;
+        }
+        self.toolbar_customize_items_open = true;
+        self.toolbar_customize_items_group = group;
+        self.toolbar_drawer_open = true;
+        if self.toolbar_drawer_tab != ToolbarDrawerTab::Customize {
+            self.toolbar_drawer_tab = ToolbarDrawerTab::App;
+        }
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_shape_picker(&mut self, open: bool) -> bool {

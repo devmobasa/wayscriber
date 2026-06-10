@@ -9,9 +9,15 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
     };
 
     super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Settings, hits);
-    if ctx
-        .snapshot
-        .side_section_collapsed(ToolbarSideSection::Settings)
+    let dedicated_panel = ctx.snapshot.customize_items_open
+        || matches!(
+            ctx.snapshot.drawer_tab,
+            crate::input::ToolbarDrawerTab::Sections | crate::input::ToolbarDrawerTab::Customize
+        );
+    if !dedicated_panel
+        && ctx
+            .snapshot
+            .side_section_collapsed(ToolbarSideSection::Settings)
     {
         return;
     }
@@ -67,6 +73,58 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             event: button.event.clone(),
             kind: HitKind::Click,
             tooltip: button.tooltip.as_string(),
+        });
+    }
+
+    let mut customize_y = buttons_y;
+    if button_layout.rows > 0 {
+        customize_y += button_layout.height;
+    }
+    customize_y += toggle_gap;
+    let groups = settings_model.groups();
+    let group_layout = grid_layout(
+        ctx.x,
+        customize_y + toggle_h + toggle_gap,
+        button_w,
+        button_h,
+        button_gap,
+        button_gap,
+        2,
+        groups.len(),
+    );
+    for (item, group) in group_layout.items.iter().zip(groups.iter()) {
+        hits.push(HitRegion {
+            rect: (item.x, item.y, item.w, item.h),
+            event: group.event.clone(),
+            kind: HitKind::Click,
+            tooltip: group.tooltip.as_string(),
+        });
+    }
+
+    let mut items_y = customize_y;
+    if group_layout.rows > 0 {
+        items_y += toggle_h + toggle_gap + group_layout.height + toggle_gap;
+    }
+    let item_overrides = settings_model.item_overrides();
+    if !item_overrides.is_empty() {
+        items_y += toggle_h + toggle_gap;
+    }
+    let item_layout = grid_layout(
+        ctx.x,
+        items_y,
+        ctx.content_width,
+        toggle_h,
+        toggle_col_gap,
+        toggle_gap,
+        1,
+        item_overrides.len(),
+    );
+    for (item, override_item) in item_layout.items.iter().zip(item_overrides.iter()) {
+        hits.push(HitRegion {
+            rect: (item.x, item.y, item.w, item.h),
+            event: activation_event(&override_item.activation),
+            kind: HitKind::Click,
+            tooltip: override_item.tooltip.as_string(),
         });
     }
 }

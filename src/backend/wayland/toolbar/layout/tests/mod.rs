@@ -226,7 +226,7 @@ fn side_header_static_hits_match_render_time_header_hits() {
 fn side_settings_static_hits_include_model_controls() {
     let mut state = create_test_input_state();
     state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
     state.show_settings_section = true;
     state.toolbar_layout_mode = crate::config::ToolbarLayoutMode::Regular;
     let snapshot = snapshot_from_state(&state);
@@ -261,7 +261,7 @@ fn side_settings_static_hits_include_model_controls() {
 fn side_session_static_hits_include_model_controls_and_recents() {
     let mut state = create_test_input_state();
     state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
     let mut snapshot = snapshot_from_state(&state);
     snapshot.active_session_path =
         Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));

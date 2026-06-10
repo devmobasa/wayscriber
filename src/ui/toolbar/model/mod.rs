@@ -202,6 +202,60 @@ mod tests {
     }
 
     #[test]
+    fn settings_model_moves_hidden_item_overrides_into_customization_panel() {
+        let mut snapshot = snapshot();
+        snapshot.drawer_tab = ToolbarDrawerTab::App;
+        snapshot.show_settings_section = true;
+        snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+            hidden: vec!["top.tool.pen".to_string()],
+        }
+        .resolved();
+
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(model.item_overrides().is_empty());
+        assert!(model.buttons().iter().any(|button| {
+            matches!(
+                &button.event,
+                ToolbarEvent::SetToolbarItemCustomizationOpen(true)
+            )
+        }));
+        assert!(model
+            .buttons()
+            .iter()
+            .any(|button| matches!(&button.event, ToolbarEvent::ResetToolbarItemHiddenOverrides)));
+
+        snapshot.customize_items_open = true;
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(model.item_overrides().is_empty());
+        assert!(model
+            .groups()
+            .iter()
+            .any(|group| group.label.as_ref() == "Top toolbar"));
+
+        snapshot.customize_items_group =
+            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(model.groups().is_empty());
+        assert!(
+            model
+                .item_overrides()
+                .iter()
+                .any(|item| item.id.as_str() == "top.tool.pen" && !item.shown)
+        );
+        assert!(!model.item_overrides().iter().any(|item| {
+            item.id.as_str() == "side.group.settings"
+                || item.id.as_str().starts_with("side.settings.")
+        }));
+        assert!(model
+            .buttons()
+            .iter()
+            .any(|button| matches!(
+                &button.event,
+                ToolbarEvent::SetToolbarItemCustomizationOpen(false)
+            )));
+    }
+
+    #[test]
     fn event_policy_classifies_persistence_and_pre_apply_effects() {
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleStatusBar(false)).persistence,

@@ -35,6 +35,20 @@ pub fn build_side_hits(
 
     let mut y = ctx.spec.side_content_start_y();
 
+    if snapshot.drawer_open
+        && (snapshot.customize_items_open
+            || snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize
+            || snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session)
+    {
+        y = drawer::push_drawer_tabs_hits(&ctx, y, hits);
+        if snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session {
+            session::push_session_hits(&ctx, y, hits);
+        } else {
+            settings::push_settings_hits(&ctx, y, hits);
+        }
+        return;
+    }
+
     // Color section: only when tool needs color
     if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
         y = colors::push_color_picker_hits(&ctx, y, hits);

@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::config::Action;
+use crate::config::{Action, ToolbarItemId};
 
 impl InputState {
     /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
@@ -88,6 +88,27 @@ impl InputState {
         self.show_preset_toasts = show_preset_toasts;
         self.show_tool_preview = show_tool_preview;
         self.apply_toolbar_mode_overrides(layout_mode);
+    }
+
+    pub fn set_toolbar_item_hidden(&mut self, id: ToolbarItemId, hidden: bool) -> bool {
+        if self.resolved_toolbar_items.is_hidden(id) == hidden {
+            return false;
+        }
+
+        self.toolbar_items.set_hidden(id, hidden);
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
+        if !self.toolbar_items.reset_known_hidden_to_defaults() {
+            return false;
+        }
+
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
     }
 
     fn apply_toolbar_mode_overrides(&mut self, mode: crate::config::ToolbarLayoutMode) {

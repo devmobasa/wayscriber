@@ -44,7 +44,7 @@ fn assert_expand_hits(hits: &[HitRegion], sections: &[ToolbarSideSection]) {
 fn collapsed_header_hit_excludes_body_start_boundary() {
     let mut state = create_test_input_state();
     state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
     state.show_settings_section = true;
     let snapshot = snapshot_from_state(&state);
     let hits = static_side_hits(&snapshot);
@@ -180,6 +180,7 @@ fn common_side_sections_collapsed_keep_only_headers() {
     state
         .toolbar_collapsed_side_sections
         .extend(sections.iter().copied());
+    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
 
     let mut collapsed = snapshot_from_state(&state);
     collapsed.active_session_path =

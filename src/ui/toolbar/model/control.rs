@@ -151,7 +151,9 @@ pub(crate) enum ToolbarControlRole {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarIcon {
+    Back,
     Settings,
+    Visibility,
     File,
     More,
     Board,

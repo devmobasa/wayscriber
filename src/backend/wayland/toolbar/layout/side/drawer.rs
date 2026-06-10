@@ -14,11 +14,16 @@ pub(super) fn push_drawer_tabs_hits(
     let tab_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let tab_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
     let tab_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-    let tab_w = (ctx.content_width - tab_gap) / 2.0;
-    let tabs = [ToolbarDrawerTab::View, ToolbarDrawerTab::App];
+    let tabs = ToolbarDrawerTab::ALL;
+    let tab_columns = 3usize;
+    let tab_w =
+        (ctx.content_width - tab_gap * (tab_columns - 1) as f64) / tab_columns as f64;
 
     for (idx, tab) in tabs.iter().enumerate() {
-        let tab_x = ctx.x + (tab_w + tab_gap) * idx as f64;
+        let tab_col = idx % tab_columns;
+        let tab_row = idx / tab_columns;
+        let tab_x = ctx.x + (tab_w + tab_gap) * tab_col as f64;
+        let tab_y = tab_y + (tab_h + tab_gap) * tab_row as f64;
         hits.push(HitRegion {
             rect: (tab_x, tab_y, tab_w, tab_h),
             event: ToolbarEvent::SetDrawerTab(*tab),

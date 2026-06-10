@@ -210,6 +210,10 @@ pub struct InputState {
     pub toolbar_drawer_open: bool,
     /// Active toolbar drawer tab
     pub toolbar_drawer_tab: ToolbarDrawerTab,
+    /// Whether the Settings drawer is showing the toolbar item customization sub-panel
+    pub toolbar_customize_items_open: bool,
+    /// Selected toolbar item customization group in the Settings drawer sub-panel
+    pub toolbar_customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)

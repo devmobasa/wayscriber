@@ -146,6 +146,8 @@ impl InputState {
             toolbar_shapes_expanded: false,
             toolbar_drawer_open: false,
             toolbar_drawer_tab: ToolbarDrawerTab::View,
+            toolbar_customize_items_open: false,
+            toolbar_customize_items_group: None,
             screen_width: 0,
             screen_height: 0,
             show_active_output_badge: false,

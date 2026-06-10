@@ -271,6 +271,25 @@ pub fn draw_icon_screenshot(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.fill();
 }
 
+/// Draw a visibility/eye icon.
+pub fn draw_icon_visibility(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.09).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    let cx = x + s * 0.5;
+    let cy = y + s * 0.5;
+    ctx.move_to(x + s * 0.14, cy);
+    ctx.curve_to(x + s * 0.28, y + s * 0.25, x + s * 0.72, y + s * 0.25, x + s * 0.86, cy);
+    ctx.curve_to(x + s * 0.72, y + s * 0.75, x + s * 0.28, y + s * 0.75, x + s * 0.14, cy);
+    let _ = ctx.stroke();
+
+    ctx.arc(cx, cy, s * 0.14, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+}
+
 /// Draw a left chevron/arrow icon for navigation.
 pub fn draw_icon_chevron_left(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

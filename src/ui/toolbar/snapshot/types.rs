@@ -312,6 +312,10 @@ pub struct ToolbarSnapshot {
     pub drawer_open: bool,
     /// Active drawer tab
     pub drawer_tab: ToolbarDrawerTab,
+    /// Whether the Settings drawer is showing the toolbar item customization sub-panel.
+    pub customize_items_open: bool,
+    /// Selected toolbar item customization group in the Settings drawer sub-panel.
+    pub customize_items_group: Option<super::super::events::ToolbarItemCustomizeGroup>,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews

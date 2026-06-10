@@ -31,6 +31,9 @@ pub(crate) enum ToolbarControlId {
     SettingsBoards,
     SettingsPages,
     SettingsStepControls,
+    CustomizeToolbarItems,
+    BackToolbarSettings,
+    ResetToolbarHiddenItems,
     OpenConfigurator,
     OpenConfigFile,
 }
