@@ -16,8 +16,7 @@ pub(super) fn push_drawer_tabs_hits(
     let tab_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let tabs = ToolbarDrawerTab::ALL;
     let tab_columns = 3usize;
-    let tab_w =
-        (ctx.content_width - tab_gap * (tab_columns - 1) as f64) / tab_columns as f64;
+    let tab_w = (ctx.content_width - tab_gap * (tab_columns - 1) as f64) / tab_columns as f64;
 
     for (idx, tab) in tabs.iter().enumerate() {
         let tab_col = idx % tab_columns;

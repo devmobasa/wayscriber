@@ -19,13 +19,13 @@ impl ToolbarLayoutSpec {
         let show_actions = ToolbarActionsModel::from_snapshot(snapshot).is_some();
         let show_pages = toolbar_pages_model(snapshot).is_some();
         let show_boards = toolbar_boards_model(snapshot).is_some();
-        let drawer_session = snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session;
+        let drawer_session =
+            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session;
         let drawer_customizing = snapshot.drawer_open
             && (snapshot.customize_items_open
                 || snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize);
-        let drawer_sections = snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
+        let drawer_sections =
+            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
         let show_presets = !snapshot.side_section_hidden(ToolbarSideSection::Presets)
             && snapshot.show_presets
             && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;

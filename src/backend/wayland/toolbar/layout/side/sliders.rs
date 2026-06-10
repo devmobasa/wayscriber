@@ -163,7 +163,9 @@ pub(super) fn push_text_size_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if ctx.snapshot.side_section_hidden(ToolbarSideSection::TextSize)
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::TextSize)
         || !ToolContext::from_snapshot(ctx.snapshot).show_font_controls
     {
         return y;

@@ -269,14 +269,28 @@ pub(super) fn draw_text_strip(
             model::polygon_tools()
         };
         if model::visible_tool_count(first_row, snapshot) > 0 {
-            draw_picker_text_row(layout, handle_w, shape_y, btn_w, btn_h, label_style, first_row);
+            draw_picker_text_row(
+                layout,
+                handle_w,
+                shape_y,
+                btn_w,
+                btn_h,
+                label_style,
+                first_row,
+            );
             shape_y += btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
         }
         if is_simple {
             let second_row = model::polygon_tools();
             if model::visible_tool_count(second_row, snapshot) > 0 {
                 draw_picker_text_row(
-                    layout, handle_w, shape_y, btn_w, btn_h, label_style, second_row,
+                    layout,
+                    handle_w,
+                    shape_y,
+                    btn_w,
+                    btn_h,
+                    label_style,
+                    second_row,
                 );
             }
         }

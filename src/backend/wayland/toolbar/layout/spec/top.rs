@@ -155,5 +155,4 @@ impl ToolbarLayoutSpec {
             (height - Self::TOP_PIN_BUTTON_SIZE) / 2.0
         }
     }
-
 }

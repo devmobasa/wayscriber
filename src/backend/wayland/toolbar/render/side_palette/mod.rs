@@ -20,8 +20,8 @@ use anyhow::Result;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::ToolbarDrawerTab;
-use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 use crate::ui::toolbar::snapshot::ToolContext;
+use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 
 use std::time::Instant;
 
@@ -118,13 +118,12 @@ pub fn render_side_palette(
     }
 
     // Color section: only show when the tool needs color
-    let colors_info = if tool_context.needs_color
-        && !snapshot.side_section_hidden(ToolbarSideSection::Colors)
-    {
-        colors::draw_colors_section(&mut layout, &mut y)
-    } else {
-        None
-    };
+    let colors_info =
+        if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
+            colors::draw_colors_section(&mut layout, &mut y)
+        } else {
+            None
+        };
 
     // Presets section (always shown when enabled)
     let hover_preset_color = if snapshot.side_section_hidden(ToolbarSideSection::Presets) {
@@ -163,12 +162,11 @@ pub fn render_side_palette(
     }
 
     // Text controls: show when text/note mode is active
-    if tool_context.show_font_controls {
-        if !snapshot.side_section_hidden(ToolbarSideSection::TextSize)
-            || !snapshot.side_section_hidden(ToolbarSideSection::Font)
-        {
-            text::draw_text_controls_section(&mut layout, &mut y);
-        }
+    if tool_context.show_font_controls
+        && (!snapshot.side_section_hidden(ToolbarSideSection::TextSize)
+            || !snapshot.side_section_hidden(ToolbarSideSection::Font))
+    {
+        text::draw_text_controls_section(&mut layout, &mut y);
     }
 
     // Drawer, actions, and other sections (always available based on settings)

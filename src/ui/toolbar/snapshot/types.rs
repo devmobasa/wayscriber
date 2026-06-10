@@ -390,9 +390,8 @@ impl ToolbarSnapshot {
         };
 
         self.toolbar_group_hidden(group)
-            || legacy_item.is_some_and(|item| {
-                self.toolbar_item_hidden(ToolbarItemId::from_known(item))
-            })
+            || legacy_item
+                .is_some_and(|item| self.toolbar_item_hidden(ToolbarItemId::from_known(item)))
     }
 
     pub fn side_section_collapsed(&self, section: ToolbarSideSection) -> bool {

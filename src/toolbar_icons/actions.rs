@@ -282,8 +282,22 @@ pub fn draw_icon_visibility(ctx: &Context, x: f64, y: f64, size: f64) {
     let cx = x + s * 0.5;
     let cy = y + s * 0.5;
     ctx.move_to(x + s * 0.14, cy);
-    ctx.curve_to(x + s * 0.28, y + s * 0.25, x + s * 0.72, y + s * 0.25, x + s * 0.86, cy);
-    ctx.curve_to(x + s * 0.72, y + s * 0.75, x + s * 0.28, y + s * 0.75, x + s * 0.14, cy);
+    ctx.curve_to(
+        x + s * 0.28,
+        y + s * 0.25,
+        x + s * 0.72,
+        y + s * 0.25,
+        x + s * 0.86,
+        cy,
+    );
+    ctx.curve_to(
+        x + s * 0.72,
+        y + s * 0.75,
+        x + s * 0.28,
+        y + s * 0.75,
+        x + s * 0.14,
+        cy,
+    );
     let _ = ctx.stroke();
 
     ctx.arc(cx, cy, s * 0.14, 0.0, PI * 2.0);

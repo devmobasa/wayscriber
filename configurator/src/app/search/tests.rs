@@ -259,14 +259,17 @@ fn ui_nested_alias_matches_concrete_nested_tab() {
 #[test]
 fn parent_scoped_ui_queries_match_concrete_nested_tabs() {
     let cases = [
-        ("ui toolbar", UiTabId::Toolbar),
-        ("ui layout mode", UiTabId::Toolbar),
-        ("ui toolbar blur", UiTabId::Toolbar),
-        ("interface presenter", UiTabId::PresenterMode),
-        ("interface status bar position", UiTabId::StatusBar),
+        (
+            "ui toolbar",
+            &[UiTabId::Toolbar, UiTabId::ToolbarVisibility][..],
+        ),
+        ("ui layout mode", &[UiTabId::Toolbar][..]),
+        ("ui toolbar blur", &[UiTabId::ToolbarVisibility][..]),
+        ("interface presenter", &[UiTabId::PresenterMode][..]),
+        ("interface status bar position", &[UiTabId::StatusBar][..]),
     ];
 
-    for (query, expected_tab) in cases {
+    for (query, expected_tabs) in cases {
         let (mut app, _task) = ConfiguratorApp::new_app();
         app.search_query = SearchQuery::new(query);
 
@@ -276,7 +279,7 @@ fn parent_scoped_ui_queries_match_concrete_nested_tabs() {
         assert!(!ui.show_all(), "query should not show all UI tabs: {query}");
         assert_eq!(
             ui.ui_tabs(),
-            &[expected_tab],
+            expected_tabs,
             "query should show concrete nested UI tab: {query}",
         );
     }
@@ -286,8 +289,8 @@ fn parent_scoped_ui_queries_match_concrete_nested_tabs() {
 fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
     let cases = [
         ("layout mode", UiTabId::Toolbar),
-        ("top.tool.blur", UiTabId::Toolbar),
-        ("side.group.presets", UiTabId::Toolbar),
+        ("top.tool.blur", UiTabId::ToolbarVisibility),
+        ("side.group.presets", UiTabId::ToolbarVisibility),
         ("status bar position", UiTabId::StatusBar),
         ("click highlight radius", UiTabId::ClickHighlight),
     ];

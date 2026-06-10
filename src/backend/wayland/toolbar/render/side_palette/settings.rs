@@ -223,10 +223,9 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             items_y,
             content_width,
             toggle_h,
-            snapshot.customize_items_group.map_or(
-                "Uncheck items to hide",
-                |group| group.label(),
-            ),
+            snapshot
+                .customize_items_group
+                .map_or("Uncheck items to hide", |group| group.label()),
         );
         items_y += toggle_h + toggle_gap;
     }

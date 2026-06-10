@@ -266,7 +266,8 @@ impl InputState {
         }
         match tab {
             ToolbarDrawerTab::Customize => {
-                if !self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some()
+                if !self.toolbar_customize_items_open
+                    || self.toolbar_customize_items_group.is_some()
                 {
                     self.toolbar_customize_items_open = true;
                     self.toolbar_customize_items_group = None;
@@ -277,7 +278,8 @@ impl InputState {
             | ToolbarDrawerTab::App
             | ToolbarDrawerTab::Session
             | ToolbarDrawerTab::Sections => {
-                if self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some() {
+                if self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some()
+                {
                     self.toolbar_customize_items_open = false;
                     self.toolbar_customize_items_group = None;
                     changed = true;

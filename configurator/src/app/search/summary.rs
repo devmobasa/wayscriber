@@ -195,7 +195,16 @@ fn toolbar_item_matches(query: &SearchQuery) -> bool {
             definition.label,
             definition.id.as_str(),
             definition.group.map_or("", |group| group.as_str()),
-        ])
+        ]) || query.matches_parts_scoped_to_tab(
+            TabId::Ui,
+            [
+                "toolbar visibility",
+                "toolbar item",
+                definition.label,
+                definition.id.as_str(),
+                definition.group.map_or("", |group| group.as_str()),
+            ],
+        )
     })
 }
 

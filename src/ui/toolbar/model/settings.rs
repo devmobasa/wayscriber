@@ -6,9 +6,7 @@ use crate::config::{
     toolbar_item_definitions,
 };
 
-use super::super::{
-    ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection, ToolbarSnapshot,
-};
+use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection, ToolbarSnapshot};
 use super::activation::{ToolbarActivation, ToolbarControlId};
 use super::control::{ToolbarIcon, ToolbarTooltip};
 
@@ -22,8 +20,7 @@ pub(crate) struct ToolbarSettingsModel {
 
 impl ToolbarSettingsModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        let customize_shortcut =
-            snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize;
+        let customize_shortcut = snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize;
         let sections_tab = snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
         let customizing = snapshot.customize_items_open || customize_shortcut;
         if !snapshot.drawer_open
@@ -342,7 +339,9 @@ fn customize_group_contains(
             definition.surface == ToolbarItemSurface::Top
                 && definition.category != ToolbarItemCategory::Tool
         }
-        ToolbarItemCustomizeGroup::SideSections => definition.category == ToolbarItemCategory::Group,
+        ToolbarItemCustomizeGroup::SideSections => {
+            definition.category == ToolbarItemCategory::Group
+        }
         ToolbarItemCustomizeGroup::Actions => definition.category == ToolbarItemCategory::Action,
         ToolbarItemCustomizeGroup::Pages => definition.category == ToolbarItemCategory::Page,
         ToolbarItemCustomizeGroup::Boards => definition.category == ToolbarItemCategory::Board,
@@ -415,10 +414,7 @@ impl ToolbarSettingsItemOverride {
             label: Cow::Borrowed(definition.label),
             shown: !hidden,
             activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarItemHidden(id, !hidden)),
-            tooltip: ToolbarTooltip::text(format!(
-                "{}: uncheck to hide",
-                definition.label
-            )),
+            tooltip: ToolbarTooltip::text(format!("{}: uncheck to hide", definition.label)),
         }
     }
 }

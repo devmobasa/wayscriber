@@ -146,7 +146,14 @@ pub fn render_top_strip(
             .hover
             .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))
             .unwrap_or(false);
-        draw_pin_button(ctx, right_x, btn_y, btn_size, snapshot.top_pinned, pin_hover);
+        draw_pin_button(
+            ctx,
+            right_x,
+            btn_y,
+            btn_size,
+            snapshot.top_pinned,
+            pin_hover,
+        );
         layout.hits.push(HitRegion {
             rect: (right_x, btn_y, btn_size, btn_size),
             event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
