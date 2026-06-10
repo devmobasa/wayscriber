@@ -35,7 +35,7 @@ impl ToolbarItemsConfig {
         }
     }
 
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn set_hidden(&mut self, id: ToolbarItemId, hidden: bool) {
         let mut next = Vec::with_capacity(self.hidden.len() + usize::from(hidden));
         let mut seen_known = BTreeSet::new();
@@ -58,7 +58,6 @@ impl ToolbarItemsConfig {
 
         self.hidden = next;
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -77,7 +76,7 @@ impl ResolvedToolbarItems {
 pub struct ToolbarItemId(&'static str);
 
 impl ToolbarItemId {
-    pub const fn from_known(value: &'static str) -> Self {
+    pub(crate) const fn from_known(value: &'static str) -> Self {
         Self(value)
     }
 
@@ -97,17 +96,63 @@ impl FromStr for ToolbarItemId {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let normalized = value.trim();
-        KNOWN_TOOLBAR_ITEM_IDS
+        toolbar_item_definitions()
             .iter()
-            .copied()
-            .find(|known| *known == normalized)
-            .map(Self)
+            .find(|definition| definition.id.as_str() == normalized)
+            .map(|definition| definition.id)
             .ok_or(UnknownToolbarItemId)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnknownToolbarItemId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolbarItemDefinition {
+    pub id: ToolbarItemId,
+    pub label: &'static str,
+    pub surface: ToolbarItemSurface,
+    pub category: ToolbarItemCategory,
+    pub group: Option<ToolbarGroupId>,
+}
+
+impl ToolbarItemDefinition {
+    const fn new(
+        id: &'static str,
+        label: &'static str,
+        surface: ToolbarItemSurface,
+        category: ToolbarItemCategory,
+        group: Option<ToolbarGroupId>,
+    ) -> Self {
+        Self {
+            id: ToolbarItemId::from_known(id),
+            label,
+            surface,
+            category,
+            group,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ToolbarItemSurface {
+    Top,
+    Side,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ToolbarItemCategory {
+    Chrome,
+    Tool,
+    Utility,
+    Group,
+    Action,
+    Page,
+    Board,
+    Setting,
+    Session,
+    ToolOption,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToolbarGroupId {
@@ -208,104 +253,351 @@ impl FromStr for ToolbarGroupId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnknownToolbarGroupId;
 
-const KNOWN_TOOLBAR_ITEM_IDS: &[&str] = &[
-    "top.chrome.drag",
-    "top.chrome.pin",
-    "top.chrome.close",
-    "top.tool.select",
-    "top.tool.pen",
-    "top.tool.marker",
-    "top.tool.step-marker",
-    "top.tool.eraser",
-    "top.tool.line",
-    "top.tool.rect",
-    "top.tool.ellipse",
-    "top.tool.arrow",
-    "top.tool.blur",
-    "top.tool.triangle",
-    "top.tool.parallelogram",
-    "top.tool.rhombus",
-    "top.tool.regular-polygon",
-    "top.tool.freeform-polygon",
-    "top.utility.shape-picker",
-    "top.utility.fill",
-    "top.utility.text",
-    "top.utility.sticky-note",
-    "top.utility.clear-canvas",
-    "top.utility.highlight",
-    "top.utility.highlight-ring",
-    "top.utility.icon-mode-icons",
-    "top.utility.icon-mode-text",
-    "side.group.colors",
-    "side.group.thickness",
-    "side.group.eraser-mode",
-    "side.group.polygon-sides",
-    "side.group.arrow-labels",
-    "side.group.step-markers",
-    "side.group.step-undo",
-    "side.group.marker-opacity",
-    "side.group.text-size",
-    "side.group.font",
-    "side.group.actions",
-    "side.group.pages",
-    "side.group.boards",
-    "side.group.presets",
-    "side.group.settings",
-    "side.group.session",
-    "side.actions.undo",
-    "side.actions.redo",
-    "side.actions.clear-canvas",
-    "side.actions.zoom-in",
-    "side.actions.zoom-out",
-    "side.actions.reset-zoom",
-    "side.actions.toggle-zoom-lock",
-    "side.actions.undo-all",
-    "side.actions.redo-all",
-    "side.actions.undo-all-delayed",
-    "side.actions.redo-all-delayed",
-    "side.actions.freeze",
-    "side.pages.previous",
-    "side.pages.next",
-    "side.pages.new",
-    "side.pages.duplicate",
-    "side.pages.delete",
-    "side.boards.previous",
-    "side.boards.next",
-    "side.boards.new",
-    "side.boards.duplicate",
-    "side.boards.delete",
-    "side.boards.rename",
-    "side.settings.context-aware-ui",
-    "side.settings.text-controls",
-    "side.settings.status-bar",
-    "side.settings.status-board-badge",
-    "side.settings.status-page-badge",
-    "side.settings.floating-badge-always",
-    "side.settings.preset-toasts",
-    "side.settings.presets",
-    "side.settings.actions",
-    "side.settings.zoom-actions",
-    "side.settings.advanced-actions",
-    "side.settings.boards",
-    "side.settings.pages",
-    "side.settings.step-controls",
-    "side.settings.configurator",
-    "side.settings.config-file",
-    "side.session.open",
-    "side.session.save-as",
-    "side.session.info",
-    "side.session.clear",
-    "side.session.manager",
-    "side.tool-options.color",
-    "side.tool-options.thickness",
-    "side.tool-options.marker-opacity",
-    "side.tool-options.eraser-mode",
-    "side.tool-options.font-size",
-    "side.tool-options.font-family",
-    "side.tool-options.polygon-sides",
-    "side.tool-options.arrow-labels",
-    "side.tool-options.step-marker-reset",
+pub fn toolbar_item_definitions() -> &'static [ToolbarItemDefinition] {
+    TOOLBAR_ITEM_DEFINITIONS
+}
+
+const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
+    item("top.chrome.drag", "Move top toolbar", Top, Chrome, None),
+    item("top.chrome.pin", "Pin top toolbar", Top, Chrome, None),
+    item("top.chrome.close", "Close top toolbar", Top, Chrome, None),
+    item("top.tool.select", "Select", Top, Tool, None),
+    item("top.tool.pen", "Pen", Top, Tool, None),
+    item("top.tool.marker", "Marker", Top, Tool, None),
+    item("top.tool.step-marker", "Step marker", Top, Tool, None),
+    item("top.tool.eraser", "Eraser", Top, Tool, None),
+    item("top.tool.line", "Line", Top, Tool, None),
+    item("top.tool.rect", "Rectangle", Top, Tool, None),
+    item("top.tool.ellipse", "Ellipse", Top, Tool, None),
+    item("top.tool.arrow", "Arrow", Top, Tool, None),
+    item("top.tool.blur", "Blur", Top, Tool, None),
+    item("top.tool.triangle", "Triangle", Top, Tool, None),
+    item("top.tool.parallelogram", "Parallelogram", Top, Tool, None),
+    item("top.tool.rhombus", "Rhombus", Top, Tool, None),
+    item("top.tool.regular-polygon", "Regular polygon", Top, Tool, None),
+    item("top.tool.freeform-polygon", "Freeform polygon", Top, Tool, None),
+    item("top.utility.shape-picker", "Shape picker", Top, Utility, None),
+    item("top.utility.fill", "Fill", Top, Utility, None),
+    item("top.utility.text", "Text", Top, Utility, None),
+    item("top.utility.sticky-note", "Sticky note", Top, Utility, None),
+    item("top.utility.clear-canvas", "Clear canvas", Top, Utility, None),
+    item("top.utility.highlight", "Highlight", Top, Utility, None),
+    item("top.utility.highlight-ring", "Highlight ring", Top, Utility, None),
+    item("top.utility.icon-mode-icons", "Use icons", Top, Utility, None),
+    item("top.utility.icon-mode-text", "Use text labels", Top, Utility, None),
+    item("side.group.colors", "Colors", Side, Group, Some(ToolbarGroupId::Colors)),
+    item(
+        "side.group.thickness",
+        "Thickness",
+        Side,
+        Group,
+        Some(ToolbarGroupId::Thickness),
+    ),
+    item(
+        "side.group.eraser-mode",
+        "Eraser mode",
+        Side,
+        Group,
+        Some(ToolbarGroupId::EraserMode),
+    ),
+    item(
+        "side.group.polygon-sides",
+        "Polygon sides",
+        Side,
+        Group,
+        Some(ToolbarGroupId::PolygonSides),
+    ),
+    item(
+        "side.group.arrow-labels",
+        "Arrow labels",
+        Side,
+        Group,
+        Some(ToolbarGroupId::ArrowLabels),
+    ),
+    item(
+        "side.group.step-markers",
+        "Step markers",
+        Side,
+        Group,
+        Some(ToolbarGroupId::StepMarkers),
+    ),
+    item(
+        "side.group.step-undo",
+        "Step Undo/Redo",
+        Side,
+        Group,
+        Some(ToolbarGroupId::StepUndo),
+    ),
+    item(
+        "side.group.marker-opacity",
+        "Marker opacity",
+        Side,
+        Group,
+        Some(ToolbarGroupId::MarkerOpacity),
+    ),
+    item("side.group.text-size", "Text size", Side, Group, Some(ToolbarGroupId::TextSize)),
+    item("side.group.font", "Font", Side, Group, Some(ToolbarGroupId::Font)),
+    item("side.group.actions", "Actions", Side, Group, Some(ToolbarGroupId::Actions)),
+    item("side.group.pages", "Pages", Side, Group, Some(ToolbarGroupId::Pages)),
+    item("side.group.boards", "Boards", Side, Group, Some(ToolbarGroupId::Boards)),
+    item("side.group.presets", "Presets", Side, Group, Some(ToolbarGroupId::Presets)),
+    item("side.group.settings", "Settings", Side, Group, Some(ToolbarGroupId::Settings)),
+    item("side.group.session", "Session", Side, Group, Some(ToolbarGroupId::Session)),
+    item("side.actions.undo", "Undo", Side, Action, Some(ToolbarGroupId::Actions)),
+    item("side.actions.redo", "Redo", Side, Action, Some(ToolbarGroupId::Actions)),
+    item(
+        "side.actions.clear-canvas",
+        "Clear canvas",
+        Side,
+        Action,
+        Some(ToolbarGroupId::Actions),
+    ),
+    item("side.actions.zoom-in", "Zoom in", Side, Action, Some(ToolbarGroupId::Actions)),
+    item("side.actions.zoom-out", "Zoom out", Side, Action, Some(ToolbarGroupId::Actions)),
+    item(
+        "side.actions.reset-zoom",
+        "Reset zoom",
+        Side,
+        Action,
+        Some(ToolbarGroupId::Actions),
+    ),
+    item(
+        "side.actions.toggle-zoom-lock",
+        "Toggle zoom lock",
+        Side,
+        Action,
+        Some(ToolbarGroupId::Actions),
+    ),
+    item("side.actions.undo-all", "Undo all", Side, Action, Some(ToolbarGroupId::Actions)),
+    item("side.actions.redo-all", "Redo all", Side, Action, Some(ToolbarGroupId::Actions)),
+    item(
+        "side.actions.undo-all-delayed",
+        "Delayed undo all",
+        Side,
+        Action,
+        Some(ToolbarGroupId::Actions),
+    ),
+    item(
+        "side.actions.redo-all-delayed",
+        "Delayed redo all",
+        Side,
+        Action,
+        Some(ToolbarGroupId::Actions),
+    ),
+    item("side.actions.freeze", "Freeze", Side, Action, Some(ToolbarGroupId::Actions)),
+    item("side.pages.previous", "Previous page", Side, Page, Some(ToolbarGroupId::Pages)),
+    item("side.pages.next", "Next page", Side, Page, Some(ToolbarGroupId::Pages)),
+    item("side.pages.new", "New page", Side, Page, Some(ToolbarGroupId::Pages)),
+    item("side.pages.duplicate", "Duplicate page", Side, Page, Some(ToolbarGroupId::Pages)),
+    item("side.pages.delete", "Delete page", Side, Page, Some(ToolbarGroupId::Pages)),
+    item("side.boards.previous", "Previous board", Side, Board, Some(ToolbarGroupId::Boards)),
+    item("side.boards.next", "Next board", Side, Board, Some(ToolbarGroupId::Boards)),
+    item("side.boards.new", "New board", Side, Board, Some(ToolbarGroupId::Boards)),
+    item(
+        "side.boards.duplicate",
+        "Duplicate board",
+        Side,
+        Board,
+        Some(ToolbarGroupId::Boards),
+    ),
+    item("side.boards.delete", "Delete board", Side, Board, Some(ToolbarGroupId::Boards)),
+    item("side.boards.rename", "Rename board", Side, Board, Some(ToolbarGroupId::Boards)),
+    item(
+        "side.settings.context-aware-ui",
+        "Context UI",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.text-controls",
+        "Text controls",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.status-bar",
+        "Status bar",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.status-board-badge",
+        "Status board badge",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.status-page-badge",
+        "Status page badge",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.floating-badge-always",
+        "Floating board/page badge",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.preset-toasts",
+        "Preset toasts",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.presets",
+        "Presets toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.actions",
+        "Actions toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.zoom-actions",
+        "Zoom actions toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.advanced-actions",
+        "Advanced actions toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.boards",
+        "Boards toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.pages",
+        "Pages toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.step-controls",
+        "Step controls toggle",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.configurator",
+        "Open configurator",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        "side.settings.config-file",
+        "Open config file",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item("side.session.open", "Open session", Side, Session, Some(ToolbarGroupId::Session)),
+    item("side.session.save-as", "Save session as", Side, Session, Some(ToolbarGroupId::Session)),
+    item("side.session.info", "Session info", Side, Session, Some(ToolbarGroupId::Session)),
+    item("side.session.clear", "Clear session", Side, Session, Some(ToolbarGroupId::Session)),
+    item(
+        "side.session.manager",
+        "Session manager",
+        Side,
+        Session,
+        Some(ToolbarGroupId::Session),
+    ),
+    item("side.tool-options.color", "Color", Side, ToolOption, Some(ToolbarGroupId::Colors)),
+    item(
+        "side.tool-options.thickness",
+        "Thickness",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::Thickness),
+    ),
+    item(
+        "side.tool-options.marker-opacity",
+        "Marker opacity",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::MarkerOpacity),
+    ),
+    item(
+        "side.tool-options.eraser-mode",
+        "Eraser mode",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::EraserMode),
+    ),
+    item(
+        "side.tool-options.font-size",
+        "Font size",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::TextSize),
+    ),
+    item(
+        "side.tool-options.font-family",
+        "Font family",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::Font),
+    ),
+    item(
+        "side.tool-options.polygon-sides",
+        "Polygon sides",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::PolygonSides),
+    ),
+    item(
+        "side.tool-options.arrow-labels",
+        "Arrow labels",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::ArrowLabels),
+    ),
+    item(
+        "side.tool-options.step-marker-reset",
+        "Reset step marker",
+        Side,
+        ToolOption,
+        Some(ToolbarGroupId::StepMarkers),
+    ),
 ];
+
+const fn item(
+    id: &'static str,
+    label: &'static str,
+    surface: ToolbarItemSurface,
+    category: ToolbarItemCategory,
+    group: Option<ToolbarGroupId>,
+) -> ToolbarItemDefinition {
+    ToolbarItemDefinition::new(id, label, surface, category, group)
+}
+
+use ToolbarItemCategory::{
+    Action, Board, Chrome, Group, Page, Session, Setting, Tool, ToolOption, Utility,
+};
+use ToolbarItemSurface::{Side, Top};
 
 #[cfg(test)]
 mod tests {
@@ -360,5 +652,27 @@ mod tests {
             "step-undo".parse::<ToolbarGroupId>(),
             Ok(ToolbarGroupId::StepUndo)
         );
+    }
+
+    #[test]
+    fn toolbar_item_definitions_are_unique_parseable_and_labeled() {
+        let mut seen = BTreeSet::new();
+
+        for definition in toolbar_item_definitions() {
+            assert!(
+                seen.insert(definition.id.as_str()),
+                "duplicate toolbar item id: {}",
+                definition.id
+            );
+            assert_eq!(
+                definition.id.as_str().parse::<ToolbarItemId>(),
+                Ok(definition.id)
+            );
+            assert!(
+                !definition.label.is_empty(),
+                "missing toolbar item label: {}",
+                definition.id
+            );
+        }
     }
 }
