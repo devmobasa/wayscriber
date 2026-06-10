@@ -63,7 +63,7 @@ use crate::{
 };
 
 use self::data::{MoveDrag, StateData};
-pub use self::data::{MoveDragKind, OverlaySuppression};
+pub use self::data::{MoveDragKind, OverlaySuppression, XdgFrozenFullscreenState};
 use super::{
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
     clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion},

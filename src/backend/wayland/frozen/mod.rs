@@ -6,5 +6,12 @@ mod state;
 pub use image::FrozenImage;
 pub use state::FrozenState;
 
-type PortalCaptureResult = Result<(Option<u32>, self::image::FrozenImage), String>;
+type PortalCaptureResult = Result<
+    (
+        Option<u32>,
+        Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
+        self::image::FrozenImage,
+    ),
+    String,
+>;
 type PortalCaptureRx = std::sync::mpsc::Receiver<PortalCaptureResult>;

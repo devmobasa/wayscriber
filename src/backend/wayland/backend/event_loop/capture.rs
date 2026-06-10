@@ -12,7 +12,38 @@ use crate::notification;
 pub(super) fn poll_portal_captures(state: &mut WaylandState) {
     // Apply any completed portal fallback captures without blocking.
     state.frozen.poll_portal_capture(&mut state.input_state);
+    handle_pending_frozen_image(state);
     state.zoom.poll_portal_capture(&mut state.input_state);
+}
+
+fn handle_pending_frozen_image(state: &mut WaylandState) {
+    if !state.frozen.has_pending_image() {
+        return;
+    }
+    if state.surface.is_xdg_window() {
+        if state.xdg_fullscreen() {
+            state.activate_pending_frozen_image_for_current_surface();
+            return;
+        }
+        if !state.xdg_frozen_fullscreen_requested() && state.begin_xdg_frozen_fullscreen() {
+            return;
+        }
+        if state.xdg_frozen_fullscreen_pending_configure() {
+            if state.xdg_frozen_fullscreen_timed_out() {
+                warn!("Frozen xdg fullscreen configure timed out; cancelling freeze");
+                state.input_state.set_ui_toast(
+                    UiToastKind::Error,
+                    "Freeze failed because fullscreen was not confirmed",
+                );
+                state.restore_xdg_after_frozen();
+                state.frozen.cancel(&mut state.input_state);
+            }
+            return;
+        }
+        state.activate_pending_frozen_image_for_current_surface();
+        return;
+    }
+    state.activate_pending_frozen_image_for_current_surface();
 }
 
 pub(super) fn flush_if_capture_active(conn: &Connection, capture_active: bool) {
@@ -61,10 +92,17 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
     }
 
     if !state.frozen_enabled() {
-        warn!("Frozen mode disabled on this compositor (xdg fallback); ignoring toggle");
+        warn!(
+            "Frozen mode unavailable: no screencopy backend and no screenshot portal backend; ignoring toggle"
+        );
+        state.input_state.set_ui_toast(
+            UiToastKind::Warning,
+            "Freeze is unavailable because screen capture is not available.",
+        );
     } else if state.frozen.is_in_progress() {
         warn!("Frozen capture already in progress; ignoring toggle");
     } else if state.input_state.frozen_active() {
+        state.restore_xdg_after_frozen();
         state.frozen.unfreeze(&mut state.input_state);
     } else {
         let use_fallback = !state.frozen.manager_available();
@@ -73,7 +111,14 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
         } else {
             info!("Frozen mode: using screencopy fast path");
         }
-        state.enter_overlay_suppression(OverlaySuppression::Frozen);
+        if !state.enter_overlay_suppression(OverlaySuppression::Frozen) {
+            warn!("Frozen mode requested while overlay is suppressed; ignoring toggle");
+            state.input_state.set_ui_toast(
+                UiToastKind::Warning,
+                "Freeze is already preparing another overlay operation.",
+            );
+            return;
+        }
         if let Err(err) = state
             .frozen
             .start_capture(use_fallback, &state.tokio_handle)

@@ -137,7 +137,7 @@ wayscriber --light-draw-off
 
 Use `--light-toggle` for passthrough on/off and `--light-draw-toggle` for sticky drawing. Draw-while-held needs a shortcut system that can run one command on press and another on release; if your KDE shortcut UI only supports activation commands, use the sticky draw toggle instead.
 
-Light passthrough still requires layer-shell support. If Wayscriber reports that light mode requires layer-shell, your session is using a fallback path where passthrough is not available.
+Light passthrough requires compositor overlay support through layer-shell. If Wayscriber reports that passthrough is unavailable, your session is using a fallback path where regular app windows cannot provide a reliable click-through overlay.
 
 ### GNOME: Fedora Workstation and Ubuntu GNOME
 
@@ -153,7 +153,9 @@ Then use the configurator's Daemon tab, or create a GNOME custom shortcut that r
 wayscriber --daemon-toggle
 ```
 
-Light passthrough mode is not currently available on GNOME sessions where Wayscriber uses the xdg-shell fallback. In that fallback, keyboard passthrough cannot be made reliable, so `--light-toggle` is intentionally disabled instead of pretending to pass input through.
+Freeze works on GNOME when the screenshot portal is available and responsive; the first use may show a desktop permission prompt. Portal capture can be slower than compositor screencopy, and mixed-DPI or multi-monitor setups may depend on client-side crop behavior.
+
+Light passthrough mode is not available in the regular app on stock GNOME Wayland. GNOME's xdg-shell fallback does not expose the shell-level overlay behavior needed to keep annotations visible while input goes to apps underneath, so `--light-toggle` is intentionally disabled instead of pretending to pass input through. A GNOME Shell extension companion would be the real path for that workflow.
 
 ### Method 3: One-Shot Mode (Alternative)
 

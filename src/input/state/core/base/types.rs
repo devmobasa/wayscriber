@@ -303,7 +303,25 @@ pub(crate) enum HistoryMode {
 pub struct CompositorCapabilities {
     pub layer_shell: bool,
     pub screencopy: bool,
+    pub freeze_capture: bool,
     pub pointer_constraints: bool,
+    pub desktop_environment: DesktopEnvironment,
+    pub shell_mode: ShellMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DesktopEnvironment {
+    Gnome,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShellMode {
+    LayerShell,
+    XdgFallback,
+    #[default]
+    Unknown,
 }
 
 impl CompositorCapabilities {
@@ -314,10 +332,12 @@ impl CompositorCapabilities {
     pub fn limitations_summary(&self) -> Option<String> {
         let mut issues = Vec::new();
         if !self.layer_shell {
-            issues.push("Toolbars limited");
+            issues.push("Toolbars limited, light passthrough unavailable");
         }
-        if !self.screencopy {
+        if !self.freeze_capture {
             issues.push("Freeze unavailable");
+        } else if !self.screencopy {
+            issues.push("Freeze uses portal capture");
         }
         if !self.pointer_constraints {
             issues.push("Pointer lock unavailable");
@@ -476,7 +496,10 @@ mod tests {
             CompositorCapabilities {
                 layer_shell: true,
                 screencopy: true,
+                freeze_capture: true,
                 pointer_constraints: true,
+                desktop_environment: Default::default(),
+                shell_mode: Default::default(),
             }
             .limitations_summary(),
             None
@@ -489,10 +512,34 @@ mod tests {
             CompositorCapabilities {
                 layer_shell: false,
                 screencopy: true,
+                freeze_capture: true,
                 pointer_constraints: false,
+                desktop_environment: Default::default(),
+                shell_mode: Default::default(),
             }
             .limitations_summary(),
-            Some("Toolbars limited, Pointer lock unavailable".to_string())
+            Some(
+                "Toolbars limited, light passthrough unavailable, Pointer lock unavailable"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn compositor_capabilities_reports_portal_freeze_without_hiding_limitations() {
+        let caps = CompositorCapabilities {
+            layer_shell: true,
+            screencopy: false,
+            freeze_capture: true,
+            pointer_constraints: true,
+            desktop_environment: Default::default(),
+            shell_mode: Default::default(),
+        };
+
+        assert!(!caps.all_available());
+        assert_eq!(
+            caps.limitations_summary(),
+            Some("Freeze uses portal capture".to_string())
         );
     }
 }

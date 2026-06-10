@@ -68,8 +68,10 @@ impl CompositorHandler for WaylandState {
         );
         self.surface.set_frame_callback_pending(false);
 
-        if self.frozen.take_preflight_pending()
-            && let Err(err) = self.frozen.begin_screencopy(&self.shm, qh)
+        if let Some(use_fallback) = self.frozen.take_preflight_pending()
+            && let Err(err) =
+                self.frozen
+                    .begin_preflight_capture(use_fallback, &self.shm, qh, &self.tokio_handle)
         {
             warn!("Frozen preflight capture failed: {}", err);
             self.frozen.cancel(&mut self.input_state);

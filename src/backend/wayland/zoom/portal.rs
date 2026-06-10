@@ -34,7 +34,7 @@ impl ZoomState {
         crate::notification::send_notification_async(
             tokio_handle,
             "Zoom capture".to_string(),
-            "Taking screenshot via portal...".to_string(),
+            "Requesting screen capture...".to_string(),
             Some("camera-photo".to_string()),
         );
         tokio_handle.spawn(async move {
@@ -51,7 +51,7 @@ impl ZoomState {
                         && origin_y >= 0
                         && phys_w > 0
                         && phys_h > 0
-                        && let Some(cropped) = crop_argb(
+                        && let Some((cropped_w, cropped_h, cropped)) = crop_argb(
                             &data,
                             width,
                             height,
@@ -62,8 +62,8 @@ impl ZoomState {
                         )
                     {
                         data = cropped;
-                        width = phys_w;
-                        height = phys_h;
+                        width = cropped_w;
+                        height = cropped_h;
                     }
                 }
 

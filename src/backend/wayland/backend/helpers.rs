@@ -26,7 +26,7 @@ pub(super) fn friendly_capture_error(error: &str) -> String {
     } else if lower.contains("permission") {
         "Permission denied. Enable screen sharing in system settings.".to_string()
     } else if lower.contains("portal returned error code") {
-        "Portal screenshot failed. If you use wlroots/Hyprland/Niri, install grim + slurp. Otherwise check xdg-desktop-portal."
+        "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service."
             .to_string()
     } else if lower.contains("busy") {
         "Screen capture in progress. Try again in a moment.".to_string()
@@ -207,7 +207,7 @@ mod tests {
         );
         assert_eq!(
             friendly_capture_error("portal returned error code 2"),
-            "Portal screenshot failed. If you use wlroots/Hyprland/Niri, install grim + slurp. Otherwise check xdg-desktop-portal."
+            "Screen capture failed. If you use Hyprland, Niri, or another wlroots desktop, install grim + slurp. Otherwise check the desktop screen capture service."
         );
         assert_eq!(
             friendly_capture_error("resource busy"),

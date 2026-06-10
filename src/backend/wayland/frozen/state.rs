@@ -4,10 +4,17 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::backend::wayland::portal_capture::crop_argb;
 use crate::input::InputState;
 
 use super::PortalCaptureRx;
 use super::capture::CaptureSession;
+
+struct PendingFrozenImage {
+    image: FrozenImage,
+    source_geometry: Option<OutputGeometry>,
+    needs_output_transform: bool,
+}
 
 /// End-to-end controller for frozen mode capture and image storage.
 #[allow(clippy::type_complexity)]
@@ -24,7 +31,9 @@ pub struct FrozenState {
     pub(super) portal_target_output_id: Option<u32>,
     pub(super) portal_started_at: Option<std::time::Instant>,
     pub(super) preflight_pending: bool,
+    pub(super) preflight_use_fallback: bool,
     pub(super) capture_done: bool,
+    pending_image: Option<PendingFrozenImage>,
 }
 
 impl FrozenState {
@@ -42,7 +51,9 @@ impl FrozenState {
             portal_target_output_id: None,
             portal_started_at: None,
             preflight_pending: false,
+            preflight_use_fallback: false,
             capture_done: false,
+            pending_image: None,
         }
     }
 
@@ -77,24 +88,126 @@ impl FrozenState {
         self.bump_image_generation();
     }
 
+    pub fn set_pending_image(
+        &mut self,
+        image: FrozenImage,
+        source_geometry: Option<OutputGeometry>,
+        needs_output_transform: bool,
+    ) {
+        self.pending_image = Some(PendingFrozenImage {
+            image,
+            source_geometry,
+            needs_output_transform,
+        });
+    }
+
+    pub fn has_pending_image(&self) -> bool {
+        self.pending_image.is_some()
+    }
+
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some() || self.portal_in_progress || self.preflight_pending
+        self.capture.is_some()
+            || self.portal_in_progress
+            || self.preflight_pending
+            || self.pending_image.is_some()
     }
 
     pub fn preflight_pending(&self) -> bool {
         self.preflight_pending
     }
 
-    pub fn take_preflight_pending(&mut self) -> bool {
-        let pending = self.preflight_pending;
+    pub fn take_preflight_pending(&mut self) -> Option<bool> {
+        if !self.preflight_pending {
+            return None;
+        }
+        let use_fallback = self.preflight_use_fallback;
         self.preflight_pending = false;
-        pending
+        self.preflight_use_fallback = false;
+        Some(use_fallback)
     }
 
     pub fn take_capture_done(&mut self) -> bool {
         let done = self.capture_done;
         self.capture_done = false;
         done
+    }
+
+    pub fn activate_pending_image(
+        &mut self,
+        phys_width: u32,
+        phys_height: u32,
+        input_state: &mut InputState,
+    ) -> Result<bool, String> {
+        let Some(pending) = self.pending_image.take() else {
+            return Ok(false);
+        };
+        let mut image = pending.image;
+
+        if pending.needs_output_transform {
+            let output_transform = pending
+                .source_geometry
+                .as_ref()
+                .or(self.active_geometry.as_ref())
+                .map(|geo| geo.transform)
+                .unwrap_or(wl_output::Transform::Normal);
+            image = image.with_output_transform(output_transform);
+        }
+
+        if image.width != phys_width || image.height != phys_height {
+            let Some(cropped) = self.crop_pending_image(
+                image,
+                pending.source_geometry.as_ref(),
+                phys_width,
+                phys_height,
+            ) else {
+                self.capture_done = true;
+                input_state.set_frozen_active(false);
+                input_state.needs_redraw = true;
+                return Err("Freeze failed after the display changed size".to_string());
+            };
+            image = cropped;
+        }
+
+        self.set_image(image);
+        input_state.set_frozen_active(true);
+        input_state.dirty_tracker.mark_full();
+        input_state.needs_redraw = true;
+        self.capture_done = true;
+        Ok(true)
+    }
+
+    fn crop_pending_image(
+        &self,
+        image: FrozenImage,
+        source_geometry: Option<&OutputGeometry>,
+        target_width: u32,
+        target_height: u32,
+    ) -> Option<FrozenImage> {
+        if target_width == 0 || target_height == 0 {
+            return None;
+        }
+        let (origin_x, origin_y) = source_geometry
+            .or(self.active_geometry.as_ref())
+            .map(|geo| geo.physical_origin())
+            .unwrap_or((0, 0));
+        let (width, height, data) = crop_argb(
+            &image.data,
+            image.width,
+            image.height,
+            origin_x.max(0) as u32,
+            origin_y.max(0) as u32,
+            target_width,
+            target_height,
+        )?;
+        if width != target_width || height != target_height {
+            return None;
+        }
+        Some(FrozenImage {
+            width: target_width,
+            height: target_height,
+            stride: (target_width * 4) as i32,
+            data,
+        })
     }
 
     /// Drop frozen image if the surface size no longer matches.
@@ -126,6 +239,8 @@ impl FrozenState {
             capture.frame.destroy();
         }
         self.preflight_pending = false;
+        self.preflight_use_fallback = false;
+        self.pending_image = None;
         self.capture_done = true;
         input_state.set_frozen_active(false);
         input_state.needs_redraw = true;

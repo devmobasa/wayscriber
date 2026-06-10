@@ -1,4 +1,27 @@
 #[cfg(feature = "portal")]
+use std::time::Duration;
+
+#[cfg(feature = "portal")]
+const PORTAL_STARTUP_PROBE_TIMEOUT: Duration = Duration::from_millis(500);
+
+#[cfg(feature = "portal")]
+pub(crate) fn screenshot_portal_available(runtime: &tokio::runtime::Runtime) -> bool {
+    runtime.block_on(async {
+        tokio::time::timeout(
+            PORTAL_STARTUP_PROBE_TIMEOUT,
+            crate::capture::portal::is_portal_available(),
+        )
+        .await
+        .unwrap_or(false)
+    })
+}
+
+#[cfg(not(feature = "portal"))]
+pub(crate) fn screenshot_portal_available(_runtime: &tokio::runtime::Runtime) -> bool {
+    false
+}
+
+#[cfg(feature = "portal")]
 pub(crate) async fn capture_via_portal_fullscreen_bytes() -> Result<Vec<u8>, String> {
     use crate::capture::sources::portal::capture_via_portal_bytes;
     use crate::capture::types::CaptureType;
@@ -30,7 +53,7 @@ pub(crate) fn crop_argb(
     y: u32,
     crop_w: u32,
     crop_h: u32,
-) -> Option<Vec<u8>> {
+) -> Option<(u32, u32, Vec<u8>)> {
     if x >= width || y >= height {
         return None;
     }
@@ -38,6 +61,9 @@ pub(crate) fn crop_argb(
     let max_h = height.saturating_sub(y);
     let cw = crop_w.min(max_w);
     let ch = crop_h.min(max_h);
+    if cw == 0 || ch == 0 {
+        return None;
+    }
 
     let mut out = vec![0u8; (cw * ch * 4) as usize];
     let src_stride = (width * 4) as usize;
@@ -52,7 +78,7 @@ pub(crate) fn crop_argb(
         out[dst_offset..dst_offset + dst_stride]
             .copy_from_slice(&data[src_offset..src_offset + dst_stride]);
     }
-    Some(out)
+    Some((cw, ch, out))
 }
 
 #[cfg(test)]
@@ -66,7 +92,8 @@ mod tests {
             1, 2, 3, 4, 5, 6, 7, 8, //
             9, 10, 11, 12, 13, 14, 15, 16,
         ];
-        let cropped = crop_argb(&data, 2, 2, 1, 0, 1, 2).expect("crop");
+        let (width, height, cropped) = crop_argb(&data, 2, 2, 1, 0, 1, 2).expect("crop");
+        assert_eq!((width, height), (1, 2));
         assert_eq!(cropped, vec![5, 6, 7, 8, 13, 14, 15, 16]);
     }
 

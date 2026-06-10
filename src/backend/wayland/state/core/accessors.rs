@@ -1,7 +1,9 @@
-use smithay_client_toolkit::shell::wlr_layer::Layer;
+use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
 
 use super::super::*;
 use std::time::{Duration, Instant};
+
+const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn current_mouse(&self) -> (i32, i32) {
@@ -211,6 +213,92 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn xdg_fullscreen(&self) -> bool {
         self.data.xdg_fullscreen
+    }
+
+    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_requested(&self) -> bool {
+        !matches!(
+            self.data.xdg_frozen_fullscreen_state,
+            crate::backend::wayland::state::XdgFrozenFullscreenState::Inactive
+        )
+    }
+
+    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_pending_configure(&self) -> bool {
+        matches!(
+            self.data.xdg_frozen_fullscreen_state,
+            crate::backend::wayland::state::XdgFrozenFullscreenState::PendingConfigure
+        )
+    }
+
+    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_timed_out(&self) -> bool {
+        self.xdg_frozen_fullscreen_pending_configure()
+            && self
+                .data
+                .xdg_frozen_fullscreen_requested_at
+                .is_some_and(|requested_at| requested_at.elapsed() >= XDG_FROZEN_FULLSCREEN_TIMEOUT)
+    }
+
+    pub(in crate::backend::wayland) fn begin_xdg_frozen_fullscreen(&mut self) -> bool {
+        let Some(window) = self.surface.xdg_window().cloned() else {
+            return false;
+        };
+        self.data.xdg_frozen_fullscreen_state =
+            crate::backend::wayland::state::XdgFrozenFullscreenState::PendingConfigure;
+        self.data.xdg_frozen_fullscreen_requested_at = Some(Instant::now());
+        if let Some(output) = self.preferred_fullscreen_output() {
+            window.set_fullscreen(Some(&output));
+        } else {
+            window.set_fullscreen(None);
+        }
+        window.commit();
+        true
+    }
+
+    pub(in crate::backend::wayland) fn restore_xdg_after_frozen(&mut self) {
+        if !self.xdg_frozen_fullscreen_requested() {
+            return;
+        }
+        if let Some(window) = self.surface.xdg_window().cloned() {
+            if self.xdg_fullscreen() {
+                if let Some(output) = self.preferred_fullscreen_output() {
+                    window.set_fullscreen(Some(&output));
+                } else {
+                    window.set_fullscreen(None);
+                }
+            } else {
+                window.unset_fullscreen();
+                window.set_maximized();
+            }
+            window.commit();
+        }
+        self.data.xdg_frozen_fullscreen_state =
+            crate::backend::wayland::state::XdgFrozenFullscreenState::Inactive;
+        self.data.xdg_frozen_fullscreen_requested_at = None;
+    }
+
+    pub(in crate::backend::wayland) fn activate_pending_frozen_image_for_current_surface(
+        &mut self,
+    ) {
+        let was_xdg_frozen_fullscreen = self.xdg_frozen_fullscreen_requested();
+        let (phys_width, phys_height) = self.surface.physical_dimensions();
+        match self
+            .frozen
+            .activate_pending_image(phys_width, phys_height, &mut self.input_state)
+        {
+            Ok(true) => {
+                if was_xdg_frozen_fullscreen {
+                    self.data.xdg_frozen_fullscreen_state =
+                        crate::backend::wayland::state::XdgFrozenFullscreenState::Active;
+                    self.data.xdg_frozen_fullscreen_requested_at = None;
+                }
+            }
+            Ok(false) => {}
+            Err(err) => {
+                log::warn!("Frozen pending image activation failed: {}", err);
+                self.input_state
+                    .set_ui_toast(crate::input::state::UiToastKind::Error, err);
+                self.restore_xdg_after_frozen();
+            }
+        }
     }
 
     pub(in crate::backend::wayland) fn main_surface_layer(&self) -> Layer {
