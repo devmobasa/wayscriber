@@ -124,6 +124,40 @@ pub(super) fn draw_utility_row(
         x += btn_size + gap;
     }
 
+    if model::top_screenshot_visible(snapshot) {
+        let screenshot_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+            .unwrap_or(false);
+        draw_button(
+            layout.ctx,
+            x,
+            y,
+            btn_size,
+            btn_size,
+            false,
+            screenshot_hover,
+        );
+        set_icon_color(layout.ctx, screenshot_hover);
+        toolbar_icons::draw_icon_screenshot(
+            layout.ctx,
+            x + (btn_size - icon_size) / 2.0,
+            y + (btn_size - icon_size) / 2.0,
+            icon_size,
+        );
+        layout.hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::CaptureScreenshot,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::CaptureSelection),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::CaptureSelection),
+            )),
+        });
+        x += btn_size + gap;
+    }
+
     if !is_simple && model::top_highlight_visible(snapshot) {
         let highlight_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))

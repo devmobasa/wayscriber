@@ -560,6 +560,7 @@ force_inline = false
 # Hide individual toolbar items or whole side sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
 hidden = [
+  "top.utility.screenshot",
   "top.tool.blur",
   "top.utility.clear-canvas",
   "side.actions.undo-all",
@@ -590,6 +591,7 @@ hidden = [
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
+- **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
 **Defaults:** all set as above.
 

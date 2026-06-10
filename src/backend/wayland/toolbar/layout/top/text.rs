@@ -99,6 +99,21 @@ pub(super) fn build_hits(
         x += btn_w + gap;
     }
 
+    if model::top_screenshot_visible(snapshot) {
+        hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::CaptureScreenshot,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::CaptureSelection),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::CaptureSelection),
+            )),
+        });
+        x += btn_w + gap;
+    }
+
     if !is_simple && model::top_clear_canvas_visible(snapshot) {
         hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),

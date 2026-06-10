@@ -127,6 +127,21 @@ pub(super) fn build_hits(
         x += btn_size + gap;
     }
 
+    if model::top_screenshot_visible(snapshot) {
+        hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::CaptureScreenshot,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::CaptureSelection),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::CaptureSelection),
+            )),
+        });
+        x += btn_size + gap;
+    }
+
     if !is_simple {
         if model::top_clear_canvas_visible(snapshot) {
             hits.push(HitRegion {

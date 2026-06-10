@@ -76,6 +76,7 @@ pub enum ToolbarEvent {
     Undo,
     Redo,
     ClearCanvas,
+    CaptureScreenshot,
     PagePrev,
     PageNext,
     PageNew,

@@ -129,6 +129,10 @@ pub(crate) fn top_clear_canvas_visible(snapshot: &ToolbarSnapshot) -> bool {
     toolbar_item_visible(snapshot, "top.utility.clear-canvas")
 }
 
+pub(crate) fn top_screenshot_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, "top.utility.screenshot")
+}
+
 pub(crate) fn top_highlight_visible(snapshot: &ToolbarSnapshot) -> bool {
     toolbar_item_visible(snapshot, "top.utility.highlight")
 }

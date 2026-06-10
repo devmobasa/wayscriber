@@ -9,10 +9,23 @@ use serde::{Deserialize, Serialize};
 /// The raw strings are intentionally preserved so unknown IDs from future
 /// versions survive unrelated toolbar saves.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolbarItemsConfig {
     #[serde(default)]
     pub hidden: Vec<String>,
+}
+
+const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[&str] = &["top.utility.screenshot"];
+
+impl Default for ToolbarItemsConfig {
+    fn default() -> Self {
+        Self {
+            hidden: DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS
+                .iter()
+                .map(|id| (*id).to_string())
+                .collect(),
+        }
+    }
 }
 
 impl ToolbarItemsConfig {
@@ -57,6 +70,24 @@ impl ToolbarItemsConfig {
         }
 
         self.hidden = next;
+    }
+
+    pub fn reset_known_hidden_to_defaults(&mut self) -> bool {
+        let original = self.hidden.clone();
+        let mut next: Vec<String> = DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS
+            .iter()
+            .map(|id| (*id).to_string())
+            .collect();
+
+        for raw in self.hidden.drain(..) {
+            if raw.parse::<ToolbarItemId>().is_err() {
+                next.push(raw);
+            }
+        }
+
+        let changed = next != original;
+        self.hidden = next;
+        changed
     }
 }
 
@@ -281,6 +312,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     item("top.utility.text", "Text", Top, Utility, None),
     item("top.utility.sticky-note", "Sticky note", Top, Utility, None),
     item("top.utility.clear-canvas", "Clear canvas", Top, Utility, None),
+    item("top.utility.screenshot", "Screenshot", Top, Utility, None),
     item("top.utility.highlight", "Highlight", Top, Utility, None),
     item("top.utility.highlight-ring", "Highlight ring", Top, Utility, None),
     item("top.utility.icon-mode-icons", "Use icons", Top, Utility, None),
@@ -619,6 +651,13 @@ mod tests {
     }
 
     #[test]
+    fn default_hidden_items_hide_screenshot_tool() {
+        let resolved = ToolbarItemsConfig::default().resolved();
+
+        assert!(resolved.is_hidden("top.utility.screenshot".parse().expect("known id")));
+    }
+
+    #[test]
     fn set_hidden_preserves_unknown_ids_while_mutating_known_ids() {
         let mut config = ToolbarItemsConfig {
             hidden: vec![
@@ -640,6 +679,23 @@ mod tests {
                 "top.tool.pen"
             ]
         );
+    }
+
+    #[test]
+    fn reset_known_hidden_restores_defaults_and_preserves_unknown_ids() {
+        let mut config = ToolbarItemsConfig {
+            hidden: vec![
+                "future.toolbar.item".to_string(),
+                "side.actions.undo-all".to_string(),
+            ],
+        };
+
+        assert!(config.reset_known_hidden_to_defaults());
+        assert_eq!(
+            config.hidden,
+            vec!["top.utility.screenshot", "future.toolbar.item"]
+        );
+        assert!(!config.reset_known_hidden_to_defaults());
     }
 
     #[test]

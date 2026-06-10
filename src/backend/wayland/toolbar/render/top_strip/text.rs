@@ -177,6 +177,26 @@ pub(super) fn draw_text_strip(
         x += btn_w + gap;
     }
 
+    if model::top_screenshot_visible(snapshot) {
+        let screenshot_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+            .unwrap_or(false);
+        draw_button(ctx, x, y, btn_w, btn_h, false, screenshot_hover);
+        draw_label_center(ctx, label_style, x, y, btn_w, btn_h, "Shot");
+        layout.hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::CaptureScreenshot,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::CaptureSelection),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::CaptureSelection),
+            )),
+        });
+        x += btn_w + gap;
+    }
+
     if !is_simple && model::top_clear_canvas_visible(snapshot) {
         let clear_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))

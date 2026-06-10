@@ -94,6 +94,9 @@ impl ToolbarLayoutSpec {
         if model::top_sticky_note_visible(snapshot) {
             x += btn_w + gap; // Note button
         }
+        if model::top_screenshot_visible(snapshot) {
+            x += btn_w + gap; // Screenshot
+        }
         if self.layout_mode != ToolbarLayoutMode::Simple {
             if model::top_clear_canvas_visible(snapshot) {
                 x += btn_w + gap; // Clear

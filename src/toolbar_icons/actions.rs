@@ -248,6 +248,29 @@ pub fn draw_icon_copy(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a screenshot/camera icon.
+pub fn draw_icon_screenshot(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.09).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    ctx.rectangle(x + s * 0.18, y + s * 0.32, s * 0.64, s * 0.46);
+    let _ = ctx.stroke();
+
+    ctx.move_to(x + s * 0.34, y + s * 0.32);
+    ctx.line_to(x + s * 0.4, y + s * 0.22);
+    ctx.line_to(x + s * 0.6, y + s * 0.22);
+    ctx.line_to(x + s * 0.66, y + s * 0.32);
+    let _ = ctx.stroke();
+
+    ctx.arc(x + s * 0.5, y + s * 0.56, s * 0.13, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+    ctx.arc(x + s * 0.72, y + s * 0.4, s * 0.035, 0.0, PI * 2.0);
+    let _ = ctx.fill();
+}
+
 /// Draw a left chevron/arrow icon for navigation.
 pub fn draw_icon_chevron_left(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
