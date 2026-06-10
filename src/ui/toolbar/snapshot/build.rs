@@ -158,6 +158,7 @@ impl ToolbarSnapshot {
             use_icons: state.toolbar_use_icons,
             toolbar_scale: state.toolbar_scale,
             layout_mode: state.toolbar_layout_mode,
+            resolved_toolbar_items: state.resolved_toolbar_items.clone(),
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_actions_advanced,

@@ -40,6 +40,7 @@ impl InputState {
         &mut self,
         layout_mode: crate::config::ToolbarLayoutMode,
         mode_overrides: crate::config::ToolbarModeOverrides,
+        items: crate::config::ToolbarItemsConfig,
         top_pinned: bool,
         side_pinned: bool,
         use_icons: bool,
@@ -69,6 +70,8 @@ impl InputState {
         self.toolbar_scale = scale;
         self.toolbar_layout_mode = layout_mode;
         self.toolbar_mode_overrides = mode_overrides;
+        self.resolved_toolbar_items = items.resolved();
+        self.toolbar_items = items;
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
         self.show_actions_advanced = show_actions_advanced;

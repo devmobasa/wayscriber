@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ToolbarLayoutMode, ToolbarModeOverrides};
+use super::{ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
 
 /// Toolbar visibility and pinning configuration.
 ///
@@ -16,6 +16,10 @@ pub struct ToolbarConfig {
     /// Optional per-mode overrides for toolbar sections
     #[serde(default)]
     pub mode_overrides: ToolbarModeOverrides,
+
+    /// Optional item-level toolbar visibility customizations.
+    #[serde(default)]
+    pub items: ToolbarItemsConfig,
 
     /// Show the top toolbar (tool selection) on startup
     #[serde(default = "default_toolbar_top_pinned")]
@@ -119,6 +123,7 @@ impl Default for ToolbarConfig {
         Self {
             layout_mode: default_toolbar_layout_mode(),
             mode_overrides: ToolbarModeOverrides::default(),
+            items: ToolbarItemsConfig::default(),
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
             use_icons: default_toolbar_use_icons(),

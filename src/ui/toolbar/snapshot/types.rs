@@ -1,4 +1,4 @@
-use crate::config::ToolbarLayoutMode;
+use crate::config::{ResolvedToolbarItems, ToolbarLayoutMode};
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
@@ -271,6 +271,8 @@ pub struct ToolbarSnapshot {
     pub toolbar_scale: f64,
     /// Current toolbar layout mode
     pub layout_mode: ToolbarLayoutMode,
+    /// Resolved known item-level toolbar visibility config.
+    pub resolved_toolbar_items: ResolvedToolbarItems,
     /// Whether to show extended color palette
     pub show_more_colors: bool,
     /// Whether to show the Actions section

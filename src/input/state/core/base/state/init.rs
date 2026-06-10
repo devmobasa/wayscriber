@@ -141,6 +141,8 @@ impl InputState {
             toolbar_scale: 1.0,
             toolbar_layout_mode: crate::config::ToolbarLayoutMode::Regular,
             toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
+            toolbar_items: crate::config::ToolbarItemsConfig::default(),
+            resolved_toolbar_items: crate::config::ResolvedToolbarItems::default(),
             toolbar_shapes_expanded: false,
             toolbar_drawer_open: false,
             toolbar_drawer_tab: ToolbarDrawerTab::View,

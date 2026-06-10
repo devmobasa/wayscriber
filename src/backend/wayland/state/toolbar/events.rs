@@ -194,6 +194,7 @@ impl WaylandState {
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
     pub(super) fn save_toolbar_pin_config(&mut self) {
         self.config.ui.toolbar.layout_mode = self.input_state.toolbar_layout_mode;
+        self.config.ui.toolbar.items = self.input_state.toolbar_items.clone();
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
         self.config.ui.toolbar.use_icons = self.input_state.toolbar_use_icons;

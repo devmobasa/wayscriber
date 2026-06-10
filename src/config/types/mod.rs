@@ -50,7 +50,7 @@ pub use status_bar::StatusBarStyle;
 pub use tablet::{StylusButtonBinding, TabletInputConfig};
 #[allow(unused_imports)]
 pub use toolbar::{
-    ToolbarConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides,
-    ToolbarSectionDefaults,
+    ResolvedToolbarItems, ToolbarConfig, ToolbarGroupId, ToolbarItemId, ToolbarItemsConfig,
+    ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, ToolbarSectionDefaults,
 };
 pub use ui::UiConfig;
