@@ -12,6 +12,7 @@ use crate::models::{
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
+use wayscriber::config::ToolbarItemId;
 
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
@@ -164,6 +165,17 @@ impl ConfiguratorApp {
         self.status = StatusMessage::idle();
         self.draft
             .set_toolbar_override(self.override_mode, field, option);
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_item_visibility_changed(
+        &mut self,
+        id: ToolbarItemId,
+        visible: bool,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.set_toolbar_item_visible(id, visible);
         self.refresh_dirty_flag();
         Task::none()
     }

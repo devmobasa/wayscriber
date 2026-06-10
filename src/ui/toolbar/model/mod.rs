@@ -40,7 +40,11 @@ pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSe
 pub(crate) use tools::{
     SemanticToolIcon, common_shape_tools, current_shape_tool, default_drag_hint,
     default_polygon_tool, default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool,
-    polygon_tools, semantic_icon_for_tool, shape_tools, top_tool_buttons,
+    polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_visible,
+    top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible, top_highlight_visible,
+    top_icon_mode_toggle_visible, top_screenshot_visible, top_shape_picker_visible,
+    top_sticky_note_visible, top_text_visible, top_tool_buttons, visible_tool_count,
+    visible_top_tool_buttons,
 };
 
 #[cfg(test)]
@@ -190,11 +194,75 @@ mod tests {
         snapshot.layout_mode = ToolbarLayoutMode::Regular;
         let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
         assert!(
+            !model
+                .toggles()
+                .iter()
+                .any(|toggle| toggle.id == ToolbarControlId::SettingsAdvancedActions)
+        );
+
+        snapshot.drawer_tab = ToolbarDrawerTab::Sections;
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(
             model
                 .toggles()
                 .iter()
                 .any(|toggle| toggle.id == ToolbarControlId::SettingsAdvancedActions)
         );
+    }
+
+    #[test]
+    fn settings_model_moves_hidden_item_overrides_into_customization_panel() {
+        let mut snapshot = snapshot();
+        snapshot.drawer_tab = ToolbarDrawerTab::App;
+        snapshot.show_settings_section = true;
+        snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+            hidden: vec!["top.tool.pen".to_string()],
+        }
+        .resolved();
+
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(model.item_overrides().is_empty());
+        assert!(model.buttons().iter().any(|button| {
+            matches!(
+                &button.event,
+                ToolbarEvent::SetToolbarItemCustomizationOpen(true)
+            )
+        }));
+        assert!(
+            model.buttons().iter().any(|button| matches!(
+                &button.event,
+                ToolbarEvent::ResetToolbarItemHiddenOverrides
+            ))
+        );
+
+        snapshot.customize_items_open = true;
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(model.item_overrides().is_empty());
+        assert!(
+            model
+                .groups()
+                .iter()
+                .any(|group| group.label.as_ref() == "Top tools")
+        );
+
+        snapshot.customize_items_group =
+            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        assert!(model.groups().is_empty());
+        assert!(
+            model
+                .item_overrides()
+                .iter()
+                .any(|item| item.id.as_str() == "top.tool.pen" && !item.shown)
+        );
+        assert!(!model.item_overrides().iter().any(|item| {
+            item.id.as_str() == "side.group.settings"
+                || item.id.as_str().starts_with("side.settings.")
+        }));
+        assert!(model.buttons().iter().any(|button| matches!(
+            &button.event,
+            ToolbarEvent::SetToolbarItemCustomizationGroup(None)
+        )));
     }
 
     #[test]

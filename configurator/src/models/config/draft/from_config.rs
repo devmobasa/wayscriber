@@ -101,6 +101,7 @@ impl ConfigDraft {
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
             ),
+            ui_toolbar_items: config.ui.toolbar.items.clone(),
             ui_toolbar_show_presets: config.ui.toolbar.show_presets,
             ui_toolbar_show_actions_section: config.ui.toolbar.show_actions_section,
             ui_toolbar_show_actions_advanced: config.ui.toolbar.show_actions_advanced,

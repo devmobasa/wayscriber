@@ -18,28 +18,24 @@ pub(super) fn draw_shape_picker_row(
     is_simple: bool,
 ) {
     let mut shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-    draw_picker_row(
-        layout,
-        handle_w,
-        shape_y,
-        btn_size,
-        icon_size,
-        if is_simple {
-            model::common_shape_tools()
-        } else {
-            model::polygon_tools()
-        },
-    );
-    if is_simple {
+    if !model::top_shape_picker_visible(layout.snapshot) {
+        return;
+    }
+
+    let first_row = if is_simple {
+        model::common_shape_tools()
+    } else {
+        model::polygon_tools()
+    };
+    if model::visible_tool_count(first_row, layout.snapshot) > 0 {
+        draw_picker_row(layout, handle_w, shape_y, btn_size, icon_size, first_row);
         shape_y += btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        draw_picker_row(
-            layout,
-            handle_w,
-            shape_y,
-            btn_size,
-            icon_size,
-            model::polygon_tools(),
-        );
+    }
+    if is_simple {
+        let second_row = model::polygon_tools();
+        if model::visible_tool_count(second_row, layout.snapshot) > 0 {
+            draw_picker_row(layout, handle_w, shape_y, btn_size, icon_size, second_row);
+        }
     }
 }
 
@@ -53,6 +49,9 @@ fn draw_picker_row(
 ) {
     let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + layout.gap;
     for tool in tools {
+        if !model::tool_visible(layout.snapshot, *tool) {
+            continue;
+        }
         let is_active =
             layout.snapshot.active_tool == *tool || layout.snapshot.tool_override == Some(*tool);
         let is_hover = layout

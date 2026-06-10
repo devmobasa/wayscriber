@@ -12,7 +12,7 @@ pub(super) fn populate_session_snapshot(
     snapshot.active_session_name = active_path.as_deref().map(session_display_name);
     snapshot.active_session_path = active_path.clone();
     snapshot.recent_sessions =
-        if snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App {
+        if snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session {
             recent_session_snapshots(active_path.as_deref())
         } else {
             Vec::new()

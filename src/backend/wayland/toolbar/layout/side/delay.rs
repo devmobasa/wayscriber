@@ -9,7 +9,10 @@ pub(super) fn push_delay_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ctx.snapshot.show_step_section
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::StepUndo)
+        || !ctx.snapshot.show_step_section
         || !ctx.snapshot.drawer_open
         || ctx.snapshot.drawer_tab != crate::input::ToolbarDrawerTab::App
     {

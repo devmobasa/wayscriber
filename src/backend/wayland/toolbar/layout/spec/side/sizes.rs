@@ -19,14 +19,28 @@ impl ToolbarLayoutSpec {
         let show_actions = ToolbarActionsModel::from_snapshot(snapshot).is_some();
         let show_pages = toolbar_pages_model(snapshot).is_some();
         let show_boards = toolbar_boards_model(snapshot).is_some();
-        let show_presets =
-            snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
+        let drawer_session =
+            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session;
+        let drawer_customizing = snapshot.drawer_open
+            && (snapshot.customize_items_open
+                || snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize);
+        let drawer_sections =
+            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
+        let show_presets = !snapshot.side_section_hidden(ToolbarSideSection::Presets)
+            && snapshot.show_presets
+            && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section
             && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App;
-        let show_settings_section = snapshot.show_settings_section
-            && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App;
+            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
+            && !snapshot.side_section_hidden(ToolbarSideSection::StepUndo);
+        let show_settings_section = if drawer_customizing || drawer_sections {
+            ToolbarSettingsModel::from_snapshot(snapshot).is_some()
+        } else {
+            snapshot.show_settings_section
+                && snapshot.drawer_open
+                && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
+                && !snapshot.side_section_hidden(ToolbarSideSection::Settings)
+        };
         let show_session_section = ToolbarSessionModel::from_snapshot(snapshot).is_some();
 
         let mut height: f64 = base_height;
@@ -36,7 +50,19 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        if tool_context.needs_color {
+        if drawer_customizing || drawer_session {
+            add_section(self.side_drawer_tabs_height(snapshot), &mut height);
+            if drawer_customizing && show_settings_section {
+                add_section(self.side_settings_height(snapshot), &mut height);
+            }
+            if drawer_session && show_session_section {
+                add_section(self.side_session_height(snapshot), &mut height);
+            }
+            height += Self::SIDE_FOOTER_PADDING;
+            return (Self::SIDE_WIDTH, height.ceil() as u32);
+        }
+
+        if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
             let colors_h = self.side_colors_height(snapshot);
             add_section(colors_h, &mut height);
         }
@@ -46,30 +72,46 @@ impl ToolbarLayoutSpec {
         }
 
         if tool_context.needs_thickness {
-            add_section(self.side_thickness_height(snapshot), &mut height);
-            if tool_context.show_eraser_mode {
+            if !snapshot.side_section_hidden(ToolbarSideSection::Thickness) {
+                add_section(self.side_thickness_height(snapshot), &mut height);
+            }
+            if tool_context.show_eraser_mode
+                && !snapshot.side_section_hidden(ToolbarSideSection::EraserMode)
+            {
                 add_section(self.side_eraser_mode_height(snapshot), &mut height);
             }
-            if tool_context.show_polygon_sides_control {
+            if tool_context.show_polygon_sides_control
+                && !snapshot.side_section_hidden(ToolbarSideSection::PolygonSides)
+            {
                 add_section(self.side_polygon_sides_height(snapshot), &mut height);
             }
         }
 
-        if tool_context.show_arrow_labels {
+        if tool_context.show_arrow_labels
+            && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
+        {
             add_section(self.side_arrow_labels_height(snapshot), &mut height);
         }
 
-        if tool_context.show_step_counter {
+        if tool_context.show_step_counter
+            && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
+        {
             add_section(self.side_step_markers_height(snapshot), &mut height);
         }
 
-        if tool_context.show_marker_opacity {
+        if tool_context.show_marker_opacity
+            && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
+        {
             add_section(self.side_marker_opacity_height(snapshot), &mut height);
         }
 
         if tool_context.show_font_controls {
-            add_section(self.side_text_size_height(snapshot), &mut height);
-            add_section(self.side_font_height(snapshot), &mut height);
+            if !snapshot.side_section_hidden(ToolbarSideSection::TextSize) {
+                add_section(self.side_text_size_height(snapshot), &mut height);
+            }
+            if !snapshot.side_section_hidden(ToolbarSideSection::Font) {
+                add_section(self.side_font_height(snapshot), &mut height);
+            }
         }
 
         if snapshot.drawer_open {
@@ -132,6 +174,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_hidden(ToolbarSideSection::Colors) {
+            return 0.0;
+        }
         if snapshot.side_section_collapsed(ToolbarSideSection::Colors) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
@@ -329,7 +374,11 @@ impl ToolbarLayoutSpec {
         if !snapshot.drawer_open {
             return 0.0;
         }
-        Self::SIDE_SECTION_TOGGLE_OFFSET_Y + Self::SIDE_TOGGLE_HEIGHT + Self::SIDE_ACTION_BUTTON_GAP
+        let rows = crate::input::ToolbarDrawerTab::ALL.len().div_ceil(3);
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
+            + Self::SIDE_TOGGLE_HEIGHT * rows as f64
+            + Self::SIDE_TOGGLE_GAP * rows.saturating_sub(1) as f64
+            + Self::SIDE_ACTION_BUTTON_GAP
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_pages_height(
@@ -380,6 +429,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_hidden(ToolbarSideSection::StepUndo) {
+            return 0.0;
+        }
         if snapshot.side_section_collapsed(ToolbarSideSection::StepUndo) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
@@ -403,7 +455,13 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        if snapshot.side_section_collapsed(ToolbarSideSection::Settings) {
+        let dedicated_panel = snapshot.customize_items_open
+            || matches!(
+                snapshot.drawer_tab,
+                crate::input::ToolbarDrawerTab::Sections
+                    | crate::input::ToolbarDrawerTab::Customize
+            );
+        if !dedicated_panel && snapshot.side_section_collapsed(ToolbarSideSection::Settings) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
@@ -418,8 +476,33 @@ impl ToolbarLayoutSpec {
         } else {
             0.0
         };
-        let buttons_h = Self::SIDE_SETTINGS_BUTTON_HEIGHT;
-        let content_h = toggle_rows_h + toggle_gap + buttons_h;
+        let button_rows = settings.buttons().len().div_ceil(2);
+        let buttons_h = if button_rows > 0 {
+            Self::SIDE_SETTINGS_BUTTON_HEIGHT * button_rows as f64
+        } else {
+            0.0
+        };
+        let group_rows = settings.groups().len().div_ceil(2);
+        let group_rows_h = if group_rows > 0 {
+            toggle_h
+                + toggle_gap
+                + Self::SIDE_SETTINGS_BUTTON_HEIGHT * group_rows as f64
+                + Self::SIDE_SETTINGS_BUTTON_GAP * (group_rows as f64 - 1.0)
+        } else {
+            0.0
+        };
+        let item_rows = settings.item_overrides().len();
+        let item_rows_h = if item_rows > 0 {
+            toggle_h
+                + toggle_gap
+                + toggle_h * item_rows as f64
+                + toggle_gap * (item_rows as f64 - 1.0)
+        } else {
+            0.0
+        };
+        let customize_h = group_rows_h + item_rows_h;
+        let customize_gap = if customize_h > 0.0 { toggle_gap } else { 0.0 };
+        let content_h = toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 
@@ -490,6 +573,9 @@ impl ToolbarLayoutSpec {
         section: ToolbarSideSection,
         expanded_height: f64,
     ) -> f64 {
+        if snapshot.side_section_hidden(section) {
+            return 0.0;
+        }
         if snapshot.side_section_collapsed(section) {
             Self::SIDE_COLLAPSED_SECTION_HEIGHT
         } else {

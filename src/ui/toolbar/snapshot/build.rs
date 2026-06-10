@@ -101,6 +101,8 @@ impl ToolbarSnapshot {
             .collect();
         let drawer_open = state.toolbar_drawer_open;
         let drawer_tab = state.toolbar_drawer_tab;
+        let customize_items_open = state.toolbar_customize_items_open;
+        let customize_items_group = state.toolbar_customize_items_group;
         let show_actions_advanced = state.show_actions_advanced;
         let show_zoom_actions = state.show_zoom_actions;
         let show_pages_section = state.show_pages_section;
@@ -158,6 +160,7 @@ impl ToolbarSnapshot {
             use_icons: state.toolbar_use_icons,
             toolbar_scale: state.toolbar_scale,
             layout_mode: state.toolbar_layout_mode,
+            resolved_toolbar_items: state.resolved_toolbar_items.clone(),
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_actions_advanced,
@@ -184,6 +187,8 @@ impl ToolbarSnapshot {
             shape_picker_open: state.toolbar_shapes_expanded,
             drawer_open,
             drawer_tab,
+            customize_items_open,
+            customize_items_group,
             binding_hints,
             show_drawer_hint,
             is_transparent: state.board_is_transparent(),

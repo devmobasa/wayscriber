@@ -53,6 +53,13 @@ impl Config {
             self.ui.toolbar.scale = self.ui.toolbar.scale.clamp(0.5, 3.0);
         }
 
+        for unknown in self.ui.toolbar.items.resolved().unknown_hidden {
+            log::warn!(
+                "Unknown toolbar item id {:?} in ui.toolbar.items.hidden; preserving it for forward compatibility",
+                unknown
+            );
+        }
+
         for i in 0..4 {
             if !(0.0..=1.0).contains(&self.ui.click_highlight.fill_color[i]) {
                 log::warn!(

@@ -1,10 +1,39 @@
 use std::path::PathBuf;
 
-use crate::config::{Action, ToolbarLayoutMode};
+use crate::config::{Action, ToolbarItemId, ToolbarLayoutMode};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
 
 use super::ToolbarSnapshot;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ToolbarItemCustomizeGroup {
+    TopTools,
+    TopControls,
+    SideSections,
+    Actions,
+    Pages,
+    Boards,
+    Presets,
+    ToolOptions,
+    Sessions,
+}
+
+impl ToolbarItemCustomizeGroup {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::TopTools => "Top tools",
+            Self::TopControls => "Top controls",
+            Self::SideSections => "Side sections",
+            Self::Actions => "Actions",
+            Self::Pages => "Pages",
+            Self::Boards => "Boards",
+            Self::Presets => "Presets",
+            Self::ToolOptions => "Tool options",
+            Self::Sessions => "Sessions",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ToolbarSideSection {
@@ -76,6 +105,7 @@ pub enum ToolbarEvent {
     Undo,
     Redo,
     ClearCanvas,
+    CaptureScreenshot,
     PagePrev,
     PageNext,
     PageNew,
@@ -180,6 +210,14 @@ pub enum ToolbarEvent {
     ToggleSideSectionCollapsed(ToolbarSideSection, bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
+    /// Hide or show a known toolbar item override.
+    SetToolbarItemHidden(ToolbarItemId, bool),
+    /// Clear known hidden toolbar item overrides, preserving unknown/future IDs.
+    ResetToolbarItemHiddenOverrides,
+    /// Show or hide the Settings drawer toolbar-item customization sub-panel.
+    SetToolbarItemCustomizationOpen(bool),
+    /// Select the Settings drawer toolbar-item customization group.
+    SetToolbarItemCustomizationGroup(Option<ToolbarItemCustomizeGroup>),
     /// Toggle the simple-mode shape picker
     ToggleShapePicker(bool),
     /// Drag handle for top toolbar (toolbar coords; screen coords when inline toolbars are active)

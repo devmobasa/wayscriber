@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::config::Action;
+use crate::config::{Action, ToolbarItemId};
 
 impl InputState {
     /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
@@ -40,6 +40,7 @@ impl InputState {
         &mut self,
         layout_mode: crate::config::ToolbarLayoutMode,
         mode_overrides: crate::config::ToolbarModeOverrides,
+        items: crate::config::ToolbarItemsConfig,
         top_pinned: bool,
         side_pinned: bool,
         use_icons: bool,
@@ -69,6 +70,8 @@ impl InputState {
         self.toolbar_scale = scale;
         self.toolbar_layout_mode = layout_mode;
         self.toolbar_mode_overrides = mode_overrides;
+        self.resolved_toolbar_items = items.resolved();
+        self.toolbar_items = items;
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
         self.show_actions_advanced = show_actions_advanced;
@@ -85,6 +88,27 @@ impl InputState {
         self.show_preset_toasts = show_preset_toasts;
         self.show_tool_preview = show_tool_preview;
         self.apply_toolbar_mode_overrides(layout_mode);
+    }
+
+    pub fn set_toolbar_item_hidden(&mut self, id: ToolbarItemId, hidden: bool) -> bool {
+        if self.resolved_toolbar_items.is_hidden(id) == hidden {
+            return false;
+        }
+
+        self.toolbar_items.set_hidden(id, hidden);
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
+        if !self.toolbar_items.reset_known_hidden_to_defaults() {
+            return false;
+        }
+
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
     }
 
     fn apply_toolbar_mode_overrides(&mut self, mode: crate::config::ToolbarLayoutMode) {

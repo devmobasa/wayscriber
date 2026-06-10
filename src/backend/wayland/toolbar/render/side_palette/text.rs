@@ -38,125 +38,135 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         return;
     }
 
-    let slider_card_h = layout.spec.side_text_size_height(snapshot);
     let btn_size = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
     let nudge_icon_size = ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE;
     let value_w = ToolbarLayoutSpec::SIDE_SLIDER_VALUE_WIDTH;
     let track_h = ToolbarLayoutSpec::SIDE_TRACK_HEIGHT;
     let knob_r = ToolbarLayoutSpec::SIDE_TRACK_KNOB_RADIUS;
 
-    draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
-    draw_collapsible_header(
-        layout,
-        *y,
-        label_style,
-        ToolbarSideSection::TextSize,
-        "Text size",
-        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
-    );
-    if snapshot.side_section_collapsed(ToolbarSideSection::TextSize) {
-        *y += slider_card_h + section_gap;
-    } else {
-        let hits = &mut layout.hits;
-
-        let font_size_spec = ToolbarSliderSpec::FONT_SIZE;
-        let fs_min = font_size_spec.min;
-        let fs_max = font_size_spec.max;
-        let fs_step = font_size_spec.step.unwrap_or(2.0);
-        let fs_slider_row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
-
-        let fs_minus_x = x;
-        let fs_minus_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, fs_minus_x, fs_slider_row_y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            ctx,
-            fs_minus_x,
-            fs_slider_row_y,
-            btn_size,
-            btn_size,
-            false,
-            fs_minus_hover,
-        );
-        set_icon_color(ctx, fs_minus_hover);
-        toolbar_icons::draw_icon_minus(
-            ctx,
-            fs_minus_x + (btn_size - nudge_icon_size) / 2.0,
-            fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
-            nudge_icon_size,
-        );
-        hits.push(HitRegion {
-            rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
-            event: ToolbarEvent::SetFontSize((snapshot.font_size - fs_step).max(fs_min)),
-            kind: HitKind::Click,
-            tooltip: Some("Decrease font size".to_string()),
-        });
-
-        let fs_plus_x = width - x - btn_size - value_w - 4.0;
-        let fs_plus_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, fs_plus_x, fs_slider_row_y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            ctx,
-            fs_plus_x,
-            fs_slider_row_y,
-            btn_size,
-            btn_size,
-            false,
-            fs_plus_hover,
-        );
-        set_icon_color(ctx, fs_plus_hover);
-        toolbar_icons::draw_icon_plus(
-            ctx,
-            fs_plus_x + (btn_size - nudge_icon_size) / 2.0,
-            fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
-            nudge_icon_size,
-        );
-        hits.push(HitRegion {
-            rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
-            event: ToolbarEvent::SetFontSize((snapshot.font_size + fs_step).min(fs_max)),
-            kind: HitKind::Click,
-            tooltip: Some("Increase font size".to_string()),
-        });
-
-        let fs_track_x = fs_minus_x + btn_size + SPACING_STD;
-        let fs_track_w = fs_plus_x - fs_track_x - SPACING_STD;
-        let fs_track_y = fs_slider_row_y + (btn_size - track_h) / 2.0;
-        let fs_knob_x =
-            font_size_spec.knob_center_x(fs_track_x, fs_track_w, knob_r, snapshot.font_size);
-
-        set_color(ctx, COLOR_TRACK_BACKGROUND);
-        draw_round_rect(ctx, fs_track_x, fs_track_y, fs_track_w, track_h, 4.0);
-        let _ = ctx.fill();
-        set_color(ctx, COLOR_TRACK_KNOB);
-        ctx.arc(
-            fs_knob_x,
-            fs_track_y + track_h / 2.0,
-            knob_r,
-            0.0,
-            std::f64::consts::PI * 2.0,
-        );
-        let _ = ctx.fill();
-
-        hits.push(HitRegion {
-            rect: (fs_track_x, fs_track_y - 6.0, fs_track_w, track_h + 12.0),
-            event: ToolbarEvent::SetFontSize(snapshot.font_size),
-            kind: HitKind::DragSetFontSize,
-            tooltip: None,
-        });
-
-        let fs_text = format!("{:.0}pt", snapshot.font_size);
-        draw_label_center(
-            ctx,
+    if !snapshot.side_section_hidden(ToolbarSideSection::TextSize) {
+        let slider_card_h = layout.spec.side_text_size_height(snapshot);
+        draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
+        draw_collapsible_header(
+            layout,
+            *y,
             label_style,
-            width - x - value_w,
-            fs_slider_row_y,
-            value_w,
-            btn_size,
-            &fs_text,
+            ToolbarSideSection::TextSize,
+            "Text size",
+            ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         );
+        if snapshot.side_section_collapsed(ToolbarSideSection::TextSize) {
+            *y += slider_card_h + section_gap;
+        } else {
+            let hits = &mut layout.hits;
 
-        *y += slider_card_h + section_gap;
+            let font_size_spec = ToolbarSliderSpec::FONT_SIZE;
+            let fs_min = font_size_spec.min;
+            let fs_max = font_size_spec.max;
+            let fs_step = font_size_spec.step.unwrap_or(2.0);
+            let fs_slider_row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+
+            let fs_minus_x = x;
+            let fs_minus_hover = hover
+                .map(|(hx, hy)| {
+                    point_in_rect(hx, hy, fs_minus_x, fs_slider_row_y, btn_size, btn_size)
+                })
+                .unwrap_or(false);
+            draw_button(
+                ctx,
+                fs_minus_x,
+                fs_slider_row_y,
+                btn_size,
+                btn_size,
+                false,
+                fs_minus_hover,
+            );
+            set_icon_color(ctx, fs_minus_hover);
+            toolbar_icons::draw_icon_minus(
+                ctx,
+                fs_minus_x + (btn_size - nudge_icon_size) / 2.0,
+                fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+                nudge_icon_size,
+            );
+            hits.push(HitRegion {
+                rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
+                event: ToolbarEvent::SetFontSize((snapshot.font_size - fs_step).max(fs_min)),
+                kind: HitKind::Click,
+                tooltip: Some("Decrease font size".to_string()),
+            });
+
+            let fs_plus_x = width - x - btn_size - value_w - 4.0;
+            let fs_plus_hover = hover
+                .map(|(hx, hy)| {
+                    point_in_rect(hx, hy, fs_plus_x, fs_slider_row_y, btn_size, btn_size)
+                })
+                .unwrap_or(false);
+            draw_button(
+                ctx,
+                fs_plus_x,
+                fs_slider_row_y,
+                btn_size,
+                btn_size,
+                false,
+                fs_plus_hover,
+            );
+            set_icon_color(ctx, fs_plus_hover);
+            toolbar_icons::draw_icon_plus(
+                ctx,
+                fs_plus_x + (btn_size - nudge_icon_size) / 2.0,
+                fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+                nudge_icon_size,
+            );
+            hits.push(HitRegion {
+                rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
+                event: ToolbarEvent::SetFontSize((snapshot.font_size + fs_step).min(fs_max)),
+                kind: HitKind::Click,
+                tooltip: Some("Increase font size".to_string()),
+            });
+
+            let fs_track_x = fs_minus_x + btn_size + SPACING_STD;
+            let fs_track_w = fs_plus_x - fs_track_x - SPACING_STD;
+            let fs_track_y = fs_slider_row_y + (btn_size - track_h) / 2.0;
+            let fs_knob_x =
+                font_size_spec.knob_center_x(fs_track_x, fs_track_w, knob_r, snapshot.font_size);
+
+            set_color(ctx, COLOR_TRACK_BACKGROUND);
+            draw_round_rect(ctx, fs_track_x, fs_track_y, fs_track_w, track_h, 4.0);
+            let _ = ctx.fill();
+            set_color(ctx, COLOR_TRACK_KNOB);
+            ctx.arc(
+                fs_knob_x,
+                fs_track_y + track_h / 2.0,
+                knob_r,
+                0.0,
+                std::f64::consts::PI * 2.0,
+            );
+            let _ = ctx.fill();
+
+            hits.push(HitRegion {
+                rect: (fs_track_x, fs_track_y - 6.0, fs_track_w, track_h + 12.0),
+                event: ToolbarEvent::SetFontSize(snapshot.font_size),
+                kind: HitKind::DragSetFontSize,
+                tooltip: None,
+            });
+
+            let fs_text = format!("{:.0}pt", snapshot.font_size);
+            draw_label_center(
+                ctx,
+                label_style,
+                width - x - value_w,
+                fs_slider_row_y,
+                value_w,
+                btn_size,
+                &fs_text,
+            );
+
+            *y += slider_card_h + section_gap;
+        }
+    }
+
+    if snapshot.side_section_hidden(ToolbarSideSection::Font) {
+        return;
     }
 
     let font_card_h = layout.spec.side_font_height(snapshot);

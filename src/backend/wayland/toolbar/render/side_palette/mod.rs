@@ -19,8 +19,9 @@ use anyhow::Result;
 
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::ui::toolbar::ToolbarSnapshot;
+use crate::input::ToolbarDrawerTab;
 use crate::ui::toolbar::snapshot::ToolContext;
+use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 
 use std::time::Instant;
 
@@ -93,15 +94,43 @@ pub fn render_side_palette(
 
     let mut y = header::draw_header(&mut layout);
 
+    if snapshot.drawer_open
+        && (snapshot.customize_items_open
+            || snapshot.drawer_tab == ToolbarDrawerTab::Customize
+            || snapshot.drawer_tab == ToolbarDrawerTab::Session)
+    {
+        drawer::draw_drawer_tabs(&mut layout, &mut y);
+        if snapshot.drawer_tab == ToolbarDrawerTab::Session {
+            session::draw_session_section(&mut layout, &mut y);
+        } else {
+            settings::draw_settings_section(&mut layout, &mut y);
+        }
+        draw_tooltip_with_delay(
+            ctx,
+            layout.hits,
+            layout.hover,
+            width,
+            height,
+            false,
+            hover_start,
+        );
+        return Ok(());
+    }
+
     // Color section: only show when the tool needs color
-    let colors_info = if tool_context.needs_color {
-        colors::draw_colors_section(&mut layout, &mut y)
-    } else {
-        None
-    };
+    let colors_info =
+        if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
+            colors::draw_colors_section(&mut layout, &mut y)
+        } else {
+            None
+        };
 
     // Presets section (always shown when enabled)
-    let hover_preset_color = presets::draw_presets_section(&mut layout, &mut y);
+    let hover_preset_color = if snapshot.side_section_hidden(ToolbarSideSection::Presets) {
+        None
+    } else {
+        presets::draw_presets_section(&mut layout, &mut y)
+    };
     if let (Some(color), Some(info)) = (hover_preset_color, &colors_info) {
         colors::draw_preset_hover_highlight(&layout, info, color);
     }
@@ -112,22 +141,31 @@ pub fn render_side_palette(
     }
 
     // Arrow labels: show when arrow tool is active
-    if tool_context.show_arrow_labels {
+    if tool_context.show_arrow_labels
+        && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
+    {
         arrow::draw_arrow_section(&mut layout, &mut y);
     }
 
     // Step marker counter: show when step marker tool is active
-    if tool_context.show_step_counter {
+    if tool_context.show_step_counter
+        && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
+    {
         step_marker::draw_step_marker_section(&mut layout, &mut y);
     }
 
     // Marker opacity: show when marker tool is active
-    if tool_context.show_marker_opacity {
+    if tool_context.show_marker_opacity
+        && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
+    {
         marker::draw_marker_opacity_section(&mut layout, &mut y);
     }
 
     // Text controls: show when text/note mode is active
-    if tool_context.show_font_controls {
+    if tool_context.show_font_controls
+        && (!snapshot.side_section_hidden(ToolbarSideSection::TextSize)
+            || !snapshot.side_section_hidden(ToolbarSideSection::Font))
+    {
         text::draw_text_controls_section(&mut layout, &mut y);
     }
 

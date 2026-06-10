@@ -20,7 +20,8 @@ use super::super::types::{
     UiToastState, ZoomAction,
 };
 use crate::config::{
-    Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding, ToolPresetConfig,
+    Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding,
+    ResolvedToolbarItems, ToolPresetConfig, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
@@ -199,12 +200,20 @@ pub struct InputState {
     pub toolbar_layout_mode: crate::config::ToolbarLayoutMode,
     /// Optional per-mode overrides for toolbar sections
     pub toolbar_mode_overrides: crate::config::ToolbarModeOverrides,
+    /// Raw item-level toolbar visibility config, preserving unknown IDs.
+    pub toolbar_items: ToolbarItemsConfig,
+    /// Resolved known item-level toolbar visibility config.
+    pub resolved_toolbar_items: ResolvedToolbarItems,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
     /// Whether the toolbar drawer is open
     pub toolbar_drawer_open: bool,
     /// Active toolbar drawer tab
     pub toolbar_drawer_tab: ToolbarDrawerTab,
+    /// Whether the Settings drawer is showing the toolbar item customization sub-panel
+    pub toolbar_customize_items_open: bool,
+    /// Selected toolbar item customization group in the Settings drawer sub-panel
+    pub toolbar_customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)

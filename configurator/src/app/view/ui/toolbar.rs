@@ -1,5 +1,9 @@
-use iced::widget::{column, pick_list, row, scrollable, text};
+use iced::widget::{checkbox, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
+use wayscriber::config::{
+    ResolvedToolbarItems, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemSurface,
+    ToolbarItemsConfig, toolbar_item_definitions,
+};
 
 use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::state::ConfiguratorApp;
@@ -214,5 +218,110 @@ impl ConfiguratorApp {
         .spacing(12);
 
         scrollable(column).id(CONTENT_SCROLL_ID).into()
+    }
+
+    pub(super) fn ui_toolbar_visibility_tab(&self) -> Element<'_, Message> {
+        let column = column![
+            text("Toolbar Visibility").size(18),
+            text("Checked items are shown. Uncheck an item to hide it from toolbar sizing, drawing, and hit testing. Existing section toggles and mode overrides can still hide checked items.").size(12),
+            toolbar_item_visibility_section(
+                &self.draft.ui_toolbar_items,
+                &self.defaults.ui_toolbar_items,
+            ),
+        ]
+        .spacing(12);
+
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
+    }
+}
+
+fn toolbar_item_visibility_section<'a>(
+    items: &ToolbarItemsConfig,
+    defaults: &ToolbarItemsConfig,
+) -> Element<'a, Message> {
+    let resolved = items.resolved();
+    let default_resolved = defaults.resolved();
+    let mut rows = column![text("Items").size(16)].spacing(8);
+    let mut current_surface = None;
+    let mut current_category = None;
+
+    if !resolved.unknown_hidden.is_empty() {
+        rows = rows.push(
+            text(format!(
+                "Preserving {} unknown toolbar item id(s) from config.",
+                resolved.unknown_hidden.len()
+            ))
+            .size(12),
+        );
+    }
+
+    for definition in toolbar_item_definitions() {
+        if current_surface != Some(definition.surface) {
+            current_surface = Some(definition.surface);
+            current_category = None;
+            rows = rows.push(text(toolbar_item_surface_label(definition.surface)).size(14));
+        }
+        if current_category != Some(definition.category) {
+            current_category = Some(definition.category);
+            rows = rows.push(text(toolbar_item_category_label(definition.category)).size(13));
+        }
+
+        rows = rows.push(toolbar_item_visibility_row(
+            definition,
+            &resolved,
+            &default_resolved,
+        ));
+    }
+
+    rows.into()
+}
+
+fn toolbar_item_visibility_row<'a>(
+    definition: &ToolbarItemDefinition,
+    resolved: &ResolvedToolbarItems,
+    defaults: &ResolvedToolbarItems,
+) -> Element<'a, Message> {
+    let id = definition.id;
+    let visible = !resolved.is_hidden(id);
+    let default = format!(
+        "default: {}",
+        visibility_override_label(!defaults.is_hidden(id))
+    );
+
+    row![
+        checkbox(visible)
+            .label(definition.label)
+            .on_toggle(move |value| Message::ToolbarItemVisibilityChanged(id, value)),
+        text(definition.id.as_str()).size(12).width(Length::Fill),
+        text(default).size(12),
+    ]
+    .spacing(12)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn visibility_override_label(visible: bool) -> &'static str {
+    if visible { "shown" } else { "hidden" }
+}
+
+fn toolbar_item_surface_label(surface: ToolbarItemSurface) -> &'static str {
+    match surface {
+        ToolbarItemSurface::Top => "Top toolbar",
+        ToolbarItemSurface::Side => "Side toolbar",
+    }
+}
+
+fn toolbar_item_category_label(category: ToolbarItemCategory) -> &'static str {
+    match category {
+        ToolbarItemCategory::Chrome => "Toolbar controls",
+        ToolbarItemCategory::Tool => "Tools",
+        ToolbarItemCategory::Utility => "Utilities",
+        ToolbarItemCategory::Group => "Sections",
+        ToolbarItemCategory::Action => "Actions",
+        ToolbarItemCategory::Page => "Pages",
+        ToolbarItemCategory::Board => "Boards",
+        ToolbarItemCategory::Setting => "Settings",
+        ToolbarItemCategory::Session => "Sessions",
+        ToolbarItemCategory::ToolOption => "Tool options",
     }
 }

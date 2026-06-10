@@ -1,5 +1,6 @@
 use crate::app::state::ConfiguratorApp;
 use crate::models::{KeybindingsTabId, SearchQuery, TabId, UiTabId};
+use wayscriber::config::toolbar_item_definitions;
 
 use super::terms::*;
 use super::types::{AppSearchSummary, SearchArea, TabSearchSummary};
@@ -178,12 +179,33 @@ fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
             .collect::<Vec<_>>();
         if query.matches_parts_scoped_to_tab(TabId::Ui, identity_parts.iter().copied())
             || query.matches_parts(full_parts.iter().copied())
+            || (tab == UiTabId::ToolbarVisibility && toolbar_item_matches(query))
             || (query.matches_any_raw_text(field_terms)
                 && query.matches_parts_scoped_to_tab(TabId::Ui, full_parts.iter().copied()))
         {
             summary.add_ui_tab(tab);
         }
     }
+}
+
+fn toolbar_item_matches(query: &SearchQuery) -> bool {
+    toolbar_item_definitions().iter().any(|definition| {
+        query.matches_parts([
+            "toolbar item",
+            definition.label,
+            definition.id.as_str(),
+            definition.group.map_or("", |group| group.as_str()),
+        ]) || query.matches_parts_scoped_to_tab(
+            TabId::Ui,
+            [
+                "toolbar visibility",
+                "toolbar item",
+                definition.label,
+                definition.id.as_str(),
+                definition.group.map_or("", |group| group.as_str()),
+            ],
+        )
+    })
 }
 
 fn board_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut TabSearchSummary) {

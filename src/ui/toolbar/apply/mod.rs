@@ -57,6 +57,7 @@ impl InputState {
             ToolbarEvent::CustomUndo => self.apply_toolbar_custom_undo(),
             ToolbarEvent::CustomRedo => self.apply_toolbar_custom_redo(),
             ToolbarEvent::ClearCanvas => self.apply_toolbar_clear_canvas(),
+            ToolbarEvent::CaptureScreenshot => self.apply_toolbar_capture_screenshot(),
             ToolbarEvent::PagePrev => self.apply_toolbar_page_prev(),
             ToolbarEvent::PageNext => self.apply_toolbar_page_next(),
             ToolbarEvent::PageNew => self.apply_toolbar_page_new(),
@@ -135,6 +136,18 @@ impl InputState {
                 self.apply_toolbar_toggle_side_section_collapsed(section, collapsed)
             }
             ToolbarEvent::SetToolbarLayoutMode(mode) => self.apply_toolbar_set_layout_mode(mode),
+            ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
+                self.apply_toolbar_set_item_hidden(id, hidden)
+            }
+            ToolbarEvent::ResetToolbarItemHiddenOverrides => {
+                self.apply_toolbar_reset_item_hidden_overrides()
+            }
+            ToolbarEvent::SetToolbarItemCustomizationOpen(open) => {
+                self.apply_toolbar_set_item_customization_open(open)
+            }
+            ToolbarEvent::SetToolbarItemCustomizationGroup(group) => {
+                self.apply_toolbar_set_item_customization_group(group)
+            }
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
             ToolbarEvent::ApplyPreset(slot) => self.apply_toolbar_apply_preset(slot),
             ToolbarEvent::SavePreset(slot) => self.apply_toolbar_save_preset(slot),

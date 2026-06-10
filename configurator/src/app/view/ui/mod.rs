@@ -38,6 +38,7 @@ impl ConfiguratorApp {
 
         let content = match active_tab {
             Some(UiTabId::Toolbar) => Some(self.ui_toolbar_tab()),
+            Some(UiTabId::ToolbarVisibility) => Some(self.ui_toolbar_visibility_tab()),
             Some(UiTabId::StatusBar) => Some(self.ui_status_bar_tab()),
             Some(UiTabId::HelpOverlay) => Some(self.ui_help_overlay_tab()),
             Some(UiTabId::ClickHighlight) => Some(self.ui_click_highlight_tab()),

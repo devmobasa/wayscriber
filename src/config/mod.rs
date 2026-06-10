@@ -44,9 +44,10 @@ pub use types::{
     PdfOrientation, PdfPageSize, PdfTransparentBackground, PerformanceConfig, PresenterModeConfig,
     PresenterToolBehavior, PresetSlotsConfig, PresetToolSettingConfig, PresetToolStatesConfig,
     RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig,
-    SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle, ToolPresetConfig,
-    ToolbarConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
-    validate_pdf_label_template,
+    ResolvedToolbarItems, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
+    ToolPresetConfig, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition,
+    ToolbarItemId, ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
+    ToolbarModeOverrides, UiConfig, toolbar_item_definitions, validate_pdf_label_template,
 };
 #[cfg(tablet)]
 #[allow(unused_imports)]

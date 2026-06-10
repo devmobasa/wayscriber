@@ -4,6 +4,7 @@ use super::super::fields::{
     ToolbarOverrideField, TripletField,
 };
 use super::draft::ConfigDraft;
+use wayscriber::config::ToolbarItemId;
 
 impl ConfigDraft {
     pub fn apply_toolbar_layout_mode(&mut self, mode: ToolbarLayoutModeOption) {
@@ -29,6 +30,10 @@ impl ConfigDraft {
         self.ui_toolbar_mode_overrides
             .for_mode_mut(mode)
             .set(field, value);
+    }
+
+    pub fn set_toolbar_item_visible(&mut self, id: ToolbarItemId, visible: bool) {
+        self.ui_toolbar_items.set_hidden(id, !visible);
     }
 
     pub fn set_mouse_drag_tool(

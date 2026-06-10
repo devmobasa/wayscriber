@@ -10,7 +10,8 @@ use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
     ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
     PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, RenderColorMappingConfig,
-    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, XdgFocusLossBehavior,
+    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, ToolbarItemsConfig,
+    XdgFocusLossBehavior,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -60,6 +61,31 @@ fn config_draft_round_trips_light_mode_click_highlight_policy() {
         .to_config(&Config::default())
         .expect("expected config to round trip");
     assert!(!round_trip.ui.click_highlight.force_in_light_mode);
+}
+
+#[test]
+fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
+    let mut config = Config::default();
+    config.ui.toolbar.items = ToolbarItemsConfig {
+        hidden: vec![
+            "future.toolbar.item".to_string(),
+            "side.actions.undo-all".to_string(),
+            "side.actions.undo-all".to_string(),
+        ],
+    };
+
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.set_toolbar_item_visible("side.actions.undo-all".parse().expect("known id"), true);
+    draft.set_toolbar_item_visible("top.tool.pen".parse().expect("known id"), false);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+
+    assert_eq!(
+        round_trip.ui.toolbar.items.hidden,
+        vec!["future.toolbar.item", "top.tool.pen"]
+    );
 }
 
 #[test]

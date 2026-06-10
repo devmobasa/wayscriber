@@ -6,7 +6,11 @@ pub(super) fn push_arrow_section_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ToolContext::from_snapshot(ctx.snapshot).show_arrow_labels {
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::ArrowLabels)
+        || !ToolContext::from_snapshot(ctx.snapshot).show_arrow_labels
+    {
         return y;
     }
 
@@ -60,7 +64,11 @@ pub(super) fn push_step_marker_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ToolContext::from_snapshot(ctx.snapshot).show_step_counter {
+    if ctx
+        .snapshot
+        .side_section_hidden(ToolbarSideSection::StepMarkers)
+        || !ToolContext::from_snapshot(ctx.snapshot).show_step_counter
+    {
         return y;
     }
 

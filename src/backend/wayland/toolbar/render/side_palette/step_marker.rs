@@ -33,7 +33,9 @@ pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f
         size: FONT_SIZE_SMALL,
     };
 
-    if !ToolContext::from_snapshot(snapshot).show_step_counter {
+    if snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
+        || !ToolContext::from_snapshot(snapshot).show_step_counter
+    {
         return;
     }
 

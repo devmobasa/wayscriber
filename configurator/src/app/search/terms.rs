@@ -47,6 +47,7 @@ pub(super) fn tab_scope_aliases(tab: TabId) -> &'static [&'static str] {
 pub(super) fn ui_tab_aliases(tab: UiTabId) -> &'static [&'static str] {
     match tab {
         UiTabId::Toolbar => &["tools", "palette", "drawer"],
+        UiTabId::ToolbarVisibility => &["toolbar items", "toolbar buttons", "show hide toolbar"],
         UiTabId::StatusBar => &["status", "badge", "indicator"],
         UiTabId::HelpOverlay => &["help", "quick help", "hints"],
         UiTabId::ClickHighlight => &["click", "cursor", "highlight"],
@@ -57,6 +58,7 @@ pub(super) fn ui_tab_aliases(tab: UiTabId) -> &'static [&'static str] {
 pub(super) fn ui_tab_terms(tab: UiTabId) -> &'static [&'static str] {
     match tab {
         UiTabId::Toolbar => UI_TOOLBAR_TERMS,
+        UiTabId::ToolbarVisibility => UI_TOOLBAR_VISIBILITY_TERMS,
         UiTabId::StatusBar => UI_STATUS_BAR_TERMS,
         UiTabId::HelpOverlay => UI_HELP_OVERLAY_TERMS,
         UiTabId::ClickHighlight => UI_CLICK_HIGHLIGHT_TERMS,
@@ -192,6 +194,29 @@ pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "top offset y",
     "side offset x",
     "side offset y",
+];
+pub(super) const UI_TOOLBAR_VISIBILITY_TERMS: &[&str] = &[
+    "toolbar visibility",
+    "toolbar items",
+    "items",
+    "checked items are shown",
+    "hidden item overrides",
+    "hide toolbar buttons",
+    "show toolbar buttons",
+    "visible toolbar buttons",
+    "top toolbar",
+    "side toolbar",
+    "toolbar controls",
+    "tools",
+    "utilities",
+    "sections",
+    "actions",
+    "pages",
+    "boards",
+    "presets",
+    "settings",
+    "sessions",
+    "tool options",
 ];
 pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
     "status bar",

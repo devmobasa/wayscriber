@@ -199,6 +199,7 @@ fn toolbar_toggle_handles_partial_visibility() {
     state.init_toolbar_from_config(
         crate::config::ToolbarLayoutMode::Regular,
         crate::config::ToolbarModeOverrides::default(),
+        crate::config::ToolbarItemsConfig::default(),
         true,  // top_pinned
         false, // side_pinned
         true,  // use_icons

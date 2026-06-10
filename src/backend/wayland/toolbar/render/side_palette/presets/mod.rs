@@ -20,7 +20,10 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     let section_gap = layout.section_gap;
 
     let slot_count = snapshot.preset_slot_count.min(snapshot.presets.len());
-    if !snapshot.show_presets || slot_count == 0 {
+    if snapshot.side_section_hidden(ToolbarSideSection::Presets)
+        || !snapshot.show_presets
+        || slot_count == 0
+    {
         return None;
     }
 

@@ -1,3 +1,4 @@
+use crate::config::Action;
 use crate::input::{InputState, ZoomAction};
 
 impl InputState {
@@ -43,6 +44,11 @@ impl InputState {
 
     pub(super) fn apply_toolbar_clear_canvas(&mut self) -> bool {
         self.toolbar_clear();
+        true
+    }
+
+    pub(super) fn apply_toolbar_capture_screenshot(&mut self) -> bool {
+        self.handle_action(Action::CaptureSelection);
         true
     }
 

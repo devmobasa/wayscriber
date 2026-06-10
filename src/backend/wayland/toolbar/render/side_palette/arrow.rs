@@ -33,7 +33,9 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         size: FONT_SIZE_SMALL,
     };
 
-    if !ToolContext::from_snapshot(snapshot).show_arrow_labels {
+    if snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
+        || !ToolContext::from_snapshot(snapshot).show_arrow_labels
+    {
         return;
     }
 

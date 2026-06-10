@@ -34,6 +34,10 @@ pub(super) fn draw_colors_section(
         size: FONT_SIZE_LABEL,
     };
 
+    if snapshot.side_section_hidden(ToolbarSideSection::Colors) {
+        return None;
+    }
+
     let basic_colors: &[ColorSwatch] = &[
         (RED, "Red", Some(Action::SetColorRed)),
         (GREEN, "Green", Some(Action::SetColorGreen)),
