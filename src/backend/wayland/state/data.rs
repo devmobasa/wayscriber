@@ -19,6 +19,14 @@ pub enum OverlaySuppression {
     Zoom,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum XdgFrozenFullscreenState {
+    #[default]
+    Inactive,
+    PendingConfigure,
+    Active,
+}
+
 impl OverlaySuppression {
     pub(in crate::backend::wayland) fn effective_for_board(
         self,
@@ -107,6 +115,8 @@ pub struct StateData {
     pub(super) has_seen_surface_enter: bool,
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
+    pub(super) xdg_frozen_fullscreen_state: XdgFrozenFullscreenState,
+    pub(super) xdg_frozen_fullscreen_requested_at: Option<Instant>,
     pub(super) main_surface_uses_overlay_layer: bool,
     pub(super) overlay_suppression: OverlaySuppression,
     pub(super) overlay_clickthrough: bool,
@@ -181,6 +191,8 @@ impl StateData {
             has_seen_surface_enter: false,
             preferred_output_identity: None,
             xdg_fullscreen: false,
+            xdg_frozen_fullscreen_state: XdgFrozenFullscreenState::Inactive,
+            xdg_frozen_fullscreen_requested_at: None,
             main_surface_uses_overlay_layer: false,
             overlay_suppression: OverlaySuppression::None,
             overlay_clickthrough: false,

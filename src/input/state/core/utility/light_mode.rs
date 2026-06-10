@@ -1,10 +1,32 @@
-use super::super::base::{InputState, LightModeRestore, UiToastKind};
+use super::super::base::{
+    DesktopEnvironment, InputState, LightModeRestore, ShellMode, UiToastKind,
+};
 use crate::config::keybindings::Action;
 use crate::input::tool::Tool;
 
 impl InputState {
     pub fn light_mode_supported(&self) -> bool {
         self.compositor_capabilities.layer_shell
+    }
+
+    fn light_mode_unsupported_message(&self) -> &'static str {
+        let caps = self.compositor_capabilities;
+        match (
+            caps.desktop_environment,
+            caps.shell_mode,
+            caps.freeze_capture,
+        ) {
+            (DesktopEnvironment::Gnome, ShellMode::XdgFallback, true) => {
+                "Light passthrough is unavailable on stock GNOME Wayland. Use Freeze for a still-frame workflow."
+            }
+            (DesktopEnvironment::Gnome, ShellMode::XdgFallback, false) => {
+                "Light passthrough is unavailable on stock GNOME Wayland. No freeze capture backend is available in this session."
+            }
+            (_, ShellMode::XdgFallback, _) => {
+                "Light passthrough requires compositor overlay support; this session is using the xdg-shell fallback."
+            }
+            _ => "Light passthrough requires compositor overlay support.",
+        }
     }
 
     pub fn light_mode_passthrough(&self) -> bool {
@@ -31,10 +53,7 @@ impl InputState {
             self.exit_light_mode();
         } else {
             if !self.light_mode_supported() {
-                self.set_ui_toast(
-                    UiToastKind::Warning,
-                    "Light Mode requires layer-shell support",
-                );
+                self.set_ui_toast(UiToastKind::Warning, self.light_mode_unsupported_message());
                 self.needs_redraw = true;
                 return false;
             }
@@ -56,10 +75,7 @@ impl InputState {
         if !self.light_mode {
             if drawing {
                 if !self.light_mode_supported() {
-                    self.set_ui_toast(
-                        UiToastKind::Warning,
-                        "Light Mode requires layer-shell support",
-                    );
+                    self.set_ui_toast(UiToastKind::Warning, self.light_mode_unsupported_message());
                     self.needs_redraw = true;
                     return false;
                 }

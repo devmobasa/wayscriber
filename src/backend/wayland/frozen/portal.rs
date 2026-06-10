@@ -4,10 +4,11 @@ use std::sync::mpsc;
 
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::portal_capture::{
-    capture_via_portal_fullscreen_bytes, crop_argb, portal_output_matches,
+    capture_via_portal_fullscreen_bytes, portal_output_matches,
 };
 use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::input::InputState;
+use crate::input::state::UiToastKind;
 
 use super::PortalCaptureResult;
 use super::state::FrozenState;
@@ -29,7 +30,7 @@ impl FrozenState {
         self.portal_rx = Some(rx);
         self.portal_target_output_id = self.active_output_id;
 
-        let geo = self.active_geometry.clone();
+        let source_geometry = self.active_geometry.clone();
         let target_output_id = self.active_output_id;
         // Notify user that portal fallback is in progress
         crate::notification::send_notification_async(
@@ -42,34 +43,12 @@ impl FrozenState {
             let result = async {
                 let bytes = capture_via_portal_fullscreen_bytes().await?;
 
-                let (mut data, mut width, mut height) =
+                let (data, width, height) =
                     decode_image_to_argb(&bytes).map_err(|e| format!("Decode failed: {}", e))?;
-
-                if let Some(geo) = geo {
-                    let (phys_w, phys_h) = geo.physical_size();
-                    let (origin_x, origin_y) = geo.physical_origin();
-                    if origin_x >= 0
-                        && origin_y >= 0
-                        && phys_w > 0
-                        && phys_h > 0
-                        && let Some(cropped) = crop_argb(
-                            &data,
-                            width,
-                            height,
-                            origin_x as u32,
-                            origin_y as u32,
-                            phys_w,
-                            phys_h,
-                        )
-                    {
-                        data = cropped;
-                        width = phys_w;
-                        height = phys_h;
-                    }
-                }
 
                 Ok((
                     target_output_id,
+                    source_geometry,
                     FrozenImage {
                         width,
                         height,
@@ -97,6 +76,10 @@ impl FrozenState {
             && start.elapsed() > std::time::Duration::from_secs(10)
         {
             warn!("Portal frozen capture timed out; restoring overlay");
+            input_state.set_ui_toast(
+                UiToastKind::Error,
+                "Freeze timed out waiting for the screenshot portal",
+            );
             input_state.set_frozen_active(false);
             self.portal_in_progress = false;
             self.portal_rx = None;
@@ -108,28 +91,29 @@ impl FrozenState {
 
         if let Some(rx) = self.portal_rx.as_ref() {
             match rx.try_recv() {
-                Ok(Ok((target_output, image))) => {
+                Ok(Ok((target_output, source_geometry, image))) => {
                     let output_matches =
                         portal_output_matches(target_output, self.active_output_id);
 
                     if output_matches {
-                        self.set_image(image);
-                        input_state.set_frozen_active(true);
-                        input_state.dirty_tracker.mark_full();
-                        input_state.needs_redraw = true;
+                        self.set_pending_image(image, source_geometry, false);
                     } else {
                         warn!("Portal capture for inactive output discarded");
                         input_state.set_frozen_active(false);
+                        self.capture_done = true;
                     }
 
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
                     self.portal_started_at = None;
-                    self.capture_done = true;
                 }
                 Ok(Err(err)) => {
                     warn!("Portal frozen capture failed: {}", err);
+                    input_state.set_ui_toast(
+                        UiToastKind::Error,
+                        "Freeze failed through the screenshot portal",
+                    );
                     input_state.set_frozen_active(false);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
@@ -140,6 +124,10 @@ impl FrozenState {
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
                     warn!("Portal frozen capture channel disconnected");
+                    input_state.set_ui_toast(
+                        UiToastKind::Error,
+                        "Freeze failed because the screenshot portal stopped responding",
+                    );
                     input_state.set_frozen_active(false);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
@@ -194,6 +182,7 @@ mod tests {
         frozen.portal_in_progress = true;
         tx.send(Ok((
             None,
+            None,
             FrozenImage {
                 width: 2,
                 height: 1,
@@ -205,9 +194,17 @@ mod tests {
 
         frozen.poll_portal_capture(&mut input);
 
-        assert!(input.frozen_active());
+        assert!(!input.frozen_active());
+        assert!(frozen.has_pending_image());
         assert!(!frozen.portal_in_progress);
         assert!(frozen.portal_rx.is_none());
+        assert!(!frozen.take_capture_done());
+
+        frozen
+            .activate_pending_image(2, 1, &mut input)
+            .expect("activate pending image");
+
+        assert!(input.frozen_active());
         assert!(frozen.image.is_some());
         assert!(frozen.take_capture_done());
     }

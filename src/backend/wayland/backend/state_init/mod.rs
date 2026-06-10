@@ -1,15 +1,18 @@
 use anyhow::Result;
 use log::{info, warn};
 use smithay_client_toolkit::globals::ProvidesBoundGlobal;
+use std::env;
 
 use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
 use super::setup::WaylandSetup;
 use super::tray::process_tray_action;
+use crate::backend::wayland::portal_capture::screenshot_portal_available;
 use crate::{
     capture::CaptureManager,
     config::Config,
-    input::{InputState, state::CompositorCapabilities},
+    input::InputState,
+    input::state::{CompositorCapabilities, DesktopEnvironment, ShellMode},
     onboarding::{DEFERRED_HINT_REPEAT_MAX, OnboardingStore},
 };
 
@@ -43,16 +46,29 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
 
     let mut input_state = input_state::build_input_state(&config);
     input_state.set_session_preflight_options(session_options.clone());
+    let screencopy_supported = setup.screencopy_manager.is_some();
+    let portal_freeze_supported = screenshot_portal_available(&backend.tokio_runtime);
+    let frozen_supported = screencopy_supported || portal_freeze_supported;
+    let tokio_handle = backend.tokio_runtime.handle().clone();
 
     // Set compositor capabilities based on detected Wayland protocols
     input_state.compositor_capabilities = CompositorCapabilities {
         layer_shell: setup.layer_shell_available,
-        screencopy: setup.screencopy_manager.is_some(),
+        screencopy: screencopy_supported,
+        freeze_capture: frozen_supported,
         pointer_constraints: setup
             .state_globals
             .pointer_constraints_state
             .bound_global()
             .is_ok(),
+        desktop_environment: desktop_environment_from_env(),
+        shell_mode: if setup.layer_shell_available {
+            ShellMode::LayerShell
+        } else if setup.state_globals.xdg_shell.is_some() {
+            ShellMode::XdgFallback
+        } else {
+            ShellMode::Unknown
+        },
     };
 
     let mut onboarding = OnboardingStore::load();
@@ -91,11 +107,10 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let capture_manager = CaptureManager::new(backend.tokio_runtime.handle());
     info!("Capture manager initialized");
 
-    let tokio_handle = backend.tokio_runtime.handle().clone();
-
-    let frozen_supported = setup.layer_shell_available;
     let freeze_on_start = if backend.freeze_on_start && !frozen_supported {
-        warn!("Frozen mode is not supported on GNOME xdg fallback; ignoring --freeze");
+        warn!(
+            "Frozen mode unavailable: no screencopy backend and no screenshot portal backend; ignoring --freeze"
+        );
         false
     } else {
         backend.freeze_on_start
@@ -142,5 +157,21 @@ fn apply_initial_mode(backend: &WaylandBackend, _config: &Config, input_state: &
         } else if !initial_id.is_empty() {
             warn!("Requested board '{}' not found; using default", initial_id);
         }
+    }
+}
+
+fn desktop_environment_from_env() -> DesktopEnvironment {
+    let values = [
+        env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+        env::var("XDG_SESSION_DESKTOP").unwrap_or_default(),
+        env::var("DESKTOP_SESSION").unwrap_or_default(),
+    ];
+    if values
+        .iter()
+        .any(|value| value.to_ascii_uppercase().contains("GNOME"))
+    {
+        DesktopEnvironment::Gnome
+    } else {
+        DesktopEnvironment::Unknown
     }
 }

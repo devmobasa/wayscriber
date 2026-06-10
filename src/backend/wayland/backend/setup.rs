@@ -124,7 +124,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         }
         Err(err) => {
             warn!(
-                "zwlr_screencopy_manager_v1 not available (frozen mode disabled): {}",
+                "zwlr_screencopy_manager_v1 not available; frozen mode may use portal fallback: {}",
                 err
             );
             None

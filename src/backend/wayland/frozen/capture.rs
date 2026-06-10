@@ -4,10 +4,7 @@ use smithay_client_toolkit::shm::{
     Shm,
     slot::{Buffer, SlotPool},
 };
-use wayland_client::{
-    Dispatch, QueueHandle, WEnum,
-    protocol::{wl_output, wl_shm},
-};
+use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::wl_shm};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
     Event as FrameEvent, Flags, ZwlrScreencopyFrameV1,
 };
@@ -75,7 +72,7 @@ impl FrozenState {
     pub fn start_capture(
         &mut self,
         use_fallback: bool,
-        tokio_handle: &tokio::runtime::Handle,
+        _tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
         if self.capture.is_some() || self.portal_in_progress || self.preflight_pending {
             warn!("Frozen-mode capture already in progress; ignoring toggle");
@@ -83,14 +80,28 @@ impl FrozenState {
         }
 
         self.capture_done = false;
-
-        if use_fallback || self.manager.is_none() {
-            info!("Screencopy unavailable; using fallback portal capture for frozen mode");
-            return self.capture_via_portal(tokio_handle);
-        }
-
+        self.preflight_use_fallback = use_fallback || self.manager.is_none();
         self.preflight_pending = true;
         Ok(())
+    }
+
+    pub fn begin_preflight_capture<State>(
+        &mut self,
+        use_fallback: bool,
+        shm: &Shm,
+        qh: &QueueHandle<State>,
+        tokio_handle: &tokio::runtime::Handle,
+    ) -> Result<()>
+    where
+        State:
+            Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
+    {
+        if use_fallback || self.manager.is_none() {
+            info!("Suppression frame committed; using fallback portal capture for frozen mode");
+            self.capture_via_portal(tokio_handle)
+        } else {
+            self.begin_screencopy(shm, qh)
+        }
     }
 
     pub fn begin_screencopy<State>(&mut self, shm: &Shm, qh: &QueueHandle<State>) -> Result<()>
@@ -168,10 +179,7 @@ impl FrozenState {
                     return;
                 }
 
-                input_state.set_frozen_active(true);
-                input_state.dirty_tracker.mark_full();
                 input_state.needs_redraw = true;
-                self.capture_done = true;
             }
             FrameEvent::Failed => {
                 warn!("Frozen capture failed");
@@ -268,20 +276,16 @@ impl FrozenState {
 
         capture.frame.destroy();
 
-        let output_transform = self
-            .active_geometry
-            .as_ref()
-            .map(|geo| geo.transform)
-            .unwrap_or(wl_output::Transform::Normal);
-
-        self.set_image(
+        let source_geometry = self.active_geometry.clone();
+        self.set_pending_image(
             FrozenImage {
                 width: capture.width,
                 height: capture.height,
                 stride: (capture.width * 4) as i32,
                 data,
-            }
-            .with_output_transform(output_transform),
+            },
+            source_geometry,
+            true,
         );
 
         Ok(())
