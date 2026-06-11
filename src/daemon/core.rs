@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(test)]
 use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
@@ -31,6 +31,12 @@ use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
 use super::types::{AlreadyRunningError, BackendRunner, OverlayState};
+
+// Some desktop custom shortcut runners, observed on KDE, can launch the same
+// plain `--daemon-toggle` command twice about 400-600ms apart from one key press.
+// Suppress only duplicate plain toggles after a successful toggle completes, so
+// typed requests still run.
+const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
 
 pub struct Daemon {
     pub(super) overlay_state: OverlayState,
@@ -56,6 +62,7 @@ pub struct Daemon {
     pub(super) overlay_spawn_failures: u32,
     pub(super) overlay_spawn_next_retry: Option<std::time::Instant>,
     pub(super) overlay_spawn_backoff_logged: bool,
+    pub(super) last_plain_visibility_toggle_completed_at: Option<Instant>,
     #[cfg(feature = "tray")]
     pub(super) tray_status: Arc<TrayStatusShared>,
 }
@@ -94,6 +101,7 @@ impl Daemon {
             overlay_spawn_failures: 0,
             overlay_spawn_next_retry: None,
             overlay_spawn_backoff_logged: false,
+            last_plain_visibility_toggle_completed_at: None,
             #[cfg(feature = "tray")]
             tray_status: Arc::new(TrayStatusShared::new()),
         }
@@ -129,6 +137,7 @@ impl Daemon {
             overlay_spawn_failures: 0,
             overlay_spawn_next_retry: None,
             overlay_spawn_backoff_logged: false,
+            last_plain_visibility_toggle_completed_at: None,
             #[cfg(feature = "tray")]
             tray_status: Arc::new(TrayStatusShared::new()),
         }
@@ -189,6 +198,20 @@ impl Daemon {
             })
             .transpose()?;
         self.ensure_visible_overlay_can_accept_request(request.as_ref())?;
+        let plain_visibility_toggle_requested =
+            request.as_ref().is_none_or(DaemonToggleRequest::is_empty);
+        if plain_visibility_toggle_requested {
+            let now = Instant::now();
+            if self
+                .last_plain_visibility_toggle_completed_at
+                .is_some_and(|previous| {
+                    now.saturating_duration_since(previous) < DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW
+                })
+            {
+                info!("Ignoring duplicate plain daemon visibility toggle");
+                return Ok(false);
+            }
+        }
         if let Some(action) = request.as_ref().and_then(|request| request.overlay_action) {
             self.pending_activation_token = activation_token;
             self.pending_toggle_request = request.filter(|request| !request.is_empty());
@@ -217,6 +240,9 @@ impl Daemon {
             self.pending_activation_token = None;
             self.pending_toggle_request = None;
             return Err(err);
+        }
+        if plain_visibility_toggle_requested {
+            self.last_plain_visibility_toggle_completed_at = Some(Instant::now());
         }
         Ok(false)
     }
@@ -680,6 +706,142 @@ mod tests {
             .expect("typed command marker should suppress raw fallback");
 
         assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    }
+
+    #[test]
+    fn duplicate_plain_toggle_requests_are_debounced() {
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        let runner: Arc<BackendRunner> = Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        });
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    }
+
+    #[test]
+    fn typed_visibility_toggle_request_is_not_debounced() {
+        let modes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let modes_clone = Arc::clone(&modes);
+        let runner: Arc<BackendRunner> = Arc::new(move |mode| {
+            modes_clone
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(mode);
+            Ok(())
+        });
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+        daemon
+            .process_single_toggle(
+                Some(DaemonToggleRequest {
+                    mode: Some("whiteboard".to_string()),
+                    ..Default::default()
+                }),
+                None,
+                false,
+            )
+            .unwrap();
+
+        let modes = modes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert_eq!(modes.as_slice(), &[None, Some("whiteboard".to_string())]);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn duplicate_plain_toggle_after_slow_hide_is_debounced() {
+        let mut daemon = Daemon::new(None, false, None, None);
+        let child = std::process::Command::new("sleep")
+            .arg("10")
+            .spawn()
+            .expect("spawn slow-terminating test process");
+        let child_pid = child.id();
+        assert_eq!(unsafe { libc::kill(child_pid as i32, libc::SIGSTOP) }, 0);
+        let mut stopped = false;
+        for _ in 0..20 {
+            let mut status = 0;
+            let result = unsafe {
+                libc::waitpid(
+                    child_pid as i32,
+                    &mut status,
+                    libc::WNOHANG | libc::WUNTRACED,
+                )
+            };
+            if result == child_pid as i32 && libc::WIFSTOPPED(status) {
+                stopped = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(stopped, "test child should stop before hide starts");
+        daemon
+            .overlay_pid
+            .store(child.id(), std::sync::atomic::Ordering::Release);
+        daemon.overlay_child = Some(child);
+        daemon.overlay_state = OverlayState::Visible;
+
+        let hide_started = Instant::now();
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+        assert!(
+            hide_started.elapsed() >= DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW,
+            "test setup should keep hide slow enough to cross the debounce window"
+        );
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        daemon.backend_runner = Some(Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        }));
+
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    }
+
+    #[test]
+    fn plain_toggle_after_debounce_window_is_processed() {
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        let runner: Arc<BackendRunner> = Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        });
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+        daemon.last_plain_visibility_toggle_completed_at =
+            Some(Instant::now() - DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW - Duration::from_millis(1));
+        daemon
+            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+            .unwrap();
+
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 2);
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
     }
 }
