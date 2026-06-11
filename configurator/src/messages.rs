@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use wayscriber::config::{Config, ToolbarItemId};
+use wayscriber::config::{Config, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
@@ -74,6 +74,8 @@ pub enum Message {
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideChanged(ToolbarOverrideField, OverrideOption),
     ToolbarItemVisibilityChanged(ToolbarItemId, bool),
+    ToolbarItemMoveRequested(ToolbarItemOrderGroup, ToolbarItemId, isize),
+    ToolbarItemOrderReset(ToolbarItemOrderGroup),
     BoardsAddItem,
     BoardsRemoveItem(usize),
     BoardsMoveItemUp(usize),

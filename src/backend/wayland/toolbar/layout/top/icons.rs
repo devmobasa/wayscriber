@@ -2,7 +2,6 @@ use super::super::super::events::HitKind;
 use super::super::super::format_binding_label;
 use super::super::super::hit::HitRegion;
 use super::super::spec::ToolbarLayoutSpec;
-use super::shape_buttons;
 use crate::config::{Action, action_label};
 use crate::ui::toolbar::bindings::tool_tooltip_label;
 use crate::ui::toolbar::model;
@@ -97,97 +96,96 @@ pub(super) fn build_hits(
         });
     }
 
-    if model::top_text_visible(snapshot) {
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::EnterTextMode,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::EnterTextMode),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::EnterTextMode),
-            )),
-        });
-        x += btn_size + gap;
-    }
-
-    if model::top_sticky_note_visible(snapshot) {
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::EnterStickyNoteMode,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::EnterStickyNoteMode),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::EnterStickyNoteMode),
-            )),
-        });
-        x += btn_size + gap;
-    }
-
-    if model::top_screenshot_visible(snapshot) {
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::CaptureScreenshot,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::CaptureSelection),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::CaptureSelection),
-            )),
-        });
-        x += btn_size + gap;
-    }
-
-    if !is_simple {
-        if model::top_clear_canvas_visible(snapshot) {
-            hits.push(HitRegion {
-                rect: (x, y, btn_size, btn_size),
-                event: ToolbarEvent::ClearCanvas,
-                kind: HitKind::Click,
-                tooltip: Some(format_binding_label(
-                    action_label(Action::ClearCanvas),
-                    snapshot
-                        .binding_hints
-                        .binding_for_action(Action::ClearCanvas),
-                )),
-            });
-            x += btn_size + gap;
-        }
-
-        if model::top_highlight_visible(snapshot) {
-            let highlight_x = x;
-            hits.push(HitRegion {
-                rect: (x, y, btn_size, btn_size),
-                event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
-                kind: HitKind::Click,
-                tooltip: Some(format_binding_label(
-                    action_label(Action::ToggleHighlightTool),
-                    snapshot
-                        .binding_hints
-                        .binding_for_action(Action::ToggleHighlightTool),
-                )),
-            });
-            if snapshot.highlight_tool_active && model::top_highlight_ring_visible(snapshot) {
-                let ring_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+    for button in model::visible_top_utility_buttons(snapshot, is_simple, true) {
+        match button {
+            model::TopUtilityButton::Text => {
                 hits.push(HitRegion {
-                    rect: (
-                        highlight_x,
-                        ring_y,
-                        btn_size,
-                        ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
-                    ),
-                    event: ToolbarEvent::ToggleHighlightToolRing(
-                        !snapshot.highlight_tool_ring_enabled,
-                    ),
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::EnterTextMode,
                     kind: HitKind::Click,
-                    tooltip: Some("Highlight ring".to_string()),
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::EnterTextMode),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::EnterTextMode),
+                    )),
                 });
+                x += btn_size + gap;
             }
-            x += btn_size + gap;
+            model::TopUtilityButton::StickyNote => {
+                hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::EnterStickyNoteMode,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::EnterStickyNoteMode),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::EnterStickyNoteMode),
+                    )),
+                });
+                x += btn_size + gap;
+            }
+            model::TopUtilityButton::Screenshot => {
+                hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::CaptureScreenshot,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::CaptureSelection),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::CaptureSelection),
+                    )),
+                });
+                x += btn_size + gap;
+            }
+            model::TopUtilityButton::ClearCanvas => {
+                hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::ClearCanvas,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::ClearCanvas),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::ClearCanvas),
+                    )),
+                });
+                x += btn_size + gap;
+            }
+            model::TopUtilityButton::Highlight => {
+                let highlight_x = x;
+                hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::ToggleHighlightTool),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::ToggleHighlightTool),
+                    )),
+                });
+                if snapshot.highlight_tool_active && model::top_highlight_ring_visible(snapshot) {
+                    let ring_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+                    hits.push(HitRegion {
+                        rect: (
+                            highlight_x,
+                            ring_y,
+                            btn_size,
+                            ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
+                        ),
+                        event: ToolbarEvent::ToggleHighlightToolRing(
+                            !snapshot.highlight_tool_ring_enabled,
+                        ),
+                        kind: HitKind::Click,
+                        tooltip: Some("Highlight ring".to_string()),
+                    });
+                }
+                x += btn_size + gap;
+            }
+            model::TopUtilityButton::IconMode => {}
         }
     }
 
@@ -202,20 +200,9 @@ pub(super) fn build_hits(
 
     if snapshot.shape_picker_open && model::top_shape_picker_visible(snapshot) {
         let mut shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        let first_row = if is_simple {
-            model::common_shape_tools()
-        } else {
-            shape_buttons()
-        };
-        if model::visible_tool_count(first_row, snapshot) > 0 {
-            push_picker_hits(shape_y, btn_size, gap, first_row, snapshot, hits);
+        for row in model::visible_shape_picker_rows(snapshot, is_simple) {
+            push_picker_hits(shape_y, btn_size, gap, &row, snapshot, hits);
             shape_y += btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        }
-        if is_simple {
-            let second_row = shape_buttons();
-            if model::visible_tool_count(second_row, snapshot) > 0 {
-                push_picker_hits(shape_y, btn_size, gap, second_row, snapshot, hits);
-            }
         }
     }
 }

@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::config::{Action, ToolbarItemId};
+use crate::config::{Action, ToolbarItemId, ToolbarItemOrderGroup};
 
 impl InputState {
     /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
@@ -103,6 +103,72 @@ impl InputState {
 
     pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
         if !self.toolbar_items.reset_known_hidden_to_defaults() {
+            return false;
+        }
+
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub fn move_toolbar_item(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+        delta: isize,
+    ) -> bool {
+        if !self.toolbar_items.move_item_by(group, id, delta) {
+            return false;
+        }
+
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub fn start_toolbar_item_drag(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+    ) -> bool {
+        if self.toolbar_customize_drag == Some((group, id)) {
+            return false;
+        }
+
+        self.toolbar_customize_drag = Some((group, id));
+        true
+    }
+
+    pub fn drag_toolbar_item_over(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        target_index: usize,
+    ) -> bool {
+        let Some((source_group, id)) = self.toolbar_customize_drag else {
+            return false;
+        };
+        if source_group != group {
+            return false;
+        }
+
+        if !self
+            .toolbar_items
+            .move_item_to_index(group, id, target_index)
+        {
+            return false;
+        }
+
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub fn clear_toolbar_item_drag(&mut self) {
+        self.toolbar_customize_drag = None;
+    }
+
+    pub fn reset_toolbar_item_order(&mut self, group: ToolbarItemOrderGroup) -> bool {
+        if !self.toolbar_items.reset_known_order_to_defaults(group) {
             return false;
         }
 

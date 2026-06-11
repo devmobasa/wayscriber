@@ -122,6 +122,10 @@ impl ConfiguratorApp {
             Message::ToolbarItemVisibilityChanged(id, visible) => {
                 self.handle_toolbar_item_visibility_changed(id, visible)
             }
+            Message::ToolbarItemMoveRequested(group, id, delta) => {
+                self.handle_toolbar_item_move_requested(group, id, delta)
+            }
+            Message::ToolbarItemOrderReset(group) => self.handle_toolbar_item_order_reset(group),
             Message::BoardsAddItem => self.handle_boards_add_item(),
             Message::BoardsRemoveItem(index) => self.handle_boards_remove_item(index),
             Message::BoardsMoveItemUp(index) => self.handle_boards_move_item(index, true),

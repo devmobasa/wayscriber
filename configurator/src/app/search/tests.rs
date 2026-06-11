@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::models::session::SessionArtifactSummary;
 use crate::models::{KeybindingsTabId, SearchQuery, SessionCatalogItem, TabId, UiTabId};
+use wayscriber::config::toolbar_item_ids as ids;
 
 #[test]
 fn active_search_tab_click_corrects_keybindings_nested_tab() {
@@ -289,8 +290,8 @@ fn parent_scoped_ui_queries_match_concrete_nested_tabs() {
 fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
     let cases = [
         ("layout mode", UiTabId::Toolbar),
-        ("top.tool.blur", UiTabId::ToolbarVisibility),
-        ("side.group.presets", UiTabId::ToolbarVisibility),
+        (ids::TOP_TOOL_BLUR.as_str(), UiTabId::ToolbarVisibility),
+        (ids::SIDE_GROUP_PRESETS.as_str(), UiTabId::ToolbarVisibility),
         ("status bar position", UiTabId::StatusBar),
         ("click highlight radius", UiTabId::ClickHighlight),
     ];

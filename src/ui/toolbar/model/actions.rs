@@ -1,4 +1,4 @@
-use crate::config::ToolbarItemId;
+use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
 use crate::input::ToolbarDrawerTab;
 
 use super::super::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
@@ -221,30 +221,30 @@ fn toolbar_button_visible(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> b
 }
 
 fn toolbar_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
-    Some(ToolbarItemId::from_known(match event {
-        ToolbarEvent::Undo => "side.actions.undo",
-        ToolbarEvent::Redo => "side.actions.redo",
-        ToolbarEvent::ClearCanvas => "side.actions.clear-canvas",
-        ToolbarEvent::ZoomIn => "side.actions.zoom-in",
-        ToolbarEvent::ZoomOut => "side.actions.zoom-out",
-        ToolbarEvent::ResetZoom => "side.actions.reset-zoom",
-        ToolbarEvent::ToggleZoomLock => "side.actions.toggle-zoom-lock",
-        ToolbarEvent::UndoAll => "side.actions.undo-all",
-        ToolbarEvent::RedoAll => "side.actions.redo-all",
-        ToolbarEvent::UndoAllDelayed => "side.actions.undo-all-delayed",
-        ToolbarEvent::RedoAllDelayed => "side.actions.redo-all-delayed",
-        ToolbarEvent::ToggleFreeze => "side.actions.freeze",
-        ToolbarEvent::PagePrev => "side.pages.previous",
-        ToolbarEvent::PageNext => "side.pages.next",
-        ToolbarEvent::PageNew => "side.pages.new",
-        ToolbarEvent::PageDuplicate => "side.pages.duplicate",
-        ToolbarEvent::PageDelete => "side.pages.delete",
-        ToolbarEvent::BoardPrev => "side.boards.previous",
-        ToolbarEvent::BoardNext => "side.boards.next",
-        ToolbarEvent::BoardNew => "side.boards.new",
-        ToolbarEvent::BoardDuplicate => "side.boards.duplicate",
-        ToolbarEvent::BoardDelete => "side.boards.delete",
-        ToolbarEvent::BoardRename => "side.boards.rename",
+    Some(match event {
+        ToolbarEvent::Undo => ids::SIDE_ACTIONS_UNDO,
+        ToolbarEvent::Redo => ids::SIDE_ACTIONS_REDO,
+        ToolbarEvent::ClearCanvas => ids::SIDE_ACTIONS_CLEAR_CANVAS,
+        ToolbarEvent::ZoomIn => ids::SIDE_ACTIONS_ZOOM_IN,
+        ToolbarEvent::ZoomOut => ids::SIDE_ACTIONS_ZOOM_OUT,
+        ToolbarEvent::ResetZoom => ids::SIDE_ACTIONS_RESET_ZOOM,
+        ToolbarEvent::ToggleZoomLock => ids::SIDE_ACTIONS_TOGGLE_ZOOM_LOCK,
+        ToolbarEvent::UndoAll => ids::SIDE_ACTIONS_UNDO_ALL,
+        ToolbarEvent::RedoAll => ids::SIDE_ACTIONS_REDO_ALL,
+        ToolbarEvent::UndoAllDelayed => ids::SIDE_ACTIONS_UNDO_ALL_DELAYED,
+        ToolbarEvent::RedoAllDelayed => ids::SIDE_ACTIONS_REDO_ALL_DELAYED,
+        ToolbarEvent::ToggleFreeze => ids::SIDE_ACTIONS_FREEZE,
+        ToolbarEvent::PagePrev => ids::SIDE_PAGES_PREVIOUS,
+        ToolbarEvent::PageNext => ids::SIDE_PAGES_NEXT,
+        ToolbarEvent::PageNew => ids::SIDE_PAGES_NEW,
+        ToolbarEvent::PageDuplicate => ids::SIDE_PAGES_DUPLICATE,
+        ToolbarEvent::PageDelete => ids::SIDE_PAGES_DELETE,
+        ToolbarEvent::BoardPrev => ids::SIDE_BOARDS_PREVIOUS,
+        ToolbarEvent::BoardNext => ids::SIDE_BOARDS_NEXT,
+        ToolbarEvent::BoardNew => ids::SIDE_BOARDS_NEW,
+        ToolbarEvent::BoardDuplicate => ids::SIDE_BOARDS_DUPLICATE,
+        ToolbarEvent::BoardDelete => ids::SIDE_BOARDS_DELETE,
+        ToolbarEvent::BoardRename => ids::SIDE_BOARDS_RENAME,
         _ => return None,
-    }))
+    })
 }

@@ -566,6 +566,35 @@ hidden = [
   "side.actions.undo-all",
   "side.group.presets",
 ]
+
+[ui.toolbar.items.order]
+# Optional order overrides. Empty lists use the built-in order.
+# Known IDs omitted from a non-empty list append in the default order.
+# Side section ordering uses runtime block representatives; detailed sections
+# such as eraser-mode, polygon-sides, and font remain visibility-only IDs.
+top_tools = [
+  "top.tool.select",
+  "top.tool.pen",
+  "top.tool.marker",
+  "top.tool.step-marker",
+  "top.tool.eraser",
+]
+top_controls = [
+  "top.utility.text",
+  "top.utility.sticky-note",
+  "top.utility.screenshot",
+  "top.utility.clear-canvas",
+  "top.utility.highlight",
+]
+side_sections = [
+  "side.group.colors",
+  "side.group.presets",
+  "side.group.thickness",
+  "side.group.actions",
+  "side.group.pages",
+  "side.group.boards",
+  "side.group.settings",
+]
 ```
 
 **Behavior:**
@@ -591,6 +620,8 @@ hidden = [
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
+- **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
+- **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
 **Defaults:** all set as above.

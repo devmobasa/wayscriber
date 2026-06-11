@@ -5,8 +5,8 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui::toolbar::model::{ToolbarActivation, ToolbarIcon, ToolbarSettingsModel};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
@@ -243,11 +243,30 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         let item_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
+        let order = override_item.order.as_ref();
+        let order_gap = 4.0;
+        let handle_w = if order.is_some() { 24.0 } else { 0.0 };
+        let move_btn_w = if order.is_some() { 28.0 } else { 0.0 };
+        let move_buttons_w = if order.is_some() {
+            move_btn_w * 2.0 + order_gap * 2.0
+        } else {
+            0.0
+        };
+        if order.is_some() {
+            let handle_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, handle_w, item.h))
+                .unwrap_or(false);
+            draw_button(ctx, item.x, item.y, handle_w, item.h, false, handle_hover);
+            draw_label_center(ctx, toggle_style, item.x, item.y, handle_w, item.h, "=");
+        }
+        let checkbox_x = item.x + handle_w + if order.is_some() { order_gap } else { 0.0 };
+        let checkbox_w =
+            item.w - handle_w - move_buttons_w - if order.is_some() { order_gap } else { 0.0 };
         draw_checkbox(
             ctx,
-            item.x,
+            checkbox_x,
             item.y,
-            item.w,
+            checkbox_w,
             item.h,
             override_item.shown,
             item_hover,
@@ -255,11 +274,69 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             override_item.label.as_ref(),
         );
         hits.push(HitRegion {
-            rect: (item.x, item.y, item.w, item.h),
+            rect: (checkbox_x, item.y, checkbox_w, item.h),
             event: activation_event(&override_item.activation),
             kind: HitKind::Click,
             tooltip: override_item.tooltip.as_string(),
         });
+        if let Some(order) = order {
+            let up_x = item.x + item.w - move_btn_w * 2.0 - order_gap;
+            let down_x = item.x + item.w - move_btn_w;
+            for (button_x, label, enabled, activation, tooltip) in [
+                (up_x, "^", order.can_move_up, &order.move_up, "Move up"),
+                (
+                    down_x,
+                    "v",
+                    order.can_move_down,
+                    &order.move_down,
+                    "Move down",
+                ),
+            ] {
+                let button_hover = enabled
+                    && hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, button_x, item.y, move_btn_w, item.h))
+                        .unwrap_or(false);
+                draw_button(
+                    ctx,
+                    button_x,
+                    item.y,
+                    move_btn_w,
+                    item.h,
+                    false,
+                    button_hover,
+                );
+                draw_label_center(
+                    ctx,
+                    toggle_style,
+                    button_x,
+                    item.y,
+                    move_btn_w,
+                    item.h,
+                    label,
+                );
+                if enabled {
+                    hits.push(HitRegion {
+                        rect: (button_x, item.y, move_btn_w, item.h),
+                        event: activation_event(activation),
+                        kind: HitKind::Click,
+                        tooltip: Some(format!("{} {}", tooltip, override_item.label)),
+                    });
+                }
+            }
+            hits.push(HitRegion {
+                rect: (item.x, item.y, item.w, item.h),
+                event: ToolbarEvent::StartToolbarItemDrag {
+                    group: order.group,
+                    id: override_item.id,
+                },
+                kind: HitKind::DragToolbarItem {
+                    group: order.group,
+                    id: override_item.id,
+                    target_index: order.index,
+                },
+                tooltip: Some(format!("Drag {} to reorder", override_item.label)),
+            });
+        }
     }
 
     *y += settings_card_h + section_gap;

@@ -1,4 +1,4 @@
-use crate::config::ToolbarLayoutMode;
+use crate::config::{ToolbarLayoutMode, toolbar_item_ids as ids};
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model;
 
@@ -43,20 +43,10 @@ impl ToolbarLayoutSpec {
             } else {
                 (Self::TOP_TEXT_BUTTON_W, Self::TOP_TEXT_BUTTON_H)
             };
-            let row_count = if self.layout_mode == ToolbarLayoutMode::Simple {
-                let mut rows = 0.0;
-                if model::visible_tool_count(model::common_shape_tools(), snapshot) > 0 {
-                    rows += 1.0;
-                }
-                if model::visible_tool_count(model::polygon_tools(), snapshot) > 0 {
-                    rows += 1.0;
-                }
-                rows
-            } else if model::visible_tool_count(model::polygon_tools(), snapshot) > 0 {
-                1.0
-            } else {
-                0.0
-            };
+            let row_count = model::visible_shape_picker_row_count(
+                snapshot,
+                self.layout_mode == ToolbarLayoutMode::Simple,
+            ) as f64;
             height += row_count * (btn_h + Self::TOP_SHAPE_ROW_GAP);
         }
 
@@ -72,7 +62,7 @@ impl ToolbarLayoutSpec {
         )
         .count();
         let mut x = Self::TOP_START_X;
-        if model::toolbar_item_visible(snapshot, "top.chrome.drag") {
+        if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG) {
             x += Self::TOP_HANDLE_SIZE + gap;
         }
         x += tool_count as f64 * (btn_w + gap);
@@ -88,31 +78,40 @@ impl ToolbarLayoutSpec {
         if fill_visible {
             x += Self::TOP_TEXT_FILL_W + gap;
         }
-        if model::top_text_visible(snapshot) {
-            x += btn_w + gap; // Text button
-        }
-        if model::top_sticky_note_visible(snapshot) {
-            x += btn_w + gap; // Note button
-        }
-        if model::top_screenshot_visible(snapshot) {
-            x += btn_w + gap; // Screenshot
-        }
-        if self.layout_mode != ToolbarLayoutMode::Simple {
-            if model::top_clear_canvas_visible(snapshot) {
-                x += btn_w + gap; // Clear
-            }
-            if self.use_icons && model::top_highlight_visible(snapshot) {
-                x += btn_w + gap; // Highlight
-            }
-        }
+        x += model::visible_top_utility_buttons(
+            snapshot,
+            self.layout_mode == ToolbarLayoutMode::Simple,
+            self.use_icons,
+        )
+        .len() as f64
+            * (btn_w + gap);
         let left_end = if model::top_icon_mode_toggle_visible(snapshot) {
             x + Self::TOP_TOGGLE_WIDTH
         } else {
             x
         };
+        let picker_right = if self.shape_picker_open && model::top_shape_picker_visible(snapshot) {
+            let picker_count = model::visible_shape_picker_max_row_len(
+                snapshot,
+                self.layout_mode == ToolbarLayoutMode::Simple,
+            );
+            if picker_count == 0 {
+                0.0
+            } else {
+                let picker_x = Self::TOP_START_X
+                    + if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG) {
+                        Self::TOP_HANDLE_SIZE + gap
+                    } else {
+                        0.0
+                    };
+                picker_x + picker_count as f64 * (btn_w + gap)
+            }
+        } else {
+            0.0
+        };
         let right_control_count =
-            usize::from(model::toolbar_item_visible(snapshot, "top.chrome.pin"))
-                + usize::from(model::toolbar_item_visible(snapshot, "top.chrome.close"));
+            usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN))
+                + usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE));
         let right_controls = if right_control_count == 0 {
             0.0
         } else {
@@ -120,7 +119,7 @@ impl ToolbarLayoutSpec {
                 + Self::TOP_PIN_BUTTON_GAP * right_control_count.saturating_sub(1) as f64
                 + Self::TOP_PIN_BUTTON_MARGIN_RIGHT
         };
-        let width = left_end + gap + right_controls;
+        let width = (left_end + gap + right_controls).max(picker_right + gap);
 
         (width.ceil() as u32, height.ceil() as u32)
     }

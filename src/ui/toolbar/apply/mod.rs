@@ -139,6 +139,19 @@ impl InputState {
             ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
                 self.apply_toolbar_set_item_hidden(id, hidden)
             }
+            ToolbarEvent::MoveToolbarItem { group, id, delta } => {
+                self.apply_toolbar_move_item(group, id, delta)
+            }
+            ToolbarEvent::StartToolbarItemDrag { group, id } => {
+                self.apply_toolbar_start_item_drag(group, id)
+            }
+            ToolbarEvent::DragToolbarItemOver {
+                group,
+                target_index,
+            } => self.apply_toolbar_drag_item_over(group, target_index),
+            ToolbarEvent::ResetToolbarItemOrder(group) => {
+                self.apply_toolbar_reset_item_order(group)
+            }
             ToolbarEvent::ResetToolbarItemHiddenOverrides => {
                 self.apply_toolbar_reset_item_hidden_overrides()
             }

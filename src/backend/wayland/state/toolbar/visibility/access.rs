@@ -17,6 +17,9 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn set_toolbar_dragging(&mut self, value: bool) {
         self.data.toolbar_dragging = value;
+        if !value {
+            self.input_state.clear_toolbar_item_drag();
+        }
     }
 
     pub(in crate::backend::wayland) fn toolbar_drag_preview_active(&self) -> bool {

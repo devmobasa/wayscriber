@@ -1,4 +1,4 @@
-use crate::config::{ToolbarItemId, ToolbarLayoutMode};
+use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
 use crate::input::{InputState, ToolbarDrawerTab};
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
@@ -331,6 +331,35 @@ impl InputState {
         hidden: bool,
     ) -> bool {
         self.set_toolbar_item_hidden(id, hidden)
+    }
+
+    pub(super) fn apply_toolbar_move_item(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+        delta: isize,
+    ) -> bool {
+        self.move_toolbar_item(group, id, delta)
+    }
+
+    pub(super) fn apply_toolbar_start_item_drag(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+    ) -> bool {
+        self.start_toolbar_item_drag(group, id)
+    }
+
+    pub(super) fn apply_toolbar_drag_item_over(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        target_index: usize,
+    ) -> bool {
+        self.drag_toolbar_item_over(group, target_index)
+    }
+
+    pub(super) fn apply_toolbar_reset_item_order(&mut self, group: ToolbarItemOrderGroup) -> bool {
+        self.reset_toolbar_item_order(group)
     }
 
     pub(super) fn apply_toolbar_reset_item_hidden_overrides(&mut self) -> bool {

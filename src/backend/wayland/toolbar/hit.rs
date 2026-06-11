@@ -38,6 +38,7 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
             | HitKind::DragCustomRedoDelay
             | HitKind::DragMoveTop
             | HitKind::DragMoveSide
+            | HitKind::DragToolbarItem { .. }
     );
 
     use crate::backend::wayland::toolbar::events::HitKind::*;
@@ -107,6 +108,7 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         ),
         DragMoveTop => ToolbarEvent::MoveTopToolbar { x, y },
         DragMoveSide => ToolbarEvent::MoveSideToolbar { x, y },
+        DragToolbarItem { group, id, .. } => ToolbarEvent::StartToolbarItemDrag { group, id },
         crate::backend::wayland::toolbar::events::HitKind::Click => hit.event.clone(),
     };
 
@@ -185,6 +187,14 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         ))),
         DragMoveTop => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
         DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
+        DragToolbarItem {
+            group,
+            target_index,
+            ..
+        } => Some(ToolbarIntent(ToolbarEvent::DragToolbarItemOver {
+            group,
+            target_index,
+        })),
         _ => None,
     }
 }

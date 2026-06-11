@@ -46,8 +46,10 @@ pub use types::{
     RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig,
     ResolvedToolbarItems, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
     ToolPresetConfig, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition,
-    ToolbarItemId, ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, UiConfig, toolbar_item_definitions, validate_pdf_label_template,
+    ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface,
+    ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
+    toolbar_item_definitions, toolbar_item_ids, toolbar_item_order_group,
+    validate_pdf_label_template,
 };
 #[cfg(tablet)]
 #[allow(unused_imports)]

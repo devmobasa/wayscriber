@@ -34,6 +34,7 @@ pub(crate) enum ToolbarControlId {
     CustomizeToolbarItems,
     BackToolbarSettings,
     ResetToolbarHiddenItems,
+    ResetToolbarItemOrder,
     OpenConfigurator,
     OpenConfigFile,
 }

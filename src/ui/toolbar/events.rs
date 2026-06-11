@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::config::{Action, ToolbarItemId, ToolbarLayoutMode};
+use crate::config::{Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
 
@@ -212,6 +212,24 @@ pub enum ToolbarEvent {
     SetToolbarLayoutMode(ToolbarLayoutMode),
     /// Hide or show a known toolbar item override.
     SetToolbarItemHidden(ToolbarItemId, bool),
+    /// Move an orderable toolbar item by a relative row delta.
+    MoveToolbarItem {
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+        delta: isize,
+    },
+    /// Begin dragging an orderable toolbar item in the customization panel.
+    StartToolbarItemDrag {
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+    },
+    /// Move the active dragged toolbar item over a target row.
+    DragToolbarItemOver {
+        group: ToolbarItemOrderGroup,
+        target_index: usize,
+    },
+    /// Reset known order overrides for one toolbar item group.
+    ResetToolbarItemOrder(ToolbarItemOrderGroup),
     /// Clear known hidden toolbar item overrides, preserving unknown/future IDs.
     ResetToolbarItemHiddenOverrides,
     /// Show or hide the Settings drawer toolbar-item customization sub-panel.
