@@ -1,8 +1,10 @@
-use iced::widget::{checkbox, column, pick_list, row, scrollable, text};
+use std::collections::BTreeSet;
+
+use iced::widget::{button, checkbox, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 use wayscriber::config::{
-    ResolvedToolbarItems, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemSurface,
-    ToolbarItemsConfig, toolbar_item_definitions,
+    ResolvedToolbarItems, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemOrderGroup,
+    ToolbarItemSurface, ToolbarItemsConfig, toolbar_item_definitions, toolbar_item_order_group,
 };
 
 use crate::app::scroll::CONTENT_SCROLL_ID;
@@ -255,7 +257,7 @@ fn toolbar_item_visibility_section<'a>(
         );
     }
 
-    for definition in toolbar_item_definitions() {
+    for definition in toolbar_item_definitions_for_display(&resolved) {
         if current_surface != Some(definition.surface) {
             current_surface = Some(definition.surface);
             current_category = None;
@@ -287,17 +289,81 @@ fn toolbar_item_visibility_row<'a>(
         "default: {}",
         visibility_override_label(!defaults.is_hidden(id))
     );
+    let order_group = configurator_order_group(definition);
+    let order = order_group.and_then(|group| {
+        let index = resolved.order.index_of(group, id)?;
+        let len = resolved.order.ordered_ids(group).len();
+        Some((group, index, index > 0, index + 1 < len))
+    });
 
-    row![
+    let mut cells = row![
         checkbox(visible)
             .label(definition.label)
             .on_toggle(move |value| Message::ToolbarItemVisibilityChanged(id, value)),
         text(definition.id.as_str()).size(12).width(Length::Fill),
-        text(default).size(12),
     ]
     .spacing(12)
-    .align_y(iced::Alignment::Center)
-    .into()
+    .align_y(iced::Alignment::Center);
+    if let Some((group, _, can_move_up, can_move_down)) = order {
+        let up = if can_move_up {
+            button(text("^")).on_press(Message::ToolbarItemMoveRequested(group, id, -1))
+        } else {
+            button(text("^"))
+        };
+        let down = if can_move_down {
+            button(text("v")).on_press(Message::ToolbarItemMoveRequested(group, id, 1))
+        } else {
+            button(text("v"))
+        };
+        cells = cells
+            .push(up)
+            .push(down)
+            .push(button(text("Reset")).on_press(Message::ToolbarItemOrderReset(group)));
+    }
+    cells.push(text(default).size(12)).into()
+}
+
+fn toolbar_item_definitions_for_display(
+    resolved: &ResolvedToolbarItems,
+) -> Vec<&'static ToolbarItemDefinition> {
+    let mut result = Vec::new();
+    let mut emitted = BTreeSet::new();
+    let mut emitted_groups = BTreeSet::new();
+
+    for definition in toolbar_item_definitions() {
+        if let Some(group) = configurator_order_group(definition) {
+            if emitted_groups.insert(group) {
+                for id in resolved.order.ordered_ids(group) {
+                    if let Some(ordered_definition) = toolbar_item_definitions()
+                        .iter()
+                        .find(|candidate| candidate.id == *id)
+                        && configurator_order_group(ordered_definition) == Some(group)
+                    {
+                        result.push(ordered_definition);
+                        emitted.insert(ordered_definition.id);
+                    }
+                }
+            }
+            if emitted.contains(&definition.id) {
+                continue;
+            }
+        }
+        result.push(definition);
+        emitted.insert(definition.id);
+    }
+
+    result
+}
+
+fn configurator_order_group(definition: &ToolbarItemDefinition) -> Option<ToolbarItemOrderGroup> {
+    let group = toolbar_item_order_group(definition)?;
+    matches!(
+        group,
+        ToolbarItemOrderGroup::TopTools
+            | ToolbarItemOrderGroup::TopControls
+            | ToolbarItemOrderGroup::SideSections
+    )
+    .then_some(group)
 }
 
 fn visibility_override_label(visible: bool) -> &'static str {

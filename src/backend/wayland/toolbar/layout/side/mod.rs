@@ -49,71 +49,106 @@ pub fn build_side_hits(
         return;
     }
 
-    // Color section: only when tool needs color
-    if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
-        y = colors::push_color_picker_hits(&ctx, y, hits);
-    }
-
-    if !snapshot.side_section_hidden(ToolbarSideSection::Presets) {
-        y = presets::push_preset_hits(&ctx, y, hits);
-    }
-
-    // Thickness/size: only when tool needs it
-    if tool_context.needs_thickness {
-        y = sliders::push_thickness_hits(&ctx, y, hits);
-
-        if tool_context.show_eraser_mode
-            && !snapshot.side_section_hidden(ToolbarSideSection::EraserMode)
-        {
-            y = sliders::push_eraser_mode_hits(&ctx, y, hits);
+    let mut drawer_tabs_pushed = false;
+    let mut thickness_block_pushed = false;
+    let mut text_block_pushed = false;
+    for section in crate::ui::toolbar::model::ordered_side_sections(snapshot) {
+        match section {
+            ToolbarSideSection::Colors
+                if tool_context.needs_color
+                    && !snapshot.side_section_hidden(ToolbarSideSection::Colors) =>
+            {
+                y = colors::push_color_picker_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Presets
+                if !snapshot.side_section_hidden(ToolbarSideSection::Presets) =>
+            {
+                y = presets::push_preset_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Thickness
+            | ToolbarSideSection::EraserMode
+            | ToolbarSideSection::PolygonSides
+                if tool_context.needs_thickness && !thickness_block_pushed =>
+            {
+                thickness_block_pushed = true;
+                y = sliders::push_thickness_hits(&ctx, y, hits);
+                if tool_context.show_eraser_mode
+                    && !snapshot.side_section_hidden(ToolbarSideSection::EraserMode)
+                {
+                    y = sliders::push_eraser_mode_hits(&ctx, y, hits);
+                }
+                if tool_context.show_polygon_sides_control
+                    && !snapshot.side_section_hidden(ToolbarSideSection::PolygonSides)
+                {
+                    y = sliders::push_polygon_sides_hits(&ctx, y, hits);
+                }
+            }
+            ToolbarSideSection::ArrowLabels
+                if tool_context.show_arrow_labels
+                    && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels) =>
+            {
+                y = arrow::push_arrow_section_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::StepMarkers
+                if tool_context.show_step_counter
+                    && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers) =>
+            {
+                y = arrow::push_step_marker_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::MarkerOpacity
+                if tool_context.show_marker_opacity
+                    && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity) =>
+            {
+                y = sliders::push_marker_opacity_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::TextSize | ToolbarSideSection::Font
+                if tool_context.show_font_controls && !text_block_pushed =>
+            {
+                text_block_pushed = true;
+                y = sliders::push_text_size_hits(&ctx, y, hits);
+                y = sliders::push_font_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Actions => {
+                y = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+                y = actions::push_actions_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Boards => {
+                y = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+                y = boards::push_boards_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Pages => {
+                y = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+                y = pages::push_pages_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::StepUndo => {
+                y = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+                y = delay::push_delay_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Session => {
+                y = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+                y = session::push_session_hits(&ctx, y, hits);
+            }
+            ToolbarSideSection::Settings => {
+                y = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+                settings::push_settings_hits(&ctx, y, hits);
+            }
+            _ => {}
         }
-
-        if tool_context.show_polygon_sides_control
-            && !snapshot.side_section_hidden(ToolbarSideSection::PolygonSides)
-        {
-            y = sliders::push_polygon_sides_hits(&ctx, y, hits);
-        }
     }
+    let _ = push_drawer_tabs_hits_once(&ctx, y, hits, &mut drawer_tabs_pushed);
+}
 
-    // Arrow section: only for arrow tool
-    if tool_context.show_arrow_labels
-        && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
-    {
-        y = arrow::push_arrow_section_hits(&ctx, y, hits);
+fn push_drawer_tabs_hits_once(
+    ctx: &SideLayoutContext<'_>,
+    y: f64,
+    hits: &mut Vec<HitRegion>,
+    pushed: &mut bool,
+) -> f64 {
+    if *pushed {
+        return y;
     }
-
-    // Step marker counter: only for step marker tool
-    if tool_context.show_step_counter
-        && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
-    {
-        y = arrow::push_step_marker_hits(&ctx, y, hits);
-    }
-
-    // Marker opacity: only for marker tool
-    if tool_context.show_marker_opacity
-        && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
-    {
-        y = sliders::push_marker_opacity_hits(&ctx, y, hits);
-    }
-
-    // Text controls: only when text/note is active
-    if tool_context.show_font_controls {
-        if !snapshot.side_section_hidden(ToolbarSideSection::TextSize) {
-            y = sliders::push_text_size_hits(&ctx, y, hits);
-        }
-        if !snapshot.side_section_hidden(ToolbarSideSection::Font) {
-            y = sliders::push_font_hits(&ctx, y, hits);
-        }
-    }
-
-    y = drawer::push_drawer_tabs_hits(&ctx, y, hits);
-    y = actions::push_actions_hits(&ctx, y, hits);
-    y = boards::push_boards_hits(&ctx, y, hits);
-    y = pages::push_pages_hits(&ctx, y, hits);
-    y = delay::push_delay_hits(&ctx, y, hits);
-    y = session::push_session_hits(&ctx, y, hits);
-
-    settings::push_settings_hits(&ctx, y, hits);
+    *pushed = true;
+    drawer::push_drawer_tabs_hits(ctx, y, hits)
 }
 
 pub(super) struct SideLayoutContext<'a> {

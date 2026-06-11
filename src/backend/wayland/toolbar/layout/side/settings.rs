@@ -120,12 +120,54 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
         item_overrides.len(),
     );
     for (item, override_item) in item_layout.items.iter().zip(item_overrides.iter()) {
+        let order = override_item.order.as_ref();
+        let order_gap = 4.0;
+        let handle_w = if order.is_some() { 24.0 } else { 0.0 };
+        let move_btn_w = if order.is_some() { 28.0 } else { 0.0 };
+        let move_buttons_w = if order.is_some() {
+            move_btn_w * 2.0 + order_gap * 2.0
+        } else {
+            0.0
+        };
+        let checkbox_x = item.x + handle_w + if order.is_some() { order_gap } else { 0.0 };
+        let checkbox_w =
+            item.w - handle_w - move_buttons_w - if order.is_some() { order_gap } else { 0.0 };
         hits.push(HitRegion {
-            rect: (item.x, item.y, item.w, item.h),
+            rect: (checkbox_x, item.y, checkbox_w, item.h),
             event: activation_event(&override_item.activation),
             kind: HitKind::Click,
             tooltip: override_item.tooltip.as_string(),
         });
+        if let Some(order) = order {
+            let up_x = item.x + item.w - move_btn_w * 2.0 - order_gap;
+            let down_x = item.x + item.w - move_btn_w;
+            for (button_x, enabled, activation, tooltip) in [
+                (up_x, order.can_move_up, &order.move_up, "Move up"),
+                (down_x, order.can_move_down, &order.move_down, "Move down"),
+            ] {
+                if enabled {
+                    hits.push(HitRegion {
+                        rect: (button_x, item.y, move_btn_w, item.h),
+                        event: activation_event(activation),
+                        kind: HitKind::Click,
+                        tooltip: Some(format!("{} {}", tooltip, override_item.label)),
+                    });
+                }
+            }
+            hits.push(HitRegion {
+                rect: (item.x, item.y, item.w, item.h),
+                event: crate::ui::toolbar::ToolbarEvent::StartToolbarItemDrag {
+                    group: order.group,
+                    id: override_item.id,
+                },
+                kind: HitKind::DragToolbarItem {
+                    group: order.group,
+                    id: override_item.id,
+                    target_index: order.index,
+                },
+                tooltip: Some(format!("Drag {} to reorder", override_item.label)),
+            });
+        }
     }
 }
 

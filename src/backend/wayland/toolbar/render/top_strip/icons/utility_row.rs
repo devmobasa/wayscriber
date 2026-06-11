@@ -30,190 +30,198 @@ pub(super) fn draw_utility_row(
         size: FONT_SIZE_SMALL,
     };
 
-    if model::top_text_visible(snapshot) {
-        let is_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            layout.ctx,
-            x,
-            y,
-            btn_size,
-            btn_size,
-            snapshot.text_active,
-            is_hover,
-        );
-        set_icon_color(layout.ctx, is_hover);
-        toolbar_icons::draw_icon_text(
-            layout.ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::EnterTextMode,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::EnterTextMode),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::EnterTextMode),
-            )),
-        });
-        x += btn_size + gap;
-    }
+    for button in model::visible_top_utility_buttons(snapshot, is_simple, true) {
+        match button {
+            model::TopUtilityButton::Text => {
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                    .unwrap_or(false);
+                draw_button(
+                    layout.ctx,
+                    x,
+                    y,
+                    btn_size,
+                    btn_size,
+                    snapshot.text_active,
+                    is_hover,
+                );
+                set_icon_color(layout.ctx, is_hover);
+                toolbar_icons::draw_icon_text(
+                    layout.ctx,
+                    x + (btn_size - icon_size) / 2.0,
+                    y + (btn_size - icon_size) / 2.0,
+                    icon_size,
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::EnterTextMode,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::EnterTextMode),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::EnterTextMode),
+                    )),
+                });
+                x += btn_size + gap;
+            }
 
-    if model::top_sticky_note_visible(snapshot) {
-        let note_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            layout.ctx,
-            x,
-            y,
-            btn_size,
-            btn_size,
-            snapshot.note_active,
-            note_hover,
-        );
-        set_icon_color(layout.ctx, note_hover);
-        toolbar_icons::draw_icon_note(
-            layout.ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::EnterStickyNoteMode,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::EnterStickyNoteMode),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::EnterStickyNoteMode),
-            )),
-        });
-        x += btn_size + gap;
-    }
+            model::TopUtilityButton::StickyNote => {
+                let note_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                    .unwrap_or(false);
+                draw_button(
+                    layout.ctx,
+                    x,
+                    y,
+                    btn_size,
+                    btn_size,
+                    snapshot.note_active,
+                    note_hover,
+                );
+                set_icon_color(layout.ctx, note_hover);
+                toolbar_icons::draw_icon_note(
+                    layout.ctx,
+                    x + (btn_size - icon_size) / 2.0,
+                    y + (btn_size - icon_size) / 2.0,
+                    icon_size,
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::EnterStickyNoteMode,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::EnterStickyNoteMode),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::EnterStickyNoteMode),
+                    )),
+                });
+                x += btn_size + gap;
+            }
 
-    if !is_simple && model::top_clear_canvas_visible(snapshot) {
-        let clear_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(layout.ctx, x, y, btn_size, btn_size, false, clear_hover);
-        set_icon_color(layout.ctx, clear_hover);
-        toolbar_icons::draw_icon_clear(
-            layout.ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::ClearCanvas,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::ClearCanvas),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::ClearCanvas),
-            )),
-        });
-        x += btn_size + gap;
-    }
+            model::TopUtilityButton::ClearCanvas => {
+                let clear_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                    .unwrap_or(false);
+                draw_button(layout.ctx, x, y, btn_size, btn_size, false, clear_hover);
+                set_icon_color(layout.ctx, clear_hover);
+                toolbar_icons::draw_icon_clear(
+                    layout.ctx,
+                    x + (btn_size - icon_size) / 2.0,
+                    y + (btn_size - icon_size) / 2.0,
+                    icon_size,
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::ClearCanvas,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::ClearCanvas),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::ClearCanvas),
+                    )),
+                });
+                x += btn_size + gap;
+            }
 
-    if model::top_screenshot_visible(snapshot) {
-        let screenshot_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            layout.ctx,
-            x,
-            y,
-            btn_size,
-            btn_size,
-            false,
-            screenshot_hover,
-        );
-        set_icon_color(layout.ctx, screenshot_hover);
-        toolbar_icons::draw_icon_screenshot(
-            layout.ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::CaptureScreenshot,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::CaptureSelection),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::CaptureSelection),
-            )),
-        });
-        x += btn_size + gap;
-    }
+            model::TopUtilityButton::Screenshot => {
+                let screenshot_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                    .unwrap_or(false);
+                draw_button(
+                    layout.ctx,
+                    x,
+                    y,
+                    btn_size,
+                    btn_size,
+                    false,
+                    screenshot_hover,
+                );
+                set_icon_color(layout.ctx, screenshot_hover);
+                toolbar_icons::draw_icon_screenshot(
+                    layout.ctx,
+                    x + (btn_size - icon_size) / 2.0,
+                    y + (btn_size - icon_size) / 2.0,
+                    icon_size,
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::CaptureScreenshot,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::CaptureSelection),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::CaptureSelection),
+                    )),
+                });
+                x += btn_size + gap;
+            }
 
-    if !is_simple && model::top_highlight_visible(snapshot) {
-        let highlight_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            layout.ctx,
-            x,
-            y,
-            btn_size,
-            btn_size,
-            snapshot.any_highlight_active,
-            highlight_hover,
-        );
-        set_icon_color(layout.ctx, highlight_hover);
-        toolbar_icons::draw_icon_highlight(
-            layout.ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::ToggleHighlightTool),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::ToggleHighlightTool),
-            )),
-        });
-        if snapshot.highlight_tool_active && model::top_highlight_ring_visible(snapshot) {
-            let ring_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-            let ring_h = ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
-            let ring_hover = hover
-                .map(|(hx, hy)| point_in_rect(hx, hy, x, ring_y, btn_size, ring_h))
-                .unwrap_or(false);
-            draw_mini_checkbox(
-                layout.ctx,
-                x,
-                ring_y,
-                btn_size,
-                ring_h,
-                snapshot.highlight_tool_ring_enabled,
-                ring_hover,
-                mini_label_style,
-                "Ring",
-            );
-            layout.hits.push(HitRegion {
-                rect: (x, ring_y, btn_size, ring_h),
-                event: ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled),
-                kind: HitKind::Click,
-                tooltip: Some("Highlight ring".to_string()),
-            });
+            model::TopUtilityButton::Highlight => {
+                let highlight_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                    .unwrap_or(false);
+                draw_button(
+                    layout.ctx,
+                    x,
+                    y,
+                    btn_size,
+                    btn_size,
+                    snapshot.any_highlight_active,
+                    highlight_hover,
+                );
+                set_icon_color(layout.ctx, highlight_hover);
+                toolbar_icons::draw_icon_highlight(
+                    layout.ctx,
+                    x + (btn_size - icon_size) / 2.0,
+                    y + (btn_size - icon_size) / 2.0,
+                    icon_size,
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_size, btn_size),
+                    event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::ToggleHighlightTool),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::ToggleHighlightTool),
+                    )),
+                });
+                if snapshot.highlight_tool_active && model::top_highlight_ring_visible(snapshot) {
+                    let ring_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+                    let ring_h = ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
+                    let ring_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, x, ring_y, btn_size, ring_h))
+                        .unwrap_or(false);
+                    draw_mini_checkbox(
+                        layout.ctx,
+                        x,
+                        ring_y,
+                        btn_size,
+                        ring_h,
+                        snapshot.highlight_tool_ring_enabled,
+                        ring_hover,
+                        mini_label_style,
+                        "Ring",
+                    );
+                    layout.hits.push(HitRegion {
+                        rect: (x, ring_y, btn_size, ring_h),
+                        event: ToolbarEvent::ToggleHighlightToolRing(
+                            !snapshot.highlight_tool_ring_enabled,
+                        ),
+                        kind: HitKind::Click,
+                        tooltip: Some("Highlight ring".to_string()),
+                    });
+                }
+                x += btn_size + gap;
+            }
+
+            model::TopUtilityButton::IconMode => {}
         }
-        x += btn_size + gap;
     }
 
     x

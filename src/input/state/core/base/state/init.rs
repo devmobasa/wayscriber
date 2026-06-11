@@ -143,6 +143,7 @@ impl InputState {
             toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
             toolbar_items: crate::config::ToolbarItemsConfig::default(),
             resolved_toolbar_items: crate::config::ToolbarItemsConfig::default().resolved(),
+            toolbar_customize_drag: None,
             toolbar_shapes_expanded: false,
             toolbar_drawer_open: false,
             toolbar_drawer_tab: ToolbarDrawerTab::View,

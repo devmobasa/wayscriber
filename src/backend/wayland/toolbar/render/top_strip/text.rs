@@ -121,108 +121,110 @@ pub(super) fn draw_text_strip(
         x += fill_w + gap;
     }
 
-    if model::top_text_visible(snapshot) {
-        let is_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
-            .unwrap_or(false);
-        draw_button(ctx, x, y, btn_w, btn_h, snapshot.text_active, is_hover);
-        draw_label_center(
-            ctx,
-            label_style,
-            x,
-            y,
-            btn_w,
-            btn_h,
-            action_short_label(Action::EnterTextMode),
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_w, btn_h),
-            event: ToolbarEvent::EnterTextMode,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::EnterTextMode),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::EnterTextMode),
-            )),
-        });
-        x += btn_w + gap;
-    }
-
-    if model::top_sticky_note_visible(snapshot) {
-        let note_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
-            .unwrap_or(false);
-        draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
-        draw_label_center(
-            ctx,
-            label_style,
-            x,
-            y,
-            btn_w,
-            btn_h,
-            action_short_label(Action::EnterStickyNoteMode),
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_w, btn_h),
-            event: ToolbarEvent::EnterStickyNoteMode,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::EnterStickyNoteMode),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::EnterStickyNoteMode),
-            )),
-        });
-        x += btn_w + gap;
-    }
-
-    if model::top_screenshot_visible(snapshot) {
-        let screenshot_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
-            .unwrap_or(false);
-        draw_button(ctx, x, y, btn_w, btn_h, false, screenshot_hover);
-        draw_label_center(ctx, label_style, x, y, btn_w, btn_h, "Shot");
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_w, btn_h),
-            event: ToolbarEvent::CaptureScreenshot,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::CaptureSelection),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::CaptureSelection),
-            )),
-        });
-        x += btn_w + gap;
-    }
-
-    if !is_simple && model::top_clear_canvas_visible(snapshot) {
-        let clear_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
-            .unwrap_or(false);
-        draw_button(ctx, x, y, btn_w, btn_h, false, clear_hover);
-        draw_label_center(
-            ctx,
-            label_style,
-            x,
-            y,
-            btn_w,
-            btn_h,
-            action_short_label(Action::ClearCanvas),
-        );
-        layout.hits.push(HitRegion {
-            rect: (x, y, btn_w, btn_h),
-            event: ToolbarEvent::ClearCanvas,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::ClearCanvas),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::ClearCanvas),
-            )),
-        });
-        x += btn_w + gap;
+    for button in model::visible_top_utility_buttons(snapshot, is_simple, false) {
+        match button {
+            model::TopUtilityButton::Text => {
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+                    .unwrap_or(false);
+                draw_button(ctx, x, y, btn_w, btn_h, snapshot.text_active, is_hover);
+                draw_label_center(
+                    ctx,
+                    label_style,
+                    x,
+                    y,
+                    btn_w,
+                    btn_h,
+                    action_short_label(Action::EnterTextMode),
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_w, btn_h),
+                    event: ToolbarEvent::EnterTextMode,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::EnterTextMode),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::EnterTextMode),
+                    )),
+                });
+                x += btn_w + gap;
+            }
+            model::TopUtilityButton::StickyNote => {
+                let note_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+                    .unwrap_or(false);
+                draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
+                draw_label_center(
+                    ctx,
+                    label_style,
+                    x,
+                    y,
+                    btn_w,
+                    btn_h,
+                    action_short_label(Action::EnterStickyNoteMode),
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_w, btn_h),
+                    event: ToolbarEvent::EnterStickyNoteMode,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::EnterStickyNoteMode),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::EnterStickyNoteMode),
+                    )),
+                });
+                x += btn_w + gap;
+            }
+            model::TopUtilityButton::Screenshot => {
+                let screenshot_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+                    .unwrap_or(false);
+                draw_button(ctx, x, y, btn_w, btn_h, false, screenshot_hover);
+                draw_label_center(ctx, label_style, x, y, btn_w, btn_h, "Shot");
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_w, btn_h),
+                    event: ToolbarEvent::CaptureScreenshot,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::CaptureSelection),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::CaptureSelection),
+                    )),
+                });
+                x += btn_w + gap;
+            }
+            model::TopUtilityButton::ClearCanvas => {
+                let clear_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+                    .unwrap_or(false);
+                draw_button(ctx, x, y, btn_w, btn_h, false, clear_hover);
+                draw_label_center(
+                    ctx,
+                    label_style,
+                    x,
+                    y,
+                    btn_w,
+                    btn_h,
+                    action_short_label(Action::ClearCanvas),
+                );
+                layout.hits.push(HitRegion {
+                    rect: (x, y, btn_w, btn_h),
+                    event: ToolbarEvent::ClearCanvas,
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        action_label(Action::ClearCanvas),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::ClearCanvas),
+                    )),
+                });
+                x += btn_w + gap;
+            }
+            model::TopUtilityButton::Highlight | model::TopUtilityButton::IconMode => {}
+        }
     }
 
     if model::top_icon_mode_toggle_visible(snapshot) {
@@ -263,36 +265,9 @@ pub(super) fn draw_text_strip(
 
     if snapshot.shape_picker_open && model::top_shape_picker_visible(snapshot) {
         let mut shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        let first_row = if is_simple {
-            model::common_shape_tools()
-        } else {
-            model::polygon_tools()
-        };
-        if model::visible_tool_count(first_row, snapshot) > 0 {
-            draw_picker_text_row(
-                layout,
-                handle_w,
-                shape_y,
-                btn_w,
-                btn_h,
-                label_style,
-                first_row,
-            );
+        for row in model::visible_shape_picker_rows(snapshot, is_simple) {
+            draw_picker_text_row(layout, handle_w, shape_y, btn_w, btn_h, label_style, &row);
             shape_y += btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        }
-        if is_simple {
-            let second_row = model::polygon_tools();
-            if model::visible_tool_count(second_row, snapshot) > 0 {
-                draw_picker_text_row(
-                    layout,
-                    handle_w,
-                    shape_y,
-                    btn_w,
-                    btn_h,
-                    label_style,
-                    second_row,
-                );
-            }
         }
     }
 }

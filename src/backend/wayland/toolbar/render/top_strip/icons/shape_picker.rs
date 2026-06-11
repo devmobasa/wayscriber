@@ -22,20 +22,9 @@ pub(super) fn draw_shape_picker_row(
         return;
     }
 
-    let first_row = if is_simple {
-        model::common_shape_tools()
-    } else {
-        model::polygon_tools()
-    };
-    if model::visible_tool_count(first_row, layout.snapshot) > 0 {
-        draw_picker_row(layout, handle_w, shape_y, btn_size, icon_size, first_row);
+    for row in model::visible_shape_picker_rows(layout.snapshot, is_simple) {
+        draw_picker_row(layout, handle_w, shape_y, btn_size, icon_size, &row);
         shape_y += btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-    }
-    if is_simple {
-        let second_row = model::polygon_tools();
-        if model::visible_tool_count(second_row, layout.snapshot) > 0 {
-            draw_picker_row(layout, handle_w, shape_y, btn_size, icon_size, second_row);
-        }
     }
 }
 

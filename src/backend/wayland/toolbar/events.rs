@@ -1,19 +1,36 @@
+use crate::config::{ToolbarItemId, ToolbarItemOrderGroup};
 use crate::draw::Color;
 
 /// Kinds of hit regions and their drag semantics.
 #[derive(Clone, Debug, PartialEq)]
 pub enum HitKind {
     Click,
-    DragSetThickness { min: f64, max: f64 },
-    DragSetMarkerOpacity { min: f64, max: f64 },
+    DragSetThickness {
+        min: f64,
+        max: f64,
+    },
+    DragSetMarkerOpacity {
+        min: f64,
+        max: f64,
+    },
     DragSetFontSize,
-    PickColor { x: f64, y: f64, w: f64, h: f64 },
+    PickColor {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
     DragUndoDelay,
     DragRedoDelay,
     DragCustomUndoDelay,
     DragCustomRedoDelay,
     DragMoveTop,
     DragMoveSide,
+    DragToolbarItem {
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+        target_index: usize,
+    },
 }
 
 /// Cursor hint for toolbar regions.
@@ -42,7 +59,8 @@ impl HitKind {
             | HitKind::DragCustomUndoDelay
             | HitKind::DragCustomRedoDelay
             | HitKind::DragMoveTop
-            | HitKind::DragMoveSide => ToolbarCursorHint::Grab,
+            | HitKind::DragMoveSide
+            | HitKind::DragToolbarItem { .. } => ToolbarCursorHint::Grab,
             HitKind::PickColor { .. } => ToolbarCursorHint::Crosshair,
         }
     }

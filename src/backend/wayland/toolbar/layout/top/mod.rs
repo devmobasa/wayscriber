@@ -3,8 +3,7 @@
 use super::super::events::HitKind;
 use super::super::hit::HitRegion;
 use super::spec::ToolbarLayoutSpec;
-use crate::config::ToolbarLayoutMode;
-use crate::input::Tool;
+use crate::config::{ToolbarLayoutMode, toolbar_item_ids as ids};
 use crate::ui::toolbar::model;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
@@ -31,7 +30,7 @@ pub fn build_top_hits(
     let btn_y = spec.top_pin_button_y(height);
 
     let mut right_x = width - ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT - btn_size;
-    if model::toolbar_item_visible(snapshot, "top.chrome.close") {
+    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE) {
         hits.push(HitRegion {
             rect: (right_x, btn_y, btn_size, btn_size),
             event: ToolbarEvent::CloseTopToolbar,
@@ -41,7 +40,7 @@ pub fn build_top_hits(
         right_x -= btn_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
     }
 
-    if model::toolbar_item_visible(snapshot, "top.chrome.pin") {
+    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN) {
         hits.push(HitRegion {
             rect: (right_x, btn_y, btn_size, btn_size),
             event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
@@ -53,8 +52,4 @@ pub fn build_top_hits(
             }),
         });
     }
-}
-
-fn shape_buttons() -> &'static [Tool] {
-    model::polygon_tools()
 }

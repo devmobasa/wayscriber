@@ -21,7 +21,8 @@ use super::super::types::{
 };
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding,
-    ResolvedToolbarItems, ToolPresetConfig, ToolbarItemsConfig,
+    ResolvedToolbarItems, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup,
+    ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
@@ -204,6 +205,8 @@ pub struct InputState {
     pub toolbar_items: ToolbarItemsConfig,
     /// Resolved known item-level toolbar visibility config.
     pub resolved_toolbar_items: ResolvedToolbarItems,
+    /// Active toolbar customization reorder drag source.
+    pub toolbar_customize_drag: Option<(ToolbarItemOrderGroup, ToolbarItemId)>,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
     /// Whether the toolbar drawer is open

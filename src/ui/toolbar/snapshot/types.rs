@@ -1,4 +1,6 @@
-use crate::config::{ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode};
+use crate::config::{
+    ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, toolbar_item_ids as ids,
+};
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
@@ -371,15 +373,15 @@ impl ToolbarSnapshot {
             ToolbarSideSection::Settings => ToolbarGroupId::Settings,
         };
         let legacy_item = match section {
-            ToolbarSideSection::Colors => Some("side.tool-options.color"),
-            ToolbarSideSection::Thickness => Some("side.tool-options.thickness"),
-            ToolbarSideSection::EraserMode => Some("side.tool-options.eraser-mode"),
-            ToolbarSideSection::PolygonSides => Some("side.tool-options.polygon-sides"),
-            ToolbarSideSection::ArrowLabels => Some("side.tool-options.arrow-labels"),
-            ToolbarSideSection::StepMarkers => Some("side.tool-options.step-marker-reset"),
-            ToolbarSideSection::MarkerOpacity => Some("side.tool-options.marker-opacity"),
-            ToolbarSideSection::TextSize => Some("side.tool-options.font-size"),
-            ToolbarSideSection::Font => Some("side.tool-options.font-family"),
+            ToolbarSideSection::Colors => Some(ids::SIDE_TOOL_OPTIONS_COLOR),
+            ToolbarSideSection::Thickness => Some(ids::SIDE_TOOL_OPTIONS_THICKNESS),
+            ToolbarSideSection::EraserMode => Some(ids::SIDE_TOOL_OPTIONS_ERASER_MODE),
+            ToolbarSideSection::PolygonSides => Some(ids::SIDE_TOOL_OPTIONS_POLYGON_SIDES),
+            ToolbarSideSection::ArrowLabels => Some(ids::SIDE_TOOL_OPTIONS_ARROW_LABELS),
+            ToolbarSideSection::StepMarkers => Some(ids::SIDE_TOOL_OPTIONS_STEP_MARKER_RESET),
+            ToolbarSideSection::MarkerOpacity => Some(ids::SIDE_TOOL_OPTIONS_MARKER_OPACITY),
+            ToolbarSideSection::TextSize => Some(ids::SIDE_TOOL_OPTIONS_FONT_SIZE),
+            ToolbarSideSection::Font => Some(ids::SIDE_TOOL_OPTIONS_FONT_FAMILY),
             ToolbarSideSection::Presets
             | ToolbarSideSection::Actions
             | ToolbarSideSection::Boards
@@ -390,8 +392,7 @@ impl ToolbarSnapshot {
         };
 
         self.toolbar_group_hidden(group)
-            || legacy_item
-                .is_some_and(|item| self.toolbar_item_hidden(ToolbarItemId::from_known(item)))
+            || legacy_item.is_some_and(|item| self.toolbar_item_hidden(item))
     }
 
     pub fn side_section_collapsed(&self, section: ToolbarSideSection) -> bool {

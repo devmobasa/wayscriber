@@ -10,8 +10,8 @@ use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
     ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
     PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, RenderColorMappingConfig,
-    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, ToolbarItemsConfig,
-    XdgFocusLossBehavior,
+    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig,
+    ToolbarItemOrderGroup, ToolbarItemsConfig, XdgFocusLossBehavior, toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -69,14 +69,15 @@ fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
     config.ui.toolbar.items = ToolbarItemsConfig {
         hidden: vec![
             "future.toolbar.item".to_string(),
-            "side.actions.undo-all".to_string(),
-            "side.actions.undo-all".to_string(),
+            ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
+            ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
         ],
+        order: ToolbarItemOrderConfig::default(),
     };
 
     let mut draft = ConfigDraft::from_config(&config);
-    draft.set_toolbar_item_visible("side.actions.undo-all".parse().expect("known id"), true);
-    draft.set_toolbar_item_visible("top.tool.pen".parse().expect("known id"), false);
+    draft.set_toolbar_item_visible(ids::SIDE_ACTIONS_UNDO_ALL, true);
+    draft.set_toolbar_item_visible(ids::TOP_TOOL_PEN, false);
 
     let round_trip = draft
         .to_config(&config)
@@ -84,7 +85,37 @@ fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
 
     assert_eq!(
         round_trip.ui.toolbar.items.hidden,
-        vec!["future.toolbar.item", "top.tool.pen"]
+        vec![
+            "future.toolbar.item".to_string(),
+            ids::TOP_TOOL_PEN.as_str().to_string()
+        ]
+    );
+}
+
+#[test]
+fn config_draft_round_trips_toolbar_item_order_preserving_unknown_ids() {
+    let mut config = Config::default();
+    config.ui.toolbar.items.order.top_tools = vec![
+        "future.toolbar.item".to_string(),
+        ids::TOP_TOOL_PEN.as_str().to_string(),
+        ids::TOP_TOOL_SELECT.as_str().to_string(),
+    ];
+
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.move_toolbar_item(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN, 1);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+
+    assert!(
+        round_trip
+            .ui
+            .toolbar
+            .items
+            .order
+            .top_tools
+            .contains(&"future.toolbar.item".to_string())
     );
 }
 

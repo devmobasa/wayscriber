@@ -1,4 +1,5 @@
 use iced::Task;
+use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::messages::Message;
 use crate::models::{
@@ -12,7 +13,6 @@ use crate::models::{
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
-use wayscriber::config::ToolbarItemId;
 
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
@@ -176,6 +176,28 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_toolbar_item_visible(id, visible);
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_item_move_requested(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+        delta: isize,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.move_toolbar_item(group, id, delta);
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_item_order_reset(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.reset_toolbar_item_order(group);
         self.refresh_dirty_flag();
         Task::none()
     }

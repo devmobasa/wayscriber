@@ -2,8 +2,9 @@ use std::borrow::Cow;
 
 use crate::config::{
     Action, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
-    ToolbarItemSurface, ToolbarLayoutMode, action_label, action_short_label,
-    toolbar_item_definitions,
+    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarLayoutMode,
+    action_label, action_short_label, toolbar_item_definitions, toolbar_item_ids as ids,
+    toolbar_item_order_group,
 };
 
 use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection, ToolbarSnapshot};
@@ -164,10 +165,14 @@ impl ToolbarSettingsModel {
         };
 
         let item_overrides: Vec<_> = if let Some(group) = snapshot.customize_items_group {
-            toolbar_item_definitions()
+            let mut definitions: Vec<_> = toolbar_item_definitions()
                 .iter()
                 .filter(|definition| customize_group_contains(group, definition))
-                .map(|definition| ToolbarSettingsItemOverride::new(snapshot, definition))
+                .collect();
+            sort_customize_definitions(snapshot, group, &mut definitions);
+            definitions
+                .into_iter()
+                .map(|definition| ToolbarSettingsItemOverride::new(snapshot, group, definition))
                 .collect()
         } else {
             Vec::new()
@@ -262,7 +267,7 @@ fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     } else {
         ToolbarEvent::SetToolbarItemCustomizationOpen(false)
     };
-    vec![
+    let mut buttons = vec![
         ToolbarSettingsButton {
             id: ToolbarControlId::BackToolbarSettings,
             label: Cow::Borrowed("Back"),
@@ -277,10 +282,24 @@ fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
             icon: ToolbarIcon::Visibility,
             tooltip: ToolbarTooltip::text("Restore default hidden items"),
         },
-    ]
-    .into_iter()
-    .filter(|button| reset_button_visible(snapshot, button.id))
-    .collect()
+    ];
+    if let Some(group) = snapshot
+        .customize_items_group
+        .and_then(customize_order_group)
+        .filter(|group| order_is_customized(snapshot, *group))
+    {
+        buttons.push(ToolbarSettingsButton {
+            id: ToolbarControlId::ResetToolbarItemOrder,
+            label: Cow::Borrowed("Reset order"),
+            event: ToolbarEvent::ResetToolbarItemOrder(group),
+            icon: ToolbarIcon::Back,
+            tooltip: ToolbarTooltip::text("Restore default order for this group"),
+        });
+    }
+    buttons
+        .into_iter()
+        .filter(|button| reset_button_visible(snapshot, button.id))
+        .collect()
 }
 
 fn reset_button_visible(snapshot: &ToolbarSnapshot, id: ToolbarControlId) -> bool {
@@ -353,30 +372,80 @@ fn customize_group_contains(
     }
 }
 
+fn sort_customize_definitions(
+    snapshot: &ToolbarSnapshot,
+    group: ToolbarItemCustomizeGroup,
+    definitions: &mut Vec<&ToolbarItemDefinition>,
+) {
+    let Some(order_group) = customize_order_group(group) else {
+        return;
+    };
+    definitions.sort_by_key(|definition| {
+        if overlay_order_group_for_definition(definition) == Some(order_group) {
+            snapshot
+                .resolved_toolbar_items
+                .order
+                .index_of(order_group, definition.id)
+                .unwrap_or(usize::MAX)
+        } else {
+            usize::MAX
+        }
+    });
+}
+
+fn customize_order_group(group: ToolbarItemCustomizeGroup) -> Option<ToolbarItemOrderGroup> {
+    match group {
+        ToolbarItemCustomizeGroup::TopTools => Some(ToolbarItemOrderGroup::TopTools),
+        ToolbarItemCustomizeGroup::TopControls => Some(ToolbarItemOrderGroup::TopControls),
+        ToolbarItemCustomizeGroup::SideSections => Some(ToolbarItemOrderGroup::SideSections),
+        _ => None,
+    }
+}
+
+fn definition_order_group_for_customize(
+    group: ToolbarItemCustomizeGroup,
+    definition: &ToolbarItemDefinition,
+) -> Option<ToolbarItemOrderGroup> {
+    let order_group = customize_order_group(group)?;
+    (overlay_order_group_for_definition(definition) == Some(order_group)).then_some(order_group)
+}
+
+fn overlay_order_group_for_definition(
+    definition: &ToolbarItemDefinition,
+) -> Option<ToolbarItemOrderGroup> {
+    toolbar_item_order_group(definition)
+}
+
+fn order_is_customized(snapshot: &ToolbarSnapshot, group: ToolbarItemOrderGroup) -> bool {
+    let current = snapshot.resolved_toolbar_items.order.ordered_ids(group);
+    let default_order = ToolbarItemOrderConfig::default().resolved();
+    current != default_order.ordered_ids(group)
+}
+
 fn control_visible(snapshot: &ToolbarSnapshot, id: ToolbarControlId) -> bool {
     control_item_id(id).is_none_or(|item| !snapshot.toolbar_item_hidden(item))
 }
 
 fn control_item_id(id: ToolbarControlId) -> Option<ToolbarItemId> {
-    Some(ToolbarItemId::from_known(match id {
-        ToolbarControlId::SettingsContextAwareUi => "side.settings.context-aware-ui",
-        ToolbarControlId::SettingsTextControls => "side.settings.text-controls",
-        ToolbarControlId::SettingsStatusBar => "side.settings.status-bar",
-        ToolbarControlId::SettingsStatusBoardBadge => "side.settings.status-board-badge",
-        ToolbarControlId::SettingsStatusPageBadge => "side.settings.status-page-badge",
-        ToolbarControlId::SettingsFloatingBadgeAlways => "side.settings.floating-badge-always",
-        ToolbarControlId::SettingsPresetToasts => "side.settings.preset-toasts",
-        ToolbarControlId::SettingsPresets => "side.settings.presets",
-        ToolbarControlId::SettingsActions => "side.settings.actions",
-        ToolbarControlId::SettingsZoomActions => "side.settings.zoom-actions",
-        ToolbarControlId::SettingsAdvancedActions => "side.settings.advanced-actions",
-        ToolbarControlId::SettingsBoards => "side.settings.boards",
-        ToolbarControlId::SettingsPages => "side.settings.pages",
-        ToolbarControlId::SettingsStepControls => "side.settings.step-controls",
-        ToolbarControlId::OpenConfigurator => "side.settings.configurator",
-        ToolbarControlId::OpenConfigFile => "side.settings.config-file",
+    Some(match id {
+        ToolbarControlId::SettingsContextAwareUi => ids::SIDE_SETTINGS_CONTEXT_AWARE_UI,
+        ToolbarControlId::SettingsTextControls => ids::SIDE_SETTINGS_TEXT_CONTROLS,
+        ToolbarControlId::SettingsStatusBar => ids::SIDE_SETTINGS_STATUS_BAR,
+        ToolbarControlId::SettingsStatusBoardBadge => ids::SIDE_SETTINGS_STATUS_BOARD_BADGE,
+        ToolbarControlId::SettingsStatusPageBadge => ids::SIDE_SETTINGS_STATUS_PAGE_BADGE,
+        ToolbarControlId::SettingsFloatingBadgeAlways => ids::SIDE_SETTINGS_FLOATING_BADGE_ALWAYS,
+        ToolbarControlId::SettingsPresetToasts => ids::SIDE_SETTINGS_PRESET_TOASTS,
+        ToolbarControlId::SettingsPresets => ids::SIDE_SETTINGS_PRESETS,
+        ToolbarControlId::SettingsActions => ids::SIDE_SETTINGS_ACTIONS,
+        ToolbarControlId::SettingsZoomActions => ids::SIDE_SETTINGS_ZOOM_ACTIONS,
+        ToolbarControlId::SettingsAdvancedActions => ids::SIDE_SETTINGS_ADVANCED_ACTIONS,
+        ToolbarControlId::SettingsBoards => ids::SIDE_SETTINGS_BOARDS,
+        ToolbarControlId::SettingsPages => ids::SIDE_SETTINGS_PAGES,
+        ToolbarControlId::SettingsStepControls => ids::SIDE_SETTINGS_STEP_CONTROLS,
+        ToolbarControlId::OpenConfigurator => ids::SIDE_SETTINGS_CONFIGURATOR,
+        ToolbarControlId::OpenConfigFile => ids::SIDE_SETTINGS_CONFIG_FILE,
         _ => return None,
-    }))
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -403,20 +472,64 @@ pub(crate) struct ToolbarSettingsItemOverride {
     pub(crate) shown: bool,
     pub(crate) activation: ToolbarActivation,
     pub(crate) tooltip: ToolbarTooltip,
+    pub(crate) order: Option<ToolbarSettingsItemOrder>,
 }
 
 impl ToolbarSettingsItemOverride {
-    fn new(snapshot: &ToolbarSnapshot, definition: &ToolbarItemDefinition) -> Self {
+    fn new(
+        snapshot: &ToolbarSnapshot,
+        group: ToolbarItemCustomizeGroup,
+        definition: &ToolbarItemDefinition,
+    ) -> Self {
         let id = definition.id;
         let hidden = snapshot.toolbar_item_hidden(id);
+        let order =
+            definition_order_group_for_customize(group, definition).and_then(|order_group| {
+                let index = snapshot
+                    .resolved_toolbar_items
+                    .order
+                    .index_of(order_group, id)?;
+                let len = snapshot
+                    .resolved_toolbar_items
+                    .order
+                    .ordered_ids(order_group)
+                    .len();
+                Some(ToolbarSettingsItemOrder {
+                    group: order_group,
+                    index,
+                    can_move_up: index > 0,
+                    can_move_down: index + 1 < len,
+                    move_up: ToolbarActivation::Click(ToolbarEvent::MoveToolbarItem {
+                        group: order_group,
+                        id,
+                        delta: -1,
+                    }),
+                    move_down: ToolbarActivation::Click(ToolbarEvent::MoveToolbarItem {
+                        group: order_group,
+                        id,
+                        delta: 1,
+                    }),
+                })
+            });
         Self {
             id,
             label: Cow::Borrowed(definition.label),
             shown: !hidden,
             activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarItemHidden(id, !hidden)),
             tooltip: ToolbarTooltip::text(format!("{}: uncheck to hide", definition.label)),
+            order,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ToolbarSettingsItemOrder {
+    pub(crate) group: ToolbarItemOrderGroup,
+    pub(crate) index: usize,
+    pub(crate) can_move_up: bool,
+    pub(crate) can_move_down: bool,
+    pub(crate) move_up: ToolbarActivation,
+    pub(crate) move_down: ToolbarActivation,
 }
 
 #[derive(Debug, Clone)]

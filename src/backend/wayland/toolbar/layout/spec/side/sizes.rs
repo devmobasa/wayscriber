@@ -1,7 +1,7 @@
 use crate::backend::wayland::toolbar::rows::capped_grid_columns;
 use crate::ui::toolbar::model::{
     ToolbarActionsModel, ToolbarCommandGroupKind, ToolbarSessionModel, ToolbarSettingsModel,
-    toolbar_boards_model, toolbar_pages_model,
+    ordered_side_sections, toolbar_boards_model, toolbar_pages_model,
 };
 use crate::ui::toolbar::snapshot::ToolContext;
 use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
@@ -62,92 +62,109 @@ impl ToolbarLayoutSpec {
             return (Self::SIDE_WIDTH, height.ceil() as u32);
         }
 
-        if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
-            let colors_h = self.side_colors_height(snapshot);
-            add_section(colors_h, &mut height);
-        }
-
-        if show_presets {
-            add_section(self.side_presets_height(snapshot), &mut height);
-        }
-
-        if tool_context.needs_thickness {
-            if !snapshot.side_section_hidden(ToolbarSideSection::Thickness) {
-                add_section(self.side_thickness_height(snapshot), &mut height);
+        let mut drawer_tabs_added = false;
+        let mut thickness_block_added = false;
+        let mut text_block_added = false;
+        for section in ordered_side_sections(snapshot) {
+            match section {
+                ToolbarSideSection::Colors
+                    if tool_context.needs_color
+                        && !snapshot.side_section_hidden(ToolbarSideSection::Colors) =>
+                {
+                    add_section(self.side_colors_height(snapshot), &mut height);
+                }
+                ToolbarSideSection::Presets if show_presets => {
+                    add_section(self.side_presets_height(snapshot), &mut height);
+                }
+                ToolbarSideSection::Thickness
+                | ToolbarSideSection::EraserMode
+                | ToolbarSideSection::PolygonSides
+                    if tool_context.needs_thickness && !thickness_block_added =>
+                {
+                    thickness_block_added = true;
+                    if !snapshot.side_section_hidden(ToolbarSideSection::Thickness) {
+                        add_section(self.side_thickness_height(snapshot), &mut height);
+                    }
+                    if tool_context.show_eraser_mode
+                        && !snapshot.side_section_hidden(ToolbarSideSection::EraserMode)
+                    {
+                        add_section(self.side_eraser_mode_height(snapshot), &mut height);
+                    }
+                    if tool_context.show_polygon_sides_control
+                        && !snapshot.side_section_hidden(ToolbarSideSection::PolygonSides)
+                    {
+                        add_section(self.side_polygon_sides_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::ArrowLabels
+                    if tool_context.show_arrow_labels
+                        && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels) =>
+                {
+                    add_section(self.side_arrow_labels_height(snapshot), &mut height);
+                }
+                ToolbarSideSection::StepMarkers
+                    if tool_context.show_step_counter
+                        && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers) =>
+                {
+                    add_section(self.side_step_markers_height(snapshot), &mut height);
+                }
+                ToolbarSideSection::MarkerOpacity
+                    if tool_context.show_marker_opacity
+                        && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity) =>
+                {
+                    add_section(self.side_marker_opacity_height(snapshot), &mut height);
+                }
+                ToolbarSideSection::TextSize | ToolbarSideSection::Font
+                    if tool_context.show_font_controls && !text_block_added =>
+                {
+                    text_block_added = true;
+                    if !snapshot.side_section_hidden(ToolbarSideSection::TextSize) {
+                        add_section(self.side_text_size_height(snapshot), &mut height);
+                    }
+                    if !snapshot.side_section_hidden(ToolbarSideSection::Font) {
+                        add_section(self.side_font_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::Actions => {
+                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
+                    if show_actions {
+                        add_section(self.side_actions_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::Boards => {
+                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
+                    if show_boards {
+                        add_section(self.side_boards_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::Pages => {
+                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
+                    if show_pages {
+                        add_section(self.side_pages_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::StepUndo => {
+                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
+                    if show_step_section {
+                        add_section(self.side_step_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::Session => {
+                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
+                    if show_session_section {
+                        add_section(self.side_session_height(snapshot), &mut height);
+                    }
+                }
+                ToolbarSideSection::Settings => {
+                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
+                    if show_settings_section {
+                        add_section(self.side_settings_height(snapshot), &mut height);
+                    }
+                }
+                _ => {}
             }
-            if tool_context.show_eraser_mode
-                && !snapshot.side_section_hidden(ToolbarSideSection::EraserMode)
-            {
-                add_section(self.side_eraser_mode_height(snapshot), &mut height);
-            }
-            if tool_context.show_polygon_sides_control
-                && !snapshot.side_section_hidden(ToolbarSideSection::PolygonSides)
-            {
-                add_section(self.side_polygon_sides_height(snapshot), &mut height);
-            }
         }
-
-        if tool_context.show_arrow_labels
-            && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
-        {
-            add_section(self.side_arrow_labels_height(snapshot), &mut height);
-        }
-
-        if tool_context.show_step_counter
-            && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
-        {
-            add_section(self.side_step_markers_height(snapshot), &mut height);
-        }
-
-        if tool_context.show_marker_opacity
-            && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
-        {
-            add_section(self.side_marker_opacity_height(snapshot), &mut height);
-        }
-
-        if tool_context.show_font_controls {
-            if !snapshot.side_section_hidden(ToolbarSideSection::TextSize) {
-                add_section(self.side_text_size_height(snapshot), &mut height);
-            }
-            if !snapshot.side_section_hidden(ToolbarSideSection::Font) {
-                add_section(self.side_font_height(snapshot), &mut height);
-            }
-        }
-
-        if snapshot.drawer_open {
-            let tabs_h = self.side_drawer_tabs_height(snapshot);
-            add_section(tabs_h, &mut height);
-        }
-
-        if show_actions {
-            let actions_card_h = self.side_actions_height(snapshot);
-            add_section(actions_card_h, &mut height);
-        }
-
-        if show_boards {
-            let boards_h = self.side_boards_height(snapshot);
-            add_section(boards_h, &mut height);
-        }
-
-        if show_pages {
-            let pages_h = self.side_pages_height(snapshot);
-            add_section(pages_h, &mut height);
-        }
-
-        if show_step_section {
-            let step_h = self.side_step_height(snapshot);
-            add_section(step_h, &mut height);
-        }
-
-        if show_session_section {
-            let session_h = self.side_session_height(snapshot);
-            add_section(session_h, &mut height);
-        }
-
-        if show_settings_section {
-            let settings_h = self.side_settings_height(snapshot);
-            add_section(settings_h, &mut height);
-        }
+        add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
 
         height += Self::SIDE_FOOTER_PADDING;
 
@@ -582,4 +599,20 @@ impl ToolbarLayoutSpec {
             expanded_height
         }
     }
+}
+
+fn add_drawer_tabs_once(
+    spec: &ToolbarLayoutSpec,
+    snapshot: &ToolbarSnapshot,
+    height: &mut f64,
+    added: &mut bool,
+) {
+    if *added || !snapshot.drawer_open {
+        return;
+    }
+    let tabs_h = spec.side_drawer_tabs_height(snapshot);
+    if tabs_h > 0.0 {
+        *height += tabs_h + ToolbarLayoutSpec::SIDE_SECTION_GAP;
+    }
+    *added = true;
 }

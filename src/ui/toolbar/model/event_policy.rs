@@ -188,6 +188,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ToggleDelaySliders(_)
         | ToolbarEvent::SetToolbarLayoutMode(_)
         | ToolbarEvent::SetToolbarItemHidden(_, _)
+        | ToolbarEvent::MoveToolbarItem { .. }
+        | ToolbarEvent::DragToolbarItemOver { .. }
+        | ToolbarEvent::ResetToolbarItemOrder(_)
         | ToolbarEvent::ResetToolbarItemHiddenOverrides => ToolbarPersistence::Persist(Toolbar),
         ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Persist(History),
         ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Persist(Ui(StatusBar)),

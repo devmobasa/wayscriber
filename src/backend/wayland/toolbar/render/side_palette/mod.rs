@@ -20,6 +20,7 @@ use anyhow::Result;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::ToolbarDrawerTab;
+use crate::ui::toolbar::model;
 use crate::ui::toolbar::snapshot::ToolContext;
 use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 
@@ -117,66 +118,87 @@ pub fn render_side_palette(
         return Ok(());
     }
 
-    // Color section: only show when the tool needs color
-    let colors_info =
-        if tool_context.needs_color && !snapshot.side_section_hidden(ToolbarSideSection::Colors) {
-            colors::draw_colors_section(&mut layout, &mut y)
-        } else {
-            None
-        };
-
-    // Presets section (always shown when enabled)
-    let hover_preset_color = if snapshot.side_section_hidden(ToolbarSideSection::Presets) {
-        None
-    } else {
-        presets::draw_presets_section(&mut layout, &mut y)
-    };
+    let mut colors_info = None;
+    let mut hover_preset_color = None;
+    let mut drawer_tabs_drawn = false;
+    let mut thickness_block_drawn = false;
+    let mut text_block_drawn = false;
+    for section in model::ordered_side_sections(snapshot) {
+        match section {
+            ToolbarSideSection::Colors
+                if tool_context.needs_color
+                    && !snapshot.side_section_hidden(ToolbarSideSection::Colors) =>
+            {
+                colors_info = colors::draw_colors_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Presets
+                if !snapshot.side_section_hidden(ToolbarSideSection::Presets) =>
+            {
+                hover_preset_color = presets::draw_presets_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Thickness
+            | ToolbarSideSection::EraserMode
+            | ToolbarSideSection::PolygonSides
+                if tool_context.needs_thickness && !thickness_block_drawn =>
+            {
+                thickness_block_drawn = true;
+                thickness::draw_thickness_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::ArrowLabels
+                if tool_context.show_arrow_labels
+                    && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels) =>
+            {
+                arrow::draw_arrow_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::StepMarkers
+                if tool_context.show_step_counter
+                    && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers) =>
+            {
+                step_marker::draw_step_marker_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::MarkerOpacity
+                if tool_context.show_marker_opacity
+                    && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity) =>
+            {
+                marker::draw_marker_opacity_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::TextSize | ToolbarSideSection::Font
+                if tool_context.show_font_controls && !text_block_drawn =>
+            {
+                text_block_drawn = true;
+                text::draw_text_controls_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Actions => {
+                draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
+                actions::draw_actions_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Boards => {
+                draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
+                boards::draw_boards_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Pages => {
+                draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
+                pages::draw_pages_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::StepUndo => {
+                draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
+                step::draw_step_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Session => {
+                draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
+                session::draw_session_section(&mut layout, &mut y);
+            }
+            ToolbarSideSection::Settings => {
+                draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
+                settings::draw_settings_section(&mut layout, &mut y);
+            }
+            _ => {}
+        }
+    }
+    draw_drawer_tabs_once(&mut layout, &mut y, &mut drawer_tabs_drawn);
     if let (Some(color), Some(info)) = (hover_preset_color, &colors_info) {
         colors::draw_preset_hover_highlight(&layout, info, color);
     }
-
-    // Thickness/size slider: show when tool needs thickness
-    if tool_context.needs_thickness {
-        thickness::draw_thickness_section(&mut layout, &mut y);
-    }
-
-    // Arrow labels: show when arrow tool is active
-    if tool_context.show_arrow_labels
-        && !snapshot.side_section_hidden(ToolbarSideSection::ArrowLabels)
-    {
-        arrow::draw_arrow_section(&mut layout, &mut y);
-    }
-
-    // Step marker counter: show when step marker tool is active
-    if tool_context.show_step_counter
-        && !snapshot.side_section_hidden(ToolbarSideSection::StepMarkers)
-    {
-        step_marker::draw_step_marker_section(&mut layout, &mut y);
-    }
-
-    // Marker opacity: show when marker tool is active
-    if tool_context.show_marker_opacity
-        && !snapshot.side_section_hidden(ToolbarSideSection::MarkerOpacity)
-    {
-        marker::draw_marker_opacity_section(&mut layout, &mut y);
-    }
-
-    // Text controls: show when text/note mode is active
-    if tool_context.show_font_controls
-        && (!snapshot.side_section_hidden(ToolbarSideSection::TextSize)
-            || !snapshot.side_section_hidden(ToolbarSideSection::Font))
-    {
-        text::draw_text_controls_section(&mut layout, &mut y);
-    }
-
-    // Drawer, actions, and other sections (always available based on settings)
-    drawer::draw_drawer_tabs(&mut layout, &mut y);
-    actions::draw_actions_section(&mut layout, &mut y);
-    boards::draw_boards_section(&mut layout, &mut y);
-    pages::draw_pages_section(&mut layout, &mut y);
-    step::draw_step_section(&mut layout, &mut y);
-    session::draw_session_section(&mut layout, &mut y);
-    settings::draw_settings_section(&mut layout, &mut y);
 
     draw_tooltip_with_delay(
         ctx,
@@ -188,4 +210,12 @@ pub fn render_side_palette(
         hover_start,
     );
     Ok(())
+}
+
+fn draw_drawer_tabs_once(layout: &mut SidePaletteLayout<'_>, y: &mut f64, drawn: &mut bool) {
+    if *drawn {
+        return;
+    }
+    drawer::draw_drawer_tabs(layout, y);
+    *drawn = true;
 }

@@ -4,7 +4,7 @@ use super::super::fields::{
     ToolbarOverrideField, TripletField,
 };
 use super::draft::ConfigDraft;
-use wayscriber::config::ToolbarItemId;
+use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
 impl ConfigDraft {
     pub fn apply_toolbar_layout_mode(&mut self, mode: ToolbarLayoutModeOption) {
@@ -34,6 +34,19 @@ impl ConfigDraft {
 
     pub fn set_toolbar_item_visible(&mut self, id: ToolbarItemId, visible: bool) {
         self.ui_toolbar_items.set_hidden(id, !visible);
+    }
+
+    pub fn move_toolbar_item(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        id: ToolbarItemId,
+        delta: isize,
+    ) {
+        self.ui_toolbar_items.move_item_by(group, id, delta);
+    }
+
+    pub fn reset_toolbar_item_order(&mut self, group: ToolbarItemOrderGroup) {
+        self.ui_toolbar_items.reset_known_order_to_defaults(group);
     }
 
     pub fn set_mouse_drag_tool(

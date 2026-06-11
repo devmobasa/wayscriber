@@ -38,19 +38,22 @@ pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessi
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
 #[allow(unused_imports)]
 pub(crate) use tools::{
-    SemanticToolIcon, common_shape_tools, current_shape_tool, default_drag_hint,
+    SemanticToolIcon, TopUtilityButton, current_shape_tool, default_drag_hint,
     default_polygon_tool, default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool,
-    polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_visible,
-    top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible, top_highlight_visible,
-    top_icon_mode_toggle_visible, top_screenshot_visible, top_shape_picker_visible,
-    top_sticky_note_visible, top_text_visible, top_tool_buttons, visible_tool_count,
-    visible_top_tool_buttons,
+    ordered_side_sections, polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible,
+    toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
+    top_highlight_visible, top_icon_mode_toggle_visible, top_screenshot_visible,
+    top_shape_picker_visible, top_sticky_note_visible, top_text_visible, top_tool_buttons,
+    visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
+    visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
 };
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ToolbarLayoutMode;
+    use crate::config::{
+        ToolbarGroupId, ToolbarLayoutMode, toolbar_item_definitions, toolbar_item_ids as ids,
+    };
     use crate::input::ToolbarDrawerTab;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
@@ -216,7 +219,8 @@ mod tests {
         snapshot.drawer_tab = ToolbarDrawerTab::App;
         snapshot.show_settings_section = true;
         snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
-            hidden: vec!["top.tool.pen".to_string()],
+            hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
+            order: crate::config::ToolbarItemOrderConfig::default(),
         }
         .resolved();
 
@@ -253,11 +257,12 @@ mod tests {
             model
                 .item_overrides()
                 .iter()
-                .any(|item| item.id.as_str() == "top.tool.pen" && !item.shown)
+                .any(|item| item.id == ids::TOP_TOOL_PEN && !item.shown)
         );
         assert!(!model.item_overrides().iter().any(|item| {
-            item.id.as_str() == "side.group.settings"
-                || item.id.as_str().starts_with("side.settings.")
+            toolbar_item_definitions().iter().any(|definition| {
+                definition.id == item.id && definition.group == Some(ToolbarGroupId::Settings)
+            })
         }));
         assert!(model.buttons().iter().any(|button| matches!(
             &button.event,

@@ -48,11 +48,13 @@ pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use status_bar::StatusBarStyle;
 #[cfg(tablet)]
 pub use tablet::{StylusButtonBinding, TabletInputConfig};
+pub use toolbar::ids as toolbar_item_ids;
 #[allow(unused_imports)]
 pub use toolbar::{
     ResolvedToolbarItems, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
-    ToolbarItemDefinition, ToolbarItemId, ToolbarItemSurface, ToolbarItemsConfig,
-    ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, ToolbarSectionDefaults,
-    toolbar_item_definitions,
+    ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
+    ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
+    ToolbarModeOverrides, ToolbarSectionDefaults, toolbar_item_definitions,
+    toolbar_item_order_group,
 };
 pub use ui::UiConfig;
