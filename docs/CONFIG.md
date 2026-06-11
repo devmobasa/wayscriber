@@ -296,8 +296,8 @@ show_status_board_badge = true
 # Show page counter in the status bar
 show_status_page_badge = true
 
-# Show the board/page badge even when the status bar is visible
-show_page_badge_with_status_bar = false
+# Show the floating board/page badge even when the status bar is visible
+show_floating_badge_always = false
 
 # Show a small "FROZEN" badge when frozen mode is active
 show_frozen_badge = false
@@ -984,6 +984,12 @@ undo = ["Ctrl+Z"]
 # Redo last undone annotation
 redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
 
+# Optional undo/redo batch actions
+undo_all = []
+redo_all = []
+undo_all_delayed = []
+redo_all_delayed = []
+
 # Duplicate current selection
 duplicate_selection = ["Ctrl+D"]
 
@@ -1073,6 +1079,7 @@ board_9 = ["Ctrl+Shift+9"]
 board_prev = ["Ctrl+Shift+ArrowLeft"]
 board_next = ["Ctrl+Shift+ArrowRight"]
 board_new = ["Ctrl+Shift+N"]
+board_duplicate = ["Ctrl+Shift+D"]
 board_delete = ["Ctrl+Shift+Delete"]
 board_picker = ["Ctrl+Shift+B"]
 
@@ -1086,6 +1093,9 @@ page_delete = ["Ctrl+Alt+Delete"]
 
 # Toggle help overlay
 toggle_help = ["F10", "F1"]
+
+# Toggle quick reference overlay
+toggle_quick_help = ["Shift+F1"]
 
 # Toggle status bar visibility
 toggle_status_bar = ["F12", "F4"]
@@ -1126,6 +1136,9 @@ open_context_menu = ["Shift+F10", "Menu"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
+
+# Toggle command palette
+toggle_command_palette = ["Ctrl+K"]
 
 # Color selection shortcuts
 set_color_red = ["R"]
