@@ -1,5 +1,6 @@
 use std::env;
 
+use crate::env_vars::RUST_LOG_ENV;
 use log::{Level, LevelFilter};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,7 +12,7 @@ pub(super) struct LogFilter {
 
 impl LogFilter {
     pub(super) fn from_env() -> Self {
-        match env::var("RUST_LOG") {
+        match env::var(RUST_LOG_ENV) {
             Ok(value) => Self::parse(&value, LevelFilter::Off),
             Err(_) => Self::parse("info", LevelFilter::Info),
         }

@@ -1,11 +1,12 @@
 use super::super::base::{InputState, UiToastKind};
 use crate::config::Config;
+use crate::env_vars::CONFIGURATOR_ENV;
 use std::io::ErrorKind;
 use std::process::{Command, Stdio};
 
 impl InputState {
     pub(crate) fn launch_configurator(&mut self) {
-        let binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
+        let binary = std::env::var(CONFIGURATOR_ENV)
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
         match Command::new(&binary)
@@ -24,7 +25,7 @@ impl InputState {
             Err(err) => {
                 if err.kind() == ErrorKind::NotFound {
                     log::error!(
-                        "Configurator not found (looked for '{binary}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path."
+                        "Configurator not found (looked for '{binary}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set {CONFIGURATOR_ENV} to its path."
                     );
                     if self.open_config_file_default() {
                         log::info!(
@@ -39,7 +40,7 @@ impl InputState {
                 } else {
                     log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
                     log::error!(
-                        "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
+                        "Set {CONFIGURATOR_ENV} to override the executable path if needed."
                     );
                     self.set_ui_toast(
                         UiToastKind::Error,

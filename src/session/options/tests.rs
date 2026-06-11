@@ -15,6 +15,7 @@ use super::identifiers::{resolve_display_id, sanitize_identifier};
 use super::types::{SessionOptions, SessionTarget};
 use super::validation;
 use crate::config::{SessionConfig, SessionStorageMode};
+use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -38,10 +39,10 @@ fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let prev = env::var_os("WAYLAND_DISPLAY");
+    let prev = env::var_os(WAYLAND_DISPLAY_ENV);
     // SAFETY: serialized via ENV_MUTEX
     unsafe {
-        env::set_var("WAYLAND_DISPLAY", "wayland-0");
+        env::set_var(WAYLAND_DISPLAY_ENV, "wayland-0");
     }
 
     let from_arg = resolve_display_id(Some("custom-display"));
@@ -51,8 +52,8 @@ fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
     assert_eq!(from_env, "wayland_0");
 
     match prev {
-        Some(v) => unsafe { env::set_var("WAYLAND_DISPLAY", v) },
-        None => unsafe { env::remove_var("WAYLAND_DISPLAY") },
+        Some(v) => unsafe { env::set_var(WAYLAND_DISPLAY_ENV, v) },
+        None => unsafe { env::remove_var(WAYLAND_DISPLAY_ENV) },
     }
 }
 

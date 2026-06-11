@@ -38,7 +38,7 @@ trait Request {
     ///
     /// # Signal Arguments
     /// * `response` - Response code (0 = success, 1 = cancelled, 2 = other error)
-    /// * `results` - Dictionary containing the results (e.g., "uri" key)
+    /// * `results` - Dictionary containing the screenshot URI result key
     #[zbus(signal)]
     fn response(&self, response: u32, results: HashMap<String, OwnedValue>) -> zbus::Result<()>;
 }
@@ -47,6 +47,9 @@ struct PortalAttempt {
     label: &'static str,
     options: HashMap<String, zbus::zvariant::Value<'static>>,
 }
+
+const PORTAL_RESULT_URI_KEY: &str = "uri";
+const PORTAL_OPTION_INTERACTIVE_KEY: &str = "interactive";
 
 /// Capture a screenshot using xdg-desktop-portal.
 ///
@@ -168,8 +171,10 @@ fn parse_response(
     match response_code {
         0 => {
             // Success - extract URI from results.
-            let uri_value = results.get("uri").ok_or_else(|| {
-                CaptureError::InvalidResponse("No 'uri' field in response".to_string())
+            let uri_value = results.get(PORTAL_RESULT_URI_KEY).ok_or_else(|| {
+                CaptureError::InvalidResponse(format!(
+                    "No '{PORTAL_RESULT_URI_KEY}' field in response"
+                ))
             })?;
 
             // Extract string from OwnedValue.
@@ -212,14 +217,14 @@ fn build_portal_options(
 
     match capture_type {
         CaptureType::FullScreen => {
-            options.insert("interactive".to_string(), false.into());
+            options.insert(PORTAL_OPTION_INTERACTIVE_KEY.to_string(), false.into());
         }
         CaptureType::ActiveWindow => {
-            options.insert("interactive".to_string(), true.into());
+            options.insert(PORTAL_OPTION_INTERACTIVE_KEY.to_string(), true.into());
         }
         CaptureType::Selection { .. } => {
             // Interactive mode for selection.
-            options.insert("interactive".to_string(), true.into());
+            options.insert(PORTAL_OPTION_INTERACTIVE_KEY.to_string(), true.into());
         }
     }
 
@@ -229,7 +234,7 @@ fn build_portal_options(
 /// Active-window capture options (user picks window interactively).
 fn build_active_window_interactive_options() -> HashMap<String, zbus::zvariant::Value<'static>> {
     let mut options = HashMap::new();
-    options.insert("interactive".to_string(), true.into());
+    options.insert(PORTAL_OPTION_INTERACTIVE_KEY.to_string(), true.into());
     options
 }
 
@@ -255,7 +260,7 @@ mod tests {
 
         // Full screen should be non-interactive.
         assert_eq!(
-            options.get("interactive"),
+            options.get(PORTAL_OPTION_INTERACTIVE_KEY),
             Some(&zbus::zvariant::Value::from(false))
         );
     }
@@ -271,7 +276,7 @@ mod tests {
 
         // Selection should be interactive.
         assert_eq!(
-            options.get("interactive"),
+            options.get(PORTAL_OPTION_INTERACTIVE_KEY),
             Some(&zbus::zvariant::Value::from(true))
         );
     }
@@ -282,10 +287,10 @@ mod tests {
         assert_eq!(attempts.len(), 1);
         assert_eq!(attempts[0].label, "active-window-interactive");
         assert_eq!(
-            attempts[0].options.get("interactive"),
+            attempts[0].options.get(PORTAL_OPTION_INTERACTIVE_KEY),
             Some(&zbus::zvariant::Value::from(true))
         );
-        assert!(!attempts[0].options.contains_key("window"));
+        assert_eq!(attempts[0].options.len(), 1);
     }
 
     #[test]
@@ -293,7 +298,7 @@ mod tests {
         let options = build_active_window_interactive_options();
 
         assert_eq!(
-            options.get("interactive"),
+            options.get(PORTAL_OPTION_INTERACTIVE_KEY),
             Some(&zbus::zvariant::Value::from(true))
         );
     }

@@ -1,20 +1,18 @@
 use std::env;
 
+use crate::env_vars::DESKTOP_ENV_KEYS;
+
 fn use_ubuntu_page_navigation_defaults() -> bool {
     if !cfg!(target_os = "linux") {
         return false;
     }
-    [
-        "XDG_CURRENT_DESKTOP",
-        "XDG_SESSION_DESKTOP",
-        "DESKTOP_SESSION",
-    ]
-    .iter()
-    .filter_map(|key| env::var(key).ok())
-    .any(|value| {
-        let value = value.to_lowercase();
-        value.contains("ubuntu") || value.contains("gnome")
-    })
+    DESKTOP_ENV_KEYS
+        .iter()
+        .filter_map(|key| env::var(key).ok())
+        .any(|value| {
+            let value = value.to_lowercase();
+            value.contains("ubuntu") || value.contains("gnome")
+        })
 }
 
 pub(crate) fn default_toggle_whiteboard() -> Vec<String> {

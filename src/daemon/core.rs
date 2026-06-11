@@ -14,6 +14,7 @@ use std::time::Duration;
 
 #[cfg(test)]
 use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
+use crate::env_vars::NO_TRAY_ENV;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::tray_action::TrayAction;
@@ -460,7 +461,7 @@ impl Daemon {
                 Err(err) => {
                     warn!("System tray unavailable: {}", err);
                     warn!(
-                        "Continuing without system tray; use --no-tray or WAYSCRIBER_NO_TRAY=1 to silence this warning"
+                        "Continuing without system tray; use --no-tray or {NO_TRAY_ENV}=1 to silence this warning"
                     );
                 }
             }

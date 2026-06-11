@@ -1,4 +1,5 @@
 use super::*;
+use crate::env_vars::TOOLBAR_POINTER_LOCK_ENV;
 use wayland_client::Proxy;
 
 impl WaylandState {
@@ -19,7 +20,7 @@ impl WaylandState {
             surface_id(surface)
         ));
         if !toolbar_pointer_lock_enabled() {
-            log::info!("skip pointer lock: disabled via WAYSCRIBER_TOOLBAR_POINTER_LOCK");
+            log::info!("skip pointer lock: disabled via {TOOLBAR_POINTER_LOCK_ENV}");
             return;
         }
         if self.pointer_lock_active() {

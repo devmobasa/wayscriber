@@ -4,6 +4,7 @@ use crate::draw::{
     Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, REGULAR_POLYGON_DEFAULT_SIDES,
     Shape, ShapeId,
 };
+use crate::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV};
 use crate::input::{
     BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, ClickHighlightSettings, DrawingState, EraserMode,
     Tool,
@@ -25,11 +26,11 @@ struct EnvGuard {
 impl EnvGuard {
     fn set_xdg_data_home(path: &Path) -> Self {
         let guard = crate::test_env::lock();
-        let catalog_hooks = std::env::var_os("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS");
-        let xdg_data_home = std::env::var_os("XDG_DATA_HOME");
+        let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
+        let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
         unsafe {
-            std::env::set_var("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS", path);
-            std::env::set_var("XDG_DATA_HOME", path);
+            std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
+            std::env::set_var(XDG_DATA_HOME_ENV, path);
         }
         Self {
             _guard: guard,
@@ -42,14 +43,12 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.catalog_hooks.take() {
-            Some(value) => unsafe {
-                std::env::set_var("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS", value)
-            },
-            None => unsafe { std::env::remove_var("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS") },
+            Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
+            None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
         }
         match self.xdg_data_home.take() {
-            Some(value) => unsafe { std::env::set_var("XDG_DATA_HOME", value) },
-            None => unsafe { std::env::remove_var("XDG_DATA_HOME") },
+            Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
+            None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
         }
     }
 }

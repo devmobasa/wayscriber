@@ -16,6 +16,8 @@ use smithay_client_toolkit::{
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
+use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
+
 use super::super::state::{WaylandGlobals, WaylandState};
 
 // Freeze/zoom capture currently consumes wl_shm buffer events and ignores linux-dmabuf.
@@ -56,9 +58,9 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         }
         Err(err) => {
             let desktop_env =
-                std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".into());
+                std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
             let session_env =
-                std::env::var("XDG_SESSION_DESKTOP").unwrap_or_else(|_| "unknown".into());
+                std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
             warn!(
                 "Layer shell not available: {} (desktop='{}', session='{}'); toolbars will be disabled and xdg fallback may not cover docks/panels.",
                 err, desktop_env, session_env

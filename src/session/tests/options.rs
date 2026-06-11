@@ -1,5 +1,6 @@
 use super::super::*;
 use crate::config::{SessionConfig, SessionStorageMode};
+use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 #[test]
 fn options_from_config_custom_storage() {
@@ -37,14 +38,14 @@ fn options_from_config_config_storage_uses_config_dir() {
         ..SessionConfig::default()
     };
 
-    let original_display = std::env::var_os("WAYLAND_DISPLAY");
+    let original_display = std::env::var_os(WAYLAND_DISPLAY_ENV);
     unsafe {
-        std::env::remove_var("WAYLAND_DISPLAY");
+        std::env::remove_var(WAYLAND_DISPLAY_ENV);
     }
 
     let mut options = options_from_config(&cfg, temp.path(), None).unwrap();
     if let Some(value) = original_display {
-        unsafe { std::env::set_var("WAYLAND_DISPLAY", value) }
+        unsafe { std::env::set_var(WAYLAND_DISPLAY_ENV, value) }
     }
 
     assert_eq!(options.base_dir, temp.path());

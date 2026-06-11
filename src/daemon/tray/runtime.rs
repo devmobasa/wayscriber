@@ -25,9 +25,15 @@ use super::super::types::TrayStatusShared;
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use crate::config::Config;
+#[cfg(feature = "tray")]
+use crate::env_vars::CONFIGURATOR_ENV;
 
 #[cfg(feature = "tray")]
 const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(feature = "tray")]
+const STATUS_NOTIFIER_WATCHER_BUS: &str = "org.kde.StatusNotifierWatcher";
+#[cfg(feature = "tray")]
+const STATUS_NOTIFIER_WATCHER_PATH: &str = "/StatusNotifierWatcher";
 
 #[cfg(feature = "tray")]
 fn load_session_resume_enabled_from_config() -> bool {
@@ -88,8 +94,8 @@ pub(crate) fn start_system_tray(
     overlay_pid: Arc<AtomicU32>,
     tray_status: Arc<TrayStatusShared>,
 ) -> Result<JoinHandle<()>> {
-    let configurator_binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
-        .unwrap_or_else(|_| "wayscriber-configurator".to_string());
+    let configurator_binary =
+        std::env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
     let session_resume_enabled = load_session_resume_enabled_from_config();
 
     let tray_quit_flag = quit_flag.clone();
@@ -216,9 +222,9 @@ async fn log_status_notifier_state() {
 
     let proxy = match Proxy::new(
         &conn,
-        "org.kde.StatusNotifierWatcher",
-        "/StatusNotifierWatcher",
-        "org.kde.StatusNotifierWatcher",
+        STATUS_NOTIFIER_WATCHER_BUS,
+        STATUS_NOTIFIER_WATCHER_PATH,
+        STATUS_NOTIFIER_WATCHER_BUS,
     )
     .await
     {

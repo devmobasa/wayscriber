@@ -9,6 +9,11 @@ use super::shortcut_hint_io::configured_toggle_shortcut_hint;
 #[cfg(feature = "tray")]
 use crate::config::{Action, action_label};
 #[cfg(feature = "tray")]
+use crate::env_vars::{
+    DESKTOP_SESSION_ENV, ICON_THEME_PATH_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV,
+    XDG_SESSION_DESKTOP_ENV,
+};
+#[cfg(feature = "tray")]
 use crate::label_format::format_binding_label;
 #[cfg(feature = "tray")]
 use crate::tray_action::TrayAction;
@@ -291,16 +296,16 @@ impl ksni::Tray for WayscriberTray {
 
 #[cfg(feature = "tray")]
 fn tray_theme_icons_enabled() -> bool {
-    if env::var_os("WAYSCRIBER_TRAY_FORCE_PIXMAP").is_some() {
+    if env::var_os(TRAY_FORCE_PIXMAP_ENV).is_some() {
         return false;
     }
-    let desktop_env = env::var("XDG_CURRENT_DESKTOP")
+    let desktop_env = env::var(XDG_CURRENT_DESKTOP_ENV)
         .unwrap_or_default()
         .to_lowercase();
-    let session_env = env::var("XDG_SESSION_DESKTOP")
+    let session_env = env::var(XDG_SESSION_DESKTOP_ENV)
         .unwrap_or_default()
         .to_lowercase();
-    let desktop_session = env::var("DESKTOP_SESSION")
+    let desktop_session = env::var(DESKTOP_SESSION_ENV)
         .unwrap_or_default()
         .to_lowercase();
     tray_theme_icons_supported(&desktop_env, &session_env, &desktop_session)
@@ -317,7 +322,7 @@ fn menu_icon_name(name: &str, use_theme_icons: bool) -> String {
 
 #[cfg(feature = "tray")]
 fn resolve_icon_theme_path() -> String {
-    if let Ok(value) = env::var("WAYSCRIBER_ICON_THEME_PATH") {
+    if let Ok(value) = env::var(ICON_THEME_PATH_ENV) {
         return value;
     }
     installed_icon_theme_path()

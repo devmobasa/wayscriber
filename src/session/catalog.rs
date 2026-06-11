@@ -7,6 +7,9 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(test)]
+use crate::env_vars::CATALOG_HOOKS_TEST_ENV;
+
 use super::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 use super::options::SessionOptions;
 
@@ -219,7 +222,7 @@ pub(crate) fn record_named_session_saved(options: &SessionOptions) {
 
 #[cfg(test)]
 fn test_catalog_hooks_enabled_for_path(path: &Path) -> bool {
-    let Some(raw) = std::env::var_os("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS") else {
+    let Some(raw) = std::env::var_os(CATALOG_HOOKS_TEST_ENV) else {
         return false;
     };
     if raw.is_empty() || raw == std::ffi::OsStr::new("1") {

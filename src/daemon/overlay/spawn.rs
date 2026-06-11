@@ -7,6 +7,8 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use crate::env_vars::{DESKTOP_STARTUP_ID_ENV, NO_DETACH_ENV, PATH_ENV, XDG_ACTIVATION_TOKEN_ENV};
+
 use super::super::core::Daemon;
 #[cfg(feature = "tray")]
 use super::super::types::OverlaySpawnErrorInfo;
@@ -84,7 +86,7 @@ impl Daemon {
                 );
             }
         } else {
-            warn!("Failed to resolve current executable; falling back to argv0/PATH");
+            warn!("Failed to resolve current executable; falling back to argv0/{PATH_ENV}");
         }
 
         if let Some(arg0) = env::args_os().next() {
@@ -107,7 +109,7 @@ impl Daemon {
             &mut candidates,
             &mut seen,
             OsString::from("wayscriber"),
-            "PATH",
+            PATH_ENV,
         );
 
         candidates
@@ -138,13 +140,13 @@ impl Daemon {
         }
         // Overlay children launched by daemon are already backgrounded and tracked.
         // Prevent `--active` from spawning another detached grandchild process.
-        command.env("WAYSCRIBER_NO_DETACH", "1");
+        command.env(NO_DETACH_ENV, "1");
         if let Some(token) = self.pending_activation_token.as_deref() {
-            command.env("XDG_ACTIVATION_TOKEN", token);
-            command.env("DESKTOP_STARTUP_ID", token);
+            command.env(XDG_ACTIVATION_TOKEN_ENV, token);
+            command.env(DESKTOP_STARTUP_ID_ENV, token);
         } else {
-            command.env_remove("XDG_ACTIVATION_TOKEN");
-            command.env_remove("DESKTOP_STARTUP_ID");
+            command.env_remove(XDG_ACTIVATION_TOKEN_ENV);
+            command.env_remove(DESKTOP_STARTUP_ID_ENV);
         }
         if let Some(request_override) =
             request.and_then(|request| request.session_resume_override())
@@ -215,7 +217,7 @@ impl Daemon {
         self.pending_activation_token = None;
         warn!("Overlay spawn attempts failed: {}", failures.join("; "));
         Err(anyhow!(
-            "Unable to launch overlay process (tried current_exe/argv0/PATH)"
+            "Unable to launch overlay process (tried current_exe/argv0/{PATH_ENV})"
         ))
     }
 }
@@ -384,7 +386,7 @@ mod tests {
             &mut candidates,
             &mut seen,
             OsString::from("wayscriber"),
-            "PATH",
+            super::PATH_ENV,
         );
         Daemon::push_spawn_candidate(
             &mut candidates,
@@ -394,6 +396,6 @@ mod tests {
         );
 
         assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].source, "PATH");
+        assert_eq!(candidates[0].source, super::PATH_ENV);
     }
 }

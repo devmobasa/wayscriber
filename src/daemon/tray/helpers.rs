@@ -1,6 +1,8 @@
 #[cfg(feature = "tray")]
 use crate::config::Config;
 #[cfg(feature = "tray")]
+use crate::env_vars::CONFIGURATOR_ENV;
+#[cfg(feature = "tray")]
 use crate::paths::log_dir;
 #[cfg(feature = "tray")]
 use crate::session::{clear_session, options_from_config};
@@ -45,7 +47,7 @@ impl WayscriberTray {
                 let not_found = err.kind() == ErrorKind::NotFound;
                 let opened_config = if not_found {
                     error!(
-                        "Configurator not found (looked for '{}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path.",
+                        "Configurator not found (looked for '{}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set {CONFIGURATOR_ENV} to its path.",
                         self.configurator_binary
                     );
                     self.open_config_file()
@@ -54,9 +56,7 @@ impl WayscriberTray {
                         "Failed to launch wayscriber-configurator using '{}': {}",
                         self.configurator_binary, err
                     );
-                    error!(
-                        "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
-                    );
+                    error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
                     false
                 };
                 #[cfg(feature = "dbus")]

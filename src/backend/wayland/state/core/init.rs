@@ -1,5 +1,6 @@
 use super::super::buffer_damage::BufferDamageTracker;
 use super::super::*;
+use crate::env_vars::{FORCE_INLINE_TOOLBARS_ENV, XDG_ACTIVATION_TOKEN_ENV};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
@@ -60,7 +61,7 @@ impl WaylandState {
             layer_shell.is_none() || force_inline_toolbars || main_surface_uses_overlay_layer;
         if force_inline_toolbars {
             info!(
-                "Forcing inline toolbars (config/ui.toolbar.force_inline or WAYSCRIBER_FORCE_INLINE_TOOLBARS)"
+                "Forcing inline toolbars (config/ui.toolbar.force_inline or {FORCE_INLINE_TOOLBARS_ENV})"
             );
         }
         if main_surface_uses_overlay_layer {
@@ -167,7 +168,7 @@ impl WaylandState {
 }
 
 fn startup_activation_token_from_env() -> Option<String> {
-    std::env::var("XDG_ACTIVATION_TOKEN")
+    std::env::var(XDG_ACTIVATION_TOKEN_ENV)
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())

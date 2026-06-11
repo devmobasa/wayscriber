@@ -1,3 +1,6 @@
+use wayscriber::env_vars::{
+    HYPRLAND_INSTANCE_SIGNATURE_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
+};
 use wayscriber::shortcut_hint::{
     PortalShortcutDropInState, ShortcutRuntimeBackend, ShortcutRuntimeInputs, is_gnome_desktop,
     resolve_shortcut_runtime_backend,
@@ -13,11 +16,11 @@ pub enum DesktopEnvironment {
 
 impl DesktopEnvironment {
     pub fn detect_current() -> Self {
-        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+        if std::env::var_os(HYPRLAND_INSTANCE_SIGNATURE_ENV).is_some() {
             return Self::Hyprland;
         }
-        let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-        let session = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
+        let current = std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
+        let session = std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
         Self::from_desktop_strings(&current, &session)
     }
 

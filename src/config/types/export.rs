@@ -4,17 +4,27 @@ use super::capture::CaptureConfig;
 
 pub const PDF_LABEL_DEFAULT_TEMPLATE: &str =
     "{board_name} - {page_name} ({document_page}/{document_pages})";
+pub const PDF_LABEL_APP_BOARD: &str = "app_board";
+pub const PDF_LABEL_APP_BOARDS: &str = "app_boards";
+pub const PDF_LABEL_EXPORT_BOARD: &str = "export_board";
+pub const PDF_LABEL_EXPORT_BOARDS: &str = "export_boards";
+pub const PDF_LABEL_PAGE: &str = "page";
+pub const PDF_LABEL_PAGES: &str = "pages";
+pub const PDF_LABEL_DOCUMENT_PAGE: &str = "document_page";
+pub const PDF_LABEL_DOCUMENT_PAGES: &str = "document_pages";
+pub const PDF_LABEL_BOARD_NAME: &str = "board_name";
+pub const PDF_LABEL_PAGE_NAME: &str = "page_name";
 pub const PDF_LABEL_PLACEHOLDERS: &[&str] = &[
-    "app_board",
-    "app_boards",
-    "export_board",
-    "export_boards",
-    "page",
-    "pages",
-    "document_page",
-    "document_pages",
-    "board_name",
-    "page_name",
+    PDF_LABEL_APP_BOARD,
+    PDF_LABEL_APP_BOARDS,
+    PDF_LABEL_EXPORT_BOARD,
+    PDF_LABEL_EXPORT_BOARDS,
+    PDF_LABEL_PAGE,
+    PDF_LABEL_PAGES,
+    PDF_LABEL_DOCUMENT_PAGE,
+    PDF_LABEL_DOCUMENT_PAGES,
+    PDF_LABEL_BOARD_NAME,
+    PDF_LABEL_PAGE_NAME,
 ];
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]

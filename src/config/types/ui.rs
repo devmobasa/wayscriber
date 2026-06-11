@@ -1,4 +1,5 @@
 use crate::config::enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
+use crate::env_vars::DESKTOP_ENV_KEYS;
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -167,17 +168,13 @@ fn use_gnome_fallback_defaults() -> bool {
     if !cfg!(target_os = "linux") {
         return false;
     }
-    [
-        "XDG_CURRENT_DESKTOP",
-        "XDG_SESSION_DESKTOP",
-        "DESKTOP_SESSION",
-    ]
-    .iter()
-    .filter_map(|key| env::var(key).ok())
-    .any(|value| {
-        let value = value.to_lowercase();
-        value.contains("ubuntu") || value.contains("gnome")
-    })
+    DESKTOP_ENV_KEYS
+        .iter()
+        .filter_map(|key| env::var(key).ok())
+        .any(|value| {
+            let value = value.to_lowercase();
+            value.contains("ubuntu") || value.contains("gnome")
+        })
 }
 
 fn default_help_overlay_context_filter() -> bool {
