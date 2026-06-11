@@ -32,7 +32,11 @@ use super::tray::start_system_tray;
 use super::types::TrayStatusShared;
 use super::types::{AlreadyRunningError, BackendRunner, OverlayState};
 
-const VISIBILITY_TOGGLE_DEBOUNCE: Duration = Duration::from_millis(700);
+// Some desktop custom shortcut runners, observed on KDE, can launch the same
+// plain `--daemon-toggle` command twice about 400-600ms apart from one key press.
+// Suppress only duplicate plain toggles after a successful toggle completes, so
+// typed requests still run.
+const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
 
 pub struct Daemon {
     pub(super) overlay_state: OverlayState,
@@ -58,7 +62,7 @@ pub struct Daemon {
     pub(super) overlay_spawn_failures: u32,
     pub(super) overlay_spawn_next_retry: Option<std::time::Instant>,
     pub(super) overlay_spawn_backoff_logged: bool,
-    pub(super) last_visibility_toggle_at: Option<Instant>,
+    pub(super) last_plain_visibility_toggle_completed_at: Option<Instant>,
     #[cfg(feature = "tray")]
     pub(super) tray_status: Arc<TrayStatusShared>,
 }
@@ -97,7 +101,7 @@ impl Daemon {
             overlay_spawn_failures: 0,
             overlay_spawn_next_retry: None,
             overlay_spawn_backoff_logged: false,
-            last_visibility_toggle_at: None,
+            last_plain_visibility_toggle_completed_at: None,
             #[cfg(feature = "tray")]
             tray_status: Arc::new(TrayStatusShared::new()),
         }
@@ -133,7 +137,7 @@ impl Daemon {
             overlay_spawn_failures: 0,
             overlay_spawn_next_retry: None,
             overlay_spawn_backoff_logged: false,
-            last_visibility_toggle_at: None,
+            last_plain_visibility_toggle_completed_at: None,
             #[cfg(feature = "tray")]
             tray_status: Arc::new(TrayStatusShared::new()),
         }
@@ -198,10 +202,13 @@ impl Daemon {
             request.as_ref().is_none_or(DaemonToggleRequest::is_empty);
         if plain_visibility_toggle_requested {
             let now = Instant::now();
-            if self.last_visibility_toggle_at.is_some_and(|previous| {
-                now.saturating_duration_since(previous) < VISIBILITY_TOGGLE_DEBOUNCE
-            }) {
-                info!("Ignoring duplicate daemon visibility toggle");
+            if self
+                .last_plain_visibility_toggle_completed_at
+                .is_some_and(|previous| {
+                    now.saturating_duration_since(previous) < DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW
+                })
+            {
+                info!("Ignoring duplicate plain daemon visibility toggle");
                 return Ok(false);
             }
         }
@@ -235,7 +242,7 @@ impl Daemon {
             return Err(err);
         }
         if plain_visibility_toggle_requested {
-            self.last_visibility_toggle_at = Some(Instant::now());
+            self.last_plain_visibility_toggle_completed_at = Some(Instant::now());
         }
         Ok(false)
     }
@@ -795,7 +802,7 @@ mod tests {
             .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
             .unwrap();
         assert!(
-            hide_started.elapsed() >= VISIBILITY_TOGGLE_DEBOUNCE,
+            hide_started.elapsed() >= DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW,
             "test setup should keep hide slow enough to cross the debounce window"
         );
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
@@ -828,8 +835,8 @@ mod tests {
         daemon
             .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
             .unwrap();
-        daemon.last_visibility_toggle_at =
-            Some(Instant::now() - VISIBILITY_TOGGLE_DEBOUNCE - Duration::from_millis(1));
+        daemon.last_plain_visibility_toggle_completed_at =
+            Some(Instant::now() - DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW - Duration::from_millis(1));
         daemon
             .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
             .unwrap();
