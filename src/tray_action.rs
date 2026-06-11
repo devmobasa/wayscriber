@@ -180,6 +180,7 @@ pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
 #[cfg(test)]
 mod tests {
     use super::{TrayAction, queue_action, take_pending_actions};
+    use crate::env_vars::XDG_RUNTIME_DIR_ENV;
     use std::env;
     use std::sync::Mutex;
 
@@ -213,9 +214,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         queue_action(TrayAction::LightDrawOn).unwrap();
@@ -229,11 +230,11 @@ mod tests {
 
         if let Some(prev) = prev {
             unsafe {
-                env::set_var("XDG_RUNTIME_DIR", prev);
+                env::set_var(XDG_RUNTIME_DIR_ENV, prev);
             }
         } else {
             unsafe {
-                env::remove_var("XDG_RUNTIME_DIR");
+                env::remove_var(XDG_RUNTIME_DIR_ENV);
             }
         }
     }

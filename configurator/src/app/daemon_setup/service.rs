@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::models::DesktopEnvironment;
+use wayscriber::env_vars::{BIN_ENV, PATH_ENV};
 use wayscriber::runtime_capabilities::{
     RUNTIME_CAPABILITIES_FLAG, RuntimeCapabilities, parse_runtime_capabilities,
 };
@@ -73,7 +74,7 @@ pub(super) fn require_systemctl_available() -> Result<(), String> {
     if command_available("systemctl") {
         Ok(())
     } else {
-        Err("systemctl is not available in PATH.".to_string())
+        Err(format!("systemctl is not available in {PATH_ENV}."))
     }
 }
 
@@ -311,14 +312,13 @@ pub(super) fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
         return Ok(path);
     }
 
-    Err(
-        "Unable to locate `wayscriber` binary. Set WAYSCRIBER_BIN or install `wayscriber` in PATH."
-            .to_string(),
-    )
+    Err(format!(
+        "Unable to locate `wayscriber` binary. Set {BIN_ENV} or install `wayscriber` in {PATH_ENV}."
+    ))
 }
 
 fn explicit_wayscriber_binary_path() -> Option<PathBuf> {
-    env::var_os("WAYSCRIBER_BIN")
+    env::var_os(BIN_ENV)
         .map(PathBuf::from)
         .filter(|path| path.exists())
 }

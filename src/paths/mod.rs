@@ -1,17 +1,22 @@
 use std::env;
 use std::path::PathBuf;
 
+use crate::env_vars::{
+    HOME_ENV, USERPROFILE_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV, XDG_PICTURES_DIR_ENV,
+    XDG_RUNTIME_DIR_ENV,
+};
+
 /// Resolve the user's home directory.
 pub fn home_dir() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
+    env::var_os(HOME_ENV)
+        .or_else(|| env::var_os(USERPROFILE_ENV))
         .map(PathBuf::from)
         .or_else(|| env::current_dir().ok())
 }
 
 /// Resolve the XDG config directory, falling back to `~/.config`.
 pub fn config_dir() -> Option<PathBuf> {
-    if let Some(dir) = env::var_os("XDG_CONFIG_HOME")
+    if let Some(dir) = env::var_os(XDG_CONFIG_HOME_ENV)
         && !dir.is_empty()
     {
         return Some(PathBuf::from(dir));
@@ -21,7 +26,7 @@ pub fn config_dir() -> Option<PathBuf> {
 
 /// Resolve the XDG data directory, falling back to `~/.local/share`.
 pub fn data_dir() -> Option<PathBuf> {
-    if let Some(dir) = env::var_os("XDG_DATA_HOME")
+    if let Some(dir) = env::var_os(XDG_DATA_HOME_ENV)
         && !dir.is_empty()
     {
         return Some(PathBuf::from(dir));
@@ -31,7 +36,7 @@ pub fn data_dir() -> Option<PathBuf> {
 
 /// Best-effort pictures directory (XDG), falling back to `~/Pictures`.
 pub fn pictures_dir() -> Option<PathBuf> {
-    if let Some(dir) = env::var_os("XDG_PICTURES_DIR")
+    if let Some(dir) = env::var_os(XDG_PICTURES_DIR_ENV)
         && !dir.is_empty()
     {
         return Some(PathBuf::from(dir));
@@ -56,7 +61,7 @@ fn fallback_runtime_root() -> PathBuf {
 fn runtime_root() -> PathBuf {
     // Prefer XDG runtime dir for ephemeral files; fall back to data/home/temp for portability.
     #[cfg(unix)]
-    if let Some(dir) = env::var_os("XDG_RUNTIME_DIR")
+    if let Some(dir) = env::var_os(XDG_RUNTIME_DIR_ENV)
         && !dir.is_empty()
     {
         return PathBuf::from(dir).join("wayscriber");
@@ -68,31 +73,31 @@ fn runtime_root() -> PathBuf {
 }
 
 /// Location for transient tray commands.
-/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+/// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
 pub fn tray_action_file() -> PathBuf {
     runtime_root().join("tray_action")
 }
 
 /// Location for queued transient tray commands.
-/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+/// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
 pub fn tray_action_dir() -> PathBuf {
     runtime_root().join("tray-actions")
 }
 
 /// Location for transient daemon toggle requests.
-/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+/// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
 pub fn daemon_command_file() -> PathBuf {
     runtime_root().join("daemon_command.json")
 }
 
 /// Location for queued daemon toggle requests.
-/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+/// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
 pub fn daemon_command_dir() -> PathBuf {
     runtime_root().join("daemon-commands")
 }
 
 /// Location for the running daemon PID.
-/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+/// Uses [`XDG_RUNTIME_DIR_ENV`] when available; falls back to data/home/temp.
 pub fn daemon_pid_file() -> PathBuf {
     runtime_root().join("wayscriber.pid")
 }

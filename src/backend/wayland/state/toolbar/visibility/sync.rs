@@ -1,4 +1,5 @@
 use super::*;
+use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
@@ -19,8 +20,10 @@ impl WaylandState {
             return;
         }
 
-        let desktop_env = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".into());
-        let session_env = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_else(|_| "unknown".into());
+        let desktop_env =
+            std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
+        let session_env =
+            std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
         log::info!(
             "Layer-shell protocol unavailable; toolbar surfaces will not appear (desktop='{}', session='{}'). Overlay may be limited to the work area on compositors like GNOME.",
             desktop_env,

@@ -4,14 +4,14 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use crate::env_vars::{LOG_FILE_ENV, LOG_MAX_SIZE_ENV};
 use crate::{paths, time_utils};
 
 const BYTES_PER_MB: u64 = 1024 * 1024;
 const DEFAULT_LOG_MAX_BYTES: u64 = 10 * BYTES_PER_MB;
-const LOG_MAX_SIZE_ENV: &str = "WAYSCRIBER_LOG_MAX_SIZE_MB";
 
 pub(super) fn resolve_log_target() -> LogFileTarget {
-    if let Ok(path) = env::var("WAYSCRIBER_LOG_FILE")
+    if let Ok(path) = env::var(LOG_FILE_ENV)
         && !path.trim().is_empty()
     {
         let trimmed = path.trim();

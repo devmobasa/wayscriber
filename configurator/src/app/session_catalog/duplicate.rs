@@ -92,6 +92,7 @@ mod tests {
         DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability,
         ShortcutApplyCapability, ShortcutBackend,
     };
+    use wayscriber::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV};
 
     use super::*;
 
@@ -105,13 +106,13 @@ mod tests {
     impl EnvGuard {
         fn set_roots(path: &Path) -> Self {
             let guard = crate::test_env::lock();
-            let catalog_hooks = std::env::var_os("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS");
-            let xdg_data_home = std::env::var_os("XDG_DATA_HOME");
-            let xdg_runtime_dir = std::env::var_os("XDG_RUNTIME_DIR");
+            let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
+            let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
+            let xdg_runtime_dir = std::env::var_os(XDG_RUNTIME_DIR_ENV);
             unsafe {
-                std::env::set_var("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS", path);
-                std::env::set_var("XDG_DATA_HOME", path);
-                std::env::set_var("XDG_RUNTIME_DIR", path);
+                std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
+                std::env::set_var(XDG_DATA_HOME_ENV, path);
+                std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
             }
             Self {
                 catalog_hooks,
@@ -125,18 +126,16 @@ mod tests {
     impl Drop for EnvGuard {
         fn drop(&mut self) {
             match self.catalog_hooks.take() {
-                Some(value) => unsafe {
-                    std::env::set_var("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS", value)
-                },
-                None => unsafe { std::env::remove_var("WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS") },
+                Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
+                None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
             }
             match self.xdg_data_home.take() {
-                Some(value) => unsafe { std::env::set_var("XDG_DATA_HOME", value) },
-                None => unsafe { std::env::remove_var("XDG_DATA_HOME") },
+                Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
+                None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
             }
             match self.xdg_runtime_dir.take() {
-                Some(value) => unsafe { std::env::set_var("XDG_RUNTIME_DIR", value) },
-                None => unsafe { std::env::remove_var("XDG_RUNTIME_DIR") },
+                Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+                None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
             }
         }
     }

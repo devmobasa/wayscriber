@@ -2,6 +2,10 @@ use log::{info, warn};
 use std::env;
 
 use crate::config::Config;
+use crate::env_vars::{
+    DESKTOP_SESSION_ENV, SWAYSOCK_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_FULLSCREEN_ENV,
+    XDG_FULLSCREEN_FORCE_ENV, XDG_OUTPUT_ENV, XDG_SESSION_DESKTOP_ENV,
+};
 
 pub(super) struct OutputPreferences {
     pub(super) preferred_output_identity: Option<String>,
@@ -10,7 +14,7 @@ pub(super) struct OutputPreferences {
 }
 
 pub(super) fn resolve(config: &Config) -> OutputPreferences {
-    let preferred_output_identity = env::var("WAYSCRIBER_XDG_OUTPUT")
+    let preferred_output_identity = env::var(XDG_OUTPUT_ENV)
         .ok()
         .or_else(|| config.ui.preferred_output.clone());
     if let Some(ref output) = preferred_output_identity {
@@ -20,20 +24,20 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
         );
     }
 
-    let mut xdg_fullscreen = env::var("WAYSCRIBER_XDG_FULLSCREEN")
+    let mut xdg_fullscreen = env::var(XDG_FULLSCREEN_ENV)
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(config.ui.xdg_fullscreen);
-    let desktop_env = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-    let session_env = env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
-    let desktop_session = env::var("DESKTOP_SESSION").unwrap_or_default();
-    let sway_sock = env::var("SWAYSOCK").unwrap_or_default();
-    let force_fullscreen = env::var("WAYSCRIBER_XDG_FULLSCREEN_FORCE")
+    let desktop_env = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
+    let session_env = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
+    let desktop_session = env::var(DESKTOP_SESSION_ENV).unwrap_or_default();
+    let sway_sock = env::var(SWAYSOCK_ENV).unwrap_or_default();
+    let force_fullscreen = env::var(XDG_FULLSCREEN_FORCE_ENV)
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     if xdg_fullscreen && desktop_env.to_uppercase().contains("GNOME") && !force_fullscreen {
         warn!(
-            "GNOME fullscreen xdg fallback is opaque; falling back to maximized. Set WAYSCRIBER_XDG_FULLSCREEN_FORCE=1 to force fullscreen anyway."
+            "GNOME fullscreen xdg fallback is opaque; falling back to maximized. Set {XDG_FULLSCREEN_FORCE_ENV}=1 to force fullscreen anyway."
         );
         xdg_fullscreen = false;
     }

@@ -7,6 +7,7 @@ use crate::models::{
     DesktopEnvironment, LightShortcutApplyCapability, SessionCatalogState, ShortcutApplyCapability,
     ShortcutBackend,
 };
+use wayscriber::env_vars::XDG_RUNTIME_DIR_ENV;
 
 struct RuntimeEnvGuard {
     previous: Option<OsString>,
@@ -16,9 +17,9 @@ struct RuntimeEnvGuard {
 impl RuntimeEnvGuard {
     fn set_xdg_runtime_dir(path: &Path) -> Self {
         let guard = crate::test_env::lock();
-        let previous = std::env::var_os("XDG_RUNTIME_DIR");
+        let previous = std::env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            std::env::set_var("XDG_RUNTIME_DIR", path);
+            std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
         }
         Self {
             previous,
@@ -30,8 +31,8 @@ impl RuntimeEnvGuard {
 impl Drop for RuntimeEnvGuard {
     fn drop(&mut self) {
         match self.previous.take() {
-            Some(value) => unsafe { std::env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { std::env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 }

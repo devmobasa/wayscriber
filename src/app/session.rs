@@ -1,9 +1,10 @@
 use crate::cli::Cli;
+use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     let loaded = crate::config::Config::load()?;
     let config_dir = crate::config::Config::config_directory_from_source(&loaded.source)?;
-    let display_env = std::env::var("WAYLAND_DISPLAY").ok();
+    let display_env = std::env::var(WAYLAND_DISPLAY_ENV).ok();
 
     let options = if let Some(raw_path) = cli.session_file.as_ref() {
         let raw = raw_path

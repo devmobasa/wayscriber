@@ -29,9 +29,12 @@ pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
 pub use drawing::{DragButtonConfig, DrawingConfig, MouseDragToolsConfig};
 pub use export::{
-    ExportConfig, PDF_LABEL_DEFAULT_TEMPLATE, PDF_LABEL_PLACEHOLDERS, PdfExportConfig, PdfFitMode,
-    PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
-    PdfTransparentBackground, validate_pdf_label_template,
+    ExportConfig, PDF_LABEL_APP_BOARD, PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME,
+    PDF_LABEL_DEFAULT_TEMPLATE, PDF_LABEL_DOCUMENT_PAGE, PDF_LABEL_DOCUMENT_PAGES,
+    PDF_LABEL_EXPORT_BOARD, PDF_LABEL_EXPORT_BOARDS, PDF_LABEL_PAGE, PDF_LABEL_PAGE_NAME,
+    PDF_LABEL_PAGES, PDF_LABEL_PLACEHOLDERS, PdfExportConfig, PdfFitMode, PdfLabelConfig,
+    PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize, PdfTransparentBackground,
+    validate_pdf_label_template,
 };
 pub use help_overlay::HelpOverlayStyle;
 pub use history::HistoryConfig;

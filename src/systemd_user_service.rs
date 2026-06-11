@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::env_vars::{PATH_ENV, WAYLAND_DISPLAY_ENV, XDG_RUNTIME_DIR_ENV};
 use crate::paths::config_dir;
 
 pub const USER_SERVICE_NAME: &str = "wayscriber.service";
@@ -48,7 +49,7 @@ pub fn render_user_service_unit(binary_path: &Path) -> String {
     let escaped_path_env =
         escape_systemd_env_value(&format!("{binary_dir}:/usr/local/bin:/usr/bin:/bin"));
     format!(
-        "[Unit]\nDescription=Wayscriber - Screen annotation tool for Wayland\nDocumentation=https://wayscriber.com\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c '[ -n \"$WAYLAND_DISPLAY\" ] && [ -S \"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY\" ]'\nExecStart={} --daemon\nRestart=on-failure\nRestartSec=5\nRestartPreventExitStatus=75\nSuccessExitStatus=75\nEnvironment=\"PATH={}\"\n\n[Install]\nWantedBy=graphical-session.target\n",
+        "[Unit]\nDescription=Wayscriber - Screen annotation tool for Wayland\nDocumentation=https://wayscriber.com\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c '[ -n \"${WAYLAND_DISPLAY_ENV}\" ] && [ -S \"${XDG_RUNTIME_DIR_ENV}/${WAYLAND_DISPLAY_ENV}\" ]'\nExecStart={} --daemon\nRestart=on-failure\nRestartSec=5\nRestartPreventExitStatus=75\nSuccessExitStatus=75\nEnvironment=\"{PATH_ENV}={}\"\n\n[Install]\nWantedBy=graphical-session.target\n",
         quoted_exec, escaped_path_env
     )
 }

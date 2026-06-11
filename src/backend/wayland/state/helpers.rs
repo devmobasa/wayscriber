@@ -2,6 +2,11 @@ use std::{sync::OnceLock, time::Duration};
 
 use wayland_client::{Proxy, protocol::wl_surface};
 
+use crate::env_vars::{
+    DEBUG_DAMAGE_ENV, DEBUG_TOOLBAR_COLOR_ENV, DEBUG_TOOLBAR_DRAG_ENV, FORCE_INLINE_TOOLBARS_ENV,
+    TOOLBAR_DRAG_HANDOFF_MS_ENV, TOOLBAR_DRAG_PREVIEW_ENV, TOOLBAR_DRAG_THROTTLE_MS_ENV,
+    TOOLBAR_POINTER_LOCK_ENV,
+};
 use crate::{config::Config, util::Rect};
 
 #[allow(dead_code)]
@@ -72,7 +77,7 @@ pub(super) fn parse_debug_damage_env(raw: &str) -> bool {
 pub(in crate::backend::wayland) fn debug_damage_logging_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        parse_debug_damage_env(&std::env::var("WAYSCRIBER_DEBUG_DAMAGE").unwrap_or_default())
+        parse_debug_damage_env(&std::env::var(DEBUG_DAMAGE_ENV).unwrap_or_default())
     })
 }
 
@@ -83,14 +88,14 @@ pub(in crate::backend::wayland) fn surface_id(surface: &wl_surface::WlSurface) -
 pub(in crate::backend::wayland) fn debug_toolbar_drag_logging_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var("WAYSCRIBER_DEBUG_TOOLBAR_DRAG").unwrap_or_default())
+        parse_boolish_env(&std::env::var(DEBUG_TOOLBAR_DRAG_ENV).unwrap_or_default())
     })
 }
 
 pub(in crate::backend::wayland) fn debug_toolbar_color_logging_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var("WAYSCRIBER_DEBUG_TOOLBAR_COLOR").unwrap_or_default())
+        parse_boolish_env(&std::env::var(DEBUG_TOOLBAR_COLOR_ENV).unwrap_or_default())
     })
 }
 
@@ -98,26 +103,21 @@ pub(in crate::backend::wayland) fn toolbar_pointer_lock_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
         // Default ON: without pointer lock, layer-shell toolbar drags jitter/flicker as surfaces move.
-        parse_boolish_env(
-            &std::env::var("WAYSCRIBER_TOOLBAR_POINTER_LOCK").unwrap_or_else(|_| "1".into()),
-        )
+        parse_boolish_env(&std::env::var(TOOLBAR_POINTER_LOCK_ENV).unwrap_or_else(|_| "1".into()))
     })
 }
 
 pub(in crate::backend::wayland) fn toolbar_drag_preview_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        parse_boolish_env(
-            &std::env::var("WAYSCRIBER_TOOLBAR_DRAG_PREVIEW").unwrap_or_else(|_| "1".into()),
-        )
+        parse_boolish_env(&std::env::var(TOOLBAR_DRAG_PREVIEW_ENV).unwrap_or_else(|_| "1".into()))
     })
 }
 
 pub(in crate::backend::wayland) fn toolbar_drag_throttle_interval() -> Option<Duration> {
     static VALUE: OnceLock<Option<Duration>> = OnceLock::new();
     *VALUE.get_or_init(|| {
-        let raw =
-            std::env::var("WAYSCRIBER_TOOLBAR_DRAG_THROTTLE_MS").unwrap_or_else(|_| "12".into());
+        let raw = std::env::var(TOOLBAR_DRAG_THROTTLE_MS_ENV).unwrap_or_else(|_| "12".into());
         let trimmed = raw.trim();
         if trimmed.is_empty() {
             return Some(Duration::from_millis(12));
@@ -136,8 +136,7 @@ pub(in crate::backend::wayland) fn toolbar_drag_throttle_interval() -> Option<Du
 pub(in crate::backend::wayland) fn toolbar_drag_handoff_delay() -> Duration {
     static VALUE: OnceLock<Duration> = OnceLock::new();
     *VALUE.get_or_init(|| {
-        let raw =
-            std::env::var("WAYSCRIBER_TOOLBAR_DRAG_HANDOFF_MS").unwrap_or_else(|_| "250".into());
+        let raw = std::env::var(TOOLBAR_DRAG_HANDOFF_MS_ENV).unwrap_or_else(|_| "250".into());
         let Ok(ms) = raw.trim().parse::<u64>() else {
             return Duration::from_millis(250);
         };
@@ -160,7 +159,7 @@ pub(in crate::backend::wayland) fn color_log(message: impl AsRef<str>) {
 fn force_inline_env_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var("WAYSCRIBER_FORCE_INLINE_TOOLBARS").unwrap_or_default())
+        parse_boolish_env(&std::env::var(FORCE_INLINE_TOOLBARS_ENV).unwrap_or_default())
     })
 }
 

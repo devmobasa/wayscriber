@@ -1,4 +1,6 @@
 #[cfg(feature = "tray")]
+use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
+#[cfg(feature = "tray")]
 use std::env;
 #[cfg(feature = "tray")]
 use std::process::Command;
@@ -34,8 +36,8 @@ pub(super) fn configured_toggle_shortcut_hint() -> Option<String> {
 
 #[cfg(feature = "tray")]
 fn current_desktop_is_gnome() -> bool {
-    let current = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-    let session = env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
+    let current = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
+    let session = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
     is_gnome_desktop(&current, &session)
 }
 

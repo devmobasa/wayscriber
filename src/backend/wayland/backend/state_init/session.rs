@@ -3,6 +3,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
+use crate::env_vars::WAYLAND_DISPLAY_ENV;
 use crate::{RESUME_SESSION_ENV, paths, session};
 
 use super::super::helpers::resume_override_from_env;
@@ -12,7 +13,7 @@ pub(super) fn build_session_options(
     config_dir: &Path,
     named_session_file: Option<PathBuf>,
 ) -> Option<session::SessionOptions> {
-    let display_env = env::var("WAYLAND_DISPLAY").ok();
+    let display_env = env::var(WAYLAND_DISPLAY_ENV).ok();
     let resume_override = resume_override_from_env();
     let mut session_options = if let Some(path) = named_session_file {
         let mut options = session::options_from_config_for_named_file(

@@ -1,5 +1,8 @@
 use crate::config::{
-    PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition, validate_pdf_label_template,
+    PDF_LABEL_APP_BOARD, PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME, PDF_LABEL_DOCUMENT_PAGE,
+    PDF_LABEL_DOCUMENT_PAGES, PDF_LABEL_EXPORT_BOARD, PDF_LABEL_EXPORT_BOARDS, PDF_LABEL_PAGE,
+    PDF_LABEL_PAGE_NAME, PDF_LABEL_PAGES, PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition,
+    validate_pdf_label_template,
 };
 
 use super::pdf::PdfPageMetadata;
@@ -162,16 +165,16 @@ pub(crate) fn format_pdf_label_template(
 
 fn label_value<'a>(name: &str, metadata: &'a PdfPageMetadata) -> Option<&'a str> {
     match name {
-        "app_board" => Some(metadata.app_board_label.as_str()),
-        "app_boards" => Some(metadata.app_board_count_label.as_str()),
-        "export_board" => Some(metadata.export_board_label.as_str()),
-        "export_boards" => Some(metadata.export_board_count_label.as_str()),
-        "page" => Some(metadata.board_page_label.as_str()),
-        "pages" => Some(metadata.board_page_count_label.as_str()),
-        "document_page" => Some(metadata.document_page_label.as_str()),
-        "document_pages" => Some(metadata.document_page_count_label.as_str()),
-        "board_name" => Some(metadata.board_name.as_str()),
-        "page_name" => Some(metadata.page_name_label.as_str()),
+        PDF_LABEL_APP_BOARD => Some(metadata.app_board_label.as_str()),
+        PDF_LABEL_APP_BOARDS => Some(metadata.app_board_count_label.as_str()),
+        PDF_LABEL_EXPORT_BOARD => Some(metadata.export_board_label.as_str()),
+        PDF_LABEL_EXPORT_BOARDS => Some(metadata.export_board_count_label.as_str()),
+        PDF_LABEL_PAGE => Some(metadata.board_page_label.as_str()),
+        PDF_LABEL_PAGES => Some(metadata.board_page_count_label.as_str()),
+        PDF_LABEL_DOCUMENT_PAGE => Some(metadata.document_page_label.as_str()),
+        PDF_LABEL_DOCUMENT_PAGES => Some(metadata.document_page_count_label.as_str()),
+        PDF_LABEL_BOARD_NAME => Some(metadata.board_name.as_str()),
+        PDF_LABEL_PAGE_NAME => Some(metadata.page_name_label.as_str()),
         _ => None,
     }
 }

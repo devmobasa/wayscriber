@@ -1,5 +1,7 @@
 use std::fs;
 
+pub use crate::env_vars::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV, PORTAL_SHORTCUT_OPT_IN_ENV};
+use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 use crate::systemd_user_service::portal_shortcut_dropin_path;
 
 pub const GNOME_MEDIA_KEYS_SCHEMA: &str = "org.gnome.settings-daemon.plugins.media-keys";
@@ -8,9 +10,6 @@ pub const GNOME_CUSTOM_KEYBINDING_SCHEMA: &str =
     "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
 pub const GNOME_WAYSCRIBER_KEYBINDING_PATH: &str =
     "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/";
-pub const PORTAL_SHORTCUT_ENV: &str = "WAYSCRIBER_PORTAL_SHORTCUT";
-pub const PORTAL_APP_ID_ENV: &str = "WAYSCRIBER_PORTAL_APP_ID";
-pub const PORTAL_SHORTCUT_OPT_IN_ENV: &str = "WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PortalShortcutDropInState {
@@ -63,8 +62,8 @@ pub fn resolve_shortcut_runtime_backend(inputs: ShortcutRuntimeInputs) -> Shortc
 }
 
 pub fn current_shortcut_runtime_backend() -> ShortcutRuntimeBackend {
-    let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-    let session = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
+    let current = std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
+    let session = std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
     resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
         gnome_desktop: is_gnome_desktop(&current, &session),
         portal_runtime_supported: portal_runtime_supported(),
@@ -347,9 +346,11 @@ mod tests {
 
     #[test]
     fn parse_portal_shortcut_dropin_state_handles_legacy_gnome_dropin() {
-        let content = "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Super>g\"\nEnvironment=\"WAYSCRIBER_PORTAL_APP_ID=com.devmobasa.wayscriber\"\n";
+        let content = format!(
+            "[Service]\nEnvironment=\"{PORTAL_SHORTCUT_ENV}=<Super>g\"\nEnvironment=\"{PORTAL_APP_ID_ENV}=com.devmobasa.wayscriber\"\n"
+        );
         assert_eq!(
-            parse_portal_shortcut_dropin_state(content),
+            parse_portal_shortcut_dropin_state(&content),
             PortalShortcutDropInState {
                 portal_shortcut_present: true,
                 portal_app_id_present: true,
@@ -360,7 +361,7 @@ mod tests {
             resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
                 gnome_desktop: true,
                 portal_runtime_supported: true,
-                portal_dropin_state: parse_portal_shortcut_dropin_state(content),
+                portal_dropin_state: parse_portal_shortcut_dropin_state(&content),
             }),
             ShortcutRuntimeBackend::GnomeCustomShortcut
         );
@@ -368,9 +369,11 @@ mod tests {
 
     #[test]
     fn parse_portal_shortcut_dropin_state_handles_explicit_opt_in() {
-        let content = "[Service]\nEnvironment=\"WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1\"\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Ctrl><Shift>g\"\nEnvironment=\"WAYSCRIBER_PORTAL_APP_ID=wayscriber\"\n";
+        let content = format!(
+            "[Service]\nEnvironment=\"{PORTAL_SHORTCUT_OPT_IN_ENV}=1\"\nEnvironment=\"{PORTAL_SHORTCUT_ENV}=<Ctrl><Shift>g\"\nEnvironment=\"{PORTAL_APP_ID_ENV}=wayscriber\"\n"
+        );
         assert_eq!(
-            parse_portal_shortcut_dropin_state(content),
+            parse_portal_shortcut_dropin_state(&content),
             PortalShortcutDropInState {
                 portal_shortcut_present: true,
                 portal_app_id_present: true,
@@ -378,7 +381,7 @@ mod tests {
             }
         );
         assert_eq!(
-            parse_portal_shortcut_from_dropin(content),
+            parse_portal_shortcut_from_dropin(&content),
             Some("<Ctrl><Shift>g".to_string())
         );
     }

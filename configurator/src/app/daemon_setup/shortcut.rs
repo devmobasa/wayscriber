@@ -1,6 +1,7 @@
 use std::fs;
 
 use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
+use wayscriber::env_vars::PATH_ENV;
 use wayscriber::shortcut_hint::{
     GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, GNOME_WAYSCRIBER_KEYBINDING_PATH,
     PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV, PORTAL_SHORTCUT_OPT_IN_ENV, PortalShortcutDropInState,
@@ -163,7 +164,7 @@ fn require_gsettings_available() -> Result<(), String> {
     if command_available("gsettings") {
         Ok(())
     } else {
-        Err("gsettings is not available in PATH.".to_string())
+        Err(format!("gsettings is not available in {PATH_ENV}."))
     }
 }
 
@@ -376,25 +377,27 @@ mod tests {
 
     #[test]
     fn parse_portal_shortcut_reads_dropin_value() {
-        let content = "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Ctrl><Shift>g\"\n";
+        let content = format!("[Service]\nEnvironment=\"{PORTAL_SHORTCUT_ENV}=<Ctrl><Shift>g\"\n");
         assert_eq!(
-            parse_portal_shortcut_from_dropin(content),
+            parse_portal_shortcut_from_dropin(&content),
             Some("<Ctrl><Shift>g".to_string())
         );
     }
 
     #[test]
     fn parse_portal_shortcut_ignores_blank_value() {
-        let content = "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=   \"\n";
-        assert_eq!(parse_portal_shortcut_from_dropin(content), None);
+        let content = format!("[Service]\nEnvironment=\"{PORTAL_SHORTCUT_ENV}=   \"\n");
+        assert_eq!(parse_portal_shortcut_from_dropin(&content), None);
     }
 
     #[test]
     fn render_portal_shortcut_dropin_includes_explicit_opt_in_marker() {
         let rendered = render_portal_shortcut_dropin("<Ctrl><Shift>g", PORTAL_APP_ID);
-        assert!(rendered.contains("Environment=\"WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1\""));
-        assert!(rendered.contains("Environment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Ctrl><Shift>g\""));
-        assert!(rendered.contains("Environment=\"WAYSCRIBER_PORTAL_APP_ID=wayscriber\""));
+        assert!(rendered.contains(&format!("Environment=\"{PORTAL_SHORTCUT_OPT_IN_ENV}=1\"")));
+        assert!(rendered.contains(&format!(
+            "Environment=\"{PORTAL_SHORTCUT_ENV}=<Ctrl><Shift>g\""
+        )));
+        assert!(rendered.contains(&format!("Environment=\"{PORTAL_APP_ID_ENV}=wayscriber\"")));
     }
 
     #[test]

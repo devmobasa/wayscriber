@@ -5,6 +5,7 @@ mod usage;
 use crate::backend::ExitAfterCaptureMode;
 use crate::cli::Cli;
 use crate::daemon::DaemonToggleRequest;
+use crate::env_vars::{DETACHED_ENV, NO_DETACH_ENV, NO_TRAY_ENV, WAYLAND_DISPLAY_ENV};
 use crate::paths::overlay_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::session_override::set_runtime_session_override;
@@ -44,15 +45,14 @@ fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
     if !(cli.active || cli.freeze) {
         return Ok(false);
     }
-    if env_flag_enabled("WAYSCRIBER_NO_DETACH") || std::env::var_os("WAYSCRIBER_DETACHED").is_some()
-    {
+    if env_flag_enabled(NO_DETACH_ENV) || std::env::var_os(DETACHED_ENV).is_some() {
         return Ok(false);
     }
     let exe = std::env::current_exe()?;
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     let mut cmd = Command::new(exe);
     cmd.args(args)
-        .env("WAYSCRIBER_DETACHED", "1")
+        .env(DETACHED_ENV, "1")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -130,7 +130,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     #[cfg(unix)]
-    if std::env::var_os("WAYSCRIBER_DETACHED").is_some() {
+    if std::env::var_os(DETACHED_ENV).is_some() {
         detach_from_tty();
     }
 
@@ -182,18 +182,18 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     // Check for Wayland environment
-    if std::env::var("WAYLAND_DISPLAY").is_err() && (cli.daemon || cli.active || cli.freeze) {
+    if std::env::var(WAYLAND_DISPLAY_ENV).is_err() && (cli.daemon || cli.active || cli.freeze) {
         return Err(anyhow::anyhow!(
-            "WAYLAND_DISPLAY not set - this application requires Wayland."
+            "{WAYLAND_DISPLAY_ENV} not set - this application requires Wayland."
         ));
     }
 
     if cli.daemon {
         // Daemon mode: background service with toggle activation
         log::info!("Starting in daemon mode");
-        let tray_disabled = cli.no_tray || env_flag_enabled("WAYSCRIBER_NO_TRAY");
+        let tray_disabled = cli.no_tray || env_flag_enabled(NO_TRAY_ENV);
         if tray_disabled {
-            log::info!("Tray disabled via --no-tray / WAYSCRIBER_NO_TRAY");
+            log::info!("Tray disabled via --no-tray / {NO_TRAY_ENV}");
         }
         let mut daemon = crate::daemon::Daemon::new(
             cli.mode,

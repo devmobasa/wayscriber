@@ -31,6 +31,28 @@ const TOGGLE_SHORTCUT_ID: &str = "toggle-overlay";
 const TOGGLE_SHORTCUT_DESCRIPTION: &str = "Toggle Wayscriber overlay";
 #[cfg(feature = "portal")]
 const PORTAL_REQUEST_POLL_INTERVAL_MS: u64 = 100;
+#[cfg(feature = "portal")]
+const PORTAL_KEY_ACTIVATION_TOKEN: &str = "activation_token";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_ACTIVATION_TOKEN_KEBAB: &str = "activation-token";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_ACTIVATION_TOKEN_CAMEL: &str = "activationToken";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_APP_ID: &str = "app_id";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_DESKTOP_STARTUP_ID: &str = "desktop-startup-id";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_DESCRIPTION: &str = "description";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_HANDLE_TOKEN: &str = "handle_token";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_PREFERRED_TRIGGER: &str = "preferred_trigger";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_SESSION_HANDLE: &str = "session_handle";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_SESSION_HANDLE_TOKEN: &str = "session_handle_token";
+#[cfg(feature = "portal")]
+const PORTAL_KEY_STARTUP_ID: &str = "startup_id";
 
 pub(super) fn start_global_shortcuts_listener(
     toggle_flag: Arc<AtomicBool>,
@@ -279,14 +301,17 @@ async fn create_global_shortcuts_session(
 ) -> Result<OwnedObjectPath> {
     let mut options: HashMap<String, Value<'static>> = HashMap::new();
     options.insert(
-        "handle_token".to_string(),
+        PORTAL_KEY_HANDLE_TOKEN.to_string(),
         Value::from(make_handle_token("wayscribergsreq")),
     );
     options.insert(
-        "session_handle_token".to_string(),
+        PORTAL_KEY_SESSION_HANDLE_TOKEN.to_string(),
         Value::from(make_handle_token("wayscribergssess")),
     );
-    options.insert("app_id".to_string(), Value::from(portal_app_id.to_string()));
+    options.insert(
+        PORTAL_KEY_APP_ID.to_string(),
+        Value::from(portal_app_id.to_string()),
+    );
 
     let request_path = proxy
         .create_session(options)
@@ -303,8 +328,8 @@ async fn create_global_shortcuts_session(
     }
 
     let session_handle_value = results
-        .get("session_handle")
-        .ok_or_else(|| anyhow!("CreateSession response missing session_handle"))?;
+        .get(PORTAL_KEY_SESSION_HANDLE)
+        .ok_or_else(|| anyhow!("CreateSession response missing {PORTAL_KEY_SESSION_HANDLE}"))?;
     parse_object_path(session_handle_value)
         .context("failed to parse session_handle from CreateSession response")
 }
@@ -319,11 +344,11 @@ async fn bind_toggle_shortcut(
 ) -> Result<()> {
     let mut shortcut_options: HashMap<String, Value<'static>> = HashMap::new();
     shortcut_options.insert(
-        "description".to_string(),
+        PORTAL_KEY_DESCRIPTION.to_string(),
         Value::from(TOGGLE_SHORTCUT_DESCRIPTION.to_string()),
     );
     shortcut_options.insert(
-        "preferred_trigger".to_string(),
+        PORTAL_KEY_PREFERRED_TRIGGER.to_string(),
         Value::from(preferred_trigger.to_string()),
     );
 
@@ -331,7 +356,7 @@ async fn bind_toggle_shortcut(
 
     let mut bind_options: HashMap<String, Value<'static>> = HashMap::new();
     bind_options.insert(
-        "handle_token".to_string(),
+        PORTAL_KEY_HANDLE_TOKEN.to_string(),
         Value::from(make_handle_token("wayscribergsbind")),
     );
 
@@ -421,11 +446,11 @@ fn parse_object_path(value: &OwnedValue) -> Result<OwnedObjectPath> {
 #[cfg(feature = "portal")]
 fn extract_activation_token(options: &HashMap<String, OwnedValue>) -> Option<String> {
     const TOKEN_KEYS: [&str; 5] = [
-        "activation_token",
-        "activation-token",
-        "activationToken",
-        "startup_id",
-        "desktop-startup-id",
+        PORTAL_KEY_ACTIVATION_TOKEN,
+        PORTAL_KEY_ACTIVATION_TOKEN_KEBAB,
+        PORTAL_KEY_ACTIVATION_TOKEN_CAMEL,
+        PORTAL_KEY_STARTUP_ID,
+        PORTAL_KEY_DESKTOP_STARTUP_ID,
     ];
 
     for key in TOKEN_KEYS {

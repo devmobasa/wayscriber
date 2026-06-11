@@ -4,6 +4,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
+use wayscriber::env_vars::{NO_DETACH_ENV, WAYLAND_DISPLAY_ENV, XDG_CONFIG_HOME_ENV};
 use wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG;
 
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -215,11 +216,11 @@ fn bare_usage_mentions_freeze_on_show() {
 fn active_mode_requires_wayland_env() {
     run_command(
         wayscriber_cmd()
-            .env_remove("WAYLAND_DISPLAY")
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active"),
     )
     .failure()
-    .stderr_contains("WAYLAND_DISPLAY not set");
+    .stderr_contains(&format!("{WAYLAND_DISPLAY_ENV} not set"));
 }
 
 #[test]
@@ -230,8 +231,8 @@ fn session_clear_command_succeeds_without_files() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-session"),
     )
     .success()
@@ -249,8 +250,8 @@ fn named_session_info_missing_parent_reports_not_found() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--session-info")
             .arg("--session-file")
             .arg(&named_path),
@@ -269,8 +270,8 @@ fn named_session_info_forces_persistence_despite_disabled_config() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--session-info")
             .arg("--session-file")
             .arg(&named_path),
@@ -293,8 +294,8 @@ fn named_session_clear_missing_parent_reports_no_artifacts() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-session")
             .arg("--session-file")
             .arg(&named_path),
@@ -315,8 +316,8 @@ fn named_session_info_rejects_symlink_primary() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--session-info")
             .arg("--session-file")
             .arg(&link),
@@ -340,8 +341,8 @@ fn named_session_clear_rejects_symlink_primary_without_removing_artifacts() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-session")
             .arg("--session-file")
             .arg(&link),
@@ -370,9 +371,9 @@ fn active_named_session_rejects_symlink_primary_before_wayland_preflight() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env("WAYSCRIBER_NO_DETACH", "1")
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env(NO_DETACH_ENV, "1")
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active")
             .arg("--session-file")
             .arg(&link),
@@ -392,9 +393,9 @@ fn freeze_named_session_rejects_symlink_primary_before_wayland_preflight() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env("WAYSCRIBER_NO_DETACH", "1")
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env(NO_DETACH_ENV, "1")
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--freeze")
             .arg("--session-file")
             .arg(&link),
@@ -413,8 +414,8 @@ fn active_named_session_missing_parent_fails_before_wayland_preflight() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active")
             .arg("--session-file")
             .arg(&named_path),
@@ -430,8 +431,8 @@ fn active_named_session_directory_path_fails_before_wayland_preflight() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active")
             .arg("--session-file")
             .arg(temp.path()),
@@ -450,8 +451,8 @@ fn freeze_named_session_missing_parent_fails_before_wayland_preflight() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--freeze")
             .arg("--session-file")
             .arg(&named_path),
@@ -467,14 +468,14 @@ fn freeze_named_session_missing_wayland_fails_before_detach() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env_remove("WAYLAND_DISPLAY")
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--freeze")
             .arg("--session-file")
             .arg(&named_path),
     )
     .failure()
-    .stderr_contains("WAYLAND_DISPLAY not set");
+    .stderr_contains(&format!("{WAYLAND_DISPLAY_ENV} not set"));
 }
 
 #[test]
@@ -484,13 +485,13 @@ fn session_info_reports_saved_snapshot() {
     write_session_config(&temp, &session_dir);
 
     let display = "test-session";
-    let original_config = std::env::var_os("XDG_CONFIG_HOME");
+    let original_config = std::env::var_os(XDG_CONFIG_HOME_ENV);
     unsafe {
-        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        std::env::set_var(XDG_CONFIG_HOME_ENV, temp.path());
     }
-    let original_display = std::env::var_os("WAYLAND_DISPLAY");
+    let original_display = std::env::var_os(WAYLAND_DISPLAY_ENV);
     unsafe {
-        std::env::set_var("WAYLAND_DISPLAY", display);
+        std::env::set_var(WAYLAND_DISPLAY_ENV, display);
     }
 
     let loaded = wayscriber::config::Config::load().unwrap();
@@ -505,13 +506,13 @@ fn session_info_reports_saved_snapshot() {
     options.set_output_identity(Some("DP-1"));
 
     match original_config {
-        Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
-        None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        Some(value) => unsafe { std::env::set_var(XDG_CONFIG_HOME_ENV, value) },
+        None => unsafe { std::env::remove_var(XDG_CONFIG_HOME_ENV) },
     }
 
     match original_display {
-        Some(value) => unsafe { std::env::set_var("WAYLAND_DISPLAY", value) },
-        None => unsafe { std::env::remove_var("WAYLAND_DISPLAY") },
+        Some(value) => unsafe { std::env::set_var(WAYLAND_DISPLAY_ENV, value) },
+        None => unsafe { std::env::remove_var(WAYLAND_DISPLAY_ENV) },
     }
 
     let mut frame = wayscriber::draw::Frame::new();
@@ -545,8 +546,8 @@ fn session_info_reports_saved_snapshot() {
 
     run_command(
         wayscriber_cmd()
-            .env("XDG_CONFIG_HOME", temp.path())
-            .env("WAYLAND_DISPLAY", display)
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env(WAYLAND_DISPLAY_ENV, display)
             .arg("--session-info"),
     )
     .success()

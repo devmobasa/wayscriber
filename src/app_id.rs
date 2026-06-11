@@ -1,6 +1,6 @@
 const DEFAULT_APP_ID: &str = "wayscriber";
-const APP_ID_ENV: &str = "WAYSCRIBER_APP_ID";
-const PORTAL_APP_ID_ENV: &str = "WAYSCRIBER_PORTAL_APP_ID";
+
+use crate::env_vars::{APP_ID_ENV, PORTAL_APP_ID_ENV};
 
 pub(crate) fn runtime_app_id() -> String {
     std::env::var(APP_ID_ENV)

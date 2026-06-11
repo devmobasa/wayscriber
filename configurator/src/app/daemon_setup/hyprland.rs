@@ -367,6 +367,7 @@ mod tests {
     use super::*;
     use std::env;
     use std::sync::Mutex;
+    use wayscriber::env_vars::HOME_ENV;
 
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -451,9 +452,9 @@ mod tests {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
         let home = tmp.path();
-        let prev_home = env::var_os("HOME");
+        let prev_home = env::var_os(HOME_ENV);
         unsafe {
-            env::set_var("HOME", home);
+            env::set_var(HOME_ENV, home);
         }
 
         let absolute = home
@@ -467,8 +468,8 @@ mod tests {
         ));
 
         match prev_home {
-            Some(value) => unsafe { env::set_var("HOME", value) },
-            None => unsafe { env::remove_var("HOME") },
+            Some(value) => unsafe { env::set_var(HOME_ENV, value) },
+            None => unsafe { env::remove_var(HOME_ENV) },
         }
     }
 

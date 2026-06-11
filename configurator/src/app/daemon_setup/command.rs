@@ -2,6 +2,8 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
+use wayscriber::env_vars::PATH_ENV;
+
 #[derive(Debug)]
 pub(super) struct CommandCapture {
     pub(super) success: bool,
@@ -14,7 +16,7 @@ pub(super) fn command_available(program: &str) -> bool {
 }
 
 pub(super) fn find_in_path(binary_name: &str) -> Option<PathBuf> {
-    let path_var = env::var_os("PATH")?;
+    let path_var = env::var_os(PATH_ENV)?;
     env::split_paths(&path_var)
         .map(|directory| directory.join(binary_name))
         .find(|path| path.exists())

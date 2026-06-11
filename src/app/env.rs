@@ -15,6 +15,7 @@ mod tests {
     use std::env;
     use std::sync::Mutex;
 
+    const TEST_FLAG_ENV: &str = "WAYSCRIBER_TEST_FLAG";
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
@@ -26,16 +27,16 @@ mod tests {
         for value in ["1", "true", "yes", "on", "TrUe"] {
             // SAFETY: serialized via ENV_MUTEX
             unsafe {
-                env::set_var("WAYSCRIBER_TEST_FLAG", value);
+                env::set_var(TEST_FLAG_ENV, value);
             }
             assert!(
-                env_flag_enabled("WAYSCRIBER_TEST_FLAG"),
+                env_flag_enabled(TEST_FLAG_ENV),
                 "expected '{value}' to be treated as truthy"
             );
         }
 
         unsafe {
-            env::remove_var("WAYSCRIBER_TEST_FLAG");
+            env::remove_var(TEST_FLAG_ENV);
         }
     }
 
@@ -48,16 +49,16 @@ mod tests {
         for value in ["0", "false", "no", "off", "", "random"] {
             // SAFETY: serialized via ENV_MUTEX
             unsafe {
-                env::set_var("WAYSCRIBER_TEST_FLAG", value);
+                env::set_var(TEST_FLAG_ENV, value);
             }
             assert!(
-                !env_flag_enabled("WAYSCRIBER_TEST_FLAG"),
+                !env_flag_enabled(TEST_FLAG_ENV),
                 "expected '{value}' to be treated as falsey"
             );
         }
 
         unsafe {
-            env::remove_var("WAYSCRIBER_TEST_FLAG");
+            env::remove_var(TEST_FLAG_ENV);
         }
     }
 }

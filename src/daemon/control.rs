@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+#[cfg(test)]
+use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 use crate::paths::{daemon_command_dir, daemon_command_file, daemon_lock_file, daemon_pid_file};
 use crate::session::try_lock_exclusive;
 use crate::tray_action::TrayAction;
@@ -887,9 +889,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         write_daemon_pid_file(1234, "daemon-token").unwrap();
@@ -900,8 +902,8 @@ mod tests {
         );
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -911,9 +913,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         let runtime = DaemonRuntimeInfo {
@@ -936,8 +938,8 @@ mod tests {
         assert!(!daemon_command_dir().exists());
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -947,9 +949,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         let current = DaemonRuntimeInfo {
@@ -975,8 +977,8 @@ mod tests {
         assert!(daemon_command_dir().exists());
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -986,9 +988,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         let request = DaemonToggleRequest {
@@ -1024,8 +1026,8 @@ mod tests {
         assert!(batch.commands.is_empty());
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -1035,9 +1037,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         write_daemon_toggle_request(
@@ -1067,8 +1069,8 @@ mod tests {
         assert!(!entries.iter().any(|name| name.ends_with(".tmp")));
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -1078,9 +1080,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         let first = DaemonToggleRequest {
@@ -1110,8 +1112,8 @@ mod tests {
         );
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -1121,9 +1123,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         write_daemon_toggle_request(
@@ -1143,8 +1145,8 @@ mod tests {
         );
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -1154,9 +1156,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         let payload = serde_json::to_vec(&DaemonToggleEnvelope {
@@ -1177,8 +1179,8 @@ mod tests {
         assert!(batch.commands.is_empty());
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 
@@ -1188,9 +1190,9 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os("XDG_RUNTIME_DIR");
+        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {
-            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
         }
 
         let payload = serde_json::to_vec(&DaemonToggleEnvelope {
@@ -1211,8 +1213,8 @@ mod tests {
         assert!(batch.commands.is_empty());
 
         match prev {
-            Some(value) => unsafe { env::set_var("XDG_RUNTIME_DIR", value) },
-            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+            Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+            None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
         }
     }
 }

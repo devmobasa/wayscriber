@@ -8,6 +8,7 @@ use super::WaylandBackend;
 use super::setup::WaylandSetup;
 use super::tray::process_tray_action;
 use crate::backend::wayland::portal_capture::screenshot_portal_available;
+use crate::env_vars::{DESKTOP_SESSION_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 use crate::{
     capture::CaptureManager,
     config::Config,
@@ -162,9 +163,9 @@ fn apply_initial_mode(backend: &WaylandBackend, _config: &Config, input_state: &
 
 fn desktop_environment_from_env() -> DesktopEnvironment {
     let values = [
-        env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
-        env::var("XDG_SESSION_DESKTOP").unwrap_or_default(),
-        env::var("DESKTOP_SESSION").unwrap_or_default(),
+        env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default(),
+        env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default(),
+        env::var(DESKTOP_SESSION_ENV).unwrap_or_default(),
     ];
     if values
         .iter()

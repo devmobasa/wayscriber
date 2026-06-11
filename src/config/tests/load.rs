@@ -192,17 +192,13 @@ fn effective_drag_tools_preserve_explicit_builtin_left_mapping() {
 
 #[test]
 fn ui_defaults_follow_desktop_for_xdg_focus_loss() {
-    let desktop_like_gnome = [
-        "XDG_CURRENT_DESKTOP",
-        "XDG_SESSION_DESKTOP",
-        "DESKTOP_SESSION",
-    ]
-    .iter()
-    .filter_map(|key| std::env::var(key).ok())
-    .any(|value| {
-        let value = value.to_lowercase();
-        value.contains("ubuntu") || value.contains("gnome")
-    });
+    let desktop_like_gnome = crate::env_vars::DESKTOP_ENV_KEYS
+        .iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .any(|value| {
+            let value = value.to_lowercase();
+            value.contains("ubuntu") || value.contains("gnome")
+        });
     let expected = if cfg!(target_os = "linux") && desktop_like_gnome {
         XdgFocusLossBehavior::Stay
     } else {

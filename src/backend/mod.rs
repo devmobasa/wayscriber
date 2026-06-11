@@ -1,6 +1,8 @@
 use anyhow::Result;
 use wayland_client::Connection;
 
+use crate::env_vars::WAYLAND_DISPLAY_ENV;
+
 pub mod wayland;
 
 // Removed: Backend trait - no longer needed with single backend
@@ -38,9 +40,9 @@ pub fn run_wayland(
 }
 
 pub fn preflight_wayland_connection() -> Result<()> {
-    if std::env::var("WAYLAND_DISPLAY").is_err() {
+    if std::env::var(WAYLAND_DISPLAY_ENV).is_err() {
         return Err(anyhow::anyhow!(
-            "WAYLAND_DISPLAY not set - this application requires Wayland."
+            "{WAYLAND_DISPLAY_ENV} not set - this application requires Wayland."
         ));
     }
     let _conn = Connection::connect_to_env()
@@ -53,8 +55,11 @@ mod tests {
     #[test]
     #[ignore]
     fn wayland_backend_smoke_test() {
-        if std::env::var("WAYLAND_DISPLAY").is_err() {
-            eprintln!("WAYLAND_DISPLAY not set; skipping Wayland smoke test");
+        if std::env::var(super::WAYLAND_DISPLAY_ENV).is_err() {
+            eprintln!(
+                "{} not set; skipping Wayland smoke test",
+                super::WAYLAND_DISPLAY_ENV
+            );
             return;
         }
         super::run_wayland(None, false, super::ExitAfterCaptureMode::Never, None)

@@ -2,6 +2,7 @@ use super::super::WaylandState;
 use crate::config::{Action, Config};
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
+use crate::env_vars::HOME_ENV;
 use crate::input::InputState;
 use crate::input::boards::BoardState;
 use crate::input::state::{ClipboardPasteRequest, UiToastKind};
@@ -416,7 +417,7 @@ fn config_path_display() -> String {
 }
 
 fn compact_path(path: PathBuf) -> String {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+    let Some(home) = std::env::var_os(HOME_ENV).map(PathBuf::from) else {
         return path.display().to_string();
     };
     match path.strip_prefix(&home) {

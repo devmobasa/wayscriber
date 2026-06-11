@@ -6,6 +6,7 @@ use super::session::{
 use super::*;
 use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, FontDescriptor};
+use crate::env_vars::XDG_DATA_HOME_ENV;
 use crate::input::state::test_support::make_test_input_state;
 use crate::input::{EraserMode, Tool};
 use crate::ui::toolbar::ToolbarSideSection;
@@ -22,9 +23,9 @@ struct EnvGuard {
 impl EnvGuard {
     fn set_xdg_data_home(path: &Path) -> Self {
         let guard = crate::test_env::lock();
-        let xdg_data_home = std::env::var_os("XDG_DATA_HOME");
+        let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
         unsafe {
-            std::env::set_var("XDG_DATA_HOME", path);
+            std::env::set_var(XDG_DATA_HOME_ENV, path);
         }
         Self {
             _guard: guard,
@@ -36,8 +37,8 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match self.xdg_data_home.take() {
-            Some(value) => unsafe { std::env::set_var("XDG_DATA_HOME", value) },
-            None => unsafe { std::env::remove_var("XDG_DATA_HOME") },
+            Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
+            None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
         }
     }
 }
