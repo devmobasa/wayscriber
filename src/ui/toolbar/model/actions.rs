@@ -1,7 +1,7 @@
-use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
 use crate::input::ToolbarDrawerTab;
 
 use super::super::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
+use super::catalog;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarCommandGroupKind {
@@ -217,34 +217,5 @@ fn visible_group(
 }
 
 fn toolbar_button_visible(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> bool {
-    toolbar_button_item_id(event).is_none_or(|id| !snapshot.toolbar_item_hidden(id))
-}
-
-fn toolbar_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
-    Some(match event {
-        ToolbarEvent::Undo => ids::SIDE_ACTIONS_UNDO,
-        ToolbarEvent::Redo => ids::SIDE_ACTIONS_REDO,
-        ToolbarEvent::ClearCanvas => ids::SIDE_ACTIONS_CLEAR_CANVAS,
-        ToolbarEvent::ZoomIn => ids::SIDE_ACTIONS_ZOOM_IN,
-        ToolbarEvent::ZoomOut => ids::SIDE_ACTIONS_ZOOM_OUT,
-        ToolbarEvent::ResetZoom => ids::SIDE_ACTIONS_RESET_ZOOM,
-        ToolbarEvent::ToggleZoomLock => ids::SIDE_ACTIONS_TOGGLE_ZOOM_LOCK,
-        ToolbarEvent::UndoAll => ids::SIDE_ACTIONS_UNDO_ALL,
-        ToolbarEvent::RedoAll => ids::SIDE_ACTIONS_REDO_ALL,
-        ToolbarEvent::UndoAllDelayed => ids::SIDE_ACTIONS_UNDO_ALL_DELAYED,
-        ToolbarEvent::RedoAllDelayed => ids::SIDE_ACTIONS_REDO_ALL_DELAYED,
-        ToolbarEvent::ToggleFreeze => ids::SIDE_ACTIONS_FREEZE,
-        ToolbarEvent::PagePrev => ids::SIDE_PAGES_PREVIOUS,
-        ToolbarEvent::PageNext => ids::SIDE_PAGES_NEXT,
-        ToolbarEvent::PageNew => ids::SIDE_PAGES_NEW,
-        ToolbarEvent::PageDuplicate => ids::SIDE_PAGES_DUPLICATE,
-        ToolbarEvent::PageDelete => ids::SIDE_PAGES_DELETE,
-        ToolbarEvent::BoardPrev => ids::SIDE_BOARDS_PREVIOUS,
-        ToolbarEvent::BoardNext => ids::SIDE_BOARDS_NEXT,
-        ToolbarEvent::BoardNew => ids::SIDE_BOARDS_NEW,
-        ToolbarEvent::BoardDuplicate => ids::SIDE_BOARDS_DUPLICATE,
-        ToolbarEvent::BoardDelete => ids::SIDE_BOARDS_DELETE,
-        ToolbarEvent::BoardRename => ids::SIDE_BOARDS_RENAME,
-        _ => return None,
-    })
+    catalog::command_button_item_id(event).is_none_or(|id| !snapshot.toolbar_item_hidden(id))
 }

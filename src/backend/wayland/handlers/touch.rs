@@ -8,7 +8,6 @@ use wayland_client::{
 use crate::backend::wayland::state::{
     TouchTarget, WaylandState, debug_toolbar_drag_logging_enabled,
 };
-use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 
 impl TouchHandler for WaylandState {
@@ -217,9 +216,8 @@ impl WaylandState {
         if target == TouchTarget::Toolbar {
             self.set_pointer_over_toolbar(true);
             if let Some((intent, drag)) = self.toolbar.pointer_press(surface, position) {
-                let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
                 self.set_toolbar_dragging(drag);
-                self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
+                self.handle_toolbar_event(intent, Some(conn), Some(qh));
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
                 self.refresh_keyboard_interactivity();
@@ -292,8 +290,7 @@ impl WaylandState {
             if self.toolbar_dragging() {
                 let intent = evt.or_else(|| self.move_drag_intent(position.0, position.1));
                 if let Some(intent) = intent {
-                    let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt, Some(conn), None);
+                    self.handle_toolbar_event(intent, Some(conn), None);
                 }
             } else {
                 self.toolbar.mark_dirty();

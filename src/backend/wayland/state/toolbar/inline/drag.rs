@@ -8,19 +8,18 @@ impl WaylandState {
         &self,
         x: f64,
         y: f64,
-    ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
-        use crate::backend::wayland::toolbar_intent::ToolbarIntent;
+    ) -> Option<ToolbarEvent> {
         use crate::ui::toolbar::ToolbarEvent;
 
         match self.data.toolbar_move_drag {
             Some(MoveDrag {
                 kind: MoveDragKind::Top,
                 ..
-            }) => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
+            }) => Some(ToolbarEvent::MoveTopToolbar { x, y }),
             Some(MoveDrag {
                 kind: MoveDragKind::Side,
                 ..
-            }) => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
+            }) => Some(ToolbarEvent::MoveSideToolbar { x, y }),
             None => None,
         }
     }

@@ -12,7 +12,6 @@ mod surface;
 #[cfg(tablet)]
 mod tablet_types;
 mod toolbar;
-mod toolbar_intent;
 mod zoom;
 
 pub use backend::WaylandBackend;

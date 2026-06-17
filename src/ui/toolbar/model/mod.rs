@@ -1,5 +1,6 @@
 mod actions;
 pub(crate) mod activation;
+pub(crate) mod catalog;
 pub(crate) mod control;
 pub(crate) mod event_policy;
 pub(crate) mod header;
@@ -16,6 +17,20 @@ pub(crate) use actions::{
 pub(crate) use activation::{
     ToolbarActivation, ToolbarColorPicker, ToolbarControlId, ToolbarDragTarget, ToolbarSlider,
     ToolbarSliderSpec, ToolbarSliderTarget, delay_secs_from_t, delay_t_from_ms,
+};
+#[allow(unused_imports)]
+pub(crate) use catalog::{
+    TopChromeControl, TopUtilityButton, action_button_item_id, all_catalog_item_ids,
+    all_toolbar_tool_entries, all_top_chrome_entries, board_button_item_id,
+    catalog_entry_for_definition, catalog_entry_for_item_id, command_button_item_id,
+    page_button_item_id, session_button_item_id, settings_control_item_id, side_section_hidden,
+    side_section_item_id, side_section_legacy_hidden_aliases, tool_for_toolbar_item_id,
+    toolbar_catalog_entries, toolbar_definition_has_runtime_metadata, toolbar_item_id_for_tool,
+    toolbar_item_visible, top_chrome_control_for_item_id, top_chrome_visible,
+    top_clear_canvas_visible, top_close_visible, top_drag_visible, top_fill_visible,
+    top_highlight_ring_visible, top_highlight_visible, top_icon_mode_toggle_visible,
+    top_pin_visible, top_screenshot_visible, top_shape_picker_visible, top_sticky_note_visible,
+    top_text_visible, top_utility_button_item_id, top_utility_item_visible,
 };
 #[allow(unused_imports)]
 pub(crate) use control::{
@@ -38,12 +53,9 @@ pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessi
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
 #[allow(unused_imports)]
 pub(crate) use tools::{
-    SemanticToolIcon, TopUtilityButton, current_shape_tool, default_drag_hint,
-    default_polygon_tool, default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool,
-    ordered_side_sections, polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible,
-    toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
-    top_highlight_visible, top_icon_mode_toggle_visible, top_screenshot_visible,
-    top_shape_picker_visible, top_sticky_note_visible, top_text_visible, top_tool_buttons,
+    SemanticToolIcon, current_shape_tool, default_drag_hint, default_polygon_tool,
+    default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool, ordered_side_sections,
+    polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible, top_tool_buttons,
     visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
     visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
 };

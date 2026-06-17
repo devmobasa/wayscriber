@@ -3,7 +3,6 @@ use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, Poi
 use wayland_client::QueueHandle;
 
 use crate::backend::wayland::state::drag_log;
-use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -75,7 +74,7 @@ impl WaylandState {
                 && let Some((intent, drag)) =
                     self.toolbar.pointer_press(&event.surface, event.position)
             {
-                let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
+                let toolbar_event = intent;
                 if matches!(
                     toolbar_event,
                     ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. }

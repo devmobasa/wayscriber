@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
 use crate::input::ToolbarDrawerTab;
 
 use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
+use super::catalog;
 
 const MAX_RECENT_SESSIONS: usize = 3;
 pub(crate) const SESSION_BUTTON_COLUMNS: usize = 3;
@@ -146,18 +146,7 @@ fn session_path_label(path: &std::path::Path) -> String {
 }
 
 fn session_button_visible(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> bool {
-    session_button_item_id(event).is_none_or(|id| !snapshot.toolbar_item_hidden(id))
-}
-
-fn session_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
-    Some(match event {
-        ToolbarEvent::OpenSession => ids::SIDE_SESSION_OPEN,
-        ToolbarEvent::SaveSessionAs => ids::SIDE_SESSION_SAVE_AS,
-        ToolbarEvent::SessionInfo => ids::SIDE_SESSION_INFO,
-        ToolbarEvent::ClearSession => ids::SIDE_SESSION_CLEAR,
-        ToolbarEvent::OpenConfigurator => ids::SIDE_SESSION_MANAGER,
-        _ => return None,
-    })
+    catalog::session_button_item_id(event).is_none_or(|id| !snapshot.toolbar_item_hidden(id))
 }
 
 #[cfg(test)]

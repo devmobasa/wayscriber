@@ -77,7 +77,6 @@ use super::{
         layout::{side_size, top_size},
         render::{render_side_palette, render_top_strip},
     },
-    toolbar_intent::intent_to_event,
     zoom::ZoomState,
 };
 

@@ -3,12 +3,12 @@ use std::borrow::Cow;
 use crate::config::{
     Action, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
     ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarLayoutMode,
-    action_label, action_short_label, toolbar_item_definitions, toolbar_item_ids as ids,
-    toolbar_item_order_group,
+    action_label, action_short_label, toolbar_item_definitions, toolbar_item_order_group,
 };
 
 use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection, ToolbarSnapshot};
 use super::activation::{ToolbarActivation, ToolbarControlId};
+use super::catalog;
 use super::control::{ToolbarIcon, ToolbarTooltip};
 
 #[derive(Debug, Clone)]
@@ -423,29 +423,7 @@ fn order_is_customized(snapshot: &ToolbarSnapshot, group: ToolbarItemOrderGroup)
 }
 
 fn control_visible(snapshot: &ToolbarSnapshot, id: ToolbarControlId) -> bool {
-    control_item_id(id).is_none_or(|item| !snapshot.toolbar_item_hidden(item))
-}
-
-fn control_item_id(id: ToolbarControlId) -> Option<ToolbarItemId> {
-    Some(match id {
-        ToolbarControlId::SettingsContextAwareUi => ids::SIDE_SETTINGS_CONTEXT_AWARE_UI,
-        ToolbarControlId::SettingsTextControls => ids::SIDE_SETTINGS_TEXT_CONTROLS,
-        ToolbarControlId::SettingsStatusBar => ids::SIDE_SETTINGS_STATUS_BAR,
-        ToolbarControlId::SettingsStatusBoardBadge => ids::SIDE_SETTINGS_STATUS_BOARD_BADGE,
-        ToolbarControlId::SettingsStatusPageBadge => ids::SIDE_SETTINGS_STATUS_PAGE_BADGE,
-        ToolbarControlId::SettingsFloatingBadgeAlways => ids::SIDE_SETTINGS_FLOATING_BADGE_ALWAYS,
-        ToolbarControlId::SettingsPresetToasts => ids::SIDE_SETTINGS_PRESET_TOASTS,
-        ToolbarControlId::SettingsPresets => ids::SIDE_SETTINGS_PRESETS,
-        ToolbarControlId::SettingsActions => ids::SIDE_SETTINGS_ACTIONS,
-        ToolbarControlId::SettingsZoomActions => ids::SIDE_SETTINGS_ZOOM_ACTIONS,
-        ToolbarControlId::SettingsAdvancedActions => ids::SIDE_SETTINGS_ADVANCED_ACTIONS,
-        ToolbarControlId::SettingsBoards => ids::SIDE_SETTINGS_BOARDS,
-        ToolbarControlId::SettingsPages => ids::SIDE_SETTINGS_PAGES,
-        ToolbarControlId::SettingsStepControls => ids::SIDE_SETTINGS_STEP_CONTROLS,
-        ToolbarControlId::OpenConfigurator => ids::SIDE_SETTINGS_CONFIGURATOR,
-        ToolbarControlId::OpenConfigFile => ids::SIDE_SETTINGS_CONFIG_FILE,
-        _ => return None,
-    })
+    catalog::settings_control_item_id(id).is_none_or(|item| !snapshot.toolbar_item_hidden(item))
 }
 
 #[derive(Debug, Clone)]

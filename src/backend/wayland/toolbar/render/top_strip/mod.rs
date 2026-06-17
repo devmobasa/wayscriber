@@ -8,7 +8,6 @@ use anyhow::Result;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::config::toolbar_item_ids as ids;
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
 
@@ -82,7 +81,7 @@ pub fn render_top_strip(
     let handle_w = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
     let handle_h = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
     let handle_y = ToolbarLayoutSpec::TOP_HANDLE_Y;
-    let handle_visible = model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG);
+    let handle_visible = model::top_drag_visible(snapshot);
     if handle_visible {
         let handle_hover = layout
             .hover
@@ -127,7 +126,7 @@ pub fn render_top_strip(
     let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
     let btn_y = layout.spec.top_pin_button_y(height);
     let mut right_x = width - ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT - btn_size;
-    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE) {
+    if model::top_close_visible(snapshot) {
         let close_hover = layout
             .hover
             .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))
@@ -142,7 +141,7 @@ pub fn render_top_strip(
         right_x -= btn_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
     }
 
-    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN) {
+    if model::top_pin_visible(snapshot) {
         let pin_hover = layout
             .hover
             .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))

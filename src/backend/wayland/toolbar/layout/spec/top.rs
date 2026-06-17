@@ -1,4 +1,4 @@
-use crate::config::{ToolbarLayoutMode, toolbar_item_ids as ids};
+use crate::config::ToolbarLayoutMode;
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model;
 
@@ -62,7 +62,7 @@ impl ToolbarLayoutSpec {
         )
         .count();
         let mut x = Self::TOP_START_X;
-        if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG) {
+        if model::top_drag_visible(snapshot) {
             x += Self::TOP_HANDLE_SIZE + gap;
         }
         x += tool_count as f64 * (btn_w + gap);
@@ -99,7 +99,7 @@ impl ToolbarLayoutSpec {
                 0.0
             } else {
                 let picker_x = Self::TOP_START_X
-                    + if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG) {
+                    + if model::top_drag_visible(snapshot) {
                         Self::TOP_HANDLE_SIZE + gap
                     } else {
                         0.0
@@ -109,9 +109,8 @@ impl ToolbarLayoutSpec {
         } else {
             0.0
         };
-        let right_control_count =
-            usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN))
-                + usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE));
+        let right_control_count = usize::from(model::top_pin_visible(snapshot))
+            + usize::from(model::top_close_visible(snapshot));
         let right_controls = if right_control_count == 0 {
             0.0
         } else {

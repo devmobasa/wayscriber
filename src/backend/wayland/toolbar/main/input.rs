@@ -4,7 +4,6 @@ use wayland_client::protocol::wl_surface;
 
 use super::structs::ToolbarSurfaceManager;
 use crate::backend::wayland::toolbar::ToolbarFocusTarget;
-use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
 
 impl ToolbarSurfaceManager {
@@ -12,7 +11,7 @@ impl ToolbarSurfaceManager {
         &mut self,
         surface: &wl_surface::WlSurface,
         position: (f64, f64),
-    ) -> Option<(ToolbarIntent, bool)> {
+    ) -> Option<(ToolbarEvent, bool)> {
         if self.top.is_surface(surface) {
             return self.top.hit_at(position.0, position.1);
         }
@@ -26,7 +25,7 @@ impl ToolbarSurfaceManager {
         &mut self,
         surface: &wl_surface::WlSurface,
         position: (f64, f64),
-    ) -> Option<ToolbarIntent> {
+    ) -> Option<ToolbarEvent> {
         if self.top.is_surface(surface) {
             if self.top_hover != Some(position) {
                 // Reset hover start time when position changes

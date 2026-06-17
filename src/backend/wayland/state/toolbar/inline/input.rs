@@ -3,10 +3,7 @@ use std::time::Instant;
 use super::*;
 
 impl WaylandState {
-    fn inline_toolbar_hit_at(
-        &self,
-        position: (f64, f64),
-    ) -> Option<(crate::backend::wayland::toolbar_intent::ToolbarIntent, bool)> {
+    fn inline_toolbar_hit_at(&self, position: (f64, f64)) -> Option<(ToolbarEvent, bool)> {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
@@ -29,10 +26,7 @@ impl WaylandState {
         None
     }
 
-    fn inline_toolbar_drag_at(
-        &self,
-        position: (f64, f64),
-    ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
+    fn inline_toolbar_drag_at(&self, position: (f64, f64)) -> Option<ToolbarEvent> {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
@@ -111,8 +105,7 @@ impl WaylandState {
         if self.toolbar_dragging()
             && let Some(intent) = self.inline_toolbar_drag_at(position)
         {
-            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-            self.handle_toolbar_event(evt, None, None);
+            self.handle_toolbar_event(intent, None, None);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             over_toolbar = true;
@@ -162,8 +155,7 @@ impl WaylandState {
                 ));
             }
             self.set_toolbar_dragging(drag);
-            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-            self.handle_toolbar_event(evt, conn, qh);
+            self.handle_toolbar_event(intent, conn, qh);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             self.set_pointer_over_toolbar(true);
@@ -210,8 +202,7 @@ impl WaylandState {
                 && !self.pointer_lock_active()
                 && let Some(intent) = self.inline_toolbar_drag_at(position)
             {
-                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.handle_toolbar_event(evt, None, None);
+                self.handle_toolbar_event(intent, None, None);
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
             }

@@ -1,6 +1,5 @@
 use crate::backend::wayland::state::{color_log, debug_toolbar_color_logging_enabled};
 use crate::backend::wayland::toolbar::events::HitKind;
-use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::model::{ToolbarSlider, ToolbarSliderSpec, ToolbarSliderTarget};
 
@@ -21,7 +20,7 @@ impl HitRegion {
     }
 }
 
-pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent, bool)> {
+pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarEvent, bool)> {
     if !hit.contains(x, y) {
         return None;
     }
@@ -112,10 +111,10 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         crate::backend::wayland::toolbar::events::HitKind::Click => hit.event.clone(),
     };
 
-    Some((ToolbarIntent(event), start_drag))
+    Some((event, start_drag))
 }
 
-pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarIntent> {
+pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarEvent> {
     if !hit.contains(x, y) {
         return None;
     }
@@ -123,7 +122,7 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
     use crate::backend::wayland::toolbar::events::HitKind::*;
     use crate::ui::toolbar::ToolbarEvent;
     match hit.kind {
-        DragSetThickness { min, max } => Some(ToolbarIntent(slider_event_for_hit(
+        DragSetThickness { min, max } => Some(slider_event_for_hit(
             ToolbarSliderTarget::Thickness,
             ToolbarSliderSpec {
                 min,
@@ -132,8 +131,8 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
             },
             hit,
             x,
-        ))),
-        DragSetMarkerOpacity { min, max } => Some(ToolbarIntent(slider_event_for_hit(
+        )),
+        DragSetMarkerOpacity { min, max } => Some(slider_event_for_hit(
             ToolbarSliderTarget::MarkerOpacity,
             ToolbarSliderSpec {
                 min,
@@ -142,13 +141,13 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
             },
             hit,
             x,
-        ))),
-        DragSetFontSize => Some(ToolbarIntent(slider_event_for_hit(
+        )),
+        DragSetFontSize => Some(slider_event_for_hit(
             ToolbarSliderTarget::FontSize,
             ToolbarSliderSpec::FONT_SIZE,
             hit,
             x,
-        ))),
+        )),
         PickColor { x: px, y: py, w, h } => {
             let hue = ((x - px) / w).clamp(0.0, 1.0);
             let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
@@ -159,42 +158,42 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
                     x, y, px, py, w, h, hue, value, color.r, color.g, color.b
                 ));
             }
-            Some(ToolbarIntent(ToolbarEvent::SetColor(color)))
+            Some(ToolbarEvent::SetColor(color))
         }
-        DragUndoDelay => Some(ToolbarIntent(slider_event_for_hit(
+        DragUndoDelay => Some(slider_event_for_hit(
             ToolbarSliderTarget::UndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
             hit,
             x,
-        ))),
-        DragRedoDelay => Some(ToolbarIntent(slider_event_for_hit(
+        )),
+        DragRedoDelay => Some(slider_event_for_hit(
             ToolbarSliderTarget::RedoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
             hit,
             x,
-        ))),
-        DragCustomUndoDelay => Some(ToolbarIntent(slider_event_for_hit(
+        )),
+        DragCustomUndoDelay => Some(slider_event_for_hit(
             ToolbarSliderTarget::CustomUndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
             hit,
             x,
-        ))),
-        DragCustomRedoDelay => Some(ToolbarIntent(slider_event_for_hit(
+        )),
+        DragCustomRedoDelay => Some(slider_event_for_hit(
             ToolbarSliderTarget::CustomRedoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
             hit,
             x,
-        ))),
-        DragMoveTop => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
-        DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
+        )),
+        DragMoveTop => Some(ToolbarEvent::MoveTopToolbar { x, y }),
+        DragMoveSide => Some(ToolbarEvent::MoveSideToolbar { x, y }),
         DragToolbarItem {
             group,
             target_index,
             ..
-        } => Some(ToolbarIntent(ToolbarEvent::DragToolbarItemOver {
+        } => Some(ToolbarEvent::DragToolbarItemOver {
             group,
             target_index,
-        })),
+        }),
         _ => None,
     }
 }
@@ -296,8 +295,8 @@ mod tests {
         let drag = drag_intent_for_hit(&hit, 200.0, 10.0).expect("drag intent");
 
         assert!(start_drag);
-        assert_set_thickness(press.0, 15.0);
-        assert_set_thickness(drag.0, 15.0);
+        assert_set_thickness(press, 15.0);
+        assert_set_thickness(drag, 15.0);
     }
 
     #[test]
@@ -307,8 +306,8 @@ mod tests {
         let (left, _) = intent_for_hit(&hit, 100.0, 10.0).expect("left intent");
         let (right, _) = intent_for_hit(&hit, 300.0, 10.0).expect("right intent");
 
-        assert_set_thickness(left.0, 10.0);
-        assert_set_thickness(right.0, 20.0);
+        assert_set_thickness(left, 10.0);
+        assert_set_thickness(right, 20.0);
         assert!(intent_for_hit(&hit, 99.0, 10.0).is_none());
         assert!(drag_intent_for_hit(&hit, 301.0, 10.0).is_none());
     }

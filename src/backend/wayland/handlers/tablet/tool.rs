@@ -2,7 +2,6 @@ use log::{debug, info};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2;
 
-use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::{
     input::{DrawingState, EraserMode, Tool},
     util::Rect,
@@ -209,8 +208,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                         && let Some((intent, drag)) = state.toolbar.pointer_press(surface, (sx, sy))
                     {
                         state.set_toolbar_dragging(drag);
-                        let evt = intent_to_event(intent, state.toolbar.last_snapshot());
-                        state.handle_toolbar_event(evt, Some(conn), Some(qh));
+                        state.handle_toolbar_event(intent, Some(conn), Some(qh));
                         state.toolbar.mark_dirty();
                         state.input_state.needs_redraw = true;
                         state.refresh_keyboard_interactivity();
@@ -271,8 +269,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                             // This allows dragging to continue when stylus moves outside hit region
                             let intent = evt.or_else(|| state.move_drag_intent(xf, yf));
                             if let Some(intent) = intent {
-                                let evt = intent_to_event(intent, state.toolbar.last_snapshot());
-                                state.handle_toolbar_event(evt, Some(conn), Some(qh));
+                                state.handle_toolbar_event(intent, Some(conn), Some(qh));
                             }
                         } else {
                             state.toolbar.mark_dirty();

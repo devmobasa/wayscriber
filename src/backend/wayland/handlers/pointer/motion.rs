@@ -3,7 +3,6 @@ use smithay_client_toolkit::seat::pointer::PointerEvent;
 use wayland_client::Connection;
 
 use crate::backend::wayland::state::drag_log;
-use crate::backend::wayland::toolbar_intent::intent_to_event;
 
 use super::*;
 
@@ -61,8 +60,7 @@ impl WaylandState {
                 let intent =
                     evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
                 if let Some(intent) = intent {
-                    let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt, None, None);
+                    self.handle_toolbar_event(intent, None, None);
                 }
             } else {
                 self.toolbar.mark_dirty();
@@ -91,8 +89,7 @@ impl WaylandState {
                 let intent =
                     evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
                 if let Some(intent) = intent {
-                    let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt, None, None);
+                    self.handle_toolbar_event(intent, None, None);
                 }
             } else {
                 self.toolbar.mark_dirty();
@@ -109,8 +106,7 @@ impl WaylandState {
         // Handle move drag that continues on the main surface after leaving toolbar
         if self.is_move_dragging() {
             if let Some(intent) = self.move_drag_intent(event.position.0, event.position.1) {
-                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.handle_toolbar_event(evt, None, None);
+                self.handle_toolbar_event(intent, None, None);
                 self.toolbar.mark_dirty();
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;

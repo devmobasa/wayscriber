@@ -1,6 +1,8 @@
-use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, toolbar_item_ids as ids};
+use crate::config::ToolbarItemOrderGroup;
 use crate::input::Tool;
 use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
+
+use super::catalog::{self, TopUtilityButton};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SemanticToolIcon {
@@ -95,94 +97,43 @@ pub(crate) fn visible_tool_count(tools: &'static [Tool], snapshot: &ToolbarSnaps
 }
 
 pub(crate) fn tool_visible(snapshot: &ToolbarSnapshot, tool: Tool) -> bool {
-    toolbar_item_visible(snapshot, toolbar_item_id_for_tool(tool))
-}
-
-pub(crate) fn toolbar_item_visible(snapshot: &ToolbarSnapshot, id: ToolbarItemId) -> bool {
-    !snapshot.toolbar_item_hidden(id)
+    catalog::toolbar_item_visible(snapshot, catalog::toolbar_item_id_for_tool(tool))
 }
 
 pub(crate) fn top_shape_picker_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_SHAPE_PICKER)
+    catalog::top_shape_picker_visible(snapshot)
 }
 
 pub(crate) fn top_fill_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_FILL)
+    catalog::top_fill_visible(snapshot)
 }
 
 pub(crate) fn top_text_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_TEXT)
+    catalog::top_text_visible(snapshot)
 }
 
 pub(crate) fn top_sticky_note_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_STICKY_NOTE)
+    catalog::top_sticky_note_visible(snapshot)
 }
 
 pub(crate) fn top_clear_canvas_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_CLEAR_CANVAS)
+    catalog::top_clear_canvas_visible(snapshot)
 }
 
 pub(crate) fn top_screenshot_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_SCREENSHOT)
+    catalog::top_screenshot_visible(snapshot)
 }
 
 pub(crate) fn top_highlight_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_HIGHLIGHT)
+    catalog::top_highlight_visible(snapshot)
 }
 
 pub(crate) fn top_highlight_ring_visible(snapshot: &ToolbarSnapshot) -> bool {
-    toolbar_item_visible(snapshot, ids::TOP_UTILITY_HIGHLIGHT_RING)
+    catalog::top_highlight_ring_visible(snapshot)
 }
 
 pub(crate) fn top_icon_mode_toggle_visible(snapshot: &ToolbarSnapshot) -> bool {
-    if snapshot.use_icons {
-        toolbar_item_visible(snapshot, ids::TOP_UTILITY_ICON_MODE_TEXT)
-    } else {
-        toolbar_item_visible(snapshot, ids::TOP_UTILITY_ICON_MODE_ICONS)
-    }
-}
-
-pub(crate) fn toolbar_item_id_for_tool(tool: Tool) -> ToolbarItemId {
-    match tool {
-        Tool::Select => ids::TOP_TOOL_SELECT,
-        Tool::Pen => ids::TOP_TOOL_PEN,
-        Tool::Line => ids::TOP_TOOL_LINE,
-        Tool::Rect => ids::TOP_TOOL_RECT,
-        Tool::Ellipse => ids::TOP_TOOL_ELLIPSE,
-        Tool::Triangle => ids::TOP_TOOL_TRIANGLE,
-        Tool::Parallelogram => ids::TOP_TOOL_PARALLELOGRAM,
-        Tool::Rhombus => ids::TOP_TOOL_RHOMBUS,
-        Tool::RegularPolygon => ids::TOP_TOOL_REGULAR_POLYGON,
-        Tool::FreeformPolygon => ids::TOP_TOOL_FREEFORM_POLYGON,
-        Tool::Arrow => ids::TOP_TOOL_ARROW,
-        Tool::Blur => ids::TOP_TOOL_BLUR,
-        Tool::Marker => ids::TOP_TOOL_MARKER,
-        Tool::Highlight => ids::TOP_UTILITY_HIGHLIGHT,
-        Tool::StepMarker => ids::TOP_TOOL_STEP_MARKER,
-        Tool::Eraser => ids::TOP_TOOL_ERASER,
-    }
-}
-
-fn tool_for_toolbar_item_id(id: ToolbarItemId) -> Option<Tool> {
-    [
-        (ids::TOP_TOOL_SELECT, Tool::Select),
-        (ids::TOP_TOOL_PEN, Tool::Pen),
-        (ids::TOP_TOOL_LINE, Tool::Line),
-        (ids::TOP_TOOL_RECT, Tool::Rect),
-        (ids::TOP_TOOL_ELLIPSE, Tool::Ellipse),
-        (ids::TOP_TOOL_TRIANGLE, Tool::Triangle),
-        (ids::TOP_TOOL_PARALLELOGRAM, Tool::Parallelogram),
-        (ids::TOP_TOOL_RHOMBUS, Tool::Rhombus),
-        (ids::TOP_TOOL_REGULAR_POLYGON, Tool::RegularPolygon),
-        (ids::TOP_TOOL_FREEFORM_POLYGON, Tool::FreeformPolygon),
-        (ids::TOP_TOOL_ARROW, Tool::Arrow),
-        (ids::TOP_TOOL_BLUR, Tool::Blur),
-        (ids::TOP_TOOL_MARKER, Tool::Marker),
-        (ids::TOP_TOOL_STEP_MARKER, Tool::StepMarker),
-        (ids::TOP_TOOL_ERASER, Tool::Eraser),
-    ]
-    .into_iter()
-    .find_map(|(candidate, tool)| (candidate == id).then_some(tool))
+    catalog::top_icon_mode_toggle_visible(snapshot)
 }
 
 fn ordered_tools(snapshot: &ToolbarSnapshot) -> Vec<Tool> {
@@ -191,18 +142,8 @@ fn ordered_tools(snapshot: &ToolbarSnapshot) -> Vec<Tool> {
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .iter()
-        .filter_map(|id| tool_for_toolbar_item_id(*id))
+        .filter_map(|id| catalog::tool_for_toolbar_item_id(*id))
         .collect()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TopUtilityButton {
-    Text,
-    StickyNote,
-    Screenshot,
-    ClearCanvas,
-    Highlight,
-    IconMode,
 }
 
 const DEFAULT_TOP_UTILITY_BUTTONS: [TopUtilityButton; 5] = [
@@ -212,20 +153,6 @@ const DEFAULT_TOP_UTILITY_BUTTONS: [TopUtilityButton; 5] = [
     TopUtilityButton::ClearCanvas,
     TopUtilityButton::Highlight,
 ];
-
-impl TopUtilityButton {
-    pub(crate) fn id(self, snapshot: &ToolbarSnapshot) -> ToolbarItemId {
-        match self {
-            Self::Text => ids::TOP_UTILITY_TEXT,
-            Self::StickyNote => ids::TOP_UTILITY_STICKY_NOTE,
-            Self::Screenshot => ids::TOP_UTILITY_SCREENSHOT,
-            Self::ClearCanvas => ids::TOP_UTILITY_CLEAR_CANVAS,
-            Self::Highlight => ids::TOP_UTILITY_HIGHLIGHT,
-            Self::IconMode if snapshot.use_icons => ids::TOP_UTILITY_ICON_MODE_TEXT,
-            Self::IconMode => ids::TOP_UTILITY_ICON_MODE_ICONS,
-        }
-    }
-}
 
 pub(crate) fn visible_top_utility_buttons(
     snapshot: &ToolbarSnapshot,
@@ -238,7 +165,7 @@ pub(crate) fn visible_top_utility_buttons(
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopControls)
     {
-        if let Some(button) = top_utility_button_for_id(*id, snapshot)
+        if let Some(button) = catalog::top_utility_button_for_item_id(*id)
             && top_utility_button_visible(snapshot, button, simple, use_icons)
             && !ordered.contains(&button)
         {
@@ -253,30 +180,6 @@ pub(crate) fn visible_top_utility_buttons(
         }
     }
     ordered
-}
-
-fn top_utility_button_for_id(
-    id: ToolbarItemId,
-    snapshot: &ToolbarSnapshot,
-) -> Option<TopUtilityButton> {
-    if id == ids::TOP_UTILITY_TEXT {
-        Some(TopUtilityButton::Text)
-    } else if id == ids::TOP_UTILITY_STICKY_NOTE {
-        Some(TopUtilityButton::StickyNote)
-    } else if id == ids::TOP_UTILITY_SCREENSHOT {
-        Some(TopUtilityButton::Screenshot)
-    } else if id == ids::TOP_UTILITY_CLEAR_CANVAS {
-        Some(TopUtilityButton::ClearCanvas)
-    } else if id == ids::TOP_UTILITY_HIGHLIGHT {
-        Some(TopUtilityButton::Highlight)
-    } else if id == ids::TOP_UTILITY_ICON_MODE_ICONS
-        || id == ids::TOP_UTILITY_ICON_MODE_TEXT
-        || id == TopUtilityButton::IconMode.id(snapshot)
-    {
-        Some(TopUtilityButton::IconMode)
-    } else {
-        None
-    }
 }
 
 fn top_utility_button_visible(
@@ -399,43 +302,8 @@ pub(crate) fn ordered_side_sections(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSi
         .order
         .ordered_ids(ToolbarItemOrderGroup::SideSections)
         .iter()
-        .filter_map(|id| side_section_for_toolbar_item_id(*id))
+        .filter_map(|id| catalog::side_section_for_toolbar_item_id(*id))
         .collect()
-}
-
-fn side_section_for_toolbar_item_id(id: ToolbarItemId) -> Option<ToolbarSideSection> {
-    [
-        (ids::SIDE_GROUP_COLORS, ToolbarSideSection::Colors),
-        (ids::SIDE_GROUP_PRESETS, ToolbarSideSection::Presets),
-        (ids::SIDE_GROUP_THICKNESS, ToolbarSideSection::Thickness),
-        (ids::SIDE_GROUP_ERASER_MODE, ToolbarSideSection::EraserMode),
-        (
-            ids::SIDE_GROUP_POLYGON_SIDES,
-            ToolbarSideSection::PolygonSides,
-        ),
-        (
-            ids::SIDE_GROUP_ARROW_LABELS,
-            ToolbarSideSection::ArrowLabels,
-        ),
-        (
-            ids::SIDE_GROUP_STEP_MARKERS,
-            ToolbarSideSection::StepMarkers,
-        ),
-        (
-            ids::SIDE_GROUP_MARKER_OPACITY,
-            ToolbarSideSection::MarkerOpacity,
-        ),
-        (ids::SIDE_GROUP_TEXT_SIZE, ToolbarSideSection::TextSize),
-        (ids::SIDE_GROUP_FONT, ToolbarSideSection::Font),
-        (ids::SIDE_GROUP_ACTIONS, ToolbarSideSection::Actions),
-        (ids::SIDE_GROUP_BOARDS, ToolbarSideSection::Boards),
-        (ids::SIDE_GROUP_PAGES, ToolbarSideSection::Pages),
-        (ids::SIDE_GROUP_STEP_UNDO, ToolbarSideSection::StepUndo),
-        (ids::SIDE_GROUP_SESSION, ToolbarSideSection::Session),
-        (ids::SIDE_GROUP_SETTINGS, ToolbarSideSection::Settings),
-    ]
-    .into_iter()
-    .find_map(|(candidate, section)| (candidate == id).then_some(section))
 }
 
 pub(crate) fn current_shape_tool(active_tool: Tool, tool_override: Option<Tool>) -> Option<Tool> {
