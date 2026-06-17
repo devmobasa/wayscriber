@@ -53,6 +53,19 @@ impl SeatHandler for WaylandState {
             }
         }
 
+        if capability == Capability::Touch {
+            info!("Touch capability available");
+            match self.seat_state.get_touch(qh, &seat) {
+                Ok(touch) => {
+                    debug!("Touch initialized");
+                    self.touch = Some(touch);
+                }
+                Err(err) => {
+                    warn!("Touch initialization failed: {}", err);
+                }
+            }
+        }
+
         #[cfg(tablet)]
         if let Some(manager) = &self.tablet_manager
             && self.tablet_seats.is_empty()
@@ -78,6 +91,11 @@ impl SeatHandler for WaylandState {
             self.themed_pointer = None;
             self.current_pointer_shape = None;
             self.cursor_hidden = false;
+        }
+        if capability == Capability::Touch {
+            info!("Touch capability removed");
+            self.touch = None;
+            self.cancel_active_touch_sequence();
         }
     }
 

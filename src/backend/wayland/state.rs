@@ -24,7 +24,7 @@ use smithay_client_toolkit::{
 use std::time::{Duration, Instant};
 use wayland_client::{
     Proxy, QueueHandle,
-    protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
+    protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface, wl_touch},
 };
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::{
@@ -187,6 +187,10 @@ pub(super) struct WaylandState {
 
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
+    #[allow(dead_code)] // Retains the WlTouch protocol object while the seat advertises touch.
+    pub(super) touch: Option<wl_touch::WlTouch>,
+    pub(super) active_touch: TouchState,
+    pub(super) active_touch_surface: Option<wl_surface::WlSurface>,
     pub(super) locked_pointer: Option<ZwpLockedPointerV1>,
     pub(super) current_pointer_shape: Option<CursorIcon>,
     pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
@@ -259,6 +263,71 @@ pub(super) struct PendingStylusFrame {
     pub(super) down: bool,
     pub(super) up: bool,
     pub(super) button_presses: Vec<u32>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum TouchTarget {
+    #[default]
+    None,
+    Overlay,
+    Toolbar,
+    InlineToolbar,
+    Other,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct TouchState {
+    active_id: Option<i32>,
+    target: TouchTarget,
+    last_position: Option<(f64, f64)>,
+}
+
+impl TouchState {
+    pub(super) fn begin(&mut self, id: i32, position: (f64, f64)) -> bool {
+        if self.active_id.is_some() {
+            return false;
+        }
+        self.active_id = Some(id);
+        self.target = TouchTarget::None;
+        self.last_position = Some(position);
+        true
+    }
+
+    pub(super) fn update_position(&mut self, id: i32, position: (f64, f64)) -> bool {
+        if self.active_id != Some(id) {
+            return false;
+        }
+        self.last_position = Some(position);
+        true
+    }
+
+    pub(super) fn is_active_id(&self, id: i32) -> bool {
+        self.active_id == Some(id)
+    }
+
+    pub(super) fn is_active(&self) -> bool {
+        self.active_id.is_some()
+    }
+
+    pub(super) fn set_target(&mut self, target: TouchTarget) {
+        if self.active_id.is_some() {
+            self.target = target;
+        }
+    }
+
+    pub(super) fn target(&self) -> TouchTarget {
+        self.target
+    }
+
+    pub(super) fn last_position(&self) -> Option<(f64, f64)> {
+        self.last_position
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.active_id = None;
+        self.target = TouchTarget::None;
+        self.last_position = None;
+    }
 }
 
 #[cfg(tablet)]
