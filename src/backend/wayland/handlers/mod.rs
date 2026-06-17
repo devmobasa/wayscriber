@@ -3,7 +3,7 @@
 use smithay_client_toolkit::{
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
     delegate_pointer_constraints, delegate_registry, delegate_relative_pointer, delegate_seat,
-    delegate_shm, delegate_xdg_shell, delegate_xdg_window,
+    delegate_shm, delegate_touch, delegate_xdg_shell, delegate_xdg_window,
 };
 
 use super::state::WaylandState;
@@ -15,6 +15,7 @@ delegate_layer!(WaylandState);
 delegate_seat!(WaylandState);
 delegate_keyboard!(WaylandState);
 delegate_pointer!(WaylandState);
+delegate_touch!(WaylandState);
 delegate_pointer_constraints!(WaylandState);
 delegate_relative_pointer!(WaylandState);
 delegate_registry!(WaylandState);
@@ -36,4 +37,5 @@ mod seat;
 mod shm;
 #[cfg(tablet)]
 mod tablet;
+mod touch;
 mod xdg;

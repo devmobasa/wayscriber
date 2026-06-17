@@ -95,6 +95,39 @@ fn parse_boolish_env_handles_case_and_on() {
 }
 
 #[test]
+fn touch_state_accepts_only_one_active_contact() {
+    let mut state = TouchState::default();
+
+    assert!(state.begin(7, (10.0, 20.0)));
+    state.set_target(TouchTarget::Overlay);
+    assert!(!state.begin(8, (30.0, 40.0)));
+
+    assert!(state.is_active());
+    assert!(state.is_active_id(7));
+    assert!(!state.is_active_id(8));
+    assert_eq!(state.target(), TouchTarget::Overlay);
+    assert_eq!(state.last_position(), Some((10.0, 20.0)));
+}
+
+#[test]
+fn touch_state_updates_and_clears_only_active_contact() {
+    let mut state = TouchState::default();
+
+    assert!(state.begin(7, (10.0, 20.0)));
+    assert!(!state.update_position(8, (30.0, 40.0)));
+    assert_eq!(state.last_position(), Some((10.0, 20.0)));
+
+    assert!(state.update_position(7, (30.0, 40.0)));
+    assert_eq!(state.last_position(), Some((30.0, 40.0)));
+
+    state.clear();
+    assert!(!state.is_active());
+    assert!(!state.is_active_id(7));
+    assert_eq!(state.target(), TouchTarget::None);
+    assert_eq!(state.last_position(), None);
+}
+
+#[test]
 fn damage_summary_truncates_after_five_regions() {
     let mut regions = Vec::new();
     for i in 0..6 {
