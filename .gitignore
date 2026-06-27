@@ -14,7 +14,7 @@
 *.swo
 
 # Local agent instructions
-AGENTS.md
+AGENTS.local.md
 CLAUDE.md
 
 
@@ -29,6 +29,8 @@ tools/release.sh
 # Packaging (but keep the service file)
 packaging/**
 !packaging/wayscriber.service
+!packaging/AGENTS.md
+!packaging/.SRCINFO
 !packaging/PKGBUILD
 !packaging/package.wayscriber.yaml
 !packaging/package.configurator.yaml
