@@ -2,10 +2,16 @@ use super::super::base::{InputState, UiToastKind};
 use super::layout;
 use super::{CommandPaletteCursorHint, layout::CommandPaletteGeometry};
 use crate::input::events::Key;
+use std::time::{Duration, Instant};
+
+const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280);
+#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
+const COMMAND_PALETTE_REPEAT_INTERVAL: Duration = Duration::from_millis(55);
 
 impl InputState {
     fn open_command_palette_internal(&mut self, track_usage: bool) {
         self.command_palette_open = true;
+        self.clear_command_palette_repeat();
         if track_usage {
             self.pending_onboarding_usage.used_command_palette = true;
         }
@@ -29,6 +35,7 @@ impl InputState {
     pub(crate) fn toggle_command_palette(&mut self) {
         if self.command_palette_open {
             self.command_palette_open = false;
+            self.clear_command_palette_repeat();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return;
@@ -50,6 +57,7 @@ impl InputState {
             }
             Key::Escape => {
                 self.command_palette_open = false;
+                self.clear_command_palette_repeat();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
@@ -57,6 +65,7 @@ impl InputState {
             Key::Return => {
                 if let Some(command) = self.selected_command() {
                     self.command_palette_open = false;
+                    self.clear_command_palette_repeat();
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     self.record_command_palette_action(command.action);
@@ -65,27 +74,33 @@ impl InputState {
                 true
             }
             Key::Up => {
-                if self.command_palette_selected > 0 {
-                    self.command_palette_selected -= 1;
-                    // Adjust scroll if selection moves above visible window
-                    if self.command_palette_selected < self.command_palette_scroll {
-                        self.command_palette_scroll = self.command_palette_selected;
-                    }
+                self.start_command_palette_repeat(Key::Up);
+                self.move_command_palette_selection(Key::Up);
+                true
+            }
+            Key::Down => {
+                self.start_command_palette_repeat(Key::Down);
+                self.move_command_palette_selection(Key::Down);
+                true
+            }
+            Key::Home => {
+                self.clear_command_palette_repeat();
+                if self.command_palette_selected != 0 || self.command_palette_scroll != 0 {
+                    self.command_palette_selected = 0;
+                    self.command_palette_scroll = 0;
                     self.needs_redraw = true;
                 }
                 true
             }
-            Key::Down => {
+            Key::End => {
+                self.clear_command_palette_repeat();
                 let filtered = self.filtered_commands();
-                if self.command_palette_selected + 1 < filtered.len() {
-                    self.command_palette_selected += 1;
-                    // Adjust scroll if selection moves below visible window
-                    if self.command_palette_selected
-                        >= self.command_palette_scroll + layout::COMMAND_PALETTE_MAX_VISIBLE
-                    {
-                        self.command_palette_scroll =
-                            self.command_palette_selected - layout::COMMAND_PALETTE_MAX_VISIBLE + 1;
-                    }
+                if let Some(last_index) = filtered.len().checked_sub(1)
+                    && self.command_palette_selected != last_index
+                {
+                    self.command_palette_selected = last_index;
+                    self.command_palette_scroll =
+                        filtered.len().saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
                     self.needs_redraw = true;
                 }
                 true
@@ -117,6 +132,83 @@ impl InputState {
             }
             _ => true, // Consume all other keys while palette is open
         }
+    }
+
+    fn start_command_palette_repeat(&mut self, key: Key) {
+        self.command_palette_repeat_key = Some(key);
+        self.command_palette_repeat_next_tick =
+            Some(Instant::now() + COMMAND_PALETTE_REPEAT_INITIAL_DELAY);
+    }
+
+    pub(crate) fn clear_command_palette_repeat(&mut self) {
+        self.command_palette_repeat_key = None;
+        self.command_palette_repeat_next_tick = None;
+    }
+
+    fn move_command_palette_selection(&mut self, key: Key) -> bool {
+        match key {
+            Key::Up => {
+                if self.command_palette_selected == 0 {
+                    return false;
+                }
+                self.command_palette_selected -= 1;
+                if self.command_palette_selected < self.command_palette_scroll {
+                    self.command_palette_scroll = self.command_palette_selected;
+                }
+            }
+            Key::Down => {
+                let filtered = self.filtered_commands();
+                if self.command_palette_selected + 1 >= filtered.len() {
+                    return false;
+                }
+                self.command_palette_selected += 1;
+                if self.command_palette_selected
+                    >= self.command_palette_scroll + layout::COMMAND_PALETTE_MAX_VISIBLE
+                {
+                    self.command_palette_scroll =
+                        self.command_palette_selected - layout::COMMAND_PALETTE_MAX_VISIBLE + 1;
+                }
+            }
+            _ => return false,
+        }
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn release_command_palette_repeat_key(&mut self, key: Key) {
+        if self.command_palette_repeat_key == Some(key) {
+            self.clear_command_palette_repeat();
+        }
+    }
+
+    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
+    pub(crate) fn command_palette_repeat_timeout(&self, now: Instant) -> Option<Duration> {
+        if !self.command_palette_open {
+            return None;
+        }
+        self.command_palette_repeat_next_tick
+            .map(|next_tick| next_tick.saturating_duration_since(now))
+    }
+
+    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
+    pub(crate) fn tick_command_palette_repeat(&mut self, now: Instant) -> bool {
+        if !self.command_palette_open {
+            self.clear_command_palette_repeat();
+            return false;
+        }
+        let Some(key) = self.command_palette_repeat_key else {
+            return false;
+        };
+        let Some(next_tick) = self.command_palette_repeat_next_tick else {
+            return false;
+        };
+        if now < next_tick {
+            return false;
+        }
+
+        let changed = self.move_command_palette_selection(key);
+        self.command_palette_repeat_next_tick = Some(now + COMMAND_PALETTE_REPEAT_INTERVAL);
+        changed
     }
 
     fn mark_command_palette_query_changed(&mut self) {

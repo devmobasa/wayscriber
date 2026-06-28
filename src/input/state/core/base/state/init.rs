@@ -117,6 +117,8 @@ impl InputState {
             command_palette_query: String::new(),
             command_palette_selected: 0,
             command_palette_scroll: 0,
+            command_palette_repeat_key: None,
+            command_palette_repeat_next_tick: None,
             command_palette_recent: Vec::new(),
             command_palette_toast_duration_ms: 1500,
             show_status_bar,

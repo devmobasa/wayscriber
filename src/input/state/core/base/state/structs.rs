@@ -30,7 +30,7 @@ use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
-    MouseButton,
+    Key, MouseButton,
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
@@ -153,6 +153,10 @@ pub struct InputState {
     pub command_palette_selected: usize,
     /// Scroll offset for command palette (first visible item index)
     pub command_palette_scroll: usize,
+    /// Held command-palette navigation key for synthetic repeat.
+    pub(crate) command_palette_repeat_key: Option<Key>,
+    /// Next synthetic command-palette repeat tick.
+    pub(crate) command_palette_repeat_next_tick: Option<Instant>,
     /// Most recently executed command palette actions (most recent first)
     pub command_palette_recent: Vec<Action>,
     /// Duration for command palette action toasts (ms)

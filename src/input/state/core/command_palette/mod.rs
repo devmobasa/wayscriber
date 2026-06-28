@@ -30,6 +30,7 @@ mod tests {
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
     use std::collections::HashSet;
+    use std::time::{Duration, Instant};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -281,6 +282,53 @@ mod tests {
 
         assert_eq!(state.command_palette_selected, COMMAND_PALETTE_MAX_VISIBLE);
         assert_eq!(state.command_palette_scroll, 1);
+    }
+
+    #[test]
+    fn home_key_jumps_to_first_command() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_selected = 5;
+        state.command_palette_scroll = 3;
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Home));
+
+        assert_eq!(state.command_palette_selected, 0);
+        assert_eq!(state.command_palette_scroll, 0);
+    }
+
+    #[test]
+    fn end_key_jumps_to_last_command_and_scrolls_into_view() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        let filtered_len = state.filtered_commands().len();
+        assert!(filtered_len > COMMAND_PALETTE_MAX_VISIBLE);
+
+        assert!(state.handle_command_palette_key(crate::input::Key::End));
+
+        assert_eq!(state.command_palette_selected, filtered_len - 1);
+        assert_eq!(
+            state.command_palette_scroll,
+            filtered_len - COMMAND_PALETTE_MAX_VISIBLE
+        );
+    }
+
+    #[test]
+    fn held_down_key_repeats_after_delay_until_release() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Down));
+        assert_eq!(state.command_palette_selected, 1);
+        assert!(state.command_palette_repeat_timeout(Instant::now()).is_some());
+
+        assert!(state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
+        assert_eq!(state.command_palette_selected, 2);
+
+        state.on_key_release(crate::input::Key::Down);
+        assert!(state.command_palette_repeat_timeout(Instant::now()).is_none());
+        assert!(!state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
+        assert_eq!(state.command_palette_selected, 2);
     }
 
     #[test]

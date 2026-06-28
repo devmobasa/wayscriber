@@ -62,6 +62,7 @@ impl KeyboardHandler for WaylandState {
         // and breaking shortcuts/tools, aggressively reset our modifier state on
         // focus loss.
         self.input_state.reset_modifiers();
+        self.input_state.clear_command_palette_repeat();
         self.set_board_pan_key_held(false);
         self.stop_board_pan();
 
@@ -254,6 +255,9 @@ impl KeyboardHandler for WaylandState {
                 }
                 _ => {}
             }
+        }
+        if self.input_state.command_palette_open && matches!(key, Key::Up | Key::Down) {
+            return;
         }
         if should_try_toolbar_key(key, self.input_state.command_palette_open)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))

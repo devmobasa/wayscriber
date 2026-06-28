@@ -90,6 +90,7 @@ pub(super) fn run_event_loop(
         let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
+        let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
         let clipboard_timeout = (state.clipboard_paste_rx.is_some()
             || state.clipboard_publish_rx.is_some())
         .then_some(Duration::from_millis(25));
@@ -129,6 +130,7 @@ pub(super) fn run_event_loop(
             tray_action_flag.as_ref().map(|_| TRAY_ACTION_POLL_TIMEOUT),
         );
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
+        let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
@@ -197,6 +199,10 @@ pub(super) fn run_event_loop(
             state.input_state.needs_redraw = true;
         }
         if state.input_state.has_pending_history() {
+            state.input_state.needs_redraw = true;
+        }
+
+        if state.input_state.tick_command_palette_repeat(Instant::now()) {
             state.input_state.needs_redraw = true;
         }
 
