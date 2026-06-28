@@ -214,6 +214,62 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_backspace_deletes_previous_query_word_and_resets_position() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "export canvas clipboard  ".to_string();
+        state.command_palette_selected = 4;
+        state.command_palette_scroll = 3;
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+
+        assert_eq!(state.command_palette_query, "export canvas ");
+        assert_eq!(state.command_palette_selected, 0);
+        assert_eq!(state.command_palette_scroll, 0);
+    }
+
+    #[test]
+    fn ctrl_backspace_stops_at_shortcut_token_separator() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "ctrl+shift+f".to_string();
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+
+        assert_eq!(state.command_palette_query, "ctrl+shift+");
+    }
+
+    #[test]
+    fn ctrl_backspace_stops_at_slash_token_separator() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "capture/file".to_string();
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+
+        assert_eq!(state.command_palette_query, "capture/");
+    }
+
+    #[test]
+    fn ctrl_u_clears_query_and_resets_position() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "status bar".to_string();
+        state.command_palette_selected = 4;
+        state.command_palette_scroll = 3;
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('u')));
+
+        assert!(state.command_palette_query.is_empty());
+        assert_eq!(state.command_palette_selected, 0);
+        assert_eq!(state.command_palette_scroll, 0);
+    }
+
+    #[test]
     fn down_key_scrolls_once_selection_moves_past_visible_window() {
         let mut state = make_state();
         state.toggle_command_palette();

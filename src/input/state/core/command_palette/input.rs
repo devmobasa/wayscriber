@@ -44,6 +44,10 @@ impl InputState {
         }
 
         match key {
+            Key::Ctrl => {
+                self.handle_modifier_key_press(key);
+                true
+            }
             Key::Escape => {
                 self.command_palette_open = false;
                 self.dirty_tracker.mark_full();
@@ -86,31 +90,72 @@ impl InputState {
                 }
                 true
             }
+            Key::Backspace if self.modifiers.ctrl => {
+                self.delete_previous_command_palette_word();
+                true
+            }
             Key::Backspace => {
                 if !self.command_palette_query.is_empty() {
                     self.command_palette_query.pop();
-                    self.command_palette_selected = 0;
-                    self.command_palette_scroll = 0;
-                    self.needs_redraw = true;
+                    self.mark_command_palette_query_changed();
                 }
                 true
             }
-            Key::Char(ch) if !ch.is_control() => {
-                self.command_palette_query.push(ch);
-                self.command_palette_selected = 0;
-                self.command_palette_scroll = 0;
-                self.needs_redraw = true;
+            Key::Char('u' | 'U') if self.modifiers.ctrl => {
+                self.clear_command_palette_query();
                 true
             }
-            Key::Space => {
+            Key::Char(ch) if !self.modifiers.ctrl && !ch.is_control() => {
+                self.command_palette_query.push(ch);
+                self.mark_command_palette_query_changed();
+                true
+            }
+            Key::Space if !self.modifiers.ctrl => {
                 self.command_palette_query.push(' ');
-                self.command_palette_selected = 0;
-                self.command_palette_scroll = 0;
-                self.needs_redraw = true;
+                self.mark_command_palette_query_changed();
                 true
             }
             _ => true, // Consume all other keys while palette is open
         }
+    }
+
+    fn mark_command_palette_query_changed(&mut self) {
+        self.command_palette_selected = 0;
+        self.command_palette_scroll = 0;
+        self.needs_redraw = true;
+    }
+
+    fn clear_command_palette_query(&mut self) {
+        if self.command_palette_query.is_empty() {
+            return;
+        }
+        self.command_palette_query.clear();
+        self.mark_command_palette_query_changed();
+    }
+
+    fn delete_previous_command_palette_word(&mut self) {
+        if self.command_palette_query.is_empty() {
+            return;
+        }
+
+        while self
+            .command_palette_query
+            .chars()
+            .last()
+            .is_some_and(command_palette_token_separator)
+        {
+            self.command_palette_query.pop();
+        }
+        while self
+            .command_palette_query
+            .chars()
+            .last()
+            .is_some_and(|ch| !command_palette_token_separator(ch))
+        {
+            self.command_palette_query.pop();
+        }
+
+        self.mark_command_palette_query_changed();
     }
 
     /// Handle a mouse click while the command palette is open.
@@ -189,6 +234,10 @@ impl InputState {
         let geometry = self.command_palette_geometry(screen_width, screen_height, filtered.len());
         command_palette_cursor_hint_from_local(geometry, x, y)
     }
+}
+
+fn command_palette_token_separator(ch: char) -> bool {
+    ch.is_whitespace() || ch == '+' || ch == '/'
 }
 
 fn command_palette_cursor_hint_from_local(

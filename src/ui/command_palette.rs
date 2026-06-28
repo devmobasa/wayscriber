@@ -9,9 +9,9 @@ use crate::input::state::{
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, HINT_PRESS_ESC,
-    INPUT_BG, INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM, PANEL_BG_COMMAND_PALETTE, RADIUS_LG,
-    RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
+    self, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG,
+    INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM, PANEL_BG_COMMAND_PALETTE, RADIUS_LG, RADIUS_STD,
+    SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
@@ -30,6 +30,7 @@ const COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X: f64 = 5.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT: f64 = 18.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_GAP: f64 = 12.0;
 const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
+const COMMAND_PALETTE_INPUT_HINT: &str = "Esc close • Ctrl+U clear • Ctrl+Backspace delete word";
 
 /// Render the command palette if open.
 pub fn render_command_palette(
@@ -345,12 +346,12 @@ fn draw_command_palette_escape_hint(
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         COMMAND_PALETTE_HINT_TEXT_SIZE,
-        HINT_PRESS_ESC,
+        COMMAND_PALETTE_INPUT_HINT,
     );
     draw_text_baseline(
         ctx,
         hint_style,
-        HINT_PRESS_ESC,
+        COMMAND_PALETTE_INPUT_HINT,
         x + (palette_width - hint_extents.width()) / 2.0,
         hint_y,
         None,
