@@ -1,3 +1,4 @@
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::io::ErrorKind;
@@ -48,7 +49,18 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
         }
     }
 
-    fs::write(path, content).with_context(|| format!("failed to write {}", path.display()))?;
+    crate::durable_io::write_text_atomic(
+        path,
+        content,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::Replace,
+            permissions: PermissionPolicy::PreserveExistingOrMode(0o644),
+            symlink: SymlinkPolicy::FollowExistingTarget,
+            sync_file: true,
+            sync_parent: true,
+        },
+    )
+    .with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 

@@ -3,70 +3,17 @@ use super::super::base::{
     PendingSelectionClipboardPublish, SelectionPublishState, UiToastKind,
     WayscriberClipboardSelection,
 };
+use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
-use crate::draw::{EmbeddedImage, Shape};
 use crate::util::Rect;
 
-const DUPLICATE_OFFSET: i32 = 12;
 const PRIVATE_CLIPBOARD_SCHEMA_VERSION: u32 = 1;
+
+mod duplicate;
+mod image_paste;
 
 #[allow(dead_code)]
 impl InputState {
-    pub(crate) fn duplicate_selection(&mut self) -> bool {
-        let ids_len = self.selected_shape_ids().len();
-        if ids_len == 0 {
-            return false;
-        }
-
-        let mut created = Vec::new();
-        let mut new_ids = Vec::new();
-        for idx in 0..ids_len {
-            let id = self.selected_shape_ids()[idx];
-            let original = {
-                let frame = self.boards.active_frame();
-                frame.shape(id).cloned()
-            };
-            let Some(shape) = original else {
-                continue;
-            };
-            if shape.locked {
-                continue;
-            }
-
-            let mut cloned_shape = shape.shape.clone();
-            Self::translate_shape(&mut cloned_shape, DUPLICATE_OFFSET, DUPLICATE_OFFSET);
-            let new_id = {
-                let frame = self.boards.active_frame_mut();
-                frame.add_shape(cloned_shape)
-            };
-
-            if let Some((index, stored)) = {
-                let frame = self.boards.active_frame();
-                frame
-                    .find_index(new_id)
-                    .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
-            } {
-                self.mark_selection_dirty_region(stored.shape.bounding_box());
-                self.invalidate_hit_cache_for(new_id);
-                created.push((index, stored));
-                new_ids.push(new_id);
-            }
-        }
-
-        if created.is_empty() {
-            return false;
-        }
-
-        self.boards.active_frame_mut().push_undo_action(
-            UndoAction::Create { shapes: created },
-            self.undo_stack_limit,
-        );
-        self.mark_session_dirty();
-        self.needs_redraw = true;
-        self.set_selection(new_ids);
-        true
-    }
-
     pub(crate) fn copy_selection(&mut self) -> usize {
         let copied = {
             let ids = self.selected_shape_ids();
@@ -481,121 +428,6 @@ impl InputState {
         }
         created_len
     }
-
-    pub(crate) fn paste_external_image_from_request(
-        &mut self,
-        request: &ClipboardPasteRequest,
-        image: EmbeddedImage,
-    ) -> bool {
-        if self.active_clipboard_paste_request_id != Some(request.id) {
-            log::info!(
-                "Ignoring external image paste request {} because active request is {:?}",
-                request.id,
-                self.active_clipboard_paste_request_id
-            );
-            return false;
-        }
-
-        let image_mime_type = image.mime_type.clone();
-        let image_width = image.width;
-        let image_height = image.height;
-        let image_bytes = image.bytes.len();
-        let target_active = self.clipboard_request_targets_active_page(request);
-        let max_shapes = self.max_shapes_per_frame;
-        let undo_limit = self.undo_stack_limit;
-        let target = self
-            .boards
-            .board_state_by_id_mut(&request.target_board_id)
-            .filter(|board| board.pages.generation() == request.target_page_generation)
-            .and_then(|board| board.pages.frame_mut(request.target_page_index));
-
-        let Some(frame) = target else {
-            log::warn!(
-                "External image paste request {} cancelled because target board '{}' page {} generation {} is no longer available",
-                request.id,
-                request.target_board_id,
-                request.target_page_index,
-                request.target_page_generation
-            );
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                "Paste target changed; image paste was cancelled.",
-            );
-            self.trigger_blocked_feedback();
-            return false;
-        };
-
-        let (x, y, w, h) = image_display_bounds(request, image.width, image.height);
-        let shape = Shape::Image {
-            x,
-            y,
-            w,
-            h,
-            data: image,
-        };
-        let Some(new_id) = frame.try_add_shape_with_id(shape, max_shapes) else {
-            log::warn!(
-                "External image paste request {} rejected by shape limit on board '{}' page {} (max_shapes={}, image_bytes={})",
-                request.id,
-                request.target_board_id,
-                request.target_page_index,
-                max_shapes,
-                image_bytes
-            );
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                "Shape limit reached; image not pasted.",
-            );
-            self.trigger_blocked_feedback();
-            return false;
-        };
-
-        let Some((index, stored)) = frame
-            .find_index(new_id)
-            .and_then(|index| frame.shape(new_id).map(|shape| (index, shape.clone())))
-        else {
-            return false;
-        };
-        let bounds = stored.shape.bounding_box();
-        frame.push_undo_action(
-            UndoAction::Create {
-                shapes: vec![(index, stored)],
-            },
-            undo_limit,
-        );
-        let undo_entries = frame.undo_stack_len();
-        self.mark_session_dirty();
-        if target_active {
-            self.mark_selection_dirty_region(bounds);
-            self.invalidate_hit_cache_for(new_id);
-            self.set_selection(vec![new_id]);
-            self.needs_redraw = true;
-        }
-        log::info!(
-            "Pasted external image shape {} from request {} into board '{}' page {}: target_active={}, mime={}, image={}x{}, bytes={}, display_bounds=({}, {}, {}, {}), undo_entries={}",
-            new_id,
-            request.id,
-            request.target_board_id,
-            request.target_page_index,
-            target_active,
-            image_mime_type,
-            image_width,
-            image_height,
-            image_bytes,
-            x,
-            y,
-            w,
-            h,
-            undo_entries
-        );
-        true
-    }
-
-    fn clipboard_request_targets_active_page(&self, request: &ClipboardPasteRequest) -> bool {
-        self.boards.active_board_id() == request.target_board_id
-            && self.boards.active_page_index() == request.target_page_index
-            && self.boards.active_page_generation() == request.target_page_generation
-    }
 }
 
 fn non_empty_shapes(shapes: Vec<Shape>) -> Option<Vec<Shape>> {
@@ -639,43 +471,4 @@ fn shapes_bounding_box(shapes: &[Shape]) -> Option<Rect> {
     found
         .then(|| Rect::from_min_max(min_x, min_y, max_x, max_y))
         .flatten()
-}
-
-fn image_display_bounds(
-    request: &ClipboardPasteRequest,
-    natural_width: u32,
-    natural_height: u32,
-) -> (i32, i32, i32, i32) {
-    let natural_width = natural_width.max(1) as f64;
-    let natural_height = natural_height.max(1) as f64;
-    let max_width = (request.visible_canvas_rect.width.max(1) as f64 * 0.7).max(1.0);
-    let max_height = (request.visible_canvas_rect.height.max(1) as f64 * 0.7).max(1.0);
-    let scale = (max_width / natural_width)
-        .min(max_height / natural_height)
-        .min(1.0);
-    let w = (natural_width * scale).round().max(1.0) as i32;
-    let h = (natural_height * scale).round().max(1.0) as i32;
-    let (anchor_x, anchor_y) = request.anchor.point();
-    let mut x = anchor_x.saturating_sub(w / 2);
-    let mut y = anchor_y.saturating_sub(h / 2);
-    x = clamp_partly_visible(
-        x,
-        w,
-        request.visible_canvas_rect.x,
-        request.visible_canvas_rect.width,
-    );
-    y = clamp_partly_visible(
-        y,
-        h,
-        request.visible_canvas_rect.y,
-        request.visible_canvas_rect.height,
-    );
-    (x, y, w, h)
-}
-
-fn clamp_partly_visible(value: i32, size: i32, visible_start: i32, visible_size: i32) -> i32 {
-    let visible_end = visible_start.saturating_add(visible_size);
-    let min_value = visible_start.saturating_sub(size.saturating_sub(1));
-    let max_value = visible_end.saturating_sub(1);
-    value.clamp(min_value, max_value)
 }

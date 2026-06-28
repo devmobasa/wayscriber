@@ -31,7 +31,10 @@ impl InputState {
         }
 
         let undo_action = if actions.len() == 1 {
-            actions.into_iter().next().unwrap()
+            let Some(action) = actions.pop() else {
+                return false;
+            };
+            action
         } else {
             UndoAction::Compound { actions }
         };

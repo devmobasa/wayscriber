@@ -10,6 +10,7 @@ mod cli;
 mod config;
 mod daemon;
 mod draw;
+mod durable_io;
 mod env_vars;
 mod file_uri;
 mod image_decode;

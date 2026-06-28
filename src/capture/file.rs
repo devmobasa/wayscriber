@@ -1,6 +1,7 @@
 //! File saving functionality for screenshots.
 
 use super::types::CaptureError;
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::paths::{expand_tilde as expand_tilde_global, home_dir, pictures_dir};
 use crate::time_utils::{format_with_template, now_local};
 use std::fs;
@@ -119,19 +120,22 @@ pub fn save_screenshot(
     );
 
     // Write file
-    fs::write(&file_path, image_data)?;
+    crate::durable_io::write_atomic(
+        &file_path,
+        image_data,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::Replace,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
+            sync_file: true,
+            sync_parent: true,
+        },
+    )
+    .map_err(|err| CaptureError::SaveError(std::io::Error::other(err)))?;
 
     // Verify the write
     let written_size = fs::metadata(&file_path)?.len();
     log::debug!("File written: {} bytes", written_size);
-
-    // Set permissions to user read/write only (security)
-    #[cfg(unix)]
-    {
-        use std::fs::Permissions;
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&file_path, Permissions::from_mode(0o600))?;
-    }
 
     log::info!("Screenshot saved successfully: {}", file_path.display());
 

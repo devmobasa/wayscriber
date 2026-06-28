@@ -10,6 +10,7 @@ pub mod canvas_export;
 pub mod capture;
 pub mod config;
 pub mod draw;
+pub mod durable_io;
 pub mod env_vars;
 #[cfg(feature = "portal")]
 pub(crate) mod file_uri;

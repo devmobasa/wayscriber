@@ -3,7 +3,7 @@ use log::{info, warn};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -17,16 +17,16 @@ use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::env_vars::NO_TRAY_ENV;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
+#[cfg(test)]
 use crate::tray_action::TrayAction;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
 use wayscriber::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 
+use super::control::DaemonToggleRequest;
 #[cfg(test)]
 use super::control::read_daemon_toggle_response;
-use super::control::{
-    DaemonToggleCommand, DaemonToggleCommands, DaemonToggleRequest,
-    write_daemon_toggle_command_error, write_daemon_toggle_command_success,
-};
+#[cfg(test)]
+use super::control::{DaemonToggleCommand, DaemonToggleCommands};
 use super::global_shortcuts::start_global_shortcuts_listener;
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
@@ -38,6 +38,8 @@ use super::types::{AlreadyRunningError, BackendRunner, OverlayState};
 // Suppress only duplicate plain toggles after a successful toggle completes, so
 // typed requests still run.
 const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
+
+mod toggles;
 
 pub struct Daemon {
     pub(super) overlay_state: OverlayState,
@@ -161,201 +163,6 @@ impl Daemon {
             .as_ref()
             .and_then(|request| request.session_file.clone())
             .or_else(|| self.initial_named_session_file.clone())
-    }
-
-    fn ensure_visible_overlay_can_accept_request(
-        &self,
-        request: Option<&DaemonToggleRequest>,
-    ) -> Result<()> {
-        let Some(requested) = request.and_then(|request| request.session_file.as_ref()) else {
-            return Ok(());
-        };
-        if self.overlay_state != OverlayState::Visible {
-            return Ok(());
-        }
-        if self
-            .active_named_session_file
-            .as_ref()
-            .is_some_and(|active| named_session_paths_match(active, requested))
-        {
-            return Ok(());
-        }
-
-        Err(anyhow::anyhow!(
-            "cannot switch named session target while overlay is visible; hide the overlay first"
-        ))
-    }
-
-    fn process_single_toggle(
-        &mut self,
-        request: Option<DaemonToggleRequest>,
-        activation_token: Option<String>,
-        suppress_overlay_action_signal: bool,
-    ) -> Result<bool> {
-        let request = request
-            .map(|mut request| {
-                request.normalize_and_validate_session_file()?;
-                Ok::<_, anyhow::Error>(request)
-            })
-            .transpose()?;
-        self.ensure_visible_overlay_can_accept_request(request.as_ref())?;
-        let plain_visibility_toggle_requested =
-            request.as_ref().is_none_or(DaemonToggleRequest::is_empty);
-        if plain_visibility_toggle_requested {
-            let now = Instant::now();
-            if self
-                .last_plain_visibility_toggle_completed_at
-                .is_some_and(|previous| {
-                    now.saturating_duration_since(previous) < DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW
-                })
-            {
-                info!("Ignoring duplicate plain daemon visibility toggle");
-                return Ok(false);
-            }
-        }
-        if let Some(action) = request.as_ref().and_then(|request| request.overlay_action) {
-            self.pending_activation_token = activation_token;
-            self.pending_toggle_request = request.filter(|request| !request.is_empty());
-            if self.overlay_state == OverlayState::Hidden
-                && matches!(action, TrayAction::LightDrawOff)
-            {
-                self.pending_activation_token = None;
-                self.pending_toggle_request = None;
-                return Ok(false);
-            }
-            let was_hidden = self.overlay_state == OverlayState::Hidden;
-            self.dispatch_overlay_action(action, !suppress_overlay_action_signal)?;
-            if self.overlay_state == OverlayState::Hidden {
-                self.show_overlay()?;
-                return Ok(was_hidden);
-            } else {
-                self.pending_activation_token = None;
-                self.pending_toggle_request = None;
-            }
-            return Ok(false);
-        }
-
-        self.pending_activation_token = activation_token;
-        self.pending_toggle_request = request.filter(|request| !request.is_empty());
-        if let Err(err) = self.toggle_overlay() {
-            self.pending_activation_token = None;
-            self.pending_toggle_request = None;
-            return Err(err);
-        }
-        if plain_visibility_toggle_requested {
-            self.last_plain_visibility_toggle_completed_at = Some(Instant::now());
-        }
-        Ok(false)
-    }
-
-    fn process_queued_toggle_command(
-        &mut self,
-        command: DaemonToggleCommand,
-        suppress_overlay_action_signal: &mut bool,
-    ) {
-        let result = self.process_single_toggle(
-            Some(command.request.clone()),
-            None,
-            *suppress_overlay_action_signal,
-        );
-        match result {
-            Ok(spawned_overlay) => {
-                *suppress_overlay_action_signal |= spawned_overlay;
-                if let Err(err) = write_daemon_toggle_command_success(&command) {
-                    warn!("Failed to write daemon toggle response: {}", err);
-                }
-            }
-            Err(err) => {
-                let message = format!("{err:#}");
-                warn!("Toggle overlay failed: {}", message);
-                if let Err(response_err) = write_daemon_toggle_command_error(&command, &message) {
-                    warn!(
-                        "Failed to write daemon toggle error response: {}",
-                        response_err
-                    );
-                }
-            }
-        }
-    }
-
-    fn dispatch_overlay_action(
-        &self,
-        action: TrayAction,
-        signal_visible_overlay: bool,
-    ) -> Result<()> {
-        let action_path = crate::tray_action::queue_action(action)?;
-
-        let pid = self.overlay_pid.load(Ordering::Acquire);
-        if signal_visible_overlay && self.overlay_state == OverlayState::Visible && pid != 0 {
-            #[cfg(unix)]
-            {
-                let pid = i32::try_from(pid).context("overlay pid does not fit into i32")?;
-                if unsafe { libc::kill(pid, libc::SIGUSR2) } != 0 {
-                    warn!(
-                        "Failed to signal overlay process {} for action {}: {}",
-                        pid,
-                        action.as_str(),
-                        std::io::Error::last_os_error()
-                    );
-                }
-            }
-            #[cfg(not(unix))]
-            {
-                warn!("Overlay actions are only supported on Unix platforms");
-            }
-        }
-        log::debug!(
-            "Queued overlay action {} at {}",
-            action.as_str(),
-            action_path.display()
-        );
-
-        Ok(())
-    }
-
-    fn process_pending_toggles(
-        &mut self,
-        activation_token: Option<String>,
-        signal_toggle_requested: bool,
-    ) -> Result<()> {
-        let queued_requests = if signal_toggle_requested {
-            crate::daemon::take_daemon_toggle_requests(&self.instance_token)?
-        } else {
-            DaemonToggleCommands {
-                commands: Vec::new(),
-                saw_command_files: false,
-            }
-        };
-
-        if !signal_toggle_requested || activation_token.is_some() {
-            self.process_single_toggle(None, activation_token, false)?;
-        }
-
-        if signal_toggle_requested {
-            self.process_signal_toggle_commands(queued_requests)?;
-        }
-
-        Ok(())
-    }
-
-    fn process_signal_toggle_commands(
-        &mut self,
-        queued_requests: DaemonToggleCommands,
-    ) -> Result<()> {
-        if queued_requests.commands.is_empty() {
-            if queued_requests.saw_command_files {
-                return Ok(());
-            }
-            return self
-                .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-                .map(drop);
-        }
-
-        let mut suppress_overlay_action_signal = false;
-        for command in queued_requests.commands {
-            self.process_queued_toggle_command(command, &mut suppress_overlay_action_signal);
-        }
-        Ok(())
     }
 
     pub(super) fn session_resume_override(&self) -> Option<bool> {
@@ -583,10 +390,6 @@ impl Daemon {
     }
 }
 
-fn named_session_paths_match(left: &Path, right: &Path) -> bool {
-    crate::session::catalog::session_paths_match(left, right)
-}
-
 #[cfg(test)]
 impl Daemon {
     pub fn test_state(&self) -> OverlayState {
@@ -595,254 +398,4 @@ impl Daemon {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
-
-    #[test]
-    fn light_draw_off_request_does_not_show_hidden_overlay() {
-        let called = Arc::new(AtomicUsize::new(0));
-        let called_clone = Arc::clone(&called);
-        let runner: Arc<BackendRunner> = Arc::new(move |_| {
-            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
-        });
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-
-        daemon
-            .process_single_toggle(
-                Some(DaemonToggleRequest {
-                    overlay_action: Some(TrayAction::LightDrawOff),
-                    ..Default::default()
-                }),
-                None,
-                false,
-            )
-            .unwrap();
-
-        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-        assert!(daemon.pending_toggle_request.is_none());
-        assert!(daemon.pending_activation_token.is_none());
-    }
-
-    #[test]
-    fn visible_overlay_rejects_different_named_session_request() {
-        let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-        daemon.overlay_state = OverlayState::Visible;
-        daemon.active_named_session_file =
-            Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
-
-        let err = daemon
-            .process_single_toggle(
-                Some(DaemonToggleRequest {
-                    session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
-                    ..Default::default()
-                }),
-                None,
-                false,
-            )
-            .expect_err("different visible named target should be rejected");
-
-        assert!(
-            format!("{err:#}")
-                .contains("cannot switch named session target while overlay is visible"),
-            "{err:#}"
-        );
-        assert_eq!(daemon.test_state(), OverlayState::Visible);
-        assert_eq!(
-            daemon.active_named_session_file.as_deref(),
-            Some(std::path::Path::new("/tmp/current.wayscriber-session"))
-        );
-    }
-
-    #[test]
-    fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-        daemon.overlay_state = OverlayState::Visible;
-        daemon.active_named_session_file =
-            Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
-        let command = DaemonToggleCommand {
-            daemon_token: "daemon-token".into(),
-            request: DaemonToggleRequest {
-                session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
-                ..Default::default()
-            },
-            request_path: temp.path().join("request.json"),
-            response_path: temp.path().join("responses").join("request.json"),
-        };
-
-        let mut suppress_overlay_action_signal = false;
-        daemon.process_queued_toggle_command(command.clone(), &mut suppress_overlay_action_signal);
-
-        let err = read_daemon_toggle_response(&command.response_path)
-            .expect_err("visible target mismatch should be written to response");
-        assert!(
-            format!("{err:#}")
-                .contains("cannot switch named session target while overlay is visible"),
-            "{err:#}"
-        );
-        assert_eq!(daemon.test_state(), OverlayState::Visible);
-        assert!(!suppress_overlay_action_signal);
-    }
-
-    #[test]
-    fn typed_signal_with_no_executable_commands_does_not_fallback_to_raw_toggle() {
-        let called = Arc::new(AtomicUsize::new(0));
-        let called_clone = Arc::clone(&called);
-        let runner: Arc<BackendRunner> = Arc::new(move |_| {
-            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
-        });
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-
-        daemon
-            .process_signal_toggle_commands(DaemonToggleCommands {
-                commands: Vec::new(),
-                saw_command_files: true,
-            })
-            .expect("typed command marker should suppress raw fallback");
-
-        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    }
-
-    #[test]
-    fn duplicate_plain_toggle_requests_are_debounced() {
-        let called = Arc::new(AtomicUsize::new(0));
-        let called_clone = Arc::clone(&called);
-        let runner: Arc<BackendRunner> = Arc::new(move |_| {
-            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
-        });
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-
-        assert_eq!(called.load(AtomicOrdering::SeqCst), 1);
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    }
-
-    #[test]
-    fn typed_visibility_toggle_request_is_not_debounced() {
-        let modes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let modes_clone = Arc::clone(&modes);
-        let runner: Arc<BackendRunner> = Arc::new(move |mode| {
-            modes_clone
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .push(mode);
-            Ok(())
-        });
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-        daemon
-            .process_single_toggle(
-                Some(DaemonToggleRequest {
-                    mode: Some("whiteboard".to_string()),
-                    ..Default::default()
-                }),
-                None,
-                false,
-            )
-            .unwrap();
-
-        let modes = modes
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        assert_eq!(modes.as_slice(), &[None, Some("whiteboard".to_string())]);
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn duplicate_plain_toggle_after_slow_hide_is_debounced() {
-        let mut daemon = Daemon::new(None, false, None, None);
-        let child = std::process::Command::new("sleep")
-            .arg("10")
-            .spawn()
-            .expect("spawn slow-terminating test process");
-        let child_pid = child.id();
-        assert_eq!(unsafe { libc::kill(child_pid as i32, libc::SIGSTOP) }, 0);
-        let mut stopped = false;
-        for _ in 0..20 {
-            let mut status = 0;
-            let result = unsafe {
-                libc::waitpid(
-                    child_pid as i32,
-                    &mut status,
-                    libc::WNOHANG | libc::WUNTRACED,
-                )
-            };
-            if result == child_pid as i32 && libc::WIFSTOPPED(status) {
-                stopped = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(10));
-        }
-        assert!(stopped, "test child should stop before hide starts");
-        daemon
-            .overlay_pid
-            .store(child.id(), std::sync::atomic::Ordering::Release);
-        daemon.overlay_child = Some(child);
-        daemon.overlay_state = OverlayState::Visible;
-
-        let hide_started = Instant::now();
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-        assert!(
-            hide_started.elapsed() >= DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW,
-            "test setup should keep hide slow enough to cross the debounce window"
-        );
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-
-        let called = Arc::new(AtomicUsize::new(0));
-        let called_clone = Arc::clone(&called);
-        daemon.backend_runner = Some(Arc::new(move |_| {
-            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
-        }));
-
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-
-        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    }
-
-    #[test]
-    fn plain_toggle_after_debounce_window_is_processed() {
-        let called = Arc::new(AtomicUsize::new(0));
-        let called_clone = Arc::clone(&called);
-        let runner: Arc<BackendRunner> = Arc::new(move |_| {
-            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
-        });
-        let mut daemon = Daemon::with_backend_runner(None, runner);
-
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-        daemon.last_plain_visibility_toggle_completed_at =
-            Some(Instant::now() - DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW - Duration::from_millis(1));
-        daemon
-            .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
-            .unwrap();
-
-        assert_eq!(called.load(AtomicOrdering::SeqCst), 2);
-        assert_eq!(daemon.test_state(), OverlayState::Hidden);
-    }
-}
+mod tests;

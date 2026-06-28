@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::models::DesktopEnvironment;
+use wayscriber::durable_io::AtomicWriteOptions;
 use wayscriber::env_vars::{BIN_ENV, PATH_ENV};
 use wayscriber::runtime_capabilities::{
     RUNTIME_CAPABILITIES_FLAG, RuntimeCapabilities, parse_runtime_capabilities,
@@ -112,7 +113,12 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     })?;
 
     let contents = render_user_service_file(&binary_path);
-    fs::write(&service_path, contents).map_err(|err| {
+    wayscriber::durable_io::write_text_atomic(
+        &service_path,
+        &contents,
+        AtomicWriteOptions::user_config_file(),
+    )
+    .map_err(|err| {
         format!(
             "Failed to write user service file {}: {}",
             service_path.display(),

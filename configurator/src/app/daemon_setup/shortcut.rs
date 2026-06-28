@@ -1,6 +1,7 @@
 use std::fs;
 
 use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
+use wayscriber::durable_io::AtomicWriteOptions;
 use wayscriber::env_vars::PATH_ENV;
 use wayscriber::shortcut_hint::{
     GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, GNOME_WAYSCRIBER_KEYBINDING_PATH,
@@ -191,7 +192,12 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
     let escaped_shortcut = escape_systemd_env_value(shortcut);
     let escaped_app_id = escape_systemd_env_value(PORTAL_APP_ID);
     let contents = render_portal_shortcut_dropin(&escaped_shortcut, &escaped_app_id);
-    fs::write(&dropin_path, contents).map_err(|err| {
+    wayscriber::durable_io::write_text_atomic(
+        &dropin_path,
+        &contents,
+        AtomicWriteOptions::user_config_file(),
+    )
+    .map_err(|err| {
         format!(
             "Failed to write portal shortcut drop-in {}: {}",
             dropin_path.display(),

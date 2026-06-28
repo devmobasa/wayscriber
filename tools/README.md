@@ -16,6 +16,11 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Runs `cargo test --workspace`
   - Usage: `./tools/test.sh`
 
+- **code-health-report.sh** - Report local maintainability metrics
+  - Reports Rust files over 500 lines, functions over 120 lines, production unwrap/expect/panic/unsafe markers, selected allowances, and direct `fs::write` usage
+  - Does not fail on reported findings; intended for baseline visibility before adding quality gates
+  - Usage: `bash tools/code-health-report.sh`
+
 - **reload-daemon.sh** - Restart running daemon
   - Kills and restarts the daemon to pick up config/code changes
   - Usage: `./tools/reload-daemon.sh`
