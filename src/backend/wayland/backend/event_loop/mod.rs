@@ -202,7 +202,10 @@ pub(super) fn run_event_loop(
             state.input_state.needs_redraw = true;
         }
 
-        if state.input_state.tick_command_palette_repeat(Instant::now()) {
+        if state
+            .input_state
+            .tick_command_palette_repeat(Instant::now())
+        {
             state.input_state.needs_redraw = true;
         }
 

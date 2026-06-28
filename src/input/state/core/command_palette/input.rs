@@ -99,8 +99,9 @@ impl InputState {
                     && self.command_palette_selected != last_index
                 {
                     self.command_palette_selected = last_index;
-                    self.command_palette_scroll =
-                        filtered.len().saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
+                    self.command_palette_scroll = filtered
+                        .len()
+                        .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
                     self.needs_redraw = true;
                 }
                 true

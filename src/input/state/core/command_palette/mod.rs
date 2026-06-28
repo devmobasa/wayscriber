@@ -320,13 +320,21 @@ mod tests {
 
         assert!(state.handle_command_palette_key(crate::input::Key::Down));
         assert_eq!(state.command_palette_selected, 1);
-        assert!(state.command_palette_repeat_timeout(Instant::now()).is_some());
+        assert!(
+            state
+                .command_palette_repeat_timeout(Instant::now())
+                .is_some()
+        );
 
         assert!(state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
         assert_eq!(state.command_palette_selected, 2);
 
         state.on_key_release(crate::input::Key::Down);
-        assert!(state.command_palette_repeat_timeout(Instant::now()).is_none());
+        assert!(
+            state
+                .command_palette_repeat_timeout(Instant::now())
+                .is_none()
+        );
         assert!(!state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
         assert_eq!(state.command_palette_selected, 2);
     }
