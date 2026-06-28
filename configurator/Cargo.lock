@@ -4236,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber"
-version = "0.9.20"
+version = "0.9.21"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4277,7 +4277,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber-configurator"
-version = "0.9.20"
+version = "0.9.21"
 dependencies = [
  "iced",
  "wayscriber",
