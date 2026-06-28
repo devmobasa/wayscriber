@@ -1,3 +1,4 @@
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use anyhow::{Context, Result};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -81,17 +82,18 @@ pub(crate) fn queue_action(action: TrayAction) -> Result<PathBuf> {
         .with_context(|| format!("failed to create runtime directory {}", dir.display()))?;
 
     let path = queued_action_path(&dir);
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| anyhow::anyhow!("{} has no file name", path.display()))?
-        .to_string_lossy();
-    let tmp_path = dir.join(format!(".{}.tmp", file_name));
-    fs::write(&tmp_path, action.as_str())
-        .with_context(|| format!("failed to write {}", tmp_path.display()))?;
-    if let Err(err) = fs::rename(&tmp_path, &path) {
-        let _ = fs::remove_file(&tmp_path);
-        return Err(err).with_context(|| format!("failed to queue tray action {}", path.display()));
-    }
+    crate::durable_io::write_text_atomic(
+        &path,
+        action.as_str(),
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::CreateNew,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
+            sync_file: false,
+            sync_parent: false,
+        },
+    )
+    .with_context(|| format!("failed to queue tray action {}", path.display()))?;
     Ok(path)
 }
 

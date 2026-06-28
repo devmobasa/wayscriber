@@ -1,5 +1,6 @@
 use super::Config;
 use super::paths::primary_config_dir;
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info};
@@ -96,8 +97,12 @@ impl Config {
 
         let config_str = toml::to_string_pretty(self).context("Failed to serialize config")?;
 
-        fs::write(&config_path, config_str)
-            .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
+        crate::durable_io::write_text_atomic(
+            &config_path,
+            &config_str,
+            AtomicWriteOptions::user_config_file(),
+        )
+        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
         if let Some(path) = &backup_path {
             info!(
@@ -176,7 +181,17 @@ impl Config {
         }
 
         let default_config = include_str!("../../config.example.toml");
-        fs::write(&config_path, default_config)?;
+        crate::durable_io::write_text_atomic(
+            &config_path,
+            default_config,
+            AtomicWriteOptions {
+                overwrite: OverwriteMode::CreateNew,
+                permissions: PermissionPolicy::PreserveExistingOrMode(0o644),
+                symlink: SymlinkPolicy::FollowExistingTarget,
+                sync_file: true,
+                sync_parent: true,
+            },
+        )?;
 
         info!("Created default config at {}", config_path.display());
         Ok(())

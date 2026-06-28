@@ -9,8 +9,18 @@ pub(super) fn backup_corrupt_session(session_path: &Path, options: &SessionOptio
     } else {
         options.corrupt_artifact_backup_file_path(session_path)
     };
-    fs::write(&backup_path, &bytes)
-        .with_context(|| format!("failed to write session backup {}", backup_path.display()))?;
+    crate::durable_io::write_atomic(
+        &backup_path,
+        &bytes,
+        crate::durable_io::AtomicWriteOptions {
+            overwrite: crate::durable_io::OverwriteMode::Replace,
+            permissions: crate::durable_io::PermissionPolicy::PreserveExistingOrMode(0o600),
+            symlink: crate::durable_io::SymlinkPolicy::Reject,
+            sync_file: true,
+            sync_parent: true,
+        },
+    )
+    .with_context(|| format!("failed to write session backup {}", backup_path.display()))?;
     if named_primary {
         debug!(
             "Backed up corrupt named session primary {} to {}; leaving the selected primary in place",
