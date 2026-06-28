@@ -67,7 +67,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Some("Dup"),
         "Duplicate the current page",
         Board,
-        false,
+        true,
         true,
         true
     ),
@@ -77,9 +77,19 @@ pub const ENTRIES: &[ActionMeta] = &[
         Some("Del"),
         "Delete the current page",
         Board,
-        false,
+        true,
         true,
         true
+    ),
+    meta!(
+        PageRestoreDeleted,
+        "Restore Deleted Page",
+        Some("Restore"),
+        "Restore the most recently deleted page",
+        Board,
+        true,
+        true,
+        false
     ),
     meta!(
         Board1,
@@ -233,7 +243,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Some("New"),
         "Create a new board",
         Board,
-        false,
+        true,
         true,
         true
     ),
@@ -243,7 +253,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Some("Del"),
         "Delete the active board",
         Board,
-        false,
+        true,
         true,
         true
     ),

@@ -133,7 +133,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Show selection properties",
         UI,
-        false,
+        true,
         true,
         false
     ),
@@ -143,7 +143,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Open the context menu",
         UI,
-        false,
+        true,
         true,
         false
     ),

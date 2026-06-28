@@ -57,7 +57,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Refresh zoom capture",
         Zoom,
-        false,
+        true,
         true,
         false
     ),
