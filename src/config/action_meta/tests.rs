@@ -26,6 +26,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::PageNew,
     Action::PageDuplicate,
     Action::PageDelete,
+    Action::PageRestoreDeleted,
     Action::BoardPrev,
     Action::BoardNext,
     Action::BoardNew,
@@ -143,7 +144,7 @@ const TOOLBAR_ACTIONS: &[Action] = &[
     Action::OpenConfigurator,
 ];
 
-const PALETTE_ACTIONS: &[Action] = &[
+const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::Exit,
     Action::EnterTextMode,
     Action::EnterStickyNoteMode,
@@ -155,6 +156,11 @@ const PALETTE_ACTIONS: &[Action] = &[
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,
+    Action::SelectTriangleTool,
+    Action::SelectParallelogramTool,
+    Action::SelectRhombusTool,
+    Action::SelectRegularPolygonTool,
+    Action::SelectFreeformPolygonTool,
     Action::SelectArrowTool,
     Action::SelectBlurTool,
     Action::SelectHighlightTool,
@@ -164,6 +170,12 @@ const PALETTE_ACTIONS: &[Action] = &[
     Action::ToggleEraserMode,
     Action::IncreaseThickness,
     Action::DecreaseThickness,
+    Action::IncreaseMarkerOpacity,
+    Action::DecreaseMarkerOpacity,
+    Action::IncreaseFontSize,
+    Action::DecreaseFontSize,
+    Action::ResetArrowLabelCounter,
+    Action::ResetStepMarkerCounter,
     Action::ToggleFill,
     Action::ToggleWhiteboard,
     Action::ToggleBlackboard,
@@ -171,14 +183,44 @@ const PALETTE_ACTIONS: &[Action] = &[
     Action::PagePrev,
     Action::PageNext,
     Action::PageNew,
+    Action::PageDuplicate,
+    Action::PageDelete,
+    Action::PageRestoreDeleted,
+    Action::Board1,
+    Action::Board2,
+    Action::Board3,
+    Action::Board4,
+    Action::Board5,
+    Action::Board6,
+    Action::Board7,
+    Action::Board8,
+    Action::Board9,
+    Action::BoardNext,
+    Action::BoardPrev,
     Action::FocusNextOutput,
     Action::FocusPrevOutput,
+    Action::BoardNew,
+    Action::BoardDelete,
+    Action::BoardPicker,
+    Action::BoardRestoreDeleted,
+    Action::BoardDuplicate,
+    Action::BoardSwitchRecent,
     Action::ToggleHelp,
+    Action::ToggleQuickHelp,
     Action::ToggleToolbar,
     Action::ToggleStatusBar,
     Action::TogglePresenterMode,
+    Action::ToggleLightMode,
+    Action::ToggleLightModeDrawing,
+    Action::RenderProfileNext,
+    Action::RenderProfilePrevious,
+    Action::RenderProfileOff,
     Action::ToggleClickHighlight,
+    Action::ToggleRadialMenu,
+    Action::ToggleSelectionProperties,
+    Action::OpenContextMenu,
     Action::OpenConfigurator,
+    Action::ToggleCommandPalette,
     Action::ReplayTour,
     Action::SetColorRed,
     Action::SetColorGreen,
@@ -201,6 +243,7 @@ const PALETTE_ACTIONS: &[Action] = &[
     Action::ZoomOut,
     Action::ResetZoom,
     Action::ToggleZoomLock,
+    Action::RefreshZoomCapture,
     Action::SelectAll,
     Action::DeleteSelection,
     Action::DuplicateSelection,
@@ -230,12 +273,45 @@ fn assert_actions_have_flag(
 }
 
 #[test]
+fn action_meta_entries_are_unique() {
+    let mut seen = HashSet::new();
+
+    for meta in action_meta_iter() {
+        assert!(
+            seen.insert(meta.action),
+            "duplicate ActionMeta for {:?}",
+            meta.action
+        );
+    }
+}
+
+#[test]
 fn action_meta_covers_surface_actions() {
     assert_actions_have_flag(HELP_ACTIONS, "in_help", |meta| meta.in_help);
     assert_actions_have_flag(TOOLBAR_ACTIONS, "in_toolbar", |meta| meta.in_toolbar);
-    assert_actions_have_flag(PALETTE_ACTIONS, "in_command_palette", |meta| {
-        meta.in_command_palette
-    });
+    assert_actions_have_flag(
+        EXPECTED_COMMAND_PALETTE_ACTIONS,
+        "in_command_palette",
+        |meta| meta.in_command_palette,
+    );
+}
+
+#[test]
+fn command_palette_actions_match_expected_contract() {
+    let actual: HashSet<Action> = action_meta_iter()
+        .filter(|meta| meta.in_command_palette)
+        .map(|meta| meta.action)
+        .collect();
+    let expected: HashSet<Action> = EXPECTED_COMMAND_PALETTE_ACTIONS.iter().copied().collect();
+    let unexpected: HashSet<Action> = actual.difference(&expected).copied().collect();
+    let missing: HashSet<Action> = expected.difference(&actual).copied().collect();
+
+    assert!(
+        unexpected.is_empty() && missing.is_empty(),
+        "command palette contract changed; unexpected: {:?}; missing: {:?}",
+        unexpected,
+        missing
+    );
 }
 
 #[test]

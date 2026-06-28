@@ -26,6 +26,7 @@ pub enum CommandPaletteCursorHint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::keybindings::Action;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
@@ -75,6 +76,38 @@ mod tests {
         );
         state.set_action_bindings(action_bindings);
         state
+    }
+
+    fn assert_palette_finds(query: &str, action: Action) {
+        let mut state = make_state();
+        state.command_palette_query = query.to_string();
+
+        let results = state.filtered_commands();
+        assert!(
+            results.iter().any(|cmd| cmd.action == action),
+            "expected query {query:?} to find {action:?}, got {:?}",
+            results.iter().map(|cmd| cmd.action).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn board_and_page_lifecycle_commands_are_searchable() {
+        assert_palette_finds("new board", Action::BoardNew);
+        assert_palette_finds("delete board", Action::BoardDelete);
+        assert_palette_finds("duplicate page", Action::PageDuplicate);
+        assert_palette_finds("delete page", Action::PageDelete);
+        assert_palette_finds("restore page", Action::PageRestoreDeleted);
+    }
+
+    #[test]
+    fn hidden_utility_commands_are_searchable() {
+        assert_palette_finds("increase marker opacity", Action::IncreaseMarkerOpacity);
+        assert_palette_finds("decrease font size", Action::DecreaseFontSize);
+        assert_palette_finds("reset arrow labels", Action::ResetArrowLabelCounter);
+        assert_palette_finds("reset step markers", Action::ResetStepMarkerCounter);
+        assert_palette_finds("selection properties", Action::ToggleSelectionProperties);
+        assert_palette_finds("context menu", Action::OpenContextMenu);
+        assert_palette_finds("refresh zoom", Action::RefreshZoomCapture);
     }
 
     #[test]

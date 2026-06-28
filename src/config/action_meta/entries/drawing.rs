@@ -27,7 +27,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Increase marker opacity",
         Drawing,
-        false,
+        true,
         false,
         false
     ),
@@ -37,7 +37,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Decrease marker opacity",
         Drawing,
-        false,
+        true,
         false,
         false
     ),
@@ -47,7 +47,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Make text larger",
         Drawing,
-        false,
+        true,
         true,
         false
     ),
@@ -57,7 +57,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Make text smaller",
         Drawing,
-        false,
+        true,
         true,
         false
     ),
@@ -67,7 +67,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Reset arrow label counter",
         Drawing,
-        false,
+        true,
         false,
         false
     ),
@@ -77,7 +77,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Reset step marker counter",
         Drawing,
-        false,
+        true,
         false,
         false
     ),
