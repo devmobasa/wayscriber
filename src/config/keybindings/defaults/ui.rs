@@ -23,7 +23,7 @@ pub(crate) fn default_toggle_presenter_mode() -> Vec<String> {
 }
 
 pub(crate) fn default_toggle_light_mode() -> Vec<String> {
-    vec!["Ctrl+Shift+L".to_string()]
+    vec!["F6".to_string()]
 }
 
 pub(crate) fn default_toggle_light_mode_drawing() -> Vec<String> {

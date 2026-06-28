@@ -429,7 +429,7 @@ show_toast = true
 
 ### Light Passthrough Mode
 
-Light mode hides UI chrome and sets the overlay to click-through passthrough until drawing is explicitly enabled. `toggle_light_mode` defaults to <kbd>Ctrl+Shift+L</kbd>, but that is a Wayscriber in-overlay shortcut: it works while the overlay still has focus. Once passthrough is active, normal keyboard and pointer input goes to the app underneath, so do not rely on <kbd>Ctrl+Shift+L</kbd> as the way back out. Compositor/global shortcuts should call the daemon commands below for reliable control.
+Light mode hides UI chrome and sets the overlay to click-through passthrough until drawing is explicitly enabled. `toggle_light_mode` defaults to <kbd>F6</kbd>, but that is a Wayscriber in-overlay shortcut: it works while the overlay still has focus. Once passthrough is active, normal keyboard and pointer input goes to the app underneath, so do not rely on in-overlay shortcuts as the way back out. Compositor/global shortcuts should call the daemon commands below for reliable control.
 
 This mode requires compositor overlay support through layer-shell. It is disabled on the xdg fallback because regular app windows cannot reliably stay visible as click-through shell overlays while keyboard and pointer input go to apps underneath. On stock GNOME Wayland, Freeze may still work for still-image capture when portal capture is available, but it is not a live passthrough replacement. True passthrough would require a GNOME Shell extension companion.
 
@@ -1107,7 +1107,7 @@ toggle_toolbar = ["F2", "F9"]
 toggle_presenter_mode = ["Ctrl+Shift+M"]
 
 # Toggle light passthrough mode while the overlay has focus
-toggle_light_mode = ["Ctrl+Shift+L"]
+toggle_light_mode = ["F6"]
 
 # Optional in-overlay toggle between light drawing and passthrough.
 # Once passthrough is active, use compositor/global shortcuts that call
