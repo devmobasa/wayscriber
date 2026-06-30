@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 /// Performance tuning options.
 ///
-/// These settings control rendering performance and smoothness. Most users
-/// won't need to change these from their defaults.
+/// These settings control rendering performance and smoothness. Defaults favor
+/// low drawing latency over strict display-synchronized rendering.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceConfig {
@@ -14,14 +14,14 @@ pub struct PerformanceConfig {
     #[serde(default = "default_buffer_count")]
     pub buffer_count: u32,
 
-    /// Enable vsync frame synchronization to prevent tearing
-    /// Set to false for lower latency at the cost of potential screen tearing
+    /// Enable vsync frame synchronization to prevent tearing.
+    /// The default is false for lower drawing latency.
     #[serde(default = "default_enable_vsync")]
     pub enable_vsync: bool,
 
-    /// Maximum frame rate when vsync is disabled (0 = unlimited)
-    /// Prevents CPU spinning at very high FPS. Set to match your monitor's
-    /// refresh rate (e.g., 60, 120, 144, 240) or 0 for no limit.
+    /// Maximum frame rate when vsync is disabled (0 = unlimited).
+    /// Prevents CPU spinning at very high FPS. 120 FPS keeps input latency low
+    /// while avoiding uncapped redraw loops.
     #[serde(default = "default_max_fps_no_vsync")]
     pub max_fps_no_vsync: u32,
 
@@ -47,11 +47,11 @@ fn default_buffer_count() -> u32 {
 }
 
 fn default_enable_vsync() -> bool {
-    true
+    false
 }
 
 fn default_max_fps_no_vsync() -> u32 {
-    60
+    120
 }
 
 fn default_ui_animation_fps() -> u32 {

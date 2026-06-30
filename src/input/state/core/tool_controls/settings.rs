@@ -89,7 +89,15 @@ impl InputState {
             self.tool_settings.get_mut(tool).thickness = clamped;
         }
         self.current_thickness = clamped;
+        let initial_pressure_sample_changes =
+            self.active_initial_pressure_sample_changes(clamped as f32);
+        if initial_pressure_sample_changes {
+            self.mark_current_provisional_dirty_full();
+        }
         self.update_initial_pressure_sample(clamped);
+        if initial_pressure_sample_changes {
+            self.mark_current_provisional_dirty_full();
+        }
         self.needs_redraw = true;
         clamped
     }
@@ -99,7 +107,7 @@ impl InputState {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS) as f32;
         let DrawingState::Drawing {
             point_thicknesses, ..
-        } = &mut self.state
+        } = &self.state
         else {
             return false;
         };
@@ -107,7 +115,17 @@ impl InputState {
             return false;
         }
 
+        self.mark_current_provisional_dirty_full();
+
+        let DrawingState::Drawing {
+            point_thicknesses, ..
+        } = &mut self.state
+        else {
+            return false;
+        };
         point_thicknesses.fill(clamped);
+
+        self.mark_current_provisional_dirty_full();
         self.needs_redraw = true;
         true
     }
@@ -124,6 +142,21 @@ impl InputState {
         if points.len() == 1 && point_thicknesses.len() == 1 {
             point_thicknesses[0] = thickness as f32;
         }
+    }
+
+    fn active_initial_pressure_sample_changes(&self, thickness: f32) -> bool {
+        let DrawingState::Drawing {
+            points,
+            point_thicknesses,
+            ..
+        } = &self.state
+        else {
+            return false;
+        };
+
+        points.len() == 1
+            && point_thicknesses.len() == 1
+            && (point_thicknesses[0] - thickness).abs() > f32::EPSILON
     }
 
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
@@ -274,8 +307,10 @@ impl InputState {
             return false;
         }
 
+        self.mark_current_provisional_dirty_full();
         self.tool_settings.get_mut(tool).thickness = clamped;
         self.current_thickness = clamped;
+        self.mark_current_provisional_dirty_full();
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -289,7 +324,9 @@ impl InputState {
         if (clamped - self.eraser_size).abs() < f64::EPSILON {
             return false;
         }
+        self.mark_current_provisional_dirty_full();
         self.eraser_size = clamped;
+        self.mark_current_provisional_dirty_full();
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;

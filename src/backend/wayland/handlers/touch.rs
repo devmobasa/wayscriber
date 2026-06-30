@@ -6,7 +6,7 @@ use wayland_client::{
 };
 
 use crate::backend::wayland::state::{
-    TouchTarget, WaylandState, debug_toolbar_drag_logging_enabled,
+    PerfInputSource, TouchTarget, WaylandState, debug_toolbar_drag_logging_enabled,
 };
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
@@ -325,6 +325,7 @@ impl WaylandState {
             .update_pointer_positions(screen_x, screen_y, wx, wy);
         self.input_state
             .on_mouse_motion_with_canvas(screen_x, screen_y, wx, wy);
+        self.record_perf_input_sample(PerfInputSource::Touch, screen_x, screen_y, wx, wy, false);
     }
 
     fn handle_touch_up(

@@ -85,6 +85,7 @@ pub(super) fn maybe_render(
             state.surface.frame_callback_pending()
         );
         let render_start = Instant::now();
+        state.begin_perf_render(render_start);
         match state.render(qh) {
             Ok(keep_rendering) => {
                 let render_duration = render_start.elapsed();

@@ -301,6 +301,13 @@ impl WaylandState {
             debug!("Skipping frame callback (vsync disabled - allows back-to-back renders)");
         }
 
+        self.commit_perf_frame(
+            &damage_screen,
+            width,
+            height,
+            scaled_damage.len(),
+            Instant::now(),
+        );
         wl_surface.commit();
         debug!("=== RENDER COMPLETE ===");
 

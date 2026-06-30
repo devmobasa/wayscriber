@@ -57,10 +57,10 @@ impl ConfiguratorApp {
                     &self.draft.performance_max_fps_no_vsync,
                     &self.defaults.performance_max_fps_no_vsync,
                     TextField::PerformanceMaxFpsNoVsync,
-                    Some("0 = unlimited, or match your monitor (60/120/144/240)"),
+                    Some("Default 120; try 144/240 on high-refresh displays; 0 = unlimited"),
                     validate_u32_range(&self.draft.performance_max_fps_no_vsync, 0, 1000),
                 ))
-                .push(text("Caps frame rate when VSync is disabled. Prevents CPU spinning at 500+ FPS. Set to your monitor's refresh rate for best results, or 0 for unlimited (requires strong CPU).").size(12));
+                .push(text("Caps frame rate when VSync is disabled. 120 FPS keeps drawing latency low without uncapped CPU/GPU usage; use 0 only for profiling.").size(12));
         }
 
         if show_animation {

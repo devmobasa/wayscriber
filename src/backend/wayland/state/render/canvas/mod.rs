@@ -173,7 +173,9 @@ impl WaylandState {
                 crate::draw::render_blur_rect(ctx, params, &replay_ctx);
                 true
             }
-            _ => self.input_state.render_provisional_shape(ctx, mx, my),
+            _ => self
+                .input_state
+                .render_provisional_shape_for_damage(ctx, mx, my, damage_world),
         };
         if rendered_provisional {
             debug!("Rendered provisional shape");

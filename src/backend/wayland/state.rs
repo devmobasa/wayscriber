@@ -93,6 +93,7 @@ mod helpers;
 mod input_actions;
 mod onboarding;
 mod pdf_export;
+mod perf;
 mod render;
 mod toolbar;
 mod zoom;
@@ -108,6 +109,7 @@ pub(super) use helpers::{
     scale_damage_regions, surface_id, toolbar_drag_preview_enabled, toolbar_drag_throttle_interval,
     toolbar_pointer_lock_enabled,
 };
+pub(in crate::backend::wayland) use perf::PerfInputSource;
 
 pub(in crate::backend::wayland) struct WaylandGlobals {
     pub registry_state: RegistryState,
@@ -181,6 +183,7 @@ pub(super) struct WaylandState {
     pub(super) capture: CaptureState,
     pub(super) frozen: FrozenState,
     pub(super) zoom: ZoomState,
+    perf: perf::PerfMetrics,
 
     // Overlay behavior
     pub(super) exit_after_capture_mode: ExitAfterCaptureMode,

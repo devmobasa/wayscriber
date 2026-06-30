@@ -27,7 +27,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// [performance]
 /// buffer_count = 3
-/// enable_vsync = true
+/// enable_vsync = false
+/// max_fps_no_vsync = 120
 /// ui_animation_fps = 30
 ///
 /// [ui]

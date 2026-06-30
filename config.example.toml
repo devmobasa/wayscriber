@@ -964,12 +964,12 @@ head_at_end = false
 buffer_count = 3
 
 # Enable vsync frame synchronization
-# Prevents tearing and limits rendering to display refresh rate
-enable_vsync = true
+# false lowers drawing latency; true prevents tearing and limits rendering to display refresh rate
+enable_vsync = false
 
 # Max FPS when VSync is disabled (0 = unlimited)
-# Prevents CPU spinning at very high FPS; set to match your monitor (60/120/144/240)
-max_fps_no_vsync = 60
+# 120 keeps pen latency low without uncapped CPU usage; set to 0 only for profiling
+max_fps_no_vsync = 120
 
 # UI animation frame rate (0 = unlimited)
 # Higher values smooth UI effects at the cost of more redraws
