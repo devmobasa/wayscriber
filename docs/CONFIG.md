@@ -244,12 +244,12 @@ Controls rendering performance and smoothness.
 buffer_count = 3
 
 # Enable vsync frame synchronization
-# Prevents tearing and limits rendering to display refresh rate
-enable_vsync = true
+# false lowers drawing latency; true prevents tearing and limits rendering to display refresh rate
+enable_vsync = false
 
 # Max FPS when VSync is disabled (0 = unlimited)
-# Prevents CPU spinning at very high FPS; set to match your monitor
-max_fps_no_vsync = 60
+# 120 keeps pen latency low without uncapped CPU usage; set to 0 only for profiling
+max_fps_no_vsync = 120
 
 # UI animation frame rate (0 = unlimited)
 # Higher values smooth UI effects at the cost of more redraws
@@ -262,13 +262,14 @@ ui_animation_fps = 30
 - **4**: Quad buffering - for high-refresh displays (144Hz+), ultra-smooth
 
 **VSync:**
-- **true** (default): Synchronizes with display refresh rate, no tearing
-- **false**: Capped by `max_fps_no_vsync` (set to 0 for uncapped); may cause tearing but lower latency
+- **false** (default): Capped by `max_fps_no_vsync`; lower drawing latency, with possible tearing
+- **true**: Synchronizes with display refresh rate, no tearing, but input-to-commit latency is bounded by refresh cadence
 
 **Max FPS (VSync off):**
-- **60** (default): Suitable for most displays
-- **0**: Unlimited (uncapped; higher CPU usage)
-- Set to your monitor refresh (60/120/144/240) for best balance
+- **120** (default): Low-latency drawing without uncapped redraw loops
+- **60**: Lower CPU/GPU use, but latency may feel closer to one 60 Hz frame interval
+- **144/165/240+**: Use when it matches your display and the machine handles the extra rendering work
+- **0**: Unlimited; mostly for profiling because it can spin CPU/GPU hard
 
 **UI Animation FPS:**
 - **30** (default): Smooth enough for most effects
@@ -277,9 +278,23 @@ ui_animation_fps = 30
 
 **Defaults:**
 - Buffer count: 3 (triple buffering)
-- VSync: true
-- Max FPS (VSync off): 60
+- VSync: false
+- Max FPS (VSync off): 120
 - UI animation FPS: 30
+
+**Tradeoff:**
+Disabling vsync improves input latency but may allow tearing and higher CPU/GPU usage. On weaker
+PCs, laptops, or battery-sensitive setups, restore `enable_vsync = true` or lower
+`max_fps_no_vsync` if you notice heat, fan noise, battery drain, or compositor smoothness issues.
+
+**Measurement note:**
+With `WAYSCRIBER_PERF_LOG=1`, the `perf.input_to_paint_latency proxy=input_to_wayland_commit`
+line reports an input-to-Wayland-commit proxy metric. It measures from input sample receipt inside
+the app to Wayland surface commit. It is not photons-on-screen display latency; compositor
+scheduling, display scanout, and hardware can add more latency outside Wayscriber.
+
+In local continuous-drawing measurements, 120 FPS low-latency mode held p95 around 8-9 ms and
+p99 around 8-9 ms for this proxy metric. Isolated max spikes existed, but p99 stayed under 16 ms.
 
 ### `[ui]` - User Interface
 
@@ -1392,7 +1407,8 @@ default_font_size = 24.0
 
 [performance]
 buffer_count = 4
-enable_vsync = true
+enable_vsync = false
+max_fps_no_vsync = 120
 ui_animation_fps = 30
 
 [ui]
@@ -1416,7 +1432,8 @@ status_bar_position = "top-right"
 ```toml
 [performance]
 buffer_count = 4
-enable_vsync = true
+enable_vsync = false
+max_fps_no_vsync = 144
 ui_animation_fps = 120
 ```
 

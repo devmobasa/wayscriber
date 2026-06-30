@@ -2,6 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::PointerEvent;
 use wayland_client::Connection;
 
+use crate::backend::wayland::state::PerfInputSource;
 use crate::backend::wayland::state::drag_log;
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 
@@ -166,6 +167,14 @@ impl WaylandState {
             event.position.1.round() as i32,
             wx,
             wy,
+        );
+        self.record_perf_input_sample(
+            PerfInputSource::Pointer,
+            event.position.0.round() as i32,
+            event.position.1.round() as i32,
+            wx,
+            wy,
+            false,
         );
     }
 }

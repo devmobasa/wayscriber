@@ -1,6 +1,6 @@
 use log::{debug, info};
 
-use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::{PerfInputSource, WaylandState};
 use crate::input::MouseButton;
 
 /// Linux input event code for the primary stylus barrel button.
@@ -49,7 +49,7 @@ impl WaylandState {
         }
 
         if let Some((x, y)) = pending.motion {
-            self.commit_stylus_motion_sample(x, y);
+            self.commit_stylus_motion_sample(x, y, pending.pressure.is_some());
         }
 
         if pending.down {
@@ -61,7 +61,7 @@ impl WaylandState {
             && !pending.down
             && self.stylus_tip_down
         {
-            self.commit_stylus_motion_sample_at_current_position();
+            self.commit_stylus_motion_sample_at_current_position(true);
         }
 
         if pending.up {
@@ -107,13 +107,21 @@ impl WaylandState {
         self.record_stylus_peak(self.input_state.current_thickness);
     }
 
-    fn commit_stylus_motion_sample(&mut self, x: f64, y: f64) {
+    fn commit_stylus_motion_sample(&mut self, x: f64, y: f64, pressure_sample: bool) {
         let previous_hover_cursor_pos = self.stylus_hover_cursor_position();
         self.set_current_mouse(x as i32, y as i32);
         self.stylus_last_pos = Some((x, y));
         let (wx, wy) = self.zoomed_world_coords(x, y);
         self.input_state
             .on_mouse_motion_with_canvas(x.round() as i32, y.round() as i32, wx, wy);
+        self.record_perf_input_sample(
+            PerfInputSource::Stylus,
+            x.round() as i32,
+            y.round() as i32,
+            wx,
+            wy,
+            pressure_sample,
+        );
         let next_hover_cursor_pos = self.stylus_hover_cursor_position();
         self.mark_stylus_hover_cursor_dirty(previous_hover_cursor_pos, next_hover_cursor_pos);
         if self.stylus_tip_down {
@@ -121,9 +129,9 @@ impl WaylandState {
         }
     }
 
-    fn commit_stylus_motion_sample_at_current_position(&mut self) {
+    fn commit_stylus_motion_sample_at_current_position(&mut self, pressure_sample: bool) {
         let (x, y) = self.current_stylus_position();
-        self.commit_stylus_motion_sample(x, y);
+        self.commit_stylus_motion_sample(x, y, pressure_sample);
     }
 
     fn commit_stylus_down(&mut self) {

@@ -782,8 +782,8 @@ size = 3.0
 
 [performance]
 buffer_count = 3
-enable_vsync = true
-max_fps_no_vsync = 60
+enable_vsync = false
+max_fps_no_vsync = 120
 ui_animation_fps = 30
 
 [ui]
@@ -909,12 +909,19 @@ See `docs/CONFIG.md` for the full list.
 
 ### Performance tuning
 
+Default behavior prioritizes lower drawing latency by disabling vsync and capping no-vsync rendering:
+
 ```toml
 [performance]
-buffer_count = 2
-enable_vsync = true
+buffer_count = 3
+enable_vsync = false
+max_fps_no_vsync = 120
 ui_animation_fps = 30
 ```
+
+Use `120` as a strong low-latency cap for common systems. Try `144`, `165`, `240`, or higher if it matches your display and the machine handles the extra rendering work. Use `max_fps_no_vsync = 0` only for profiling because uncapped rendering can spin CPU/GPU hard.
+
+Set `enable_vsync = true` when tear-free presentation, lower power use, or quieter behavior matters more than input latency. Vsync usually adds a frame-cadence floor, especially on 60 Hz displays; disabling it improves input latency but may allow tearing and higher CPU/GPU usage.
 
 ---
 

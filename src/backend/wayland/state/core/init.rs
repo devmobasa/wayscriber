@@ -111,6 +111,7 @@ impl WaylandState {
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             zoom: ZoomState::new(zoom_manager),
+            perf: perf::PerfMetrics::from_env(),
             exit_after_capture_mode,
             themed_pointer: None,
             touch: None,

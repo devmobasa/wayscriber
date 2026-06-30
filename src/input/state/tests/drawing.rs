@@ -214,6 +214,157 @@ fn freeform_polygon_preview_dirty_has_antialias_padding() {
 }
 
 #[test]
+fn append_path_motion_dirties_only_new_tail_segment() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_motion(20, 10);
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_motion(30, 10);
+    let dirty = state.take_dirty_regions();
+    let thick = state.thickness_for_tool(Tool::Pen);
+    let tail_bounds = crate::draw::shape::bounding_box_for_points(&[(20, 10), (30, 10)], thick)
+        .expect("tail segment should have bounds");
+    let full_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
+        .expect("full provisional stroke should have bounds");
+    let head_probe = crate::util::Rect::new(10, 10, 1, 1).unwrap();
+
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, tail_bounds)),
+        "dirty regions should include the new tail segment; dirty={dirty:?}, tail={tail_bounds:?}"
+    );
+    assert!(
+        !dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, head_probe)),
+        "append motion should not redraw the start of the accumulated stroke; dirty={dirty:?}"
+    );
+    assert_eq!(
+        state.last_provisional_bounds,
+        Some(full_bounds),
+        "cleanup bounds should still cover the whole active stroke"
+    );
+}
+
+#[test]
+fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    assert!(state.set_thickness(32.0));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    let old_full_bounds = state
+        .last_provisional_bounds
+        .expect("initial pressure preview should have bounds");
+    let old_only_probe = crate::util::Rect::new(10, old_full_bounds.y, 1, 1).unwrap();
+    let _ = state.take_dirty_regions();
+
+    state.set_pressure_thickness_for_active_tool(2.0);
+    state.on_mouse_motion(30, 10);
+    let dirty = state.take_dirty_regions();
+
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, old_only_probe)),
+        "shrinking the first pressure sample should dirty old wide preview pixels; dirty={dirty:?}, old_full={old_full_bounds:?}, probe={old_only_probe:?}"
+    );
+}
+
+#[test]
+fn marker_size_increase_updates_accumulated_cleanup_bounds() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Marker)));
+    assert!(state.set_thickness(2.0));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    state.on_mouse_motion(20, 10);
+    let _ = state.take_dirty_regions();
+
+    assert!(state.set_thickness(32.0));
+    let _ = state.take_dirty_regions();
+
+    state.cancel_active_interaction();
+    let dirty = state.take_dirty_regions();
+    let marker_width = (32.0f64 * 1.35).max(32.0 + 1.0);
+    let expanded_bounds =
+        crate::draw::shape::bounding_box_for_points(&[(10, 10), (20, 10)], marker_width)
+            .expect("expanded marker preview should have bounds");
+    let expanded_only_probe = crate::util::Rect::new(10, expanded_bounds.y, 1, 1).unwrap();
+
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, expanded_only_probe)),
+        "cancel should dirty marker pixels exposed by a mid-stroke size increase; dirty={dirty:?}, expanded={expanded_bounds:?}, probe={expanded_only_probe:?}"
+    );
+    assert_eq!(state.last_provisional_bounds, None);
+}
+
+#[test]
+fn eraser_size_increase_updates_accumulated_cleanup_bounds() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Eraser)));
+    assert!(state.set_eraser_size(2.0));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    state.on_mouse_motion(20, 10);
+    let _ = state.take_dirty_regions();
+
+    assert!(state.set_eraser_size(32.0));
+    let _ = state.take_dirty_regions();
+
+    state.cancel_active_interaction();
+    let dirty = state.take_dirty_regions();
+    let expanded_bounds = crate::draw::shape::bounding_box_for_eraser(&[(10, 10), (20, 10)], 32.0)
+        .expect("expanded eraser preview should have bounds");
+    let expanded_only_probe = crate::util::Rect::new(10, expanded_bounds.y, 1, 1).unwrap();
+
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, expanded_only_probe)),
+        "cancel should dirty eraser pixels exposed by a mid-stroke size increase; dirty={dirty:?}, expanded={expanded_bounds:?}, probe={expanded_only_probe:?}"
+    );
+    assert_eq!(state.last_provisional_bounds, None);
+}
+
+#[test]
+fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    state.on_mouse_motion(20, 10);
+    state.on_mouse_motion(30, 10);
+    let _ = state.take_dirty_regions();
+
+    state.cancel_active_interaction();
+    let dirty = state.take_dirty_regions();
+    let thick = state.thickness_for_tool(Tool::Pen);
+    let full_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
+        .expect("full provisional stroke should have bounds");
+
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, full_bounds)),
+        "cancel should dirty the full active stroke bounds; dirty={dirty:?}, full={full_bounds:?}"
+    );
+    assert_eq!(state.last_provisional_bounds, None);
+}
+
+#[test]
 fn freeform_polygon_freezes_style_on_first_click() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
@@ -458,4 +609,13 @@ fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
     };
     state.sync_highlight_color();
     assert!(state.needs_redraw);
+}
+
+fn test_rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {
+    let a_right = a.x.saturating_add(a.width);
+    let a_bottom = a.y.saturating_add(a.height);
+    let b_right = b.x.saturating_add(b.width);
+    let b_bottom = b.y.saturating_add(b.height);
+
+    !(a.x >= b_right || a_right <= b.x || a.y >= b_bottom || a_bottom <= b.y)
 }

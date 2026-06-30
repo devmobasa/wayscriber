@@ -2,7 +2,9 @@ use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::shape::{
     bounding_box_for_points, bounding_box_for_sticky_note, bounding_box_for_text,
 };
-use crate::input::tool::PROVISIONAL_POLYGON_DAMAGE_PADDING;
+use crate::input::tool::{
+    PROVISIONAL_POLYGON_DAMAGE_PADDING, ToolMotionBehavior, ToolMotionSizeSource,
+};
 use crate::util::Rect;
 
 impl InputState {
@@ -15,6 +17,13 @@ impl InputState {
 
     /// Updates tracked provisional shape bounds for dirty-region purposes.
     pub(crate) fn update_provisional_dirty(&mut self, current_x: i32, current_y: i32) {
+        if let Some(append_bounds) = self.compute_append_only_provisional_bounds() {
+            self.dirty_tracker.mark_rect(append_bounds);
+            self.last_provisional_bounds =
+                union_optional_rect(self.last_provisional_bounds, append_bounds);
+            return;
+        }
+
         let new_bounds = self.compute_provisional_bounds(current_x, current_y);
         let previous = self.last_provisional_bounds;
 
@@ -29,6 +38,19 @@ impl InputState {
             self.last_provisional_bounds = Some(bounds);
         } else {
             self.last_provisional_bounds = None;
+        }
+    }
+
+    /// Marks the full current provisional shape dirty.
+    ///
+    /// This is needed when existing provisional geometry changes in place, for
+    /// example when the first tablet pressure sample backfills previous widths.
+    pub(crate) fn mark_current_provisional_dirty_full(&mut self) {
+        let (current_x, current_y) = self.last_canvas_pointer_position;
+        if let Some(bounds) = self.compute_provisional_bounds(current_x, current_y) {
+            self.dirty_tracker.mark_rect(bounds);
+            self.last_provisional_bounds =
+                union_optional_rect(self.last_provisional_bounds, bounds);
         }
     }
 
@@ -56,6 +78,43 @@ impl InputState {
             }
             _ => None,
         }
+    }
+
+    fn compute_append_only_provisional_bounds(&self) -> Option<Rect> {
+        let DrawingState::Drawing {
+            tool,
+            points,
+            point_thicknesses,
+            ..
+        } = &self.state
+        else {
+            return None;
+        };
+
+        let stroke_width = match tool.motion_behavior() {
+            ToolMotionBehavior::NoPathAccumulation => return None,
+            ToolMotionBehavior::AccumulatePath {
+                size_source: ToolMotionSizeSource::ToolSize,
+            } => {
+                if *tool == crate::input::Tool::Marker {
+                    let size = self.thickness_for_tool(*tool);
+                    (size * 1.35).max(size + 1.0)
+                } else if point_thicknesses.len() == points.len() && !point_thicknesses.is_empty() {
+                    let start = point_thicknesses.len().saturating_sub(2);
+                    point_thicknesses[start..]
+                        .iter()
+                        .fold(1.0f64, |max, &thickness| max.max(thickness as f64))
+                } else {
+                    self.thickness_for_tool(*tool)
+                }
+            }
+            ToolMotionBehavior::AccumulatePath {
+                size_source: ToolMotionSizeSource::EraserSize,
+            } => self.eraser_size,
+        };
+
+        let start = points.len().saturating_sub(2);
+        bounding_box_for_points(&points[start..], stroke_width)
     }
 
     /// Updates dirty tracking for the live text preview/caret overlay.
@@ -111,4 +170,21 @@ impl InputState {
             None
         }
     }
+}
+
+fn union_optional_rect(current: Option<Rect>, next: Rect) -> Option<Rect> {
+    match current {
+        Some(current) => union_rect(current, next),
+        None => Some(next),
+    }
+}
+
+fn union_rect(a: Rect, b: Rect) -> Option<Rect> {
+    let min_x = a.x.min(b.x);
+    let min_y = a.y.min(b.y);
+    let max_x = a.x.saturating_add(a.width).max(b.x.saturating_add(b.width));
+    let max_y =
+        a.y.saturating_add(a.height)
+            .max(b.y.saturating_add(b.height));
+    Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
