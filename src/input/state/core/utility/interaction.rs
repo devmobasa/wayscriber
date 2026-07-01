@@ -1,4 +1,5 @@
 use super::super::base::{DrawingState, InputState, PasteAnchor};
+use crate::draw::DirtyRegionReport;
 use crate::util::Rect;
 
 impl InputState {
@@ -245,9 +246,13 @@ impl InputState {
     /// Drains pending dirty rectangles for the current surface size.
     #[allow(dead_code)]
     pub fn take_dirty_regions(&mut self) -> Vec<Rect> {
+        self.take_dirty_region_report().regions
+    }
+
+    pub(crate) fn take_dirty_region_report(&mut self) -> DirtyRegionReport {
         let width = self.screen_width.min(i32::MAX as u32) as i32;
         let height = self.screen_height.min(i32::MAX as u32) as i32;
-        self.dirty_tracker.take_regions(width, height)
+        self.dirty_tracker.take_region_report(width, height)
     }
 }
 
@@ -383,5 +388,23 @@ mod tests {
             vec![Rect::new(0, 0, 100, 50).unwrap()]
         );
         assert!(state.take_dirty_regions().is_empty());
+    }
+
+    #[test]
+    fn take_dirty_region_report_preserves_full_reason() {
+        let mut state = make_test_input_state();
+        state.update_screen_dimensions(100, 50);
+        state
+            .dirty_tracker
+            .mark_full_for(crate::draw::DirtyFullReason::CanvasClear);
+
+        let report = state.take_dirty_region_report();
+
+        assert_eq!(report.regions, vec![Rect::new(0, 0, 100, 50).unwrap()]);
+        assert_eq!(
+            report.full_reason,
+            Some(crate::draw::DirtyFullReason::CanvasClear)
+        );
+        assert!(state.take_dirty_region_report().regions.is_empty());
     }
 }

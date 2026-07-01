@@ -5,11 +5,23 @@
 use super::Shape;
 use crate::util::Rect;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirtyFullReason {
+    CanvasClear,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirtyRegionReport {
+    pub regions: Vec<Rect>,
+    pub full_reason: Option<DirtyFullReason>,
+}
+
 /// Tracks dirty rectangles accumulated between renders.
 #[derive(Debug, Clone)]
 pub struct DirtyTracker {
     regions: Vec<Rect>,
     force_full: bool,
+    force_full_reason: Option<DirtyFullReason>,
 }
 
 impl Default for DirtyTracker {
@@ -24,12 +36,22 @@ impl DirtyTracker {
         Self {
             regions: Vec::with_capacity(8), // Typical frame has 4-8 dirty regions
             force_full: false,
+            force_full_reason: None,
         }
     }
 
     /// Marks the entire surface as dirty. Clears any accumulated rectangles.
     pub fn mark_full(&mut self) {
+        self.mark_full_with_reason(None);
+    }
+
+    pub fn mark_full_for(&mut self, reason: DirtyFullReason) {
+        self.mark_full_with_reason(Some(reason));
+    }
+
+    fn mark_full_with_reason(&mut self, reason: Option<DirtyFullReason>) {
         self.force_full = true;
+        self.force_full_reason = reason;
         self.regions.clear();
     }
 
@@ -62,19 +84,34 @@ impl DirtyTracker {
     /// entire surface; otherwise returns accumulated rectangles.
     #[allow(dead_code)]
     pub fn take_regions(&mut self, width: i32, height: i32) -> Vec<Rect> {
+        self.take_region_report(width, height).regions
+    }
+
+    pub fn take_region_report(&mut self, width: i32, height: i32) -> DirtyRegionReport {
         if self.force_full {
             self.force_full = false;
+            let full_reason = self.force_full_reason.take();
             self.regions.clear();
             if width > 0
                 && height > 0
                 && let Some(full) = Rect::new(0, 0, width, height)
             {
-                return vec![full];
+                return DirtyRegionReport {
+                    regions: vec![full],
+                    full_reason,
+                };
             }
-            Vec::new()
+            DirtyRegionReport {
+                regions: Vec::new(),
+                full_reason,
+            }
         } else {
+            self.force_full_reason = None;
             self.regions.retain(Rect::is_valid);
-            self.regions.drain(..).collect()
+            DirtyRegionReport {
+                regions: self.regions.drain(..).collect(),
+                full_reason: None,
+            }
         }
     }
 }
@@ -166,5 +203,19 @@ mod tests {
         let rects = tracker.take_regions(100, 100);
         assert_eq!(rects.len(), 1);
         assert_eq!(rects[0], Rect::new(1, 2, 3, 4).unwrap());
+    }
+
+    #[test]
+    fn take_region_report_exposes_full_reason_and_drains_it() {
+        let mut tracker = DirtyTracker::new();
+        tracker.mark_full_for(DirtyFullReason::CanvasClear);
+
+        let report = tracker.take_region_report(100, 50);
+        assert_eq!(report.regions, vec![Rect::new(0, 0, 100, 50).unwrap()]);
+        assert_eq!(report.full_reason, Some(DirtyFullReason::CanvasClear));
+
+        let drained = tracker.take_region_report(100, 50);
+        assert!(drained.regions.is_empty());
+        assert_eq!(drained.full_reason, None);
     }
 }

@@ -5,7 +5,7 @@ use smithay_client_toolkit::shell::xdg::window::{Window, WindowConfigure, Window
 use std::time::Instant;
 use wayland_client::{Connection, QueueHandle};
 
-use super::super::state::WaylandState;
+use super::super::state::{FullDamageReason, WaylandState};
 use crate::session;
 
 impl WindowHandler for WaylandState {
@@ -97,7 +97,8 @@ impl WindowHandler for WaylandState {
 
         if self.surface.update_dimensions(width, height) {
             info!("xdg window configured: {}x{}", width, height);
-            self.buffer_damage.mark_all_full();
+            self.buffer_damage
+                .mark_all_full(FullDamageReason::SurfaceResized);
         } else {
             debug!(
                 "xdg window configure acknowledged without size change ({}x{})",

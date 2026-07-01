@@ -18,7 +18,7 @@ pub mod shape;
 #[allow(unused_imports)]
 pub use canvas_set::{BoardPages, PageDeleteOutcome};
 pub use color::Color;
-pub use dirty::DirtyTracker;
+pub use dirty::{DirtyFullReason, DirtyRegionReport, DirtyTracker};
 pub use font::FontDescriptor;
 pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]

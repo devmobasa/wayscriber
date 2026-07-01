@@ -7,6 +7,8 @@ use crate::input::tool::{
 };
 use crate::util::Rect;
 
+const APPEND_ONLY_DAMAGE_MAX_SPAN: f64 = 128.0;
+
 impl InputState {
     /// Clears any cached provisional shape bounds and marks their damage region.
     pub(crate) fn clear_provisional_dirty(&mut self) {
@@ -15,10 +17,18 @@ impl InputState {
         }
     }
 
+    /// Takes cached provisional bounds without marking them dirty.
+    pub(crate) fn take_provisional_dirty_bounds(&mut self) -> Option<Rect> {
+        self.last_provisional_bounds.take()
+    }
+
     /// Updates tracked provisional shape bounds for dirty-region purposes.
     pub(crate) fn update_provisional_dirty(&mut self, current_x: i32, current_y: i32) {
-        if let Some(append_bounds) = self.compute_append_only_provisional_bounds() {
-            self.dirty_tracker.mark_rect(append_bounds);
+        if let Some((append_bounds, append_regions)) = self.compute_append_only_provisional_damage()
+        {
+            for region in append_regions {
+                self.dirty_tracker.mark_rect(region);
+            }
             self.last_provisional_bounds =
                 union_optional_rect(self.last_provisional_bounds, append_bounds);
             return;
@@ -80,7 +90,7 @@ impl InputState {
         }
     }
 
-    fn compute_append_only_provisional_bounds(&self) -> Option<Rect> {
+    fn compute_append_only_provisional_damage(&self) -> Option<(Rect, Vec<Rect>)> {
         let DrawingState::Drawing {
             tool,
             points,
@@ -114,7 +124,10 @@ impl InputState {
         };
 
         let start = points.len().saturating_sub(2);
-        bounding_box_for_points(&points[start..], stroke_width)
+        let tail_points = &points[start..];
+        let bounds = bounding_box_for_points(tail_points, stroke_width)?;
+        let regions = append_only_damage_regions(tail_points, stroke_width, bounds);
+        Some((bounds, regions))
     }
 
     /// Updates dirty tracking for the live text preview/caret overlay.
@@ -187,4 +200,48 @@ fn union_rect(a: Rect, b: Rect) -> Option<Rect> {
         a.y.saturating_add(a.height)
             .max(b.y.saturating_add(b.height));
     Rect::from_min_max(min_x, min_y, max_x, max_y)
+}
+
+fn append_only_damage_regions(
+    points: &[(i32, i32)],
+    stroke_width: f64,
+    fallback: Rect,
+) -> Vec<Rect> {
+    let Some((&start, &end)) = points.first().zip(points.last()) else {
+        return vec![fallback];
+    };
+    if start == end {
+        return vec![fallback];
+    }
+
+    let dx = f64::from(end.0 - start.0);
+    let dy = f64::from(end.1 - start.1);
+    let steps = (dx.abs().max(dy.abs()) / APPEND_ONLY_DAMAGE_MAX_SPAN).ceil() as usize;
+    let steps = steps.max(1);
+    if steps == 1 {
+        return vec![fallback];
+    }
+
+    let mut regions = Vec::with_capacity(steps);
+    for step in 0..steps {
+        let t0 = step as f64 / steps as f64;
+        let t1 = (step + 1) as f64 / steps as f64;
+        let p0 = (
+            (start.0 as f64 + dx * t0).round() as i32,
+            (start.1 as f64 + dy * t0).round() as i32,
+        );
+        let p1 = (
+            (start.0 as f64 + dx * t1).round() as i32,
+            (start.1 as f64 + dy * t1).round() as i32,
+        );
+        if let Some(region) = bounding_box_for_points(&[p0, p1], stroke_width) {
+            regions.push(region);
+        }
+    }
+
+    if regions.is_empty() {
+        vec![fallback]
+    } else {
+        regions
+    }
 }

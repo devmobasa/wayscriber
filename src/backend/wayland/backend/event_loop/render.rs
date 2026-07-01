@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use log::{debug, warn};
 
-use super::super::super::state::WaylandState;
+use super::super::super::state::{PerfRenderSkipReason, WaylandState};
 
 const MAX_RENDER_FAILURES: u32 = 10;
 
@@ -88,16 +88,24 @@ pub(super) fn maybe_render(
         state.begin_perf_render(render_start);
         match state.render(qh) {
             Ok(keep_rendering) => {
-                let render_duration = render_start.elapsed();
+                let render_end = Instant::now();
+                let render_duration = render_end.saturating_duration_since(render_start);
                 if render_duration > Duration::from_millis(5) {
                     debug!("Render took {:?}", render_duration);
                 }
 
                 // Reset failure counter and record render time.
                 *consecutive_render_failures = 0;
-                *last_render_time = Some(Instant::now());
+                *last_render_time = Some(render_end);
                 state.input_state.needs_redraw =
                     keep_rendering || state.input_state.has_pending_history();
+                state.record_perf_render_complete(
+                    render_start,
+                    render_end,
+                    vsync_enabled,
+                    state.config.performance.max_fps_no_vsync,
+                    keep_rendering,
+                );
                 // Only set frame_callback_pending if vsync is enabled.
                 if vsync_enabled {
                     state.surface.set_frame_callback_pending(true);
@@ -121,6 +129,20 @@ pub(super) fn maybe_render(
             }
         }
     } else {
+        let skip_reason = if !state.surface.is_configured() {
+            Some(PerfRenderSkipReason::SurfaceUnconfigured)
+        } else if !state.input_state.needs_redraw {
+            Some(PerfRenderSkipReason::NoRedraw)
+        } else if vsync_enabled && state.surface.frame_callback_pending() {
+            Some(PerfRenderSkipReason::FrameCallbackPending)
+        } else if !vsync_enabled && !frame_time_ok {
+            Some(PerfRenderSkipReason::FpsCap)
+        } else {
+            None
+        };
+        if let Some(reason) = skip_reason {
+            state.record_perf_render_skip(reason);
+        }
         state.render_layer_toolbars_if_needed();
         if state.input_state.needs_redraw {
             if vsync_enabled && state.surface.frame_callback_pending() {

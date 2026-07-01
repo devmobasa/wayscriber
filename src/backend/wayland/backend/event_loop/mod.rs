@@ -233,6 +233,7 @@ pub(super) fn run_event_loop(
         }
     }
 
+    state.flush_perf_summaries(Instant::now());
     info!("Wayland backend exiting");
 
     if let Err(err) = session_save::persist_session(state) {
