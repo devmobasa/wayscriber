@@ -39,18 +39,22 @@ impl WaylandState {
         // Add new dirty regions from input state to the per-buffer damage tracker.
         // We do this BEFORE acquiring the buffer/damage so the current frame's changes
         // are included in the damage for the current buffer.
-        let input_damage = self.input_state.take_dirty_regions();
+        let input_damage_report = self.input_state.take_dirty_region_report();
+        let input_damage = input_damage_report.regions;
         let logical_width = width.min(i32::MAX as u32) as i32;
         let logical_height = height.min(i32::MAX as u32) as i32;
-        let force_full_damage = self.canvas_transform_active()
-            || ui_toast_active
-            || preset_feedback_active
-            || blocked_feedback_active
-            || text_edit_entry_active;
-        if force_full_damage {
+        let force_full_damage_reason = self.render_force_full_damage_reason(
+            ui_toast_active,
+            preset_feedback_active,
+            blocked_feedback_active,
+            text_edit_entry_active,
+        );
+        if let Some(reason) = force_full_damage_reason {
             // Zoom uses a world transform and some UI effects don't emit damage; full damage avoids
             // mismatched coordinate spaces and empty damage frames.
-            self.buffer_damage.mark_all_full();
+            self.buffer_damage.mark_all_full(reason);
+        } else if let Some(reason) = input_full_damage_reason(input_damage_report.full_reason) {
+            self.buffer_damage.mark_all_full(reason);
         } else {
             self.buffer_damage.add_regions(input_damage);
         }
@@ -89,18 +93,22 @@ impl WaylandState {
         // Pool identity (generation + size) is passed to detect pool recreation/growth.
         // SlotPool reuses the same memory regions for released buffers, so the
         // canvas pointer serves as a stable slot identifier across buffer reuse.
-        let mut logical_damage = self.buffer_damage.take_buffer_damage(
+        let damage_report = self.buffer_damage.take_buffer_damage_report(
             canvas_ptr,
             logical_width,
             logical_height,
             pool_gen,
             pool_size,
         );
+        let mut logical_damage = damage_report.regions;
+        let mut full_damage_reason = damage_report.full_reason;
         if logical_damage.is_empty()
             && let Some(full) = crate::util::Rect::new(0, 0, logical_width, logical_height)
         {
             logical_damage = vec![full];
-            self.buffer_damage.mark_all_full();
+            full_damage_reason = Some(FullDamageReason::EmptyDamageFallback);
+            self.buffer_damage
+                .mark_all_full(FullDamageReason::EmptyDamageFallback);
         }
         let damage_screen = logical_damage;
         let damage_world = if self.canvas_transform_active() {
@@ -306,6 +314,7 @@ impl WaylandState {
             width,
             height,
             scaled_damage.len(),
+            full_damage_reason,
             Instant::now(),
         );
         wl_surface.commit();
@@ -320,4 +329,34 @@ impl WaylandState {
 
         Ok(keep_rendering)
     }
+
+    fn render_force_full_damage_reason(
+        &self,
+        ui_toast_active: bool,
+        preset_feedback_active: bool,
+        blocked_feedback_active: bool,
+        text_edit_entry_active: bool,
+    ) -> Option<FullDamageReason> {
+        if self.zoom.active {
+            Some(FullDamageReason::Zoom)
+        } else if self.canvas_transform_active() {
+            Some(FullDamageReason::BoardPan)
+        } else if ui_toast_active {
+            Some(FullDamageReason::UiToast)
+        } else if preset_feedback_active {
+            Some(FullDamageReason::PresetFeedback)
+        } else if blocked_feedback_active {
+            Some(FullDamageReason::BlockedFeedback)
+        } else if text_edit_entry_active {
+            Some(FullDamageReason::TextEditEntry)
+        } else {
+            None
+        }
+    }
+}
+
+fn input_full_damage_reason(
+    reason: Option<crate::draw::DirtyFullReason>,
+) -> Option<FullDamageReason> {
+    reason.map(|crate::draw::DirtyFullReason::CanvasClear| FullDamageReason::CanvasClear)
 }

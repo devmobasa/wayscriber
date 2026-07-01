@@ -6,7 +6,7 @@ use smithay_client_toolkit::shell::{
 };
 use wayland_client::{Connection, Proxy, QueueHandle};
 
-use super::super::state::WaylandState;
+use super::super::state::{FullDamageReason, WaylandState};
 use crate::session;
 
 impl LayerShellHandler for WaylandState {
@@ -58,7 +58,8 @@ impl LayerShellHandler for WaylandState {
 
             if size_changed {
                 info!("Surface size changed - recreating SlotPool");
-                self.buffer_damage.mark_all_full();
+                self.buffer_damage
+                    .mark_all_full(FullDamageReason::SurfaceResized);
             }
 
             self.input_state

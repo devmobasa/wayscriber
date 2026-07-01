@@ -1,4 +1,5 @@
 use super::super::base::InputState;
+use crate::draw::DirtyFullReason;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::util::Rect;
 
@@ -84,7 +85,8 @@ impl InputState {
         }
         self.invalidate_hit_cache();
         self.clear_selection();
-        self.dirty_tracker.mark_full();
+        self.dirty_tracker
+            .mark_full_for(DirtyFullReason::CanvasClear);
         self.needs_redraw = true;
         self.mark_session_dirty();
         true

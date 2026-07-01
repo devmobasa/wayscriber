@@ -13,11 +13,71 @@
 //! previous canvas pointers become invalid.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::util::Rect;
 
 /// Maximum number of buffer slots to track (prevents unbounded growth).
 const MAX_TRACKED_BUFFERS: usize = 8;
+const DAMAGE_MERGE_MARGIN: i32 = 1;
+const DAMAGE_MERGE_ALIGNMENT_TOLERANCE: i32 = 2;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(in crate::backend::wayland) enum FullDamageReason {
+    InitialFrame,
+    NewBufferSlot,
+    PoolGenerationChanged,
+    PoolGrew,
+    ScaleChanged,
+    SurfaceResized,
+    OutputChanged,
+    LayerSurfaceRecreated,
+    OverlaySuppression,
+    OverlayRestored,
+    Zoom,
+    BoardPan,
+    CanvasClear,
+    UiToast,
+    PresetFeedback,
+    BlockedFeedback,
+    TextEditEntry,
+    EmptyDamageFallback,
+    DamageRegionsCoverSurface,
+    Unknown,
+}
+
+impl FullDamageReason {
+    pub(in crate::backend::wayland) fn as_str(self) -> &'static str {
+        match self {
+            Self::InitialFrame => "initial_frame",
+            Self::NewBufferSlot => "new_buffer_slot",
+            Self::PoolGenerationChanged => "pool_generation_changed",
+            Self::PoolGrew => "pool_grew",
+            Self::ScaleChanged => "scale_changed",
+            Self::SurfaceResized => "surface_resized",
+            Self::OutputChanged => "output_changed",
+            Self::LayerSurfaceRecreated => "layer_surface_recreated",
+            Self::OverlaySuppression => "overlay_suppression",
+            Self::OverlayRestored => "overlay_restored",
+            Self::Zoom => "zoom",
+            Self::BoardPan => "board_pan",
+            Self::CanvasClear => "canvas_clear",
+            Self::UiToast => "ui_toast",
+            Self::PresetFeedback => "preset_feedback",
+            Self::BlockedFeedback => "blocked_feedback",
+            Self::TextEditEntry => "text_edit_entry",
+            Self::EmptyDamageFallback => "empty_damage_fallback",
+            Self::DamageRegionsCoverSurface => "damage_regions_cover_surface",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl fmt::Display for FullDamageReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Damage state for a single buffer slot.
 #[derive(Debug, Default)]
@@ -26,8 +86,15 @@ struct BufferDamage {
     regions: Vec<Rect>,
     /// Force full damage on next render (e.g., new buffer or after resize).
     force_full: bool,
+    /// Reason the next render for this slot must use full damage.
+    force_full_reason: Option<FullDamageReason>,
     /// Frame counter for LRU eviction.
     last_used_frame: u64,
+}
+
+pub(in crate::backend::wayland) struct BufferDamageReport {
+    pub(in crate::backend::wayland) regions: Vec<Rect>,
+    pub(in crate::backend::wayland) full_reason: Option<FullDamageReason>,
 }
 
 /// Tracks dirty regions for each buffer slot independently.
@@ -46,6 +113,8 @@ pub struct BufferDamageTracker {
     frame_counter: u64,
     /// When true, all buffers (including new ones) get full damage.
     global_full_damage: bool,
+    /// Reason all buffers are forced to full damage.
+    global_full_reason: Option<FullDamageReason>,
     /// Pool generation - when this changes, all tracking is invalidated.
     pool_generation: u64,
     /// Pool size - when this increases, pool grew and tracking is invalidated.
@@ -59,6 +128,7 @@ impl BufferDamageTracker {
             buffers: HashMap::with_capacity(4),
             frame_counter: 0,
             global_full_damage: true, // First frame always needs full damage
+            global_full_reason: Some(FullDamageReason::InitialFrame),
             pool_generation: 0,
             pool_size: 0,
         }
@@ -73,6 +143,18 @@ impl BufferDamageTracker {
         let pool_grew = pool_size > self.pool_size;
 
         if pool_changed || pool_grew {
+            let first_pool_identity = self.pool_generation == 0
+                && self.pool_size == 0
+                && self.buffers.is_empty()
+                && self.global_full_damage;
+            let reason = if first_pool_identity {
+                self.global_full_reason
+                    .unwrap_or(FullDamageReason::InitialFrame)
+            } else if pool_changed {
+                FullDamageReason::PoolGenerationChanged
+            } else {
+                FullDamageReason::PoolGrew
+            };
             if pool_changed {
                 log::debug!(
                     "Pool generation changed {} -> {}, resetting damage tracking",
@@ -90,6 +172,7 @@ impl BufferDamageTracker {
             self.pool_size = pool_size;
             self.buffers.clear();
             self.global_full_damage = true;
+            self.global_full_reason = Some(reason);
         } else if pool_size != self.pool_size {
             // Pool shrunk (shouldn't happen normally, but track it)
             self.pool_size = pool_size;
@@ -109,10 +192,12 @@ impl BufferDamageTracker {
     }
 
     /// Marks the entire surface as dirty for all buffers (including future new ones).
-    pub fn mark_all_full(&mut self) {
+    pub fn mark_all_full(&mut self, reason: FullDamageReason) {
         self.global_full_damage = true;
+        self.global_full_reason = Some(reason);
         for damage in self.buffers.values_mut() {
             damage.force_full = true;
+            damage.force_full_reason = Some(reason);
             damage.regions.clear();
         }
     }
@@ -134,14 +219,14 @@ impl BufferDamageTracker {
     ///
     /// If this is a new slot (or global_full_damage is set), returns full damage.
     /// Otherwise returns and clears the slot's accumulated damage.
-    pub fn take_buffer_damage(
+    pub fn take_buffer_damage_report(
         &mut self,
         canvas_ptr: usize,
         width: i32,
         height: i32,
         pool_generation: u64,
         pool_size: usize,
-    ) -> Vec<Rect> {
+    ) -> BufferDamageReport {
         // Check pool identity first - resets tracking if pool changed
         self.check_pool_identity(pool_generation, pool_size);
         self.frame_counter += 1;
@@ -155,45 +240,86 @@ impl BufferDamageTracker {
             self.evict_if_needed();
         }
 
-        let damage = self
-            .buffers
-            .entry(canvas_ptr)
-            .or_insert_with(|| BufferDamage {
-                regions: Vec::new(),
-                force_full: true, // New slot always needs full damage
-                last_used_frame: frame,
-            });
+        let global_full = self.global_full_damage;
+        let global_reason = self.global_full_reason;
+        let (needs_full, full_reason, mut regions) = {
+            let damage = self
+                .buffers
+                .entry(canvas_ptr)
+                .or_insert_with(|| BufferDamage {
+                    regions: Vec::new(),
+                    force_full: true, // New slot always needs full damage
+                    force_full_reason: Some(FullDamageReason::NewBufferSlot),
+                    last_used_frame: frame,
+                });
 
-        damage.last_used_frame = frame;
+            damage.last_used_frame = frame;
 
-        // Check if we need full damage
-        let needs_full = damage.force_full || self.global_full_damage;
+            // Check if we need full damage
+            let needs_full = damage.force_full || global_full;
+            let full_reason = if global_full {
+                global_reason
+            } else if damage.force_full {
+                damage.force_full_reason
+            } else {
+                None
+            };
+
+            if needs_full {
+                damage.force_full = false;
+                damage.force_full_reason = None;
+                damage.regions.clear();
+                (true, full_reason, Vec::new())
+            } else {
+                // Take and deduplicate regions
+                let mut regions: Vec<Rect> = damage.regions.drain(..).collect();
+                regions.retain(Rect::is_valid);
+                (false, None, regions)
+            }
+        };
 
         if needs_full {
-            damage.force_full = false;
-            damage.regions.clear();
             // Clear global flag only after a buffer has received it
-            if self.global_full_damage {
+            if global_full {
                 self.global_full_damage = false;
+                self.global_full_reason = None;
             }
 
             if width > 0
                 && height > 0
                 && let Some(full) = Rect::new(0, 0, width, height)
             {
-                return vec![full];
+                return BufferDamageReport {
+                    regions: vec![full],
+                    full_reason: Some(full_reason.unwrap_or(FullDamageReason::Unknown)),
+                };
             }
-            return Vec::new();
+            return BufferDamageReport {
+                regions: Vec::new(),
+                full_reason,
+            };
         }
-
-        // Take and deduplicate regions
-        let mut regions: Vec<Rect> = damage.regions.drain(..).collect();
-        regions.retain(Rect::is_valid);
 
         // Merge overlapping regions to reduce compositor work
         merge_damage_regions(&mut regions);
 
-        regions
+        BufferDamageReport {
+            regions,
+            full_reason: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn take_buffer_damage(
+        &mut self,
+        canvas_ptr: usize,
+        width: i32,
+        height: i32,
+        pool_generation: u64,
+        pool_size: usize,
+    ) -> Vec<Rect> {
+        self.take_buffer_damage_report(canvas_ptr, width, height, pool_generation, pool_size)
+            .regions
     }
 
     /// Evicts oldest buffer if we're at capacity.
@@ -223,13 +349,14 @@ impl BufferDamageTracker {
     }
 }
 
-/// Merges overlapping or adjacent damage regions to reduce compositor work.
+/// Merges aligned overlapping or adjacent damage regions to reduce compositor work.
 fn merge_damage_regions(regions: &mut Vec<Rect>) {
     if regions.len() <= 1 {
         return;
     }
 
-    // Simple greedy merge: combine regions that overlap or touch
+    // Keep sparse diagonal/path damage split. Merging those into bounding boxes can turn an
+    // ordinary stroke into a full-surface damage rect even when most pixels are untouched.
     let mut merged = true;
     while merged && regions.len() > 1 {
         merged = false;
@@ -246,7 +373,7 @@ fn merge_damage_regions(regions: &mut Vec<Rect>) {
     }
 }
 
-/// Attempts to merge two rectangles if they overlap or are adjacent.
+/// Attempts to merge two rectangles if they overlap or are adjacent on the same row/column.
 fn try_merge_rects(a: &Rect, b: &Rect) -> Option<Rect> {
     let a_right = a.x.saturating_add(a.width);
     let a_bottom = a.y.saturating_add(a.height);
@@ -254,19 +381,34 @@ fn try_merge_rects(a: &Rect, b: &Rect) -> Option<Rect> {
     let b_bottom = b.y.saturating_add(b.height);
 
     // Check if rectangles overlap or touch (with 1px margin for adjacency)
-    let margin = 1;
-    let overlaps_x = a.x <= b_right + margin && b.x <= a_right + margin;
-    let overlaps_y = a.y <= b_bottom + margin && b.y <= a_bottom + margin;
+    let overlaps_x = ranges_touch_or_overlap(a.x, a_right, b.x, b_right);
+    let overlaps_y = ranges_touch_or_overlap(a.y, a_bottom, b.y, b_bottom);
 
-    if overlaps_x && overlaps_y {
-        let min_x = a.x.min(b.x);
-        let min_y = a.y.min(b.y);
-        let max_x = a_right.max(b_right);
-        let max_y = a_bottom.max(b_bottom);
-        Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
-    } else {
-        None
+    if !overlaps_x || !overlaps_y {
+        return None;
     }
+
+    let aligned_horizontally = ranges_aligned(a.y, a_bottom, b.y, b_bottom);
+    let aligned_vertically = ranges_aligned(a.x, a_right, b.x, b_right);
+    if !aligned_horizontally && !aligned_vertically {
+        return None;
+    }
+
+    let min_x = a.x.min(b.x);
+    let min_y = a.y.min(b.y);
+    let max_x = a_right.max(b_right);
+    let max_y = a_bottom.max(b_bottom);
+    Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
+}
+
+fn ranges_touch_or_overlap(a_start: i32, a_end: i32, b_start: i32, b_end: i32) -> bool {
+    a_start <= b_end.saturating_add(DAMAGE_MERGE_MARGIN)
+        && b_start <= a_end.saturating_add(DAMAGE_MERGE_MARGIN)
+}
+
+fn ranges_aligned(a_start: i32, a_end: i32, b_start: i32, b_end: i32) -> bool {
+    a_start.abs_diff(b_start) <= DAMAGE_MERGE_ALIGNMENT_TOLERANCE as u32
+        && a_end.abs_diff(b_end) <= DAMAGE_MERGE_ALIGNMENT_TOLERANCE as u32
 }
 
 #[cfg(test)]
@@ -334,7 +476,7 @@ mod tests {
         tracker.mark_rect(Rect::new(5, 5, 10, 10).unwrap());
 
         // Mark all full
-        tracker.mark_all_full();
+        tracker.mark_all_full(FullDamageReason::SurfaceResized);
 
         // Both slots should get full damage
         let d1 = tracker.take_buffer_damage(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
@@ -344,6 +486,21 @@ mod tests {
         let d2 = tracker.take_buffer_damage(0x2000, 800, 600, TEST_GEN, TEST_SIZE);
         assert_eq!(d2.len(), 1);
         assert_eq!(d2[0], Rect::new(0, 0, 800, 600).unwrap());
+    }
+
+    #[test]
+    fn report_exposes_full_damage_reasons() {
+        let mut tracker = BufferDamageTracker::new(2);
+
+        let initial = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
+        assert_eq!(initial.full_reason, Some(FullDamageReason::InitialFrame));
+
+        let new_slot = tracker.take_buffer_damage_report(0x2000, 800, 600, TEST_GEN, TEST_SIZE);
+        assert_eq!(new_slot.full_reason, Some(FullDamageReason::NewBufferSlot));
+
+        tracker.mark_all_full(FullDamageReason::UiToast);
+        let explicit = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
+        assert_eq!(explicit.full_reason, Some(FullDamageReason::UiToast));
     }
 
     #[test]
@@ -398,11 +555,11 @@ mod tests {
     fn merge_overlapping_regions() {
         let mut regions = vec![
             Rect::new(0, 0, 10, 10).unwrap(),
-            Rect::new(5, 5, 10, 10).unwrap(), // Overlaps first
+            Rect::new(5, 0, 10, 10).unwrap(), // Overlaps first on the same row
         ];
         merge_damage_regions(&mut regions);
         assert_eq!(regions.len(), 1);
-        assert_eq!(regions[0], Rect::new(0, 0, 15, 15).unwrap());
+        assert_eq!(regions[0], Rect::new(0, 0, 15, 10).unwrap());
     }
 
     #[test]
@@ -423,5 +580,89 @@ mod tests {
         ];
         merge_damage_regions(&mut regions);
         assert_eq!(regions.len(), 2);
+    }
+
+    #[test]
+    fn no_merge_diagonal_regions_into_surface_sized_bounds() {
+        let mut regions = (0..10)
+            .map(|index| {
+                let position = index * 10;
+                Rect::new(position, position, 20, 20).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        merge_damage_regions(&mut regions);
+
+        assert_eq!(regions.len(), 10);
+        assert!(
+            regions.iter().all(|rect| !(rect.x <= 0
+                && rect.y <= 0
+                && rect.width >= 100
+                && rect.height >= 100)),
+            "diagonal damage should stay split instead of becoming full-surface: {regions:?}"
+        );
+    }
+
+    #[test]
+    fn buffer_damage_keeps_diagonal_path_damage_split() {
+        let mut tracker = BufferDamageTracker::new(3);
+        let _ = tracker.take_buffer_damage_report(0x1000, 100, 100, TEST_GEN, TEST_SIZE);
+
+        for index in 0..10 {
+            let position = index * 10;
+            tracker.mark_rect(Rect::new(position, position, 20, 20).unwrap());
+        }
+
+        let report = tracker.take_buffer_damage_report(0x1000, 100, 100, TEST_GEN, TEST_SIZE);
+
+        assert_eq!(report.full_reason, None);
+        assert_eq!(report.regions.len(), 10);
+        assert!(
+            report.regions.iter().all(|rect| !(rect.x <= 0
+                && rect.y <= 0
+                && rect.width >= 100
+                && rect.height >= 100)),
+            "diagonal path damage should not be reported as full damage: {:?}",
+            report.regions
+        );
+    }
+
+    #[test]
+    fn multi_buffer_path_damage_stays_split_across_reused_slots() {
+        let mut tracker = BufferDamageTracker::new(3);
+        for slot in [0x1000, 0x2000, 0x3000] {
+            let _ = tracker.take_buffer_damage_report(slot, 1000, 1000, TEST_GEN, TEST_SIZE);
+        }
+
+        for index in 0..10 {
+            let position = index * 100;
+            tracker.mark_rect(Rect::new(position, position, 120, 120).unwrap());
+        }
+
+        let first_reused =
+            tracker.take_buffer_damage_report(0x2000, 1000, 1000, TEST_GEN, TEST_SIZE);
+        assert_eq!(first_reused.full_reason, None);
+        assert_path_damage_stays_split(&first_reused.regions);
+
+        tracker.mark_rect(Rect::new(930, 930, 60, 60).unwrap());
+
+        let second_reused =
+            tracker.take_buffer_damage_report(0x3000, 1000, 1000, TEST_GEN, TEST_SIZE);
+        assert_eq!(second_reused.full_reason, None);
+        assert_path_damage_stays_split(&second_reused.regions);
+    }
+
+    fn assert_path_damage_stays_split(regions: &[Rect]) {
+        assert!(
+            regions.len() > 1,
+            "path damage should stay split across reused buffers: {regions:?}"
+        );
+        assert!(
+            regions.iter().all(|rect| !(rect.x <= 0
+                && rect.y <= 0
+                && rect.width >= 1000
+                && rect.height >= 1000)),
+            "path damage should not become a full-surface region: {regions:?}"
+        );
     }
 }

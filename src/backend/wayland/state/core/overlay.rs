@@ -58,7 +58,8 @@ impl WaylandState {
         }
         self.data.overlay_suppression = reason;
         self.sync_overlay_interactivity();
-        self.buffer_damage.mark_all_full();
+        self.buffer_damage
+            .mark_all_full(FullDamageReason::OverlaySuppression);
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
         true
@@ -73,7 +74,8 @@ impl WaylandState {
         }
         self.data.overlay_suppression = OverlaySuppression::None;
         self.sync_overlay_interactivity();
-        self.buffer_damage.mark_all_full();
+        self.buffer_damage
+            .mark_all_full(FullDamageReason::OverlayRestored);
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
     }
