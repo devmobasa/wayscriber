@@ -253,6 +253,146 @@ fn append_path_motion_dirties_only_new_tail_segment() {
 }
 
 #[test]
+fn append_path_long_diagonal_motion_splits_tail_damage() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_motion(900, 900);
+    let dirty = state.take_dirty_regions();
+    let thick = state.thickness_for_tool(Tool::Pen);
+    let full_tail_bounds =
+        crate::draw::shape::bounding_box_for_points(&[(10, 10), (900, 900)], thick)
+            .expect("long tail segment should have bounds");
+
+    assert!(
+        dirty.len() > 1,
+        "long diagonal append damage should be split; dirty={dirty:?}"
+    );
+    assert!(
+        dirty.iter().all(
+            |rect| rect.width < full_tail_bounds.width && rect.height < full_tail_bounds.height
+        ),
+        "split damage should avoid the full tail AABB; dirty={dirty:?}, full={full_tail_bounds:?}"
+    );
+    assert_eq!(
+        state.last_provisional_bounds,
+        Some(full_tail_bounds),
+        "cleanup bounds should still cover the whole active stroke"
+    );
+}
+
+#[test]
+fn append_path_long_diagonal_release_splits_finished_path_damage() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_motion(900, 900);
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_release(MouseButton::Left, 900, 900);
+    let dirty = state.take_dirty_regions();
+    let thick = state.thickness_for_tool(Tool::Pen);
+    let full_path_bounds =
+        crate::draw::shape::bounding_box_for_points(&[(10, 10), (900, 900)], thick)
+            .expect("long finished path should have bounds");
+
+    assert_eq!(state.boards.active_frame().shapes.len(), 1);
+    assert_eq!(state.last_provisional_bounds, None);
+    assert!(
+        dirty.iter().all(
+            |rect| rect.width < full_path_bounds.width && rect.height < full_path_bounds.height
+        ),
+        "release should not reintroduce the full path AABB; dirty={dirty:?}, full={full_path_bounds:?}"
+    );
+}
+
+#[test]
+fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    assert!(state.set_thickness(2.0));
+    state.update_screen_dimensions(1000, 1000);
+    state.pending_onboarding_usage.first_stroke_done = true;
+    state.pressure_variation_threshold = 1000.0;
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 100);
+    state.set_pressure_thickness_for_active_tool(32.0);
+    state.on_mouse_motion(900, 100);
+    let wide_preview_bounds = state
+        .last_provisional_bounds
+        .expect("wide pressure preview should track cleanup bounds");
+    let wide_only_probe = crate::util::Rect::new(450, wide_preview_bounds.y, 1, 1).unwrap();
+    let final_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 100), (900, 100)], 2.0)
+        .expect("final freehand should have bounds");
+    assert!(
+        !test_rects_intersect(final_bounds, wide_only_probe),
+        "test probe should be outside the final narrow stroke; final={final_bounds:?}, probe={wide_only_probe:?}"
+    );
+    let _ = state.take_dirty_regions();
+
+    state.set_pressure_thickness_for_active_tool(2.0);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_release(MouseButton::Left, 900, 100);
+    let dirty = state.take_dirty_regions();
+
+    match &state.boards.active_frame().shapes[0].shape {
+        Shape::Freehand { thick, .. } => assert_eq!(*thick, 2.0),
+        other => panic!("expected final pressure samples to downgrade to Freehand, got {other:?}"),
+    }
+    assert_eq!(state.last_provisional_bounds, None);
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, wide_only_probe)),
+        "release should dirty pressure-preview pixels outside the final narrow path; dirty={dirty:?}, preview={wide_preview_bounds:?}, probe={wide_only_probe:?}"
+    );
+}
+
+#[test]
+fn append_path_limit_rejection_clears_provisional_damage() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    state.boards.active_frame_mut().add_shape(Shape::Line {
+        x1: 1,
+        y1: 1,
+        x2: 2,
+        y2: 2,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.max_shapes_per_frame = 1;
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_motion(900, 900);
+    let provisional_bounds = state
+        .last_provisional_bounds
+        .expect("active path preview should track cleanup bounds");
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_release(MouseButton::Left, 900, 900);
+    let dirty = state.take_dirty_regions();
+
+    assert_eq!(state.boards.active_frame().shapes.len(), 1);
+    assert_eq!(state.last_provisional_bounds, None);
+    assert!(
+        dirty
+            .iter()
+            .any(|rect| test_rects_intersect(*rect, provisional_bounds)),
+        "rejected path should dirty the old preview bounds for cleanup; dirty={dirty:?}, provisional={provisional_bounds:?}"
+    );
+}
+
+#[test]
 fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Pen)));
