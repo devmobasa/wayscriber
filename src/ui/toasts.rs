@@ -7,7 +7,7 @@ use super::constants::{
     TOAST_SUCCESS, TOAST_WARNING,
 };
 use super::primitives::draw_rounded_rect;
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextStyle, measure_text, text_layout};
 
 /// Border width for blocked action feedback edge flash.
 const BLOCKED_FEEDBACK_BORDER: f64 = 6.0;
@@ -19,18 +19,42 @@ const UI_TOAST_HOLD_RATIO: f64 = 0.75;
 /// Vertical position for preset toast (percentage of screen height from top)
 const PRESET_TOAST_Y_RATIO: f64 = 0.2;
 
-/// Render a transient toast for preset actions (apply/save/clear).
-pub fn render_preset_toast(
-    ctx: &cairo::Context,
-    input_state: &InputState,
+const UI_TOAST_FONT_SIZE: f64 = 15.0;
+const PRESET_TOAST_FONT_SIZE: f64 = 16.0;
+const TOAST_PADDING_X: f64 = 16.0;
+const TOAST_PADDING_Y: f64 = 9.0;
+
+fn toast_text_style(size: f64) -> UiTextStyle<'static> {
+    UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size,
+    }
+}
+
+/// Box geometry for a toast label centered horizontally at a screen-height ratio.
+fn toast_box_geometry(
+    label: &str,
+    font_size: f64,
     screen_width: u32,
     screen_height: u32,
-) {
-    if !input_state.show_preset_toasts {
-        return;
-    }
+    y_ratio: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let extents = measure_text(toast_text_style(font_size), label, None)?;
+    let width = extents.width() + TOAST_PADDING_X * 2.0;
+    let height = extents.height() + TOAST_PADDING_Y * 2.0;
+    let x = (screen_width as f64 - width) / 2.0;
+    let center_y = screen_height as f64 * y_ratio;
+    let y = center_y - height / 2.0;
+    Some((x, y, width, height))
+}
 
-    let now = Instant::now();
+/// The most recent, still-animating preset feedback entry: (slot, kind, progress).
+fn latest_preset_feedback(
+    input_state: &InputState,
+    now: Instant,
+) -> Option<(usize, PresetFeedbackKind, f32)> {
     let duration_secs = PRESET_TOAST_DURATION_MS as f32 / 1000.0;
     let mut latest: Option<(usize, PresetFeedbackKind, Instant, f32)> = None;
 
@@ -51,34 +75,109 @@ pub fn render_preset_toast(
         }
     }
 
-    let Some((slot, kind, _started, progress)) = latest else {
-        return;
-    };
+    latest.map(|(slot, kind, _started, progress)| (slot, kind, progress))
+}
 
-    let label = match kind {
+fn preset_feedback_label(slot: usize, kind: PresetFeedbackKind) -> String {
+    match kind {
         PresetFeedbackKind::Apply => format!("Preset {} applied", slot),
         PresetFeedbackKind::Save => format!("Preset {} saved", slot),
         PresetFeedbackKind::Clear => format!("Preset {} cleared", slot),
+    }
+}
+
+fn ui_toast_full_label(input_state: &InputState) -> Option<String> {
+    let toast = input_state.ui_toast.as_ref()?;
+    let action_suffix = toast
+        .action
+        .as_ref()
+        .map(|a| format!(" [{}]", a.label))
+        .unwrap_or_default();
+    Some(format!("{}{}", toast.message, action_suffix))
+}
+
+/// On-screen bounds (x, y, width, height) the active UI toast occupies, without
+/// rendering it. Used for damage tracking; measurement goes through the same
+/// layout cache as rendering, so the two always agree.
+pub fn ui_toast_geometry(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    let full_label = ui_toast_full_label(input_state)?;
+    toast_box_geometry(
+        &full_label,
+        UI_TOAST_FONT_SIZE,
+        screen_width,
+        screen_height,
+        UI_TOAST_Y_RATIO,
+    )
+}
+
+/// On-screen bounds (x, y, width, height) of the active preset toast, without
+/// rendering it. Returns `None` when no preset toast would be drawn.
+pub fn preset_toast_geometry(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    if !input_state.show_preset_toasts {
+        return None;
+    }
+    let (slot, kind, _progress) = latest_preset_feedback(input_state, Instant::now())?;
+    let label = preset_feedback_label(slot, kind);
+    toast_box_geometry(
+        &label,
+        PRESET_TOAST_FONT_SIZE,
+        screen_width,
+        screen_height,
+        PRESET_TOAST_Y_RATIO,
+    )
+}
+
+/// The four screen-edge strips flashed by blocked-action feedback.
+pub fn blocked_feedback_rects(screen_width: u32, screen_height: u32) -> [(f64, f64, f64, f64); 4] {
+    let w = screen_width as f64;
+    let h = screen_height as f64;
+    let b = BLOCKED_FEEDBACK_BORDER;
+    [
+        (0.0, 0.0, w, b),
+        (0.0, h - b, w, b),
+        (0.0, b, b, h - 2.0 * b),
+        (w - b, b, b, h - 2.0 * b),
+    ]
+}
+
+/// Render a transient toast for preset actions (apply/save/clear).
+pub fn render_preset_toast(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    if !input_state.show_preset_toasts {
+        return;
+    }
+
+    let Some((slot, kind, progress)) = latest_preset_feedback(input_state, Instant::now()) else {
+        return;
     };
 
-    let font_size = 16.0;
-    let padding_x = 16.0;
-    let padding_y = 9.0;
+    let label = preset_feedback_label(slot, kind);
     let radius = 10.0;
 
-    let text_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Bold,
-        size: font_size,
-    };
+    let text_style = toast_text_style(PRESET_TOAST_FONT_SIZE);
     let layout = text_layout(ctx, text_style, &label, None);
     let extents = layout.ink_extents();
-    let width = extents.width() + padding_x * 2.0;
-    let height = extents.height() + padding_y * 2.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let center_y = screen_height as f64 * PRESET_TOAST_Y_RATIO;
-    let y = center_y - height / 2.0;
+    let Some((x, y, width, height)) = toast_box_geometry(
+        &label,
+        PRESET_TOAST_FONT_SIZE,
+        screen_width,
+        screen_height,
+        PRESET_TOAST_Y_RATIO,
+    ) else {
+        return;
+    };
 
     let fade = if (progress as f64) <= UI_TOAST_HOLD_RATIO {
         1.0
@@ -121,9 +220,7 @@ pub fn render_ui_toast(
     }
 
     let label = toast.message.as_str();
-    let font_size = 15.0;
-    let padding_x = 16.0;
-    let padding_y = 9.0;
+    let padding_x = TOAST_PADDING_X;
     let radius = 10.0;
 
     // Calculate label with optional action suffix
@@ -134,19 +231,16 @@ pub fn render_ui_toast(
         .unwrap_or_default();
     let full_label = format!("{}{}", label, action_suffix);
 
-    let text_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Bold,
-        size: font_size,
-    };
+    let text_style = toast_text_style(UI_TOAST_FONT_SIZE);
     let full_layout = text_layout(ctx, text_style, &full_label, None);
     let full_extents = full_layout.ink_extents();
-    let width = full_extents.width() + padding_x * 2.0;
-    let height = full_extents.height() + padding_y * 2.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let center_y = screen_height as f64 * UI_TOAST_Y_RATIO;
-    let y = center_y - height / 2.0;
+    let (x, y, width, height) = toast_box_geometry(
+        &full_label,
+        UI_TOAST_FONT_SIZE,
+        screen_width,
+        screen_height,
+        UI_TOAST_Y_RATIO,
+    )?;
 
     let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
     let (r, g, b) = match toast.kind {
@@ -252,26 +346,10 @@ pub fn render_blocked_feedback(
         0.22 * (1.0 - (progress - 0.4) / 0.6)
     };
 
-    let w = screen_width as f64;
-    let h = screen_height as f64;
-    let b = BLOCKED_FEEDBACK_BORDER;
-
     // Red tint on all four screen edges
     constants::set_color_alpha(ctx, BLOCKED_FLASH, alpha);
-
-    // Top edge
-    ctx.rectangle(0.0, 0.0, w, b);
-    let _ = ctx.fill();
-
-    // Bottom edge
-    ctx.rectangle(0.0, h - b, w, b);
-    let _ = ctx.fill();
-
-    // Left edge (between top and bottom)
-    ctx.rectangle(0.0, b, b, h - 2.0 * b);
-    let _ = ctx.fill();
-
-    // Right edge (between top and bottom)
-    ctx.rectangle(w - b, b, b, h - 2.0 * b);
-    let _ = ctx.fill();
+    for (x, y, w, h) in blocked_feedback_rects(screen_width, screen_height) {
+        ctx.rectangle(x, y, w, h);
+        let _ = ctx.fill();
+    }
 }

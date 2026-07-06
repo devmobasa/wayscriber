@@ -135,6 +135,12 @@ pub struct StateData {
     pub(super) xdg_explicit_close_requested: bool,
     /// Reused pre-UI pixel snapshot for render-profile UI-only remapping.
     pub(super) render_profile_ui_baseline: Vec<u8>,
+    /// Previous-frame damage bounds for transient UI effects, so partial
+    /// redraws cover both the old and new footprint of each effect.
+    pub(super) prev_ui_toast_damage: Option<crate::util::Rect>,
+    pub(super) prev_preset_toast_damage: Option<crate::util::Rect>,
+    pub(super) blocked_feedback_was_active: bool,
+    pub(super) prev_text_edit_entry_damage: Option<crate::util::Rect>,
 }
 
 impl StateData {
@@ -203,6 +209,10 @@ impl StateData {
             xdg_close_guard_until: None,
             xdg_explicit_close_requested: false,
             render_profile_ui_baseline: Vec::new(),
+            prev_ui_toast_damage: None,
+            prev_preset_toast_damage: None,
+            blocked_feedback_was_active: false,
+            prev_text_edit_entry_damage: None,
         }
     }
 }
