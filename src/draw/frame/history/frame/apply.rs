@@ -18,7 +18,7 @@ impl Frame {
                 shape_id, after, ..
             } => {
                 if let Some(target) = self.shape_mut(*shape_id) {
-                    target.shape = after.shape.clone();
+                    target.set_shape(after.shape.clone());
                     target.locked = after.locked;
                 }
             }
@@ -59,7 +59,7 @@ impl Frame {
                 shape_id, before, ..
             } => {
                 if let Some(target) = self.shape_mut(*shape_id) {
-                    target.shape = before.shape.clone();
+                    target.set_shape(before.shape.clone());
                     target.locked = before.locked;
                 }
             }
@@ -106,6 +106,7 @@ impl Frame {
             *w = bounds.w;
             *h = bounds.h;
             target.locked = bounds.locked;
+            target.invalidate_bounds();
         }
     }
 }

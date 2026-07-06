@@ -6,9 +6,9 @@ use crate::draw::{
 
 #[test]
 fn compute_hit_bounds_inflates_bounds_for_tolerance() {
-    let drawn = DrawnShape {
-        id: 1,
-        shape: Shape::Rect {
+    let drawn = DrawnShape::with_metadata(
+        1,
+        Shape::Rect {
             x: 10,
             y: 20,
             w: 30,
@@ -17,9 +17,9 @@ fn compute_hit_bounds_inflates_bounds_for_tolerance() {
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     let base = drawn
         .shape
@@ -36,18 +36,18 @@ fn compute_hit_bounds_inflates_bounds_for_tolerance() {
 
 #[test]
 fn compute_hit_bounds_ignores_eraser_strokes() {
-    let eraser = DrawnShape {
-        id: 2,
-        shape: Shape::EraserStroke {
+    let eraser = DrawnShape::with_metadata(
+        2,
+        Shape::EraserStroke {
             points: vec![(0, 0), (10, 10)],
             brush: EraserBrush {
                 size: 8.0,
                 kind: EraserKind::Circle,
             },
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(
         compute_hit_bounds(&eraser, 5.0).is_none(),
@@ -57,9 +57,9 @@ fn compute_hit_bounds_ignores_eraser_strokes() {
 
 #[test]
 fn rect_hit_handles_degenerate_dimensions() {
-    let rect = DrawnShape {
-        id: 1,
-        shape: Shape::Rect {
+    let rect = DrawnShape::with_metadata(
+        1,
+        Shape::Rect {
             x: 10,
             y: 10,
             w: 0,
@@ -68,9 +68,9 @@ fn rect_hit_handles_degenerate_dimensions() {
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(hit_test(&rect, (10, 10), 3.0));
     assert!(!hit_test(&rect, (5, 5), 2.0));
@@ -78,9 +78,9 @@ fn rect_hit_handles_degenerate_dimensions() {
 
 #[test]
 fn ellipse_hit_handles_zero_radius() {
-    let ellipse = DrawnShape {
-        id: 2,
-        shape: Shape::Ellipse {
+    let ellipse = DrawnShape::with_metadata(
+        2,
+        Shape::Ellipse {
             cx: 50,
             cy: 80,
             rx: 0,
@@ -89,9 +89,9 @@ fn ellipse_hit_handles_zero_radius() {
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(hit_test(&ellipse, (50, 80), 2.0));
     assert!(!hit_test(&ellipse, (60, 90), 1.0));
@@ -99,18 +99,18 @@ fn ellipse_hit_handles_zero_radius() {
 
 #[test]
 fn polygon_hit_tests_closed_outline_only() {
-    let polygon = DrawnShape {
-        id: 3,
-        shape: Shape::Polygon {
+    let polygon = DrawnShape::with_metadata(
+        3,
+        Shape::Polygon {
             kind: PolygonKind::Triangle,
             points: vec![(10, 10), (40, 10), (25, 40)],
             fill: true,
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(hit_test(&polygon, (25, 10), 1.0));
     assert!(
@@ -121,9 +121,9 @@ fn polygon_hit_tests_closed_outline_only() {
 
 #[test]
 fn point_targeting_hits_filled_rect_and_ellipse_interiors() {
-    let rect = DrawnShape {
-        id: 3,
-        shape: Shape::Rect {
+    let rect = DrawnShape::with_metadata(
+        3,
+        Shape::Rect {
             x: 10,
             y: 10,
             w: 40,
@@ -132,12 +132,12 @@ fn point_targeting_hits_filled_rect_and_ellipse_interiors() {
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
-    let ellipse = DrawnShape {
-        id: 4,
-        shape: Shape::Ellipse {
+        0,
+        false,
+    );
+    let ellipse = DrawnShape::with_metadata(
+        4,
+        Shape::Ellipse {
             cx: 80,
             cy: 70,
             rx: 20,
@@ -146,9 +146,9 @@ fn point_targeting_hits_filled_rect_and_ellipse_interiors() {
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(!hit_test(&rect, (30, 25), 1.0));
     assert!(hit_test_for_point_targeting(&rect, (30, 25), 1.0));
@@ -158,18 +158,18 @@ fn point_targeting_hits_filled_rect_and_ellipse_interiors() {
 
 #[test]
 fn point_targeting_hits_filled_polygon_interior() {
-    let polygon = DrawnShape {
-        id: 3,
-        shape: Shape::Polygon {
+    let polygon = DrawnShape::with_metadata(
+        3,
+        Shape::Polygon {
             kind: PolygonKind::Triangle,
             points: vec![(10, 10), (40, 10), (25, 40)],
             fill: true,
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(
         hit_test_for_point_targeting(&polygon, (25, 22), 1.0),
@@ -179,18 +179,18 @@ fn point_targeting_hits_filled_polygon_interior() {
 
 #[test]
 fn invalid_polygon_hit_test_is_false() {
-    let polygon = DrawnShape {
-        id: 4,
-        shape: Shape::Polygon {
+    let polygon = DrawnShape::with_metadata(
+        4,
+        Shape::Polygon {
             kind: PolygonKind::Freeform,
             points: vec![(10, 10), (10, 10), (40, 10)],
             fill: false,
             color: BLACK,
             thick: 2.0,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(!hit_test(&polygon, (10, 10), 10.0));
 }
@@ -220,9 +220,9 @@ fn arrow_label_hit_detects_label_bounds() {
         size: 12.0,
         font_descriptor: font.clone(),
     };
-    let drawn = DrawnShape {
-        id: 3,
-        shape: Shape::Arrow {
+    let drawn = DrawnShape::with_metadata(
+        3,
+        Shape::Arrow {
             x1: 0,
             y1: 0,
             x2: 100,
@@ -234,9 +234,9 @@ fn arrow_label_hit_detects_label_bounds() {
             head_at_end: true,
             label: Some(label),
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     let label_text = "12";
     let layout = crate::draw::shape::arrow_label_layout(100, 0, 0, 0, 2.0, label_text, 12.0, &font)
@@ -264,17 +264,17 @@ fn step_marker_hit_detects_center_and_rejects_outside_point() {
         size: 16.0,
         font_descriptor: font,
     };
-    let drawn = DrawnShape {
-        id: 4,
-        shape: Shape::StepMarker {
+    let drawn = DrawnShape::with_metadata(
+        4,
+        Shape::StepMarker {
             x: 50,
             y: 60,
             color: BLACK,
             label,
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(
         hit_test(&drawn, (50, 60), 0.1),
@@ -296,9 +296,9 @@ fn step_marker_hit_detects_center_and_rejects_outside_point() {
 
 #[test]
 fn image_hit_test_uses_display_rectangle() {
-    let drawn = DrawnShape {
-        id: 5,
-        shape: Shape::Image {
+    let drawn = DrawnShape::with_metadata(
+        5,
+        Shape::Image {
             x: 10,
             y: 20,
             w: 40,
@@ -310,9 +310,9 @@ fn image_hit_test_uses_display_rectangle() {
                 bytes: vec![1, 2, 3],
             },
         },
-        created_at: 0,
-        locked: false,
-    };
+        0,
+        false,
+    );
 
     assert!(hit_test(&drawn, (20, 30), 0.0));
     assert!(!hit_test(&drawn, (60, 60), 0.0));

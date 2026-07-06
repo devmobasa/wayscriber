@@ -12,18 +12,8 @@ fn validate_history_drops_actions_exceeding_compound_depth() {
         thick: 1.0,
     };
 
-    let shallow_drawn = DrawnShape {
-        id: 1,
-        shape: base_shape.clone(),
-        created_at: 0,
-        locked: false,
-    };
-    let deep_drawn = DrawnShape {
-        id: 2,
-        shape: base_shape,
-        created_at: 0,
-        locked: false,
-    };
+    let shallow_drawn = DrawnShape::with_metadata(1, base_shape.clone(), 0, false);
+    let deep_drawn = DrawnShape::with_metadata(2, base_shape, 0, false);
 
     let shallow = UndoAction::Compound {
         actions: vec![UndoAction::Create {

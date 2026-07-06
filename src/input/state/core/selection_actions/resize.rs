@@ -74,14 +74,14 @@ impl InputState {
             for (shape_id, snapshot) in snapshots {
                 if let Some(drawn) = frame.shape_mut(*shape_id) {
                     // Apply scaling transformation to the shape
-                    drawn.shape = Self::scale_shape(
+                    drawn.set_shape(Self::scale_shape(
                         &snapshot.shape,
                         scale_x,
                         scale_y,
                         anchor_x,
                         anchor_y,
                         original_bounds,
-                    );
+                    ));
                     ids_to_invalidate.push(*shape_id);
                 }
             }
@@ -350,7 +350,7 @@ impl InputState {
             let frame = self.boards.active_frame_mut();
             for (shape_id, snapshot) in snapshots {
                 if let Some(drawn) = frame.shape_mut(*shape_id) {
-                    drawn.shape = snapshot.shape.clone();
+                    drawn.set_shape(snapshot.shape.clone());
                     drawn.locked = snapshot.locked;
                     ids_to_invalidate.push(*shape_id);
                 }

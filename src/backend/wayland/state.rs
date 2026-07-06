@@ -84,6 +84,7 @@ use super::{
 mod activation;
 mod boards;
 mod buffer_damage;
+mod canvas_layer;
 mod capture;
 mod clipboard;
 mod color_picker;
@@ -166,6 +167,8 @@ pub(super) struct WaylandState {
     data: StateData,
     /// Per-buffer damage tracking for correct incremental rendering.
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
+    /// Baked committed-shapes layer for panned canvas rendering.
+    pub(super) canvas_layer_cache: canvas_layer::CanvasLayerCache,
 
     // Configuration
     pub(super) config: Config,

@@ -297,6 +297,10 @@ pub struct InputState {
     pub radial_menu_mouse_binding: RadialMenuMouseBinding,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
+    /// Monotonic counter bumped whenever committed shape content may have
+    /// changed (piggybacks on hit-cache invalidation). Used by render-side
+    /// caches to detect content changes cheaply.
+    pub(in crate::input::state::core) canvas_content_generation: u64,
     /// Hit test tolerance in pixels
     pub hit_test_tolerance: f64,
     /// Threshold before enabling spatial indexing

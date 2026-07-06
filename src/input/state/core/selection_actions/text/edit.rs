@@ -128,6 +128,7 @@ impl InputState {
                     }
                     _ => {}
                 }
+                shape.invalidate_bounds();
                 let after = shape.shape.bounding_box();
                 Some((before, after))
             } else {
@@ -156,7 +157,7 @@ impl InputState {
             let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 let before = shape.shape.bounding_box();
-                shape.shape = snapshot.shape.clone();
+                shape.set_shape(snapshot.shape.clone());
                 shape.locked = snapshot.locked;
                 let after = shape.shape.bounding_box();
                 Some((before, after))
@@ -185,7 +186,7 @@ impl InputState {
             let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 let before_bounds = shape.shape.bounding_box();
-                shape.shape = new_shape;
+                shape.set_shape(new_shape);
                 let after_bounds = shape.shape.bounding_box();
                 let after_snapshot = ShapeSnapshot {
                     shape: shape.shape.clone(),

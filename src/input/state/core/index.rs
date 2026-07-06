@@ -89,8 +89,14 @@ impl InputState {
         hits
     }
 
+    /// Monotonic counter bumped whenever committed shape content may have changed.
+    pub fn canvas_content_generation(&self) -> u64 {
+        self.canvas_content_generation
+    }
+
     /// Clears all cached hit-test data and spatial index.
     pub fn invalidate_hit_cache(&mut self) {
+        self.canvas_content_generation = self.canvas_content_generation.wrapping_add(1);
         self.hit_test_cache.clear();
         self.spatial_index = None;
     }
@@ -100,6 +106,7 @@ impl InputState {
     /// Instead of invalidating the entire spatial index, this method updates
     /// only the affected cells, providing O(1) amortized updates instead of O(n).
     pub fn invalidate_hit_cache_for(&mut self, id: ShapeId) {
+        self.canvas_content_generation = self.canvas_content_generation.wrapping_add(1);
         self.hit_test_cache.remove(&id);
 
         // Get the shape's new bounds (if it still exists)
