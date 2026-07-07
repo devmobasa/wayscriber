@@ -288,6 +288,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
         *y1 = 200;
         *x2 = 50;
         *y2 = 250;
+        drawn.invalidate_bounds();
     }
     state.invalidate_hit_cache_for(shape_ids[4]);
 
