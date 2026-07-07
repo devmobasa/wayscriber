@@ -49,11 +49,118 @@ fn click_highlight_force_in_light_mode_defaults_true_and_parses_false() {
 }
 
 #[test]
+fn drawing_quick_colors_default_when_drawing_table_omits_field() {
+    let config: Config = toml::from_str("[drawing]\ndefault_color = 'blue'\n")
+        .expect("drawing table without quick colors should parse");
+
+    assert_eq!(config.drawing.quick_colors, QuickColorsConfig::default());
+}
+
+#[test]
+fn drawing_quick_colors_default_when_drawing_table_is_missing() {
+    let config: Config = toml::from_str("[ui]\nshow_status_bar = false\n")
+        .expect("missing drawing table should parse");
+
+    assert_eq!(config.drawing.quick_colors, QuickColorsConfig::default());
+}
+
+#[test]
+fn drawing_quick_colors_parse_ordered_entries_with_hex_and_rgb() {
+    let config: Config = toml::from_str(
+        "[[drawing.quick_colors]]\nlabel = 'Soft pink'\ncolor = '#FFB3BA'\n\n[[drawing.quick_colors]]\nlabel = 'Ink'\ncolor = [1, 2, 3]\n",
+    )
+    .expect("ordered quick colors should parse");
+
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+    assert!(color_approx_eq(
+        &palette.color_for_index(0).unwrap(),
+        &crate::draw::Color {
+            r: 1.0,
+            g: 179.0 / 255.0,
+            b: 186.0 / 255.0,
+            a: 1.0,
+        },
+    ));
+    assert!(color_approx_eq(
+        &palette.color_for_index(1).unwrap(),
+        &crate::draw::Color {
+            r: 1.0 / 255.0,
+            g: 2.0 / 255.0,
+            b: 3.0 / 255.0,
+            a: 1.0,
+        },
+    ));
+    assert_eq!(
+        palette.entry(0).map(|entry| entry.label.as_str()),
+        Some("Soft pink")
+    );
+    assert_eq!(
+        palette.entry(1).map(|entry| entry.label.as_str()),
+        Some("Ink")
+    );
+}
+
+#[test]
+fn drawing_quick_colors_missing_shortcut_slots_backfill_defaults() {
+    let config: Config =
+        toml::from_str("[[drawing.quick_colors]]\nlabel = 'Only'\ncolor = 'blue'\n")
+            .expect("short quick color list should parse");
+
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+
+    assert_eq!(palette.len(), 8);
+    assert_eq!(
+        palette.entry(0).map(|entry| entry.label.as_str()),
+        Some("Only")
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorRed),
+        Some(crate::draw::color::BLUE)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorGreen),
+        Some(crate::draw::color::GREEN)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorBlack),
+        Some(crate::draw::color::BLACK)
+    );
+}
+
+#[test]
+fn drawing_quick_colors_invalid_hash_hex_warns_and_falls_back_red() {
+    let config: Config = toml::from_str(
+        "[[drawing.quick_colors]]\nlabel = 'Invalid'\ncolor = '#GG0000'\n\n[[drawing.quick_colors]]\nlabel = 'Short'\ncolor = '#12345'\n",
+    )
+    .expect("invalid hash-looking hex strings keep load compatibility");
+
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+    assert_eq!(palette.color_for_index(0), Some(crate::draw::color::RED));
+    assert_eq!(palette.color_for_index(1), Some(crate::draw::color::RED));
+}
+
+#[test]
+fn drawing_quick_colors_empty_array_uses_runtime_default_palette() {
+    let config: Config =
+        toml::from_str("[drawing]\nquick_colors = []\n").expect("empty quick color array parses");
+
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+    assert_eq!(palette, QuickColorPalette::default());
+}
+
+#[test]
 fn pdf_transparent_background_defaults_to_none() {
     assert_eq!(
         Config::default().export.pdf.transparent_background,
         PdfTransparentBackground::None
     );
+}
+
+fn color_approx_eq(a: &crate::draw::Color, b: &crate::draw::Color) -> bool {
+    (a.r - b.r).abs() < 0.001
+        && (a.g - b.g).abs() < 0.001
+        && (a.b - b.b).abs() < 0.001
+        && (a.a - b.a).abs() < 0.001
 }
 
 #[test]

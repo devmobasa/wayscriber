@@ -99,6 +99,15 @@ impl ConfiguratorApp {
             Message::ColorPickerChanged(id, value) => self.handle_color_picker_changed(id, value),
             Message::ColorModeChanged(mode) => self.handle_color_mode_changed(mode),
             Message::NamedColorSelected(option) => self.handle_named_color_selected(option),
+            Message::QuickColorAdded => self.handle_quick_color_added(),
+            Message::QuickColorRemoved(index) => self.handle_quick_color_removed(index),
+            Message::QuickColorMoved(index, delta) => self.handle_quick_color_moved(index, delta),
+            Message::QuickColorModeChanged(index, mode) => {
+                self.handle_quick_color_mode_changed(index, mode)
+            }
+            Message::QuickNamedColorSelected(index, option) => {
+                self.handle_quick_named_color_selected(index, option)
+            }
             Message::EraserModeChanged(option) => self.handle_eraser_mode_changed(option),
             Message::DrawingDragMappingSectionToggled(button) => {
                 self.handle_drawing_drag_mapping_section_toggled(button)

@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ColorPickerId {
     DrawingColor,
+    QuickColor(usize),
     BoardBackground(usize),
     BoardPen(usize),
     RenderProfileMappingFrom(usize, usize),

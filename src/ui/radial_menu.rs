@@ -3,9 +3,8 @@ use std::f64::consts::PI;
 use crate::input::InputState;
 use crate::input::Tool;
 use crate::input::state::{
-    RADIAL_COLOR_SEGMENT_COUNT, RADIAL_TOOL_LABELS, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout,
-    RadialMenuState, RadialSegmentId, radial_color_for_index, sub_ring_child_count,
-    sub_ring_child_label,
+    RADIAL_TOOL_LABELS, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState,
+    RadialSegmentId, sub_ring_child_count, sub_ring_child_label,
 };
 
 /// Render the radial menu overlay.
@@ -34,7 +33,16 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let cx = layout.center_x;
     let cy = layout.center_y;
     let seg_angle = 2.0 * PI / RADIAL_TOOL_SEGMENT_COUNT as f64;
-    let color_seg_angle = 2.0 * PI / RADIAL_COLOR_SEGMENT_COUNT as f64;
+    let color_count = if input_state.quick_colors.is_empty() {
+        0
+    } else {
+        input_state.quick_colors.len().min(u8::MAX as usize)
+    };
+    let color_seg_angle = if color_count > 0 {
+        2.0 * PI / color_count as f64
+    } else {
+        0.0
+    };
     // Angle offset: segment 0 starts at top, centered
     let offset = -PI / 2.0 - seg_angle / 2.0;
     let color_offset = -PI / 2.0 - color_seg_angle / 2.0;
@@ -43,12 +51,18 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let active_color = input_state.color_for_tool(active_tool);
 
     // ── Color ring (outermost) ──
-    for i in 0..RADIAL_COLOR_SEGMENT_COUNT {
+    for (i, entry) in input_state
+        .quick_colors
+        .entries()
+        .iter()
+        .take(color_count)
+        .enumerate()
+    {
         let start = color_offset + i as f64 * color_seg_angle;
         let end = start + color_seg_angle;
         let is_hovered = hover == Some(RadialSegmentId::Color(i as u8));
 
-        let c = radial_color_for_index(i as u8);
+        let c = entry.color;
         // Check if this color matches current
         let is_active = colors_match(&active_color, &c);
 

@@ -1,6 +1,5 @@
 use super::{ACTIONS_CHILDREN, RadialMenuState, RadialSegmentId, SHAPES_CHILDREN, TEXT_CHILDREN};
 use crate::config::Action;
-use crate::draw::color;
 use crate::input::DrawingState;
 use crate::input::state::InputState;
 use crate::input::state::TextInputMode;
@@ -76,7 +75,13 @@ impl InputState {
         } = self.radial_menu_state
             && let Some(layout) = &self.radial_menu_layout
         {
-            let segment = super::hit_test::hit_test_radial(layout, *expanded_sub_ring, x, y);
+            let segment = super::hit_test::hit_test_radial(
+                layout,
+                *expanded_sub_ring,
+                self.quick_colors.len(),
+                x,
+                y,
+            );
             let old_hover = *hover;
             let old_expanded_sub_ring = *expanded_sub_ring;
             *hover = segment;
@@ -248,8 +253,9 @@ impl InputState {
     }
 
     fn dispatch_color_segment(&mut self, idx: u8) {
-        let c = radial_color_for_index(idx);
-        self.apply_color_from_ui(c);
+        if let Some(color) = self.quick_colors.color_for_index(idx as usize) {
+            self.apply_color_from_ui(color);
+        }
     }
 
     fn enter_text_mode_at_center(&mut self) {
@@ -282,21 +288,6 @@ impl InputState {
             self.update_text_preview_dirty();
             self.needs_redraw = true;
         }
-    }
-}
-
-/// Map a color segment index to the corresponding draw color constant.
-pub fn radial_color_for_index(idx: u8) -> crate::draw::Color {
-    match idx {
-        0 => color::RED,
-        1 => color::GREEN,
-        2 => color::BLUE,
-        3 => color::YELLOW,
-        4 => color::ORANGE,
-        5 => color::PINK,
-        6 => color::WHITE,
-        7 => color::BLACK,
-        _ => color::RED,
     }
 }
 

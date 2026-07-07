@@ -2,8 +2,8 @@ mod helpers;
 
 use super::{ColorSectionInfo, SidePaletteLayout};
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::config::Action;
-use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::config::QuickColorPalette;
+use crate::draw::Color;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
@@ -38,48 +38,7 @@ pub(super) fn draw_colors_section(
         return None;
     }
 
-    let basic_colors: &[ColorSwatch] = &[
-        (RED, "Red", Some(Action::SetColorRed)),
-        (GREEN, "Green", Some(Action::SetColorGreen)),
-        (BLUE, "Blue", Some(Action::SetColorBlue)),
-        (YELLOW, "Yellow", Some(Action::SetColorYellow)),
-        (WHITE, "White", Some(Action::SetColorWhite)),
-        (BLACK, "Black", Some(Action::SetColorBlack)),
-    ];
-    let extended_colors: &[ColorSwatch] = &[
-        (ORANGE, "Orange", Some(Action::SetColorOrange)),
-        (PINK, "Pink", Some(Action::SetColorPink)),
-        (
-            Color {
-                r: 0.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            },
-            "Cyan",
-            None,
-        ),
-        (
-            Color {
-                r: 0.6,
-                g: 0.4,
-                b: 0.8,
-                a: 1.0,
-            },
-            "Purple",
-            None,
-        ),
-        (
-            Color {
-                r: 0.4,
-                g: 0.4,
-                b: 0.4,
-                a: 1.0,
-            },
-            "Gray",
-            None,
-        ),
-    ];
+    let palette_colors = palette_swatches(&snapshot.quick_colors);
 
     let swatch = ToolbarLayoutSpec::SIDE_COLOR_SWATCH;
     let swatch_gap = ToolbarLayoutSpec::SIDE_COLOR_SWATCH_GAP;
@@ -116,7 +75,12 @@ pub(super) fn draw_colors_section(
     draw_hex_input(ctx, hits, hover, x, preview_row_y, preview_size, &hex);
 
     let mut row_y = preview_row_y + preview_size + ToolbarLayoutSpec::SIDE_COLOR_PREVIEW_GAP_BOTTOM;
-    let basic_toggle = if snapshot.show_more_colors {
+    let first_row_len = palette_colors
+        .len()
+        .min(ToolbarLayoutSpec::SIDE_COLOR_SWATCHES_PER_ROW);
+    let basic_toggle = if snapshot.show_more_colors
+        || palette_colors.len() <= ToolbarLayoutSpec::SIDE_COLOR_SWATCHES_PER_ROW
+    {
         None
     } else {
         Some(ColorSwatchToggle {
@@ -136,30 +100,37 @@ pub(super) fn draw_colors_section(
             swatch,
             swatch_gap,
         },
-        basic_colors,
+        &palette_colors[..first_row_len],
         basic_toggle,
     );
 
     row_y += swatch + swatch_gap;
     if snapshot.show_more_colors {
-        draw_color_swatch_row(
-            ctx,
-            hits,
-            hover,
-            snapshot,
-            ColorSwatchRowLayout {
-                start_x: x,
-                row_y,
-                swatch,
-                swatch_gap,
-            },
-            extended_colors,
-            Some(ColorSwatchToggle {
-                event: ToolbarEvent::ToggleMoreColors(false),
-                tooltip: "Hide colors",
-                icon_fn: crate::toolbar_icons::draw_icon_minus,
-            }),
-        );
+        let rows = palette_colors[first_row_len..]
+            .chunks(ToolbarLayoutSpec::SIDE_COLOR_SWATCHES_PER_ROW)
+            .collect::<Vec<_>>();
+        for (row_index, row_colors) in rows.iter().enumerate() {
+            let is_last_row = row_index + 1 == rows.len();
+            draw_color_swatch_row(
+                ctx,
+                hits,
+                hover,
+                snapshot,
+                ColorSwatchRowLayout {
+                    start_x: x,
+                    row_y,
+                    swatch,
+                    swatch_gap,
+                },
+                row_colors,
+                is_last_row.then_some(ColorSwatchToggle {
+                    event: ToolbarEvent::ToggleMoreColors(false),
+                    tooltip: "Hide colors",
+                    icon_fn: crate::toolbar_icons::draw_icon_minus,
+                }),
+            );
+            row_y += swatch + swatch_gap;
+        }
     }
 
     *y += colors_card_h + section_gap;
@@ -169,6 +140,21 @@ pub(super) fn draw_colors_section(
         picker_w,
         picker_h,
     })
+}
+
+fn palette_swatches(palette: &QuickColorPalette) -> Vec<ColorSwatch> {
+    palette
+        .entries()
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            (
+                entry.color,
+                entry.label.clone(),
+                QuickColorPalette::action_for_index(index),
+            )
+        })
+        .collect()
 }
 
 pub(super) fn draw_preset_hover_highlight(

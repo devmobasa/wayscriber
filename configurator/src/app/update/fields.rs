@@ -66,6 +66,9 @@ impl ConfiguratorApp {
 
     pub(super) fn handle_color_mode_changed(&mut self, mode: ColorMode) -> Task<Message> {
         self.status = StatusMessage::idle();
+        if matches!(mode, ColorMode::Rgb) {
+            self.draft.drawing_color.sync_rgb_from_preview();
+        }
         self.draft.drawing_color.mode = mode;
         if matches!(mode, ColorMode::Named) {
             if self.draft.drawing_color.name.trim().is_empty() {
@@ -95,6 +98,79 @@ impl ConfiguratorApp {
             self.draft.drawing_color.name = option.as_value().to_string();
         }
         self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_quick_color_mode_changed(
+        &mut self,
+        index: usize,
+        mode: ColorMode,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        let Some(entry) = self.draft.drawing_quick_colors.get_mut(index) else {
+            return Task::none();
+        };
+        let quick_color = &mut entry.color;
+        if matches!(mode, ColorMode::Rgb) {
+            quick_color.sync_rgb_from_preview();
+        }
+        quick_color.mode = mode;
+        if matches!(mode, ColorMode::Named) {
+            if quick_color.name.trim().is_empty() {
+                quick_color.selected_named = NamedColorOption::Red;
+                quick_color.name = quick_color.selected_named.as_value().to_string();
+            } else {
+                quick_color.update_named_from_current();
+            }
+        }
+        self.sync_color_picker_hex_for_id(ColorPickerId::QuickColor(index));
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_quick_named_color_selected(
+        &mut self,
+        index: usize,
+        option: NamedColorOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        let Some(entry) = self.draft.drawing_quick_colors.get_mut(index) else {
+            return Task::none();
+        };
+        let quick_color = &mut entry.color;
+        quick_color.selected_named = option;
+        if option != NamedColorOption::Custom {
+            quick_color.name = option.as_value().to_string();
+        }
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_quick_color_added(&mut self) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.drawing_quick_colors.add_entry();
+        self.sync_all_color_picker_hex();
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_quick_color_removed(&mut self, index: usize) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        if self.draft.drawing_quick_colors.remove_entry(index) {
+            self.color_picker_open = None;
+            self.sync_all_color_picker_hex();
+            self.refresh_dirty_flag();
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_quick_color_moved(&mut self, index: usize, delta: isize) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        if self.draft.drawing_quick_colors.move_entry(index, delta) {
+            self.color_picker_open = None;
+            self.sync_all_color_picker_hex();
+            self.refresh_dirty_flag();
+        }
         Task::none()
     }
 
@@ -376,5 +452,38 @@ fn quad_field_picker_id(field: QuadField) -> Option<ColorPickerId> {
 fn triplet_field_picker_id(field: TripletField) -> ColorPickerId {
     match field {
         TripletField::DrawingColorRgb => ColorPickerId::DrawingColor,
+        TripletField::QuickColorRgb(index) => ColorPickerId::QuickColor(index),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wayscriber::config::{ColorSpec, Config};
+
+    #[test]
+    fn quick_color_mode_change_to_rgb_materializes_named_hex_preview() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let entry = &mut app.draft.drawing_quick_colors.entries[1];
+        entry.color.mode = ColorMode::Named;
+        entry.color.selected_named = NamedColorOption::Custom;
+        entry.color.name = "#123456".to_string();
+
+        let _ = app.handle_quick_color_mode_changed(1, ColorMode::Rgb);
+
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[1].color.rgb,
+            ["18", "52", "86"]
+        );
+
+        let saved = app
+            .draft
+            .to_config(&Config::default())
+            .expect("expected quick color RGB to save");
+
+        assert_eq!(
+            saved.drawing.quick_colors.entries[1].color,
+            ColorSpec::Rgb([18, 52, 86])
+        );
     }
 }

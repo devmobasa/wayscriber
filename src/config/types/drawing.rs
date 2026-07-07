@@ -1,4 +1,6 @@
 use crate::config::enums::ColorSpec;
+use crate::config::keybindings::Action;
+use crate::draw::Color;
 use crate::draw::shape::REGULAR_POLYGON_DEFAULT_SIDES;
 use crate::input::{DragBindableTool, DragTool, EraserMode};
 use serde::{Deserialize, Serialize};
@@ -14,6 +16,10 @@ pub struct DrawingConfig {
     /// or an RGB array like `[255, 0, 0]` for red
     #[serde(default = "default_color")]
     pub default_color: ColorSpec,
+
+    /// Configurable colors selected by the quick color actions.
+    #[serde(default)]
+    pub quick_colors: QuickColorsConfig,
 
     /// Default pen thickness in pixels (valid range: 1.0 - 50.0)
     #[serde(default = "default_thickness")]
@@ -106,6 +112,7 @@ impl Default for DrawingConfig {
     fn default() -> Self {
         Self {
             default_color: default_color(),
+            quick_colors: QuickColorsConfig::default(),
             default_thickness: default_thickness(),
             default_eraser_size: default_eraser_size(),
             default_eraser_mode: default_eraser_mode(),
@@ -126,6 +133,227 @@ impl Default for DrawingConfig {
             font_weight: default_font_weight(),
             font_style: default_font_style(),
             text_background_enabled: default_text_background(),
+        }
+    }
+}
+
+/// Ordered quick color palette.
+///
+/// The first eight entries are selected by the existing quick color actions.
+/// Additional entries are shown in palette UIs where space allows.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct QuickColorsConfig {
+    pub entries: Vec<QuickColorConfig>,
+}
+
+impl Default for QuickColorsConfig {
+    fn default() -> Self {
+        Self {
+            entries: default_quick_color_entries(),
+        }
+    }
+}
+
+impl QuickColorsConfig {
+    pub fn effective_entries(&self) -> Vec<QuickColorConfig> {
+        let mut entries = self.entries.clone();
+        let defaults = default_quick_color_entries();
+        if entries.len() < QuickColorSlot::ALL.len() {
+            entries.extend(defaults.into_iter().skip(entries.len()));
+        }
+        entries
+    }
+}
+
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuickColorConfig {
+    #[serde(default)]
+    pub label: String,
+    #[serde(default = "default_color")]
+    pub color: ColorSpec,
+}
+
+impl QuickColorConfig {
+    pub fn resolved_label(&self, index: usize) -> String {
+        quick_color_label(self, index)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QuickColorSlot {
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Orange,
+    Pink,
+    White,
+    Black,
+}
+
+impl QuickColorSlot {
+    pub const ALL: [Self; 8] = [
+        Self::Red,
+        Self::Green,
+        Self::Blue,
+        Self::Yellow,
+        Self::Orange,
+        Self::Pink,
+        Self::White,
+        Self::Black,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Red => "Red",
+            Self::Green => "Green",
+            Self::Blue => "Blue",
+            Self::Yellow => "Yellow",
+            Self::Orange => "Orange",
+            Self::Pink => "Pink",
+            Self::White => "White",
+            Self::Black => "Black",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
+
+    pub fn action(self) -> Action {
+        match self {
+            Self::Red => Action::SetColorRed,
+            Self::Green => Action::SetColorGreen,
+            Self::Blue => Action::SetColorBlue,
+            Self::Yellow => Action::SetColorYellow,
+            Self::Orange => Action::SetColorOrange,
+            Self::Pink => Action::SetColorPink,
+            Self::White => Action::SetColorWhite,
+            Self::Black => Action::SetColorBlack,
+        }
+    }
+
+    pub fn fallback_key(self) -> &'static str {
+        match self {
+            Self::Red => "R",
+            Self::Green => "G",
+            Self::Blue => "B",
+            Self::Yellow => "Y",
+            Self::Orange => "O",
+            Self::Pink => "P",
+            Self::White => "W",
+            Self::Black => "K",
+        }
+    }
+
+    pub fn from_action(action: Action) -> Option<Self> {
+        match action {
+            Action::SetColorRed => Some(Self::Red),
+            Action::SetColorGreen => Some(Self::Green),
+            Action::SetColorBlue => Some(Self::Blue),
+            Action::SetColorYellow => Some(Self::Yellow),
+            Action::SetColorOrange => Some(Self::Orange),
+            Action::SetColorPink => Some(Self::Pink),
+            Action::SetColorWhite => Some(Self::White),
+            Action::SetColorBlack => Some(Self::Black),
+            _ => None,
+        }
+    }
+
+    pub fn from_index(index: usize) -> Option<Self> {
+        Self::ALL.get(index).copied()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuickColorPaletteEntry {
+    pub label: String,
+    pub color: Color,
+}
+
+/// Runtime palette resolved from quick color config.
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuickColorPalette {
+    entries: Vec<QuickColorPaletteEntry>,
+}
+
+impl QuickColorPalette {
+    pub fn from_config(config: &QuickColorsConfig) -> Self {
+        if config.entries.is_empty() {
+            return Self::default();
+        }
+        Self {
+            entries: config
+                .effective_entries()
+                .into_iter()
+                .enumerate()
+                .map(|(index, entry)| QuickColorPaletteEntry {
+                    label: entry.resolved_label(index),
+                    color: entry.color.to_color(),
+                })
+                .collect(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn from_entries(entries: Vec<QuickColorPaletteEntry>) -> Self {
+        Self { entries }
+    }
+
+    pub fn entries(&self) -> &[QuickColorPaletteEntry] {
+        &self.entries
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn entry(&self, index: usize) -> Option<&QuickColorPaletteEntry> {
+        self.entries.get(index)
+    }
+
+    pub fn color_for_action(&self, action: Action) -> Option<Color> {
+        let index = QuickColorSlot::from_action(action)?.index();
+        self.color_for_index(index)
+    }
+
+    pub fn color_for_index(&self, index: usize) -> Option<Color> {
+        self.entry(index).map(|entry| entry.color)
+    }
+
+    pub fn action_for_index(index: usize) -> Option<Action> {
+        QuickColorSlot::from_index(index).map(QuickColorSlot::action)
+    }
+
+    pub fn cache_key(&self) -> String {
+        self.entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                format!("{}={}={}", index, entry.label, color_cache_key(entry.color))
+            })
+            .collect::<Vec<_>>()
+            .join("|")
+    }
+}
+
+impl Default for QuickColorPalette {
+    fn default() -> Self {
+        Self {
+            entries: default_quick_color_entries()
+                .into_iter()
+                .map(|entry| QuickColorPaletteEntry {
+                    label: entry.label,
+                    color: entry.color.to_color(),
+                })
+                .collect(),
         }
     }
 }
@@ -388,6 +616,47 @@ impl DrawingConfig {
 
 fn default_color() -> ColorSpec {
     ColorSpec::Name("red".to_string())
+}
+
+fn default_quick_color_entries() -> Vec<QuickColorConfig> {
+    [
+        ("Red", "red"),
+        ("Green", "green"),
+        ("Blue", "blue"),
+        ("Yellow", "yellow"),
+        ("Orange", "orange"),
+        ("Pink", "pink"),
+        ("White", "white"),
+        ("Black", "black"),
+    ]
+    .into_iter()
+    .map(|(label, color)| QuickColorConfig {
+        label: label.to_string(),
+        color: ColorSpec::Name(color.to_string()),
+    })
+    .collect()
+}
+
+fn quick_color_label(entry: &QuickColorConfig, index: usize) -> String {
+    let trimmed = entry.label.trim();
+    if trimmed.is_empty() {
+        QuickColorSlot::from_index(index)
+            .map(QuickColorSlot::label)
+            .unwrap_or("Quick color")
+            .to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn color_cache_key(color: Color) -> String {
+    let clamp = |v: f64| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round().min(255.0) as u8 };
+    format!(
+        "#{:02X}{:02X}{:02X}",
+        clamp(color.r),
+        clamp(color.g),
+        clamp(color.b)
+    )
 }
 
 fn default_thickness() -> f64 {

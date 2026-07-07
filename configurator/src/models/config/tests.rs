@@ -9,9 +9,10 @@ use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
     ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
-    PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, RenderColorMappingConfig,
-    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig,
-    ToolbarItemOrderGroup, ToolbarItemsConfig, XdgFocusLossBehavior, toolbar_item_ids as ids,
+    PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, QuickColorConfig,
+    RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig,
+    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig, XdgFocusLossBehavior,
+    toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -35,6 +36,155 @@ fn config_draft_to_config_reports_errors() {
     assert!(fields.contains(&"drawing.default_thickness"));
     assert!(fields.contains(&"ui.click_highlight.duration_ms"));
     assert!(fields.contains(&"drawing.default_color"));
+}
+
+#[test]
+fn config_draft_round_trips_quick_colors() {
+    let mut config = Config::default();
+    config.drawing.quick_colors.entries = vec![
+        QuickColorConfig {
+            label: "Blush".to_string(),
+            color: ColorSpec::Name("#FFB3BA".to_string()),
+        },
+        QuickColorConfig {
+            label: "Ink".to_string(),
+            color: ColorSpec::Rgb([1, 2, 3]),
+        },
+    ];
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.drawing_quick_colors.entries[0].label, "Blush");
+    assert_eq!(
+        draft.drawing_quick_colors.entries[0].color.summary(),
+        "#FFB3BA"
+    );
+    assert_eq!(draft.drawing_quick_colors.entries[1].label, "Ink");
+    assert_eq!(
+        draft.drawing_quick_colors.entries[1].color.rgb,
+        ["1", "2", "3"]
+    );
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("expected quick colors to round trip");
+
+    assert_eq!(
+        round_trip.drawing.quick_colors.entries[0],
+        QuickColorConfig {
+            label: "Blush".to_string(),
+            color: ColorSpec::Name("#FFB3BA".to_string())
+        }
+    );
+    assert_eq!(
+        round_trip.drawing.quick_colors.entries[1],
+        QuickColorConfig {
+            label: "Ink".to_string(),
+            color: ColorSpec::Rgb([1, 2, 3])
+        }
+    );
+}
+
+#[test]
+fn config_draft_reorders_and_removes_quick_colors() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.drawing_quick_colors.entries[0].label = "First".to_string();
+    draft.drawing_quick_colors.entries[1].label = "Second".to_string();
+
+    assert!(draft.drawing_quick_colors.move_entry(1, -1));
+    assert_eq!(draft.drawing_quick_colors.entries[0].label, "Second");
+
+    assert!(!draft.drawing_quick_colors.remove_entry(1));
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 8);
+
+    draft.drawing_quick_colors.add_entry();
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 9);
+    assert!(draft.drawing_quick_colors.remove_entry(8));
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 8);
+}
+
+#[test]
+fn config_draft_switches_quick_color_named_hex_to_rgb_without_stale_rgb() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    {
+        let entry = &mut draft.drawing_quick_colors.entries[1];
+        entry.color.mode = ColorMode::Named;
+        entry.color.selected_named = NamedColorOption::Custom;
+        entry.color.name = "#123456".to_string();
+        entry.color.sync_rgb_from_preview();
+        entry.color.mode = ColorMode::Rgb;
+    }
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("expected quick color RGB to save");
+
+    assert_eq!(
+        round_trip.drawing.quick_colors.entries[1].color,
+        ColorSpec::Rgb([18, 52, 86])
+    );
+}
+
+#[test]
+fn config_draft_rejects_invalid_quick_colors() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    {
+        let entry = &mut draft.drawing_quick_colors.entries[1];
+        entry.color.mode = ColorMode::Named;
+        entry.color.selected_named = NamedColorOption::Custom;
+        entry.color.name = "#GG0000".to_string();
+    }
+    {
+        let entry = &mut draft.drawing_quick_colors.entries[5];
+        entry.color.mode = ColorMode::Named;
+        entry.color.selected_named = NamedColorOption::Custom;
+        entry.color.name = "chartreuse".to_string();
+    }
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("expected invalid quick color errors");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"drawing.quick_colors[1].color"));
+    assert!(fields.contains(&"drawing.quick_colors[5].color"));
+}
+
+#[test]
+fn config_draft_materializes_missing_quick_color_slots_and_labels() {
+    let mut config = Config::default();
+    config.drawing.quick_colors.entries = vec![QuickColorConfig {
+        label: String::new(),
+        color: ColorSpec::Name("blue".to_string()),
+    }];
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 8);
+    assert_eq!(draft.drawing_quick_colors.entries[0].label, "Red");
+    assert_eq!(draft.drawing_quick_colors.entries[1].label, "Green");
+
+    draft.drawing_quick_colors.entries[0].label = " ".to_string();
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("blank labels should save with fallback labels");
+
+    assert_eq!(round_trip.drawing.quick_colors.entries[0].label, "Red");
+}
+
+#[test]
+fn config_draft_accepts_quick_color_hex_string() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    let entry = &mut draft.drawing_quick_colors.entries[0];
+    entry.color.mode = ColorMode::Named;
+    entry.color.selected_named = NamedColorOption::Custom;
+    entry.color.name = "#FFB3BA".to_string();
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("expected quick color hex to save");
+
+    assert_eq!(
+        round_trip.drawing.quick_colors.entries[0].color,
+        ColorSpec::Name("#FFB3BA".to_string())
+    );
 }
 
 #[test]

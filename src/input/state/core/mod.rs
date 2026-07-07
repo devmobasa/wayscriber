@@ -45,10 +45,9 @@ pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint}
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };
-pub use radial_menu::state::{radial_color_for_index, sub_ring_child_count, sub_ring_child_label};
+pub use radial_menu::state::{sub_ring_child_count, sub_ring_child_label};
 pub use radial_menu::{
-    COLOR_SEGMENT_COUNT as RADIAL_COLOR_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState,
-    RadialSegmentId, TOOL_LABELS as RADIAL_TOOL_LABELS,
+    RadialMenuLayout, RadialMenuState, RadialSegmentId, TOOL_LABELS as RADIAL_TOOL_LABELS,
     TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT,
 };
 pub use selection::SelectionState;

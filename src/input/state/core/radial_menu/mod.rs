@@ -28,7 +28,7 @@ pub enum RadialSegmentId {
     Tool(u8),
     /// Sub-ring child segment (parent index, child index).
     SubTool(u8, u8),
-    /// Color ring segment (index 0..8).
+    /// Color ring segment (palette index).
     Color(u8),
     /// Center circle (dismiss).
     Center,
@@ -59,9 +59,6 @@ pub struct RadialMenuLayout {
 
 /// Number of segments in the primary tool ring.
 pub const TOOL_SEGMENT_COUNT: usize = 9;
-/// Number of segments in the color ring.
-pub const COLOR_SEGMENT_COUNT: usize = 8;
-
 /// Sub-ring children for the Shapes segment (index 4).
 pub const SHAPES_CHILDREN: &[&str] = &["Rect", "Ellipse", "Blur"];
 /// Sub-ring children for the Text segment (index 5).

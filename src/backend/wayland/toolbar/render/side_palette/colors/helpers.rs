@@ -13,7 +13,7 @@ use crate::ui_text::UiTextStyle;
 use super::super::super::widgets::constants::FONT_FAMILY_DEFAULT;
 use super::super::super::widgets::{set_icon_color, *};
 
-pub(super) type ColorSwatch = (Color, &'static str, Option<Action>);
+pub(super) type ColorSwatch = (Color, String, Option<Action>);
 pub(super) type ColorToggleIconFn = fn(&cairo::Context, f64, f64, f64);
 
 #[derive(Clone)]

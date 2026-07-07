@@ -660,6 +660,8 @@ The polygon tools are available from the toolbar picker; their default keybindin
 | White | <kbd>W</kbd> |
 | Black | <kbd>K</kbd> |
 
+The quick color palette is configurable with ordered `[[drawing.quick_colors]]` entries. The first eight entries map to <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; if fewer are configured by hand, missing shortcut positions use the built-in defaults.
+
 | Action | Key |
 |--------|-----|
 | Increase thickness | <kbd>+</kbd> / <kbd>=</kbd> / scroll down |
@@ -765,6 +767,10 @@ wayscriber-configurator   # or press F11
 default_color = "red"
 default_thickness = 3.0
 polygon_sides = 5
+
+[[drawing.quick_colors]]
+label = "Blush"
+color = "#FFB3BA"
 
 [drawing.drag_tools.right]
 drag_tool = "pen"

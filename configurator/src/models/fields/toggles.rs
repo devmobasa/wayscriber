@@ -78,6 +78,8 @@ pub enum PresetToggleField {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextField {
     DrawingColorName,
+    QuickColorLabel(usize),
+    QuickColorName(usize),
     DrawingThickness,
     DrawingEraserSize,
     DrawingFontSize,
@@ -165,6 +167,7 @@ pub enum PresetTextField {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TripletField {
     DrawingColorRgb,
+    QuickColorRgb(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

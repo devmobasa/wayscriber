@@ -115,6 +115,7 @@ impl ToolbarSnapshot {
             active_tool,
             tool_override: state.tool_override(),
             color: state.color_for_tool(active_tool),
+            quick_colors: state.quick_colors.clone(),
             thickness: thickness_value,
             eraser_size: state.eraser_size,
             thickness_targets_eraser,
@@ -198,5 +199,32 @@ impl ToolbarSnapshot {
             recent_sessions: Vec::new(),
             pending_save_as_overwrite_path: state.pending_save_as_overwrite().map(PathBuf::from),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
+    use crate::draw::Color;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn snapshot_carries_input_state_quick_colors() {
+        let mut state = make_test_input_state();
+        let palette = QuickColorPalette::from_entries(vec![QuickColorPaletteEntry {
+            label: "Custom".to_string(),
+            color: Color {
+                r: 0.20,
+                g: 0.40,
+                b: 0.60,
+                a: 1.0,
+            },
+        }]);
+        state.set_quick_colors(palette.clone());
+
+        let snapshot = ToolbarSnapshot::from_input(&state);
+
+        assert_eq!(snapshot.quick_colors, palette);
     }
 }

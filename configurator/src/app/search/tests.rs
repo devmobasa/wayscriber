@@ -124,6 +124,8 @@ fn exact_drawing_default_labels_match_defaults_section() {
 fn exact_drawing_color_and_font_labels_match_their_sections() {
     let cases = [
         ("pen color", SearchArea::DrawingColor),
+        ("quick colors", SearchArea::DrawingColor),
+        ("quick color label", SearchArea::DrawingColor),
         ("custom or numeric weight", SearchArea::DrawingFont),
     ];
 

@@ -121,6 +121,9 @@ impl ConfiguratorApp {
         ] {
             self.sync_color_picker_hex_for_id(id);
         }
+        for index in 0..self.draft.drawing_quick_colors.entries.len() {
+            self.sync_color_picker_hex_for_id(ColorPickerId::QuickColor(index));
+        }
     }
 
     fn apply_color_picker_value(&mut self, id: ColorPickerId, rgb: [f64; 3], alpha: Option<f64>) {
@@ -131,6 +134,16 @@ impl ConfiguratorApp {
                 for (component, value) in values.iter().enumerate() {
                     if let Some(slot) = self.draft.drawing_color.rgb.get_mut(component) {
                         *slot = value.to_string();
+                    }
+                }
+            }
+            ColorPickerId::QuickColor(index) => {
+                let values = rgb.map(format_rgb255);
+                if let Some(entry) = self.draft.drawing_quick_colors.get_mut(index) {
+                    for (component, value) in values.iter().enumerate() {
+                        if let Some(slot) = entry.color.rgb.get_mut(component) {
+                            *slot = value.to_string();
+                        }
                     }
                 }
             }
@@ -213,6 +226,10 @@ impl ConfiguratorApp {
         match id {
             ColorPickerId::DrawingColor => {
                 normalized_drawing_rgb(&self.draft.drawing_color.rgb).map(|rgb| (rgb, None))
+            }
+            ColorPickerId::QuickColor(index) => {
+                let entry = self.draft.drawing_quick_colors.get(index)?;
+                normalized_drawing_rgb(&entry.color.rgb).map(|rgb| (rgb, None))
             }
             ColorPickerId::BoardBackground(index) => {
                 self.draft.boards.items.get(index).map(|item| {
@@ -357,5 +374,19 @@ mod tests {
             app.handle_color_picker_hex_changed(ColorPickerId::DrawingColor, "#00FF80".to_string());
 
         assert_eq!(app.draft.drawing_color.rgb, ["0", "255", "128"]);
+    }
+
+    #[test]
+    fn quick_color_picker_hex_writes_slot_rgb255_components() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.draft.drawing_quick_colors.entries[1].color.mode = ColorMode::Rgb;
+
+        let _ = app
+            .handle_color_picker_hex_changed(ColorPickerId::QuickColor(1), "#123456".to_string());
+
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[1].color.rgb,
+            ["18", "52", "86"]
+        );
     }
 }

@@ -1,13 +1,17 @@
 use crate::config::Action;
+use crate::config::QuickColorPalette;
 use crate::draw::Color;
 use crate::input::Tool;
-use crate::util;
 
 use super::super::InputState;
 
 impl InputState {
+    pub fn set_quick_colors(&mut self, quick_colors: QuickColorPalette) {
+        self.quick_colors = quick_colors;
+    }
+
     pub(in crate::input::state) fn handle_color_action(&mut self, action: Action) -> bool {
-        let Some(color) = action_color(action) else {
+        let Some(color) = self.quick_colors.color_for_action(action) else {
             return false;
         };
         let _ = self.apply_color_from_ui(color);
@@ -31,19 +35,5 @@ impl InputState {
     /// Take and clear the pending paste hex color request.
     pub fn take_pending_paste_hex(&mut self) -> bool {
         std::mem::take(&mut self.pending_paste_hex)
-    }
-}
-
-fn action_color(action: Action) -> Option<Color> {
-    match action {
-        Action::SetColorRed => util::key_to_color('r'),
-        Action::SetColorGreen => util::key_to_color('g'),
-        Action::SetColorBlue => util::key_to_color('b'),
-        Action::SetColorYellow => util::key_to_color('y'),
-        Action::SetColorOrange => util::key_to_color('o'),
-        Action::SetColorPink => util::key_to_color('p'),
-        Action::SetColorWhite => util::key_to_color('w'),
-        Action::SetColorBlack => util::key_to_color('k'),
-        _ => None,
     }
 }

@@ -25,10 +25,7 @@ fn ellipse_bounds_compute_center_and_radii() {
 }
 
 #[test]
-fn key_and_name_color_mappings_round_trip() {
-    assert_eq!(key_to_color('r').unwrap(), RED);
-    assert_eq!(key_to_color('K').unwrap(), BLACK);
-    assert!(key_to_color('x').is_none());
+fn name_color_mappings_resolve_known_colors() {
     assert_eq!(name_to_color("white").unwrap(), WHITE);
     assert!(name_to_color("chartreuse").is_none());
 }

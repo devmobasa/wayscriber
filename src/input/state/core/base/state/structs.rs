@@ -20,9 +20,9 @@ use super::super::types::{
     UiToastState, ZoomAction,
 };
 use crate::config::{
-    Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding,
-    ResolvedToolbarItems, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup,
-    ToolbarItemsConfig,
+    Action, BoardsConfig, KeyBinding, PresenterModeConfig, QuickColorPalette,
+    RadialMenuMouseBinding, ResolvedToolbarItems, ToolPresetConfig, ToolbarItemId,
+    ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
@@ -69,6 +69,8 @@ pub struct InputState {
     pub boards: BoardManager,
     /// Current drawing color (changed with color keys: R, G, B, etc.)
     pub current_color: Color,
+    /// Colors selected by quick color actions and palette UI.
+    pub(crate) quick_colors: QuickColorPalette,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
     /// Independent color/thickness values for drawing tools.
