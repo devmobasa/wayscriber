@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::app::view::theme;
 use iced::widget::{Column, Row, button, column, pick_list, row, text, text_input};
 use iced::{Alignment, Element, Length};
@@ -184,14 +182,11 @@ fn quick_named_color_section(app: &ConfiguratorApp, index: usize) -> Element<'_,
         return column![].into();
     };
     let color = &entry.color;
-    let options = quick_named_color_picker_options(&entry.label, color.selected_named);
-    let selected = options
-        .iter()
-        .find(|option| option.value == color.selected_named)
-        .cloned();
-    let picker = pick_list(options, selected, move |option| {
-        Message::QuickNamedColorSelected(index, option.value)
-    })
+    let picker = pick_list(
+        NamedColorOption::list(),
+        Some(color.selected_named),
+        move |value| Message::QuickNamedColorSelected(index, value),
+    )
     .width(Length::Fixed(COLOR_PICKER_WIDTH));
 
     let picker_row = row![picker, color_preview_labeled(color.preview_color())]
@@ -219,48 +214,6 @@ fn quick_named_color_section(app: &ConfiguratorApp, index: usize) -> Element<'_,
     }
 
     column.into()
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct QuickNamedColorPickerOption {
-    value: NamedColorOption,
-    label: String,
-}
-
-impl fmt::Display for QuickNamedColorPickerOption {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.label)
-    }
-}
-
-fn quick_named_color_picker_options(
-    slot_label: &str,
-    selected: NamedColorOption,
-) -> Vec<QuickNamedColorPickerOption> {
-    NamedColorOption::list()
-        .into_iter()
-        .map(|value| QuickNamedColorPickerOption {
-            value,
-            label: quick_named_color_picker_label(slot_label, value, selected),
-        })
-        .collect()
-}
-
-fn quick_named_color_picker_label(
-    slot_label: &str,
-    value: NamedColorOption,
-    selected: NamedColorOption,
-) -> String {
-    if value != selected || value == NamedColorOption::Custom {
-        return value.label().to_string();
-    }
-
-    let slot_label = slot_label.trim();
-    if slot_label.is_empty() || slot_label.eq_ignore_ascii_case(value.label()) {
-        value.label().to_string()
-    } else {
-        format!("{} ({})", slot_label, value.as_value())
-    }
 }
 
 fn quick_rgb_color_section(app: &ConfiguratorApp, index: usize) -> Element<'_, Message> {
@@ -334,37 +287,4 @@ fn rgb_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
     }
 
     column.into()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn quick_named_color_picker_uses_live_slot_label_for_selected_builtin_color() {
-        let options = quick_named_color_picker_options("Great", NamedColorOption::Red);
-
-        let red = options
-            .iter()
-            .find(|option| option.value == NamedColorOption::Red)
-            .expect("red option");
-        let green = options
-            .iter()
-            .find(|option| option.value == NamedColorOption::Green)
-            .expect("green option");
-
-        assert_eq!(red.to_string(), "Great (red)");
-        assert_eq!(green.to_string(), "Green");
-    }
-
-    #[test]
-    fn quick_named_color_picker_keeps_builtin_label_when_slot_label_matches() {
-        let options = quick_named_color_picker_options(" red ", NamedColorOption::Red);
-        let red = options
-            .iter()
-            .find(|option| option.value == NamedColorOption::Red)
-            .expect("red option");
-
-        assert_eq!(red.to_string(), "Red");
-    }
 }

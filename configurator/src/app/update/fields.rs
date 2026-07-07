@@ -486,4 +486,30 @@ mod tests {
             ColorSpec::Rgb([18, 52, 86])
         );
     }
+
+    #[test]
+    fn quick_color_label_edit_does_not_change_slot_colors() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+
+        let _ = app.handle_text_changed(TextField::QuickColorLabel(0), "RedNew".to_string());
+
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[0]
+                .color
+                .selected_named,
+            NamedColorOption::Red
+        );
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[1]
+                .color
+                .selected_named,
+            NamedColorOption::Green
+        );
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[2]
+                .color
+                .selected_named,
+            NamedColorOption::Blue
+        );
+    }
 }
