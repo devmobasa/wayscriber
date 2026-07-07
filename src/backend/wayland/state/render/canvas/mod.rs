@@ -16,21 +16,37 @@ impl WaylandState {
         phys_height: u32,
         now: Instant,
         damage_world: &[crate::util::Rect],
+        mut perf: Option<&mut PerfRenderBreakdown>,
     ) -> Result<()> {
         let canvas_transform_active = self.canvas_transform_active();
         let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
+        let shapes_total = self.input_state.boards.active_frame().shapes.len();
 
         // For pure pan transforms, serve the board background and committed
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
+        let layer_cache_start = perf.as_ref().map(|_| Instant::now());
         let layer_cache_ready = if self.canvas_layer_cache_usable() {
             self.ensure_canvas_layer_cache(width, height, scale)
         } else {
             self.canvas_layer_cache.clear();
             false
         };
+        if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
+            perf.stages.completed_shapes = perf
+                .stages
+                .completed_shapes
+                .saturating_add(Instant::now().saturating_duration_since(layer_cache_start));
+        }
 
+        let background_start = perf.as_ref().map(|_| Instant::now());
         let eraser_ctx = self.render_canvas_background(ctx, scale, phys_width, phys_height)?;
+        if let (Some(perf), Some(background_start)) = (perf.as_mut(), background_start) {
+            perf.stages.background = perf
+                .stages
+                .background
+                .saturating_add(Instant::now().saturating_duration_since(background_start));
+        }
 
         // Scale subsequent drawing to logical coordinates
         let _ = ctx.save();
@@ -48,16 +64,21 @@ impl WaylandState {
 
         let replay_ctx = eraser_ctx.replay_context();
 
+        let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
         if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
             // Board background and committed shapes came from the baked layer.
             debug!("Rendered committed shapes from layer cache");
+            if let Some(perf) = perf.as_mut() {
+                perf.shapes_total = shapes_total;
+                perf.canvas_layer_cache_hit = true;
+            }
         } else {
             // Render all completed shapes from active frame
-            debug!(
-                "Rendering {} completed shapes",
-                self.input_state.boards.active_frame().shapes.len()
-            );
+            debug!("Rendering {} completed shapes", shapes_total);
             let shapes = &self.input_state.boards.active_frame().shapes;
+            if let Some(perf) = perf.as_mut() {
+                perf.shapes_total = shapes.len();
+            }
 
             // Manual Culling: Only render shapes that intersect with the damage regions.
             // Cairo's internal clipping is efficient for rasterization, but sending
@@ -120,7 +141,10 @@ impl WaylandState {
                 };
 
                 if let Some(safe_bounds) = safe_bounds {
+                    let mut shapes_tested = 0usize;
+                    let mut shapes_rendered = 0usize;
                     for drawn_shape in shapes {
+                        shapes_tested += 1;
                         // If shape has no bounding box (e.g. empty freehand), skip it.
                         // If it has one, check intersection. Uses the per-shape
                         // memoized bounds to avoid O(points) recomputation per frame.
@@ -139,16 +163,34 @@ impl WaylandState {
 
                             if intersects {
                                 render_drawn_shape(drawn_shape);
+                                shapes_rendered += 1;
                             }
                         }
+                    }
+                    if let Some(perf) = perf.as_mut() {
+                        perf.shapes_tested = shapes_tested;
+                        perf.shapes_rendered = shapes_rendered;
                     }
                 }
             } else {
                 // If we don't have damage bounds, render everything to stay correct.
+                let mut shapes_rendered = 0usize;
                 for drawn_shape in shapes {
                     render_drawn_shape(drawn_shape);
+                    shapes_rendered += 1;
+                }
+                if let Some(perf) = perf.as_mut() {
+                    perf.shapes_tested = shapes.len();
+                    perf.shapes_rendered = shapes_rendered;
                 }
             }
+        }
+        if let (Some(perf), Some(completed_shapes_start)) = (perf.as_mut(), completed_shapes_start)
+        {
+            perf.stages.completed_shapes = perf
+                .stages
+                .completed_shapes
+                .saturating_add(Instant::now().saturating_duration_since(completed_shapes_start));
         }
 
         self.render_selection_overlays(ctx);
@@ -163,6 +205,8 @@ impl WaylandState {
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 
         let provisional = self.input_state.provisional_tool_stroke(mx, my);
+        let provisional_points = provisional_point_count(&provisional);
+        let provisional_start = perf.as_ref().map(|_| Instant::now());
         let rendered_provisional = match provisional {
             crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(params) => {
                 crate::draw::render_blur_rect(ctx, params, &replay_ctx);
@@ -172,6 +216,13 @@ impl WaylandState {
                 .input_state
                 .render_provisional_shape_for_damage(ctx, mx, my, damage_world),
         };
+        if let (Some(perf), Some(provisional_start)) = (perf.as_mut(), provisional_start) {
+            perf.provisional_points = provisional_points;
+            perf.stages.provisional = perf
+                .stages
+                .provisional
+                .saturating_add(Instant::now().saturating_duration_since(provisional_start));
+        }
         if rendered_provisional {
             debug!("Rendered provisional shape");
         }
@@ -191,5 +242,17 @@ impl WaylandState {
         let _ = ctx.restore();
 
         Ok(())
+    }
+}
+
+fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_>) -> usize {
+    match stroke {
+        crate::input::tool::ProvisionalToolStroke::BorrowedFreehand { points, .. }
+        | crate::input::tool::ProvisionalToolStroke::BorrowedPressureFreehand { points, .. }
+        | crate::input::tool::ProvisionalToolStroke::BorrowedMarker { points, .. }
+        | crate::input::tool::ProvisionalToolStroke::EraserPreview { points, .. } => points.len(),
+        crate::input::tool::ProvisionalToolStroke::Shape(_)
+        | crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(_)
+        | crate::input::tool::ProvisionalToolStroke::None => 0,
     }
 }

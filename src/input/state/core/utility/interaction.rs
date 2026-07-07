@@ -151,9 +151,6 @@ impl InputState {
             return;
         }
 
-        // First-run onboarding card can live outside the stroke bounds. Force a
-        // full repaint so the step transition appears immediately.
-        self.dirty_tracker.mark_full();
         self.pending_onboarding_usage.first_stroke_done = true;
     }
 
