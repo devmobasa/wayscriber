@@ -43,7 +43,7 @@ impl DrawnShape {
         }
     }
 
-    pub fn with_metadata(id: ShapeId, shape: Shape, created_at: u64, locked: bool) -> Self {
+    pub(crate) fn with_metadata(id: ShapeId, shape: Shape, created_at: u64, locked: bool) -> Self {
         Self {
             id,
             shape,

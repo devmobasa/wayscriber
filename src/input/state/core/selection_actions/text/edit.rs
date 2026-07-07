@@ -118,7 +118,7 @@ impl InputState {
         let cleared = {
             let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
-                let before = shape.shape.bounding_box();
+                let before = shape.bounding_box();
                 match &mut shape.shape {
                     Shape::Text { text, .. } => {
                         text.clear();
@@ -129,7 +129,7 @@ impl InputState {
                     _ => {}
                 }
                 shape.invalidate_bounds();
-                let after = shape.shape.bounding_box();
+                let after = shape.bounding_box();
                 Some((before, after))
             } else {
                 None
@@ -156,10 +156,10 @@ impl InputState {
         let restored = {
             let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
-                let before = shape.shape.bounding_box();
+                let before = shape.bounding_box();
                 shape.set_shape(snapshot.shape.clone());
                 shape.locked = snapshot.locked;
-                let after = shape.shape.bounding_box();
+                let after = shape.bounding_box();
                 Some((before, after))
             } else {
                 None
@@ -185,9 +185,9 @@ impl InputState {
         let updated = {
             let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
-                let before_bounds = shape.shape.bounding_box();
+                let before_bounds = shape.bounding_box();
                 shape.set_shape(new_shape);
-                let after_bounds = shape.shape.bounding_box();
+                let after_bounds = shape.bounding_box();
                 let after_snapshot = ShapeSnapshot {
                     shape: shape.shape.clone(),
                     locked: shape.locked,

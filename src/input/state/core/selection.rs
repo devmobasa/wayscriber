@@ -97,7 +97,7 @@ impl InputState {
 
         for id in ids {
             if let Some(shape) = frame.shape(*id)
-                && let Some(bounds) = shape.shape.bounding_box()
+                && let Some(bounds) = shape.bounding_box()
             {
                 min_x = min_x.min(bounds.x);
                 min_y = min_y.min(bounds.y);

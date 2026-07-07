@@ -81,9 +81,6 @@ struct UiLayoutCacheKey {
 
 struct CachedUiLayout {
     layout: pango::Layout,
-    ink_rect: pango::Rectangle,
-    logical_rect: pango::Rectangle,
-    baseline: f64,
     last_used: u64,
 }
 
@@ -106,20 +103,12 @@ impl UiLayoutCache {
         }
     }
 
-    fn get(
-        &mut self,
-        key: &UiLayoutCacheKey,
-    ) -> Option<(pango::Layout, pango::Rectangle, pango::Rectangle, f64)> {
+    fn get(&mut self, key: &UiLayoutCacheKey) -> Option<pango::Layout> {
         self.tick += 1;
         let tick = self.tick;
         let entry = self.entries.get_mut(key)?;
         entry.last_used = tick;
-        Some((
-            entry.layout.clone(),
-            entry.ink_rect,
-            entry.logical_rect,
-            entry.baseline,
-        ))
+        Some(entry.layout.clone())
     }
 
     fn insert(&mut self, key: UiLayoutCacheKey, mut entry: CachedUiLayout) {
@@ -199,10 +188,11 @@ pub(crate) fn text_layout(
     };
 
     let cached = UI_LAYOUT_CACHE.with(|cache| cache.borrow_mut().get(&key));
-    if let Some((layout, ink_rect, logical_rect, baseline)) = cached {
+    if let Some(layout) = cached {
         // Re-bind the cached layout to the current Cairo context (font options,
         // resolution, transformation) without re-shaping the text.
         pangocairo::functions::update_layout(ctx, &layout);
+        let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
         return UiTextLayout {
             layout,
             ink_rect,
@@ -219,17 +209,13 @@ pub(crate) fn text_layout(
         layout.set_width(wrap_units);
         layout.set_wrap(pango::WrapMode::WordChar);
     }
-    let (ink_rect, logical_rect) = layout.extents();
-    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+    let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
 
     UI_LAYOUT_CACHE.with(|cache| {
         cache.borrow_mut().insert(
             key,
             CachedUiLayout {
                 layout: layout.clone(),
-                ink_rect,
-                logical_rect,
-                baseline,
                 last_used: 0,
             },
         );
@@ -309,6 +295,12 @@ fn to_pango_units_f64(value: f64) -> f64 {
     scaled.clamp(i32::MIN as f64, i32::MAX as f64)
 }
 
+fn layout_metrics(layout: &pango::Layout) -> (pango::Rectangle, pango::Rectangle, f64) {
+    let (ink_rect, logical_rect) = layout.extents();
+    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+    (ink_rect, logical_rect, baseline)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,6 +312,31 @@ mod tests {
             weight: cairo::FontWeight::Bold,
             size,
         }
+    }
+
+    fn uncached_text_extents(
+        ctx: &cairo::Context,
+        style: UiTextStyle<'_>,
+        text: &str,
+        wrap_width: Option<f64>,
+    ) -> UiTextExtents {
+        let layout = pangocairo::functions::create_layout(ctx);
+        let font_desc = font_description(style);
+        layout.set_font_description(Some(&font_desc));
+        layout.set_text(text);
+        if let Some(width) = wrap_width {
+            layout.set_width(to_pango_units(width.max(1.0)));
+            layout.set_wrap(pango::WrapMode::WordChar);
+        }
+        let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
+        rect_to_extents(ink_rect, logical_rect, baseline)
+    }
+
+    fn assert_extents_eq(actual: UiTextExtents, expected: UiTextExtents) {
+        assert_eq!(actual.width(), expected.width());
+        assert_eq!(actual.height(), expected.height());
+        assert_eq!(actual.x_bearing(), expected.x_bearing());
+        assert_eq!(actual.y_bearing(), expected.y_bearing());
     }
 
     #[test]
@@ -334,6 +351,28 @@ mod tests {
         assert_eq!(first.height(), second.height());
         assert_eq!(first.x_bearing(), second.x_bearing());
         assert_eq!(first.y_bearing(), second.y_bearing());
+    }
+
+    #[test]
+    fn cached_layout_recomputes_extents_after_context_update() {
+        let first_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 64, 64).unwrap();
+        let first_ctx = cairo::Context::new(&first_surface).unwrap();
+        let scaled_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 64, 64).unwrap();
+        let scaled_ctx = cairo::Context::new(&scaled_surface).unwrap();
+        scaled_ctx.scale(2.0, 2.0);
+
+        let style = style(18.0);
+        let text = "cache scale";
+        let first = text_layout(&first_ctx, style, text, None).ink_extents();
+        let expected_scaled = uncached_text_extents(&scaled_ctx, style, text, None);
+        assert_ne!(
+            first.width(),
+            expected_scaled.width(),
+            "test setup must exercise context-sensitive text extents"
+        );
+
+        let cached_scaled = text_layout(&scaled_ctx, style, text, None).ink_extents();
+        assert_extents_eq(cached_scaled, expected_scaled);
     }
 
     #[test]

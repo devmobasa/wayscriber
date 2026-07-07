@@ -79,7 +79,7 @@ impl InputState {
         else {
             return false;
         };
-        let bounds = stored.shape.bounding_box();
+        let bounds = stored.bounding_box();
         frame.push_undo_action(
             UndoAction::Create {
                 shapes: vec![(index, stored)],

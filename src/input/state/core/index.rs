@@ -114,7 +114,7 @@ impl InputState {
             .boards
             .active_frame()
             .shape(id)
-            .and_then(|drawn| drawn.shape.bounding_box());
+            .and_then(|drawn| drawn.bounding_box());
 
         if let Some(grid) = &mut self.spatial_index {
             // Remove shape from its old cells
@@ -286,7 +286,7 @@ impl SpatialGrid {
         let mut shape_cells: HashMap<ShapeId, Vec<(i32, i32)>> = HashMap::new();
 
         for drawn in &frame.shapes {
-            let Some(bounds) = drawn.shape.bounding_box() else {
+            let Some(bounds) = drawn.bounding_box() else {
                 continue;
             };
 

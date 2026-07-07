@@ -27,7 +27,7 @@ impl InputState {
                 if shape.locked {
                     return false;
                 }
-                let before = shape.shape.bounding_box();
+                let before = shape.bounding_box();
                 match &mut shape.shape {
                     Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
                         if *wrap_width == Some(new_width) {
@@ -38,7 +38,7 @@ impl InputState {
                     _ => return false,
                 }
                 shape.invalidate_bounds();
-                let after = shape.shape.bounding_box();
+                let after = shape.bounding_box();
                 Some((before, after))
             } else {
                 None

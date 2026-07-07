@@ -39,7 +39,7 @@ impl InputState {
                     if shape.locked {
                         continue;
                     }
-                    dirty.push((shape.id, shape.shape.bounding_box()));
+                    dirty.push((shape.id, shape.bounding_box()));
                     removed.push((index, shape.clone()));
                 }
             }

@@ -59,9 +59,7 @@ impl InputState {
                         previous_ids
                             .iter()
                             .filter_map(|id| {
-                                frame
-                                    .shape(*id)
-                                    .and_then(|shape| shape.shape.bounding_box())
+                                frame.shape(*id).and_then(|shape| shape.bounding_box())
                             })
                             .collect::<Vec<_>>()
                     };
@@ -75,7 +73,7 @@ impl InputState {
                         let frame = self.boards.active_frame();
                         frame
                             .shape(hovered_shape)
-                            .and_then(|shape| shape.shape.bounding_box())
+                            .and_then(|shape| shape.bounding_box())
                     };
                     self.mark_selection_dirty_region(hovered_bounds);
 

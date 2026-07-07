@@ -87,7 +87,7 @@ impl InputState {
                 continue;
             }
 
-            let before_bounds = drawn.shape.bounding_box();
+            let before_bounds = drawn.bounding_box();
             let before_snapshot = crate::draw::frame::ShapeSnapshot {
                 shape: drawn.shape.clone(),
                 locked: drawn.locked,
@@ -99,7 +99,7 @@ impl InputState {
                 continue;
             }
 
-            let after_bounds = drawn.shape.bounding_box();
+            let after_bounds = drawn.bounding_box();
             let after_snapshot = crate::draw::frame::ShapeSnapshot {
                 shape: drawn.shape.clone(),
                 locked: drawn.locked,

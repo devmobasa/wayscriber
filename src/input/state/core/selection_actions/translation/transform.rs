@@ -15,10 +15,10 @@ impl InputState {
             let bounds = {
                 let frame = self.boards.active_frame_mut();
                 if let Some(shape) = frame.shape_mut(shape_id) {
-                    let before = shape.shape.bounding_box();
+                    let before = shape.bounding_box();
                     shape.set_shape(snapshot.shape.clone());
                     shape.locked = snapshot.locked;
-                    let after = shape.shape.bounding_box();
+                    let after = shape.bounding_box();
                     Some((before, after))
                 } else {
                     None
