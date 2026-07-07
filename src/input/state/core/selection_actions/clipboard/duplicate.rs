@@ -39,7 +39,7 @@ impl InputState {
                     .find_index(new_id)
                     .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
             } {
-                self.mark_selection_dirty_region(stored.shape.bounding_box());
+                self.mark_selection_dirty_region(stored.bounding_box());
                 self.invalidate_hit_cache_for(new_id);
                 created.push((index, stored));
                 new_ids.push(new_id);

@@ -46,12 +46,12 @@ fn clamp_history_depth_clears_both_stacks() {
             UndoAction::Create {
                 shapes: vec![(
                     index,
-                    DrawnShape {
+                    DrawnShape::with_metadata(
                         id,
-                        shape: snapshot.shape,
-                        created_at: snapshot.created_at,
-                        locked: snapshot.locked,
-                    },
+                        snapshot.shape,
+                        snapshot.created_at,
+                        snapshot.locked,
+                    ),
                 )],
             },
             10,

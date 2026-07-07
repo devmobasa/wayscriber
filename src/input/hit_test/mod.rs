@@ -12,7 +12,7 @@ use crate::util::Rect;
 
 /// Computes a tolerance-aware bounding rectangle for the shape.
 pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
-    let base = shape.shape.bounding_box()?;
+    let base = shape.bounding_box()?;
     if matches!(shape.shape, Shape::EraserStroke { .. }) {
         return None;
     }
@@ -122,7 +122,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
         }
         Shape::BlurRect { .. } => {
             let inflate = tolerance.ceil() as i32;
-            if let Some(bounds) = shape.shape.bounding_box() {
+            if let Some(bounds) = shape.bounding_box() {
                 bounds
                     .inflated(inflate)
                     .unwrap_or(bounds)
@@ -132,7 +132,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             }
         }
         Shape::Text { .. } | Shape::StickyNote { .. } | Shape::Image { .. } => {
-            if let Some(bounds) = shape.shape.bounding_box() {
+            if let Some(bounds) = shape.bounding_box() {
                 let inflate = tolerance.ceil() as i32;
                 bounds
                     .inflated(inflate)

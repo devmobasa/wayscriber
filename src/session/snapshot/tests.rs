@@ -1939,6 +1939,7 @@ fn translate_line(frame: &mut Frame, shape_id: crate::draw::ShapeId, dx: i32, dy
         *x2 += dx;
         *y2 += dy;
     }
+    shape.invalidate_bounds();
 }
 
 #[test]

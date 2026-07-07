@@ -110,7 +110,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             );
         }
         Shape::BlurRect { .. } => {
-            if let Some(bounds) = drawn.shape.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box() {
                 let padding = 3.0;
                 let x = bounds.x as f64 - padding;
                 let y = bounds.y as f64 - padding;
@@ -152,7 +152,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             render_freehand_borrowed(ctx, points, glow, outline);
         }
         Shape::Text { .. } | Shape::Image { .. } => {
-            if let Some(bounds) = drawn.shape.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box() {
                 let padding = 4.0;
                 let x = bounds.x as f64 - padding;
                 let y = bounds.y as f64 - padding;
@@ -168,7 +168,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             }
         }
         Shape::StickyNote { .. } => {
-            if let Some(bounds) = drawn.shape.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box() {
                 let padding = 4.0;
                 let x = bounds.x as f64 - padding;
                 let y = bounds.y as f64 - padding;

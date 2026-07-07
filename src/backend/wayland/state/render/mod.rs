@@ -3,6 +3,7 @@ use super::*;
 mod canvas;
 mod tool_preview;
 mod ui;
+mod ui_effect_damage;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
@@ -43,20 +44,28 @@ impl WaylandState {
         let input_damage = input_damage_report.regions;
         let logical_width = width.min(i32::MAX as u32) as i32;
         let logical_height = height.min(i32::MAX as u32) as i32;
-        let force_full_damage_reason = self.render_force_full_damage_reason(
+        let force_full_damage_reason = self.render_force_full_damage_reason();
+        // Transient UI effects (toasts, feedback flashes) emit targeted damage
+        // instead of forcing full-surface redraws. Collect on every frame so the
+        // previous-bounds tracking stays in sync even when full damage is forced
+        // for other reasons.
+        let ui_effect_damage = self.collect_ui_effect_damage(
             ui_toast_active,
             preset_feedback_active,
             blocked_feedback_active,
             text_edit_entry_active,
+            width,
+            height,
         );
         if let Some(reason) = force_full_damage_reason {
-            // Zoom uses a world transform and some UI effects don't emit damage; full damage avoids
-            // mismatched coordinate spaces and empty damage frames.
+            // Zoom and board pan use a world transform; full damage avoids
+            // mismatched coordinate spaces.
             self.buffer_damage.mark_all_full(reason);
         } else if let Some(reason) = input_full_damage_reason(input_damage_report.full_reason) {
             self.buffer_damage.mark_all_full(reason);
         } else {
             self.buffer_damage.add_regions(input_damage);
+            self.buffer_damage.add_regions(ui_effect_damage);
         }
 
         // Get a buffer from the pool for rendering
@@ -330,25 +339,11 @@ impl WaylandState {
         Ok(keep_rendering)
     }
 
-    fn render_force_full_damage_reason(
-        &self,
-        ui_toast_active: bool,
-        preset_feedback_active: bool,
-        blocked_feedback_active: bool,
-        text_edit_entry_active: bool,
-    ) -> Option<FullDamageReason> {
+    fn render_force_full_damage_reason(&self) -> Option<FullDamageReason> {
         if self.zoom.active {
             Some(FullDamageReason::Zoom)
         } else if self.canvas_transform_active() {
             Some(FullDamageReason::BoardPan)
-        } else if ui_toast_active {
-            Some(FullDamageReason::UiToast)
-        } else if preset_feedback_active {
-            Some(FullDamageReason::PresetFeedback)
-        } else if blocked_feedback_active {
-            Some(FullDamageReason::BlockedFeedback)
-        } else if text_edit_entry_active {
-            Some(FullDamageReason::TextEditEntry)
         } else {
             None
         }

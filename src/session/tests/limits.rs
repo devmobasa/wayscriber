@@ -337,7 +337,10 @@ fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
             locked: current.locked,
         };
         let after_shape = large_freehand(point_count, 1);
-        frame.shape_mut(id).expect("shape should exist").shape = after_shape.clone();
+        frame
+            .shape_mut(id)
+            .expect("shape should exist")
+            .set_shape(after_shape.clone());
         frame.push_undo_action(
             UndoAction::Modify {
                 shape_id: id,
@@ -437,7 +440,10 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
                 locked: current.locked,
             };
             let after_shape = large_freehand(point_count, offset);
-            frame.shape_mut(id).expect("shape should exist").shape = after_shape.clone();
+            frame
+                .shape_mut(id)
+                .expect("shape should exist")
+                .set_shape(after_shape.clone());
             frame.push_undo_action(
                 UndoAction::Modify {
                     shape_id: id,
@@ -524,7 +530,10 @@ fn autosave_snapshot_uses_bounded_history_fallback() {
                 locked: current.locked,
             };
             let after_shape = large_freehand(point_count, offset);
-            frame.shape_mut(id).expect("shape should exist").shape = after_shape.clone();
+            frame
+                .shape_mut(id)
+                .expect("shape should exist")
+                .set_shape(after_shape.clone());
             frame.push_undo_action(
                 UndoAction::Modify {
                     shape_id: id,
@@ -617,7 +626,10 @@ fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
                 locked: current.locked,
             };
             let after_shape = large_freehand(40, offset);
-            frame.shape_mut(id).expect("shape should exist").shape = after_shape.clone();
+            frame
+                .shape_mut(id)
+                .expect("shape should exist")
+                .set_shape(after_shape.clone());
             frame.push_undo_action(
                 UndoAction::Modify {
                     shape_id: id,

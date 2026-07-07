@@ -93,6 +93,7 @@ fn modify_image_bounds_undo_redo_changes_geometry_without_replacing_payload() {
         *w = 40;
         *h = 32;
     }
+    frame.shape_mut(id).unwrap().invalidate_bounds();
     frame.push_undo_action(
         UndoAction::ModifyImageBounds {
             shape_id: id,

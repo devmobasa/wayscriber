@@ -54,9 +54,10 @@ impl InputState {
                     if shape.locked {
                         None
                     } else {
-                        let before = shape.shape.bounding_box();
+                        let before = shape.bounding_box();
                         Self::translate_shape(&mut shape.shape, dx, dy);
-                        let after = shape.shape.bounding_box();
+                        shape.invalidate_bounds();
+                        let after = shape.bounding_box();
                         Some((before, after))
                     }
                 } else {

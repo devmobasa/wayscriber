@@ -178,7 +178,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
     {
         let frame = state.boards.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        let bounds = shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.x, 0);
     }
 
@@ -187,7 +187,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
     {
         let frame = state.boards.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        let bounds = shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.x + bounds.width, 200);
     }
 }
@@ -213,7 +213,7 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
     {
         let frame = state.boards.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        let bounds = shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.x, 0);
     }
 
@@ -222,7 +222,7 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
     {
         let frame = state.boards.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        let bounds = shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.x + bounds.width, 200);
     }
 }
@@ -247,7 +247,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
     {
         let frame = state.boards.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        let bounds = shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.y, 0);
     }
 
@@ -256,7 +256,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
     {
         let frame = state.boards.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        let bounds = shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.y + bounds.height, 100);
     }
 }
@@ -305,7 +305,7 @@ fn nudge_selection_clamps_left_and_top_edges() {
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
-    let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+    let bounds = shape.bounding_box().expect("rect should have bounds");
     assert_eq!((bounds.x, bounds.y), (0, 0));
 }
 
@@ -329,7 +329,7 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
-    let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+    let bounds = shape.bounding_box().expect("rect should have bounds");
     assert_eq!(
         (bounds.x + bounds.width, bounds.y + bounds.height),
         (100, 100)

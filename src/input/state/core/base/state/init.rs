@@ -189,6 +189,7 @@ impl InputState {
             radial_menu_layout: None,
             radial_menu_mouse_binding: RadialMenuMouseBinding::Middle,
             hit_test_cache: HashMap::new(),
+            canvas_content_generation: 0,
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,
             undo_stack_limit: 100,

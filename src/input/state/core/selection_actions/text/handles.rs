@@ -27,7 +27,7 @@ impl InputState {
         if !matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. }) {
             return None;
         }
-        let bounds = shape.shape.bounding_box()?;
+        let bounds = shape.bounding_box()?;
         let handle = Self::text_resize_handle_rect(bounds)?;
         Some((shape_id, handle))
     }

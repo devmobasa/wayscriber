@@ -1115,7 +1115,7 @@ mod tests {
                 dirty_area_pct: 42.0,
                 full_damage: true,
                 damage_rects: 2,
-                force_full_reason: Some(FullDamageReason::UiToast),
+                force_full_reason: Some(FullDamageReason::CanvasClear),
             },
             base,
         );
@@ -1131,7 +1131,7 @@ mod tests {
         assert_eq!(slow.max_fps_no_vsync, 120);
         assert_eq!(slow.dirty_area_pct, 42.0);
         assert!(slow.full_damage);
-        assert_eq!(slow.force_full_reason, Some(FullDamageReason::UiToast));
+        assert_eq!(slow.force_full_reason, Some(FullDamageReason::CanvasClear));
         assert_eq!(slow.damage_rects, 2);
     }
 
@@ -1155,7 +1155,7 @@ mod tests {
                         dirty_area_pct: 100.0,
                         full_damage: true,
                         damage_rects: 1,
-                        force_full_reason: Some(FullDamageReason::UiToast),
+                        force_full_reason: Some(FullDamageReason::CanvasClear),
                     },
                     started_at,
                 );
@@ -1180,8 +1180,8 @@ mod tests {
                 assert_eq!(summary.render_over_50ms, 70);
                 assert_eq!(summary.full_damage_count, 3);
                 assert_eq!(summary.full_damage_pct, "2.50");
-                assert_eq!(summary.force_full_reason, "ui_toast");
-                assert_eq!(summary.force_full_reasons, "ui_toast:3");
+                assert_eq!(summary.force_full_reason, "canvas_clear");
+                assert_eq!(summary.force_full_reasons, "canvas_clear:3");
             }
         }
     }
