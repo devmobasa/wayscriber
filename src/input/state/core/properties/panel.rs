@@ -92,7 +92,7 @@ impl InputState {
             if let Some(timestamp) = format_timestamp(drawn.created_at) {
                 lines.push(format!("Created: {timestamp}"));
             }
-            if let Some(bounds) = drawn.shape.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box() {
                 lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
             }
 
@@ -163,7 +163,7 @@ impl InputState {
                 if let Some(timestamp) = format_timestamp(drawn.created_at) {
                     lines.push(format!("Created: {timestamp}"));
                 }
-                if let Some(bounds) = drawn.shape.bounding_box() {
+                if let Some(bounds) = drawn.bounding_box() {
                     lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
                 }
                 ("Shape Properties".to_string(), lines, false)

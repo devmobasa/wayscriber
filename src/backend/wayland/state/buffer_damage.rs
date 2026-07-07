@@ -37,10 +37,6 @@ pub(in crate::backend::wayland) enum FullDamageReason {
     Zoom,
     BoardPan,
     CanvasClear,
-    UiToast,
-    PresetFeedback,
-    BlockedFeedback,
-    TextEditEntry,
     EmptyDamageFallback,
     DamageRegionsCoverSurface,
     Unknown,
@@ -62,10 +58,6 @@ impl FullDamageReason {
             Self::Zoom => "zoom",
             Self::BoardPan => "board_pan",
             Self::CanvasClear => "canvas_clear",
-            Self::UiToast => "ui_toast",
-            Self::PresetFeedback => "preset_feedback",
-            Self::BlockedFeedback => "blocked_feedback",
-            Self::TextEditEntry => "text_edit_entry",
             Self::EmptyDamageFallback => "empty_damage_fallback",
             Self::DamageRegionsCoverSurface => "damage_regions_cover_surface",
             Self::Unknown => "unknown",
@@ -498,9 +490,9 @@ mod tests {
         let new_slot = tracker.take_buffer_damage_report(0x2000, 800, 600, TEST_GEN, TEST_SIZE);
         assert_eq!(new_slot.full_reason, Some(FullDamageReason::NewBufferSlot));
 
-        tracker.mark_all_full(FullDamageReason::UiToast);
+        tracker.mark_all_full(FullDamageReason::CanvasClear);
         let explicit = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
-        assert_eq!(explicit.full_reason, Some(FullDamageReason::UiToast));
+        assert_eq!(explicit.full_reason, Some(FullDamageReason::CanvasClear));
     }
 
     #[test]

@@ -241,7 +241,7 @@ fn frame_content_bounds(frame: &Frame) -> Option<CanvasExportRect> {
     let mut found = false;
 
     for drawn in &frame.shapes {
-        let Some(bounds) = drawn.shape.bounding_box() else {
+        let Some(bounds) = drawn.bounding_box() else {
             continue;
         };
         min_x = min_x.min(bounds.x);

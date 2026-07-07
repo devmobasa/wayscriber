@@ -29,5 +29,8 @@ pub use status::{
     render_editing_badge, render_frozen_badge, render_page_badge, render_pan_badge,
     render_status_bar, render_zoom_badge,
 };
-pub use toasts::{render_blocked_feedback, render_preset_toast, render_ui_toast};
+pub use toasts::{
+    blocked_feedback_rects, preset_toast_geometry, render_blocked_feedback, render_preset_toast,
+    render_ui_toast, ui_toast_geometry,
+};
 pub use tour::render_tour;

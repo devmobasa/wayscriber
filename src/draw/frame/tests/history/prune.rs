@@ -15,18 +15,8 @@ fn prune_history_for_removed_ids_prunes_shapes_and_actions() {
         thick: 1.0,
     };
 
-    let shape1 = DrawnShape {
-        id: 1,
-        shape: base_shape.clone(),
-        created_at: 0,
-        locked: false,
-    };
-    let shape2 = DrawnShape {
-        id: 2,
-        shape: base_shape.clone(),
-        created_at: 0,
-        locked: false,
-    };
+    let shape1 = DrawnShape::with_metadata(1, base_shape.clone(), 0, false);
+    let shape2 = DrawnShape::with_metadata(2, base_shape.clone(), 0, false);
 
     let create_both = UndoAction::Create {
         shapes: vec![(0, shape1), (1, shape2.clone())],

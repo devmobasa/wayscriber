@@ -101,6 +101,7 @@ impl WaylandState {
             toolbar: ToolbarSurfaceManager::new(),
             data,
             buffer_damage: BufferDamageTracker::new(buffer_count),
+            canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             config,
             input_state,
             clipboard_publish_rx: None,
