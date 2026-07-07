@@ -1331,7 +1331,7 @@ mod tests {
     }
 
     #[test]
-    fn render_breakdown_summary_reports_stage_culling_and_cache_hits() {
+    fn render_breakdown_summary_reports_stage_culling_and_cache_use() {
         let base = Instant::now();
         let mut metrics = PerfMetrics::new(true);
         metrics.record_render_breakdown(PerfRenderBreakdown {
@@ -1346,7 +1346,7 @@ mod tests {
             shapes_rendered: 3,
             provisional_points: 42,
             render_profile: PerfRenderProfileKind::Canvas,
-            canvas_layer_cache_hit: true,
+            canvas_layer_cache_used: true,
         });
         let _ = metrics.commit_frame(
             frame_context(Some(Duration::from_millis(1)), 1.0, false, 2, None),
@@ -1375,7 +1375,7 @@ mod tests {
         assert_eq!(summary.shape_cull_pct, "75.00");
         assert_eq!(summary.provisional_points_max, 42);
         assert_eq!(summary.render_profile_frames, 1);
-        assert_eq!(summary.canvas_layer_cache_hits, 1);
+        assert_eq!(summary.canvas_layer_cache_used_frames, 1);
     }
 
     #[test]

@@ -56,7 +56,7 @@ pub(in crate::backend::wayland) struct PerfRenderBreakdown {
     pub(in crate::backend::wayland) shapes_rendered: usize,
     pub(in crate::backend::wayland) provisional_points: usize,
     pub(in crate::backend::wayland) render_profile: PerfRenderProfileKind,
-    pub(in crate::backend::wayland) canvas_layer_cache_hit: bool,
+    pub(in crate::backend::wayland) canvas_layer_cache_used: bool,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -74,7 +74,7 @@ pub(super) struct PerfRenderBreakdownSummary {
     pub(super) shape_cull_pct: String,
     pub(super) provisional_points_max: usize,
     pub(super) render_profile_frames: u64,
-    pub(super) canvas_layer_cache_hits: u64,
+    pub(super) canvas_layer_cache_used_frames: u64,
 }
 
 #[derive(Debug, Default)]
@@ -87,7 +87,7 @@ pub(super) struct PerfRenderBreakdownAccumulator {
     shapes_rendered_total: u64,
     provisional_points_max: usize,
     render_profile_frames: u64,
-    canvas_layer_cache_hits: u64,
+    canvas_layer_cache_used_frames: u64,
 }
 
 impl PerfRenderBreakdownAccumulator {
@@ -108,8 +108,8 @@ impl PerfRenderBreakdownAccumulator {
         if breakdown.render_profile != PerfRenderProfileKind::None {
             self.render_profile_frames += 1;
         }
-        if breakdown.canvas_layer_cache_hit {
-            self.canvas_layer_cache_hits += 1;
+        if breakdown.canvas_layer_cache_used {
+            self.canvas_layer_cache_used_frames += 1;
         }
     }
 
@@ -137,7 +137,7 @@ impl PerfRenderBreakdownAccumulator {
             ),
             provisional_points_max: self.provisional_points_max,
             render_profile_frames: self.render_profile_frames,
-            canvas_layer_cache_hits: self.canvas_layer_cache_hits,
+            canvas_layer_cache_used_frames: self.canvas_layer_cache_used_frames,
         })
     }
 
@@ -149,7 +149,7 @@ impl PerfRenderBreakdownAccumulator {
 pub(super) fn log_render_stage_frame(frame: u64, render_ms: u64, breakdown: &PerfRenderBreakdown) {
     let dominant = dominant_render_stage(&breakdown.stages);
     info!(
-        "perf.render_stage frame={} render_ms={} dominant_stage={} dominant_stage_ms={} advance_animations_ms={} dirty_collect_ms={} buffer_acquire_ms={} cairo_surface_ms={} clear_clip_ms={} background_ms={} completed_shapes_ms={} provisional_ms={} ui_ms={} render_profile_ms={} damage_commit_ms={} toolbar_ms={} surface_px={} shapes_total={} shapes_tested={} shapes_rendered={} shape_cull_pct={} provisional_points={} render_profile_active={} canvas_layer_cache_hit={}",
+        "perf.render_stage frame={} render_ms={} dominant_stage={} dominant_stage_ms={} advance_animations_ms={} dirty_collect_ms={} buffer_acquire_ms={} cairo_surface_ms={} clear_clip_ms={} background_ms={} completed_shapes_ms={} provisional_ms={} ui_ms={} render_profile_ms={} damage_commit_ms={} toolbar_ms={} surface_px={} shapes_total={} shapes_tested={} shapes_rendered={} shape_cull_pct={} provisional_points={} render_profile_active={} canvas_layer_cache_used={}",
         frame,
         render_ms,
         dominant.0,
@@ -176,13 +176,13 @@ pub(super) fn log_render_stage_frame(frame: u64, render_ms: u64, breakdown: &Per
         ),
         breakdown.provisional_points,
         breakdown.render_profile.as_str(),
-        breakdown.canvas_layer_cache_hit
+        breakdown.canvas_layer_cache_used
     );
 }
 
 pub(super) fn log_render_stage_summary(summary: &PerfRenderBreakdownSummary, final_summary: bool) {
     info!(
-        "perf.render_stage_summary frames={} samples={} dominant_stage={} dominant_stage_avg_ms={} advance_animations_avg_ms={} dirty_collect_avg_ms={} buffer_acquire_avg_ms={} cairo_surface_avg_ms={} clear_clip_avg_ms={} background_avg_ms={} completed_shapes_avg_ms={} provisional_avg_ms={} ui_avg_ms={} render_profile_avg_ms={} damage_commit_avg_ms={} toolbar_avg_ms={} surface_px_max={} shapes_total_max={} shapes_tested_avg={} shapes_rendered_avg={} shape_cull_pct={} provisional_points_max={} render_profile_frames={} canvas_layer_cache_hits={} final={}",
+        "perf.render_stage_summary frames={} samples={} dominant_stage={} dominant_stage_avg_ms={} advance_animations_avg_ms={} dirty_collect_avg_ms={} buffer_acquire_avg_ms={} cairo_surface_avg_ms={} clear_clip_avg_ms={} background_avg_ms={} completed_shapes_avg_ms={} provisional_avg_ms={} ui_avg_ms={} render_profile_avg_ms={} damage_commit_avg_ms={} toolbar_avg_ms={} surface_px_max={} shapes_total_max={} shapes_tested_avg={} shapes_rendered_avg={} shape_cull_pct={} provisional_points_max={} render_profile_frames={} canvas_layer_cache_used_frames={} final={}",
         summary.frames,
         summary.samples,
         summary.dominant_stage,
@@ -206,7 +206,7 @@ pub(super) fn log_render_stage_summary(summary: &PerfRenderBreakdownSummary, fin
         summary.shape_cull_pct,
         summary.provisional_points_max,
         summary.render_profile_frames,
-        summary.canvas_layer_cache_hits,
+        summary.canvas_layer_cache_used_frames,
         final_summary
     );
 }

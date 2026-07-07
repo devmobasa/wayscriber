@@ -70,7 +70,7 @@ impl WaylandState {
             debug!("Rendered committed shapes from layer cache");
             if let Some(perf) = perf.as_mut() {
                 perf.shapes_total = shapes_total;
-                perf.canvas_layer_cache_hit = true;
+                perf.canvas_layer_cache_used = true;
             }
         } else {
             // Render all completed shapes from active frame
