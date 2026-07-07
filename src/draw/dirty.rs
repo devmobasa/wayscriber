@@ -8,6 +8,7 @@ use crate::util::Rect;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirtyFullReason {
     CanvasClear,
+    FirstRunOnboarding,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

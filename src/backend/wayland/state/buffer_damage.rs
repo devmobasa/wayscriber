@@ -37,6 +37,7 @@ pub(in crate::backend::wayland) enum FullDamageReason {
     Zoom,
     BoardPan,
     CanvasClear,
+    FirstRunOnboarding,
     EmptyDamageFallback,
     DamageRegionsCoverSurface,
     Unknown,
@@ -58,6 +59,7 @@ impl FullDamageReason {
             Self::Zoom => "zoom",
             Self::BoardPan => "board_pan",
             Self::CanvasClear => "canvas_clear",
+            Self::FirstRunOnboarding => "first_run_onboarding",
             Self::EmptyDamageFallback => "empty_damage_fallback",
             Self::DamageRegionsCoverSurface => "damage_regions_cover_surface",
             Self::Unknown => "unknown",
@@ -87,6 +89,8 @@ struct BufferDamage {
 pub(in crate::backend::wayland) struct BufferDamageReport {
     pub(in crate::backend::wayland) regions: Vec<Rect>,
     pub(in crate::backend::wayland) full_reason: Option<FullDamageReason>,
+    pub(in crate::backend::wayland) regions_before_merge: usize,
+    pub(in crate::backend::wayland) regions_after_merge: usize,
 }
 
 /// Tracks dirty regions for each buffer slot independently.
@@ -284,20 +288,28 @@ impl BufferDamageTracker {
                 return BufferDamageReport {
                     regions: vec![full],
                     full_reason: Some(full_reason.unwrap_or(FullDamageReason::Unknown)),
+                    regions_before_merge: 0,
+                    regions_after_merge: 0,
                 };
             }
             return BufferDamageReport {
                 regions: Vec::new(),
                 full_reason,
+                regions_before_merge: 0,
+                regions_after_merge: 0,
             };
         }
 
+        let regions_before_merge = regions.len();
         // Merge overlapping regions to reduce compositor work
         merge_damage_regions(&mut regions);
+        let regions_after_merge = regions.len();
 
         BufferDamageReport {
             regions,
             full_reason: None,
+            regions_before_merge,
+            regions_after_merge,
         }
     }
 
@@ -486,6 +498,8 @@ mod tests {
 
         let initial = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
         assert_eq!(initial.full_reason, Some(FullDamageReason::InitialFrame));
+        assert_eq!(initial.regions_before_merge, 0);
+        assert_eq!(initial.regions_after_merge, 0);
 
         let new_slot = tracker.take_buffer_damage_report(0x2000, 800, 600, TEST_GEN, TEST_SIZE);
         assert_eq!(new_slot.full_reason, Some(FullDamageReason::NewBufferSlot));
@@ -493,6 +507,22 @@ mod tests {
         tracker.mark_all_full(FullDamageReason::CanvasClear);
         let explicit = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
         assert_eq!(explicit.full_reason, Some(FullDamageReason::CanvasClear));
+    }
+
+    #[test]
+    fn report_exposes_merge_counts() {
+        let mut tracker = BufferDamageTracker::new(2);
+        let _ = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
+        tracker.mark_rect(Rect::new(0, 0, 10, 10).unwrap());
+        tracker.mark_rect(Rect::new(5, 0, 10, 10).unwrap());
+        tracker.mark_rect(Rect::new(100, 100, 10, 10).unwrap());
+
+        let report = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
+
+        assert_eq!(report.full_reason, None);
+        assert_eq!(report.regions_before_merge, 3);
+        assert_eq!(report.regions_after_merge, 2);
+        assert_eq!(report.regions.len(), 2);
     }
 
     #[test]

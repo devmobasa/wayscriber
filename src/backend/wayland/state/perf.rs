@@ -9,10 +9,32 @@ use log::info;
 use crate::{
     env_vars::PERF_LOG_ENV,
     input::{DrawingState, Tool},
-    util::Rect,
 };
 
 use super::{FullDamageReason, WaylandState};
+
+#[path = "perf_modules/damage_diagnostics.rs"]
+mod damage_diagnostics;
+#[path = "perf_modules/render_breakdown.rs"]
+mod render_breakdown;
+
+pub(in crate::backend::wayland) use damage_diagnostics::{
+    PerfDamageDiagnostics, PerfFrameDamageContext, damage_covers_logical_surface,
+};
+use damage_diagnostics::{
+    damage_area_pct, damage_covers_surface, effective_full_damage_reason,
+    format_effective_full_damage_reason, format_pct_hundredths, full_damage_source,
+    largest_region_area_pct_hundredths,
+};
+#[cfg(test)]
+use render_breakdown::PerfRenderStageDurations;
+pub(in crate::backend::wayland) use render_breakdown::{
+    PerfRenderBreakdown, PerfRenderProfileKind,
+};
+use render_breakdown::{
+    PerfRenderBreakdownAccumulator, PerfRenderBreakdownSummary, log_render_stage_frame,
+    log_render_stage_summary,
+};
 
 const MAX_PENDING_INPUT_SAMPLES: usize = 4096;
 const MAX_RECENT_LATENCIES: usize = 2048;
@@ -80,6 +102,7 @@ struct PerfFrameContext {
     full_damage: bool,
     damage_rects: usize,
     force_full_reason: Option<FullDamageReason>,
+    damage_diagnostics: PerfDamageDiagnostics,
 }
 
 impl Default for PerfFrameContext {
@@ -90,6 +113,7 @@ impl Default for PerfFrameContext {
             full_damage: false,
             damage_rects: 0,
             force_full_reason: None,
+            damage_diagnostics: PerfDamageDiagnostics::default(),
         }
     }
 }
@@ -118,6 +142,7 @@ struct PerfSlowFrame {
     render_ms: Option<u64>,
     dirty_area_pct: f64,
     full_damage: bool,
+    full_damage_reason: Option<FullDamageReason>,
     damage_rects: usize,
     dropped_input_samples: u64,
 }
@@ -140,6 +165,7 @@ struct PerfSummary {
 struct PerfFramePacingReport {
     slow_frame: Option<PerfSlowRenderFrame>,
     summary: Option<PerfFramePacingSummary>,
+    render_breakdown_summary: Option<PerfRenderBreakdownSummary>,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -147,6 +173,7 @@ struct PerfFramePacingReport {
 struct PerfFinalSummaryReport {
     input: Option<PerfSummary>,
     frame_pacing: Option<PerfFramePacingSummary>,
+    render_breakdown: Option<PerfRenderBreakdownSummary>,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -158,9 +185,11 @@ struct PerfSlowRenderFrame {
     vsync_enabled: bool,
     max_fps_no_vsync: u32,
     dirty_area_pct: f64,
+    render_breakdown: Option<PerfRenderBreakdown>,
     full_damage: bool,
     damage_rects: usize,
     force_full_reason: Option<FullDamageReason>,
+    damage_diagnostics: PerfDamageDiagnostics,
     keep_rendering: bool,
     skipped_frame_callback_pending: u64,
     skipped_fps_cap: u64,
@@ -197,6 +226,7 @@ pub(super) struct PerfMetrics {
     recent_render_ms: VecDeque<u64>,
     render_started_at: Option<Instant>,
     last_frame_context: Option<PerfFrameContext>,
+    last_render_breakdown: Option<PerfRenderBreakdown>,
     frames_since_summary: u64,
     samples_since_summary: u64,
     render_frame_id: u64,
@@ -207,6 +237,7 @@ pub(super) struct PerfMetrics {
     render_over_50ms: u64,
     full_damage_count: u64,
     full_damage_reasons: BTreeMap<FullDamageReason, u64>,
+    render_breakdown: PerfRenderBreakdownAccumulator,
     skipped_frame_callback_pending: u64,
     skipped_fps_cap: u64,
     skipped_surface_unconfigured: u64,
@@ -233,6 +264,7 @@ impl PerfMetrics {
             recent_render_ms: VecDeque::new(),
             render_started_at: None,
             last_frame_context: None,
+            last_render_breakdown: None,
             frames_since_summary: 0,
             samples_since_summary: 0,
             render_frame_id: 0,
@@ -243,6 +275,7 @@ impl PerfMetrics {
             render_over_50ms: 0,
             full_damage_count: 0,
             full_damage_reasons: BTreeMap::new(),
+            render_breakdown: PerfRenderBreakdownAccumulator::default(),
             skipped_frame_callback_pending: 0,
             skipped_fps_cap: 0,
             skipped_surface_unconfigured: 0,
@@ -262,6 +295,14 @@ impl PerfMetrics {
             return;
         }
         self.render_started_at = Some(now);
+        self.last_render_breakdown = None;
+    }
+
+    fn record_render_breakdown(&mut self, breakdown: PerfRenderBreakdown) {
+        if !self.enabled {
+            return;
+        }
+        self.last_render_breakdown = Some(breakdown);
     }
 
     fn record_render_skip(&mut self, reason: PerfRenderSkipReason) {
@@ -307,7 +348,11 @@ impl PerfMetrics {
         }
 
         let frame = self.last_frame_context.take().unwrap_or_default();
+        let render_breakdown = self.last_render_breakdown.take();
         self.count_full_damage(&frame);
+        if let Some(breakdown) = render_breakdown.as_ref() {
+            self.count_render_breakdown(breakdown);
+        }
         let budget = frame_budget_duration(vsync_enabled, max_fps_no_vsync);
         let slow_frame = if budget.is_some_and(|budget| render_duration > budget)
             || render_duration > SLOW_RENDER_FALLBACK
@@ -319,9 +364,11 @@ impl PerfMetrics {
                 vsync_enabled,
                 max_fps_no_vsync,
                 dirty_area_pct: frame.dirty_area_pct,
+                render_breakdown,
                 full_damage: frame.full_damage,
                 damage_rects: frame.damage_rects,
                 force_full_reason: frame.force_full_reason,
+                damage_diagnostics: frame.damage_diagnostics,
                 keep_rendering,
                 skipped_frame_callback_pending: self.skipped_frame_callback_pending,
                 skipped_fps_cap: self.skipped_fps_cap,
@@ -332,7 +379,7 @@ impl PerfMetrics {
 
         if let Some(slow) = slow_frame.as_ref() {
             info!(
-                "perf.slow_frame frame={} render_ms={} budget_ms={} vsync={} max_fps_no_vsync={} dirty_area_pct={:.2} full_damage={} force_full_reason={} damage_rects={} keep_rendering={} skipped_frame_callback_pending={} skipped_fps_cap={}",
+                "perf.slow_frame frame={} render_ms={} budget_ms={} vsync={} max_fps_no_vsync={} dirty_area_pct={:.2} full_damage={} full_damage_reason={} force_full_reason={} full_damage_source={} damage_rects={} input_damage_rects={} input_full_reason={} input_covers_surface={} buffer_damage_rects_before_merge={} buffer_damage_rects_after_merge={} buffer_covers_surface={} final_single_surface_rect={} largest_damage_rect_pct={} keep_rendering={} skipped_frame_callback_pending={} skipped_fps_cap={}",
                 slow.frame,
                 slow.render_ms,
                 format_optional_ms(slow.budget_ms),
@@ -340,26 +387,49 @@ impl PerfMetrics {
                 slow.max_fps_no_vsync,
                 slow.dirty_area_pct,
                 slow.full_damage,
+                format_effective_full_damage_reason(slow.full_damage, slow.force_full_reason),
                 format_force_full_reason(slow.force_full_reason),
+                full_damage_source(
+                    slow.full_damage,
+                    slow.force_full_reason,
+                    &slow.damage_diagnostics
+                ),
                 slow.damage_rects,
+                slow.damage_diagnostics.input_regions,
+                format_force_full_reason(slow.damage_diagnostics.input_full_reason),
+                slow.damage_diagnostics.input_covers_surface,
+                slow.damage_diagnostics.buffer_regions_before_merge,
+                slow.damage_diagnostics.buffer_regions_after_merge,
+                slow.damage_diagnostics.buffer_covers_surface,
+                slow.damage_diagnostics.final_single_surface_rect,
+                format_pct_hundredths(slow.damage_diagnostics.largest_region_area_pct_hundredths),
                 slow.keep_rendering,
                 slow.skipped_frame_callback_pending,
                 slow.skipped_fps_cap
             );
+            if let Some(breakdown) = slow.render_breakdown.as_ref() {
+                log_render_stage_frame(slow.frame, slow.render_ms, breakdown);
+            }
         }
 
-        let summary = if self.frame_pacing_summary_due(render_finished_at) {
-            let summary = self.build_frame_pacing_summary();
-            log_frame_pacing_summary(&summary, false);
-            self.reset_frame_pacing_summary(render_finished_at);
-            Some(summary)
-        } else {
-            None
-        };
+        let (summary, render_breakdown_summary) =
+            if self.frame_pacing_summary_due(render_finished_at) {
+                let summary = self.build_frame_pacing_summary();
+                let render_breakdown_summary = self.build_render_breakdown_summary();
+                log_frame_pacing_summary(&summary, false);
+                if let Some(summary) = render_breakdown_summary.as_ref() {
+                    log_render_stage_summary(summary, false);
+                }
+                self.reset_frame_pacing_summary(render_finished_at);
+                (Some(summary), render_breakdown_summary)
+            } else {
+                (None, None)
+            };
 
         Some(PerfFramePacingReport {
             slow_frame,
             summary,
+            render_breakdown_summary,
         })
     }
 
@@ -446,6 +516,10 @@ impl PerfMetrics {
                 render_ms: render_duration.map(duration_ms),
                 dirty_area_pct: frame.dirty_area_pct,
                 full_damage: frame.full_damage,
+                full_damage_reason: effective_full_damage_reason(
+                    frame.full_damage,
+                    frame.force_full_reason,
+                ),
                 damage_rects: frame.damage_rects,
                 dropped_input_samples: self.dropped_input_samples,
             })
@@ -455,7 +529,7 @@ impl PerfMetrics {
 
         if let Some(slow) = slow_frame.as_ref() {
             info!(
-                "perf.slow_input_to_paint proxy=input_to_wayland_commit latency_ms={} source={} tool={:?} points={} pressure_sample={} screen=({}, {}) canvas=({}, {}) render_ms={} dirty_area_pct={:.2} full_damage={} damage_rects={} dropped_input_samples={}",
+                "perf.slow_input_to_paint proxy=input_to_wayland_commit latency_ms={} source={} tool={:?} points={} pressure_sample={} screen=({}, {}) canvas=({}, {}) render_ms={} dirty_area_pct={:.2} full_damage={} full_damage_reason={} damage_rects={} dropped_input_samples={}",
                 slow.latency_ms,
                 slow.source,
                 slow.tool,
@@ -468,6 +542,7 @@ impl PerfMetrics {
                 format_optional_ms(slow.render_ms),
                 slow.dirty_area_pct,
                 slow.full_damage,
+                format_force_full_reason(slow.full_damage_reason),
                 slow.damage_rects,
                 slow.dropped_input_samples
             );
@@ -528,6 +603,10 @@ impl PerfMetrics {
             .force_full_reason
             .unwrap_or(FullDamageReason::DamageRegionsCoverSurface);
         *self.full_damage_reasons.entry(reason).or_default() += 1;
+    }
+
+    fn count_render_breakdown(&mut self, breakdown: &PerfRenderBreakdown) {
+        self.render_breakdown.record(breakdown);
     }
 
     fn summary_due(&self, now: Instant) -> bool {
@@ -595,6 +674,11 @@ impl PerfMetrics {
         }
     }
 
+    fn build_render_breakdown_summary(&self) -> Option<PerfRenderBreakdownSummary> {
+        self.render_breakdown
+            .build_summary(self.render_frames_since_summary)
+    }
+
     fn reset_frame_pacing_summary(&mut self, now: Instant) {
         self.render_frames_since_summary = 0;
         self.render_over_8ms = 0;
@@ -603,6 +687,7 @@ impl PerfMetrics {
         self.render_over_50ms = 0;
         self.full_damage_count = 0;
         self.full_damage_reasons.clear();
+        self.render_breakdown.reset();
         self.skipped_frame_callback_pending = 0;
         self.skipped_fps_cap = 0;
         self.skipped_surface_unconfigured = 0;
@@ -624,26 +709,42 @@ impl PerfMetrics {
             None
         };
 
-        let frame_pacing =
+        let (frame_pacing, render_breakdown) =
             if self.render_frames_since_summary > 0 && !self.recent_render_ms.is_empty() {
                 let summary = self.build_frame_pacing_summary();
+                let render_breakdown_summary = self.build_render_breakdown_summary();
                 log_frame_pacing_summary(&summary, true);
+                if let Some(summary) = render_breakdown_summary.as_ref() {
+                    log_render_stage_summary(summary, true);
+                }
                 self.reset_frame_pacing_summary(now);
-                Some(summary)
+                (Some(summary), render_breakdown_summary)
             } else {
-                None
+                (None, None)
             };
 
         PerfFinalSummaryReport {
             input,
             frame_pacing,
+            render_breakdown,
         }
     }
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn perf_enabled(&self) -> bool {
+        self.perf.enabled()
+    }
+
     pub(in crate::backend::wayland) fn begin_perf_render(&mut self, now: Instant) {
         self.perf.begin_render(now);
+    }
+
+    pub(in crate::backend::wayland) fn record_perf_render_breakdown(
+        &mut self,
+        breakdown: PerfRenderBreakdown,
+    ) {
+        self.perf.record_render_breakdown(breakdown);
     }
 
     pub(in crate::backend::wayland) fn record_perf_render_skip(
@@ -700,23 +801,40 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn commit_perf_frame(
         &mut self,
-        damage_screen: &[Rect],
-        logical_width: u32,
-        logical_height: u32,
-        damage_rects: usize,
-        force_full_reason: Option<FullDamageReason>,
+        damage: PerfFrameDamageContext<'_>,
         commit_at: Instant,
     ) {
         if !self.perf.enabled() {
             return;
         }
-        let full_damage = damage_covers_surface(damage_screen, logical_width, logical_height);
+        let full_damage = damage_covers_surface(
+            damage.damage_screen,
+            damage.logical_width,
+            damage.logical_height,
+        );
+        let mut damage_diagnostics = damage.diagnostics;
+        damage_diagnostics.final_single_surface_rect =
+            damage.damage_screen.len() == 1 && full_damage;
+        damage_diagnostics.largest_region_area_pct_hundredths = largest_region_area_pct_hundredths(
+            damage.damage_screen,
+            damage.logical_width,
+            damage.logical_height,
+        );
         let frame = PerfFrameContext {
             render_duration: None,
-            dirty_area_pct: damage_area_pct(damage_screen, logical_width, logical_height),
+            dirty_area_pct: damage_area_pct(
+                damage.damage_screen,
+                damage.logical_width,
+                damage.logical_height,
+            ),
             full_damage,
-            damage_rects,
-            force_full_reason: if full_damage { force_full_reason } else { None },
+            damage_rects: damage.damage_rects,
+            force_full_reason: if full_damage {
+                damage.force_full_reason
+            } else {
+                None
+            },
+            damage_diagnostics,
         };
         let _ = self.perf.commit_frame(frame, commit_at);
     }
@@ -839,43 +957,10 @@ fn percentile_nearest_rank(sorted_values: &[u64], percentile: u64) -> Option<u64
     sorted_values.get(index).copied()
 }
 
-fn damage_area_pct(damage: &[Rect], logical_width: u32, logical_height: u32) -> f64 {
-    let surface_area = u64::from(logical_width).saturating_mul(u64::from(logical_height));
-    if surface_area == 0 {
-        return 0.0;
-    }
-
-    let damage_area = damage
-        .iter()
-        .map(|rect| clamped_rect_area(*rect, logical_width, logical_height))
-        .sum::<u64>();
-    ((damage_area as f64 / surface_area as f64) * 100.0).min(100.0)
-}
-
-fn damage_covers_surface(damage: &[Rect], logical_width: u32, logical_height: u32) -> bool {
-    let width = logical_width.min(i32::MAX as u32) as i32;
-    let height = logical_height.min(i32::MAX as u32) as i32;
-    damage
-        .iter()
-        .any(|rect| rect.x <= 0 && rect.y <= 0 && rect.width >= width && rect.height >= height)
-}
-
-fn clamped_rect_area(rect: Rect, logical_width: u32, logical_height: u32) -> u64 {
-    let max_x = logical_width.min(i32::MAX as u32) as i32;
-    let max_y = logical_height.min(i32::MAX as u32) as i32;
-    let left = rect.x.clamp(0, max_x);
-    let top = rect.y.clamp(0, max_y);
-    let right = rect.x.saturating_add(rect.width).clamp(0, max_x);
-    let bottom = rect.y.saturating_add(rect.height).clamp(0, max_y);
-    if right <= left || bottom <= top {
-        return 0;
-    }
-    (right - left) as u64 * (bottom - top) as u64
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::Rect;
 
     fn record_sample(metrics: &mut PerfMetrics, received_at: Instant) {
         metrics.record_input_sample(
@@ -889,6 +974,23 @@ mod tests {
             false,
             received_at,
         );
+    }
+
+    fn frame_context(
+        render_duration: Option<Duration>,
+        dirty_area_pct: f64,
+        full_damage: bool,
+        damage_rects: usize,
+        force_full_reason: Option<FullDamageReason>,
+    ) -> PerfFrameContext {
+        PerfFrameContext {
+            render_duration,
+            dirty_area_pct,
+            full_damage,
+            damage_rects,
+            force_full_reason,
+            damage_diagnostics: PerfDamageDiagnostics::default(),
+        }
     }
 
     #[test]
@@ -908,13 +1010,7 @@ mod tests {
 
         record_sample(&mut metrics, base);
         let report = metrics.commit_frame(
-            PerfFrameContext {
-                render_duration: Some(Duration::from_millis(2)),
-                dirty_area_pct: 1.0,
-                full_damage: false,
-                damage_rects: 1,
-                force_full_reason: None,
-            },
+            frame_context(Some(Duration::from_millis(2)), 1.0, false, 1, None),
             base + Duration::from_millis(16),
         );
 
@@ -943,13 +1039,7 @@ mod tests {
 
         let report = metrics
             .commit_frame(
-                PerfFrameContext {
-                    render_duration: None,
-                    dirty_area_pct: 2.5,
-                    full_damage: false,
-                    damage_rects: 3,
-                    force_full_reason: None,
-                },
+                frame_context(None, 2.5, false, 3, None),
                 base + Duration::from_millis(70),
             )
             .expect("enabled metrics should report commits");
@@ -990,13 +1080,7 @@ mod tests {
                 commit_at - Duration::from_millis(frame + 1),
             );
             let report = metrics.commit_frame(
-                PerfFrameContext {
-                    render_duration: Some(Duration::from_millis(1)),
-                    dirty_area_pct: 0.5,
-                    full_damage: false,
-                    damage_rects: 1,
-                    force_full_reason: None,
-                },
+                frame_context(Some(Duration::from_millis(1)), 0.5, false, 1, None),
                 commit_at,
             );
             if frame + 1 < SUMMARY_FRAME_INTERVAL {
@@ -1020,13 +1104,7 @@ mod tests {
         let mut metrics = PerfMetrics::new(true);
         record_sample(&mut metrics, base);
         let first_report = metrics.commit_frame(
-            PerfFrameContext {
-                render_duration: Some(Duration::from_millis(1)),
-                dirty_area_pct: 0.5,
-                full_damage: false,
-                damage_rects: 1,
-                force_full_reason: None,
-            },
+            frame_context(Some(Duration::from_millis(1)), 0.5, false, 1, None),
             base + Duration::from_millis(10),
         );
         assert!(first_report.and_then(|report| report.summary).is_none());
@@ -1034,13 +1112,7 @@ mod tests {
         record_sample(&mut metrics, base + Duration::from_secs(5));
         let second_report = metrics
             .commit_frame(
-                PerfFrameContext {
-                    render_duration: Some(Duration::from_millis(1)),
-                    dirty_area_pct: 0.5,
-                    full_damage: false,
-                    damage_rects: 1,
-                    force_full_reason: None,
-                },
+                frame_context(Some(Duration::from_millis(1)), 0.5, false, 1, None),
                 base + Duration::from_secs(5) + Duration::from_millis(20),
             )
             .expect("enabled metrics should report commits");
@@ -1059,13 +1131,7 @@ mod tests {
 
         record_sample(&mut metrics, base);
         let _ = metrics.commit_frame(
-            PerfFrameContext {
-                render_duration: Some(Duration::from_millis(2)),
-                dirty_area_pct: 100.0,
-                full_damage: true,
-                damage_rects: 1,
-                force_full_reason: None,
-            },
+            frame_context(Some(Duration::from_millis(2)), 100.0, true, 1, None),
             base + Duration::from_millis(9),
         );
         let _ = metrics.record_render_complete(
@@ -1110,13 +1176,13 @@ mod tests {
         let base = Instant::now();
         let mut metrics = PerfMetrics::new(true);
         let _ = metrics.commit_frame(
-            PerfFrameContext {
-                render_duration: Some(Duration::from_millis(1)),
-                dirty_area_pct: 42.0,
-                full_damage: true,
-                damage_rects: 2,
-                force_full_reason: Some(FullDamageReason::CanvasClear),
-            },
+            frame_context(
+                Some(Duration::from_millis(1)),
+                42.0,
+                true,
+                2,
+                Some(FullDamageReason::CanvasClear),
+            ),
             base,
         );
 
@@ -1150,13 +1216,13 @@ mod tests {
             let duration = Duration::from_millis(frame + 1);
             if frame % 40 == 0 {
                 let _ = metrics.commit_frame(
-                    PerfFrameContext {
-                        render_duration: Some(Duration::from_millis(1)),
-                        dirty_area_pct: 100.0,
-                        full_damage: true,
-                        damage_rects: 1,
-                        force_full_reason: Some(FullDamageReason::CanvasClear),
-                    },
+                    frame_context(
+                        Some(Duration::from_millis(1)),
+                        100.0,
+                        true,
+                        1,
+                        Some(FullDamageReason::CanvasClear),
+                    ),
                     started_at,
                 );
             }
@@ -1198,13 +1264,7 @@ mod tests {
                 1 | 2 => None,
                 _ => {
                     let _ = metrics.commit_frame(
-                        PerfFrameContext {
-                            render_duration: Some(Duration::from_millis(1)),
-                            dirty_area_pct: 0.5,
-                            full_damage: false,
-                            damage_rects: 1,
-                            force_full_reason: None,
-                        },
+                        frame_context(Some(Duration::from_millis(1)), 0.5, false, 1, None),
                         started_at,
                     );
                     let report = metrics.record_render_complete(
@@ -1230,13 +1290,13 @@ mod tests {
             };
 
             let _ = metrics.commit_frame(
-                PerfFrameContext {
-                    render_duration: Some(Duration::from_millis(1)),
-                    dirty_area_pct: 100.0,
-                    full_damage: true,
-                    damage_rects: 1,
+                frame_context(
+                    Some(Duration::from_millis(1)),
+                    100.0,
+                    true,
+                    1,
                     force_full_reason,
-                },
+                ),
                 started_at,
             );
             let report = metrics.record_render_complete(
@@ -1248,6 +1308,74 @@ mod tests {
             );
             assert!(report.and_then(|report| report.summary).is_none());
         }
+    }
+
+    #[test]
+    fn full_damage_source_prefers_input_full_over_generic_force() {
+        let diagnostics = PerfDamageDiagnostics {
+            input_full_reason: Some(FullDamageReason::FirstRunOnboarding),
+            input_covers_surface: true,
+            buffer_covers_surface: true,
+            final_single_surface_rect: true,
+            ..PerfDamageDiagnostics::default()
+        };
+
+        assert_eq!(
+            full_damage_source(
+                true,
+                Some(FullDamageReason::FirstRunOnboarding),
+                &diagnostics
+            ),
+            "input_full"
+        );
+    }
+
+    #[test]
+    fn render_breakdown_summary_reports_stage_culling_and_cache_use() {
+        let base = Instant::now();
+        let mut metrics = PerfMetrics::new(true);
+        metrics.record_render_breakdown(PerfRenderBreakdown {
+            stages: PerfRenderStageDurations {
+                completed_shapes: Duration::from_millis(9),
+                provisional: Duration::from_millis(3),
+                ..PerfRenderStageDurations::default()
+            },
+            surface_px: 2_000_000,
+            shapes_total: 20,
+            shapes_tested: 12,
+            shapes_rendered: 3,
+            provisional_points: 42,
+            render_profile: PerfRenderProfileKind::Canvas,
+            canvas_layer_cache_used: true,
+        });
+        let _ = metrics.commit_frame(
+            frame_context(Some(Duration::from_millis(1)), 1.0, false, 2, None),
+            base,
+        );
+        let _ = metrics.record_render_complete(
+            base,
+            base + Duration::from_millis(12),
+            false,
+            120,
+            false,
+        );
+
+        let report = metrics.flush_pending_summaries(base + Duration::from_millis(20));
+        let summary = report
+            .render_breakdown
+            .expect("render breakdown summary should flush");
+
+        assert_eq!(summary.samples, 1);
+        assert_eq!(summary.dominant_stage, "completed_shapes");
+        assert_eq!(summary.dominant_stage_avg, Duration::from_millis(9));
+        assert_eq!(summary.surface_px_max, 2_000_000);
+        assert_eq!(summary.shapes_total_max, 20);
+        assert_eq!(summary.shapes_tested_avg, 12);
+        assert_eq!(summary.shapes_rendered_avg, 3);
+        assert_eq!(summary.shape_cull_pct, "75.00");
+        assert_eq!(summary.provisional_points_max, 42);
+        assert_eq!(summary.render_profile_frames, 1);
+        assert_eq!(summary.canvas_layer_cache_used_frames, 1);
     }
 
     #[test]

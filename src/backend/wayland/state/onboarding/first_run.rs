@@ -1,6 +1,10 @@
 use crate::backend::wayland::state::WaylandState;
 use crate::config::{RadialMenuMouseBinding, keybindings::Action};
-use crate::input::{Key, state::UiToastKind};
+use crate::draw::DirtyFullReason;
+use crate::input::{
+    Key,
+    state::{PendingOnboardingUsage, UiToastKind},
+};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 use crate::ui::{OnboardingCard, OnboardingChecklistItem};
 
@@ -51,7 +55,9 @@ impl WaylandState {
                 .set_ui_toast(UiToastKind::Info, "Skipped background mode setup for now.");
         }
 
-        self.input_state.dirty_tracker.mark_full();
+        self.input_state
+            .dirty_tracker
+            .mark_full_for(DirtyFullReason::FirstRunOnboarding);
         self.input_state.needs_redraw = true;
         true
     }
@@ -185,53 +191,47 @@ impl WaylandState {
         let toolbar_visible = self.input_state.toolbar_visible();
 
         let mut changed = false;
+        let mut first_run_ui_changed = false;
         let mut completed_now = false;
 
         {
             let state = self.onboarding.state_mut();
+            let first_run_active = state.first_run_active();
 
-            if usage.first_stroke_done && !state.first_stroke_done {
-                state.first_stroke_done = true;
+            if apply_persisted_usage_signals(state, &usage) {
                 changed = true;
-            }
-            if usage.first_undo_done && !state.first_undo_done {
-                state.first_undo_done = true;
-                changed = true;
-            }
-            if usage.used_toolbar_toggle && !state.used_toolbar_toggle {
-                state.used_toolbar_toggle = true;
-                changed = true;
-            }
-            if usage.used_radial_menu && !state.used_radial_menu {
-                state.used_radial_menu = true;
-                changed = true;
-            }
-            if usage.used_context_menu_right_click && !state.used_context_menu_right_click {
-                state.used_context_menu_right_click = true;
-                changed = true;
-            }
-            if usage.used_context_menu_keyboard && !state.used_context_menu_keyboard {
-                state.used_context_menu_keyboard = true;
-                changed = true;
-            }
-            if usage.used_help_overlay && !state.used_help_overlay {
-                state.used_help_overlay = true;
-                changed = true;
-            }
-            if usage.used_command_palette && !state.used_command_palette {
-                state.used_command_palette = true;
-                changed = true;
+                first_run_ui_changed |= first_run_active;
             }
 
-            if !state.first_run_active() {
+            if first_run_active {
+                if usage.first_stroke_done && !state.first_stroke_done {
+                    state.first_stroke_done = true;
+                    changed = true;
+                    first_run_ui_changed = true;
+                }
+                if usage.first_undo_done && !state.first_undo_done {
+                    state.first_undo_done = true;
+                    changed = true;
+                    first_run_ui_changed = true;
+                }
+                if usage.used_toolbar_toggle && !state.used_toolbar_toggle {
+                    state.used_toolbar_toggle = true;
+                    changed = true;
+                    first_run_ui_changed = true;
+                }
+            }
+
+            if !first_run_active {
                 if state.active_step.is_some() || state.quick_access_requires_toolbar {
                     state.active_step = None;
                     state.quick_access_requires_toolbar = false;
                     changed = true;
+                    first_run_ui_changed = true;
                 }
             } else if state.active_step.is_none() {
                 state.active_step = Some(FirstRunStep::BackgroundModeSetup);
                 changed = true;
+                first_run_ui_changed = true;
             }
 
             while let Some(step) = state.active_step {
@@ -242,6 +242,7 @@ impl WaylandState {
                         }
                         state.active_step = Some(FirstRunStep::WaitDraw);
                         changed = true;
+                        first_run_ui_changed = true;
                     }
                     FirstRunStep::WaitDraw => {
                         if !state.first_stroke_done {
@@ -249,6 +250,7 @@ impl WaylandState {
                         }
                         state.active_step = Some(FirstRunStep::DrawUndo);
                         changed = true;
+                        first_run_ui_changed = true;
                     }
                     FirstRunStep::DrawUndo => {
                         if !state.first_undo_done {
@@ -257,6 +259,7 @@ impl WaylandState {
                         state.active_step = Some(FirstRunStep::QuickAccess);
                         state.quick_access_requires_toolbar = !toolbar_visible;
                         changed = true;
+                        first_run_ui_changed = true;
                     }
                     FirstRunStep::QuickAccess => {
                         if !quick_access_completed(
@@ -272,6 +275,7 @@ impl WaylandState {
                         state.active_step = Some(FirstRunStep::Reference);
                         state.quick_access_requires_toolbar = false;
                         changed = true;
+                        first_run_ui_changed = true;
                     }
                     FirstRunStep::Reference => {
                         if !(state.used_help_overlay && state.used_command_palette) {
@@ -282,6 +286,7 @@ impl WaylandState {
                         state.active_step = None;
                         state.quick_access_requires_toolbar = false;
                         changed = true;
+                        first_run_ui_changed = true;
                         completed_now = true;
                         break;
                     }
@@ -291,7 +296,11 @@ impl WaylandState {
 
         if changed {
             self.onboarding.save();
-            self.input_state.dirty_tracker.mark_full();
+        }
+        if first_run_ui_changed {
+            self.input_state
+                .dirty_tracker
+                .mark_full_for(DirtyFullReason::FirstRunOnboarding);
             self.input_state.needs_redraw = true;
         }
         if completed_now && self.input_state.ui_toast.is_none() {
@@ -429,6 +438,36 @@ pub(super) fn quick_access_completed(
     }
 
     done
+}
+
+pub(super) fn apply_persisted_usage_signals(
+    state: &mut OnboardingState,
+    usage: &PendingOnboardingUsage,
+) -> bool {
+    let mut changed = false;
+
+    if usage.used_radial_menu && !state.used_radial_menu {
+        state.used_radial_menu = true;
+        changed = true;
+    }
+    if usage.used_context_menu_right_click && !state.used_context_menu_right_click {
+        state.used_context_menu_right_click = true;
+        changed = true;
+    }
+    if usage.used_context_menu_keyboard && !state.used_context_menu_keyboard {
+        state.used_context_menu_keyboard = true;
+        changed = true;
+    }
+    if usage.used_help_overlay && !state.used_help_overlay {
+        state.used_help_overlay = true;
+        changed = true;
+    }
+    if usage.used_command_palette && !state.used_command_palette {
+        state.used_command_palette = true;
+        changed = true;
+    }
+
+    changed
 }
 
 pub(super) fn background_mode_prompt_active(state: &OnboardingState, card_visible: bool) -> bool {
