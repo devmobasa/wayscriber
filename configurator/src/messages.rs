@@ -42,6 +42,7 @@ pub enum Message {
     SessionCatalogMoveInputChanged(String, String),
     SessionCatalogMoveRequested(String),
     SessionCatalogRevealRequested(String),
+    SessionCatalogClearToolStateRequested(String),
     SessionCatalogClearRequested(String),
     SessionCatalogClearConfirmed(String),
     SessionCatalogClearCanceled,

@@ -168,6 +168,64 @@ backup_retention = 1
     fs::write(config_dir.join("config.toml"), config_contents).unwrap();
 }
 
+fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
+    wayscriber::session::ToolStateSnapshot {
+        current_color: wayscriber::draw::Color {
+            r: 0.0,
+            g: 1.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        current_thickness: 3.0,
+        eraser_size: 12.0,
+        eraser_kind: wayscriber::draw::EraserKind::Circle,
+        eraser_mode: wayscriber::input::EraserMode::Brush,
+        marker_opacity: Some(0.32),
+        fill_enabled: Some(false),
+        tool_override: None,
+        current_font_size: 24.0,
+        font_descriptor: Some(wayscriber::draw::FontDescriptor::default()),
+        text_background_enabled: false,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        arrow_head_at_end: Some(false),
+        arrow_label_enabled: Some(false),
+        polygon_sides: wayscriber::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+        board_previous_color: None,
+        show_status_bar: true,
+        tool_settings: None,
+    }
+}
+
+fn saved_line_snapshot(with_tool_state: bool) -> wayscriber::session::SessionSnapshot {
+    let mut frame = wayscriber::draw::Frame::new();
+    frame.add_shape(wayscriber::draw::Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 10,
+        y2: 10,
+        color: wayscriber::draw::Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 2.0,
+    });
+
+    wayscriber::session::SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![wayscriber::session::BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: wayscriber::session::BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
+        tool_state: with_tool_state.then(saved_tool_state),
+    }
+}
+
 fn wayscriber_cmd() -> Command {
     Command::new(env!("CARGO_BIN_EXE_wayscriber"))
 }
@@ -303,6 +361,68 @@ fn named_session_clear_missing_parent_reports_no_artifacts() {
     .success()
     .stdout_contains(&format!("Session file: {}", named_path.display()))
     .stdout_contains("No session artefacts found");
+}
+
+#[test]
+fn clear_tool_state_command_succeeds_without_files() {
+    let temp = TempDir::new().unwrap();
+    let session_dir = temp.path().join("sessions");
+    write_session_config(&temp, &session_dir);
+
+    run_command(
+        wayscriber_cmd()
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
+            .arg("--clear-tool-state"),
+    )
+    .success()
+    .stdout_contains("Session file:")
+    .stdout_contains("No session file present");
+}
+
+#[test]
+fn clear_tool_state_named_session_targets_only_requested_file() {
+    let temp = TempDir::new().unwrap();
+    let selected = temp.path().join("lecture-04.wayscriber-session");
+    let sibling = temp.path().join("lecture-05.wayscriber-session");
+
+    let mut selected_options =
+        wayscriber::session::SessionOptions::new(temp.path().to_path_buf(), "display");
+    selected_options.set_named_file_target(selected.clone());
+    selected_options.persist_transparent = true;
+    selected_options.restore_tool_state = true;
+
+    let mut sibling_options =
+        wayscriber::session::SessionOptions::new(temp.path().to_path_buf(), "display");
+    sibling_options.set_named_file_target(sibling);
+    sibling_options.persist_transparent = true;
+    sibling_options.restore_tool_state = true;
+
+    wayscriber::session::save_snapshot(&saved_line_snapshot(true), &selected_options).unwrap();
+    wayscriber::session::save_snapshot(&saved_line_snapshot(true), &sibling_options).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env(XDG_CONFIG_HOME_ENV, temp.path())
+            .env_remove(WAYLAND_DISPLAY_ENV)
+            .arg("--clear-tool-state")
+            .arg("--session-file")
+            .arg(&selected),
+    )
+    .success()
+    .stdout_contains(&format!("Session file: {}", selected.display()))
+    .stdout_contains("Cleared saved tool state")
+    .stdout_contains("Preserved saved boards and history");
+
+    let selected_loaded = wayscriber::session::load_snapshot(&selected_options)
+        .unwrap()
+        .expect("selected session should remain");
+    let sibling_loaded = wayscriber::session::load_snapshot(&sibling_options)
+        .unwrap()
+        .expect("sibling session should remain");
+
+    assert!(selected_loaded.tool_state.is_none());
+    assert!(sibling_loaded.tool_state.is_some());
 }
 
 #[cfg(unix)]

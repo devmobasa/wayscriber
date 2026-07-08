@@ -1,7 +1,7 @@
 use crate::config::Action;
 use log::info;
 
-use super::super::{DrawingState, InputState, UiToastKind};
+use super::super::{DrawingState, InputState, PendingBackendAction, UiToastKind};
 
 impl InputState {
     pub(in crate::input::state) fn handle_ui_action(&mut self, action: Action) -> bool {
@@ -136,6 +136,10 @@ impl InputState {
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();
+                true
+            }
+            Action::ClearSavedToolState => {
+                self.set_pending_backend_action(PendingBackendAction::ClearSavedToolState);
                 true
             }
             Action::OpenCaptureFolder => {

@@ -29,6 +29,13 @@ pub(in crate::backend::wayland) struct RuntimeClearSessionReport {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct RuntimeClearToolStateReport {
+    pub session_path: Option<PathBuf>,
+    pub outcome: Option<stored_session::ClearToolStateOutcome>,
+}
+
+#[allow(dead_code)]
 pub(in crate::backend::wayland) fn open_named_session_runtime(
     input_state: &mut InputState,
     session_state: &mut SessionState,
@@ -223,6 +230,31 @@ pub(in crate::backend::wayland) fn clear_current_session_runtime(
     Ok(RuntimeClearSessionReport {
         cleared_path,
         persisted: true,
+    })
+}
+
+#[allow(dead_code)]
+pub(in crate::backend::wayland) fn clear_saved_tool_state_runtime(
+    input_state: &mut InputState,
+    session_state: &mut SessionState,
+    default_tool_state: stored_session::ToolStateSnapshot,
+    now: Instant,
+) -> Result<RuntimeClearToolStateReport> {
+    let (session_path, outcome) = if let Some(options) = session_state.options().cloned() {
+        let session_path = options.session_file_path();
+        let outcome = stored_session::clear_tool_state(&options)?;
+        (Some(session_path), Some(outcome))
+    } else {
+        (None, None)
+    };
+
+    stored_session::apply_tool_state_snapshot(input_state, default_tool_state);
+    input_state.mark_session_dirty();
+    session_state.record_input_dirty(now, true);
+
+    Ok(RuntimeClearToolStateReport {
+        session_path,
+        outcome,
     })
 }
 

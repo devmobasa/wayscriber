@@ -10,6 +10,14 @@ pub struct ClearOutcome {
     pub removed_lock: bool,
 }
 
+/// Result of clearing saved tool state from a session snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClearToolStateOutcome {
+    NoSession,
+    NoToolState,
+    Cleared { preserved_board_data: bool },
+}
+
 /// Summary information about the current session file(s).
 #[derive(Debug, Clone)]
 pub struct SessionInspection {

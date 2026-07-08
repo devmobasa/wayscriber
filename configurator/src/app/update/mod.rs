@@ -60,6 +60,9 @@ impl ConfiguratorApp {
             Message::SessionCatalogRevealRequested(id) => {
                 self.handle_session_catalog_reveal_requested(id)
             }
+            Message::SessionCatalogClearToolStateRequested(id) => {
+                self.handle_session_catalog_clear_tool_state_requested(id)
+            }
             Message::SessionCatalogClearRequested(id) => {
                 self.handle_session_catalog_clear_requested(id)
             }

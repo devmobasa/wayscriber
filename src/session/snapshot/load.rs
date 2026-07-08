@@ -93,6 +93,12 @@ pub(crate) fn load_snapshot_with_outcome(options: &SessionOptions) -> Result<Loa
     load_snapshot_with_expanded_limit(options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
 }
 
+pub(crate) fn load_snapshot_for_offline_edit(
+    options: &SessionOptions,
+) -> Result<LoadSnapshotOutcome> {
+    load_snapshot_with_expanded_limit_inner(options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
+}
+
 #[allow(dead_code)]
 pub(crate) fn load_named_session_candidate(
     options: &SessionOptions,

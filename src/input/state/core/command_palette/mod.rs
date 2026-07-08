@@ -483,6 +483,25 @@ mod tests {
     }
 
     #[test]
+    fn return_key_sets_pending_clear_saved_tool_state_backend_action() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "clear saved tool state".to_string();
+        let selected = state.selected_command().expect("selected command");
+        assert_eq!(
+            selected.action,
+            crate::config::keybindings::Action::ClearSavedToolState
+        );
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::ClearSavedToolState)
+        );
+    }
+
+    #[test]
     fn clicking_outside_palette_closes_it() {
         let mut state = make_state();
         state.toggle_command_palette();

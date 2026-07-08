@@ -104,6 +104,17 @@ fn session_clear_blocker_blocks_unknown_daemon_status() {
 }
 
 #[test]
+fn session_clear_tool_state_blocker_uses_tool_state_status_message() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let blocker =
+        session_clear_tool_state_blocker(None).expect("unknown status should block tool reset");
+
+    assert!(blocker.contains("Clear saved tool state"));
+    assert!(blocker.contains("status finishes loading"));
+}
+
+#[test]
 fn session_clear_blocker_blocks_manual_daemon_lock() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());

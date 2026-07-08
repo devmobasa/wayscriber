@@ -46,11 +46,12 @@ pub(crate) use snapshot::{
 };
 #[allow(unused_imports)]
 pub(crate) use snapshot::{
-    LoadSnapshotOutcome, apply_snapshot_replacing_boards, load_named_session_candidate,
-    load_snapshot_with_outcome,
+    LoadSnapshotOutcome, apply_snapshot_replacing_boards, apply_tool_state_snapshot,
+    load_named_session_candidate, load_snapshot_with_outcome,
 };
 #[allow(unused_imports)]
 pub use storage::{ClearOutcome, FrameCounts, SessionInspection, clear_session, inspect_session};
+pub use storage::{ClearToolStateOutcome, clear_tool_state};
 
 #[cfg(test)]
 mod tests;

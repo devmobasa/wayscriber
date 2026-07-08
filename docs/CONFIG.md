@@ -1010,11 +1010,16 @@ Use the CLI helpers for quick maintenance:
 
 - `wayscriber --session-info` prints the active storage path, file details, and shape counts.
 - `wayscriber --clear-session` removes the session file, backup, and lock.
+- `wayscriber --clear-tool-state` removes only the saved tool defaults from the session snapshot, preserving saved boards and history.
 - `wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session` opens and saves a named session file directly.
 - `wayscriber --freeze --session-file ~/Documents/lecture-04.wayscriber-session` starts frozen mode with that same named session target.
 - `wayscriber --daemon --session-file ~/Documents/lecture-04.wayscriber-session` starts a daemon whose overlay activations use that named session target.
 - `wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session` asks the running daemon to launch a hidden overlay with that named session target. If the overlay is already visible with a different target, hide it before switching.
-- `wayscriber --session-info --session-file <path>` and `wayscriber --clear-session --session-file <path>` inspect or remove only that named file and its sidecars.
+- `wayscriber --session-info --session-file <path>`, `wayscriber --clear-session --session-file <path>`, and `wayscriber --clear-tool-state --session-file <path>` target only that named file.
+
+Config values seed startup defaults. When `restore_tool_state = true`, the saved session tool state is applied after those defaults, so edits such as `[arrow] head_at_end = true` can appear ignored if the session snapshot still stores an older arrow setting. Run `wayscriber --clear-tool-state` (or add `--session-file <path>` for a named session) to make config defaults apply on the next startup without deleting saved boards. In a running overlay, Command Palette -> Reset Tool Defaults clears the saved layer for the active session and immediately applies config defaults to the current tools so the next autosave keeps those defaults.
+
+The configurator Session tab exposes the same distinction for recent named sessions: Clear Tool State preserves saved boards/history while removing only persisted tool settings; Clear Saved Data removes saved session files. Offline catalog actions are disabled while an overlay, manually started daemon, or background service is active. Use the command palette for the active overlay session.
 
 The overlay Session panel lives in the side toolbar's Settings drawer:
 

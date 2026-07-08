@@ -41,6 +41,9 @@ pub struct Cli {
     /// Delete persisted session data and backups
     pub clear_session: bool,
 
+    /// Clear saved tool defaults while preserving session drawings
+    pub clear_tool_state: bool,
+
     /// Show session persistence status and file paths
     pub session_info: bool,
 
@@ -130,6 +133,7 @@ impl Cli {
                 "--no-tray" => cli.no_tray = true,
                 "--freeze-on-show" => cli.freeze_on_show = true,
                 "--clear-session" => cli.clear_session = true,
+                "--clear-tool-state" => cli.clear_tool_state = true,
                 "--session-info" => cli.session_info = true,
                 "--session-file" => {
                     index += 1;
@@ -202,6 +206,7 @@ impl Cli {
                 || self.no_tray
                 || self.freeze_on_show
                 || self.clear_session
+                || self.clear_tool_state
                 || self.session_info
                 || self.session_file.is_some()
                 || self.freeze
@@ -223,12 +228,22 @@ impl Cli {
         if self.clear_session && self.session_info {
             return Err(conflict("--clear-session", "--session-info"));
         }
+        if self.clear_tool_state && self.clear_session {
+            return Err(conflict("--clear-tool-state", "--clear-session"));
+        }
+        if self.clear_tool_state && self.session_info {
+            return Err(conflict("--clear-tool-state", "--session-info"));
+        }
 
         if self.freeze_on_show && !self.daemon {
             return Err("--freeze-on-show requires --daemon".to_string());
         }
         if self.freeze_on_show
-            && (self.active || self.freeze || self.clear_session || self.session_info)
+            && (self.active
+                || self.freeze
+                || self.clear_session
+                || self.clear_tool_state
+                || self.session_info)
         {
             return Err("--freeze-on-show conflicts with overlay/session commands".to_string());
         }
@@ -256,10 +271,11 @@ impl Cli {
                 || self.daemon
                 || self.daemon_toggle
                 || self.clear_session
+                || self.clear_tool_state
                 || self.session_info)
             {
                 return Err(
-                    "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, or --clear-session"
+                    "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, --clear-session, or --clear-tool-state"
                         .to_string(),
                 );
             }
@@ -279,6 +295,7 @@ impl Cli {
                 || self.no_tray
                 || self.freeze_on_show
                 || self.clear_session
+                || self.clear_tool_state
                 || self.session_info
                 || self.about)
         {
@@ -296,6 +313,7 @@ impl Cli {
                 || self.no_tray
                 || self.freeze_on_show
                 || self.clear_session
+                || self.clear_tool_state
                 || self.session_info
                 || self.session_file.is_some()
                 || self.freeze
@@ -311,20 +329,30 @@ impl Cli {
         if self.clear_session && (self.daemon || self.active) {
             return Err("--clear-session conflicts with --daemon/--active".to_string());
         }
+        if self.clear_tool_state && (self.daemon || self.active) {
+            return Err("--clear-tool-state conflicts with --daemon/--active".to_string());
+        }
         if self.session_info && (self.daemon || self.active) {
             return Err("--session-info conflicts with --daemon/--active".to_string());
         }
-        if self.freeze && (self.daemon || self.clear_session || self.session_info) {
+        if self.freeze
+            && (self.daemon || self.clear_session || self.clear_tool_state || self.session_info)
+        {
             return Err("--freeze conflicts with the selected command".to_string());
         }
-        if (self.clear_session || self.session_info) && self.resume_session {
+        if (self.clear_session || self.clear_tool_state || self.session_info) && self.resume_session
+        {
             return Err(
-                "--resume-session conflicts with --clear-session/--session-info".to_string(),
+                "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+                    .to_string(),
             );
         }
-        if (self.clear_session || self.session_info) && self.no_resume_session {
+        if (self.clear_session || self.clear_tool_state || self.session_info)
+            && self.no_resume_session
+        {
             return Err(
-                "--no-resume-session conflicts with --clear-session/--session-info".to_string(),
+                "--no-resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+                    .to_string(),
             );
         }
         if self.about
@@ -336,6 +364,7 @@ impl Cli {
                 || self.no_tray
                 || self.freeze_on_show
                 || self.clear_session
+                || self.clear_tool_state
                 || self.session_info
                 || self.session_file.is_some()
                 || self.freeze
@@ -442,6 +471,7 @@ fn print_help() {
     println!("  wayscriber --freeze [--session-file PATH]");
     println!("  wayscriber --session-info [--session-file PATH]");
     println!("  wayscriber --clear-session [--session-file PATH]");
+    println!("  wayscriber --clear-tool-state [--session-file PATH]");
     println!("  wayscriber --about");
     println!();
     println!("Options:");
@@ -462,6 +492,7 @@ fn print_help() {
     println!("      --resume-session          Force session resume on");
     println!("      --no-resume-session       Force session resume off");
     println!("      --clear-session           Delete persisted session data and backups");
+    println!("      --clear-tool-state        Remove saved tool defaults but keep boards");
     println!("      --session-info            Show session persistence status");
     println!("      --session-file PATH       Use a named session file");
     println!("      --about                   Show the About window");

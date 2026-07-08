@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use iced::Task;
 
 use crate::app::session_catalog::{
-    clear_session_catalog_entry, duplicate_session_catalog_entry, forget_session_catalog_entry,
-    load_session_catalog, move_session_catalog_entry, rename_session_catalog_entry,
-    reveal_session_catalog_entry, session_clear_blocker, session_duplicate_blocker,
+    clear_session_catalog_entry, clear_session_catalog_tool_state_entry,
+    duplicate_session_catalog_entry, forget_session_catalog_entry, load_session_catalog,
+    move_session_catalog_entry, rename_session_catalog_entry, reveal_session_catalog_entry,
+    session_clear_blocker, session_clear_tool_state_blocker, session_duplicate_blocker,
     session_move_blocker,
 };
 use crate::messages::Message;
@@ -178,6 +179,31 @@ impl ConfiguratorApp {
         self.status = StatusMessage::info("Opening session folder...");
         Task::perform(
             reveal_session_catalog_entry(id),
+            Message::SessionCatalogActionCompleted,
+        )
+    }
+
+    pub(super) fn handle_session_catalog_clear_tool_state_requested(
+        &mut self,
+        id: String,
+    ) -> Task<Message> {
+        if self.session_catalog.busy {
+            return Task::none();
+        }
+        if let Some(blocker) = session_clear_tool_state_blocker(self.daemon_status.as_ref()) {
+            self.status = StatusMessage::warning(blocker);
+            return Task::none();
+        }
+        if self.session_catalog.item(&id).is_none() {
+            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            return Task::none();
+        }
+
+        self.session_catalog.busy = true;
+        self.session_catalog.pending_clear_id = None;
+        self.status = StatusMessage::info("Clearing saved tool state...");
+        Task::perform(
+            clear_session_catalog_tool_state_entry(id),
             Message::SessionCatalogActionCompleted,
         )
     }

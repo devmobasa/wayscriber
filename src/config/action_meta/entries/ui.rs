@@ -158,6 +158,21 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        ClearSavedToolState,
+        "Reset Tool Defaults",
+        None,
+        "Clear saved tool state and apply config defaults",
+        UI,
+        true,
+        true,
+        false,
+        &[
+            "clear tool state",
+            "clear saved tool state",
+            "config defaults"
+        ]
+    ),
+    meta!(
         ToggleCommandPalette,
         "Command Palette",
         None,

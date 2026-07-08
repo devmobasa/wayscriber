@@ -94,8 +94,40 @@ pub(super) async fn clear_session_catalog_entry(
     ))
 }
 
+pub(super) async fn clear_session_catalog_tool_state_entry(
+    id: String,
+) -> Result<SessionCatalogActionResult, String> {
+    let status = load_daemon_runtime_status().await?;
+    let item = find_session_catalog_item(&id)?;
+    let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
+        RuntimeLockKind::Daemon,
+        CatalogOperation::ClearToolState,
+    )?;
+    let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
+        RuntimeLockKind::Overlay,
+        CatalogOperation::ClearToolState,
+    )?;
+    if let Some(blocker) = service_status_blocker(Some(&status), CatalogOperation::ClearToolState) {
+        return Err(blocker);
+    }
+
+    let options = named_session_options_for_catalog_item(&item)?;
+    let outcome = wayscriber::session::clear_tool_state(&options).map_err(|err| err.to_string())?;
+    let items = load_session_catalog_sync()?;
+    Ok(SessionCatalogActionResult::success(
+        clear_tool_state_catalog_message(&item.display_name, outcome),
+        items,
+    ))
+}
+
 pub(super) fn session_clear_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
     inactive_operation_blocker(status, CatalogOperation::Clear)
+}
+
+pub(super) fn session_clear_tool_state_blocker(
+    status: Option<&DaemonRuntimeStatus>,
+) -> Option<String> {
+    inactive_operation_blocker(status, CatalogOperation::ClearToolState)
 }
 
 pub(super) fn session_duplicate_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
@@ -143,6 +175,12 @@ pub(super) fn session_clear_cached_status_blocker(
     service_status_blocker(status, CatalogOperation::Clear)
 }
 
+pub(super) fn session_clear_tool_state_cached_status_blocker(
+    status: Option<&DaemonRuntimeStatus>,
+) -> Option<String> {
+    service_status_blocker(status, CatalogOperation::ClearToolState)
+}
+
 pub(super) fn session_duplicate_cached_status_blocker(
     status: Option<&DaemonRuntimeStatus>,
 ) -> Option<String> {
@@ -185,6 +223,41 @@ fn find_session_catalog_item(id: &str) -> Result<SessionCatalogItem, String> {
         .ok_or_else(|| "Session is no longer in the catalog.".to_string())
 }
 
+fn named_session_options_for_catalog_item(
+    item: &SessionCatalogItem,
+) -> Result<wayscriber::session::SessionOptions, String> {
+    let loaded = wayscriber::config::Config::load().map_err(|err| err.to_string())?;
+    let mut options = wayscriber::session::options_from_config_for_named_file(
+        &loaded.config.session,
+        item.path.clone(),
+        None,
+    );
+    options.force_resume_persistence();
+    Ok(options)
+}
+
+fn clear_tool_state_catalog_message(
+    display_name: &str,
+    outcome: wayscriber::session::ClearToolStateOutcome,
+) -> String {
+    match outcome {
+        wayscriber::session::ClearToolStateOutcome::NoSession => {
+            format!("No saved session file found for {display_name}.")
+        }
+        wayscriber::session::ClearToolStateOutcome::NoToolState => {
+            format!("No saved tool state found for {display_name}.")
+        }
+        wayscriber::session::ClearToolStateOutcome::Cleared {
+            preserved_board_data: true,
+        } => format!(
+            "Cleared saved tool state for {display_name}. Boards and history were preserved."
+        ),
+        wayscriber::session::ClearToolStateOutcome::Cleared {
+            preserved_board_data: false,
+        } => format!("Cleared saved tool state for {display_name}. No board data was present."),
+    }
+}
+
 fn reveal_path_parent(path: &Path) -> Result<(), String> {
     let parent = path
         .parent()
@@ -213,6 +286,7 @@ enum RuntimeLockKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CatalogOperation {
     Clear,
+    ClearToolState,
     Duplicate,
     Move,
 }
@@ -242,6 +316,12 @@ impl CatalogOperation {
             (Self::Clear, RuntimeLockKind::Overlay) => {
                 "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session."
             }
+            (Self::ClearToolState, RuntimeLockKind::Daemon) => {
+                "Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first."
+            }
+            (Self::ClearToolState, RuntimeLockKind::Overlay) => {
+                "Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session."
+            }
             (Self::Duplicate, RuntimeLockKind::Daemon) => {
                 "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session."
             }
@@ -261,6 +341,9 @@ impl CatalogOperation {
         match self {
             Self::Clear => {
                 "Clear saved data is disabled until background service status finishes loading."
+            }
+            Self::ClearToolState => {
+                "Clear saved tool state is disabled until background service status finishes loading."
             }
             Self::Duplicate => {
                 "Duplicate Session is disabled until background service status finishes loading."
@@ -356,6 +439,7 @@ impl CatalogOperation {
     fn label(self) -> &'static str {
         match self {
             Self::Clear => "Clear saved data",
+            Self::ClearToolState => "Clear saved tool state",
             Self::Duplicate => "Duplicate Session",
             Self::Move => "Move Session",
         }

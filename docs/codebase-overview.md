@@ -137,8 +137,8 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 ## 7. Session Persistence and Named Session Manager
 
 **Modules:**
-- `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, locks, catalog metadata, and inactive file operations.
-- `src/backend/wayland/session/`: runtime Open, Save As, and Clear transactions for the active overlay.
+- `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
+- `src/backend/wayland/session/`: runtime Open, Save As, Clear, and saved tool-state reset transactions for the active overlay.
 - `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session panel routing for Open, Save As, Info, Clear, recent sessions, and configurator launch.
 - `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target.
 
@@ -148,7 +148,9 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 3. Runtime Open first saves dirty current data when needed, loads the candidate named session without mutating it, replaces board state only after a valid load, and records the open in the named-session catalog.
 4. Runtime Save As validates the target, prompts before replacing existing artifacts, writes the snapshot, switches the active target, and records the save in the catalog.
 5. Runtime Clear writes a durable empty-session boundary so older backup or recovery artifacts do not restore stale drawings.
-6. The configurator reads the same catalog for inactive-session management: rename/reveal/forget metadata, duplicate primary files, move non-lock sidecars, and clear saved data when daemon/overlay locks are absent.
+6. Runtime saved tool-state reset clears the persisted tool layer for the active session and applies config-derived tool defaults in memory so autosave does not restore stale values.
+7. Offline CLI maintenance can inspect sessions, clear all saved data, or clear only persisted tool state so config defaults seed the next startup without deleting boards.
+8. The configurator reads the same catalog for inactive-session management: rename/reveal/forget metadata, duplicate primary files, move non-lock sidecars, clear saved tool state, and clear saved data when daemon/overlay locks are absent.
 
 ---
 
