@@ -269,9 +269,10 @@ fn autosave_active(options: &SessionOptions) -> bool {
 mod runtime;
 
 pub(in crate::backend::wayland) use runtime::{
-    RuntimeClearSessionReport, RuntimeOpenSessionReport, RuntimeSaveAsSessionReport,
-    clear_current_session_runtime, open_named_session_runtime,
-    save_named_session_as_requires_overwrite, save_named_session_as_runtime,
+    RuntimeClearSessionReport, RuntimeClearToolStateReport, RuntimeOpenSessionReport,
+    RuntimeSaveAsSessionReport, clear_current_session_runtime, clear_saved_tool_state_runtime,
+    open_named_session_runtime, save_named_session_as_requires_overwrite,
+    save_named_session_as_runtime,
 };
 pub(super) use runtime::{has_session_artifact, should_skip_unloaded_contentless_save};
 

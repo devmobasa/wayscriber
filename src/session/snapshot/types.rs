@@ -1,4 +1,7 @@
-use crate::draw::{Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES};
+use crate::config::Config;
+use crate::draw::{
+    Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES, clamp_regular_sides,
+};
 use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
@@ -81,7 +84,7 @@ pub struct ToolStateSnapshot {
 }
 
 impl ToolStateSnapshot {
-    pub(super) fn from_input_state(input: &InputState) -> Self {
+    pub(crate) fn from_input_state(input: &InputState) -> Self {
         let active_tool = input.session_active_tool();
         Self {
             current_color: input.color_for_tool(active_tool),
@@ -103,6 +106,42 @@ impl ToolStateSnapshot {
             board_previous_color: input.board_previous_color,
             show_status_bar: input.session_show_status_bar(),
             tool_settings: Some(input.tool_settings.clone()),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn from_config(config: &Config) -> Self {
+        let color = config.drawing.default_color.to_color();
+        let thickness = config.drawing.default_thickness;
+        let font_descriptor = FontDescriptor::new(
+            config.drawing.font_family.clone(),
+            config.drawing.font_weight.clone(),
+            config.drawing.font_style.clone(),
+        );
+        let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
+        tool_settings.step_marker.thickness =
+            crate::input::state::default_step_marker_size(config.drawing.default_font_size);
+
+        Self {
+            current_color: color,
+            current_thickness: thickness,
+            eraser_size: config.drawing.default_eraser_size,
+            eraser_kind: EraserKind::Circle,
+            eraser_mode: config.drawing.default_eraser_mode,
+            marker_opacity: Some(config.drawing.marker_opacity),
+            fill_enabled: Some(config.drawing.default_fill_enabled),
+            tool_override: None,
+            current_font_size: config.drawing.default_font_size,
+            font_descriptor: Some(font_descriptor),
+            text_background_enabled: config.drawing.text_background_enabled,
+            arrow_length: config.arrow.length,
+            arrow_angle: config.arrow.angle_degrees,
+            arrow_head_at_end: Some(config.arrow.head_at_end),
+            arrow_label_enabled: Some(false),
+            polygon_sides: clamp_regular_sides(config.drawing.polygon_sides),
+            board_previous_color: None,
+            show_status_bar: config.ui.show_status_bar,
+            tool_settings: Some(tool_settings),
         }
     }
 }

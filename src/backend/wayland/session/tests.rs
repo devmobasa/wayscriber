@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig};
+use crate::config::{Action, BoardsConfig, Config, KeyBinding, PresenterModeConfig};
 use crate::draw::{
     Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, REGULAR_POLYGON_DEFAULT_SIDES,
     Shape, ShapeId,
@@ -653,6 +653,81 @@ fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
         std::fs::read(&current_target).expect("current target bytes"),
         b"preserve current target"
     );
+}
+
+#[test]
+fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards() {
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let current_options = named_options(temp.path(), "current-tool-reset");
+    let mut saved = snapshot_for_board("transparent", 121);
+    saved.tool_state = Some(sample_tool_state());
+    stored_session::save_snapshot(&saved, &current_options).expect("seed saved session");
+
+    let mut input = test_input_state();
+    let _ = input.set_thickness(11.0);
+    input.arrow_head_at_end = false;
+    input.show_status_bar = false;
+    let mut session_state = SessionState::new(Some(current_options.clone()));
+    session_state.mark_loaded(true);
+
+    let mut config = Config::default();
+    config.drawing.default_thickness = 7.0;
+    config.arrow.head_at_end = true;
+    config.ui.show_status_bar = true;
+    let report = clear_saved_tool_state_runtime(
+        &mut input,
+        &mut session_state,
+        stored_session::ToolStateSnapshot::from_config(&config),
+        Instant::now(),
+    )
+    .expect("runtime clear tool state");
+
+    assert_eq!(
+        report.session_path,
+        Some(current_options.session_file_path())
+    );
+    assert_eq!(
+        report.outcome,
+        Some(stored_session::ClearToolStateOutcome::Cleared {
+            preserved_board_data: true
+        })
+    );
+    assert_eq!(input.thickness_for_active_tool(), 7.0);
+    assert!(input.arrow_head_at_end);
+    assert!(input.show_status_bar);
+    assert!(input.is_session_dirty());
+    assert!(session_state.is_dirty());
+
+    let LoadSnapshotOutcome::Loaded(snapshot) =
+        stored_session::load_snapshot_with_outcome(&current_options).expect("load saved session")
+    else {
+        panic!("expected saved session after tool reset");
+    };
+    assert!(snapshot.tool_state.is_none());
+    assert!(snapshot.has_board_data());
+}
+
+#[test]
+fn runtime_clear_saved_tool_state_without_active_session_resets_live_tools_only() {
+    let mut input = test_input_state();
+    let _ = input.set_thickness(13.0);
+    let mut session_state = SessionState::new(None);
+    let mut config = Config::default();
+    config.drawing.default_thickness = 5.0;
+
+    let report = clear_saved_tool_state_runtime(
+        &mut input,
+        &mut session_state,
+        stored_session::ToolStateSnapshot::from_config(&config),
+        Instant::now(),
+    )
+    .expect("runtime clear tool state");
+
+    assert_eq!(report.session_path, None);
+    assert_eq!(report.outcome, None);
+    assert_eq!(input.thickness_for_active_tool(), 5.0);
+    assert!(input.is_session_dirty());
+    assert!(session_state.is_dirty());
 }
 
 #[test]

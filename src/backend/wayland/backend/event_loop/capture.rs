@@ -70,6 +70,9 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::BoardPdfExport(action) => {
                 state.handle_board_pdf_export_action(action);
             }
+            PendingBackendAction::ClearSavedToolState => {
+                state.handle_clear_saved_tool_state_action();
+            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {

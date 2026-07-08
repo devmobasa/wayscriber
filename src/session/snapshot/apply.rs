@@ -1,4 +1,4 @@
-use super::types::{BoardPagesSnapshot, SessionSnapshot};
+use super::types::{BoardPagesSnapshot, SessionSnapshot, ToolStateSnapshot};
 use crate::draw::{BoardPages, clamp_regular_sides};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{BOARD_ID_TRANSPARENT, InputState, PerToolDrawingSettings};
@@ -54,74 +54,79 @@ fn apply_snapshot_inner(
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
-            let marker_opacity = tool_state.marker_opacity.unwrap_or(input.marker_opacity);
-            let fill_enabled = tool_state.fill_enabled.unwrap_or(input.fill_enabled);
-            log::info!(
-                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], marker_opacity={:.2}, fill_enabled={}, tool_override={:?}, font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}, arrow_labels={:?}",
-                tool_state.current_color,
-                tool_state.current_thickness,
-                tool_state.eraser_size,
-                tool_state.eraser_kind,
-                tool_state.eraser_mode,
-                marker_opacity,
-                fill_enabled,
-                tool_state.tool_override,
-                tool_state.current_font_size,
-                tool_state.text_background_enabled,
-                tool_state.arrow_length,
-                tool_state.arrow_angle,
-                tool_state.show_status_bar,
-                tool_state.board_previous_color,
-                tool_state.arrow_label_enabled
-            );
-            let current_thickness = tool_state
-                .current_thickness
-                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-            let tool_settings = tool_state.tool_settings.unwrap_or_else(|| {
-                let mut settings =
-                    PerToolDrawingSettings::new(tool_state.current_color, current_thickness);
-                settings.step_marker.thickness =
-                    crate::input::state::default_step_marker_size(tool_state.current_font_size);
-                settings
-            });
-            let tool_settings =
-                tool_settings.clamp_thicknesses(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-            input.replace_tool_settings(tool_settings);
-            let _ = input.set_eraser_size(
-                tool_state
-                    .eraser_size
-                    .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
-            );
-            input.eraser_kind = tool_state.eraser_kind;
-            let _ = input.set_eraser_mode(tool_state.eraser_mode);
-            if let Some(opacity) = tool_state.marker_opacity {
-                let _ = input.set_marker_opacity(opacity);
-            }
-            if let Some(fill_enabled) = tool_state.fill_enabled {
-                let _ = input.set_fill_enabled(fill_enabled);
-            }
-            let _ = input.set_tool_override(tool_state.tool_override);
-            if let Some(font_descriptor) = tool_state.font_descriptor {
-                let _ = input.set_font_descriptor(font_descriptor);
-            }
-            let _ = input.set_font_size(tool_state.current_font_size.clamp(8.0, 72.0));
-            input.text_background_enabled = tool_state.text_background_enabled;
-            input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
-            input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
-            if let Some(head_at_end) = tool_state.arrow_head_at_end {
-                input.arrow_head_at_end = head_at_end;
-            }
-            if let Some(label_enabled) = tool_state.arrow_label_enabled {
-                input.arrow_label_enabled = label_enabled;
-            }
-            input.polygon_sides = clamp_regular_sides(tool_state.polygon_sides);
-            input.board_previous_color = tool_state.board_previous_color;
-            input.show_status_bar = tool_state.show_status_bar;
+            apply_tool_state_snapshot(input, tool_state);
         } else {
             log::info!("No tool state found in session; skipping tool restore");
         }
     }
 
+    input.sync_step_marker_counter();
+    input.needs_redraw = true;
+}
+
+/// Apply persisted or config-derived tool state to the live [`InputState`].
+pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: ToolStateSnapshot) {
+    let marker_opacity = tool_state.marker_opacity.unwrap_or(input.marker_opacity);
+    let fill_enabled = tool_state.fill_enabled.unwrap_or(input.fill_enabled);
+    log::info!(
+        "Applying tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], marker_opacity={:.2}, fill_enabled={}, tool_override={:?}, font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}, arrow_labels={:?}",
+        tool_state.current_color,
+        tool_state.current_thickness,
+        tool_state.eraser_size,
+        tool_state.eraser_kind,
+        tool_state.eraser_mode,
+        marker_opacity,
+        fill_enabled,
+        tool_state.tool_override,
+        tool_state.current_font_size,
+        tool_state.text_background_enabled,
+        tool_state.arrow_length,
+        tool_state.arrow_angle,
+        tool_state.show_status_bar,
+        tool_state.board_previous_color,
+        tool_state.arrow_label_enabled
+    );
+    let current_thickness = tool_state
+        .current_thickness
+        .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+    let tool_settings = tool_state.tool_settings.unwrap_or_else(|| {
+        let mut settings = PerToolDrawingSettings::new(tool_state.current_color, current_thickness);
+        settings.step_marker.thickness =
+            crate::input::state::default_step_marker_size(tool_state.current_font_size);
+        settings
+    });
+    let tool_settings = tool_settings.clamp_thicknesses(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+    input.replace_tool_settings(tool_settings);
+    let _ = input.set_eraser_size(
+        tool_state
+            .eraser_size
+            .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
+    );
+    input.eraser_kind = tool_state.eraser_kind;
+    let _ = input.set_eraser_mode(tool_state.eraser_mode);
+    if let Some(opacity) = tool_state.marker_opacity {
+        let _ = input.set_marker_opacity(opacity);
+    }
+    if let Some(fill_enabled) = tool_state.fill_enabled {
+        let _ = input.set_fill_enabled(fill_enabled);
+    }
+    let _ = input.set_tool_override(tool_state.tool_override);
+    if let Some(font_descriptor) = tool_state.font_descriptor {
+        let _ = input.set_font_descriptor(font_descriptor);
+    }
+    let _ = input.set_font_size(tool_state.current_font_size.clamp(8.0, 72.0));
+    input.text_background_enabled = tool_state.text_background_enabled;
+    input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
+    input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
+    if let Some(head_at_end) = tool_state.arrow_head_at_end {
+        input.arrow_head_at_end = head_at_end;
+    }
+    if let Some(label_enabled) = tool_state.arrow_label_enabled {
+        input.arrow_label_enabled = label_enabled;
+    }
+    input.polygon_sides = clamp_regular_sides(tool_state.polygon_sides);
+    input.board_previous_color = tool_state.board_previous_color;
+    input.show_status_bar = tool_state.show_status_bar;
     input.sync_step_marker_counter();
     input.needs_redraw = true;
 }

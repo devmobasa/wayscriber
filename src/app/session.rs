@@ -11,7 +11,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
         let path = crate::session::normalize_named_session_file_arg(raw);
-        if cli.clear_session {
+        if cli.clear_session || cli.clear_tool_state {
             crate::session::validate_named_session_file_for_clear(&path)?;
         } else {
             crate::session::validate_named_session_file_for_info(&path)?;
@@ -54,6 +54,30 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
             && !outcome.removed_lock
         {
             println!("  No session artefacts found");
+        }
+        return Ok(());
+    }
+
+    if cli.clear_tool_state {
+        let outcome = crate::session::clear_tool_state(&options)?;
+        println!("Session file: {}", options.session_file_path().display());
+        match outcome {
+            crate::session::ClearToolStateOutcome::NoSession => {
+                println!("  No session file present");
+            }
+            crate::session::ClearToolStateOutcome::NoToolState => {
+                println!("  No saved tool state present");
+            }
+            crate::session::ClearToolStateOutcome::Cleared {
+                preserved_board_data,
+            } => {
+                println!("  Cleared saved tool state");
+                if preserved_board_data {
+                    println!("  Preserved saved boards and history");
+                } else {
+                    println!("  No board data remained; cleared empty session snapshot");
+                }
+            }
         }
         return Ok(());
     }

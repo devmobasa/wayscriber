@@ -228,8 +228,9 @@ For distro-specific package details, see [Installation](#installation). For keyb
 - Session persistence is enabled by default for boards, undo/redo history, and tool state
 - Per-output default sessions, plus named session files with `--session-file`
 - Overlay Session panel: Open, Save As, Info, Clear, recent sessions, and Manager
-- Configurator Session tab: rename/reveal/forget catalog entries, plus duplicate/move/clear inactive session files
-- CLI overrides: `--resume-session`, `--no-resume-session`, `--session-info`, and `--clear-session`
+- Command palette: Reset Tool Defaults clears saved tool state and applies config defaults in the active overlay
+- Configurator Session tab: rename/reveal/forget catalog entries, plus duplicate/move/clear inactive session files or clear only saved tool state
+- CLI overrides: `--resume-session`, `--no-resume-session`, `--session-info`, `--clear-session`, and `--clear-tool-state`
 - Tray checkmark flips config on disk
 
 ### Toolbars & UI
@@ -802,19 +803,21 @@ wayscriber --resume-session      # force resume (persist/restore all boards + hi
 wayscriber --no-resume-session   # disable resume for this run
 wayscriber --session-info        # inspect saved sessions
 wayscriber --clear-session       # remove stored boards
+wayscriber --clear-tool-state    # reset saved tool defaults, keep boards/history
 wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session
 wayscriber --freeze --session-file ~/Documents/lecture-04.wayscriber-session
 wayscriber --daemon --session-file ~/Documents/lecture-04.wayscriber-session
 wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session
 wayscriber --session-info --session-file ~/Documents/lecture-04.wayscriber-session
 wayscriber --clear-session --session-file ~/Documents/lecture-04.wayscriber-session
+wayscriber --clear-tool-state --session-file ~/Documents/lecture-04.wayscriber-session
 ```
 
 Notes:
-- When `restore_tool_state` is enabled (default), the last-used tool settings (including arrow head placement) override config defaults on startup. Disable it in the Session tab or clear the session to force config values.
+- Config values seed startup defaults. When `restore_tool_state` is enabled (default), the last-used tool settings saved in the session (including arrow head placement) override those config defaults on startup. Run `wayscriber --clear-tool-state` to remove only that saved tool layer so config defaults apply next startup while saved boards/history remain. In a running overlay, use Command Palette -> Reset Tool Defaults to clear the saved layer and immediately apply config defaults to the active tools.
 - `--session-file` uses exactly the selected file, implies persistence for that overlay run, rejects directories/symlinks/special files, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
 - The overlay Session panel lives in the side toolbar's Settings drawer. It can open an existing named session, save the current overlay as another named session, show session info, clear the active session, reopen recent named sessions, and jump to the configurator. The Open/Save As dialogs use `zenity` or `kdialog`; Save As appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
-- The configurator Session tab manages recent named sessions recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog labels, reveal files, and forget metadata without touching files. Duplicate, Move, and Clear are disabled while an overlay, manually started daemon, or background service is active.
+- The configurator Session tab manages recent named sessions recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog labels, reveal files, and forget metadata without touching files. Clear Tool State removes only the saved tool layer; Clear Saved Data removes session files. Duplicate, Move, Clear Tool State, and Clear are disabled while an overlay, manually started daemon, or background service is active.
 - See [Session manager examples](examples/session-manager.md) for complete CLI, overlay, and configurator workflows.
 
 ### Tablet/Stylus Support

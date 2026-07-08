@@ -216,6 +216,40 @@ fn clear_request_blocks_without_daemon_status() {
 }
 
 #[test]
+fn clear_tool_state_request_blocks_without_daemon_status() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let (mut app, _task) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = None;
+
+    let _ = app.handle_session_catalog_clear_tool_state_requested("s-1".to_string());
+
+    assert!(!app.session_catalog.busy);
+    assert!(status_contains(&app.status, "Clear saved tool state"));
+    assert!(status_contains(&app.status, "status finishes loading"));
+}
+
+#[test]
+fn clear_tool_state_request_sets_busy_when_safe() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+    let (mut app, _task) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = Some(inactive_daemon_status());
+
+    let _ = app.handle_session_catalog_clear_tool_state_requested("s-1".to_string());
+
+    assert!(app.session_catalog.busy);
+    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(status_contains(&app.status, "Clearing saved tool state"));
+}
+
+#[test]
 fn clear_request_sets_pending_confirmation_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
