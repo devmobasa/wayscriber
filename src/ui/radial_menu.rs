@@ -33,7 +33,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let cx = layout.center_x;
     let cy = layout.center_y;
     let seg_angle = 2.0 * PI / RADIAL_TOOL_SEGMENT_COUNT as f64;
-    let color_count = input_state.quick_colors.rendered_len();
+    let color_count = input_state.quick_colors.radial_rendered_len();
     let color_seg_angle = if color_count > 0 {
         2.0 * PI / color_count as f64
     } else {
@@ -49,7 +49,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     // ── Color ring (outermost) ──
     for (i, entry) in input_state
         .quick_colors
-        .rendered_entries()
+        .radial_rendered_entries()
         .iter()
         .enumerate()
     {

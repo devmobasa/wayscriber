@@ -133,6 +133,16 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
 
     assert_eq!(palette.len(), 11);
     assert_eq!(
+        palette.rendered_len(),
+        11,
+        "toolbar palettes keep legacy extended colors"
+    );
+    assert_eq!(
+        palette.radial_rendered_len(),
+        8,
+        "default radial menu preserves the pre-configurable 8-color ring"
+    );
+    assert_eq!(
         palette.entry(8).map(|entry| entry.label.as_str()),
         Some("Cyan")
     );
@@ -171,6 +181,63 @@ fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
             a: 1.0,
         },
     ));
+}
+
+#[test]
+fn drawing_quick_colors_explicit_extra_entries_extend_radial_palette() {
+    let config: Config = toml::from_str(
+        r##"
+[[drawing.quick_colors]]
+label = "Red"
+color = "red"
+[[drawing.quick_colors]]
+label = "Green"
+color = "green"
+[[drawing.quick_colors]]
+label = "Blue"
+color = "blue"
+[[drawing.quick_colors]]
+label = "Yellow"
+color = "yellow"
+[[drawing.quick_colors]]
+label = "Orange"
+color = "orange"
+[[drawing.quick_colors]]
+label = "Pink"
+color = "pink"
+[[drawing.quick_colors]]
+label = "White"
+color = "white"
+[[drawing.quick_colors]]
+label = "Black"
+color = "black"
+[[drawing.quick_colors]]
+label = "Cyan"
+color = "#00FFFF"
+"##,
+    )
+    .expect("explicit quick colors should parse");
+
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+
+    assert_eq!(
+        config.drawing.quick_colors.configured_entry_count(),
+        Some(9)
+    );
+    assert_eq!(palette.rendered_len(), 9);
+    assert_eq!(palette.radial_rendered_len(), 9);
+    assert_eq!(palette.radial_rendered_entries()[8].label.as_str(), "Cyan");
+}
+
+#[test]
+fn drawing_quick_colors_implicit_defaults_do_not_serialize_as_explicit_entries() {
+    let config_str =
+        toml::to_string_pretty(&Config::default()).expect("default config should serialize");
+
+    assert!(
+        !config_str.contains("quick_colors"),
+        "implicit quick color defaults should not become explicit radial extras on save"
+    );
 }
 
 #[test]
@@ -232,6 +299,7 @@ fn drawing_quick_color_rendered_entries_are_capped_without_dropping_config() {
     assert_eq!(palette.len(), QUICK_COLOR_RENDER_LIMIT + 3);
     assert_eq!(palette.rendered_len(), QUICK_COLOR_RENDER_LIMIT);
     assert_eq!(palette.rendered_entries().len(), QUICK_COLOR_RENDER_LIMIT);
+    assert_eq!(palette.radial_rendered_len(), QUICK_COLOR_RENDER_LIMIT);
     assert!(palette.color_for_index(QUICK_COLOR_RENDER_LIMIT).is_some());
     assert!(
         palette
@@ -259,6 +327,7 @@ fn drawing_quick_colors_empty_array_uses_runtime_default_palette() {
 
     let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
     assert_eq!(palette, QuickColorPalette::default());
+    assert_eq!(palette.radial_rendered_len(), 8);
 }
 
 #[test]

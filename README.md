@@ -661,7 +661,7 @@ The polygon tools are available from the toolbar picker; their default keybindin
 | White | <kbd>W</kbd> |
 | Black | <kbd>K</kbd> |
 
-The quick color palette is configurable with ordered `[[drawing.quick_colors]]` entries. The first eight entries map to <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; if fewer are configured by hand, missing shortcut positions use the built-in defaults. Default configs also include Cyan, Purple, and Gray as extra toolbar/radial colors. Extra entries have no shortcut action binding, and dense palette UIs render at most the first 24 colors.
+The quick color palette is configurable with ordered `[[drawing.quick_colors]]` entries. The first eight entries map to <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; if fewer are configured by hand, missing shortcut positions use the built-in defaults. The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors while the radial menu keeps its original first-eight color ring. Explicit entries beyond the first eight have no shortcut action binding and opt those extra colors into dense palette UIs, capped to the first 24 colors.
 
 | Action | Key |
 |--------|-----|

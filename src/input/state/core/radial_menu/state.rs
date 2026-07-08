@@ -78,7 +78,7 @@ impl InputState {
             let segment = super::hit_test::hit_test_radial(
                 layout,
                 *expanded_sub_ring,
-                self.quick_colors.rendered_len(),
+                self.quick_colors.radial_rendered_len(),
                 x,
                 y,
             );
@@ -253,7 +253,7 @@ impl InputState {
     }
 
     fn dispatch_color_segment(&mut self, idx: u8) {
-        if let Some(color) = self.quick_colors.rendered_color_for_index(idx as usize) {
+        if let Some(color) = self.quick_colors.radial_color_for_index(idx as usize) {
             self.apply_color_from_ui(color);
         }
     }

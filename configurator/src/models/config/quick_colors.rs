@@ -57,7 +57,11 @@ impl QuickColorsDraft {
         }
 
         if errors.len() == initial_error_count {
-            config.entries = next_entries;
+            if next_entries == config.effective_entries() {
+                config.replace_entries_preserving_source(next_entries);
+            } else {
+                config.set_entries(next_entries);
+            }
         }
     }
 

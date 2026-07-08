@@ -85,6 +85,35 @@ fn config_draft_round_trips_quick_colors() {
 }
 
 #[test]
+fn config_draft_preserves_implicit_quick_color_defaults() {
+    let config = Config::default();
+    let draft = ConfigDraft::from_config(&config);
+
+    let saved = draft
+        .to_config(&config)
+        .expect("expected implicit quick colors to save");
+
+    assert_eq!(saved.drawing.quick_colors.configured_entry_count(), None);
+    assert!(saved.drawing.quick_colors.is_implicit_default());
+}
+
+#[test]
+fn config_draft_marks_changed_quick_colors_explicit() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.drawing_quick_colors.entries[8].label = "Pool cyan".to_string();
+
+    let saved = draft
+        .to_config(&config)
+        .expect("expected changed quick colors to save");
+
+    assert_eq!(
+        saved.drawing.quick_colors.configured_entry_count(),
+        Some(draft.drawing_quick_colors.entries.len())
+    );
+}
+
+#[test]
 fn config_draft_reorders_and_removes_quick_colors() {
     let mut draft = ConfigDraft::from_config(&Config::default());
     assert_eq!(draft.drawing_quick_colors.entries.len(), 11);

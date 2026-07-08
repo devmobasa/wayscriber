@@ -79,8 +79,9 @@ tab_drag_tool = "ellipse"
 # The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by
 # hand, missing shortcut positions use built-in defaults and help-overlay badges
 # follow those shortcut-backed entries. Extra entries have no shortcut action
-# binding and appear in toolbar/radial palette UIs, capped to the first 24
-# rendered colors. Use known color names, #RRGGBB hex, or RGB arrays.
+# binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
+# arrays.
 [[drawing.quick_colors]]
 label = "Red"
 color = "red"
@@ -153,8 +154,8 @@ drag_tool = "default"
 **Quick Colors:**
 - `[[drawing.quick_colors]]` entries define an ordered palette.
 - The first eight entries are selected by <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; missing first-eight entries fall back to built-in defaults.
-- Default configs also include Cyan, Purple, and Gray as extra toolbar/radial colors using hex values.
-- Extra entries have no quick-color action binding; toolbar and radial palette UIs render at most the first 24 colors.
+- The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors, while the radial menu keeps the original first-eight color ring.
+- Extra entries have no quick-color action binding; explicit extra entries appear in toolbar and radial palette UIs, capped to the first 24 colors.
 - Help overlay badges are shown for the first eight shortcut-backed entries only.
 
 **Runtime Adjustments:**

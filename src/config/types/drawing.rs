@@ -21,7 +21,10 @@ pub struct DrawingConfig {
     pub default_color: ColorSpec,
 
     /// Configurable colors selected by the quick color actions.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "QuickColorsConfig::is_implicit_default"
+    )]
     pub quick_colors: QuickColorsConfig,
 
     /// Default pen thickness in pixels (valid range: 1.0 - 50.0)
@@ -145,17 +148,35 @@ impl Default for DrawingConfig {
 /// The first eight entries are selected by the existing quick color actions.
 /// Additional entries are shown in palette UIs where space allows.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct QuickColorsConfig {
     pub entries: Vec<QuickColorConfig>,
+    #[serde(skip)]
+    #[cfg_attr(feature = "config-schema", schemars(skip))]
+    configured_entry_count: Option<usize>,
 }
 
 impl Default for QuickColorsConfig {
     fn default() -> Self {
         Self {
             entries: default_quick_color_entries(),
+            configured_entry_count: None,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for QuickColorsConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let entries = Vec::<QuickColorConfig>::deserialize(deserializer)?;
+        let configured_entry_count = Some(entries.len());
+        Ok(Self {
+            entries,
+            configured_entry_count,
+        })
     }
 }
 
@@ -171,6 +192,25 @@ impl QuickColorsConfig {
             entries.extend(defaults.into_iter().skip(entries.len()));
         }
         entries
+    }
+
+    pub fn configured_entry_count(&self) -> Option<usize> {
+        self.configured_entry_count
+    }
+
+    #[allow(dead_code)]
+    pub fn set_entries(&mut self, entries: Vec<QuickColorConfig>) {
+        self.configured_entry_count = Some(entries.len());
+        self.entries = entries;
+    }
+
+    #[allow(dead_code)]
+    pub fn replace_entries_preserving_source(&mut self, entries: Vec<QuickColorConfig>) {
+        self.entries = entries;
+    }
+
+    pub fn is_implicit_default(&self) -> bool {
+        self.configured_entry_count.is_none() && self.entries == default_quick_color_entries()
     }
 }
 
@@ -285,6 +325,7 @@ pub struct QuickColorPaletteEntry {
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuickColorPalette {
     entries: Vec<QuickColorPaletteEntry>,
+    radial_render_len: usize,
 }
 
 impl QuickColorPalette {
@@ -292,22 +333,30 @@ impl QuickColorPalette {
         if config.entries.is_empty() {
             return Self::default();
         }
+        let entries = config
+            .effective_entries()
+            .into_iter()
+            .enumerate()
+            .map(|(index, entry)| QuickColorPaletteEntry {
+                label: entry.resolved_label(index),
+                color: entry.color.to_color(),
+            })
+            .collect::<Vec<_>>();
+        let radial_render_len =
+            radial_render_len_for(entries.len(), config.configured_entry_count());
         Self {
-            entries: config
-                .effective_entries()
-                .into_iter()
-                .enumerate()
-                .map(|(index, entry)| QuickColorPaletteEntry {
-                    label: entry.resolved_label(index),
-                    color: entry.color.to_color(),
-                })
-                .collect(),
+            entries,
+            radial_render_len,
         }
     }
 
     #[cfg(test)]
     pub fn from_entries(entries: Vec<QuickColorPaletteEntry>) -> Self {
-        Self { entries }
+        let radial_render_len = entries.len().min(QUICK_COLOR_RENDER_LIMIT);
+        Self {
+            entries,
+            radial_render_len,
+        }
     }
 
     pub fn rendered_entries(&self) -> &[QuickColorPaletteEntry] {
@@ -324,6 +373,15 @@ impl QuickColorPalette {
             return 0;
         }
         self.entries.len().min(QUICK_COLOR_RENDER_LIMIT)
+    }
+
+    pub fn radial_rendered_entries(&self) -> &[QuickColorPaletteEntry] {
+        let len = self.radial_rendered_len();
+        &self.entries[..len]
+    }
+
+    pub fn radial_rendered_len(&self) -> usize {
+        self.radial_render_len.min(self.rendered_len())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -343,8 +401,15 @@ impl QuickColorPalette {
         self.entry(index).map(|entry| entry.color)
     }
 
+    #[cfg(test)]
     pub fn rendered_color_for_index(&self, index: usize) -> Option<Color> {
         self.rendered_entries().get(index).map(|entry| entry.color)
+    }
+
+    pub fn radial_color_for_index(&self, index: usize) -> Option<Color> {
+        self.radial_rendered_entries()
+            .get(index)
+            .map(|entry| entry.color)
     }
 
     pub fn action_for_index(index: usize) -> Option<Action> {
@@ -352,27 +417,32 @@ impl QuickColorPalette {
     }
 
     pub fn cache_key(&self) -> String {
-        self.entries
+        let entries = self
+            .entries
             .iter()
             .enumerate()
             .map(|(index, entry)| {
                 format!("{}={}={}", index, entry.label, color_cache_key(entry.color))
             })
             .collect::<Vec<_>>()
-            .join("|")
+            .join("|");
+        format!("radial={};{entries}", self.radial_rendered_len())
     }
 }
 
 impl Default for QuickColorPalette {
     fn default() -> Self {
+        let entries = default_quick_color_entries()
+            .into_iter()
+            .map(|entry| QuickColorPaletteEntry {
+                label: entry.label,
+                color: entry.color.to_color(),
+            })
+            .collect::<Vec<_>>();
+        let radial_render_len = radial_render_len_for(entries.len(), None);
         Self {
-            entries: default_quick_color_entries()
-                .into_iter()
-                .map(|entry| QuickColorPaletteEntry {
-                    label: entry.label,
-                    color: entry.color.to_color(),
-                })
-                .collect(),
+            entries,
+            radial_render_len,
         }
     }
 }
@@ -673,6 +743,15 @@ fn default_quick_color_entries() -> Vec<QuickColorConfig> {
         },
     ]);
     entries
+}
+
+fn radial_render_len_for(entry_len: usize, configured_entry_count: Option<usize>) -> usize {
+    let shortcut_len = QuickColorSlot::ALL.len();
+    let len = match configured_entry_count {
+        Some(count) if count > shortcut_len => entry_len,
+        _ => entry_len.min(shortcut_len),
+    };
+    len.min(QUICK_COLOR_RENDER_LIMIT)
 }
 
 fn quick_color_label(entry: &QuickColorConfig, index: usize) -> String {

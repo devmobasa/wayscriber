@@ -249,7 +249,7 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
         .expect("layout should exist for open radial menu");
 
     // Just inside color segment 1 (Green), close to the segment boundary.
-    let seg = 2.0 * PI / state.quick_colors.len() as f64;
+    let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
     let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
@@ -258,7 +258,7 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
     state.update_radial_menu_hover(probe_x, probe_y);
     state.radial_menu_select_hovered();
 
-    let expected = state.quick_colors.color_for_index(1).unwrap();
+    let expected = state.quick_colors.radial_color_for_index(1).unwrap();
     assert!(colors_approx_eq(&state.current_color, &expected));
 }
 
@@ -287,7 +287,7 @@ fn color_ring_selection_uses_configured_quick_palette() {
         .radial_menu_layout
         .expect("layout should exist for open radial menu");
 
-    let seg = 2.0 * PI / state.quick_colors.len() as f64;
+    let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
     let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
