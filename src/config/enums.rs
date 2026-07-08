@@ -1,6 +1,7 @@
 //! Configuration enum types.
 
 use crate::draw::{Color, color::*};
+use crate::util::ConfigHexColorError;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -46,12 +47,15 @@ pub enum XdgFocusLossBehavior {
     Stay,
 }
 
-/// Color specification - either a named color or RGB values.
+/// Color specification - either a named color, `#RRGGBB` hex string, or RGB values.
 ///
 /// # Examples
 /// ```toml
 /// # Named color
 /// default_color = "red"
+///
+/// # Hex color
+/// default_color = "#FFB3BA"
 ///
 /// # Custom RGB color (0-255 per component)
 /// default_color = [255, 128, 0]  # Orange
@@ -60,7 +64,7 @@ pub enum XdgFocusLossBehavior {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ColorSpec {
-    /// Named color: red, green, blue, yellow, orange, pink, white, black
+    /// Named color, or `#RRGGBB` hex color
     Name(String),
     /// RGB color as [red, green, blue] where each component is 0-255
     Rgb([u8; 3]),
@@ -69,15 +73,24 @@ pub enum ColorSpec {
 impl ColorSpec {
     /// Converts the color specification to a [`Color`] struct.
     ///
-    /// Named colors are mapped to predefined RGBA values using `util::name_to_color()`.
-    /// Unknown color names default to red with a warning. RGB arrays are converted from
-    /// 0-255 range to 0.0-1.0 range with full opacity.
+    /// Hex colors accept only `#RRGGBB`. Named colors are mapped to predefined RGBA
+    /// values using `util::name_to_color()`. Unknown color names and invalid hex values
+    /// default to red with a warning. RGB arrays are converted from 0-255 range to
+    /// 0.0-1.0 range with full opacity.
     pub fn to_color(&self) -> Color {
         match self {
-            ColorSpec::Name(name) => crate::util::name_to_color(name).unwrap_or_else(|| {
-                warn!("Unknown color '{}', using red", name);
-                RED
-            }),
+            ColorSpec::Name(name) => match crate::util::parse_config_hex_color(name) {
+                Ok(color) => color,
+                Err(ConfigHexColorError::MissingHash) => crate::util::name_to_color(name)
+                    .unwrap_or_else(|| {
+                        warn!("Unknown color '{}', using red", name);
+                        RED
+                    }),
+                Err(err) => {
+                    warn!("Invalid hex color '{}': {:?}; using red", name, err);
+                    RED
+                }
+            },
             ColorSpec::Rgb([r, g, b]) => Color {
                 r: *r as f64 / 255.0,
                 g: *g as f64 / 255.0,
@@ -122,6 +135,30 @@ mod tests {
         let spec = ColorSpec::Name("chartreuse".to_string());
         let color = spec.to_color();
         assert_eq!(color, RED);
+    }
+
+    #[test]
+    fn color_spec_to_color_accepts_hash_rrggbb_hex() {
+        let spec = ColorSpec::Name("#FFB3BA".to_string());
+        let color = spec.to_color();
+        assert_eq!(
+            color,
+            Color {
+                r: 1.0,
+                g: 179.0 / 255.0,
+                b: 186.0 / 255.0,
+                a: 1.0,
+            }
+        );
+    }
+
+    #[test]
+    fn color_spec_to_color_falls_back_to_red_for_invalid_hex() {
+        for value in ["#GG0000", "#12345", "0xFFB3BA"] {
+            let spec = ColorSpec::Name(value.to_string());
+            let color = spec.to_color();
+            assert_eq!(color, RED, "{value} should fall back to red");
+        }
     }
 
     #[test]

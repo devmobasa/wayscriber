@@ -12,6 +12,7 @@ use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEnt
 use super::super::keybindings::KeybindingsDraft;
 use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
+use super::quick_colors::QuickColorsDraft;
 use super::render_profiles::RenderProfilesDraft;
 use super::toolbar_overrides::ToolbarModeOverridesDraft;
 use wayscriber::config::{MouseDragToolsConfig, ToolbarItemsConfig};
@@ -19,6 +20,7 @@ use wayscriber::config::{MouseDragToolsConfig, ToolbarItemsConfig};
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigDraft {
     pub drawing_color: ColorInput,
+    pub drawing_quick_colors: QuickColorsDraft,
     pub drawing_default_thickness: String,
     pub drawing_default_eraser_size: String,
     pub drawing_default_eraser_mode: EraserModeOption,

@@ -12,7 +12,7 @@ use crate::models::{
 };
 use wayscriber::config::DragButtonConfig;
 
-use self::color::drawing_color_block;
+use self::color::{drawing_color_block, quick_colors_block};
 use self::font::font_controls;
 use super::super::search::{SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
@@ -39,7 +39,9 @@ impl ConfiguratorApp {
         let mut column = column![text("Drawing Defaults").size(20)].spacing(12);
 
         if show_color {
-            column = column.push(drawing_color_block(self));
+            column = column
+                .push(drawing_color_block(self))
+                .push(quick_colors_block(self));
         }
 
         if show_defaults {

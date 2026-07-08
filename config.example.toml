@@ -798,6 +798,7 @@ backup_retention = 1
 [drawing]
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# Or #RRGGBB hex: "#FFB3BA"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
@@ -844,7 +845,7 @@ tab_drag_tool = "ellipse"
 # Optional per-mouse-button drag mapping. These override the flat drag_tool
 # fields above when present. Right/middle default to their built-in behavior
 # unless configured here. Use "default" for a button's built-in behavior.
-# Colors are optional and can be names or RGB arrays.
+# Colors are optional and can be names, #RRGGBB hex strings, or RGB arrays.
 #
 # [drawing.drag_tools.left]
 # drag_tool = "pen"
@@ -897,6 +898,62 @@ font_style = "normal"
 # Set to true if you find text hard to read against complex backgrounds
 # Default: false (no background, cleaner look with just stroke outline)
 text_background_enabled = false
+
+# Ordered quick colors used by shortcuts, toolbar swatches, and radial menu.
+# The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by
+# hand, missing shortcut positions use built-in defaults and help-overlay badges
+# follow those shortcut-backed entries. Extra entries have no shortcut action
+# binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
+# arrays.
+[[drawing.quick_colors]]
+label = "Red"
+color = "red"
+
+[[drawing.quick_colors]]
+label = "Green"
+color = "green"
+
+[[drawing.quick_colors]]
+label = "Blue"
+color = "blue"
+
+[[drawing.quick_colors]]
+label = "Yellow"
+color = "yellow"
+
+[[drawing.quick_colors]]
+label = "Orange"
+color = "orange"
+
+[[drawing.quick_colors]]
+label = "Pink"
+color = "pink"
+
+[[drawing.quick_colors]]
+label = "White"
+color = "white"
+
+[[drawing.quick_colors]]
+label = "Black"
+color = "black"
+
+[[drawing.quick_colors]]
+label = "Cyan"
+color = "#00FFFF"
+
+[[drawing.quick_colors]]
+label = "Purple"
+color = "#9966CC"
+
+[[drawing.quick_colors]]
+label = "Gray"
+color = "#666666"
+
+# Example custom entry:
+# [[drawing.quick_colors]]
+# label = "Blush"
+# color = "#FFB3BA"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PRESET SLOTS

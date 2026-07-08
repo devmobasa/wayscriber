@@ -1,4 +1,4 @@
-use crate::config::{Action, action_label};
+use crate::config::{Action, QuickColorSlot, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::toolbar_icons;
 
@@ -19,16 +19,12 @@ pub(super) struct MainSections {
     pub(super) screenshots: Option<Section>,
 }
 
-fn color_badge(
-    bindings: &HelpOverlayBindings,
-    action: Action,
-    fallback: &str,
-    color: [f64; 3],
-) -> Badge {
-    Badge {
-        label: primary_or_fallback(bindings, action, fallback),
-        color,
-    }
+fn color_badge(bindings: &HelpOverlayBindings, index: usize) -> Option<Badge> {
+    let slot = QuickColorSlot::from_index(index)?;
+    Some(Badge {
+        label: primary_or_fallback(bindings, slot.action(), slot.fallback_key()),
+        color: bindings.quick_color_badge(index)?,
+    })
 }
 
 pub(super) fn build_main_sections(
@@ -132,16 +128,9 @@ pub(super) fn build_main_sections(
         icon: Some(toolbar_icons::draw_icon_file),
     };
 
-    let color_badges = vec![
-        color_badge(bindings, Action::SetColorRed, "R", [0.95, 0.41, 0.38]),
-        color_badge(bindings, Action::SetColorGreen, "G", [0.46, 0.82, 0.45]),
-        color_badge(bindings, Action::SetColorBlue, "B", [0.32, 0.58, 0.92]),
-        color_badge(bindings, Action::SetColorYellow, "Y", [0.98, 0.80, 0.10]),
-        color_badge(bindings, Action::SetColorOrange, "O", [0.98, 0.55, 0.26]),
-        color_badge(bindings, Action::SetColorPink, "P", [0.78, 0.47, 0.96]),
-        color_badge(bindings, Action::SetColorWhite, "W", [0.90, 0.92, 0.96]),
-        color_badge(bindings, Action::SetColorBlack, "K", [0.28, 0.30, 0.38]),
-    ];
+    let color_badges: Vec<Badge> = (0..bindings.quick_color_count())
+        .filter_map(|index| color_badge(bindings, index))
+        .collect();
 
     let drawing = Section {
         title: "Drawing",

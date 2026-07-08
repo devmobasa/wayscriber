@@ -2,6 +2,7 @@ mod boards;
 mod draft;
 mod parse;
 mod presets;
+mod quick_colors;
 mod render_profiles;
 mod setters;
 mod to_config;

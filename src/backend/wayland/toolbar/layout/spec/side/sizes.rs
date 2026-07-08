@@ -198,7 +198,13 @@ impl ToolbarLayoutSpec {
         if snapshot.side_section_collapsed(ToolbarSideSection::Colors) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
-        let rows = 1.0 + if snapshot.show_more_colors { 1.0 } else { 0.0 };
+        let visible_rows = if snapshot.show_more_colors {
+            let color_count = snapshot.quick_colors.rendered_len().max(1);
+            color_count.div_ceil(Self::SIDE_COLOR_SWATCHES_PER_ROW)
+        } else {
+            1
+        };
+        let rows = visible_rows as f64;
         let preview_row_h = Self::SIDE_COLOR_PREVIEW_SIZE
             + Self::SIDE_COLOR_PREVIEW_GAP_TOP
             + Self::SIDE_COLOR_PREVIEW_GAP_BOTTOM;

@@ -13,6 +13,7 @@ use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
 use super::super::boards::BoardsDraft;
 use super::super::presets::PresetsDraft;
+use super::super::quick_colors::QuickColorsDraft;
 use super::super::render_profiles::RenderProfilesDraft;
 use super::super::toolbar_overrides::ToolbarModeOverridesDraft;
 use super::ConfigDraft;
@@ -26,6 +27,7 @@ impl ConfigDraft {
         let drawing_drag_tools = config.drawing.effective_drag_tools();
         Self {
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
+            drawing_quick_colors: QuickColorsDraft::from_config(&config.drawing.quick_colors),
             drawing_default_thickness: format_float(config.drawing.default_thickness),
             drawing_default_eraser_size: format_float(config.drawing.default_eraser_size),
             drawing_default_eraser_mode: EraserModeOption::from_mode(

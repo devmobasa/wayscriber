@@ -23,6 +23,54 @@ fn color_input_named_round_trip_and_preview() {
 }
 
 #[test]
+fn color_input_hex_preview_and_known_conversion() {
+    let spec = ColorSpec::Name("#FFB3BA".to_string());
+    let input = ColorInput::from_color(&spec);
+
+    assert_eq!(input.mode, ColorMode::Named);
+    assert_eq!(input.selected_named, NamedColorOption::Custom);
+    assert_eq!(input.summary(), "#FFB3BA");
+    assert_eq!(input.rgb, ["255", "179", "186"]);
+
+    let preview = input.preview_color().expect("hex preview should resolve");
+    assert!((preview.r - 1.0).abs() < f32::EPSILON);
+    assert!((preview.g - (179.0f32 / 255.0)).abs() < f32::EPSILON);
+    assert!((preview.b - (186.0f32 / 255.0)).abs() < f32::EPSILON);
+
+    let round_trip = input
+        .to_known_color_spec_with_field("drawing.quick_colors[0].color")
+        .expect("valid hex should convert");
+    assert_eq!(round_trip, spec);
+}
+
+#[test]
+fn color_input_known_conversion_rejects_invalid_hex_and_unknown_names() {
+    let invalid_hex = ColorInput {
+        mode: ColorMode::Named,
+        name: "#GG0000".to_string(),
+        rgb: ["0".to_string(), "0".to_string(), "0".to_string()],
+        selected_named: NamedColorOption::Custom,
+    };
+    let err = invalid_hex
+        .to_known_color_spec_with_field("drawing.quick_colors[0].color")
+        .expect_err("invalid hash-looking hex should be rejected");
+    assert_eq!(err.field, "drawing.quick_colors[0].color");
+    assert!(err.message.contains("#RRGGBB"));
+
+    let unknown = ColorInput {
+        mode: ColorMode::Named,
+        name: "chartreuse".to_string(),
+        rgb: ["0".to_string(), "0".to_string(), "0".to_string()],
+        selected_named: NamedColorOption::Custom,
+    };
+    let err = unknown
+        .to_known_color_spec_with_field("drawing.quick_colors[0].color")
+        .expect_err("unknown quick color names should be rejected");
+    assert_eq!(err.field, "drawing.quick_colors[0].color");
+    assert!(err.message.contains("known color name"));
+}
+
+#[test]
 fn color_input_custom_name_requires_value() {
     let input = ColorInput {
         mode: ColorMode::Named,

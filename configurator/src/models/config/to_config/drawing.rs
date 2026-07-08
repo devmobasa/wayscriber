@@ -10,6 +10,8 @@ impl ConfigDraft {
             Ok(color) => config.drawing.default_color = color,
             Err(err) => errors.push(err),
         }
+        self.drawing_quick_colors
+            .apply_to_config(&mut config.drawing.quick_colors, errors);
         parse_field(
             &self.drawing_default_thickness,
             "drawing.default_thickness",

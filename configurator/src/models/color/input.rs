@@ -1,6 +1,6 @@
 use iced::Color;
 use wayscriber::config::enums::ColorSpec;
-use wayscriber::util::name_to_color;
+use wayscriber::util::{ConfigHexColorError, name_to_color, parse_config_hex_color};
 
 use super::super::error::FormError;
 use super::named::{ColorMode, NamedColorOption};
@@ -19,7 +19,7 @@ impl ColorInput {
             ColorSpec::Name(name) => Self {
                 mode: ColorMode::Named,
                 name: name.clone(),
-                rgb: ["255".into(), "0".into(), "0".into()],
+                rgb: color_to_rgb_strings(spec.to_color()),
                 selected_named: NamedColorOption::from_str(name),
             },
             ColorSpec::Rgb([r, g, b]) => Self {
@@ -38,11 +38,7 @@ impl ColorInput {
     pub fn to_color_spec_with_field(&self, field: &str) -> Result<ColorSpec, FormError> {
         match self.mode {
             ColorMode::Named => {
-                let value = if self.selected_named_is_custom() {
-                    self.name.trim().to_string()
-                } else {
-                    self.selected_named.as_value().to_string()
-                };
+                let value = self.named_value();
 
                 if value.trim().is_empty() {
                     Err(FormError::new(
@@ -70,8 +66,51 @@ impl ColorInput {
         }
     }
 
+    pub fn to_known_color_spec_with_field(&self, field: &str) -> Result<ColorSpec, FormError> {
+        match self.mode {
+            ColorMode::Named => {
+                let value = self.named_value();
+                if value.is_empty() {
+                    return Err(FormError::new(
+                        field.to_string(),
+                        "Please enter a color name or #RRGGBB hex color.",
+                    ));
+                }
+
+                match parse_config_hex_color(&value) {
+                    Ok(_) => return Ok(ColorSpec::Name(value)),
+                    Err(ConfigHexColorError::MissingHash) => {}
+                    Err(_) => {
+                        return Err(FormError::new(
+                            field.to_string(),
+                            "Expected #RRGGBB hex color.",
+                        ));
+                    }
+                }
+
+                if name_to_color(&value).is_some() {
+                    Ok(ColorSpec::Name(value))
+                } else {
+                    Err(FormError::new(
+                        field.to_string(),
+                        "Expected a known color name or #RRGGBB hex color.",
+                    ))
+                }
+            }
+            ColorMode::Rgb => self.to_color_spec_with_field(field),
+        }
+    }
+
     pub fn update_named_from_current(&mut self) {
         self.selected_named = NamedColorOption::from_str(&self.name);
+    }
+
+    pub fn sync_rgb_from_preview(&mut self) -> bool {
+        let Some(color) = self.preview_color() else {
+            return false;
+        };
+        self.rgb = iced_color_to_rgb_strings(color);
+        true
     }
 
     pub fn selected_named_is_custom(&self) -> bool {
@@ -81,24 +120,19 @@ impl ColorInput {
     pub fn preview_color(&self) -> Option<Color> {
         match self.mode {
             ColorMode::Named => {
-                let name = if self.selected_named_is_custom() {
-                    self.name.trim().to_string()
-                } else {
-                    self.selected_named.as_value().to_string()
-                };
+                let name = self.named_value();
 
                 if name.is_empty() {
                     return None;
                 }
 
-                name_to_color(&name).map(|color| {
-                    Color::from_rgba(
-                        color.r as f32,
-                        color.g as f32,
-                        color.b as f32,
-                        color.a as f32,
-                    )
-                })
+                match parse_config_hex_color(&name) {
+                    Ok(color) => Some(to_iced_color(color)),
+                    Err(ConfigHexColorError::MissingHash) => {
+                        name_to_color(&name).map(to_iced_color)
+                    }
+                    Err(_) => None,
+                }
             }
             ColorMode::Rgb => {
                 let mut components = [0.0f32; 3];
@@ -145,4 +179,37 @@ impl ColorInput {
             ),
         }
     }
+
+    fn named_value(&self) -> String {
+        if self.selected_named_is_custom() {
+            self.name.trim().to_string()
+        } else {
+            self.selected_named.as_value().to_string()
+        }
+    }
+}
+
+fn to_iced_color(color: wayscriber::draw::Color) -> Color {
+    Color::from_rgba(
+        color.r as f32,
+        color.g as f32,
+        color.b as f32,
+        color.a as f32,
+    )
+}
+
+fn color_to_rgb_strings(color: wayscriber::draw::Color) -> [String; 3] {
+    [
+        ((color.r.clamp(0.0, 1.0) * 255.0).round() as u8).to_string(),
+        ((color.g.clamp(0.0, 1.0) * 255.0).round() as u8).to_string(),
+        ((color.b.clamp(0.0, 1.0) * 255.0).round() as u8).to_string(),
+    ]
+}
+
+fn iced_color_to_rgb_strings(color: Color) -> [String; 3] {
+    [
+        ((color.r.clamp(0.0, 1.0) * 255.0).round() as u8).to_string(),
+        ((color.g.clamp(0.0, 1.0) * 255.0).round() as u8).to_string(),
+        ((color.b.clamp(0.0, 1.0) * 255.0).round() as u8).to_string(),
+    ]
 }

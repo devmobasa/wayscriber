@@ -253,6 +253,17 @@ impl ConfigDraft {
                 self.drawing_color.name = value;
                 self.drawing_color.update_named_from_current();
             }
+            TextField::QuickColorLabel(index) => {
+                if let Some(entry) = self.drawing_quick_colors.get_mut(index) {
+                    entry.label = value;
+                }
+            }
+            TextField::QuickColorName(index) => {
+                if let Some(entry) = self.drawing_quick_colors.get_mut(index) {
+                    entry.color.name = value;
+                    entry.color.update_named_from_current();
+                }
+            }
             TextField::DrawingThickness => self.drawing_default_thickness = value,
             TextField::DrawingEraserSize => self.drawing_default_eraser_size = value,
             TextField::DrawingFontSize => self.drawing_default_font_size = value,
@@ -351,6 +362,15 @@ impl ConfigDraft {
             TripletField::DrawingColorRgb => {
                 if let Some(slot) = self.drawing_color.rgb.get_mut(index) {
                     *slot = value;
+                }
+            }
+            TripletField::QuickColorRgb(quick_color_index) => {
+                if let Some(component) = self
+                    .drawing_quick_colors
+                    .get_mut(quick_color_index)
+                    .and_then(|entry| entry.color.rgb.get_mut(index))
+                {
+                    *component = value;
                 }
             }
         }

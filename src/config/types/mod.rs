@@ -27,7 +27,10 @@ pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, Board
 pub use capture::CaptureConfig;
 pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
-pub use drawing::{DragButtonConfig, DrawingConfig, MouseDragToolsConfig};
+pub use drawing::{
+    DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,
+    QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorsConfig,
+};
 pub use export::{
     ExportConfig, PDF_LABEL_APP_BOARD, PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME,
     PDF_LABEL_DEFAULT_TEMPLATE, PDF_LABEL_DOCUMENT_PAGE, PDF_LABEL_DOCUMENT_PAGES,

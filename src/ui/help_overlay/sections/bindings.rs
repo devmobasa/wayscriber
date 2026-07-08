@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::config::{Action, RadialMenuMouseBinding, action_meta_iter};
+use crate::config::{
+    Action, QuickColorPalette, QuickColorSlot, RadialMenuMouseBinding, action_meta_iter,
+};
 use crate::input::InputState;
 use crate::label_format::{format_binding_labels_or, join_binding_labels};
 
@@ -8,6 +10,7 @@ pub struct HelpOverlayBindings {
     labels: HashMap<Action, Vec<String>>,
     cache_key: String,
     radial_menu_mouse_label: Option<String>,
+    quick_colors: QuickColorPalette,
 }
 
 impl Default for HelpOverlayBindings {
@@ -16,6 +19,7 @@ impl Default for HelpOverlayBindings {
             labels: HashMap::new(),
             cache_key: String::new(),
             radial_menu_mouse_label: Some("Middle Click".to_string()),
+            quick_colors: QuickColorPalette::default(),
         }
     }
 }
@@ -45,11 +49,13 @@ impl HelpOverlayBindings {
             "radial_mouse={}",
             radial_menu_mouse_label.as_deref().unwrap_or("")
         ));
+        cache_parts.push(format!("quick_colors={}", state.quick_colors.cache_key()));
 
         Self {
             labels,
             cache_key: cache_parts.join("|"),
             radial_menu_mouse_label,
+            quick_colors: state.quick_colors.clone(),
         }
     }
 
@@ -63,6 +69,15 @@ impl HelpOverlayBindings {
 
     pub(crate) fn radial_menu_mouse_label(&self) -> Option<&str> {
         self.radial_menu_mouse_label.as_deref()
+    }
+
+    pub(crate) fn quick_color_badge(&self, index: usize) -> Option<[f64; 3]> {
+        let color = self.quick_colors.color_for_index(index)?;
+        Some([color.r, color.g, color.b])
+    }
+
+    pub(crate) fn quick_color_count(&self) -> usize {
+        self.quick_colors.len().min(QuickColorSlot::ALL.len())
     }
 }
 
@@ -185,7 +200,9 @@ fn split_numeric_suffix(label: &str) -> Option<(String, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Action;
+    use crate::config::{Action, QuickColorPaletteEntry};
+    use crate::draw::Color;
+    use crate::input::state::test_support::make_test_input_state;
 
     fn bindings_with(entries: &[(Action, &[&str])]) -> HelpOverlayBindings {
         let labels = entries
@@ -201,6 +218,7 @@ mod tests {
             labels,
             cache_key: String::new(),
             radial_menu_mouse_label: Some("Middle Click".to_string()),
+            quick_colors: QuickColorPalette::default(),
         }
     }
 
@@ -245,6 +263,36 @@ mod tests {
         assert_eq!(
             bindings_compact_or_fallback(&bindings, &[Action::Board1, Action::Board3], "fallback"),
             "Ctrl+Shift+1 / Ctrl+Shift+3"
+        );
+    }
+
+    #[test]
+    fn from_input_state_includes_quick_colors_in_cache_and_badges() {
+        let mut state = make_test_input_state();
+        let custom_green = Color {
+            r: 0.10,
+            g: 0.20,
+            b: 0.30,
+            a: 1.0,
+        };
+        state.set_quick_colors(QuickColorPalette::from_entries(vec![
+            QuickColorPaletteEntry {
+                label: "Red".to_string(),
+                color: crate::draw::color::RED,
+            },
+            QuickColorPaletteEntry {
+                label: "Custom green".to_string(),
+                color: custom_green,
+            },
+        ]));
+
+        let bindings = HelpOverlayBindings::from_input_state(&state);
+
+        assert!(bindings.cache_key().contains("quick_colors="));
+        assert!(bindings.cache_key().contains("Custom green=#1A334D"));
+        assert_eq!(
+            bindings.quick_color_badge(1),
+            Some([custom_green.r, custom_green.g, custom_green.b])
         );
     }
 

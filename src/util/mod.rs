@@ -1,7 +1,6 @@
 //! Utility functions for colors, geometry, text, and arrowhead calculations.
 //!
 //! This module provides:
-//! - Key-to-color mapping for keyboard shortcuts (constants moved to draw::color)
 //! - Arrowhead geometry calculations
 //! - Ellipse bounding box calculations
 //! - Text truncation utilities
@@ -12,7 +11,7 @@ mod geometry;
 mod text;
 
 pub(crate) use arrow::calculate_arrowhead_triangle_custom;
-pub use colors::{color_to_name, key_to_color, name_to_color};
+pub use colors::{ConfigHexColorError, color_to_name, name_to_color, parse_config_hex_color};
 pub use geometry::{Rect, ellipse_bounds};
 pub use text::truncate_with_ellipsis;
 

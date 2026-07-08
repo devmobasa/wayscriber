@@ -29,6 +29,7 @@ Controls the default appearance of annotations.
 [drawing]
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# Or #RRGGBB hex: "#FFB3BA"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
@@ -74,6 +75,62 @@ ctrl_drag_tool = "rect"
 ctrl_shift_drag_tool = "arrow"
 tab_drag_tool = "ellipse"
 
+# Ordered quick colors used by shortcuts, toolbar swatches, and radial menu.
+# The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by
+# hand, missing shortcut positions use built-in defaults and help-overlay badges
+# follow those shortcut-backed entries. Extra entries have no shortcut action
+# binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
+# arrays.
+[[drawing.quick_colors]]
+label = "Red"
+color = "red"
+
+[[drawing.quick_colors]]
+label = "Green"
+color = "green"
+
+[[drawing.quick_colors]]
+label = "Blue"
+color = "blue"
+
+[[drawing.quick_colors]]
+label = "Yellow"
+color = "yellow"
+
+[[drawing.quick_colors]]
+label = "Orange"
+color = "orange"
+
+[[drawing.quick_colors]]
+label = "Pink"
+color = "pink"
+
+[[drawing.quick_colors]]
+label = "White"
+color = "white"
+
+[[drawing.quick_colors]]
+label = "Black"
+color = "black"
+
+[[drawing.quick_colors]]
+label = "Cyan"
+color = "#00FFFF"
+
+[[drawing.quick_colors]]
+label = "Purple"
+color = "#9966CC"
+
+[[drawing.quick_colors]]
+label = "Gray"
+color = "#666666"
+
+# Example custom entry:
+# [[drawing.quick_colors]]
+# label = "Blush"
+# color = "#FFB3BA"
+
 # Optional per-button override. Right/middle keep their built-in behavior
 # unless configured. Use "default" for a button's built-in behavior.
 [drawing.drag_tools.left]
@@ -91,7 +148,15 @@ drag_tool = "default"
 
 **Color Options:**
 - **Named colors**: `"red"`, `"green"`, `"blue"`, `"yellow"`, `"orange"`, `"pink"`, `"white"`, `"black"`
+- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
+
+**Quick Colors:**
+- `[[drawing.quick_colors]]` entries define an ordered palette.
+- The first eight entries are selected by <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; missing first-eight entries fall back to built-in defaults.
+- The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors, while the radial menu keeps the original first-eight color ring.
+- Extra entries have no quick-color action binding; explicit extra entries appear in toolbar and radial palette UIs, capped to the first 24 colors.
+- Help overlay badges are shown for the first eight shortcut-backed entries only.
 
 **Runtime Adjustments:**
 - **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-50px)

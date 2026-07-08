@@ -8,7 +8,9 @@ use super::super::types::{
     ToolbarDrawerTab,
 };
 use super::structs::InputState;
-use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, RadialMenuMouseBinding};
+use crate::config::{
+    Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding,
+};
 use crate::draw::{DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{
@@ -75,6 +77,7 @@ impl InputState {
         let mut state = Self {
             boards: BoardManager::from_config(boards_config),
             current_color: color,
+            quick_colors: QuickColorPalette::default(),
             current_thickness: thickness,
             tool_settings,
             pressure_variation_threshold: 0.1,

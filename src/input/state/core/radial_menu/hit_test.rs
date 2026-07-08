@@ -1,11 +1,12 @@
 use super::state::sub_ring_child_count;
-use super::{COLOR_SEGMENT_COUNT, RadialMenuLayout, RadialSegmentId, TOOL_SEGMENT_COUNT};
+use super::{RadialMenuLayout, RadialSegmentId, TOOL_SEGMENT_COUNT};
 use std::f64::consts::PI;
 
 /// Perform a hit-test on the radial menu and return the segment under (x, y).
 pub fn hit_test_radial(
     layout: &RadialMenuLayout,
     expanded_sub_ring: Option<u8>,
+    color_segment_count: usize,
     x: f64,
     y: f64,
 ) -> Option<RadialSegmentId> {
@@ -50,11 +51,12 @@ pub fn hit_test_radial(
     }
 
     // Color ring
-    if dist >= layout.color_inner && dist <= layout.color_outer {
+    if color_segment_count > 0 && dist >= layout.color_inner && dist <= layout.color_outer {
+        let color_segment_count = color_segment_count.min(u8::MAX as usize);
         // Color ring uses its own segment size and render offset.
-        let color_half_seg = PI / COLOR_SEGMENT_COUNT as f64; // == color_seg_angle / 2
+        let color_half_seg = PI / color_segment_count as f64; // == color_seg_angle / 2
         let color_angle = normalize_angle(dy.atan2(dx) + PI / 2.0 + color_half_seg);
-        let idx = angle_to_segment(color_angle, COLOR_SEGMENT_COUNT);
+        let idx = angle_to_segment(color_angle, color_segment_count);
         return Some(RadialSegmentId::Color(idx));
     }
 

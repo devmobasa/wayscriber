@@ -1,3 +1,4 @@
+use crate::config::QuickColorPalette;
 use crate::config::{
     ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, toolbar_item_ids as ids,
 };
@@ -221,6 +222,7 @@ pub struct ToolbarSnapshot {
     pub active_tool: Tool,
     pub tool_override: Option<Tool>,
     pub color: Color,
+    pub quick_colors: QuickColorPalette,
     pub thickness: f64,
     pub eraser_size: f64,
     pub thickness_targets_eraser: bool,

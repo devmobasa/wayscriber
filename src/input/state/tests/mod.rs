@@ -3,7 +3,6 @@ use super::*;
 use crate::config::{Action, BoardsConfig, ColorSpec, ToolPresetConfig};
 use crate::draw::{Color, EraserKind, FontDescriptor, Shape, frame::UndoAction};
 use crate::input::{ClickHighlightSettings, EraserMode, Key, MouseButton, Tool};
-use crate::util;
 
 mod helpers;
 use helpers::{

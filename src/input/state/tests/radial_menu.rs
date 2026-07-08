@@ -1,5 +1,6 @@
 use super::helpers::create_test_input_state_with_keybindings;
 use super::*;
+use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
 use crate::input::BOARD_ID_WHITEBOARD;
 use std::f64::consts::PI;
 
@@ -248,7 +249,7 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
         .expect("layout should exist for open radial menu");
 
     // Just inside color segment 1 (Green), close to the segment boundary.
-    let seg = 2.0 * PI / RADIAL_COLOR_SEGMENT_COUNT as f64;
+    let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
     let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
@@ -257,7 +258,45 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
     state.update_radial_menu_hover(probe_x, probe_y);
     state.radial_menu_select_hovered();
 
-    let expected = radial_color_for_index(1);
+    let expected = state.quick_colors.radial_color_for_index(1).unwrap();
+    assert!(colors_approx_eq(&state.current_color, &expected));
+}
+
+#[test]
+fn color_ring_selection_uses_configured_quick_palette() {
+    let mut state = create_test_input_state();
+    let configured_green = Color {
+        r: 0.12,
+        g: 0.34,
+        b: 0.56,
+        a: 1.0,
+    };
+    state.set_quick_colors(QuickColorPalette::from_entries(vec![
+        QuickColorPaletteEntry {
+            label: "First".to_string(),
+            color: crate::draw::color::RED,
+        },
+        QuickColorPaletteEntry {
+            label: "Configured".to_string(),
+            color: configured_green,
+        },
+    ]));
+    state.open_radial_menu(300.0, 220.0);
+    state.update_radial_menu_layout(900, 700);
+    let layout = state
+        .radial_menu_layout
+        .expect("layout should exist for open radial menu");
+
+    let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
+    let probe_angle = -PI / 2.0 + seg + 0.04;
+    let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
+    let probe_x = layout.center_x + probe_radius * probe_angle.cos();
+    let probe_y = layout.center_y + probe_radius * probe_angle.sin();
+
+    state.update_radial_menu_hover(probe_x, probe_y);
+    state.radial_menu_select_hovered();
+
+    let expected = configured_green;
     assert!(colors_approx_eq(&state.current_color, &expected));
 }
 
