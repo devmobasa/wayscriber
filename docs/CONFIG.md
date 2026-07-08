@@ -75,11 +75,12 @@ ctrl_drag_tool = "rect"
 ctrl_shift_drag_tool = "arrow"
 tab_drag_tool = "ellipse"
 
-# Ordered quick colors used by shortcuts, toolbar swatches, radial menu, and help.
+# Ordered quick colors used by shortcuts, toolbar swatches, and radial menu.
 # The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by
-# hand, missing shortcut positions use built-in defaults. Extra entries have no
-# shortcut action binding and appear in toolbar/radial palette UIs, capped to the
-# first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB arrays.
+# hand, missing shortcut positions use built-in defaults and help-overlay badges
+# follow those shortcut-backed entries. Extra entries have no shortcut action
+# binding and appear in toolbar/radial palette UIs, capped to the first 24
+# rendered colors. Use known color names, #RRGGBB hex, or RGB arrays.
 [[drawing.quick_colors]]
 label = "Red"
 color = "red"
@@ -154,7 +155,7 @@ drag_tool = "default"
 - The first eight entries are selected by <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; missing first-eight entries fall back to built-in defaults.
 - Default configs also include Cyan, Purple, and Gray as extra toolbar/radial colors using hex values.
 - Extra entries have no quick-color action binding; toolbar and radial palette UIs render at most the first 24 colors.
-- The same runtime palette drives shortcuts, toolbar swatches, radial menu colors, and help overlay badges.
+- Help overlay badges are shown for the first eight shortcut-backed entries only.
 
 **Runtime Adjustments:**
 - **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-50px)

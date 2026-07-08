@@ -899,11 +899,12 @@ font_style = "normal"
 # Default: false (no background, cleaner look with just stroke outline)
 text_background_enabled = false
 
-# Ordered quick colors used by shortcuts, toolbar swatches, radial menu, and help.
+# Ordered quick colors used by shortcuts, toolbar swatches, and radial menu.
 # The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by
-# hand, missing shortcut positions use built-in defaults. Extra entries have no
-# shortcut action binding and appear in toolbar/radial palette UIs, capped to the
-# first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB arrays.
+# hand, missing shortcut positions use built-in defaults and help-overlay badges
+# follow those shortcut-backed entries. Extra entries have no shortcut action
+# binding and appear in toolbar/radial palette UIs, capped to the first 24
+# rendered colors. Use known color names, #RRGGBB hex, or RGB arrays.
 [[drawing.quick_colors]]
 label = "Red"
 color = "red"
