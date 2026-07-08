@@ -105,7 +105,10 @@ mod tests;
 type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 pub(in crate::backend::wayland) use self::buffer_damage::FullDamageReason;
-pub(in crate::backend::wayland) use self::perf::{PerfInputSource, PerfRenderSkipReason};
+pub(in crate::backend::wayland) use self::perf::{
+    PerfDamageDiagnostics, PerfFrameDamageContext, PerfInputSource, PerfRenderBreakdown,
+    PerfRenderProfileKind, PerfRenderSkipReason, damage_covers_logical_surface,
+};
 pub(super) use helpers::{
     color_log, damage_summary, debug_damage_logging_enabled, debug_toolbar_color_logging_enabled,
     debug_toolbar_drag_logging_enabled, drag_log, force_inline_toolbars_requested,

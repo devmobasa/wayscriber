@@ -29,7 +29,8 @@ pub use base::{
 pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState};
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,
-    PendingSelectionClipboardPublish, SelectionPublishState, WayscriberClipboardSelection,
+    PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
+    WayscriberClipboardSelection,
 };
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub use color_picker_popup::{

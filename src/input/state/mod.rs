@@ -34,7 +34,8 @@ pub(crate) use core::{
 #[allow(unused_imports)]
 pub(crate) use core::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,
-    PendingSelectionClipboardPublish, SelectionPublishState, WayscriberClipboardSelection,
+    PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
+    WayscriberClipboardSelection,
 };
 pub use highlight::ClickHighlightSettings;
 

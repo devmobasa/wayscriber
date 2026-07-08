@@ -314,6 +314,32 @@ fn append_path_long_diagonal_release_splits_finished_path_damage() {
 }
 
 #[test]
+fn first_stroke_onboarding_signal_keeps_release_damage_bounded() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    state.update_screen_dimensions(1000, 1000);
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    let _ = state.take_dirty_regions();
+    state.on_mouse_motion(900, 900);
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_release(MouseButton::Left, 900, 900);
+    let first_dirty = state.take_dirty_region_report();
+
+    assert!(state.pending_onboarding_usage.first_stroke_done);
+    assert_eq!(first_dirty.full_reason, None);
+    assert!(
+        first_dirty.regions.iter().all(|rect| {
+            !(rect.x <= 0 && rect.y <= 0 && rect.width >= 1000 && rect.height >= 1000)
+        }),
+        "input onboarding usage should not force full-surface release damage; dirty={:?}",
+        first_dirty.regions
+    );
+}
+
+#[test]
 fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Pen)));

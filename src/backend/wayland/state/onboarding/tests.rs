@@ -1,10 +1,10 @@
 use super::first_run::{
-    background_mode_prompt_active, background_mode_prompt_choice,
+    apply_persisted_usage_signals, background_mode_prompt_active, background_mode_prompt_choice,
     first_run_card_hidden_by_ui_state, first_run_skip_allowed, first_run_step_eyebrow,
     quick_access_completed,
 };
 use crate::config::RadialMenuMouseBinding;
-use crate::input::Key;
+use crate::input::{Key, state::PendingOnboardingUsage};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 
 #[test]
@@ -141,4 +141,34 @@ fn quick_access_blocks_when_toolbar_required_and_still_hidden() {
         false,
         false,
     ));
+}
+
+#[test]
+fn persisted_usage_signals_apply_after_first_run_completion() {
+    let mut state = OnboardingState {
+        first_run_completed: true,
+        first_run_skipped: true,
+        ..OnboardingState::default()
+    };
+    let usage = PendingOnboardingUsage {
+        first_stroke_done: true,
+        first_undo_done: true,
+        used_toolbar_toggle: true,
+        used_radial_menu: true,
+        used_context_menu_right_click: true,
+        used_context_menu_keyboard: true,
+        used_help_overlay: true,
+        used_command_palette: true,
+    };
+
+    assert!(apply_persisted_usage_signals(&mut state, &usage));
+
+    assert!(!state.first_stroke_done);
+    assert!(!state.first_undo_done);
+    assert!(!state.used_toolbar_toggle);
+    assert!(state.used_radial_menu);
+    assert!(state.used_context_menu_right_click);
+    assert!(state.used_context_menu_keyboard);
+    assert!(state.used_help_overlay);
+    assert!(state.used_command_palette);
 }
