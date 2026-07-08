@@ -199,7 +199,7 @@ impl ToolbarLayoutSpec {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
         let visible_rows = if snapshot.show_more_colors {
-            let color_count = snapshot.quick_colors.len().max(1);
+            let color_count = snapshot.quick_colors.rendered_len().max(1);
             color_count.div_ceil(Self::SIDE_COLOR_SWATCHES_PER_ROW)
         } else {
             1

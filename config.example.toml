@@ -901,9 +901,9 @@ text_background_enabled = false
 
 # Ordered quick colors used by shortcuts, toolbar swatches, radial menu, and help.
 # The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by
-# hand, missing shortcut positions use built-in defaults. Additional entries
-# appear in palette UIs where space allows. Use known color names, #RRGGBB hex,
-# or RGB arrays.
+# hand, missing shortcut positions use built-in defaults. Extra entries have no
+# shortcut action binding and appear in toolbar/radial palette UIs, capped to the
+# first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB arrays.
 [[drawing.quick_colors]]
 label = "Red"
 color = "red"
@@ -935,6 +935,18 @@ color = "white"
 [[drawing.quick_colors]]
 label = "Black"
 color = "black"
+
+[[drawing.quick_colors]]
+label = "Cyan"
+color = "#00FFFF"
+
+[[drawing.quick_colors]]
+label = "Purple"
+color = "#9966CC"
+
+[[drawing.quick_colors]]
+label = "Gray"
+color = "#666666"
 
 # Example custom entry:
 # [[drawing.quick_colors]]

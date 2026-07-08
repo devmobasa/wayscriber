@@ -87,14 +87,20 @@ fn config_draft_round_trips_quick_colors() {
 #[test]
 fn config_draft_reorders_and_removes_quick_colors() {
     let mut draft = ConfigDraft::from_config(&Config::default());
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 11);
     draft.drawing_quick_colors.entries[0].label = "First".to_string();
     draft.drawing_quick_colors.entries[1].label = "Second".to_string();
 
     assert!(draft.drawing_quick_colors.move_entry(1, -1));
     assert_eq!(draft.drawing_quick_colors.entries[0].label, "Second");
 
-    assert!(!draft.drawing_quick_colors.remove_entry(1));
+    assert!(draft.drawing_quick_colors.remove_entry(10));
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 10);
+    assert!(draft.drawing_quick_colors.remove_entry(9));
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 9);
+    assert!(draft.drawing_quick_colors.remove_entry(8));
     assert_eq!(draft.drawing_quick_colors.entries.len(), 8);
+    assert!(!draft.drawing_quick_colors.remove_entry(1));
 
     draft.drawing_quick_colors.add_entry();
     assert_eq!(draft.drawing_quick_colors.entries.len(), 9);

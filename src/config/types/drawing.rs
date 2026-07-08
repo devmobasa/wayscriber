@@ -5,6 +5,9 @@ use crate::draw::shape::REGULAR_POLYGON_DEFAULT_SIDES;
 use crate::input::{DragBindableTool, DragTool, EraserMode};
 use serde::{Deserialize, Serialize};
 
+/// Maximum quick colors rendered by dense palette UIs.
+pub const QUICK_COLOR_RENDER_LIMIT: usize = 24;
+
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
@@ -158,8 +161,12 @@ impl Default for QuickColorsConfig {
 
 impl QuickColorsConfig {
     pub fn effective_entries(&self) -> Vec<QuickColorConfig> {
+        if self.entries.is_empty() {
+            return default_quick_color_entries();
+        }
+
         let mut entries = self.entries.clone();
-        let defaults = default_quick_color_entries();
+        let defaults = default_shortcut_quick_color_entries();
         if entries.len() < QuickColorSlot::ALL.len() {
             entries.extend(defaults.into_iter().skip(entries.len()));
         }
@@ -303,12 +310,20 @@ impl QuickColorPalette {
         Self { entries }
     }
 
-    pub fn entries(&self) -> &[QuickColorPaletteEntry] {
-        &self.entries
+    pub fn rendered_entries(&self) -> &[QuickColorPaletteEntry] {
+        let len = self.rendered_len();
+        &self.entries[..len]
     }
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn rendered_len(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
+        self.entries.len().min(QUICK_COLOR_RENDER_LIMIT)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -326,6 +341,10 @@ impl QuickColorPalette {
 
     pub fn color_for_index(&self, index: usize) -> Option<Color> {
         self.entry(index).map(|entry| entry.color)
+    }
+
+    pub fn rendered_color_for_index(&self, index: usize) -> Option<Color> {
+        self.rendered_entries().get(index).map(|entry| entry.color)
     }
 
     pub fn action_for_index(index: usize) -> Option<Action> {
@@ -618,7 +637,7 @@ fn default_color() -> ColorSpec {
     ColorSpec::Name("red".to_string())
 }
 
-fn default_quick_color_entries() -> Vec<QuickColorConfig> {
+fn default_shortcut_quick_color_entries() -> Vec<QuickColorConfig> {
     [
         ("Red", "red"),
         ("Green", "green"),
@@ -635,6 +654,25 @@ fn default_quick_color_entries() -> Vec<QuickColorConfig> {
         color: ColorSpec::Name(color.to_string()),
     })
     .collect()
+}
+
+fn default_quick_color_entries() -> Vec<QuickColorConfig> {
+    let mut entries = default_shortcut_quick_color_entries();
+    entries.extend([
+        QuickColorConfig {
+            label: "Cyan".to_string(),
+            color: ColorSpec::Rgb([0, 255, 255]),
+        },
+        QuickColorConfig {
+            label: "Purple".to_string(),
+            color: ColorSpec::Rgb([153, 102, 204]),
+        },
+        QuickColorConfig {
+            label: "Gray".to_string(),
+            color: ColorSpec::Rgb([102, 102, 102]),
+        },
+    ]);
+    entries
 }
 
 fn quick_color_label(entry: &QuickColorConfig, index: usize) -> String {

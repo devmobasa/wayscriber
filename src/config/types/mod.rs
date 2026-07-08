@@ -28,8 +28,8 @@ pub use capture::CaptureConfig;
 pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
 pub use drawing::{
-    DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QuickColorConfig, QuickColorPalette,
-    QuickColorPaletteEntry, QuickColorSlot, QuickColorsConfig,
+    DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,
+    QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorsConfig,
 };
 pub use export::{
     ExportConfig, PDF_LABEL_APP_BOARD, PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME,

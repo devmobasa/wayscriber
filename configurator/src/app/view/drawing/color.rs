@@ -1,6 +1,7 @@
 use crate::app::view::theme;
-use iced::widget::{Column, Row, button, column, pick_list, row, text, text_input};
+use iced::widget::{Column, Row, button, column, container, pick_list, row, text, text_input};
 use iced::{Alignment, Element, Length};
+use wayscriber::config::QUICK_COLOR_RENDER_LIMIT;
 
 use crate::messages::Message;
 use crate::models::{ColorMode, ColorPickerId, NamedColorOption, TextField, TripletField};
@@ -66,12 +67,30 @@ pub(super) fn quick_colors_block(app: &ConfiguratorApp) -> Element<'_, Message> 
         .spacing(12)
         .align_y(Alignment::Center),
     );
+    if let Some(warning) =
+        quick_color_render_limit_warning(app.draft.drawing_quick_colors.entries.len())
+    {
+        column = column.push(
+            container(text(warning).size(12))
+                .padding(8)
+                .width(Length::Fill)
+                .style(theme::Container::Warning),
+        );
+    }
 
     for index in 0..app.draft.drawing_quick_colors.entries.len() {
         column = column.push(quick_color_entry_block(app, index));
     }
 
     column.into()
+}
+
+fn quick_color_render_limit_warning(count: usize) -> Option<String> {
+    (count > QUICK_COLOR_RENDER_LIMIT).then(|| {
+        format!(
+            "Only the first {QUICK_COLOR_RENDER_LIMIT} quick colors are shown in toolbar and radial menus."
+        )
+    })
 }
 
 fn named_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
@@ -287,4 +306,19 @@ fn rgb_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
     }
 
     column.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quick_color_render_limit_warning_starts_after_render_cap() {
+        assert!(quick_color_render_limit_warning(QUICK_COLOR_RENDER_LIMIT).is_none());
+
+        let warning = quick_color_render_limit_warning(QUICK_COLOR_RENDER_LIMIT + 1)
+            .expect("expected warning once quick colors exceed render cap");
+
+        assert!(warning.contains(&QUICK_COLOR_RENDER_LIMIT.to_string()));
+    }
 }

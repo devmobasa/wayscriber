@@ -128,6 +128,119 @@ fn drawing_quick_colors_missing_shortcut_slots_backfill_defaults() {
 }
 
 #[test]
+fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
+    let palette = QuickColorPalette::default();
+
+    assert_eq!(palette.len(), 11);
+    assert_eq!(
+        palette.entry(8).map(|entry| entry.label.as_str()),
+        Some("Cyan")
+    );
+    assert_eq!(
+        palette.entry(9).map(|entry| entry.label.as_str()),
+        Some("Purple")
+    );
+    assert_eq!(
+        palette.entry(10).map(|entry| entry.label.as_str()),
+        Some("Gray")
+    );
+    assert!(color_approx_eq(
+        &palette.color_for_index(8).unwrap(),
+        &crate::draw::Color {
+            r: 0.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        },
+    ));
+    assert!(color_approx_eq(
+        &palette.color_for_index(9).unwrap(),
+        &crate::draw::Color {
+            r: 153.0 / 255.0,
+            g: 102.0 / 255.0,
+            b: 204.0 / 255.0,
+            a: 1.0,
+        },
+    ));
+    assert!(color_approx_eq(
+        &palette.color_for_index(10).unwrap(),
+        &crate::draw::Color {
+            r: 102.0 / 255.0,
+            g: 102.0 / 255.0,
+            b: 102.0 / 255.0,
+            a: 1.0,
+        },
+    ));
+}
+
+#[test]
+fn drawing_quick_color_actions_stay_limited_to_first_eight_slots() {
+    let palette = QuickColorPalette::default();
+
+    assert_eq!(
+        palette.color_for_action(Action::SetColorRed),
+        Some(crate::draw::color::RED)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorGreen),
+        Some(crate::draw::color::GREEN)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorBlue),
+        Some(crate::draw::color::BLUE)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorYellow),
+        Some(crate::draw::color::YELLOW)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorOrange),
+        Some(crate::draw::color::ORANGE)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorPink),
+        Some(crate::draw::color::PINK)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorWhite),
+        Some(crate::draw::color::WHITE)
+    );
+    assert_eq!(
+        palette.color_for_action(Action::SetColorBlack),
+        Some(crate::draw::color::BLACK)
+    );
+    assert_eq!(QuickColorPalette::action_for_index(8), None);
+    assert_eq!(QuickColorPalette::action_for_index(9), None);
+    assert_eq!(QuickColorPalette::action_for_index(10), None);
+}
+
+#[test]
+fn drawing_quick_color_rendered_entries_are_capped_without_dropping_config() {
+    let entries = (0..QUICK_COLOR_RENDER_LIMIT + 3)
+        .map(|index| QuickColorPaletteEntry {
+            label: format!("Color {index}"),
+            color: crate::draw::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        })
+        .collect();
+    let palette = QuickColorPalette::from_entries(entries);
+
+    assert_eq!(palette.len(), QUICK_COLOR_RENDER_LIMIT + 3);
+    assert_eq!(palette.rendered_len(), QUICK_COLOR_RENDER_LIMIT);
+    assert_eq!(palette.rendered_entries().len(), QUICK_COLOR_RENDER_LIMIT);
+    assert!(palette.color_for_index(QUICK_COLOR_RENDER_LIMIT).is_some());
+    assert!(
+        palette
+            .rendered_color_for_index(QUICK_COLOR_RENDER_LIMIT)
+            .is_none()
+    );
+}
+
+#[test]
 fn drawing_quick_colors_invalid_hash_hex_warns_and_falls_back_red() {
     let config: Config = toml::from_str(
         "[[drawing.quick_colors]]\nlabel = 'Invalid'\ncolor = '#GG0000'\n\n[[drawing.quick_colors]]\nlabel = 'Short'\ncolor = '#12345'\n",
