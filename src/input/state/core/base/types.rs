@@ -371,6 +371,7 @@ pub enum PendingBackendAction {
     Screenshot(Action),
     CanvasExport(Action),
     BoardPdfExport(Action),
+    ClearSavedToolState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

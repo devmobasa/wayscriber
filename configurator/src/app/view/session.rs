@@ -4,7 +4,8 @@ use iced::{Element, Length};
 use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::session_catalog::{
     session_artifact_status_label, session_clear_cached_status_blocker,
-    session_duplicate_cached_status_blocker, session_move_cached_status_blocker,
+    session_clear_tool_state_cached_status_blocker, session_duplicate_cached_status_blocker,
+    session_move_cached_status_blocker,
 };
 use crate::app::view::theme;
 use crate::messages::Message;
@@ -190,6 +191,8 @@ impl ConfiguratorApp {
                 .align_y(iced::Alignment::Center),
             text("Recent named session files recorded from overlay Open and Save As actions.")
                 .size(14),
+            text("Clear Tool State applies config defaults without deleting boards.").size(14),
+            text("Clear Saved Data removes saved session files.").size(14),
         ]
         .spacing(10);
 
@@ -261,6 +264,15 @@ impl ConfiguratorApp {
         if !busy {
             reveal_button =
                 reveal_button.on_press(Message::SessionCatalogRevealRequested(id.clone()));
+        }
+
+        let clear_tool_state_blocker =
+            session_clear_tool_state_cached_status_blocker(self.daemon_status.as_ref());
+        let mut clear_tool_state_button =
+            button("Clear Tool State").style(theme::Button::Secondary);
+        if !busy && clear_tool_state_blocker.is_none() {
+            clear_tool_state_button = clear_tool_state_button
+                .on_press(Message::SessionCatalogClearToolStateRequested(id.clone()));
         }
 
         let mut forget_button = button("Forget").style(theme::Button::Subtle);
@@ -342,9 +354,15 @@ impl ConfiguratorApp {
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
-        let actions = row![reveal_button, clear_controls, forget_button]
-            .spacing(8)
-            .align_y(iced::Alignment::Center);
+        let actions = column![
+            row![reveal_button, clear_tool_state_button]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+            row![clear_controls, forget_button]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+        ]
+        .spacing(8);
 
         container(
             column![

@@ -187,6 +187,9 @@ pub(crate) fn print_usage() {
     println!("  wayscriber --session-info [--session-file PATH]  Inspect saved session data");
     println!("  wayscriber --clear-session [--session-file PATH]  Remove saved session data");
     println!(
+        "  wayscriber --clear-tool-state [--session-file PATH]  Reset saved tool defaults only"
+    );
+    println!(
         "  wayscriber --exit-after-capture  Exit overlay after a capture completes (override auto clipboard exit)"
     );
     println!(

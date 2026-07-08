@@ -115,6 +115,19 @@ fn session_file_accepts_separated_and_attached_values() {
         cli.session_file,
         Some(PathBuf::from("/tmp/wayscriber-info.session"))
     );
+
+    let cli = Cli::try_parse_from([
+        "wayscriber",
+        "--clear-tool-state",
+        "--session-file",
+        "/tmp/wayscriber-tool-state.session",
+    ])
+    .unwrap();
+    assert!(cli.clear_tool_state);
+    assert_eq!(
+        cli.session_file,
+        Some(PathBuf::from("/tmp/wayscriber-tool-state.session"))
+    );
 }
 
 #[test]
@@ -126,7 +139,7 @@ fn session_file_requires_supported_command() {
     ]);
     assert_eq!(
         result.unwrap_err(),
-        "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, or --clear-session"
+        "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, --clear-session, or --clear-tool-state"
     );
 }
 
@@ -200,14 +213,36 @@ fn offline_session_commands_reject_resume_overrides() {
     let info_result = Cli::try_parse_from(["wayscriber", "--session-info", "--resume-session"]);
     assert_eq!(
         info_result.unwrap_err(),
-        "--resume-session conflicts with --clear-session/--session-info"
+        "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
     );
 
     let clear_result =
         Cli::try_parse_from(["wayscriber", "--clear-session", "--no-resume-session"]);
     assert_eq!(
         clear_result.unwrap_err(),
-        "--no-resume-session conflicts with --clear-session/--session-info"
+        "--no-resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+    );
+
+    let tool_state_result =
+        Cli::try_parse_from(["wayscriber", "--clear-tool-state", "--resume-session"]);
+    assert_eq!(
+        tool_state_result.unwrap_err(),
+        "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+    );
+}
+
+#[test]
+fn offline_session_commands_conflict_with_each_other() {
+    let clear_result = Cli::try_parse_from(["wayscriber", "--clear-tool-state", "--clear-session"]);
+    assert_eq!(
+        clear_result.unwrap_err(),
+        "--clear-tool-state conflicts with --clear-session"
+    );
+
+    let info_result = Cli::try_parse_from(["wayscriber", "--clear-tool-state", "--session-info"]);
+    assert_eq!(
+        info_result.unwrap_err(),
+        "--clear-tool-state conflicts with --session-info"
     );
 }
 
@@ -268,6 +303,12 @@ fn cli_conflicting_flags_fail() {
     assert!(
         result.is_err(),
         "expected conflicting flags (--active and --clear-session) to error"
+    );
+
+    let result = Cli::try_parse_from(["wayscriber", "--active", "--clear-tool-state"]);
+    assert_eq!(
+        result.unwrap_err(),
+        "--clear-tool-state conflicts with --daemon/--active"
     );
 }
 
