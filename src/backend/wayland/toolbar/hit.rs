@@ -4,6 +4,13 @@ use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::model::{ToolbarSlider, ToolbarSliderSpec, ToolbarSliderTarget};
 
+/// Minimum pointer-target size in logical pixels. Visual rects stay as
+/// drawn; hit-testing inflates smaller rects to at least this square so
+/// small chrome (collapse chevrons, drag grips, micro-buttons) stays
+/// comfortably clickable with mouse, stylus, and touch. Inflation is
+/// bounded by the toolbar surface, so it never leaks onto the canvas.
+pub const MIN_HIT_TARGET: f64 = 24.0;
+
 #[derive(Clone, Debug)]
 pub struct HitRegion {
     pub rect: (f64, f64, f64, f64), // x, y, w, h
@@ -12,12 +19,25 @@ pub struct HitRegion {
     pub tooltip: Option<String>,
 }
 
+/// Row-style hits at least this long (section headers, sliders, list rows)
+/// are already easy targets along their major axis and usually abut the
+/// neighboring row, so they are not inflated across their minor axis.
+const ROW_HIT_LENGTH: f64 = MIN_HIT_TARGET * 3.0;
+
 impl HitRegion {
     pub fn contains(&self, x: f64, y: f64) -> bool {
-        x >= self.rect.0
-            && x <= self.rect.0 + self.rect.2
-            && y >= self.rect.1
-            && y <= self.rect.1 + self.rect.3
+        let (rx, ry, rw, rh) = self.rect;
+        let pad_x = if rh < ROW_HIT_LENGTH {
+            ((MIN_HIT_TARGET - rw) / 2.0).max(0.0)
+        } else {
+            0.0
+        };
+        let pad_y = if rw < ROW_HIT_LENGTH {
+            ((MIN_HIT_TARGET - rh) / 2.0).max(0.0)
+        } else {
+            0.0
+        };
+        x >= rx - pad_x && x <= rx + rw + pad_x && y >= ry - pad_y && y <= ry + rh + pad_y
     }
 }
 
@@ -286,6 +306,54 @@ mod tests {
             }
             other => panic!("unexpected event: {other:?}"),
         }
+    }
+
+    #[test]
+    fn small_hit_rects_inflate_to_min_target() {
+        let hit = HitRegion {
+            rect: (100.0, 100.0, 14.0, 14.0),
+            event: ToolbarEvent::Undo,
+            kind: HitKind::Click,
+            tooltip: None,
+        };
+
+        // 14x14 inflates by 5px on each side to reach 24x24.
+        assert!(hit.contains(96.0, 96.0));
+        assert!(hit.contains(118.0, 118.0));
+        assert!(!hit.contains(94.0, 107.0));
+        assert!(!hit.contains(107.0, 120.0));
+    }
+
+    #[test]
+    fn large_hit_rects_do_not_inflate() {
+        let hit = HitRegion {
+            rect: (100.0, 100.0, 40.0, 40.0),
+            event: ToolbarEvent::Undo,
+            kind: HitKind::Click,
+            tooltip: None,
+        };
+
+        assert!(hit.contains(100.0, 100.0));
+        assert!(hit.contains(140.0, 140.0));
+        assert!(!hit.contains(99.0, 120.0));
+        assert!(!hit.contains(120.0, 141.0));
+    }
+
+    #[test]
+    fn row_hits_do_not_inflate_across_their_minor_axis() {
+        // A full-width 21px section-header row must not swallow the first
+        // body row's boundary below it.
+        let hit = HitRegion {
+            rect: (10.0, 100.0, 236.0, 21.0),
+            event: ToolbarEvent::Undo,
+            kind: HitKind::Click,
+            tooltip: None,
+        };
+
+        assert!(hit.contains(120.0, 100.0));
+        assert!(hit.contains(120.0, 121.0));
+        assert!(!hit.contains(120.0, 122.0));
+        assert!(!hit.contains(120.0, 99.0));
     }
 
     #[test]

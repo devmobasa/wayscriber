@@ -5,7 +5,7 @@ use crate::input::ToolbarDrawerTab;
 
 use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
-const MAX_RECENT_SESSIONS: usize = 3;
+const MAX_RECENT_SESSIONS: usize = 5;
 pub(crate) const SESSION_BUTTON_COLUMNS: usize = 3;
 
 #[derive(Debug, Clone)]
@@ -178,7 +178,7 @@ mod tests {
         let mut snapshot = app_snapshot();
         snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
         snapshot.active_session_path = Some(PathBuf::from("/tmp/lecture.wayscriber-session"));
-        snapshot.recent_sessions = (0..5)
+        snapshot.recent_sessions = (0..8)
             .map(|index| SessionRecentSnapshot {
                 display_name: format!("recent-{index}.wayscriber-session"),
                 path: PathBuf::from(format!("/tmp/recent-{index}.wayscriber-session")),

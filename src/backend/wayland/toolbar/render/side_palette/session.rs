@@ -74,7 +74,7 @@ pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     draw_text_baseline(
         ctx,
         meta_style,
-        &truncate_label(&model.active_name, 28),
+        &truncate_middle(&model.active_name, 28),
         layout.x,
         meta_y + 12.0,
         None,
@@ -82,7 +82,7 @@ pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     draw_text_baseline(
         ctx,
         path_style,
-        &truncate_label(&model.active_path_label, 34),
+        &truncate_start(&model.active_path_label, 34),
         layout.x,
         meta_y + 27.0,
         None,
@@ -164,7 +164,7 @@ fn draw_save_as_overwrite_confirmation(
     let Some(confirmation) = model.overwrite_confirmation.as_ref() else {
         return 0.0;
     };
-    let message = format!("Replace {}?", truncate_label(&confirmation.label, 20));
+    let message = format!("Replace {}?", truncate_middle(&confirmation.label, 20));
     draw_text_baseline(layout.ctx, meta_style, &message, layout.x, y + 11.0, None);
 
     let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
@@ -332,7 +332,7 @@ fn draw_recent_sessions(
         draw_text_baseline(
             layout.ctx,
             label_style,
-            &truncate_label(&recent.label, 24),
+            &truncate_middle(strip_session_extension(&recent.label), 24),
             icon_x + SESSION_RECENT_ICON_SIZE + SESSION_RECENT_ICON_GAP,
             y + 14.0,
             None,
@@ -357,15 +357,75 @@ fn draw_recent_sessions(
     }
 }
 
-fn truncate_label(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        value.to_string()
-    } else {
-        let mut truncated = value
-            .chars()
-            .take(max_chars.saturating_sub(3))
-            .collect::<String>();
-        truncated.push_str("...");
-        truncated
+/// Middle-ellipsize so both the head and the distinguishing tail survive.
+/// Tail truncation made e.g. two different "lecture-05-…" files render
+/// identically in the recents list.
+fn truncate_middle(value: &str, max_chars: usize) -> String {
+    let count = value.chars().count();
+    if count <= max_chars {
+        return value.to_string();
+    }
+    let keep = max_chars.saturating_sub(1).max(2);
+    let head = keep.div_ceil(2);
+    let tail = keep - head;
+    let mut truncated: String = value.chars().take(head).collect();
+    truncated.push('…');
+    truncated.extend(value.chars().skip(count - tail));
+    truncated
+}
+
+/// Keep the tail of a path — the leading directories are the least
+/// informative part of a session path.
+fn truncate_start(value: &str, max_chars: usize) -> String {
+    let count = value.chars().count();
+    if count <= max_chars {
+        return value.to_string();
+    }
+    let keep = max_chars.saturating_sub(1);
+    let mut truncated = String::from("…");
+    truncated.extend(value.chars().skip(count - keep));
+    truncated
+}
+
+/// Drop the constant session-file extension in list rows; it costs the
+/// characters that distinguish one session from another.
+fn strip_session_extension(value: &str) -> &str {
+    value
+        .strip_suffix(".wayscriber-session")
+        .or_else(|| value.strip_suffix(".wayscriber"))
+        .unwrap_or(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_middle_keeps_head_and_tail() {
+        assert_eq!(truncate_middle("short", 10), "short");
+        let truncated = truncate_middle("lecture-05-quantum-mechanics-part-two", 20);
+        assert_eq!(truncated.chars().count(), 20);
+        assert!(truncated.starts_with("lecture-05"));
+        assert!(truncated.ends_with("part-two"));
+        assert!(truncated.contains('…'));
+    }
+
+    #[test]
+    fn truncate_start_keeps_path_tail() {
+        assert_eq!(truncate_start("/tmp/x", 10), "/tmp/x");
+        let truncated = truncate_start("/home/user/.local/share/wayscriber/sessions", 20);
+        assert_eq!(truncated.chars().count(), 20);
+        assert!(truncated.starts_with('…'));
+        assert!(truncated.ends_with("wayscriber/sessions"));
+    }
+
+    #[test]
+    fn strip_session_extension_drops_known_suffixes() {
+        assert_eq!(
+            strip_session_extension("lecture.wayscriber-session"),
+            "lecture"
+        );
+        assert_eq!(strip_session_extension("lecture.wayscriber"), "lecture");
+        assert_eq!(strip_session_extension("lecture.txt"), "lecture.txt");
     }
 }
