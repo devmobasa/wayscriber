@@ -75,13 +75,13 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         snapshot.custom_section_enabled,
         step_hover,
         label_style,
-        "Step controls",
+        "Step buttons",
     );
     hits.push(HitRegion {
         rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
         kind: HitKind::Click,
-        tooltip: Some("Step controls: multi-step undo/redo.".to_string()),
+        tooltip: Some("Step buttons: undo/redo several strokes at once.".to_string()),
     });
 
     let delay_toggle_y = custom_toggle_y + custom_toggle_h + toggle_gap;

@@ -63,18 +63,19 @@ pub(crate) fn board_chip_label(snapshot: &ToolbarSnapshot) -> String {
     let name = snapshot.board_name.trim();
     let board_label = if board_count > 1 {
         if name.is_empty() {
-            format!("Boards · B{}/{}", board_index, board_count)
+            format!("Board {}/{}", board_index, board_count)
         } else {
-            format!("Boards · B{}/{} {}", board_index, board_count, name)
+            format!("Board {}/{} · {}", board_index, board_count, name)
         }
     } else if name.is_empty() {
-        "Boards".to_string()
+        "Board".to_string()
     } else {
-        format!("Boards · {}", name)
+        format!("Board · {}", name)
     };
     let pages = snapshot.page_count.max(1);
     if pages > 1 {
-        format!("{board_label} · {pages}p")
+        let page = (snapshot.page_index + 1).min(pages);
+        format!("{board_label} · p.{page}/{pages}")
     } else {
         board_label
     }

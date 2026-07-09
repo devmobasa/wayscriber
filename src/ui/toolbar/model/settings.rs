@@ -44,10 +44,10 @@ impl ToolbarSettingsModel {
         let mut toggles = vec![
             ToolbarSettingsToggle::new(
                 ToolbarControlId::SettingsContextAwareUi,
-                "Context UI",
+                "Adapt to tool",
                 snapshot.context_aware_ui,
                 ToolbarEvent::ToggleContextAwareUi(!snapshot.context_aware_ui),
-                "Show/hide controls based on active tool.",
+                "Show only the active tool's controls.",
             ),
             ToolbarSettingsToggle::new(
                 ToolbarControlId::SettingsTextControls,
@@ -97,14 +97,14 @@ impl ToolbarSettingsModel {
             toggles.extend([
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsPresets,
-                    "Show presets",
+                    "Presets",
                     snapshot.show_presets,
                     ToolbarEvent::TogglePresets(!snapshot.show_presets),
                     "Presets: quick slots.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsActions,
-                    "Show actions",
+                    "Actions",
                     snapshot.show_actions_section,
                     ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
                     "Actions: undo/redo/clear.",
@@ -118,10 +118,10 @@ impl ToolbarSettingsModel {
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsAdvancedActions,
-                    "Adv. Actions",
+                    "Advanced actions",
                     snapshot.show_actions_advanced,
                     ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
-                    "Advanced: undo-all/delay/freeze.",
+                    "Undo all, delayed undo, freeze.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsBoards,
@@ -139,10 +139,10 @@ impl ToolbarSettingsModel {
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsStepControls,
-                    "Step controls",
+                    "Multi-step undo/redo",
                     snapshot.show_step_section,
                     ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
-                    "Step: step undo/redo.",
+                    "Undo/redo several strokes at once.",
                 ),
             ]);
         }

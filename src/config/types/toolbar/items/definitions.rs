@@ -374,7 +374,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     ),
     item(
         ids::SIDE_SETTINGS_CONTEXT_AWARE_UI,
-        "Context UI",
+        "Adapt to tool",
         Side,
         Setting,
         Some(ToolbarGroupId::Settings),
@@ -465,7 +465,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     ),
     item(
         ids::SIDE_SETTINGS_STEP_CONTROLS,
-        "Step controls toggle",
+        "Multi-step undo/redo toggle",
         Side,
         Setting,
         Some(ToolbarGroupId::Settings),

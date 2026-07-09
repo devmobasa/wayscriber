@@ -169,7 +169,7 @@ mod tests {
             panic!("board chip payload");
         };
 
-        assert_eq!(chip.label, "Boards · B2/3 Sprint · 2p");
+        assert_eq!(chip.label, "Board 2/3 · Sprint · p.1/2");
         assert_eq!(chip.board_index, 1);
         assert_eq!(chip.board_count, 3);
         assert_eq!(chip.page_count, 2);

@@ -70,7 +70,7 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowPresets,
             ),
             toggle_row(
-                "Show actions (basic)",
+                "Show actions",
                 self.draft.ui_toolbar_show_actions_section,
                 self.defaults.ui_toolbar_show_actions_section,
                 ToggleField::UiToolbarShowActionsSection,
@@ -100,7 +100,7 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowBoardsSection,
             ),
             toggle_row(
-                "Show Step Undo/Redo",
+                "Show multi-step undo/redo",
                 self.draft.ui_toolbar_show_step_section,
                 self.defaults.ui_toolbar_show_step_section,
                 ToggleField::UiToolbarShowStepSection,

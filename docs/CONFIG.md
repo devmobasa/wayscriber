@@ -294,7 +294,7 @@ custom_redo_steps = 5
 
 **Notes:**
 - `undo_all_delay_ms` / `redo_all_delay_ms` drive the "Undo all (delay)" and "Redo all (delay)" toolbar actions.
-- `custom_section_enabled` reveals the Step controls in the side toolbar; those controls use the custom delays and step counts above.
+- `custom_section_enabled` reveals the Step buttons in the side toolbar; those buttons use the custom delays and step counts above.
 
 ### `[performance]` - Performance Tuning
 
@@ -688,7 +688,7 @@ side_sections = [
 - **Boards**: `show_boards_section` toggles the board navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
-- **Step controls**: `show_step_section` hides/shows the Step Undo/Redo section.
+- **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo section.
 - **Settings**: `show_settings_section` hides/shows the settings footer (config buttons and toggles).
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.

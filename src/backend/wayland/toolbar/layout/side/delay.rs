@@ -35,7 +35,7 @@ pub(super) fn push_delay_hits(
         rect: (ctx.x, custom_toggle_y, ctx.content_width, toggle_h),
         event: ToolbarEvent::ToggleCustomSection(!ctx.snapshot.custom_section_enabled),
         kind: HitKind::Click,
-        tooltip: Some("Step controls: multi-step undo/redo.".to_string()),
+        tooltip: Some("Step buttons: undo/redo several strokes at once.".to_string()),
     });
     let delay_toggle_y = custom_toggle_y + toggle_h + toggle_gap;
     hits.push(HitRegion {
