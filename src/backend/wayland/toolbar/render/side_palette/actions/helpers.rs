@@ -7,7 +7,8 @@ use crate::ui_text::UiTextStyle;
 
 use super::super::super::widgets::constants::{COLOR_TEXT_DISABLED, set_color};
 use super::super::super::widgets::{
-    draw_button, draw_destructive_button, draw_label_center, point_in_rect, set_icon_color,
+    draw_button, draw_destructive_button, draw_disabled_button, draw_label_center,
+    draw_label_center_color, point_in_rect, set_icon_color,
 };
 
 pub(super) type ActionIconFn = fn(&cairo::Context, f64, f64, f64);
@@ -193,7 +194,7 @@ fn render_icon_action_button(
         })
         .unwrap_or(false);
 
-    let is_destructive = is_destructive_action(&action.event);
+    let is_destructive = action.event.is_destructive();
     if action.enabled {
         if is_destructive {
             draw_destructive_button(
@@ -217,14 +218,12 @@ fn render_icon_action_button(
         }
         set_icon_color(render_ctx.ctx, is_hover);
     } else {
-        draw_button(
+        draw_disabled_button(
             render_ctx.ctx,
             geometry.x,
             geometry.y,
             geometry.button_size,
             geometry.button_size,
-            false,
-            false,
         );
         set_color(render_ctx.ctx, COLOR_TEXT_DISABLED);
     }
@@ -267,7 +266,15 @@ fn render_text_action_button(
         .map(|(hx, hy)| point_in_rect(hx, hy, layout.x, layout.y, layout.width, layout.height))
         .unwrap_or(false);
 
-    if is_destructive_action(&action.event) && action.enabled {
+    if !action.enabled {
+        draw_disabled_button(
+            render_ctx.ctx,
+            layout.x,
+            layout.y,
+            layout.width,
+            layout.height,
+        );
+    } else if action.event.is_destructive() {
         draw_destructive_button(
             render_ctx.ctx,
             layout.x,
@@ -283,20 +290,33 @@ fn render_text_action_button(
             layout.y,
             layout.width,
             layout.height,
-            enabled_style && action.enabled,
-            is_hover && action.enabled,
+            enabled_style,
+            is_hover,
         );
     }
 
-    draw_label_center(
-        render_ctx.ctx,
-        label_style,
-        layout.x,
-        layout.y,
-        layout.width,
-        layout.height,
-        label,
-    );
+    if action.enabled {
+        draw_label_center(
+            render_ctx.ctx,
+            label_style,
+            layout.x,
+            layout.y,
+            layout.width,
+            layout.height,
+            label,
+        );
+    } else {
+        draw_label_center_color(
+            render_ctx.ctx,
+            label_style,
+            layout.x,
+            layout.y,
+            layout.width,
+            layout.height,
+            label,
+            COLOR_TEXT_DISABLED,
+        );
+    }
     if action.enabled {
         render_ctx.hits.push(HitRegion {
             rect: (layout.x, layout.y, layout.width, layout.height),
@@ -311,11 +331,4 @@ fn render_text_action_button(
             )),
         });
     }
-}
-
-fn is_destructive_action(event: &ToolbarEvent) -> bool {
-    matches!(
-        event,
-        ToolbarEvent::ClearCanvas | ToolbarEvent::UndoAll | ToolbarEvent::UndoAllDelayed
-    )
 }

@@ -255,6 +255,20 @@ impl ToolbarEvent {
         super::model::action_for_event(self)
     }
 
+    /// Events that permanently discard user content; rendered with the
+    /// destructive (red-accent) button treatment.
+    pub fn is_destructive(&self) -> bool {
+        matches!(
+            self,
+            ToolbarEvent::ClearCanvas
+                | ToolbarEvent::UndoAll
+                | ToolbarEvent::UndoAllDelayed
+                | ToolbarEvent::BoardDelete
+                | ToolbarEvent::PageDelete
+                | ToolbarEvent::ClearSession
+        )
+    }
+
     pub fn short_label(&self, snapshot: &ToolbarSnapshot, fallback: &'static str) -> &'static str {
         super::model::short_label_for_event(
             self,

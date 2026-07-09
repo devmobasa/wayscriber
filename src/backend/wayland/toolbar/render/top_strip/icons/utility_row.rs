@@ -104,7 +104,7 @@ pub(super) fn draw_utility_row(
                 let clear_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
                     .unwrap_or(false);
-                draw_button(layout.ctx, x, y, btn_size, btn_size, false, clear_hover);
+                draw_destructive_button(layout.ctx, x, y, btn_size, btn_size, clear_hover);
                 set_icon_color(layout.ctx, clear_hover);
                 toolbar_icons::draw_icon_clear(
                     layout.ctx,

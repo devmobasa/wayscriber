@@ -200,7 +200,7 @@ pub(super) fn draw_text_strip(
                 let clear_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
                     .unwrap_or(false);
-                draw_button(ctx, x, y, btn_w, btn_h, false, clear_hover);
+                draw_destructive_button(ctx, x, y, btn_w, btn_h, clear_hover);
                 draw_label_center(
                     ctx,
                     label_style,

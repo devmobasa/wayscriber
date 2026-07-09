@@ -9,7 +9,9 @@ use crate::ui::toolbar::model::toolbar_boards_model;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
-use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::widgets::constants::{
+    COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
+};
 use super::super::widgets::*;
 use super::section_header::draw_collapsible_header;
 
@@ -95,22 +97,40 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         let label = button.short_label(snapshot, "Board");
         let bx = item.x;
         let by = item.y;
-        let is_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, btn_w, btn_h))
-            .unwrap_or(false);
-        draw_button(ctx, bx, by, btn_w, btn_h, button.enabled, is_hover);
+        let is_hover = button.enabled
+            && hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, btn_w, btn_h))
+                .unwrap_or(false);
+        if !button.enabled {
+            draw_disabled_button(ctx, bx, by, btn_w, btn_h);
+        } else if button.event.is_destructive() {
+            draw_destructive_button(ctx, bx, by, btn_w, btn_h, is_hover);
+        } else {
+            draw_button(ctx, bx, by, btn_w, btn_h, false, is_hover);
+        }
         if use_icons {
             if button.enabled {
                 set_icon_color(ctx, is_hover);
             } else {
-                ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                set_color(ctx, COLOR_TEXT_DISABLED);
             }
             let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
             let icon_x = bx + (btn_w - icon_size) / 2.0;
             let icon_y = by + (btn_h - icon_size) / 2.0;
             board_icon(&button.event)(ctx, icon_x, icon_y, icon_size);
-        } else {
+        } else if button.enabled {
             draw_label_center(ctx, label_style, bx, by, btn_w, btn_h, label);
+        } else {
+            draw_label_center_color(
+                ctx,
+                label_style,
+                bx,
+                by,
+                btn_w,
+                btn_h,
+                label,
+                COLOR_TEXT_DISABLED,
+            );
         }
         if button.enabled {
             hits.push(HitRegion {
