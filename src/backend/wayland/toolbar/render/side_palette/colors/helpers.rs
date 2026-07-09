@@ -203,14 +203,14 @@ pub(super) fn draw_hex_input(
         let _ = ctx.stroke();
     }
 
-    let clip_icon_x = hex_input_x + hex_input_w - hex_icon_size - hex_icon_pad;
-    let clip_icon_y = hex_input_y + (hex_input_h - hex_icon_size) / 2.0;
+    let copy_icon_x = hex_input_x + hex_input_w - hex_icon_size - hex_icon_pad;
+    let copy_icon_y = hex_input_y + (hex_input_h - hex_icon_size) / 2.0;
     if hex_hover {
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85);
     } else {
         ctx.set_source_rgba(0.6, 0.6, 0.6, 0.5);
     }
-    toolbar_icons::draw_icon_paste(ctx, clip_icon_x, clip_icon_y, hex_icon_size);
+    toolbar_icons::draw_icon_copy(ctx, copy_icon_x, copy_icon_y, hex_icon_size);
 
     ctx.set_source_rgba(0.85, 0.85, 0.85, 1.0);
     let hex_layout = crate::ui_text::text_layout(ctx, hex_style, hex, None);
@@ -222,11 +222,18 @@ pub(super) fn draw_hex_input(
         hex_input_y + hex_input_h / 2.0 + hex_extents.height() / 2.0,
     );
 
+    // The copy icon is pushed first so it wins the overlap with the chip.
     hits.push(HitRegion {
-        rect: (hex_input_x, hex_input_y, hex_input_w, hex_input_h),
+        rect: (copy_icon_x, copy_icon_y, hex_icon_size, hex_icon_size),
         event: ToolbarEvent::CopyHexColor,
         kind: HitKind::Click,
-        tooltip: Some("Click to copy hex (Ctrl+V to paste)".to_string()),
+        tooltip: Some("Copy hex color".to_string()),
+    });
+    hits.push(HitRegion {
+        rect: (hex_input_x, hex_input_y, hex_input_w, hex_input_h),
+        event: ToolbarEvent::EditHexColor,
+        kind: HitKind::Click,
+        tooltip: Some("Type a hex color (Enter applies)".to_string()),
     });
 
     let paste_btn_x = hex_input_x + hex_input_w + 4.0;

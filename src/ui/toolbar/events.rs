@@ -168,6 +168,8 @@ pub enum ToolbarEvent {
     CopyHexColor,
     /// Paste hex color from clipboard
     PasteHexColor,
+    /// Open the color picker popup with the hex field focused for typing
+    EditHexColor,
     /// Open the color picker popup
     OpenColorPickerPopup,
     /// Toggle Actions section visibility (undo all, redo all, etc.)

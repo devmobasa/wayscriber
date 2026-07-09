@@ -100,6 +100,7 @@ impl InputState {
             ToolbarEvent::ToggleMoreColors(show) => self.apply_toolbar_toggle_more_colors(show),
             ToolbarEvent::CopyHexColor => self.apply_toolbar_copy_hex_color(),
             ToolbarEvent::PasteHexColor => self.apply_toolbar_paste_hex_color(),
+            ToolbarEvent::EditHexColor => self.apply_toolbar_edit_hex_color(),
             ToolbarEvent::OpenColorPickerPopup => self.apply_toolbar_open_color_picker_popup(),
             ToolbarEvent::ToggleActionsSection(show) => {
                 self.apply_toolbar_toggle_actions_section(show)

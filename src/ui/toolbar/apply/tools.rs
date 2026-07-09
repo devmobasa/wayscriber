@@ -134,4 +134,30 @@ impl InputState {
         self.open_color_picker_popup();
         true
     }
+
+    /// Open the color picker popup ready for typing: the hex field is
+    /// focused and its content selected, so the first keystroke replaces it.
+    pub(super) fn apply_toolbar_edit_hex_color(&mut self) -> bool {
+        self.open_color_picker_popup();
+        self.color_picker_popup_set_hex_editing(true);
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn edit_hex_color_opens_popup_with_hex_focused() {
+        let mut state = make_test_input_state();
+
+        let changed = state.apply_toolbar_event(ToolbarEvent::EditHexColor);
+
+        assert!(changed);
+        assert!(state.is_color_picker_popup_open());
+        assert!(state.color_picker_popup_is_hex_editing());
+        assert!(state.color_picker_popup_hex_selected());
+    }
 }
