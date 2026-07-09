@@ -124,6 +124,21 @@ impl ToolbarSurface {
                     hit.rect.1 *= ui_scale;
                     hit.rect.2 *= ui_scale;
                     hit.rect.3 *= ui_scale;
+                    // The color picker embeds its own rect; scale it in
+                    // lockstep or hue/value math picks the wrong color on
+                    // scaled toolbars (the inline path already does this).
+                    if let crate::backend::wayland::toolbar::events::HitKind::PickColor {
+                        x,
+                        y,
+                        w,
+                        h,
+                    } = &mut hit.kind
+                    {
+                        *x *= ui_scale;
+                        *y *= ui_scale;
+                        *w *= ui_scale;
+                        *h *= ui_scale;
+                    }
                 }
             }
         }

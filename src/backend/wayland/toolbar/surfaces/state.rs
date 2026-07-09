@@ -55,8 +55,55 @@ impl ToolbarSurface {
         if let Some(surface) = self.wl_surface.as_ref() {
             set_surface_clickthrough(compositor, surface, suppressed);
         }
+        if !suppressed {
+            // Unsuppressing restored the full input region; reapply any
+            // partial region the content declared.
+            self.input_region_dirty = self.input_rects.is_some();
+        }
         self.hit_regions.clear();
         self.dirty = true;
+    }
+
+    /// Declare which surface-local rects should accept input; None means the
+    /// whole surface. Applied after the next render via
+    /// [`Self::apply_input_region`].
+    // Consumed by the popover/overflow phases; the allow is removed then.
+    #[allow(dead_code)]
+    pub fn set_input_rects(&mut self, rects: Option<Vec<(f64, f64, f64, f64)>>) {
+        if self.input_rects != rects {
+            self.input_rects = rects;
+            self.input_region_dirty = true;
+        }
+    }
+
+    /// Apply a pending input-region change. Suppression owns the region
+    /// while active; the pending change is applied on unsuppress instead.
+    pub fn apply_input_region(&mut self, compositor: &CompositorState) {
+        if !self.input_region_dirty || self.suppressed {
+            return;
+        }
+        let Some(surface) = self.wl_surface.as_ref() else {
+            return;
+        };
+        match self.input_rects.as_deref() {
+            None => surface.set_input_region(None),
+            Some(rects) => {
+                let Ok(region) = smithay_client_toolkit::compositor::Region::new(compositor) else {
+                    return;
+                };
+                for &(x, y, w, h) in rects {
+                    // Round outward so edge pixels stay clickable.
+                    let x0 = x.floor() as i32;
+                    let y0 = y.floor() as i32;
+                    let x1 = (x + w).ceil() as i32;
+                    let y1 = (y + h).ceil() as i32;
+                    region.add(x0, y0, x1 - x0, y1 - y0);
+                }
+                surface.set_input_region(Some(region.wl_region()));
+            }
+        }
+        surface.commit();
+        self.input_region_dirty = false;
     }
 
     pub fn set_logical_size(&mut self, size: (u32, u32)) {

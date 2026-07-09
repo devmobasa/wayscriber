@@ -204,6 +204,7 @@ impl WaylandState {
         let render_profile = self.input_state.active_ui_render_profile().cloned();
         self.toolbar
             .render(&self.shm, snapshot, None, render_profile.as_ref());
+        self.toolbar.apply_input_regions(&self.compositor_state);
     }
 
     pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {

@@ -57,6 +57,30 @@ impl ToolbarSurface {
         self.configured = false;
     }
 
+    /// Resize an already-mapped surface in place via layer_surface.set_size
+    /// instead of destroy/recreate, so size changes (shape picker, drawer,
+    /// contextual sections) don't flicker. Rendering pauses until the
+    /// compositor acks with a new configure.
+    pub fn resize(&mut self, logical: (u32, u32)) {
+        if self.logical_size == logical {
+            return;
+        }
+        self.logical_size = logical;
+        let Some(layer) = self.layer_surface.as_ref() else {
+            return;
+        };
+        info!(
+            "Resizing toolbar surface '{}' in place to logical {:?}",
+            self.name, logical
+        );
+        layer.set_size(logical.0, logical.1);
+        layer.wl_surface().commit();
+        // Wait for the configure that carries the new size before drawing;
+        // needs_render() stays false until handle_configure runs.
+        self.configured = false;
+        self.dirty = true;
+    }
+
     pub fn destroy(&mut self) {
         self.layer_surface = None;
         self.wl_surface = None;
