@@ -1,0 +1,1 @@
+../../src/shortcut_hint.rs

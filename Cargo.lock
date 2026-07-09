@@ -2949,7 +2949,21 @@ name = "wayscriber-configurator"
 version = "0.9.21"
 dependencies = [
  "iced",
- "wayscriber",
+ "wayscriber-core",
+]
+
+[[package]]
+name = "wayscriber-core"
+version = "0.9.21"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "libc",
+ "log",
+ "schemars",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]

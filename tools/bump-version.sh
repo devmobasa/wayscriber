@@ -11,6 +11,7 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
   packaging/PKGBUILD, packaging/.SRCINFO, and release artifacts use the HOTFIX version.
 - Updates:
   * Cargo.toml (wayscriber)
+  * core/Cargo.toml
   * configurator/Cargo.toml
   * Cargo.lock (via cargo generate-lockfile)
   * configurator/Cargo.lock local package versions
@@ -132,6 +133,7 @@ update_version_field() {
 }
 
 update_version_field "Cargo.toml"
+update_version_field "core/Cargo.toml"
 update_version_field "configurator/Cargo.toml"
 
 update_lock_package_version() {
@@ -151,7 +153,7 @@ update_lock_package_version() {
     fi
 }
 
-update_lock_package_version "configurator/Cargo.lock" "wayscriber"
+update_lock_package_version "configurator/Cargo.lock" "wayscriber-core"
 update_lock_package_version "configurator/Cargo.lock" "wayscriber-configurator"
 
 if [[ -f Cargo.lock ]]; then

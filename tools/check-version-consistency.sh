@@ -7,6 +7,7 @@ Usage: tools/check-version-consistency.sh [--release-version X.Y.Z[.N]]
 
 Checks that release/version metadata agrees across:
   * Cargo.toml
+  * core/Cargo.toml
   * configurator/Cargo.toml
   * Cargo.lock
   * configurator/Cargo.lock
@@ -159,14 +160,18 @@ def require_template_sha256sums(label, values):
         errors.append(f"{label}: expected SKIP template checksum, got {actual}")
 
 root_version = cargo_version("Cargo.toml")
+core_version = cargo_version("core/Cargo.toml")
 config_version = cargo_version("configurator/Cargo.toml")
+require_equal("core/Cargo.toml", core_version, root_version)
 require_equal("configurator/Cargo.toml", config_version, root_version)
 
-for lockfile in ("Cargo.lock", "configurator/Cargo.lock"):
-    require_equal(f"{lockfile} wayscriber", lock_package_version(lockfile, "wayscriber"), root_version)
+for package in ("wayscriber", "wayscriber-core", "wayscriber-configurator"):
+    require_equal(f"Cargo.lock {package}", lock_package_version("Cargo.lock", package), root_version)
+
+for package in ("wayscriber-core", "wayscriber-configurator"):
     require_equal(
-        f"{lockfile} wayscriber-configurator",
-        lock_package_version(lockfile, "wayscriber-configurator"),
+        f"configurator/Cargo.lock {package}",
+        lock_package_version("configurator/Cargo.lock", package),
         root_version,
     )
 

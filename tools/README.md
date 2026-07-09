@@ -44,7 +44,7 @@ Helper scripts for development, installation, packaging, and release workflows.
 ## Version & Release
 
 - **bump-version.sh** - Bump version numbers
-  - Updates Cargo.toml, configurator/Cargo.toml, Cargo.lock, configurator/Cargo.lock, PKGBUILD, .SRCINFO
+  - Updates Cargo.toml, core/Cargo.toml, configurator/Cargo.toml, Cargo.lock, configurator/Cargo.lock, PKGBUILD, .SRCINFO
   - flake.nix package version follows Cargo.toml automatically
   - Auto-increments patch version if no version specified
   - Supports MAJOR.MINOR.PATCH.HOTFIX for packaging-only hotfix releases

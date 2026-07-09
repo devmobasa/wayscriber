@@ -1,0 +1,1 @@
+../../src/build_info.rs

@@ -4235,44 +4235,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "wayscriber"
+name = "wayscriber-core"
 version = "0.9.21"
 dependencies = [
  "anyhow",
- "async-trait",
- "cairo-rs",
- "cairo-sys-rs",
- "calloop 0.14.3",
- "cfg_aliases 0.2.1",
- "chrono",
- "clap",
- "dirs",
- "env_logger",
  "flate2",
- "fs2",
- "futures",
- "ksni",
  "libc",
  "log",
- "memmap2 0.9.9",
- "nix 0.30.1",
- "pango",
- "pangocairo",
- "png",
  "schemars",
  "serde",
  "serde_json",
- "signal-hook",
- "smithay-client-toolkit 0.20.0",
- "thiserror 1.0.69",
- "tokio",
  "toml",
- "url",
- "wayland-client",
- "wayland-protocols 0.32.9",
- "wayland-protocols-wlr 0.3.9",
- "wl-clipboard-rs",
- "zbus 4.4.0",
 ]
 
 [[package]]
@@ -4280,7 +4253,7 @@ name = "wayscriber-configurator"
 version = "0.9.21"
 dependencies = [
  "iced",
- "wayscriber",
+ "wayscriber-core",
 ]
 
 [[package]]

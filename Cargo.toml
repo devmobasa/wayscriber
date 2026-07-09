@@ -9,7 +9,7 @@ repository = "https://github.com/devmobasa/wayscriber"
 default-run = "wayscriber"
 
 [workspace]
-members = ["configurator"]
+members = ["core", "configurator"]
 default-members = ["."]
 
 [workspace.lints.rust]

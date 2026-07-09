@@ -9,7 +9,7 @@ workspace = true
 
 [dependencies]
 # The configurator edits config and service files; it does not call portal D-Bus APIs directly.
-wayscriber = { path = "..", default-features = false }
+wayscriber = { package = "wayscriber-core", path = "../core", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["tokio", "tiny-skia", "wayland"] }
 
 [features]
