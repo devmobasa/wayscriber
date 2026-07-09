@@ -24,20 +24,27 @@ pub struct HitRegion {
 /// neighboring row, so they are not inflated across their minor axis.
 const ROW_HIT_LENGTH: f64 = MIN_HIT_TARGET * 3.0;
 
+/// Shared pointer-target predicate: true when (x, y) lands inside `rect`
+/// inflated to the minimum target size. Used by both the legacy HitRegion
+/// path and the view-engine tree so the two can never disagree.
+pub fn rect_contains_with_min_target(rect: (f64, f64, f64, f64), x: f64, y: f64) -> bool {
+    let (rx, ry, rw, rh) = rect;
+    let pad_x = if rh < ROW_HIT_LENGTH {
+        ((MIN_HIT_TARGET - rw) / 2.0).max(0.0)
+    } else {
+        0.0
+    };
+    let pad_y = if rw < ROW_HIT_LENGTH {
+        ((MIN_HIT_TARGET - rh) / 2.0).max(0.0)
+    } else {
+        0.0
+    };
+    x >= rx - pad_x && x <= rx + rw + pad_x && y >= ry - pad_y && y <= ry + rh + pad_y
+}
+
 impl HitRegion {
     pub fn contains(&self, x: f64, y: f64) -> bool {
-        let (rx, ry, rw, rh) = self.rect;
-        let pad_x = if rh < ROW_HIT_LENGTH {
-            ((MIN_HIT_TARGET - rw) / 2.0).max(0.0)
-        } else {
-            0.0
-        };
-        let pad_y = if rw < ROW_HIT_LENGTH {
-            ((MIN_HIT_TARGET - rh) / 2.0).max(0.0)
-        } else {
-            0.0
-        };
-        x >= rx - pad_x && x <= rx + rw + pad_x && y >= ry - pad_y && y <= ry + rh + pad_y
+        rect_contains_with_min_target(self.rect, x, y)
     }
 }
 

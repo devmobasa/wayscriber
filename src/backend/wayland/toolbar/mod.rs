@@ -5,6 +5,7 @@ mod main;
 pub mod render;
 mod rows;
 pub mod surfaces;
+pub mod view;
 
 #[allow(unused_imports)]
 pub use events::{HitKind, ToolbarCursorHint, hsv_to_rgb};

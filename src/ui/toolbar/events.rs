@@ -79,7 +79,7 @@ impl ToolbarSideSection {
 }
 
 /// Events emitted by the floating toolbar UI.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ToolbarEvent {
     SelectTool(Tool),
     SetColor(Color),
