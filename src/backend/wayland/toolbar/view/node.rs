@@ -137,8 +137,12 @@ pub enum WidgetKind {
     Divider { vertical: bool },
     /// Drag grip for moving a toolbar.
     DragHandle,
-    /// Button body with a centered icon glyph.
-    IconButton { glyph: IconFn, style: ButtonStyle },
+    /// Button body with a centered icon glyph of the given size.
+    IconButton {
+        glyph: IconFn,
+        icon_size: f64,
+        style: ButtonStyle,
+    },
     /// Button body with a centered text label.
     TextButton {
         label: LabelSpec,
@@ -150,6 +154,17 @@ pub enum WidgetKind {
     Label(LabelSpec),
     /// Small labelled checkbox.
     MiniCheckbox { checked: bool, label: LabelSpec },
+    /// Full-size labelled checkbox.
+    Checkbox { checked: bool, label: LabelSpec },
+    /// Two-segment control; the halves' interactions are separate
+    /// [`WidgetKind::HitArea`] nodes layered on top.
+    SegmentedControl {
+        left: LabelSpec,
+        right: LabelSpec,
+        active_right: bool,
+    },
+    /// Invisible interactive region (segment halves, full-row toggles).
+    HitArea,
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),

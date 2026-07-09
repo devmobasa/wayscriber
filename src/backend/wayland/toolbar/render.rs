@@ -1,3 +1,4 @@
+mod paint;
 mod side_palette;
 mod top_strip;
 mod widgets;
