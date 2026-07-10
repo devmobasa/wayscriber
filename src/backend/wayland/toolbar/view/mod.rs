@@ -15,6 +15,7 @@
 pub mod flow;
 pub mod measure;
 pub mod node;
+pub mod popover;
 pub mod top;
 pub mod transform;
 pub mod tree;

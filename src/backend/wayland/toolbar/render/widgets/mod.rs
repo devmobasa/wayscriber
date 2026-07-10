@@ -8,6 +8,8 @@ mod labels;
 mod primitives;
 mod tooltip;
 
+#[allow(unused_imports)]
+pub(super) use background::draw_popover_panel;
 pub(super) use background::{draw_group_card, draw_panel_background};
 #[allow(unused_imports)]
 pub(super) use buttons::{
