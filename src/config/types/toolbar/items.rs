@@ -23,8 +23,32 @@ pub use order::{
 pub struct ToolbarItemsConfig {
     #[serde(default)]
     pub hidden: Vec<String>,
+    /// IDs explicitly shown, overriding the layout-mode baseline (e.g.
+    /// presets kept visible in simple mode). Raw strings preserve unknown
+    /// future IDs, mirroring `hidden`.
+    #[serde(default)]
+    pub shown: Vec<String>,
     #[serde(default)]
     pub order: ToolbarItemOrderConfig,
+}
+
+/// Rebuild a raw-id list without `id`, deduping known ids and preserving
+/// unknown raw strings.
+fn drain_without(raw_ids: Vec<String>, id: ToolbarItemId) -> Vec<String> {
+    let mut next = Vec::with_capacity(raw_ids.len());
+    let mut seen_known = BTreeSet::new();
+    for raw in raw_ids {
+        match raw.parse::<ToolbarItemId>() {
+            Ok(existing) if existing == id => {}
+            Ok(existing) => {
+                if seen_known.insert(existing) {
+                    next.push(existing.as_str().to_string());
+                }
+            }
+            Err(_) => next.push(raw),
+        }
+    }
+    next
 }
 
 const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_SCREENSHOT];
@@ -78,6 +102,7 @@ impl Default for ToolbarItemsConfig {
                 .iter()
                 .map(|id| id.as_str().to_string())
                 .collect(),
+            shown: Vec::new(),
             order: ToolbarItemOrderConfig::default(),
         }
     }
@@ -97,39 +122,41 @@ impl ToolbarItemsConfig {
             }
         }
 
+        let mut shown = BTreeSet::new();
+        let mut unknown_shown = Vec::new();
+        for raw in &self.shown {
+            match raw.parse::<ToolbarItemId>() {
+                Ok(id) => {
+                    shown.insert(id);
+                }
+                Err(_) => unknown_shown.push(raw.clone()),
+            }
+        }
+
         ResolvedToolbarItems {
             hidden,
+            shown,
             unknown_hidden,
+            unknown_shown,
             order: self.order.resolved(),
         }
     }
 
-    #[allow(dead_code)]
     pub fn set_hidden(&mut self, id: ToolbarItemId, hidden: bool) {
-        let mut next = Vec::with_capacity(self.hidden.len() + usize::from(hidden));
-        let mut seen_known = BTreeSet::new();
-
-        for raw in self.hidden.drain(..) {
-            match raw.parse::<ToolbarItemId>() {
-                Ok(existing) if existing == id => {}
-                Ok(existing) => {
-                    if seen_known.insert(existing) {
-                        next.push(existing.as_str().to_string());
-                    }
-                }
-                Err(_) => next.push(raw),
-            }
-        }
-
+        self.hidden = drain_without(std::mem::take(&mut self.hidden), id);
+        self.shown = drain_without(std::mem::take(&mut self.shown), id);
         if hidden {
-            next.push(id.as_str().to_string());
+            self.hidden.push(id.as_str().to_string());
+        } else if super::visibility::section_flag_for_item(id).is_some() {
+            // Section-level ids have a layout-mode baseline that may hide
+            // them again; an explicit "shown" entry pins them visible.
+            self.shown.push(id.as_str().to_string());
         }
-
-        self.hidden = next;
     }
 
     pub fn reset_known_hidden_to_defaults(&mut self) -> bool {
-        let original = self.hidden.clone();
+        let original_hidden = self.hidden.clone();
+        let original_shown = self.shown.clone();
         let mut next: Vec<String> = DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS
             .iter()
             .map(|id| id.as_str().to_string())
@@ -140,9 +167,16 @@ impl ToolbarItemsConfig {
                 next.push(raw);
             }
         }
+        let mut next_shown = Vec::new();
+        for raw in self.shown.drain(..) {
+            if raw.parse::<ToolbarItemId>().is_err() {
+                next_shown.push(raw);
+            }
+        }
 
-        let changed = next != original;
+        let changed = next != original_hidden || next_shown != original_shown;
         self.hidden = next;
+        self.shown = next_shown;
         changed
     }
 
@@ -194,7 +228,10 @@ impl ToolbarItemsConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ResolvedToolbarItems {
     pub hidden: BTreeSet<ToolbarItemId>,
+    /// Explicit "keep visible" overrides that beat the layout-mode baseline.
+    pub shown: BTreeSet<ToolbarItemId>,
     pub unknown_hidden: Vec<String>,
+    pub unknown_shown: Vec<String>,
     pub order: ResolvedToolbarOrder,
 }
 

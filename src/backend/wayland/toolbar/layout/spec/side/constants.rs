@@ -23,7 +23,7 @@ impl ToolbarLayoutSpec {
     // Segmented control height
     pub(in crate::backend::wayland::toolbar) const SIDE_SEGMENT_HEIGHT: f64 = 22.0;
 
-    pub(in crate::backend::wayland::toolbar) const SIDE_MODE_LAYOUT_WIDTH: f64 = 120.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_MODE_LAYOUT_WIDTH: f64 = 180.0;
 
     // Board chip (inline style)
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_CHIP_HEIGHT: f64 = 22.0;

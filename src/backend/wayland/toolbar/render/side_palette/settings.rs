@@ -68,8 +68,9 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
 
     let mut toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
 
-    // Interim Simple/Full layout-mode control (moves into the visibility
-    // store UI in a later phase).
+    // Layout-mode presets: Simple / Regular / Advanced. Non-destructive —
+    // switching re-baselines the sections without touching explicit
+    // user overrides.
     if !dedicated_panel {
         let seg_h = ToolbarLayoutSpec::SIDE_SEGMENT_HEIGHT;
         let seg_w = ToolbarLayoutSpec::SIDE_MODE_LAYOUT_WIDTH;
@@ -398,26 +399,23 @@ fn draw_layout_mode_segments(
         return;
     };
     let segments = segmented.segments();
-    let labels = (
-        segments.first().map(|s| s.label.as_ref()).unwrap_or(""),
-        segments.get(1).map(|s| s.label.as_ref()).unwrap_or(""),
-    );
+    if segments.is_empty() {
+        return;
+    }
     let active = segmented
         .active_segment()
         .and_then(|active| segments.iter().position(|s| s.id == active))
         .unwrap_or(0);
-    let seg_hover = hover.and_then(|(hx, hy)| {
-        if point_in_rect(hx, hy, x, y, w, h) {
-            Some(if hx < x + w / 2.0 { 0 } else { 1 })
-        } else {
-            None
-        }
-    });
-    draw_segmented_control(ctx, x, y, w, h, labels, active, seg_hover, label_style);
-    let half_w = w / 2.0;
+    let seg_w = w / segments.len() as f64;
     for (index, segment) in segments.iter().enumerate() {
+        let seg_x = x + seg_w * index as f64;
+        let is_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, seg_x, y, seg_w, h))
+            .unwrap_or(false);
+        draw_button(ctx, seg_x, y, seg_w, h, index == active, is_hover);
+        draw_label_center(ctx, label_style, seg_x, y, seg_w, h, segment.label.as_ref());
         hits.push(HitRegion {
-            rect: (x + half_w * index as f64, y, half_w, h),
+            rect: (seg_x, y, seg_w, h),
             event: segment.activation.compatibility_event(),
             kind: HitKind::Click,
             tooltip: segment.tooltip.as_string(),

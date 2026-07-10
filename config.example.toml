@@ -459,9 +459,16 @@ force_inline = false
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
 # The screenshot toolbar button is hidden by default.
+# Section-level ids (side.group.*) act as explicit overrides that beat the
+# layout-mode baseline and survive mode switches.
 hidden = [
   "top.utility.screenshot",
 ]
+
+# IDs explicitly shown, overriding the layout-mode baseline (for example
+# keeping presets visible in simple mode). The overlay updates this as you
+# toggle sections.
+shown = []
 
 [ui.toolbar.items.order]
 # Optional order overrides. Empty lists use the built-in order.

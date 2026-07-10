@@ -7,6 +7,7 @@ fn known_hidden_ids_resolve_and_unknown_ids_round_trip() {
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
             "future.toolbar.item".to_string(),
         ],
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig::default(),
     };
 
@@ -32,6 +33,7 @@ fn set_hidden_preserves_unknown_ids_while_mutating_known_ids() {
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
             ids::SIDE_PAGES_DUPLICATE.as_str().to_string(),
         ],
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig::default(),
     };
 
@@ -55,6 +57,7 @@ fn reset_known_hidden_restores_defaults_and_preserves_unknown_ids() {
             "future.toolbar.item".to_string(),
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
         ],
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig::default(),
     };
 
@@ -95,6 +98,7 @@ fn default_order_matches_visual_toolbar_defaults() {
 fn item_order_moves_known_ids_and_preserves_unknown_ids() {
     let mut config = ToolbarItemsConfig {
         hidden: Vec::new(),
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig {
             top_tools: vec![
                 "future.toolbar.item".to_string(),
@@ -124,6 +128,7 @@ fn item_order_moves_known_ids_and_preserves_unknown_ids() {
 fn top_control_order_excludes_visibility_only_utilities() {
     let config = ToolbarItemsConfig {
         hidden: Vec::new(),
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig {
             top_controls: vec![
                 ids::TOP_UTILITY_SHAPE_PICKER.as_str().to_string(),
@@ -147,6 +152,7 @@ fn top_control_order_excludes_visibility_only_utilities() {
 fn side_section_order_uses_runtime_representable_blocks() {
     let config = ToolbarItemsConfig {
         hidden: Vec::new(),
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig {
             side_sections: vec![
                 ids::SIDE_GROUP_FONT.as_str().to_string(),

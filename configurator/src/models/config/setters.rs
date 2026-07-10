@@ -9,16 +9,23 @@ use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 impl ConfigDraft {
     pub fn apply_toolbar_layout_mode(&mut self, mode: ToolbarLayoutModeOption) {
         self.ui_toolbar_layout_mode = mode;
-        let defaults = mode.to_mode().section_defaults();
-        self.ui_toolbar_show_actions_section = defaults.show_actions_section;
-        self.ui_toolbar_show_actions_advanced = defaults.show_actions_advanced;
-        self.ui_toolbar_show_zoom_actions = defaults.show_zoom_actions;
-        self.ui_toolbar_show_pages_section = defaults.show_pages_section;
-        self.ui_toolbar_show_boards_section = defaults.show_boards_section;
-        self.ui_toolbar_show_presets = defaults.show_presets;
-        self.ui_toolbar_show_step_section = defaults.show_step_section;
-        self.ui_toolbar_show_text_controls = defaults.show_text_controls;
-        self.ui_toolbar_show_settings_section = defaults.show_settings_section;
+        // Modes are non-destructive presets: resolve the section booleans
+        // against explicit item overrides so a mode change in the
+        // configurator matches the overlay's behavior.
+        let visibility = wayscriber::config::resolve_section_visibility(
+            mode.to_mode(),
+            &self.ui_toolbar_mode_overrides.to_config(),
+            &self.ui_toolbar_items.resolved(),
+        );
+        self.ui_toolbar_show_actions_section = visibility.show_actions_section;
+        self.ui_toolbar_show_actions_advanced = visibility.show_actions_advanced;
+        self.ui_toolbar_show_zoom_actions = visibility.show_zoom_actions;
+        self.ui_toolbar_show_pages_section = visibility.show_pages_section;
+        self.ui_toolbar_show_boards_section = visibility.show_boards_section;
+        self.ui_toolbar_show_presets = visibility.show_presets;
+        self.ui_toolbar_show_step_section = visibility.show_step_section;
+        self.ui_toolbar_show_text_controls = visibility.show_text_controls;
+        self.ui_toolbar_show_settings_section = visibility.show_settings_section;
     }
 
     pub fn set_toolbar_override(

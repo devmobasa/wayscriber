@@ -645,6 +645,8 @@ force_inline = false
 [ui.toolbar.items]
 # Hide individual toolbar items or whole side sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
+# Section-level ids (side.group.*) are explicit overrides that beat the
+# layout-mode baseline and survive mode switches.
 hidden = [
   "top.utility.screenshot",
   "top.tool.blur",
@@ -652,6 +654,10 @@ hidden = [
   "side.actions.undo-all",
   "side.group.presets",
 ]
+
+# IDs explicitly shown, overriding the layout-mode baseline (e.g. presets
+# kept visible in simple mode).
+shown = []
 
 [ui.toolbar.items.order]
 # Optional order overrides. Empty lists use the built-in order.
@@ -707,6 +713,8 @@ side_sections = [
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 - **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
+- **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.

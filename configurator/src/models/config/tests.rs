@@ -257,6 +257,7 @@ fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
         ],
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig::default(),
     };
 

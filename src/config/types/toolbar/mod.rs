@@ -3,6 +3,7 @@ pub mod ids;
 mod items;
 mod mode;
 mod overrides;
+mod visibility;
 
 pub use config::ToolbarConfig;
 pub use items::{
@@ -12,3 +13,7 @@ pub use items::{
 };
 pub use mode::{ToolbarLayoutMode, ToolbarSectionDefaults};
 pub use overrides::{ToolbarModeOverride, ToolbarModeOverrides};
+pub use visibility::{
+    ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
+    resolve_section_visibility, section_flag_for_item,
+};

@@ -684,6 +684,7 @@ mod tests {
         let mut snapshot = snapshot();
         snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
             hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
+            shown: Vec::new(),
             order: crate::config::ToolbarItemOrderConfig::default(),
         }
         .resolved();

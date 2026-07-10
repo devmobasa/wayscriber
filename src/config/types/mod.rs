@@ -63,4 +63,8 @@ pub use toolbar::{
     ToolbarModeOverrides, ToolbarSectionDefaults, toolbar_item_definitions,
     toolbar_item_order_group,
 };
+pub use toolbar::{
+    ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
+    resolve_section_visibility, section_flag_for_item,
+};
 pub use ui::UiConfig;

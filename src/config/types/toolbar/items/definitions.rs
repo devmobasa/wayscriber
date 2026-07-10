@@ -205,6 +205,27 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Some(ToolbarGroupId::Settings),
     ),
     item(
+        ids::SIDE_GROUP_ACTIONS_ADVANCED,
+        "Advanced actions",
+        Side,
+        Group,
+        None,
+    ),
+    item(
+        ids::SIDE_GROUP_ZOOM_ACTIONS,
+        "Zoom actions",
+        Side,
+        Group,
+        None,
+    ),
+    item(
+        ids::SIDE_GROUP_TEXT_CONTROLS,
+        "Text controls (persistent)",
+        Side,
+        Group,
+        None,
+    ),
+    item(
         ids::SIDE_GROUP_SESSION,
         "Session",
         Side,

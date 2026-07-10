@@ -95,75 +95,50 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_actions_section(&mut self, show: bool) -> bool {
-        if self.show_actions_section != show {
-            self.show_actions_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Actions, show)
     }
 
     pub(super) fn apply_toolbar_toggle_actions_advanced(&mut self, show: bool) -> bool {
-        if self.show_actions_advanced != show {
-            self.show_actions_advanced = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::ActionsAdvanced, show)
     }
 
     pub(super) fn apply_toolbar_toggle_zoom_actions(&mut self, show: bool) -> bool {
-        if self.show_zoom_actions != show {
-            self.show_zoom_actions = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::ZoomActions, show)
     }
 
     pub(super) fn apply_toolbar_toggle_pages_section(&mut self, show: bool) -> bool {
-        if self.show_pages_section != show {
-            self.show_pages_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Pages, show)
     }
 
     pub(super) fn apply_toolbar_toggle_boards_section(&mut self, show: bool) -> bool {
-        if self.show_boards_section != show {
-            self.show_boards_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Boards, show)
     }
 
     pub(super) fn apply_toolbar_toggle_presets(&mut self, show: bool) -> bool {
-        if self.show_presets != show {
-            self.show_presets = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Presets, show)
     }
 
     pub(super) fn apply_toolbar_toggle_step_section(&mut self, show: bool) -> bool {
-        if self.show_step_section != show {
-            self.show_step_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::StepSection, show)
     }
 
     pub(super) fn apply_toolbar_toggle_text_controls(&mut self, show: bool) -> bool {
-        if self.show_text_controls != show {
-            self.show_text_controls = show;
-            true
-        } else {
-            false
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::TextControls, show)
+    }
+
+    /// Section toggles record an explicit override in the item store (the
+    /// single source of truth) and re-derive the mirror booleans, so the
+    /// choice survives layout-mode switches.
+    fn apply_section_flag(&mut self, flag: crate::config::ToolbarSectionFlag, show: bool) -> bool {
+        let before = self.toolbar_items.clone();
+        self.toolbar_items.set_hidden(flag.item_id(), !show);
+        if self.toolbar_items == before {
+            return false;
         }
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.refresh_section_visibility();
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_context_aware_ui(&mut self, enabled: bool) -> bool {
@@ -381,5 +356,78 @@ impl InputState {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn section_toggles_survive_layout_mode_switches() {
+        let mut state = make_test_input_state();
+        assert!(state.show_zoom_actions);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleZoomActions(false));
+        assert!(!state.show_zoom_actions);
+
+        // The old behavior recomputed all section booleans from mode
+        // defaults on every switch, erasing the choice.
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Simple,
+        ));
+        assert!(!state.show_zoom_actions);
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Regular,
+        ));
+        assert!(!state.show_zoom_actions);
+
+        // Simple hides presets by baseline; an explicit show survives the
+        // round trip through other modes.
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Simple,
+        ));
+        assert!(!state.show_presets);
+        state.apply_toolbar_event(ToolbarEvent::TogglePresets(true));
+        assert!(state.show_presets);
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced,
+        ));
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Simple,
+        ));
+        assert!(state.show_presets);
+        assert!(
+            state
+                .resolved_toolbar_items
+                .shown
+                .contains(&ToolbarSectionFlag::Presets.item_id())
+        );
+    }
+
+    #[test]
+    fn customize_checkbox_and_section_toggle_share_one_store() {
+        let mut state = make_test_input_state();
+
+        // Hide the presets section through the item store (the customize
+        // checkbox path) — the section boolean mirrors it.
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarItemHidden(
+            ToolbarSectionFlag::Presets.item_id(),
+            true,
+        ));
+        assert!(!state.show_presets);
+
+        // Re-enable through the Settings toggle — the hidden entry is
+        // replaced, not fought, so the section comes back.
+        state.apply_toolbar_event(ToolbarEvent::TogglePresets(true));
+        assert!(state.show_presets);
+        assert!(
+            !state
+                .resolved_toolbar_items
+                .hidden
+                .contains(&ToolbarSectionFlag::Presets.item_id())
+        );
     }
 }

@@ -61,6 +61,12 @@ pub const SIDE_GROUP_PAGES: ToolbarItemId = ToolbarItemId::from_known("side.grou
 pub const SIDE_GROUP_BOARDS: ToolbarItemId = ToolbarItemId::from_known("side.group.boards");
 pub const SIDE_GROUP_PRESETS: ToolbarItemId = ToolbarItemId::from_known("side.group.presets");
 pub const SIDE_GROUP_SETTINGS: ToolbarItemId = ToolbarItemId::from_known("side.group.settings");
+pub const SIDE_GROUP_ACTIONS_ADVANCED: ToolbarItemId =
+    ToolbarItemId::from_known("side.group.actions-advanced");
+pub const SIDE_GROUP_ZOOM_ACTIONS: ToolbarItemId =
+    ToolbarItemId::from_known("side.group.zoom-actions");
+pub const SIDE_GROUP_TEXT_CONTROLS: ToolbarItemId =
+    ToolbarItemId::from_known("side.group.text-controls");
 pub const SIDE_GROUP_SESSION: ToolbarItemId = ToolbarItemId::from_known("side.group.session");
 
 pub const SIDE_ACTIONS_UNDO: ToolbarItemId = ToolbarItemId::from_known("side.actions.undo");

@@ -9,7 +9,6 @@ use super::control::{
     ToolbarControlRole, ToolbarIcon, ToolbarPresentationPayload, ToolbarSegment,
     ToolbarSegmentedControl, ToolbarSingleControl, ToolbarTooltip,
 };
-use super::event_policy::full_mode_target;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SideHeaderModel {
@@ -93,31 +92,42 @@ fn drag_control(id: ToolbarControlId, target: ToolbarDragTarget) -> ToolbarContr
 }
 
 pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
-    let full_mode = full_mode_target(mode);
+    let segment = |id, label: &'static str, target: ToolbarLayoutMode, tooltip: &'static str| {
+        ToolbarSegment {
+            id,
+            label: Cow::Borrowed(label),
+            activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarLayoutMode(target)),
+            action: None,
+            tooltip: ToolbarTooltip::text(tooltip),
+            enabled: true,
+        }
+    };
+    // Modes are non-destructive presets: switching changes the baseline,
+    // never the user's explicit section overrides.
     let segments = vec![
-        ToolbarSegment {
-            id: ToolbarControlId::LayoutModeSimple,
-            label: Cow::Borrowed("Simple"),
-            activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarLayoutMode(
-                ToolbarLayoutMode::Simple,
-            )),
-            action: None,
-            tooltip: ToolbarTooltip::text("Simple mode"),
-            enabled: true,
-        },
-        ToolbarSegment {
-            id: ToolbarControlId::LayoutModeFull,
-            label: Cow::Borrowed("Full"),
-            activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarLayoutMode(full_mode)),
-            action: None,
-            tooltip: ToolbarTooltip::text("Full mode"),
-            enabled: true,
-        },
+        segment(
+            ToolbarControlId::LayoutModeSimple,
+            "Simple",
+            ToolbarLayoutMode::Simple,
+            "Simple preset",
+        ),
+        segment(
+            ToolbarControlId::LayoutModeRegular,
+            "Regular",
+            ToolbarLayoutMode::Regular,
+            "Regular preset",
+        ),
+        segment(
+            ToolbarControlId::LayoutModeAdvanced,
+            "Advanced",
+            ToolbarLayoutMode::Advanced,
+            "Advanced preset",
+        ),
     ];
-    let active = if mode == ToolbarLayoutMode::Simple {
-        ToolbarControlId::LayoutModeSimple
-    } else {
-        ToolbarControlId::LayoutModeFull
+    let active = match mode {
+        ToolbarLayoutMode::Simple => ToolbarControlId::LayoutModeSimple,
+        ToolbarLayoutMode::Regular => ToolbarControlId::LayoutModeRegular,
+        ToolbarLayoutMode::Advanced => ToolbarControlId::LayoutModeAdvanced,
     };
     segmented_control(
         ToolbarControlId::LayoutModeSimple,

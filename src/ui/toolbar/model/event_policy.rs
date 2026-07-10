@@ -1,4 +1,4 @@
-use crate::config::{Action, ToolbarLayoutMode, action_label, action_short_label};
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
 
 use super::super::ToolbarEvent;
@@ -226,13 +226,5 @@ fn pre_apply_effects_for_event(event: &ToolbarEvent) -> Vec<ToolbarPreApplyEffec
         vec![ToolbarPreApplyEffect::RecordDrawerHintShown]
     } else {
         Vec::new()
-    }
-}
-
-pub(crate) fn full_mode_target(current: ToolbarLayoutMode) -> ToolbarLayoutMode {
-    if current == ToolbarLayoutMode::Advanced {
-        ToolbarLayoutMode::Advanced
-    } else {
-        ToolbarLayoutMode::Regular
     }
 }
