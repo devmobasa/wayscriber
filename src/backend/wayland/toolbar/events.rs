@@ -1,5 +1,4 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup};
-use crate::draw::Color;
 
 /// Kinds of hit regions and their drag semantics.
 #[derive(Clone, Debug, PartialEq)]
@@ -14,11 +13,16 @@ pub enum HitKind {
         max: f64,
     },
     DragSetFontSize,
-    PickColor {
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
+    /// 2-D saturation/value area; the fixed hue rides along so the drag
+    /// handler can rebuild the full color from the pointer position and the
+    /// hit rect alone (payload rects are banned — the rect IS the region).
+    PickSatVal {
+        hue: f64,
+    },
+    /// Hue bar; the fixed saturation/value ride along like PickSatVal's hue.
+    PickHue {
+        sat: f64,
+        val: f64,
     },
     DragUndoDelay,
     DragRedoDelay,
@@ -65,26 +69,7 @@ impl HitKind {
             | HitKind::DragMoveSide
             | HitKind::DragScrollSide { .. }
             | HitKind::DragToolbarItem { .. } => ToolbarCursorHint::Grab,
-            HitKind::PickColor { .. } => ToolbarCursorHint::Crosshair,
+            HitKind::PickSatVal { .. } | HitKind::PickHue { .. } => ToolbarCursorHint::Crosshair,
         }
     }
-}
-
-/// Convert HSV to RGB for color picker math.
-pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
-    let h = (h - h.floor()).clamp(0.0, 1.0) * 6.0;
-    let i = h.floor();
-    let f = h - i;
-    let p = v * (1.0 - s);
-    let q = v * (1.0 - s * f);
-    let t = v * (1.0 - s * (1.0 - f));
-    let (r, g, b) = match i as i32 {
-        0 => (v, t, p),
-        1 => (q, v, p),
-        2 => (p, v, t),
-        3 => (p, q, v),
-        4 => (t, p, v),
-        _ => (v, p, q),
-    };
-    Color { r, g, b, a: 1.0 }
 }

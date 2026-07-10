@@ -58,7 +58,8 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         HitKind::DragSetThickness { .. }
             | HitKind::DragSetMarkerOpacity { .. }
             | HitKind::DragSetFontSize
-            | HitKind::PickColor { .. }
+            | HitKind::PickSatVal { .. }
+            | HitKind::PickHue { .. }
             | HitKind::DragUndoDelay
             | HitKind::DragRedoDelay
             | HitKind::DragCustomUndoDelay
@@ -98,18 +99,8 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
             hit,
             x,
         ),
-        PickColor { x: px, y: py, w, h } => {
-            let hue = ((x - px) / w).clamp(0.0, 1.0);
-            let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-            let color = crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value);
-            if debug_toolbar_color_logging_enabled() {
-                color_log(format!(
-                    "toolbar pick color: pos=({:.1},{:.1}) picker=({:.1},{:.1},{:.1},{:.1}) hue={:.3} value={:.3} rgb=({:.3},{:.3},{:.3})",
-                    x, y, px, py, w, h, hue, value, color.r, color.g, color.b
-                ));
-            }
-            ToolbarEvent::SetColor(color)
-        }
+        PickSatVal { hue } => sat_val_event_for_hit(hue, hit, x, y),
+        PickHue { sat, val } => hue_event_for_hit(sat, val, hit, x),
         DragUndoDelay => slider_event_for_hit(
             ToolbarSliderTarget::UndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
@@ -178,18 +169,8 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
             hit,
             x,
         ))),
-        PickColor { x: px, y: py, w, h } => {
-            let hue = ((x - px) / w).clamp(0.0, 1.0);
-            let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-            let color = crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value);
-            if debug_toolbar_color_logging_enabled() {
-                color_log(format!(
-                    "toolbar drag color: pos=({:.1},{:.1}) picker=({:.1},{:.1},{:.1},{:.1}) hue={:.3} value={:.3} rgb=({:.3},{:.3},{:.3})",
-                    x, y, px, py, w, h, hue, value, color.r, color.g, color.b
-                ));
-            }
-            Some(ToolbarIntent(ToolbarEvent::SetColor(color)))
-        }
+        PickSatVal { hue } => Some(ToolbarIntent(sat_val_event_for_hit(hue, hit, x, y))),
+        PickHue { sat, val } => Some(ToolbarIntent(hue_event_for_hit(sat, val, hit, x))),
         DragUndoDelay => Some(ToolbarIntent(slider_event_for_hit(
             ToolbarSliderTarget::UndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
@@ -229,6 +210,33 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         })),
         _ => None,
     }
+}
+
+/// Map a pointer position inside the saturation/value area to a full HSV
+/// color; saturation follows x, value follows inverted y, hue is fixed.
+fn sat_val_event_for_hit(hue: f64, hit: &HitRegion, x: f64, y: f64) -> ToolbarEvent {
+    let s = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
+    let v = (1.0 - (y - hit.rect.1) / hit.rect.3.max(1.0)).clamp(0.0, 1.0);
+    if debug_toolbar_color_logging_enabled() {
+        color_log(format!(
+            "toolbar pick sat/val: pos=({x:.1},{y:.1}) rect={:?} h={hue:.3} s={s:.3} v={v:.3}",
+            hit.rect
+        ));
+    }
+    ToolbarEvent::SetColorHsv { h: hue, s, v }
+}
+
+/// Map a pointer x inside the hue bar to a full HSV color; hue follows x,
+/// saturation and value are fixed.
+fn hue_event_for_hit(sat: f64, val: f64, hit: &HitRegion, x: f64) -> ToolbarEvent {
+    let h = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
+    if debug_toolbar_color_logging_enabled() {
+        color_log(format!(
+            "toolbar pick hue: x={x:.1} rect={:?} h={h:.3} s={sat:.3} v={val:.3}",
+            hit.rect
+        ));
+    }
+    ToolbarEvent::SetColorHsv { h, s: sat, v: val }
 }
 
 /// Map a pointer y within the scrollbar track to an absolute scroll offset.
@@ -399,6 +407,71 @@ mod tests {
         assert_set_thickness(right.0, 20.0);
         assert!(intent_for_hit(&hit, 99.0, 10.0).is_none());
         assert!(drag_intent_for_hit(&hit, 301.0, 10.0).is_none());
+    }
+
+    #[test]
+    fn sat_val_hit_maps_pointer_to_full_hsv_color() {
+        let hit = HitRegion {
+            rect: (100.0, 50.0, 200.0, 80.0),
+            event: ToolbarEvent::SetColorHsv {
+                h: 0.5,
+                s: 0.5,
+                v: 0.5,
+            },
+            kind: HitKind::PickSatVal { hue: 0.5 },
+            tooltip: None,
+        };
+
+        let (intent, start_drag) = intent_for_hit(&hit, 200.0, 90.0).expect("press intent");
+        assert!(start_drag);
+        match intent.0 {
+            ToolbarEvent::SetColorHsv { h, s, v } => {
+                assert!((h - 0.5).abs() < 1e-9);
+                assert!((s - 0.5).abs() < 1e-9);
+                assert!((v - 0.5).abs() < 1e-9);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+
+        // The top-right corner is full saturation and value; the mapping
+        // derives from the hit rect itself, not an embedded payload rect.
+        let drag = drag_intent_for_hit(&hit, 300.0, 50.0).expect("drag intent");
+        match drag.0 {
+            ToolbarEvent::SetColorHsv { h, s, v } => {
+                assert!((h - 0.5).abs() < 1e-9);
+                assert!((s - 1.0).abs() < 1e-9);
+                assert!((v - 1.0).abs() < 1e-9);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hue_hit_maps_pointer_x_and_keeps_sat_val() {
+        let hit = HitRegion {
+            rect: (100.0, 150.0, 200.0, 14.0),
+            event: ToolbarEvent::SetColorHsv {
+                h: 0.0,
+                s: 0.25,
+                v: 0.75,
+            },
+            kind: HitKind::PickHue {
+                sat: 0.25,
+                val: 0.75,
+            },
+            tooltip: None,
+        };
+
+        let (intent, start_drag) = intent_for_hit(&hit, 150.0, 157.0).expect("press intent");
+        assert!(start_drag);
+        match intent.0 {
+            ToolbarEvent::SetColorHsv { h, s, v } => {
+                assert!((h - 0.25).abs() < 1e-9);
+                assert!((s - 0.25).abs() < 1e-9);
+                assert!((v - 0.75).abs() < 1e-9);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
     }
 
     #[test]

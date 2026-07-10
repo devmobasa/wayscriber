@@ -40,11 +40,6 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
     let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
     let slot_row_y = *y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
-    let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
-    let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
-    let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
-    let action_w = (slot_size - action_gap) / 2.0;
-    let action_icon = (action_h * 0.6).round();
     let icon_size = (slot_size * 0.45).round();
     let swatch_size = (slot_size * 0.35).round();
     let number_box = (slot_size * 0.4).round();
@@ -55,11 +50,6 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
         slot_size,
         slot_gap,
         slot_row_y,
-        action_row_y,
-        action_h,
-        action_gap,
-        action_w,
-        action_icon,
         icon_size,
         swatch_size,
         number_box,

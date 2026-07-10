@@ -28,6 +28,18 @@ impl InputState {
         self.apply_color_from_ui(color)
     }
 
+    pub(super) fn apply_toolbar_set_color_hsv(&mut self, h: f64, s: f64, v: f64) -> bool {
+        let changed = self.apply_color_from_ui(crate::draw::color::hsv_to_rgb(h, s, v));
+        // Remember the picker position even when the color collapses to a
+        // gray/black RGB value that cannot express hue or saturation.
+        if self.toolbar_picker_hsv != Some((h, s, v)) {
+            self.toolbar_picker_hsv = Some((h, s, v));
+            self.needs_redraw = true;
+            return true;
+        }
+        changed
+    }
+
     pub(super) fn apply_toolbar_set_thickness(&mut self, value: f64) -> bool {
         self.set_thickness_for_active_tool(value)
     }
@@ -148,6 +160,26 @@ impl InputState {
 mod tests {
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn set_color_hsv_applies_color_and_remembers_picker_position() {
+        let mut state = make_test_input_state();
+
+        // A zero-saturation pick collapses to white in RGB; the remembered
+        // HSV triple is what keeps the picker's hue from snapping to red.
+        let changed = state.apply_toolbar_event(ToolbarEvent::SetColorHsv {
+            h: 0.4,
+            s: 0.0,
+            v: 1.0,
+        });
+
+        assert!(changed);
+        assert_eq!(state.toolbar_picker_hsv, Some((0.4, 0.0, 1.0)));
+        let color = state.current_color;
+        assert!((color.r - 1.0).abs() < 1e-9);
+        assert!((color.g - 1.0).abs() < 1e-9);
+        assert!((color.b - 1.0).abs() < 1e-9);
+    }
 
     #[test]
     fn edit_hex_color_opens_popup_with_hex_focused() {

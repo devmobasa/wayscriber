@@ -16,7 +16,9 @@ pub(super) use buttons::{
 };
 pub(super) use checkbox::{draw_checkbox, draw_mini_checkbox};
 #[allow(unused_imports)]
-pub(super) use color::{draw_color_indicator, draw_color_picker, draw_swatch, rgb_to_hsv};
+pub(super) use color::{
+    draw_color_indicator, draw_hue_bar, draw_sat_val_area, draw_swatch, rgb_to_hsv,
+};
 #[allow(unused_imports)]
 pub(super) use icons::{draw_icon_hover_bg, set_icon_color};
 pub(super) use labels::{

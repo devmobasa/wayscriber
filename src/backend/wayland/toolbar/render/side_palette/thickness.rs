@@ -39,12 +39,19 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         let slider_card_h = layout.spec.side_thickness_height(snapshot);
         draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
         let thickness_label = tool_context.thickness_label;
+        // Generic titles gain the tool scope; specific ones ("Eraser size")
+        // already name their target.
+        let title = if thickness_label == "Thickness" {
+            super::section_header::scoped_title(thickness_label, snapshot)
+        } else {
+            thickness_label.to_string()
+        };
         draw_collapsible_header(
             layout,
             *y,
             label_style,
             ToolbarSideSection::Thickness,
-            thickness_label,
+            &title,
             ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         );
         if snapshot.side_section_collapsed(ToolbarSideSection::Thickness) {

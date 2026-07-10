@@ -186,6 +186,13 @@ impl SidePane {
 pub enum ToolbarEvent {
     SelectTool(Tool),
     SetColor(Color),
+    /// Set the color from the side palette's HSV picker. Carries the full
+    /// triple so hue survives gray colors (where RGB alone loses it).
+    SetColorHsv {
+        h: f64,
+        s: f64,
+        v: f64,
+    },
     SetThickness(f64),
     NudgeThickness(f64),
     SetMarkerOpacity(f64),

@@ -115,6 +115,7 @@ impl ToolbarSnapshot {
             active_tool,
             tool_override: state.tool_override(),
             color: state.color_for_tool(active_tool),
+            picker_hsv: state.toolbar_picker_hsv,
             quick_colors: state.quick_colors.clone(),
             thickness: thickness_value,
             eraser_size: state.eraser_size,

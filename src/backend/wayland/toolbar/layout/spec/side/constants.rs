@@ -41,7 +41,11 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_GAP: f64 = 12.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_TOGGLE_OFFSET_Y: f64 = 22.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SECTION_LABEL_HEIGHT: f64 = 28.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_INPUT_HEIGHT: f64 = 24.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SV_HEIGHT: f64 = 72.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HUE_HEIGHT: f64 = 14.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HUE_GAP: f64 = 6.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_BLOCK_HEIGHT: f64 =
+        Self::SIDE_COLOR_SV_HEIGHT + Self::SIDE_COLOR_HUE_GAP + Self::SIDE_COLOR_HUE_HEIGHT;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SECTION_BOTTOM_PADDING: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH_GAP: f64 = 6.0;
@@ -80,13 +84,10 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_CARD_HEIGHT: f64 = 100.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_CARD_HEIGHT: f64 = 74.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_SLOT_SIZE: f64 = 40.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_SLOT_GAP: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ACTION_HEIGHT: f64 = 20.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 4.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_FOOTER_PADDING: f64 = 10.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SETTINGS_BUTTON_HEIGHT: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SETTINGS_BUTTON_GAP: f64 = 6.0;

@@ -1,12 +1,16 @@
+use crate::backend::wayland::toolbar::events::HitKind;
+use crate::backend::wayland::toolbar::format_binding_label;
+use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::config::action_label;
 use crate::draw::Color;
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::toolbar_icons;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::bindings::{action_for_clear_preset, action_for_save_preset};
 
-use super::super::super::widgets::constants::FONT_FAMILY_DEFAULT;
 use super::super::super::widgets::{draw_button, draw_round_rect, point_in_rect};
 use super::SidePaletteLayout;
 use super::widgets::draw_keycap;
 
-mod actions;
 mod content;
 mod feedback;
 
@@ -14,11 +18,6 @@ pub(super) struct PresetSlotLayout {
     pub(super) slot_size: f64,
     pub(super) slot_gap: f64,
     pub(super) slot_row_y: f64,
-    pub(super) action_row_y: f64,
-    pub(super) action_h: f64,
-    pub(super) action_gap: f64,
-    pub(super) action_w: f64,
-    pub(super) action_icon: f64,
     pub(super) icon_size: f64,
     pub(super) swatch_size: f64,
     pub(super) number_box: f64,
@@ -28,6 +27,9 @@ pub(super) struct PresetSlotLayout {
     pub(super) card_w: f64,
     pub(super) section_y: f64,
 }
+
+/// Size of the hover-revealed clear (✕) badge in a filled slot's corner.
+const CLEAR_BADGE_SIZE: f64 = 14.0;
 
 pub(super) fn draw_preset_slot(
     layout: &mut SidePaletteLayout,
@@ -67,6 +69,25 @@ pub(super) fn draw_preset_slot(
     // Hover for empty slots (for save hint)
     let empty_slot_hover = slot_hover_any && !preset_exists;
 
+    // The clear badge sits over the apply target and hit-testing is
+    // first-match, so its region must precede the slot's apply region.
+    let clear_badge = (preset_exists && slot_hover_any).then(|| {
+        let badge_x = slot_x + layout_spec.slot_size - CLEAR_BADGE_SIZE - 2.0;
+        let badge_y = layout_spec.slot_row_y + 2.0;
+        hits.push(HitRegion {
+            rect: (badge_x, badge_y, CLEAR_BADGE_SIZE, CLEAR_BADGE_SIZE),
+            event: ToolbarEvent::ClearPreset(slot),
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_for_clear_preset(slot)
+                    .map(action_label)
+                    .unwrap_or("Clear Preset"),
+                snapshot.binding_hints.clear_preset(slot),
+            )),
+        });
+        (badge_x, badge_y)
+    });
+
     draw_button(
         ctx,
         slot_x,
@@ -100,7 +121,7 @@ pub(super) fn draw_preset_slot(
         );
         let _ = ctx.stroke();
     } else {
-        // Empty slot background - brighter on hover
+        // Empty slot: click saves the current tool setup here.
         let bg_alpha = if empty_slot_hover { 0.45 } else { 0.35 };
         ctx.set_source_rgba(0.05, 0.05, 0.07, bg_alpha);
         draw_round_rect(
@@ -113,24 +134,31 @@ pub(super) fn draw_preset_slot(
         );
         let _ = ctx.fill();
 
-        // Show "Save" hint on hover for empty slots
-        if empty_slot_hover {
-            // Draw a subtle "+" icon or "Save" hint
-            let hint_style = UiTextStyle {
-                family: FONT_FAMILY_DEFAULT,
-                slant: cairo::FontSlant::Normal,
-                weight: cairo::FontWeight::Normal,
-                size: 9.0,
-            };
-            let hint_text = "Save";
-            let hint_layout = text_layout(ctx, hint_style, hint_text, None);
-            let hint_extents = hint_layout.ink_extents();
-            let hint_x = slot_x + (layout_spec.slot_size - hint_extents.width()) / 2.0
-                - hint_extents.x_bearing();
-            let hint_y = layout_spec.slot_row_y + layout_spec.slot_size - 8.0;
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
-            hint_layout.show_at_baseline(ctx, hint_x, hint_y);
-        }
+        hits.push(HitRegion {
+            rect: (
+                slot_x,
+                layout_spec.slot_row_y,
+                layout_spec.slot_size,
+                layout_spec.slot_size,
+            ),
+            event: ToolbarEvent::SavePreset(slot),
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_for_save_preset(slot)
+                    .map(action_label)
+                    .unwrap_or("Save Preset"),
+                snapshot.binding_hints.save_preset(slot),
+            )),
+        });
+
+        let plus = layout_spec.icon_size.min(14.0);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, if empty_slot_hover { 0.9 } else { 0.45 });
+        toolbar_icons::draw_icon_plus(
+            ctx,
+            slot_x + (layout_spec.slot_size - plus) / 2.0,
+            layout_spec.slot_row_y + (layout_spec.slot_size - plus) / 2.0,
+            plus,
+        );
     }
 
     let hover_preset_color = content::draw_preset_content(
@@ -165,24 +193,32 @@ pub(super) fn draw_preset_slot(
         preset_exists,
     );
 
-    // Draw subtle separator line between slot and action buttons
-    let sep_y = layout_spec.action_row_y - 3.0;
-    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.25);
-    ctx.set_line_width(0.5);
-    ctx.move_to(slot_x + 2.0, sep_y);
-    ctx.line_to(slot_x + layout_spec.slot_size - 2.0, sep_y);
-    let _ = ctx.stroke();
-
-    actions::draw_preset_actions(
-        ctx,
-        snapshot,
-        hits,
-        layout_spec,
-        slot_x,
-        slot,
-        preset_exists,
-        hover,
-    );
+    if let Some((badge_x, badge_y)) = clear_badge {
+        draw_clear_badge(ctx, badge_x, badge_y);
+    }
 
     hover_preset_color
+}
+
+fn draw_clear_badge(ctx: &cairo::Context, x: f64, y: f64) {
+    let size = CLEAR_BADGE_SIZE;
+    ctx.set_source_rgba(0.75, 0.2, 0.2, 0.9);
+    ctx.arc(
+        x + size / 2.0,
+        y + size / 2.0,
+        size / 2.0,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
+    let _ = ctx.fill();
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    let inset = size * 0.3;
+    ctx.set_line_width(1.6);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.move_to(x + inset, y + inset);
+    ctx.line_to(x + size - inset, y + size - inset);
+    let _ = ctx.stroke();
+    ctx.move_to(x + size - inset, y + inset);
+    ctx.line_to(x + inset, y + size - inset);
+    let _ = ctx.stroke();
 }

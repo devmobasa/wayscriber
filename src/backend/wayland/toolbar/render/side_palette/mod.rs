@@ -135,9 +135,6 @@ pub fn render_side_palette(
         while index < layout.hits.len() {
             let hit = &mut layout.hits[index];
             hit.rect.1 -= scroll;
-            if let HitKind::PickColor { y, .. } = &mut hit.kind {
-                *y -= scroll;
-            }
             let visible = hit.rect.1 + hit.rect.3 > content_top + 1.0 && hit.rect.1 < height - 1.0;
             if visible {
                 index += 1;

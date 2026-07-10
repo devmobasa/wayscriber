@@ -8,6 +8,23 @@ use crate::ui_text::UiTextStyle;
 use super::super::widgets::constants::{COLOR_LABEL_SECTION, set_color};
 use super::super::widgets::{draw_section_label, point_in_rect};
 
+/// Scope a section title to the tool it currently edits ("Color — Pen"),
+/// making the per-tool settings model visible. Falls back to the base
+/// title when the contextual UI is off (sections then apply broadly).
+pub(super) fn scoped_title(base: &str, snapshot: &crate::ui::toolbar::ToolbarSnapshot) -> String {
+    if !snapshot.context_aware_ui {
+        return base.to_string();
+    }
+    let scope = if snapshot.text_active {
+        "Text"
+    } else if snapshot.note_active {
+        "Note"
+    } else {
+        crate::ui::toolbar::bindings::tool_label(snapshot.active_tool)
+    };
+    format!("{base} — {scope}")
+}
+
 pub(super) fn draw_collapsible_header(
     layout: &mut SidePaletteLayout,
     y: f64,

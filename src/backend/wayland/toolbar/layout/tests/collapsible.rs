@@ -158,11 +158,10 @@ fn draw_pane_sections_collapsed_keep_only_headers() {
 
     let hits = rendered_side_hits(&collapsed);
     assert_expand_hits(&hits, &sections);
-    assert!(
-        !hits
-            .iter()
-            .any(|hit| matches!(hit.kind, HitKind::PickColor { .. }))
-    );
+    assert!(!hits.iter().any(|hit| matches!(
+        hit.kind,
+        HitKind::PickSatVal { .. } | HitKind::PickHue { .. }
+    )));
     assert!(!hits.iter().any(|hit| matches!(
         hit.event,
         ToolbarEvent::SetThickness(_) | ToolbarEvent::SetFontSize(_) | ToolbarEvent::SetFont(_)

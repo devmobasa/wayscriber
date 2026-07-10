@@ -163,7 +163,7 @@ fn top_size_keeps_toggle_and_window_controls_separate() {
 }
 
 #[test]
-fn side_color_picker_keeps_input_height_and_more_colors_adds_swatches() {
+fn side_color_picker_offers_sat_val_area_and_hue_bar() {
     let count_swatches = |hits: &[HitRegion]| {
         hits.iter()
             .filter(|hit| matches!(hit.event, ToolbarEvent::SetColor(_)))
@@ -174,29 +174,115 @@ fn side_color_picker_keeps_input_height_and_more_colors_adds_swatches() {
     state.show_more_colors = false;
     let snapshot = snapshot_from_state(&state);
     let compact_hits = rendered_side_hits(&snapshot);
-    let picker_height = compact_hits.iter().find_map(|hit| {
-        if let HitKind::PickColor { h, .. } = hit.kind {
-            Some(h)
-        } else {
-            None
-        }
-    });
-    assert_eq!(picker_height, Some(24.0));
+    let sv = compact_hits
+        .iter()
+        .find(|hit| matches!(hit.kind, HitKind::PickSatVal { .. }))
+        .expect("sat/val area hit");
+    let hue = compact_hits
+        .iter()
+        .find(|hit| matches!(hit.kind, HitKind::PickHue { .. }))
+        .expect("hue bar hit");
+    assert_eq!(sv.rect.3, ToolbarLayoutSpec::SIDE_COLOR_SV_HEIGHT);
+    assert_eq!(hue.rect.3, ToolbarLayoutSpec::SIDE_COLOR_HUE_HEIGHT);
+    assert!(
+        hue.rect.1 > sv.rect.1 + sv.rect.3,
+        "hue bar sits below the sat/val area"
+    );
 
     state.show_more_colors = true;
     let snapshot = snapshot_from_state(&state);
     let expanded_hits = rendered_side_hits(&snapshot);
-    let picker_height = expanded_hits.iter().find_map(|hit| {
-        if let HitKind::PickColor { h, .. } = hit.kind {
-            Some(h)
-        } else {
-            None
-        }
-    });
-    assert_eq!(picker_height, Some(24.0));
     assert!(
         count_swatches(&expanded_hits) > count_swatches(&compact_hits),
         "extended palette should add swatch hits"
+    );
+}
+
+#[test]
+fn preset_slots_save_on_empty_click_and_clear_on_hover_badge() {
+    let state = create_test_input_state();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+        name: None,
+        tool: crate::input::Tool::Pen,
+        color: Color {
+            r: 1.0,
+            g: 0.5,
+            b: 0.0,
+            a: 1.0,
+        },
+        size: 4.0,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+    });
+
+    // Without hover: filled slot applies, empty slots save, and the old
+    // per-slot micro action row is gone.
+    let hits = rendered_side_hits(&snapshot);
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::ApplyPreset(1)))
+    );
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SavePreset(2)))
+    );
+    assert!(
+        !hits
+            .iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SavePreset(1))),
+        "filled slot should not save on click"
+    );
+    assert!(
+        !hits
+            .iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::ClearPreset(_))),
+        "clear affordance only appears on hover"
+    );
+
+    // Hovering the filled slot reveals the clear badge, and its hit takes
+    // precedence over the apply hit underneath.
+    let apply_hit = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ApplyPreset(1)))
+        .expect("apply hit");
+    let hover = (
+        apply_hit.rect.0 + apply_hit.rect.2 / 2.0,
+        apply_hit.rect.1 + apply_hit.rect.3 / 2.0,
+    );
+    let (w, h) = side_size(&snapshot);
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut hovered_hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx,
+        w as f64,
+        h as f64,
+        &snapshot,
+        &mut hovered_hits,
+        Some(hover),
+        None,
+    )
+    .unwrap();
+    let clear_index = hovered_hits
+        .iter()
+        .position(|hit| matches!(hit.event, ToolbarEvent::ClearPreset(1)))
+        .expect("clear badge hit while hovered");
+    let apply_index = hovered_hits
+        .iter()
+        .position(|hit| matches!(hit.event, ToolbarEvent::ApplyPreset(1)))
+        .expect("apply hit while hovered");
+    assert!(
+        clear_index < apply_index,
+        "clear badge must win first-match hit testing over apply"
     );
 }
 

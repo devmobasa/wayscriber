@@ -222,6 +222,9 @@ pub struct ToolbarSnapshot {
     pub active_tool: Tool,
     pub tool_override: Option<Tool>,
     pub color: Color,
+    /// Last HSV triple committed from the palette color picker, when it
+    /// still matches `color`; keeps hue/saturation stable across grays.
+    pub picker_hsv: Option<(f64, f64, f64)>,
     pub quick_colors: QuickColorPalette,
     pub thickness: f64,
     pub eraser_size: f64,

@@ -215,6 +215,9 @@ pub struct InputState {
     pub toolbar_customize_drag: Option<(ToolbarItemOrderGroup, ToolbarItemId)>,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
+    /// Last HSV triple committed from the side palette's color picker;
+    /// preserves hue/saturation across gray colors where RGB loses them.
+    pub toolbar_picker_hsv: Option<(f64, f64, f64)>,
     /// Whether the toolbar drawer is open
     /// Active toolbar drawer tab
     pub toolbar_side_pane: crate::ui::toolbar::SidePane,
