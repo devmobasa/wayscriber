@@ -12,10 +12,6 @@
 //! click-through (`ToolbarSurface::set_input_rects`); inline mode simply
 //! draws on the overlay.
 
-// Consumed by the top-strip overflow and per-tool options phases; the
-// allows are removed as those land.
-#![allow(dead_code)]
-
 pub type Rect = (f64, f64, f64, f64);
 
 /// Which side of the anchor the popover opened on.
@@ -78,6 +74,8 @@ pub fn place_popover(spec: PopoverSpec) -> PopoverPlacement {
 
 /// Input rects for a bar with an optional open popover: the transparent
 /// grown area between them must not eat clicks meant for the canvas.
+// Wired to the layer-shell surfaces in the polish phase.
+#[allow(dead_code)]
 pub fn input_rects_with_popover(bar: Rect, popover: Option<Rect>) -> Vec<Rect> {
     match popover {
         Some(popover) => vec![bar, popover],

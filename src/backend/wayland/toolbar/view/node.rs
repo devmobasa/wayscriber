@@ -174,6 +174,8 @@ pub enum WidgetKind {
     PinButton { pinned: bool },
     /// Minimize chrome button (collapses the bar to its restore tab).
     MinimizeButton,
+    /// Anchored popover panel (shadow, background, caret at `caret_x`).
+    Popover { caret_x: f64, caret_up: bool },
 }
 
 /// What a node does when hit. Nodes without an interaction are decoration.

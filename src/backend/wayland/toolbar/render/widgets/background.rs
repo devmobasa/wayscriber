@@ -29,9 +29,6 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_group_card(
 /// pointing at the anchor. `caret_x` comes from the popover placement math
 /// (`view::popover`); `caret_up` is true when the popover opened below its
 /// anchor so the caret points up at it.
-// Consumed by the top-strip overflow and per-tool options phases; the
-// allow is removed as those land.
-#[allow(dead_code)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_popover_panel(
     ctx: &cairo::Context,
     x: f64,

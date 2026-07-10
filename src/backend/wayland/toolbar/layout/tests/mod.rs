@@ -89,7 +89,7 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (1120, 72));
+    assert_eq!(top_size(&snapshot), (1120, 58));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
@@ -154,6 +154,87 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
         overflow_ids.len() > 1,
         "panel + dropped items: {overflow_ids:?}"
     );
+}
+
+#[test]
+fn shapes_popover_hosts_the_relocated_tool_options() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.set_tool_override(Some(crate::input::Tool::RegularPolygon));
+    state.toolbar_shapes_expanded = true;
+    let snapshot = snapshot_from_state(&state);
+    assert!(snapshot.shape_picker_open);
+
+    let (w, h) = top_size(&snapshot);
+    assert!(h > 58, "open popover grows the surface: {h}");
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+
+    // The grid renders inside popover chrome with a caret.
+    let panel = tree
+        .node_by_id(&"top.shapes.panel".into())
+        .expect("shapes popover panel");
+    assert!(matches!(
+        panel.kind,
+        crate::backend::wayland::toolbar::view::WidgetKind::Popover { .. }
+    ));
+
+    // The old mini-checkbox lane's controls live inside the popover now.
+    let fill = tree
+        .node_by_id(&"top.utility.fill".into())
+        .expect("fill option row");
+    let inside = |rect: (f64, f64, f64, f64)| {
+        rect.0 >= panel.rect.0
+            && rect.1 >= panel.rect.1
+            && rect.0 + rect.2 <= panel.rect.0 + panel.rect.2 + 0.5
+            && rect.1 + rect.3 <= panel.rect.1 + panel.rect.3 + 0.5
+    };
+    assert!(inside(fill.rect), "fill row sits inside the popover");
+    assert!(matches!(
+        fill.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleFill(_)
+    ));
+    let minus = tree
+        .node_by_id(&"top.options.sides-minus".into())
+        .expect("sides minus");
+    assert!(inside(minus.rect));
+    assert!(matches!(
+        minus.interact.as_ref().unwrap().event,
+        ToolbarEvent::NudgePolygonSides(-1)
+    ));
+
+    // With the popover closed the bar carries no fill checkbox at all —
+    // the permanently reserved mini-checkbox lane is gone.
+    state.toolbar_shapes_expanded = false;
+    let snapshot = snapshot_from_state(&state);
+    let (w, h) = top_size(&snapshot);
+    assert_eq!(h, 58);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    assert!(tree.node_by_id(&"top.utility.fill".into()).is_none());
+}
+
+#[test]
+fn highlight_ring_row_grows_the_bar_only_while_active() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    let snapshot = snapshot_from_state(&state);
+    assert_eq!(top_size(&snapshot).1, 58);
+
+    state.set_highlight_tool(true);
+    let snapshot = snapshot_from_state(&state);
+    assert!(snapshot.highlight_tool_active);
+    let (w, h) = top_size(&snapshot);
+    assert!(h > 58, "ring row grows the bar: {h}");
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let ring = tree
+        .node_by_id(&"top.utility.highlight-ring".into())
+        .expect("ring checkbox");
+    assert!(matches!(
+        ring.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleHighlightToolRing(_)
+    ));
 }
 
 #[test]

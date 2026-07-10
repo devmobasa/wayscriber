@@ -140,7 +140,6 @@ fn build_top_view_planned(
         ));
         x += handle_size + gap;
     }
-    let picker_handle_w = if handle_visible { handle_size } else { 0.0 };
 
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let current_shape_tool =
@@ -165,9 +164,6 @@ fn build_top_view_planned(
     };
 
     // --- Tool groups: pens | shapes ----------------------------------------
-    let mut fill_anchor: Option<(f64, f64)> = None;
-    let mut shape_span_start = None;
-    let mut shape_span_end = None;
     let mut previous_group: Option<model::TopToolGroup> = None;
     let mut tool_drawn = false;
     for tool in model::visible_top_tool_buttons(is_simple, snapshot) {
@@ -181,12 +177,6 @@ fn build_top_view_planned(
             push_divider(&mut tree, &mut x, "tools");
         }
         previous_group = Some(group);
-        if model::is_fill_tool(tool) {
-            if shape_span_start.is_none() {
-                shape_span_start = Some(x);
-            }
-            shape_span_end = Some(x + btn_w);
-        }
         let active = snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
         tree.push(tool_button_node(
             snapshot,
@@ -200,6 +190,7 @@ fn build_top_view_planned(
     }
 
     // --- Shapes picker (face = last-used shape, caret grid below) ----------
+    let mut picker_anchor: Option<(f64, f64, f64, f64)> = None;
     if model::top_shape_picker_visible(snapshot) {
         if previous_group == Some(model::TopToolGroup::Pens) {
             push_divider(&mut tree, &mut x, "tools");
@@ -228,78 +219,12 @@ fn build_top_view_planned(
             kind,
             Some(interact),
         ));
-        // Fill anchor bookkeeping (icon mode hangs the checkbox below):
-        // under the picker when it owns the fill-capable tool, otherwise
-        // spanning the inline fill-capable tools.
-        let picker_owns_fill = current_shape_tool
-            .map(|tool| !model::top_tool_buttons(is_simple).contains(&tool))
-            .unwrap_or(true);
-        if picker_owns_fill {
-            fill_anchor = Some((x, btn_w));
-        } else if let (Some(start), Some(end)) = (shape_span_start, shape_span_end) {
-            fill_anchor = Some((start, end - start));
-        }
+        picker_anchor = Some((x, y, btn_w, btn_h));
         x += btn_w + gap;
         tool_drawn = true;
     }
 
-    // --- Fill toggle ---------------------------------------------------------
-    let fill_visible =
-        fill_tool_active && !snapshot.shape_picker_open && model::top_fill_visible(snapshot);
-    if fill_visible {
-        let interact = Interaction::click(
-            ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-            Some(format_binding_label(
-                action_label(Action::ToggleFill),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::ToggleFill),
-            )),
-        );
-        if snapshot.use_icons {
-            // Mini checkbox hanging below the fill-capable tool span.
-            if let Some((fill_x, fill_w)) = fill_anchor {
-                let fill_y = y + btn_h + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-                tree.push(WidgetNode::new(
-                    ids::TOP_UTILITY_FILL.as_str(),
-                    (
-                        fill_x,
-                        fill_y,
-                        fill_w,
-                        ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
-                    ),
-                    WidgetKind::MiniCheckbox {
-                        checked: snapshot.fill_enabled,
-                        label: LabelSpec::new(
-                            action_short_label(Action::ToggleFill),
-                            MINI_LABEL_FONT_SIZE,
-                            false,
-                        ),
-                    },
-                    Some(interact),
-                ));
-            }
-        } else {
-            // Inline checkbox between the picker and the utilities.
-            let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
-            tree.push(WidgetNode::new(
-                ids::TOP_UTILITY_FILL.as_str(),
-                (x, y, fill_w, btn_h),
-                WidgetKind::Checkbox {
-                    checked: snapshot.fill_enabled,
-                    label: LabelSpec::new(
-                        action_short_label(Action::ToggleFill),
-                        TOP_LABEL_FONT_SIZE,
-                        true,
-                    ),
-                },
-                Some(interact),
-            ));
-            x += fill_w + gap;
-        }
-    }
-
-    // --- Annotation utilities (Clear is pulled out and isolated below) ------
+    // --- Annotation utilities    // --- Annotation utilities (Clear is pulled out and isolated below) ------
     let utilities: Vec<model::TopUtilityButton> =
         model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
             .into_iter()
@@ -506,29 +431,72 @@ fn build_top_view_planned(
         ));
     }
 
-    // --- Shape picker rows -----------------------------------------------------
-    if snapshot.shape_picker_open && model::top_shape_picker_visible(snapshot) {
-        let mut row_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        for row in model::visible_shape_picker_rows(snapshot, is_simple) {
-            let mut shape_x = ToolbarLayoutSpec::TOP_START_X + picker_handle_w + gap;
-            for tool in row {
-                if !model::tool_visible(snapshot, tool) {
-                    continue;
+    // --- Shapes popover: the grid plus per-tool options ------------------------
+    if snapshot.shape_picker_open
+        && model::top_shape_picker_visible(snapshot)
+        && let Some(anchor) = picker_anchor
+    {
+        let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+        let option_rows = shape_option_rows(snapshot, fill_tool_active);
+        let max_row_len = rows.iter().map(Vec::len).max().unwrap_or(0);
+        if max_row_len > 0 || !option_rows.is_empty() {
+            let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
+            let option_h = ToolbarLayoutSpec::TOP_OPTION_ROW_H;
+            let grid_w = max_row_len as f64 * (btn_w + gap) - gap;
+            let content_w = grid_w.max(160.0) + pad * 2.0;
+            let grid_h = rows.len() as f64 * (btn_h + gap) - gap;
+            let content_h = pad * 2.0
+                + grid_h.max(0.0)
+                + option_rows.len() as f64 * (option_h + gap)
+                + if rows.is_empty() { -gap } else { 0.0 };
+            let placement = super::popover::place_popover(super::popover::PopoverSpec {
+                anchor,
+                content: (content_w, content_h),
+                bounds: (width, height),
+                gap: ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP,
+                margin: 4.0,
+            });
+            let (px, py, pw, _ph) = placement.rect;
+            tree.push(WidgetNode::decor(
+                "top.shapes.panel",
+                placement.rect,
+                WidgetKind::Popover {
+                    caret_x: placement.caret_x,
+                    caret_up: placement.side == super::popover::PopoverSide::Below,
+                },
+            ));
+            let mut row_y = py + pad;
+            for row in rows {
+                let mut shape_x = px + pad;
+                for tool in row {
+                    if !model::tool_visible(snapshot, tool) {
+                        continue;
+                    }
+                    let active =
+                        snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
+                    tree.push(tool_button_node(
+                        snapshot,
+                        tool,
+                        format!(
+                            "top.picker.{}",
+                            model::toolbar_item_id_for_tool(tool).as_str()
+                        ),
+                        (shape_x, row_y, btn_w, btn_h),
+                        active,
+                    ));
+                    shape_x += btn_w + gap;
                 }
-                let active = snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
-                tree.push(tool_button_node(
-                    snapshot,
-                    tool,
-                    format!(
-                        "top.picker.{}",
-                        model::toolbar_item_id_for_tool(tool).as_str()
-                    ),
-                    (shape_x, row_y, btn_w, btn_h),
-                    active,
-                ));
-                shape_x += btn_w + gap;
+                row_y += btn_h + gap;
             }
-            row_y += btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            for option_row in option_rows {
+                push_option_row(
+                    &mut tree,
+                    snapshot,
+                    option_row,
+                    (px + pad, row_y, pw - pad * 2.0, option_h),
+                );
+                row_y += option_h + gap;
+            }
         }
     }
 
@@ -603,11 +571,14 @@ fn build_top_view_planned(
                 gap: 6.0,
                 margin: 4.0,
             });
-            let (px, py, pw, ph) = placement.rect;
+            let (px, py, _pw, _ph) = placement.rect;
             tree.push(WidgetNode::decor(
                 "top.overflow.panel",
-                (px, py, pw, ph),
-                WidgetKind::Card,
+                placement.rect,
+                WidgetKind::Popover {
+                    caret_x: placement.caret_x,
+                    caret_up: placement.side == super::popover::PopoverSide::Below,
+                },
             ));
             let mut index = 0usize;
             let item_rect = |index: usize| {
@@ -712,8 +683,156 @@ fn build_top_minimized_tab(width: f64, height: f64) -> WidgetTree {
     tree
 }
 
-/// Extra height the open overflow popover needs below the bar.
-pub fn top_overflow_height(snapshot: &ToolbarSnapshot) -> f64 {
+/// Per-tool option rows shown at the bottom of the shapes popover: the
+/// controls that used to hang under the bar as mini-checkboxes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShapeOptionRow {
+    Fill,
+    PolygonSides,
+}
+
+fn shape_option_rows(snapshot: &ToolbarSnapshot, fill_tool_active: bool) -> Vec<ShapeOptionRow> {
+    let mut rows = Vec::new();
+    if fill_tool_active && model::top_fill_visible(snapshot) {
+        rows.push(ShapeOptionRow::Fill);
+    }
+    if snapshot.active_tool == Tool::RegularPolygon
+        || snapshot.tool_override == Some(Tool::RegularPolygon)
+    {
+        rows.push(ShapeOptionRow::PolygonSides);
+    }
+    rows
+}
+
+fn push_option_row(
+    tree: &mut WidgetTree,
+    snapshot: &ToolbarSnapshot,
+    row: ShapeOptionRow,
+    rect: (f64, f64, f64, f64),
+) {
+    let (x, y, w, h) = rect;
+    match row {
+        ShapeOptionRow::Fill => {
+            tree.push(WidgetNode::new(
+                ids::TOP_UTILITY_FILL.as_str(),
+                rect,
+                WidgetKind::Checkbox {
+                    checked: snapshot.fill_enabled,
+                    label: LabelSpec::new(
+                        action_short_label(Action::ToggleFill),
+                        TOP_LABEL_FONT_SIZE,
+                        true,
+                    ),
+                },
+                Some(Interaction::click(
+                    ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                    Some(format_binding_label(
+                        action_label(Action::ToggleFill),
+                        snapshot
+                            .binding_hints
+                            .binding_for_action(Action::ToggleFill),
+                    )),
+                )),
+            ));
+        }
+        ShapeOptionRow::PolygonSides => {
+            let btn = h;
+            tree.push(WidgetNode::new(
+                "top.options.sides-minus",
+                (x, y, btn, btn),
+                WidgetKind::TextButton {
+                    label: LabelSpec::new("−", TOP_LABEL_FONT_SIZE, true),
+                    style: ButtonStyle::plain(),
+                },
+                Some(Interaction::click(
+                    ToolbarEvent::NudgePolygonSides(-1),
+                    Some("Fewer sides".to_string()),
+                )),
+            ));
+            tree.push(WidgetNode::decor(
+                "top.options.sides-label",
+                (x + btn + 4.0, y, (w - 2.0 * (btn + 4.0)).max(0.0), h),
+                WidgetKind::Label(LabelSpec::new(
+                    format!("{} sides", snapshot.polygon_sides),
+                    TOP_LABEL_FONT_SIZE,
+                    true,
+                )),
+            ));
+            tree.push(WidgetNode::new(
+                "top.options.sides-plus",
+                (x + w - btn, y, btn, btn),
+                WidgetKind::TextButton {
+                    label: LabelSpec::new("+", TOP_LABEL_FONT_SIZE, true),
+                    style: ButtonStyle::plain(),
+                },
+                Some(Interaction::click(
+                    ToolbarEvent::NudgePolygonSides(1),
+                    Some("More sides".to_string()),
+                )),
+            ));
+        }
+    }
+}
+
+/// Everything that grows the surface below the base bar: the shapes/options
+/// popover, the contextual highlight-ring row, and the overflow popover.
+pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
+    if snapshot.top_minimized {
+        return 0.0;
+    }
+    shape_popover_height(snapshot) + ring_row_height(snapshot) + overflow_height(snapshot)
+}
+
+fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
+    if !snapshot.shape_picker_open || !model::top_shape_picker_visible(snapshot) {
+        return 0.0;
+    }
+    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
+    let spec = ToolbarLayoutSpec::new(snapshot);
+    let (_, btn_h) = spec.top_button_size();
+    let gap = ToolbarLayoutSpec::TOP_GAP;
+    let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
+    let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+    let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
+    let option_rows = shape_option_rows(snapshot, fill_tool_active);
+    if rows.is_empty() && option_rows.is_empty() {
+        return 0.0;
+    }
+    let grid_h = if rows.is_empty() {
+        -gap
+    } else {
+        rows.len() as f64 * (btn_h + gap) - gap
+    };
+    let content_h =
+        pad * 2.0 + grid_h + option_rows.len() as f64 * (ToolbarLayoutSpec::TOP_OPTION_ROW_H + gap);
+    ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP + content_h + 4.0 + 6.0
+}
+
+/// The highlight ring row grows the bar only while the highlight tool is
+/// active — the lane is no longer permanently reserved.
+fn ring_row_height(snapshot: &ToolbarSnapshot) -> f64 {
+    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
+    if !snapshot.use_icons
+        || is_simple
+        || !snapshot.highlight_tool_active
+        || !model::top_highlight_ring_visible(snapshot)
+    {
+        return 0.0;
+    }
+    let plan = plan_top_strip(snapshot);
+    let highlight_shown =
+        model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
+            .contains(&model::TopUtilityButton::Highlight)
+            && !plan
+                .dropped_utilities
+                .contains(&model::TopUtilityButton::Highlight);
+    if !highlight_shown {
+        return 0.0;
+    }
+    ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT + 2.0
+}
+
+fn overflow_height(snapshot: &ToolbarSnapshot) -> f64 {
     if !snapshot.top_overflow_open {
         return 0.0;
     }
