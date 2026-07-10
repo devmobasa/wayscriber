@@ -78,7 +78,7 @@ mod tests {
 
         let model = ToolbarActionsModel::from_snapshot(&snapshot).expect("actions model");
         assert_eq!(model.groups().len(), 2);
-        assert_eq!(model.groups()[0].kind, ToolbarCommandGroupKind::ViewActions);
+        assert_eq!(model.groups()[0].kind, ToolbarCommandGroupKind::Zoom);
         assert_eq!(
             model.groups()[1].kind,
             ToolbarCommandGroupKind::AdvancedActions

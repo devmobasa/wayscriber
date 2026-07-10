@@ -199,6 +199,55 @@ fn side_color_picker_offers_sat_val_area_and_hue_bar() {
 }
 
 #[test]
+fn canvas_pane_right_aligns_destructive_buttons() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pane = SidePane::Canvas;
+    state.toolbar_use_icons = true;
+    let snapshot = snapshot_from_state(&state);
+    let hits = rendered_side_hits(&snapshot);
+
+    let right_edge = ToolbarLayoutSpec::SIDE_START_X
+        + (ToolbarLayoutSpec::SIDE_WIDTH as f64 - ToolbarLayoutSpec::SIDE_CONTENT_PADDING_X);
+    for (event_name, matcher) in [
+        (
+            "ClearCanvas",
+            &(|hit: &HitRegion| matches!(hit.event, ToolbarEvent::ClearCanvas))
+                as &dyn Fn(&HitRegion) -> bool,
+        ),
+        ("BoardDelete", &|hit: &HitRegion| {
+            matches!(hit.event, ToolbarEvent::BoardDelete)
+        }),
+        ("PageDelete", &|hit: &HitRegion| {
+            matches!(hit.event, ToolbarEvent::PageDelete)
+        }),
+    ] {
+        let hit = hits
+            .iter()
+            .find(|hit| matcher(hit))
+            .unwrap_or_else(|| panic!("{event_name} hit"));
+        assert!(
+            (hit.rect.0 + hit.rect.2 - right_edge).abs() < 1.0,
+            "{event_name} should be right-aligned"
+        );
+    }
+
+    // The guard gap: the button before the delete does not abut it.
+    let duplicate = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::PageDuplicate))
+        .expect("page duplicate hit");
+    let delete = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::PageDelete))
+        .expect("page delete hit");
+    assert!(
+        duplicate.rect.0 + duplicate.rect.2 + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP
+            < delete.rect.0,
+        "destructive delete should sit apart from its neighbors"
+    );
+}
+
+#[test]
 fn preset_slots_save_on_empty_click_and_clear_on_hover_badge() {
     let state = create_test_input_state();
     let mut snapshot = snapshot_from_state(&state);

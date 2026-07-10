@@ -37,6 +37,7 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_BUTTON_HEIGHT_TEXT: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_BUTTON_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_CONTENT_GAP_TEXT: f64 = 5.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_GROUP_LABEL_HEIGHT: f64 = 16.0;
 
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_GAP: f64 = 12.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_TOGGLE_OFFSET_Y: f64 = 22.0;

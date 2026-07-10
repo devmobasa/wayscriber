@@ -3,7 +3,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::backend::wayland::toolbar::rows::{capped_grid_columns, grid_layout, row_item_width};
+use crate::backend::wayland::toolbar::rows::capped_grid_columns;
 use crate::toolbar_icons;
 use crate::ui::toolbar::model::toolbar_boards_model;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
@@ -81,22 +81,21 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let cols = capped_grid_columns(model.buttons.len(), 5);
-    let btn_w = row_item_width(content_width, cols, btn_gap);
-    let layout = grid_layout(
-        x,
-        boards_y,
-        btn_w,
-        btn_h,
-        btn_gap,
-        btn_gap,
-        model.buttons.len(),
-        cols,
+    let rects = super::side_row_button_rects(
+        super::SideRowLayout {
+            x,
+            row_y: boards_y,
+            content_width,
+            btn_h,
+            btn_gap,
+            use_icons,
+            text_columns: capped_grid_columns(model.buttons.len(), 5),
+        },
+        &model.buttons,
     );
-    for (item, button) in layout.items.iter().zip(model.buttons.iter()) {
+    for (rect, button) in rects.iter().zip(model.buttons.iter()) {
         let label = button.short_label(snapshot, "Board");
-        let bx = item.x;
-        let by = item.y;
+        let (bx, by, btn_w, btn_h) = *rect;
         let is_hover = button.enabled
             && hover
                 .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, btn_w, btn_h))

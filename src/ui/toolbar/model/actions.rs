@@ -4,11 +4,24 @@ use super::super::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarCommandGroupKind {
-    BasicActions,
-    ViewActions,
+    History,
+    Zoom,
     AdvancedActions,
     Pages,
     Boards,
+}
+
+impl ToolbarCommandGroupKind {
+    /// Label drawn above the group inside the Canvas pane's Actions card;
+    /// Pages/Boards carry their own section headers instead.
+    pub(crate) fn sub_label(self) -> Option<&'static str> {
+        match self {
+            Self::History => Some("History"),
+            Self::Zoom => Some("Zoom"),
+            Self::AdvancedActions => Some("Advanced"),
+            Self::Pages | Self::Boards => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +96,7 @@ impl ToolbarActionsModel {
             push_visible_group(
                 snapshot,
                 &mut groups,
-                ToolbarCommandGroupKind::BasicActions,
+                ToolbarCommandGroupKind::History,
                 vec![
                     ToolbarButtonModel::new(ToolbarEvent::Undo, snapshot.undo_available),
                     ToolbarButtonModel::new(ToolbarEvent::Redo, snapshot.redo_available),
@@ -96,7 +109,7 @@ impl ToolbarActionsModel {
             push_visible_group(
                 snapshot,
                 &mut groups,
-                ToolbarCommandGroupKind::ViewActions,
+                ToolbarCommandGroupKind::Zoom,
                 vec![
                     ToolbarButtonModel::new(ToolbarEvent::ZoomIn, true),
                     ToolbarButtonModel::new(ToolbarEvent::ZoomOut, true),

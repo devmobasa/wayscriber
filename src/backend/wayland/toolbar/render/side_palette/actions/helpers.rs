@@ -116,6 +116,64 @@ pub(super) fn render_icon_action_group(
     }
 }
 
+/// One left-aligned run of square icon buttons plus a right-aligned run
+/// (destructive actions), separated by the leftover width — the mockup's
+/// "Undo Redo ......... Clear" row.
+pub(super) fn render_icon_action_row_split(
+    ctx: &cairo::Context,
+    hits: &mut Vec<HitRegion>,
+    hover: Option<(f64, f64)>,
+    snapshot: &ToolbarSnapshot,
+    layout: IconActionLayout,
+    leading: &[ActionButton],
+    trailing: &[ActionButton],
+) -> (f64, bool) {
+    if leading.is_empty() && trailing.is_empty() {
+        return (layout.start_y, false);
+    }
+    let mut render_ctx = ActionButtonRenderContext {
+        ctx,
+        hits,
+        hover,
+        snapshot,
+    };
+    let mut action_y = layout.start_y;
+    if layout.add_gap {
+        action_y += layout.gap;
+    }
+
+    for (index, action) in leading.iter().enumerate() {
+        let bx = layout.x + index as f64 * (layout.button_size + layout.gap);
+        render_icon_action_button(
+            &mut render_ctx,
+            IconActionButtonGeometry {
+                x: bx,
+                y: action_y,
+                button_size: layout.button_size,
+                icon_size: layout.icon_size,
+            },
+            action,
+        );
+    }
+    for (index, action) in trailing.iter().enumerate() {
+        let bx = layout.x + layout.content_width
+            - (index + 1) as f64 * layout.button_size
+            - index as f64 * layout.gap;
+        render_icon_action_button(
+            &mut render_ctx,
+            IconActionButtonGeometry {
+                x: bx,
+                y: action_y,
+                button_size: layout.button_size,
+                icon_size: layout.icon_size,
+            },
+            action,
+        );
+    }
+
+    (action_y + layout.button_size, true)
+}
+
 pub(super) fn render_text_action_group(
     ctx: &cairo::Context,
     hits: &mut Vec<HitRegion>,

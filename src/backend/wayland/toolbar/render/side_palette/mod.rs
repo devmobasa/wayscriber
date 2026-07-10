@@ -71,6 +71,72 @@ impl<'a> SidePaletteLayout<'a> {
     }
 }
 
+/// Button rects for a Boards/Pages-style command row. Icon mode packs
+/// plain buttons left as squares and right-aligns destructive ones with
+/// the leftover width as a guard gap; text mode keeps the equal-width
+/// grid so labels stay readable.
+pub(super) struct SideRowLayout {
+    pub(super) x: f64,
+    pub(super) row_y: f64,
+    pub(super) content_width: f64,
+    pub(super) btn_h: f64,
+    pub(super) btn_gap: f64,
+    pub(super) use_icons: bool,
+    pub(super) text_columns: usize,
+}
+
+pub(super) fn side_row_button_rects(
+    layout: SideRowLayout,
+    buttons: &[model::ToolbarButtonModel],
+) -> Vec<(f64, f64, f64, f64)> {
+    use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+    let SideRowLayout {
+        x,
+        row_y,
+        content_width,
+        btn_h,
+        btn_gap,
+        use_icons,
+        text_columns,
+    } = layout;
+    if use_icons {
+        let mut leading = 0usize;
+        let mut trailing = 0usize;
+        buttons
+            .iter()
+            .map(|button| {
+                if button.event.is_destructive() {
+                    trailing += 1;
+                    let bx = x + content_width
+                        - trailing as f64 * btn_h
+                        - (trailing as f64 - 1.0) * btn_gap;
+                    (bx, row_y, btn_h, btn_h)
+                } else {
+                    let bx = x + leading as f64 * (btn_h + btn_gap);
+                    leading += 1;
+                    (bx, row_y, btn_h, btn_h)
+                }
+            })
+            .collect()
+    } else {
+        let btn_w = row_item_width(content_width, text_columns, btn_gap);
+        grid_layout(
+            x,
+            row_y,
+            btn_w,
+            btn_h,
+            btn_gap,
+            btn_gap,
+            buttons.len(),
+            text_columns,
+        )
+        .items
+        .iter()
+        .map(|item| (item.x, item.y, item.w, item.h))
+        .collect()
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ColorSectionInfo {
     pub(super) picker_y: f64,

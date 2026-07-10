@@ -29,14 +29,16 @@ impl ToolbarLayoutSpec {
                     height += icon_gap;
                 }
                 let columns = match group.kind {
-                    ToolbarCommandGroupKind::BasicActions => group.buttons.len(),
-                    ToolbarCommandGroupKind::ViewActions
-                    | ToolbarCommandGroupKind::AdvancedActions => 5,
+                    ToolbarCommandGroupKind::History => group.buttons.len(),
+                    ToolbarCommandGroupKind::Zoom | ToolbarCommandGroupKind::AdvancedActions => 5,
                     ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => {
                         group.buttons.len()
                     }
                 };
                 let rows = group.buttons.len().div_ceil(columns);
+                if group.kind.sub_label().is_some() {
+                    height += Self::SIDE_ACTION_GROUP_LABEL_HEIGHT;
+                }
                 height += icon_btn * rows as f64 + icon_gap * (rows as f64 - 1.0);
                 has_group = true;
             }
@@ -54,14 +56,16 @@ impl ToolbarLayoutSpec {
                     height += Self::SIDE_ACTION_BUTTON_GAP;
                 }
                 let columns = match group.kind {
-                    ToolbarCommandGroupKind::BasicActions => 1,
-                    ToolbarCommandGroupKind::ViewActions
-                    | ToolbarCommandGroupKind::AdvancedActions => 2,
+                    ToolbarCommandGroupKind::History => 1,
+                    ToolbarCommandGroupKind::Zoom | ToolbarCommandGroupKind::AdvancedActions => 2,
                     ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => {
                         group.buttons.len().max(1)
                     }
                 };
                 let rows = group.buttons.len().div_ceil(columns);
+                if group.kind.sub_label().is_some() {
+                    height += Self::SIDE_ACTION_GROUP_LABEL_HEIGHT;
+                }
                 height += action_h * rows as f64 + action_gap * (rows as f64 - 1.0);
                 has_group = true;
             }
