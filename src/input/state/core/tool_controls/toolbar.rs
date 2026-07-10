@@ -87,12 +87,10 @@ impl InputState {
         self.show_marker_opacity_section = show_marker_opacity_section;
         self.show_preset_toasts = show_preset_toasts;
         self.show_tool_preview = show_tool_preview;
-        self.apply_toolbar_mode_overrides(layout_mode);
-
         // Fold the legacy show_* booleans into explicit item overrides,
         // then re-derive them from the one resolver. Effective visibility
         // is bit-identical; the overrides now survive mode switches.
-        let legacy = crate::config::ToolbarSectionVisibility {
+        let mut legacy = crate::config::ToolbarSectionVisibility {
             show_actions_section: self.show_actions_section,
             show_actions_advanced: self.show_actions_advanced,
             show_zoom_actions: self.show_zoom_actions,
@@ -103,6 +101,7 @@ impl InputState {
             show_text_controls: self.show_text_controls,
             show_settings_section: self.show_settings_section,
         };
+        legacy.apply_mode_override(self.toolbar_mode_overrides.for_mode(layout_mode));
         if crate::config::fold_legacy_section_flags(
             &legacy,
             layout_mode,
@@ -244,36 +243,6 @@ impl InputState {
         self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.needs_redraw = true;
         true
-    }
-
-    fn apply_toolbar_mode_overrides(&mut self, mode: crate::config::ToolbarLayoutMode) {
-        let overrides = self.toolbar_mode_overrides.for_mode(mode);
-        if let Some(value) = overrides.show_actions_section {
-            self.show_actions_section = value;
-        }
-        if let Some(value) = overrides.show_actions_advanced {
-            self.show_actions_advanced = value;
-        }
-        if let Some(value) = overrides.show_zoom_actions {
-            self.show_zoom_actions = value;
-        }
-        if let Some(value) = overrides.show_pages_section {
-            self.show_pages_section = value;
-        }
-        if let Some(value) = overrides.show_boards_section {
-            self.show_boards_section = value;
-        }
-        if let Some(value) = overrides.show_presets {
-            self.show_presets = value;
-        }
-        if let Some(value) = overrides.show_step_section {
-            self.show_step_section = value;
-        }
-        if let Some(value) = overrides.show_text_controls {
-            self.show_text_controls = value;
-        }
-        // `show_settings_section` is retained in config for compatibility,
-        // but Settings navigation is always reachable.
     }
 
     /// Layout-mode switches re-resolve the section booleans against the new

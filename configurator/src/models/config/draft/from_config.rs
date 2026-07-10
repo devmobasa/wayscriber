@@ -25,10 +25,35 @@ impl ConfigDraft {
         let (weight_option, weight_value) =
             FontWeightOption::from_value(&config.drawing.font_weight);
         let drawing_drag_tools = config.drawing.effective_drag_tools();
+        let mut toolbar_items = config.ui.toolbar.items.clone();
+        let mut legacy_toolbar_visibility = wayscriber::config::ToolbarSectionVisibility {
+            show_actions_section: config.ui.toolbar.show_actions_section,
+            show_actions_advanced: config.ui.toolbar.show_actions_advanced,
+            show_zoom_actions: config.ui.toolbar.show_zoom_actions,
+            show_pages_section: config.ui.toolbar.show_pages_section,
+            show_boards_section: config.ui.toolbar.show_boards_section,
+            show_presets: config.ui.toolbar.show_presets,
+            show_step_section: config.ui.toolbar.show_step_section,
+            show_text_controls: config.ui.toolbar.show_text_controls,
+            show_settings_section: config.ui.toolbar.show_settings_section,
+        };
+        legacy_toolbar_visibility.apply_mode_override(
+            config
+                .ui
+                .toolbar
+                .mode_overrides
+                .for_mode(config.ui.toolbar.layout_mode),
+        );
+        wayscriber::config::fold_legacy_section_flags(
+            &legacy_toolbar_visibility,
+            config.ui.toolbar.layout_mode,
+            &config.ui.toolbar.mode_overrides,
+            &mut toolbar_items,
+        );
         let toolbar_visibility = wayscriber::config::resolve_section_visibility(
             config.ui.toolbar.layout_mode,
             &config.ui.toolbar.mode_overrides,
-            &config.ui.toolbar.items.resolved(),
+            &toolbar_items.resolved(),
         );
         Self {
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
@@ -108,7 +133,7 @@ impl ConfigDraft {
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
             ),
-            ui_toolbar_items: config.ui.toolbar.items.clone(),
+            ui_toolbar_items: toolbar_items,
             ui_toolbar_show_presets: toolbar_visibility.show_presets,
             ui_toolbar_show_actions_section: toolbar_visibility.show_actions_section,
             ui_toolbar_show_actions_advanced: toolbar_visibility.show_actions_advanced,
