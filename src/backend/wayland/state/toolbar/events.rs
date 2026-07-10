@@ -241,6 +241,8 @@ impl WaylandState {
         self.config.ui.toolbar.items = self.input_state.toolbar_items.clone();
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
+        self.config.ui.toolbar.top_minimized = self.input_state.toolbar_top_minimized;
+        self.config.ui.toolbar.side_minimized = self.input_state.toolbar_side_minimized;
         self.config.ui.toolbar.side_active_pane =
             self.input_state.toolbar_side_pane.config_id().to_string();
         // Keep unknown ids (written by newer versions) so a round trip

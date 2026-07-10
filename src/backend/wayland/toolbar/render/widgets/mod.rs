@@ -13,8 +13,8 @@ pub(super) use background::draw_popover_panel;
 pub(super) use background::{draw_group_card, draw_panel_background};
 #[allow(unused_imports)]
 pub(super) use buttons::{
-    draw_button, draw_close_button, draw_destructive_button, draw_disabled_button,
-    draw_drag_handle, draw_pin_button, draw_segmented_control,
+    draw_button, draw_destructive_button, draw_disabled_button, draw_drag_handle,
+    draw_minimize_button, draw_pin_button, draw_segmented_control,
 };
 pub(super) use checkbox::{draw_checkbox, draw_mini_checkbox};
 #[allow(unused_imports)]

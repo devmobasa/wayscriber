@@ -38,8 +38,8 @@ impl SideHeaderModel {
             ),
             close: single_button(
                 ToolbarControlId::CloseSide,
-                ToolbarEvent::CloseSideToolbar,
-                "Close",
+                ToolbarEvent::SetSideMinimized(true),
+                "Minimize (leaves a restore tab)",
                 false,
                 ToolbarControlRole::Button,
             ),

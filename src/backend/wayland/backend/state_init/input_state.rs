@@ -92,6 +92,10 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.show_preset_toasts,
         config.ui.toolbar.show_tool_preview,
     );
+    input_state.init_toolbar_minimized_from_config(
+        config.ui.toolbar.top_minimized,
+        config.ui.toolbar.side_minimized,
+    );
     input_state.init_toolbar_side_panes_from_config(
         &config.ui.toolbar.side_active_pane,
         &config.ui.toolbar.collapsed_sections,

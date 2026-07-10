@@ -14,6 +14,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
+        if snapshot.side_minimized {
+            return Self::SIDE_MINIMIZED_SIZE;
+        }
         let natural = self.side_natural_height(snapshot);
         let height = match snapshot.side_viewport_max {
             Some(max) if max > 0.0 && natural > max => max,

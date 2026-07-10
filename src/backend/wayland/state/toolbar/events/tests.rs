@@ -113,6 +113,10 @@ fn toolbar_preference_events_save_toolbar_config() {
         ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
         ToolbarEvent::SetSidePane(crate::ui::toolbar::SidePane::Canvas),
         ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
+        ToolbarEvent::SetTopMinimized(true),
+        ToolbarEvent::SetSideMinimized(true),
+        ToolbarEvent::CloseTopToolbar,
+        ToolbarEvent::CloseSideToolbar,
     ];
 
     for event in events {

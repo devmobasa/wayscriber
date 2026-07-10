@@ -264,9 +264,17 @@ pub enum ToolbarEvent {
     CustomRedo,
     /// Open/close the top strip's overflow menu (width-dropped items)
     ToggleTopOverflow(bool),
-    /// Close the top toolbar panel
+    /// Minimize the top strip to a small edge tab (click restores), or
+    /// restore it. Replaces closing: there is always a way back on screen.
+    SetTopMinimized(bool),
+    /// Minimize the side palette to a small edge tab, or restore it.
+    SetSideMinimized(bool),
+    /// Deprecated alias for `SetTopMinimized(true)`; kept so external
+    /// callers and old code paths keep working.
+    #[allow(dead_code)]
     CloseTopToolbar,
-    /// Close the side toolbar panel
+    /// Deprecated alias for `SetSideMinimized(true)`.
+    #[allow(dead_code)]
     CloseSideToolbar,
     /// Pin/unpin the top toolbar (saves to config)
     PinTopToolbar(bool),

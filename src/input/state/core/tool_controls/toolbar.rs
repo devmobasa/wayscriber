@@ -134,6 +134,13 @@ impl InputState {
         self.show_settings_section = visibility.show_settings_section;
     }
 
+    /// Restore the persisted minimize state of both bars (called at
+    /// startup). Minimized bars come back as their edge restore tabs.
+    pub fn init_toolbar_minimized_from_config(&mut self, top: bool, side: bool) {
+        self.toolbar_top_minimized = top;
+        self.toolbar_side_minimized = side;
+    }
+
     /// Restore the persisted side-palette pane and collapsed sections
     /// (called at startup). Unknown ids are ignored; they are preserved in
     /// the config file itself for forward compatibility.

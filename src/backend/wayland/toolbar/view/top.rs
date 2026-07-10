@@ -61,6 +61,9 @@ impl TopStripPlan {
 /// 8→6→4→0 first, then droppable items move into the overflow menu.
 pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
     let mut plan = TopStripPlan::unconstrained();
+    if snapshot.top_minimized {
+        return plan;
+    }
     let Some(budget) = snapshot.top_viewport_max else {
         return plan;
     };
@@ -108,6 +111,9 @@ fn build_top_view_planned(
     width: f64,
     height: f64,
 ) -> WidgetTree {
+    if snapshot.top_minimized {
+        return build_top_minimized_tab(width, height);
+    }
     let spec = ToolbarLayoutSpec::new(snapshot);
     let gap = ToolbarLayoutSpec::TOP_GAP;
     let mut tree = WidgetTree::new((width, height));
@@ -534,10 +540,10 @@ fn build_top_view_planned(
         tree.push(WidgetNode::new(
             ids::TOP_CHROME_CLOSE.as_str(),
             (right_x, chrome_y, chrome_size, chrome_size),
-            WidgetKind::CloseButton,
+            WidgetKind::MinimizeButton,
             Some(Interaction::click(
-                ToolbarEvent::CloseTopToolbar,
-                Some("Close".to_string()),
+                ToolbarEvent::SetTopMinimized(true),
+                Some("Minimize (leaves a restore tab)".to_string()),
             )),
         ));
         right_x -= chrome_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
@@ -678,6 +684,31 @@ fn build_top_view_planned(
         }
     }
 
+    tree
+}
+
+/// Minimized top strip: the whole tab is one restore button. It is not an
+/// item id on purpose — the way back must not be hideable.
+fn build_top_minimized_tab(width: f64, height: f64) -> WidgetTree {
+    let mut tree = WidgetTree::new((width, height));
+    tree.push(WidgetNode::decor(
+        "top.panel",
+        (0.0, 0.0, width, height),
+        WidgetKind::Panel,
+    ));
+    tree.push(WidgetNode::new(
+        "top.chrome.restore",
+        (0.0, 0.0, width, height),
+        WidgetKind::IconButton {
+            glyph: IconFn(toolbar_icons::draw_icon_chevron_down),
+            icon_size: (height * 0.75).min(18.0),
+            style: ButtonStyle::plain(),
+        },
+        Some(Interaction::click(
+            ToolbarEvent::SetTopMinimized(false),
+            Some("Show toolbar".to_string()),
+        )),
+    ));
     tree
 }
 
@@ -1057,6 +1088,28 @@ mod tests {
         assert!(picker_ids.contains(&"top.picker.top.tool.rect"));
         assert!(picker_ids.contains(&"top.picker.top.tool.blur"));
         assert!(picker_ids.contains(&"top.picker.top.tool.regular-polygon"));
+    }
+
+    #[test]
+    fn minimized_strip_is_a_single_restore_tab() {
+        let mut snapshot = snapshot();
+        snapshot.top_minimized = true;
+
+        let (w, h) = top_size(&snapshot);
+        assert_eq!((w, h), (64, 24));
+
+        let tree = build_top_view(&snapshot, w as f64, h as f64);
+        let interactive: Vec<_> = tree
+            .nodes()
+            .iter()
+            .filter(|node| node.interact.is_some())
+            .collect();
+        assert_eq!(interactive.len(), 1, "one restore button only");
+        assert_eq!(interactive[0].id.as_str(), "top.chrome.restore");
+        assert!(matches!(
+            interactive[0].interact.as_ref().unwrap().event,
+            ToolbarEvent::SetTopMinimized(false)
+        ));
     }
 
     #[test]

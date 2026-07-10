@@ -378,6 +378,12 @@ top_pinned = true
 # Show side toolbar on startup (pinned)
 side_pinned = true
 
+# Start toolbars minimized to their edge restore tabs
+# The minimize button updates these; a minimized bar always leaves a
+# clickable tab on screen to bring it back
+top_minimized = false
+side_minimized = false
+
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
 # The overlay updates this as you switch panes
 side_active_pane = "draw"

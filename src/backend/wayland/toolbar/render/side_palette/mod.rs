@@ -155,6 +155,11 @@ pub fn render_side_palette(
 ) -> Result<()> {
     draw_panel_background(ctx, width, height);
 
+    if snapshot.side_minimized {
+        draw_side_minimized_tab(ctx, width, height, hits, hover, hover_start);
+        return Ok(());
+    }
+
     let mut layout = SidePaletteLayout::new(ctx, width, snapshot, hits, hover);
 
     let content_top = header::draw_header(&mut layout);
@@ -309,6 +314,36 @@ fn draw_pane_sections(layout: &mut SidePaletteLayout<'_>, y: &mut f64) {
     if let (Some(color), Some(info)) = (hover_preset_color, &colors_info) {
         colors::draw_preset_hover_highlight(layout, info, color);
     }
+}
+
+/// Minimized side palette: the whole tab is one restore button. Not an
+/// item id on purpose — the way back must not be hideable.
+fn draw_side_minimized_tab(
+    ctx: &cairo::Context,
+    width: f64,
+    height: f64,
+    hits: &mut Vec<HitRegion>,
+    hover: Option<(f64, f64)>,
+    hover_start: Option<Instant>,
+) {
+    let is_hover = hover
+        .map(|(hx, hy)| super::widgets::point_in_rect(hx, hy, 0.0, 0.0, width, height))
+        .unwrap_or(false);
+    super::widgets::set_icon_color(ctx, is_hover);
+    let icon = (width * 0.75).min(18.0);
+    crate::toolbar_icons::draw_icon_chevron_right(
+        ctx,
+        (width - icon) / 2.0,
+        (height - icon) / 2.0,
+        icon,
+    );
+    hits.push(HitRegion {
+        rect: (0.0, 0.0, width, height),
+        event: ToolbarEvent::SetSideMinimized(false),
+        kind: HitKind::Click,
+        tooltip: Some("Show toolbar".to_string()),
+    });
+    draw_tooltip_with_delay(ctx, hits, hover, width, height, false, hover_start);
 }
 
 /// Minimal scrollbar: proportional thumb on the right edge; the whole track

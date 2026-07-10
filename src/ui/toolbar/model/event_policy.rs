@@ -188,6 +188,10 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ToggleDelaySliders(_)
         | ToolbarEvent::SetToolbarLayoutMode(_)
         | ToolbarEvent::SetSidePane(_)
+        | ToolbarEvent::SetTopMinimized(_)
+        | ToolbarEvent::SetSideMinimized(_)
+        | ToolbarEvent::CloseTopToolbar
+        | ToolbarEvent::CloseSideToolbar
         | ToolbarEvent::ToggleSideSectionCollapsed(_, _)
         | ToolbarEvent::SetToolbarItemHidden(_, _)
         | ToolbarEvent::MoveToolbarItem { .. }

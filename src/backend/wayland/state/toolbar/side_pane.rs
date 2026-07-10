@@ -34,6 +34,9 @@ impl WaylandState {
             return false;
         }
         let snapshot = self.toolbar_snapshot();
+        if snapshot.side_minimized {
+            return false;
+        }
         let (natural, viewport) = side_scroll_bounds(&snapshot);
         let max_scroll = (natural - viewport).max(0.0);
         if max_scroll <= 0.0 {

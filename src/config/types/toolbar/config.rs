@@ -29,6 +29,14 @@ pub struct ToolbarConfig {
     #[serde(default = "default_toolbar_side_pinned")]
     pub side_pinned: bool,
 
+    /// Start the top toolbar minimized to its edge restore tab
+    #[serde(default)]
+    pub top_minimized: bool,
+
+    /// Start the side toolbar minimized to its edge restore tab
+    #[serde(default)]
+    pub side_minimized: bool,
+
     /// Side-palette pane restored at startup ("draw", "canvas", "session", "settings")
     #[serde(default = "default_side_active_pane")]
     pub side_active_pane: String,
@@ -134,6 +142,8 @@ impl Default for ToolbarConfig {
             items: ToolbarItemsConfig::default(),
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
+            top_minimized: false,
+            side_minimized: false,
             side_active_pane: default_side_active_pane(),
             collapsed_sections: Vec::new(),
             use_icons: default_toolbar_use_icons(),

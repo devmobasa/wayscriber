@@ -100,7 +100,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let close_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, close_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_close_button(ctx, close_x, btn_y, btn_size, close_hover);
+    draw_minimize_button(ctx, close_x, btn_y, btn_size, close_hover);
     hits.push(HitRegion {
         rect: (close_x, btn_y, btn_size, btn_size),
         event: single_control_event(&header_model.close),
@@ -233,7 +233,7 @@ fn draw_chevron_right(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bo
 
 fn single_control_event(control: &ToolbarControl) -> ToolbarEvent {
     let ToolbarControlKind::Single(single) = &control.kind else {
-        return ToolbarEvent::CloseSideToolbar;
+        return ToolbarEvent::SetSideMinimized(true);
     };
     single.activation.compatibility_event()
 }

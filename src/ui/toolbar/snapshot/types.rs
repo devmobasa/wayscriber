@@ -317,6 +317,10 @@ pub struct ToolbarSnapshot {
     pub shape_picker_open: bool,
     /// Whether the top strip's overflow menu is open
     pub top_overflow_open: bool,
+    /// Whether the top strip is minimized to its edge restore tab
+    pub top_minimized: bool,
+    /// Whether the side palette is minimized to its edge restore tab
+    pub side_minimized: bool,
     /// Width available to the top strip in pre-scale spec units, when
     /// known; content past this degrades into the overflow menu.
     pub top_viewport_max: Option<f64>,

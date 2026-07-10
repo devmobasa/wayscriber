@@ -172,8 +172,8 @@ pub enum WidgetKind {
     },
     /// Pin (open-at-startup) toggle.
     PinButton { pinned: bool },
-    /// Close/minimize chrome button.
-    CloseButton,
+    /// Minimize chrome button (collapses the bar to its restore tab).
+    MinimizeButton,
 }
 
 /// What a node does when hit. Nodes without an interaction are decoration.

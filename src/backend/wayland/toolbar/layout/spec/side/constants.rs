@@ -2,6 +2,8 @@ use super::super::ToolbarLayoutSpec;
 
 impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_WIDTH: u32 = 260;
+    /// Minimized side palette: the edge restore tab.
+    pub(in crate::backend::wayland::toolbar) const SIDE_MINIMIZED_SIZE: (u32, u32) = (24, 64);
 
     pub(in crate::backend::wayland::toolbar) const SIDE_START_X: f64 = 16.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_TOP_PADDING: f64 = 12.0;

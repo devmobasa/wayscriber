@@ -12,10 +12,11 @@ use super::widgets::constants::{
     COLOR_ICON_DEFAULT, COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, set_color,
 };
 use super::widgets::{
-    draw_button, draw_checkbox, draw_close_button, draw_destructive_button, draw_disabled_button,
+    draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
     draw_divider_vertical, draw_drag_handle, draw_group_card, draw_label_center,
-    draw_label_center_color, draw_label_left, draw_mini_checkbox, draw_panel_background,
-    draw_pin_button, draw_round_rect, draw_segmented_control, point_in_rect, set_icon_color,
+    draw_label_center_color, draw_label_left, draw_mini_checkbox, draw_minimize_button,
+    draw_panel_background, draw_pin_button, draw_round_rect, draw_segmented_control, point_in_rect,
+    set_icon_color,
 };
 
 /// Paint every node of `tree` in order. `hover` is in the same logical space
@@ -187,6 +188,6 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         WidgetKind::PinButton { pinned } => {
             draw_pin_button(ctx, x, y, w, *pinned, is_hover);
         }
-        WidgetKind::CloseButton => draw_close_button(ctx, x, y, w, is_hover),
+        WidgetKind::MinimizeButton => draw_minimize_button(ctx, x, y, w, is_hover),
     }
 }

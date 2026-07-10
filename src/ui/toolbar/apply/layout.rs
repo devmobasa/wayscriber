@@ -31,16 +31,27 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_close_top_toolbar(&mut self) -> bool {
-        self.toolbar_top_visible = false;
-        self.toolbar_shapes_expanded = false;
-        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+    /// Minimize keeps the surface mapped as a small restore tab instead of
+    /// hiding it, so a presenter who "closes" a bar is never stranded.
+    pub(super) fn apply_toolbar_set_top_minimized(&mut self, minimized: bool) -> bool {
+        if self.toolbar_top_minimized == minimized {
+            return false;
+        }
+        self.toolbar_top_minimized = minimized;
+        if minimized {
+            self.toolbar_shapes_expanded = false;
+            self.toolbar_top_overflow_open = false;
+        }
+        self.needs_redraw = true;
         true
     }
 
-    pub(super) fn apply_toolbar_close_side_toolbar(&mut self) -> bool {
-        self.toolbar_side_visible = false;
-        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+    pub(super) fn apply_toolbar_set_side_minimized(&mut self, minimized: bool) -> bool {
+        if self.toolbar_side_minimized == minimized {
+            return false;
+        }
+        self.toolbar_side_minimized = minimized;
+        self.needs_redraw = true;
         true
     }
 
@@ -414,6 +425,38 @@ mod tests {
                 .shown
                 .contains(&ToolbarSectionFlag::Presets.item_id())
         );
+    }
+
+    #[test]
+    fn minimize_keeps_bars_visible_and_close_is_an_alias() {
+        let mut state = make_test_input_state();
+
+        // The deprecated Close events now minimize: the surface stays
+        // visible as a restore tab instead of vanishing.
+        state.apply_toolbar_event(ToolbarEvent::CloseTopToolbar);
+        assert!(state.toolbar_top_minimized);
+        assert!(state.toolbar_top_visible());
+
+        state.apply_toolbar_event(ToolbarEvent::CloseSideToolbar);
+        assert!(state.toolbar_side_minimized);
+        assert!(state.toolbar_side_visible());
+
+        state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
+        state.apply_toolbar_event(ToolbarEvent::SetSideMinimized(false));
+        assert!(!state.toolbar_top_minimized);
+        assert!(!state.toolbar_side_minimized);
+    }
+
+    #[test]
+    fn minimizing_the_top_strip_closes_its_popups() {
+        let mut state = make_test_input_state();
+        state.toolbar_shapes_expanded = true;
+        state.toolbar_top_overflow_open = true;
+
+        state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
+
+        assert!(!state.toolbar_shapes_expanded);
+        assert!(!state.toolbar_top_overflow_open);
     }
 
     #[test]

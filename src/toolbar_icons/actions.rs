@@ -334,6 +334,20 @@ pub fn draw_icon_chevron_right(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a downward chevron icon (expand below).
+pub fn draw_icon_chevron_down(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.12).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    ctx.move_to(x + s * 0.2, y + s * 0.4);
+    ctx.line_to(x + s * 0.5, y + s * 0.65);
+    ctx.line_to(x + s * 0.8, y + s * 0.4);
+    let _ = ctx.stroke();
+}
+
 /// Draw a pencil/edit icon.
 #[allow(dead_code)]
 pub fn draw_icon_pencil(ctx: &Context, x: f64, y: f64, size: f64) {

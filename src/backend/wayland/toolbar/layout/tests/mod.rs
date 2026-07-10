@@ -157,6 +157,22 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
 }
 
 #[test]
+fn minimized_side_palette_is_a_single_restore_tab() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_minimized = true;
+    let snapshot = snapshot_from_state(&state);
+
+    assert_eq!(side_size(&snapshot), (24, 64));
+
+    let hits = rendered_side_hits(&snapshot);
+    assert_eq!(hits.len(), 1, "one restore hit only: {hits:?}");
+    assert!(matches!(
+        hits[0].event,
+        ToolbarEvent::SetSideMinimized(false)
+    ));
+}
+
+#[test]
 fn side_color_picker_offers_sat_val_area_and_hue_bar() {
     let count_swatches = |hits: &[HitRegion]| {
         hits.iter()

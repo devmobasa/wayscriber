@@ -576,6 +576,10 @@ top_pinned = true
 # Show side toolbar on startup (pinned)
 side_pinned = true
 
+# Start toolbars minimized to their edge restore tabs
+top_minimized = false
+side_minimized = false
+
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
 side_active_pane = "draw"
 
@@ -711,6 +715,7 @@ side_sections = [
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
+- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F2/F9 still toggle full visibility.
 - **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.

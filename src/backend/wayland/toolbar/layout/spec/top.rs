@@ -6,6 +6,8 @@ use super::ToolbarLayoutSpec;
 
 impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 72);
+    /// Minimized top strip: the edge restore tab.
+    pub(in crate::backend::wayland::toolbar) const TOP_MINIMIZED_SIZE: (u32, u32) = (64, 24);
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_TEXT: (u32, u32) = (875, 60);
 
     pub(in crate::backend::wayland::toolbar) const TOP_GAP: f64 = 5.0;
@@ -30,6 +32,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
+        if snapshot.top_minimized {
+            return Self::TOP_MINIMIZED_SIZE;
+        }
         let base_height = if self.use_icons {
             Self::TOP_SIZE_ICONS.1
         } else {

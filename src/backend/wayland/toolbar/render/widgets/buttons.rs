@@ -52,7 +52,9 @@ fn drag_handle_bar_start_y(y: f64, h: f64, bar_h: f64, bar_gap: f64) -> f64 {
     y + (h - stack_h) / 2.0
 }
 
-pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
+/// Minimize chrome button: a dash, not an X — the bar collapses to an
+/// edge restore tab instead of disappearing.
+pub(in crate::backend::wayland::toolbar::render) fn draw_minimize_button(
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -76,12 +78,9 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
 
     set_color(ctx, COLOR_TEXT_PRIMARY);
     ctx.set_line_width(LINE_WIDTH_THICK);
-    let inset = size * 0.3;
-    ctx.move_to(x + inset, y + inset);
-    ctx.line_to(x + size - inset, y + size - inset);
-    let _ = ctx.stroke();
-    ctx.move_to(x + size - inset, y + inset);
-    ctx.line_to(x + inset, y + size - inset);
+    let inset = size * 0.28;
+    ctx.move_to(x + inset, cy);
+    ctx.line_to(x + size - inset, cy);
     let _ = ctx.stroke();
 }
 
