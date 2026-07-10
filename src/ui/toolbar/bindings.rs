@@ -56,6 +56,8 @@ pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
     tool.action()
 }
 
+// Consumed by the bin's toolbar render layer; the lib target builds this
+// module without the backend, so the reference is target-dependent.
 #[allow(dead_code)]
 pub(crate) fn tool_label(tool: Tool) -> &'static str {
     tool.short_label()

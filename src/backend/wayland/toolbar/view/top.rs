@@ -774,6 +774,39 @@ fn push_option_row(
     }
 }
 
+/// Input rects for the top surface in tree-logical coordinates, or None
+/// when the whole surface should accept input. While a popover grows the
+/// surface, only the bar band and the popover panels take clicks — the
+/// transparent remainder stays click-through to the canvas.
+pub fn top_input_rects(
+    snapshot: &ToolbarSnapshot,
+    width: f64,
+    height: f64,
+) -> Option<Vec<(f64, f64, f64, f64)>> {
+    if snapshot.top_minimized {
+        return None;
+    }
+    if shape_popover_height(snapshot) + overflow_height(snapshot) <= 0.0 {
+        return None;
+    }
+    let base = if snapshot.use_icons {
+        ToolbarLayoutSpec::TOP_SIZE_ICONS.1 as f64
+    } else {
+        ToolbarLayoutSpec::TOP_SIZE_TEXT.1 as f64
+    };
+    let bar_h = base + ring_row_height(snapshot);
+    let tree = build_top_view(snapshot, width, height);
+    let mut rects = vec![(0.0, 0.0, width, bar_h)];
+    for id in ["top.shapes.panel", "top.overflow.panel"] {
+        if let Some(node) = tree.node_by_id(&id.to_string().into()) {
+            let (x, y, w, h) = node.rect;
+            // Cover the caret and the anchor gap above the panel.
+            rects.push((x, (y - 8.0).max(0.0), w, h + 10.0));
+        }
+    }
+    Some(rects)
+}
+
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, and the overflow popover.
 pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
@@ -1207,6 +1240,34 @@ mod tests {
         assert!(picker_ids.contains(&"top.picker.top.tool.rect"));
         assert!(picker_ids.contains(&"top.picker.top.tool.blur"));
         assert!(picker_ids.contains(&"top.picker.top.tool.regular-polygon"));
+    }
+
+    #[test]
+    fn input_rects_cover_bar_and_open_popovers_only() {
+        let mut state = make_test_input_state();
+        state.toolbar_shapes_expanded = false;
+        let snapshot =
+            ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
+        let (w, h) = top_size(&snapshot);
+        assert!(
+            top_input_rects(&snapshot, w as f64, h as f64).is_none(),
+            "no popover: whole surface takes input"
+        );
+
+        state.toolbar_shapes_expanded = true;
+        let snapshot =
+            ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
+        let (w, h) = top_size(&snapshot);
+        let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("partial input region");
+        assert_eq!(rects.len(), 2, "bar band + shapes panel: {rects:?}");
+        assert_eq!(rects[0].0, 0.0);
+        assert_eq!(rects[0].1, 0.0);
+        assert!(rects[0].3 < h as f64, "bar band ends above the popover");
+        let tree = build_top_view(&snapshot, w as f64, h as f64);
+        let panel = tree
+            .node_by_id(&"top.shapes.panel".into())
+            .expect("panel node");
+        assert!(rects[1].1 <= panel.rect.1 && rects[1].3 >= panel.rect.3);
     }
 
     #[test]

@@ -1,9 +1,10 @@
 //! The widget tree: one flat, z-ordered list of nodes per bar.
 
-// Consumed starting with the top-strip port; the allow is removed then.
-#![allow(dead_code)]
+#[cfg(test)]
 use crate::backend::wayland::toolbar::events::HitKind;
-use crate::backend::wayland::toolbar::hit::{HitRegion, rect_contains_with_min_target};
+use crate::backend::wayland::toolbar::hit::HitRegion;
+#[cfg(test)]
+use crate::backend::wayland::toolbar::hit::rect_contains_with_min_target;
 
 use super::node::{WidgetId, WidgetNode};
 
@@ -31,12 +32,9 @@ impl WidgetTree {
         &self.nodes
     }
 
+    #[cfg(test)]
     pub fn size(&self) -> (f64, f64) {
         self.size
-    }
-
-    pub fn set_size(&mut self, size: (f64, f64)) {
-        self.size = size;
     }
 
     pub fn node_by_id(&self, id: &WidgetId) -> Option<&WidgetNode> {
@@ -46,6 +44,9 @@ impl WidgetTree {
     /// Topmost interactive node at a logical point. Nodes are stored in
     /// paint order, so the scan runs back-to-front; compact targets are
     /// inflated with the same predicate the legacy hit path uses.
+    /// Production consumes the tree through [`Self::to_hit_regions`]; the
+    /// invariant tests below pin this native path to the same semantics.
+    #[cfg(test)]
     pub fn hit(&self, x: f64, y: f64) -> Option<&WidgetNode> {
         self.nodes
             .iter()
@@ -55,6 +56,7 @@ impl WidgetTree {
     }
 
     /// Ids of keyboard-focusable nodes (click interactions), in paint order.
+    #[cfg(test)]
     pub fn focusable_ids(&self) -> impl Iterator<Item = &WidgetId> {
         self.nodes
             .iter()
@@ -68,6 +70,7 @@ impl WidgetTree {
 
     /// Next focusable id after `current` (wrapping), or the first/last
     /// focusable when nothing is focused yet.
+    #[cfg(test)]
     pub fn next_focus(&self, current: Option<&WidgetId>, reverse: bool) -> Option<WidgetId> {
         let ids: Vec<&WidgetId> = self.focusable_ids().collect();
         if ids.is_empty() {
@@ -85,6 +88,7 @@ impl WidgetTree {
 
     /// Tight bounding box over all nodes: (x, y, w, h). Falls back to the
     /// declared size when the tree is empty.
+    #[cfg(test)]
     pub fn bounds(&self) -> (f64, f64, f64, f64) {
         if self.nodes.is_empty() {
             return (0.0, 0.0, self.size.0, self.size.1);

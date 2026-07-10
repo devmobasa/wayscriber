@@ -7,26 +7,14 @@
 //! the historical split where render code pushed hit regions while drawing
 //! and a parallel test-only builder re-derived the same geometry.
 //!
-//! Coordinates: trees are always built in logical units. Input events are
-//! mapped from surface coordinates into logical space through a single
-//! [`ViewTransform`] before hit-testing; the painter applies the same
-//! transform when drawing. No per-node coordinate fixups exist by design.
+//! Coordinates: trees are always built in logical units; the surface layer
+//! applies one uniform scale when mapping input in and rects out. No
+//! per-node coordinate fixups exist by design.
 
-pub mod flow;
-pub mod measure;
 pub mod node;
 pub mod popover;
 pub mod top;
-pub mod transform;
 pub mod tree;
 
-#[allow(unused_imports)]
-pub use flow::RowCursor;
-#[allow(unused_imports)]
-pub use measure::{FixedMeasure, TextMeasure};
-#[allow(unused_imports)]
-pub use node::{ButtonStyle, IconFn, Interaction, LabelSpec, WidgetId, WidgetKind, WidgetNode};
-#[allow(unused_imports)]
-pub use transform::ViewTransform;
-#[allow(unused_imports)]
+pub use node::{ButtonStyle, WidgetKind, WidgetNode};
 pub use tree::WidgetTree;

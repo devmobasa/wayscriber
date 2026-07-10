@@ -7,14 +7,10 @@ mod rows;
 pub mod surfaces;
 pub mod view;
 
-#[allow(unused_imports)]
-pub use events::{HitKind, ToolbarCursorHint};
-#[allow(unused_imports)]
+pub use events::ToolbarCursorHint;
 pub use layout::{side_size, top_size};
 pub use main::*;
 pub use render::{render_side_palette, render_top_strip};
-#[allow(unused_imports)]
-pub use surfaces::ToolbarSurface;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarFocusTarget {

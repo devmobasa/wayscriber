@@ -31,6 +31,7 @@ impl ToolbarSurfaceManager {
             ) {
                 log::warn!("Failed to render top toolbar: {}", err);
             }
+            self.top.sync_top_input_region(snapshot);
         }
 
         // Render side toolbar if visible

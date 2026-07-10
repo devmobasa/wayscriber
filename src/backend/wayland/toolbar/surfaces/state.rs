@@ -64,11 +64,34 @@ impl ToolbarSurface {
         self.dirty = true;
     }
 
+    /// Restrict the top surface's input region to the bar band plus any
+    /// open popover panels, in surface coordinates; full-surface otherwise.
+    pub fn sync_top_input_region(&mut self, snapshot: &crate::ui::toolbar::ToolbarSnapshot) {
+        if self.width == 0 || self.height == 0 {
+            return;
+        }
+        let ui_scale = if self.ui_scale.is_finite() {
+            self.ui_scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+        let rects = crate::backend::wayland::toolbar::view::top::top_input_rects(
+            snapshot,
+            self.width as f64 / ui_scale,
+            self.height as f64 / ui_scale,
+        )
+        .map(|rects| {
+            rects
+                .iter()
+                .map(|(x, y, w, h)| (x * ui_scale, y * ui_scale, w * ui_scale, h * ui_scale))
+                .collect()
+        });
+        self.set_input_rects(rects);
+    }
+
     /// Declare which surface-local rects should accept input; None means the
     /// whole surface. Applied after the next render via
     /// [`Self::apply_input_region`].
-    // Consumed by the popover/overflow phases; the allow is removed then.
-    #[allow(dead_code)]
     pub fn set_input_rects(&mut self, rects: Option<Vec<(f64, f64, f64, f64)>>) {
         if self.input_rects != rects {
             self.input_rects = rects;
