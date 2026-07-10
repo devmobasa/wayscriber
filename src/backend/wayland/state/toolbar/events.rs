@@ -27,6 +27,26 @@ fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
     true
 }
 
+/// The top overflow menu is a plain flyout: any event other than the two menu
+/// toggles dismisses it (selecting a dropped tool, an unrelated keybinding, etc.).
+fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
+    !matches!(
+        event,
+        ToolbarEvent::ToggleShapePicker(_) | ToolbarEvent::ToggleTopOverflow(_)
+    )
+}
+
+/// The Shapes popover dismisses on everything the overflow does *except* its own
+/// inline options: the Fill checkbox and the polygon-sides stepper live inside
+/// the popover, so using them must not close it out from under the pointer.
+fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
+    event_dismisses_top_overflow(event)
+        && !matches!(
+            event,
+            ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_)
+        )
+}
+
 fn apply_toolbar_ui_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
@@ -108,14 +128,17 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
-        if (self.input_state.toolbar_shapes_expanded || self.input_state.toolbar_top_overflow_open)
-            && !matches!(
-                &event,
-                ToolbarEvent::ToggleShapePicker(_) | ToolbarEvent::ToggleTopOverflow(_)
-            )
-        {
-            self.input_state.toolbar_shapes_expanded = false;
-            self.input_state.toolbar_top_overflow_open = false;
+        let dismiss_overflow =
+            self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
+        let dismiss_shapes =
+            self.input_state.toolbar_shapes_expanded && event_dismisses_shape_picker(&event);
+        if dismiss_overflow || dismiss_shapes {
+            if dismiss_overflow {
+                self.input_state.toolbar_top_overflow_open = false;
+            }
+            if dismiss_shapes {
+                self.input_state.toolbar_shapes_expanded = false;
+            }
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }

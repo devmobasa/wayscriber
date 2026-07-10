@@ -481,3 +481,45 @@ fn tool_preview_config_preserves_presenter_mode_restore_value() {
     assert!(persisted_tool_preview_value(true, None));
     assert!(!persisted_tool_preview_value(false, None));
 }
+
+#[test]
+fn shape_picker_survives_its_own_inline_options() {
+    // The Shapes popover hosts the Fill checkbox and the polygon-sides stepper,
+    // so using them must not dismiss the popover...
+    assert!(!event_dismisses_shape_picker(&ToolbarEvent::ToggleFill(
+        true
+    )));
+    assert!(!event_dismisses_shape_picker(
+        &ToolbarEvent::NudgePolygonSides(1)
+    ));
+    assert!(!event_dismisses_shape_picker(
+        &ToolbarEvent::ToggleShapePicker(false)
+    ));
+    // ...while selecting a shape or any other action still closes it.
+    assert!(event_dismisses_shape_picker(&ToolbarEvent::SelectTool(
+        Tool::Line
+    )));
+    assert!(event_dismisses_shape_picker(&ToolbarEvent::Undo));
+}
+
+#[test]
+fn top_overflow_menu_closes_on_any_non_toggle_event() {
+    // The overflow menu owns none of the inline options, so even a Fill or
+    // polygon-sides event fired while it is open (e.g. via keybinding) dismisses it.
+    assert!(event_dismisses_top_overflow(&ToolbarEvent::ToggleFill(
+        true
+    )));
+    assert!(event_dismisses_top_overflow(
+        &ToolbarEvent::NudgePolygonSides(1)
+    ));
+    assert!(event_dismisses_top_overflow(&ToolbarEvent::SelectTool(
+        Tool::Line
+    )));
+    // Its own toggle spares it.
+    assert!(!event_dismisses_top_overflow(
+        &ToolbarEvent::ToggleTopOverflow(false)
+    ));
+    assert!(!event_dismisses_top_overflow(
+        &ToolbarEvent::ToggleShapePicker(true)
+    ));
+}
