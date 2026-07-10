@@ -34,6 +34,7 @@ pub struct ToolbarSurface {
     pub(super) hit_regions: Vec<HitRegion>,
     pub(super) hover: Option<(f64, f64)>,
     pub(super) focus_index: Option<usize>,
+    pub(super) focus_id: Option<String>,
 }
 
 impl ToolbarSurface {
@@ -58,6 +59,7 @@ impl ToolbarSurface {
             hit_regions: Vec::new(),
             hover: None,
             focus_index: None,
+            focus_id: None,
         }
     }
 

@@ -101,7 +101,6 @@ pub enum ToolbarOverrideField {
     ShowBoardsSection,
     ShowStepSection,
     ShowTextControls,
-    ShowSettingsSection,
 }
 
 impl ToolbarOverrideField {
@@ -115,7 +114,6 @@ impl ToolbarOverrideField {
             Self::ShowBoardsSection => "Boards",
             Self::ShowStepSection => "Multi-step undo/redo",
             Self::ShowTextControls => "Text controls",
-            Self::ShowSettingsSection => "Settings section",
         }
     }
 }

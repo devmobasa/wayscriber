@@ -65,6 +65,6 @@ pub use toolbar::{
 };
 pub use toolbar::{
     ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
-    resolve_section_visibility, section_flag_for_item,
+    resolve_section_visibility, section_flag_for_item, set_section_visibility,
 };
 pub use ui::UiConfig;

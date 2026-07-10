@@ -59,6 +59,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         .unwrap_or(false);
     draw_drag_handle(ctx, x, drag_y, drag_size, drag_size, drag_hover);
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, drag_y, drag_size, drag_size),
         event: single_control_event(&header_model.drag),
         kind: HitKind::DragMoveSide,
@@ -91,6 +92,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         .unwrap_or(false);
     draw_pin_button(ctx, pin_x, btn_y, btn_size, snapshot.side_pinned, pin_hover);
     hits.push(HitRegion {
+        focus_id: None,
         rect: (pin_x, btn_y, btn_size, btn_size),
         event: single_control_event(&header_model.pin),
         kind: HitKind::Click,
@@ -102,6 +104,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         .unwrap_or(false);
     draw_minimize_button(ctx, close_x, btn_y, btn_size, close_hover);
     hits.push(HitRegion {
+        focus_id: None,
         rect: (close_x, btn_y, btn_size, btn_size),
         event: single_control_event(&header_model.close),
         kind: HitKind::Click,
@@ -129,6 +132,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         draw_button(ctx, tab_x, nav_y, tab_w, nav_h, selected, tab_hover);
         draw_label_center(ctx, nav_style, tab_x, nav_y, tab_w, nav_h, pane.label());
         hits.push(HitRegion {
+            focus_id: None,
             rect: (tab_x, nav_y, tab_w, nav_h),
             event: ToolbarEvent::SetSidePane(pane),
             kind: HitKind::Click,
@@ -210,6 +214,7 @@ fn draw_board_chip(
     );
 
     hits.push(HitRegion {
+        focus_id: None,
         rect: (chip_x, chip_y, chip_w, chip_h),
         event: single_control_event(&header_model.board_chip),
         kind: HitKind::Click,

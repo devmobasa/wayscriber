@@ -200,19 +200,17 @@ pub fn render_side_palette(
 
     if scrolling {
         let _ = ctx.restore();
-        // Shift the pane-content hits into visible coordinates and drop
-        // regions that ended up fully outside the viewport.
-        let mut index = chrome_hits;
-        while index < layout.hits.len() {
-            let hit = &mut layout.hits[index];
+        // Shift pane-content hits into visible coordinates, then clip every
+        // region to the scroll viewport so partial rows cannot remain active
+        // through the fixed header or below the surface.
+        for hit in &mut layout.hits[chrome_hits..] {
             hit.rect.1 -= scroll;
-            let visible = hit.rect.1 + hit.rect.3 > content_top + 1.0 && hit.rect.1 < height - 1.0;
-            if visible {
-                index += 1;
-            } else {
-                layout.hits.remove(index);
-            }
         }
+        crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(
+            layout.hits,
+            chrome_hits,
+            (0.0, content_top, width, (height - content_top).max(0.0)),
+        );
         layout.hover = hover;
         draw_scrollbar(&mut layout, content_top, height, natural, scroll);
     }
@@ -338,6 +336,7 @@ fn draw_side_minimized_tab(
         icon,
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (0.0, 0.0, width, height),
         event: ToolbarEvent::SetSideMinimized(false),
         kind: HitKind::Click,
@@ -377,6 +376,7 @@ fn draw_scrollbar(
     let _ = ctx.fill();
 
     layout.hits.push(HitRegion {
+        focus_id: None,
         rect: (track_x - 8.0, track_y, track_w + 11.0, track_h),
         event: ToolbarEvent::ScrollSidePane(scroll),
         kind: HitKind::DragScrollSide { max_scroll },

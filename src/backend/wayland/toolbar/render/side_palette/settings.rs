@@ -121,6 +121,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 toggle.label.as_ref(),
             );
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (cell_x, row_y, cell_w, toggle_h),
                 event: activation_event(&toggle.activation),
                 kind: HitKind::Click,
@@ -198,6 +199,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             );
         }
         hits.push(HitRegion {
+            focus_id: None,
             rect: (item.x, item.y, item.w, item.h),
             event: button.event.clone(),
             kind: HitKind::Click,
@@ -248,6 +250,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             group.label.as_ref(),
         );
         hits.push(HitRegion {
+            focus_id: None,
             rect: (item.x, item.y, item.w, item.h),
             event: group.event.clone(),
             kind: HitKind::Click,
@@ -319,6 +322,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             override_item.label.as_ref(),
         );
         hits.push(HitRegion {
+            focus_id: None,
             rect: (checkbox_x, item.y, checkbox_w, item.h),
             event: activation_event(&override_item.activation),
             kind: HitKind::Click,
@@ -361,6 +365,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 );
                 if enabled {
                     hits.push(HitRegion {
+                        focus_id: None,
                         rect: (button_x, item.y, move_btn_w, item.h),
                         event: activation_event(activation),
                         kind: HitKind::Click,
@@ -369,6 +374,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 }
             }
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (item.x, item.y, item.w, item.h),
                 event: ToolbarEvent::StartToolbarItemDrag {
                     group: order.group,
@@ -445,6 +451,7 @@ fn draw_layout_mode_segments(
         draw_button(ctx, seg_x, y, seg_w, h, index == active, is_hover);
         draw_label_center(ctx, label_style, seg_x, y, seg_w, h, segment.label.as_ref());
         hits.push(HitRegion {
+            focus_id: None,
             rect: (seg_x, y, seg_w, h),
             event: segment.activation.compatibility_event(),
             kind: HitKind::Click,

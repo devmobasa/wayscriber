@@ -118,6 +118,7 @@ impl WidgetTree {
             .rev()
             .filter_map(|node| {
                 node.interact.as_ref().map(|interact| HitRegion {
+                    focus_id: Some(node.id.as_str().to_string()),
                     rect: node.rect,
                     event: interact.event.clone(),
                     kind: interact.kind.clone(),
@@ -132,6 +133,7 @@ impl WidgetTree {
 mod tests {
     use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
     use super::*;
+    use crate::backend::wayland::toolbar::hit::next_focus_index;
     use crate::ui::toolbar::ToolbarEvent;
 
     fn button(id: &'static str, rect: (f64, f64, f64, f64), event: ToolbarEvent) -> WidgetNode {
@@ -231,6 +233,18 @@ mod tests {
             .find(|region| region.contains(80.0, 30.0))
             .unwrap();
         assert!(matches!(hit.event, ToolbarEvent::Redo));
+    }
+
+    #[test]
+    fn production_adapter_tabs_in_visual_order() {
+        let tree = sample_tree();
+        let regions = tree.to_hit_regions();
+
+        let first = next_focus_index(&regions, None, false).expect("first focus");
+        assert!(matches!(regions[first].event, ToolbarEvent::Undo));
+        assert_eq!(regions[first].focus_id.as_deref(), Some("undo"));
+        let second = next_focus_index(&regions, Some(first), false).expect("second focus");
+        assert!(matches!(regions[second].event, ToolbarEvent::Redo));
     }
 
     #[test]

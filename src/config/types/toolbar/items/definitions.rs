@@ -9,7 +9,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     item(ids::TOP_CHROME_PIN, "Pin top toolbar", Top, Chrome, None),
     item(
         ids::TOP_CHROME_CLOSE,
-        "Close top toolbar",
+        "Minimize top toolbar",
         Top,
         Chrome,
         None,

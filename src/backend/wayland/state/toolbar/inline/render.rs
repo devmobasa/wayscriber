@@ -18,10 +18,12 @@ impl WaylandState {
         if !top_visible {
             self.data.inline_top_hover = None;
             self.data.inline_top_focus_index = None;
+            self.data.inline_top_focus_id = None;
         }
         if !side_visible {
             self.data.inline_side_hover = None;
             self.data.inline_side_focus_index = None;
+            self.data.inline_side_focus_id = None;
         }
 
         if !top_visible && !side_visible {
@@ -100,6 +102,11 @@ impl WaylandState {
                 top_size.0 as f64,
                 top_size.1 as f64,
             ));
+            crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(
+                &mut self.data.inline_top_hits,
+                0,
+                self.data.inline_top_rect.expect("top rect was just set"),
+            );
         } else {
             self.data.inline_top_rect = None;
         }
@@ -144,6 +151,11 @@ impl WaylandState {
                 side_size.0 as f64,
                 side_size.1 as f64,
             ));
+            crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(
+                &mut self.data.inline_side_hits,
+                0,
+                self.data.inline_side_rect.expect("side rect was just set"),
+            );
         } else {
             self.data.inline_side_rect = None;
         }

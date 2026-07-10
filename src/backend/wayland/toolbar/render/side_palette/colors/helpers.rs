@@ -46,7 +46,7 @@ pub(super) fn effective_hsv(snapshot: &ToolbarSnapshot) -> (f64, f64, f64) {
             return (h, s, v);
         }
     }
-    rgb_to_hsv(snapshot.color.r, snapshot.color.g, snapshot.color.b)
+    crate::draw::color::rgb_to_hsv(snapshot.color.r, snapshot.color.g, snapshot.color.b)
 }
 
 /// Draw the 2-D saturation/value area plus the hue bar; returns the total
@@ -66,6 +66,7 @@ pub(super) fn draw_color_picker_area(
 
     draw_sat_val_area(ctx, x, picker_y, picker_w, sv_h, h);
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, picker_y, picker_w, sv_h),
         event: ToolbarEvent::SetColorHsv { h, s, v },
         kind: HitKind::PickSatVal { hue: h },
@@ -81,6 +82,7 @@ pub(super) fn draw_color_picker_area(
     let hue_y = picker_y + sv_h + hue_gap;
     draw_hue_bar(ctx, x, hue_y, picker_w, hue_h);
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, hue_y, picker_w, hue_h),
         event: ToolbarEvent::SetColorHsv { h, s, v },
         kind: HitKind::PickHue { sat: s, val: v },
@@ -173,6 +175,7 @@ pub(super) fn draw_preview_swatch_and_icon(
     let _ = ctx.stroke();
 
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, preview_row_y, preview_size, preview_size),
         event: ToolbarEvent::OpenColorPickerPopup,
         kind: HitKind::Click,
@@ -255,12 +258,14 @@ pub(super) fn draw_hex_input(
 
     // The copy icon is pushed first so it wins the overlap with the chip.
     hits.push(HitRegion {
+        focus_id: None,
         rect: (copy_icon_x, copy_icon_y, hex_icon_size, hex_icon_size),
         event: ToolbarEvent::CopyHexColor,
         kind: HitKind::Click,
         tooltip: Some("Copy hex color".to_string()),
     });
     hits.push(HitRegion {
+        focus_id: None,
         rect: (hex_input_x, hex_input_y, hex_input_w, hex_input_h),
         event: ToolbarEvent::EditHexColor,
         kind: HitKind::Click,
@@ -298,6 +303,7 @@ pub(super) fn draw_hex_input(
         12.0,
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (paste_btn_x, hex_input_y, paste_btn_size, paste_btn_size),
         event: ToolbarEvent::PasteHexColor,
         kind: HitKind::Click,
@@ -327,6 +333,7 @@ pub(super) fn draw_color_swatch_row(
         let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
         let tooltip = format_binding_label(name, binding);
         hits.push(HitRegion {
+            focus_id: None,
             rect: (x, layout.row_y, layout.swatch, layout.swatch),
             event: ToolbarEvent::SetColor(*color),
             kind: HitKind::Click,
@@ -359,6 +366,7 @@ pub(super) fn draw_color_swatch_row(
         14.0,
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, layout.row_y, layout.swatch, layout.swatch),
         event: toggle.event,
         kind: HitKind::Click,

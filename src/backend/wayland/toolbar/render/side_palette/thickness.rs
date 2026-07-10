@@ -91,6 +91,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
                 nudge_icon_size,
             );
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (minus_x, thickness_slider_row_y, btn_size, btn_size),
                 event: ToolbarEvent::NudgeThickness(-nudge_step),
                 kind: HitKind::Click,
@@ -120,6 +121,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
                 nudge_icon_size,
             );
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (plus_x, thickness_slider_row_y, btn_size, btn_size),
                 event: ToolbarEvent::NudgeThickness(nudge_step),
                 kind: HitKind::Click,
@@ -145,6 +147,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
             let _ = ctx.fill();
 
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (track_x, thickness_track_y - 6.0, track_w, track_h + 12.0),
                 event: ToolbarEvent::SetThickness(snapshot.thickness),
                 kind: HitKind::DragSetThickness {
@@ -212,6 +215,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
                     .binding_for_action(Action::ToggleEraserMode),
             );
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (x, toggle_y, toggle_w, toggle_h),
                 event: ToolbarEvent::SetEraserMode(if stroke_active {
                     EraserMode::Brush
@@ -279,6 +283,7 @@ fn draw_polygon_sides_section(
         icon_size,
     );
     layout.hits.push(HitRegion {
+        focus_id: None,
         rect: (minus_x, row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgePolygonSides(-1),
         kind: HitKind::Click,
@@ -298,6 +303,7 @@ fn draw_polygon_sides_section(
         icon_size,
     );
     layout.hits.push(HitRegion {
+        focus_id: None,
         rect: (plus_x, row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgePolygonSides(1),
         kind: HitKind::Click,
@@ -316,6 +322,7 @@ fn draw_polygon_sides_section(
     );
 
     layout.hits.push(HitRegion {
+        focus_id: None,
         rect: (
             minus_x + btn_size,
             row_y,

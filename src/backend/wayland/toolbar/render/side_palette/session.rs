@@ -198,6 +198,7 @@ fn draw_save_as_overwrite_confirmation(
             label,
         );
         layout.hits.push(HitRegion {
+            focus_id: None,
             rect: (item.x, item.y, item.w, item.h),
             event,
             kind: HitKind::Click,
@@ -236,6 +237,7 @@ fn draw_session_button(
 
     if button.enabled {
         layout.hits.push(HitRegion {
+            focus_id: None,
             rect: (x, y, w, h),
             event: button.event.clone(),
             kind: HitKind::Click,
@@ -339,6 +341,7 @@ fn draw_recent_sessions(
         );
         let tooltip_path = recent.path.display().to_string();
         layout.hits.push(HitRegion {
+            focus_id: None,
             rect: (
                 layout.x,
                 y,

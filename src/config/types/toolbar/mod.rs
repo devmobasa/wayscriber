@@ -15,5 +15,5 @@ pub use mode::{ToolbarLayoutMode, ToolbarSectionDefaults};
 pub use overrides::{ToolbarModeOverride, ToolbarModeOverrides};
 pub use visibility::{
     ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
-    resolve_section_visibility, section_flag_for_item,
+    resolve_section_visibility, section_flag_for_item, set_section_visibility,
 };

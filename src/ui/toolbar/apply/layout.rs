@@ -3,6 +3,16 @@ use crate::input::InputState;
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
+    pub(super) fn close_top_toolbar_menus(&mut self) -> bool {
+        let changed = self.toolbar_shapes_expanded || self.toolbar_top_overflow_open;
+        self.toolbar_shapes_expanded = false;
+        self.toolbar_top_overflow_open = false;
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
     pub(super) fn apply_toolbar_toggle_custom_section(&mut self, enable: bool) -> bool {
         if self.custom_section_enabled != enable {
             self.custom_section_enabled = enable;
@@ -141,9 +151,7 @@ impl InputState {
     /// single source of truth) and re-derive the mirror booleans, so the
     /// choice survives layout-mode switches.
     fn apply_section_flag(&mut self, flag: crate::config::ToolbarSectionFlag, show: bool) -> bool {
-        let before = self.toolbar_items.clone();
-        self.toolbar_items.set_hidden(flag.item_id(), !show);
-        if self.toolbar_items == before {
+        if !crate::config::set_section_visibility(&mut self.toolbar_items, flag, show) {
             return false;
         }
         self.resolved_toolbar_items = self.toolbar_items.resolved();
@@ -231,12 +239,19 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_top_overflow(&mut self, open: bool) -> bool {
-        if self.toolbar_top_overflow_open == open {
-            return false;
+        let mut changed = false;
+        if self.toolbar_top_overflow_open != open {
+            self.toolbar_top_overflow_open = open;
+            changed = true;
         }
-        self.toolbar_top_overflow_open = open;
-        self.needs_redraw = true;
-        true
+        if open && self.toolbar_shapes_expanded {
+            self.toolbar_shapes_expanded = false;
+            changed = true;
+        }
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
     }
 
     pub(super) fn apply_toolbar_set_side_pane(
@@ -370,12 +385,19 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_shape_picker(&mut self, open: bool) -> bool {
+        let mut changed = false;
         if self.toolbar_shapes_expanded != open {
             self.toolbar_shapes_expanded = open;
-            true
-        } else {
-            false
+            changed = true;
         }
+        if open && self.toolbar_top_overflow_open {
+            self.toolbar_top_overflow_open = false;
+            changed = true;
+        }
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
     }
 }
 
@@ -456,6 +478,31 @@ mod tests {
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
 
         assert!(!state.toolbar_shapes_expanded);
+        assert!(!state.toolbar_top_overflow_open);
+    }
+
+    #[test]
+    fn top_menus_are_mutually_exclusive() {
+        let mut state = make_test_input_state();
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true));
+        assert!(state.toolbar_shapes_expanded);
+        state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
+        assert!(state.toolbar_top_overflow_open);
+        assert!(!state.toolbar_shapes_expanded);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true));
+        assert!(state.toolbar_shapes_expanded);
+        assert!(!state.toolbar_top_overflow_open);
+    }
+
+    #[test]
+    fn selecting_from_top_menu_closes_it() {
+        let mut state = make_test_input_state();
+        state.toolbar_top_overflow_open = true;
+
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Line));
+
         assert!(!state.toolbar_top_overflow_open);
     }
 

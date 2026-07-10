@@ -1,12 +1,6 @@
 use super::draw_round_rect;
 use crate::draw::Color;
 
-/// Convert RGB to HSV color space.
-/// Returns (hue, saturation, value) all in 0.0-1.0 range.
-pub fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    crate::draw::color::rgb_to_hsv(r, g, b)
-}
-
 pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     ctx: &cairo::Context,
     x: f64,

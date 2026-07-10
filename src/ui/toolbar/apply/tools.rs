@@ -21,6 +21,10 @@ impl InputState {
             self.toolbar_shapes_expanded = false;
             changed = true;
         }
+        if self.toolbar_top_overflow_open {
+            self.toolbar_top_overflow_open = false;
+            changed = true;
+        }
         changed
     }
 
@@ -95,25 +99,27 @@ impl InputState {
     pub(super) fn apply_toolbar_enter_text_mode(&mut self) -> bool {
         let _ = self.set_tool_override(None);
         self.toolbar_enter_text_mode();
+        self.close_top_toolbar_menus();
         true
     }
 
     pub(super) fn apply_toolbar_enter_sticky_note_mode(&mut self) -> bool {
         let _ = self.set_tool_override(None);
         self.toolbar_enter_sticky_note_mode();
+        self.close_top_toolbar_menus();
         true
     }
 
     pub(super) fn apply_toolbar_toggle_all_highlight(&mut self, enable: bool) -> bool {
         // set_highlight_tool already handles both highlight tool and click highlight
         let currently_active = self.highlight_tool_active() || self.click_highlight_enabled();
+        let mut changed = false;
         if currently_active != enable {
             self.set_highlight_tool(enable);
             self.needs_redraw = true;
-            true
-        } else {
-            false
+            changed = true;
         }
+        self.close_top_toolbar_menus() || changed
     }
 
     pub(super) fn apply_toolbar_toggle_highlight_tool_ring(&mut self, enable: bool) -> bool {

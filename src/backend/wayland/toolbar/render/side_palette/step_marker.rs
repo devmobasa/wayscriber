@@ -79,6 +79,7 @@ pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f
         "Reset",
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, reset_y, content_width, reset_h),
         event: ToolbarEvent::ResetStepMarkerCounter,
         kind: HitKind::Click,

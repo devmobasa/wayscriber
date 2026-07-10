@@ -103,6 +103,7 @@ impl<'a> CustomRowContext<'a> {
             );
         }
         self.hits.push(HitRegion {
+            focus_id: None,
             rect: (self.x, y, btn_w, row_h),
             event: if is_undo {
                 ToolbarEvent::CustomUndo
@@ -131,6 +132,7 @@ impl<'a> CustomRowContext<'a> {
             ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
         );
         self.hits.push(HitRegion {
+            focus_id: None,
             rect: (steps_x, y, steps_btn_w, row_h),
             event: if is_undo {
                 ToolbarEvent::SetCustomUndoSteps(steps.saturating_sub(1).max(1))
@@ -178,6 +180,7 @@ impl<'a> CustomRowContext<'a> {
             ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
         );
         self.hits.push(HitRegion {
+            focus_id: None,
             rect: (steps_plus_x, y, steps_btn_w, row_h),
             event: if is_undo {
                 ToolbarEvent::SetCustomUndoSteps(steps.saturating_add(1))
@@ -217,6 +220,7 @@ impl<'a> CustomRowContext<'a> {
         let _ = self.ctx.fill();
         let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
         self.hits.push(HitRegion {
+            focus_id: None,
             rect: (
                 self.x,
                 slider_y - hit_pad,

@@ -14,9 +14,7 @@ pub(super) use buttons::{
     draw_minimize_button, draw_pin_button, draw_segmented_control,
 };
 pub(super) use checkbox::{draw_checkbox, draw_mini_checkbox};
-pub(super) use color::{
-    draw_color_indicator, draw_hue_bar, draw_sat_val_area, draw_swatch, rgb_to_hsv,
-};
+pub(super) use color::{draw_color_indicator, draw_hue_bar, draw_sat_val_area, draw_swatch};
 pub(super) use icons::set_icon_color;
 pub(super) use labels::{
     draw_label_center, draw_label_center_color, draw_label_left, draw_section_label,

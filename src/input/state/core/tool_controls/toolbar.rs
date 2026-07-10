@@ -114,7 +114,7 @@ impl InputState {
         self.refresh_section_visibility();
     }
 
-    /// Re-derive the nine section booleans from the visibility resolver.
+    /// Re-derive the live section booleans from the visibility resolver.
     /// They stay as fields (and config keys) purely as mirrors: every read
     /// site keeps working and older versions can still read the config.
     pub(crate) fn refresh_section_visibility(&mut self) {
@@ -272,9 +272,8 @@ impl InputState {
         if let Some(value) = overrides.show_text_controls {
             self.show_text_controls = value;
         }
-        if let Some(value) = overrides.show_settings_section {
-            self.show_settings_section = value;
-        }
+        // `show_settings_section` is retained in config for compatibility,
+        // but Settings navigation is always reachable.
     }
 
     /// Layout-mode switches re-resolve the section booleans against the new

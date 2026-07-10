@@ -1,7 +1,5 @@
 //! Typed widget nodes: what exists, where it is, and what it does.
 
-// Consumed starting with the top-strip port; the allow is removed then.
-#![allow(dead_code)]
 use std::borrow::Cow;
 use std::fmt;
 
@@ -17,6 +15,7 @@ use crate::ui::toolbar::ToolbarEvent;
 pub struct WidgetId(Cow<'static, str>);
 
 impl WidgetId {
+    #[allow(dead_code)] // Reserved for the side-palette tree port; top ids use From directly.
     pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
         Self(id.into())
     }
@@ -132,6 +131,7 @@ pub enum WidgetKind {
     /// Full-surface panel background.
     Panel,
     /// Rounded group-card background.
+    #[allow(dead_code)] // Used by the staged side-palette tree port.
     Card,
     /// Thin separator line.
     Divider { vertical: bool },
@@ -149,6 +149,7 @@ pub enum WidgetKind {
         style: ButtonStyle,
     },
     /// Standalone icon glyph (no button body).
+    #[allow(dead_code)] // Used by the staged side-palette tree port.
     Icon { glyph: IconFn },
     /// Standalone text.
     Label(LabelSpec),
@@ -158,12 +159,14 @@ pub enum WidgetKind {
     Checkbox { checked: bool, label: LabelSpec },
     /// Two-segment control; the halves' interactions are separate
     /// [`WidgetKind::HitArea`] nodes layered on top.
+    #[allow(dead_code)] // Used by the staged side-palette tree port.
     SegmentedControl {
         left: LabelSpec,
         right: LabelSpec,
         active_right: bool,
     },
     /// Invisible interactive region (segment halves, full-row toggles).
+    #[allow(dead_code)] // Used by the staged side-palette tree port.
     HitArea,
     /// Color swatch tile.
     Swatch {

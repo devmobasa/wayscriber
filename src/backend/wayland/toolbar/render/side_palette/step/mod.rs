@@ -76,6 +76,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         "Step buttons",
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
         kind: HitKind::Click,
@@ -98,6 +99,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         "Delay sliders",
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, delay_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
         kind: HitKind::Click,

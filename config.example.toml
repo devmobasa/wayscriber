@@ -348,7 +348,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = false
 #
 # [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
@@ -359,7 +358,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = true
 #
 # [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
@@ -370,7 +368,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = true
 # show_text_controls = true
-# show_settings_section = true
 
 # Show top toolbar on startup (pinned)
 top_pinned = true
@@ -427,7 +424,8 @@ show_step_section = false
 # Keep text controls visible even when text is inactive
 show_text_controls = true
 
-# Show settings section (config buttons and advanced toggles)
+# Deprecated compatibility mirror. Settings navigation is always reachable;
+# this value is preserved for older Wayscriber versions but is otherwise ignored.
 show_settings_section = true
 
 # Show timing delay sliders in side toolbar

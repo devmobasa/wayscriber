@@ -89,6 +89,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
                 nudge_icon_size,
             );
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
                 event: ToolbarEvent::SetFontSize((snapshot.font_size - fs_step).max(fs_min)),
                 kind: HitKind::Click,
@@ -118,6 +119,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
                 nudge_icon_size,
             );
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
                 event: ToolbarEvent::SetFontSize((snapshot.font_size + fs_step).min(fs_max)),
                 kind: HitKind::Click,
@@ -144,6 +146,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
             let _ = ctx.fill();
 
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (fs_track_x, fs_track_y - 6.0, fs_track_w, track_h + 12.0),
                 event: ToolbarEvent::SetFontSize(snapshot.font_size),
                 kind: HitKind::DragSetFontSize,
@@ -214,6 +217,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
             &font.family,
         );
         hits.push(HitRegion {
+            focus_id: None,
             rect: (fx, fy, font_btn_w, font_btn_h),
             event: ToolbarEvent::SetFont(font.clone()),
             kind: HitKind::Click,

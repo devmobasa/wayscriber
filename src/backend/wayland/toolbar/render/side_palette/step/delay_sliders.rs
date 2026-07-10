@@ -61,6 +61,7 @@ pub(super) fn draw_delay_sliders(
     let _ = ctx.fill();
     let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
     hits.push(HitRegion {
+        focus_id: None,
         rect: (
             x,
             undo_slider_y - hit_pad,
@@ -110,6 +111,7 @@ pub(super) fn draw_delay_sliders(
     );
     let _ = ctx.fill();
     hits.push(HitRegion {
+        focus_id: None,
         rect: (
             x,
             redo_slider_y - hit_pad,

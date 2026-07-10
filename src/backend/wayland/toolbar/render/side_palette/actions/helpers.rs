@@ -292,6 +292,7 @@ fn render_icon_action_button(
 
     if action.enabled {
         render_ctx.hits.push(HitRegion {
+            focus_id: None,
             rect: (
                 geometry.x,
                 geometry.y,
@@ -377,6 +378,7 @@ fn render_text_action_button(
     }
     if action.enabled {
         render_ctx.hits.push(HitRegion {
+            focus_id: None,
             rect: (layout.x, layout.y, layout.width, layout.height),
             event: action.event.clone(),
             kind: HitKind::Click,

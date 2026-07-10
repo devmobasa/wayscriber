@@ -192,7 +192,6 @@ pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "show boards section",
     "show step undo redo",
     "always show text controls",
-    "show settings section",
     "show delay sliders",
     "show marker opacity controls",
     "show tool preview bubble",

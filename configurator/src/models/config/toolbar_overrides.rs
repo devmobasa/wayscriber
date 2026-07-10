@@ -53,7 +53,6 @@ impl ToolbarModeOverrideDraft {
             ToolbarOverrideField::ShowBoardsSection => self.show_boards_section = value,
             ToolbarOverrideField::ShowStepSection => self.show_step_section = value,
             ToolbarOverrideField::ShowTextControls => self.show_text_controls = value,
-            ToolbarOverrideField::ShowSettingsSection => self.show_settings_section = value,
         }
     }
 }

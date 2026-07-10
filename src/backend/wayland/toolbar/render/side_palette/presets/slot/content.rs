@@ -35,6 +35,7 @@ pub(super) fn draw_preset_content(
             .filter(|name| !name.is_empty());
         let tooltip = preset_tooltip_text(preset, slot, snapshot.binding_hints.apply_preset(slot));
         hits.push(HitRegion {
+            focus_id: None,
             rect: (
                 slot_x,
                 layout_spec.slot_row_y,

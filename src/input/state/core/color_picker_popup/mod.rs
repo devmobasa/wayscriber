@@ -231,46 +231,7 @@ pub enum ColorPickerCursorHint {
     Pointer,
 }
 
-/// Convert HSV to RGB color.
-pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
-    let h = (h - h.floor()).clamp(0.0, 1.0) * 6.0;
-    let i = h.floor();
-    let f = h - i;
-    let p = v * (1.0 - s);
-    let q = v * (1.0 - s * f);
-    let t = v * (1.0 - s * (1.0 - f));
-    let (r, g, b) = match i as i32 {
-        0 => (v, t, p),
-        1 => (q, v, p),
-        2 => (p, v, t),
-        3 => (p, q, v),
-        4 => (t, p, v),
-        _ => (v, p, q),
-    };
-    Color { r, g, b, a: 1.0 }
-}
-
-/// Convert RGB to HSV color space.
-pub fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let delta = max - min;
-
-    let value = max;
-    let saturation = if max == 0.0 { 0.0 } else { delta / max };
-
-    let hue = if delta == 0.0 {
-        0.0
-    } else if max == r {
-        ((g - b) / delta).rem_euclid(6.0) / 6.0
-    } else if max == g {
-        ((b - r) / delta + 2.0) / 6.0
-    } else {
-        ((r - g) / delta + 4.0) / 6.0
-    };
-
-    (hue, saturation, value)
-}
+pub use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
 
 /// Convert a color to hex string (e.g., "#FF8040").
 pub fn color_to_hex(color: Color) -> String {

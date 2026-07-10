@@ -38,7 +38,7 @@ pub struct ToolbarModeOverride {
     #[serde(default)]
     pub show_text_controls: Option<bool>,
 
-    /// Show the Settings section (config shortcuts, layout controls)
+    /// Deprecated compatibility field. Settings navigation is always reachable.
     #[serde(default)]
     pub show_settings_section: Option<bool>,
 }

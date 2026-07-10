@@ -3,7 +3,9 @@ use wayland_client::protocol::wl_output;
 
 use super::structs::ToolbarSurface;
 use crate::backend::wayland::overlay_passthrough::set_surface_clickthrough;
-use crate::backend::wayland::toolbar::hit::{focus_hover_point, focused_event, next_focus_index};
+use crate::backend::wayland::toolbar::hit::{
+    focus_hover_point, focused_event, next_focus_index, resolve_focus_index,
+};
 use crate::ui::toolbar::ToolbarEvent;
 
 impl ToolbarSurface {
@@ -19,16 +21,23 @@ impl ToolbarSurface {
     }
 
     pub fn clear_focus(&mut self) {
-        if self.focus_index.is_some() {
+        if self.focus_index.is_some() || self.focus_id.is_some() {
             self.focus_index = None;
+            self.focus_id = None;
             self.dirty = true;
         }
     }
 
     pub fn focus_next(&mut self, reverse: bool) -> bool {
-        let next = next_focus_index(&self.hit_regions, self.focus_index, reverse);
-        if next != self.focus_index {
+        let current = resolve_focus_index(
+            &self.hit_regions,
+            self.focus_index,
+            self.focus_id.as_deref(),
+        );
+        let next = next_focus_index(&self.hit_regions, current, reverse);
+        if next != current {
             self.focus_index = next;
+            self.focus_id = next.and_then(|index| self.hit_regions[index].focus_id.clone());
             self.dirty = true;
             return true;
         }
@@ -36,11 +45,25 @@ impl ToolbarSurface {
     }
 
     pub fn focused_hover(&self) -> Option<(f64, f64)> {
-        focus_hover_point(&self.hit_regions, self.focus_index)
+        focus_hover_point(
+            &self.hit_regions,
+            resolve_focus_index(
+                &self.hit_regions,
+                self.focus_index,
+                self.focus_id.as_deref(),
+            ),
+        )
     }
 
     pub fn focused_event(&self) -> Option<ToolbarEvent> {
-        focused_event(&self.hit_regions, self.focus_index)
+        focused_event(
+            &self.hit_regions,
+            resolve_focus_index(
+                &self.hit_regions,
+                self.focus_index,
+                self.focus_id.as_deref(),
+            ),
+        )
     }
 
     pub fn needs_render(&self) -> bool {

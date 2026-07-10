@@ -24,7 +24,6 @@ impl ToolbarLayoutMode {
                 show_presets: false,
                 show_step_section: false,
                 show_text_controls: true,
-                show_settings_section: false,
             },
             Self::Regular => ToolbarSectionDefaults {
                 show_actions_section: true,
@@ -35,7 +34,6 @@ impl ToolbarLayoutMode {
                 show_presets: true,
                 show_step_section: false,
                 show_text_controls: true,
-                show_settings_section: true,
             },
             Self::Advanced => ToolbarSectionDefaults {
                 show_actions_section: true,
@@ -46,7 +44,6 @@ impl ToolbarLayoutMode {
                 show_presets: true,
                 show_step_section: true,
                 show_text_controls: true,
-                show_settings_section: true,
             },
         }
     }
@@ -62,5 +59,4 @@ pub struct ToolbarSectionDefaults {
     pub show_presets: bool,
     pub show_step_section: bool,
     pub show_text_controls: bool,
-    pub show_settings_section: bool,
 }

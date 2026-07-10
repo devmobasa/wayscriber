@@ -110,6 +110,7 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         }
         if button.enabled {
             hits.push(HitRegion {
+                focus_id: None,
                 rect: (bx, by, btn_w, btn_h),
                 event: button.event.clone(),
                 kind: HitKind::Click,

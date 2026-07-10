@@ -157,6 +157,115 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
 }
 
 #[test]
+fn overflow_contains_only_visible_items_and_is_structural() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state
+        .toolbar_items
+        .set_hidden(crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
+    state
+        .toolbar_items
+        .set_hidden(crate::config::toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
+    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = Some(700.0);
+
+    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(plan.show_overflow);
+    assert!(
+        !plan
+            .dropped_utilities
+            .contains(&crate::ui::toolbar::model::TopUtilityButton::Screenshot)
+    );
+    assert!(
+        !plan
+            .dropped_utilities
+            .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight)
+    );
+
+    snapshot.top_overflow_open = true;
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    assert!(tree.node_by_id(&"top.chrome.overflow".into()).is_some());
+    assert!(
+        tree.node_by_id(&"top.overflow.top.utility.screenshot".into())
+            .is_none()
+    );
+    assert!(
+        tree.node_by_id(&"top.overflow.top.utility.highlight".into())
+            .is_none()
+    );
+}
+
+#[test]
+fn top_strip_fits_480_pixels_in_icon_and_text_modes() {
+    for use_icons in [true, false] {
+        let mut state = create_test_input_state();
+        state.toolbar_use_icons = use_icons;
+        let mut snapshot = snapshot_from_state(&state);
+        snapshot.top_viewport_max = Some(480.0);
+        let (width, _) = top_size(&snapshot);
+        assert!(
+            width <= 480,
+            "{} mode planned width {width} exceeds 480",
+            if use_icons { "icon" } else { "text" }
+        );
+    }
+}
+
+#[test]
+fn compact_top_strip_respects_budget_without_the_old_floor() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = false;
+    let mut snapshot = snapshot_from_state(&state);
+    for budget in [376, 320, 300] {
+        snapshot.top_viewport_max = Some(budget as f64);
+        assert!(
+            top_size(&snapshot).0 <= budget,
+            "planned width {} exceeds {budget}",
+            top_size(&snapshot).0
+        );
+    }
+}
+
+#[test]
+fn reordered_overflow_items_keep_visual_order() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.toolbar_items.set_hidden(
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        false,
+    );
+    state.toolbar_items.move_item_to_index(
+        crate::config::ToolbarItemOrderGroup::TopControls,
+        crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT,
+        0,
+    );
+    state.toolbar_items.move_item_to_index(
+        crate::config::ToolbarItemOrderGroup::TopControls,
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        1,
+    );
+    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = Some(560.0);
+
+    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    let highlight = plan
+        .dropped_utilities
+        .iter()
+        .position(|item| *item == crate::ui::toolbar::model::TopUtilityButton::Highlight)
+        .expect("highlight dropped");
+    let screenshot = plan
+        .dropped_utilities
+        .iter()
+        .position(|item| *item == crate::ui::toolbar::model::TopUtilityButton::Screenshot)
+        .expect("screenshot dropped");
+    assert!(highlight < screenshot);
+}
+
+#[test]
 fn shapes_popover_hosts_the_relocated_tool_options() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
@@ -235,6 +344,87 @@ fn highlight_ring_row_grows_the_bar_only_while_active() {
         ring.interact.as_ref().unwrap().event,
         ToolbarEvent::ToggleHighlightToolRing(_)
     ));
+}
+
+#[test]
+fn highlight_ring_and_top_popovers_use_separate_lanes() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.set_highlight_tool(true);
+    state.toolbar_shapes_expanded = true;
+    let snapshot = snapshot_from_state(&state);
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let ring = tree
+        .node_by_id(&"top.utility.highlight-ring".into())
+        .expect("ring row");
+    let shapes = tree
+        .node_by_id(&"top.shapes.panel".into())
+        .expect("shapes panel");
+    assert!(shapes.rect.1 >= ring.rect.1 + ring.rect.3);
+
+    state.toolbar_shapes_expanded = false;
+    state.toolbar_top_overflow_open = true;
+    state.toolbar_items.set_hidden(
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        false,
+    );
+    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
+        snapshot.top_viewport_max = Some(budget as f64);
+        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+        (plan.show_overflow
+            && !plan
+                .dropped_utilities
+                .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight))
+        .then_some(budget as f64)
+    });
+    assert!(
+        snapshot.top_viewport_max.is_some(),
+        "overflow budget retaining highlight"
+    );
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let ring = tree
+        .node_by_id(&"top.utility.highlight-ring".into())
+        .expect("ring row");
+    let overflow = tree
+        .node_by_id(&"top.overflow.panel".into())
+        .expect("overflow panel");
+    assert!(
+        overflow.rect.1 >= ring.rect.1 + ring.rect.3,
+        "ring={:?}, overflow={:?}, surface=({w}, {h}), budget={:?}",
+        ring.rect,
+        overflow.rect,
+        snapshot.top_viewport_max
+    );
+}
+
+#[test]
+fn scrolled_side_hits_are_clipped_at_both_viewport_edges() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pane = SidePane::Settings;
+    state.toolbar_side_scroll[SidePane::Settings.index()] = 17.3;
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.side_viewport_max = Some(240.0);
+    snapshot.side_scroll = 17.3;
+    let (_, height) = side_size(&snapshot);
+    let content_top = ToolbarLayoutSpec::new(&snapshot).side_content_start_y();
+    let hits = rendered_side_hits(&snapshot);
+    let content_hits = &hits[8..];
+
+    assert!(!content_hits.is_empty());
+    assert!(content_hits.iter().all(|hit| {
+        hit.rect.1 >= content_top - f64::EPSILON
+            && hit.rect.1 + hit.rect.3 <= height as f64 + f64::EPSILON
+    }));
+    assert!(content_hits.iter().any(|hit| {
+        (hit.rect.1 - content_top).abs() < 0.01
+            || (hit.rect.1 + hit.rect.3 - height as f64).abs() < 0.01
+    }));
 }
 
 #[test]

@@ -278,7 +278,7 @@ fn should_try_toolbar_key(key: Key, modal_capture_active: bool) -> bool {
     if modal_capture_active {
         return false;
     }
-    matches!(key, Key::Tab | Key::Return | Key::Space)
+    matches!(key, Key::Tab | Key::Return | Key::Space | Key::Escape)
 }
 
 #[cfg(test)]
@@ -297,6 +297,7 @@ mod tests {
         assert!(should_try_toolbar_key(Key::Tab, false));
         assert!(should_try_toolbar_key(Key::Return, false));
         assert!(should_try_toolbar_key(Key::Space, false));
+        assert!(should_try_toolbar_key(Key::Escape, false));
         assert!(!should_try_toolbar_key(Key::Down, false));
     }
 }

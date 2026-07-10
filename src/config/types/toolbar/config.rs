@@ -89,7 +89,7 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_text_controls")]
     pub show_text_controls: bool,
 
-    /// Show the Settings section (config shortcuts, layout controls)
+    /// Deprecated compatibility mirror. Settings navigation is always reachable.
     #[serde(default = "default_show_settings_section")]
     pub show_settings_section: bool,
 

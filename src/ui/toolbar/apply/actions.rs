@@ -49,6 +49,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_capture_screenshot(&mut self) -> bool {
         self.handle_action(Action::CaptureSelection);
+        self.close_top_toolbar_menus();
         true
     }
 

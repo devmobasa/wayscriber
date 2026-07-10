@@ -125,7 +125,7 @@ impl ToolbarSideSection {
 }
 
 /// The four fixed side-palette panes, selected by the nav row under the
-/// header. Panes replace the old open/closed drawer with five tabs.
+/// header. Panes replace the old open/closed drawer with four tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SidePane {
     /// Contextual drawing properties for the active tool.

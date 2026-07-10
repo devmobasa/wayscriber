@@ -13,6 +13,9 @@ pub const MIN_HIT_TARGET: f64 = 24.0;
 
 #[derive(Clone, Debug)]
 pub struct HitRegion {
+    /// Stable tree identity for keyboard focus. Hand-rendered side hits do
+    /// not have one yet and fall back to their visual-order index.
+    pub focus_id: Option<String>,
     pub rect: (f64, f64, f64, f64), // x, y, w, h
     pub event: ToolbarEvent,
     pub kind: crate::backend::wayland::toolbar::events::HitKind,
@@ -45,6 +48,53 @@ pub fn rect_contains_with_min_target(rect: (f64, f64, f64, f64), x: f64, y: f64)
 impl HitRegion {
     pub fn contains(&self, x: f64, y: f64) -> bool {
         rect_contains_with_min_target(self.rect, x, y)
+    }
+}
+
+/// Clip a hit region to visible surface content. Small clipped targets are
+/// expanded inward (never outside `bounds`) so the shared minimum-target
+/// predicate cannot make them clickable through fixed chrome or the canvas.
+pub fn clip_hit_region_to_bounds(hit: &mut HitRegion, bounds: (f64, f64, f64, f64)) -> bool {
+    let (bx, by, bw, bh) = bounds;
+    let (rx, ry, rw, rh) = hit.rect;
+    let x0 = rx.max(bx);
+    let y0 = ry.max(by);
+    let x1 = (rx + rw).min(bx + bw);
+    let y1 = (ry + rh).min(by + bh);
+    if x1 <= x0 || y1 <= y0 {
+        return false;
+    }
+
+    let mut x = x0;
+    let mut y = y0;
+    let mut w = x1 - x0;
+    let mut h = y1 - y0;
+    if h < ROW_HIT_LENGTH && w < MIN_HIT_TARGET && bw >= MIN_HIT_TARGET {
+        let center = x + w / 2.0;
+        w = MIN_HIT_TARGET;
+        x = (center - w / 2.0).clamp(bx, bx + bw - w);
+    }
+    if w < ROW_HIT_LENGTH && h < MIN_HIT_TARGET && bh >= MIN_HIT_TARGET {
+        let center = y + h / 2.0;
+        h = MIN_HIT_TARGET;
+        y = (center - h / 2.0).clamp(by, by + bh - h);
+    }
+    hit.rect = (x, y, w, h);
+    true
+}
+
+pub fn clip_hit_regions_to_bounds(
+    hits: &mut Vec<HitRegion>,
+    start: usize,
+    bounds: (f64, f64, f64, f64),
+) {
+    let mut index = start;
+    while index < hits.len() {
+        if clip_hit_region_to_bounds(&mut hits[index], bounds) {
+            index += 1;
+        } else {
+            hits.remove(index);
+        }
     }
 }
 
@@ -262,11 +312,45 @@ fn slider_event_for_hit(
 }
 
 fn focusable_indices(hits: &[HitRegion]) -> Vec<usize> {
-    hits.iter()
+    let mut indices: Vec<_> = hits
+        .iter()
         .enumerate()
         .filter(|(_, hit)| matches!(hit.kind, HitKind::Click))
         .map(|(idx, _)| idx)
-        .collect()
+        .collect();
+    // Hit vectors are pointer-z ordered (topmost first), while keyboard
+    // focus follows visual reading order. Choose the major visual axis so
+    // vertically centered swatches/chrome do not scramble a horizontal bar.
+    let centers: Vec<_> = indices
+        .iter()
+        .map(|index| {
+            let (x, y, w, h) = hits[*index].rect;
+            (x + w / 2.0, y + h / 2.0)
+        })
+        .collect();
+    let x_span = centers
+        .iter()
+        .map(|center| center.0)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), value| {
+            (min.min(value), max.max(value))
+        });
+    let y_span = centers
+        .iter()
+        .map(|center| center.1)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), value| {
+            (min.min(value), max.max(value))
+        });
+    let horizontal = x_span.1 - x_span.0 >= y_span.1 - y_span.0;
+    indices.sort_by(|left, right| {
+        let a = hits[*left].rect;
+        let b = hits[*right].rect;
+        if horizontal {
+            a.0.total_cmp(&b.0).then_with(|| a.1.total_cmp(&b.1))
+        } else {
+            a.1.total_cmp(&b.1).then_with(|| a.0.total_cmp(&b.0))
+        }
+    });
+    indices
 }
 
 pub fn next_focus_index(
@@ -288,6 +372,19 @@ pub fn next_focus_index(
     indices.get(next_pos).copied()
 }
 
+pub fn resolve_focus_index(
+    hits: &[HitRegion],
+    index: Option<usize>,
+    focus_id: Option<&str>,
+) -> Option<usize> {
+    if let Some(focus_id) = focus_id {
+        return hits
+            .iter()
+            .position(|hit| hit.focus_id.as_deref() == Some(focus_id));
+    }
+    index.filter(|index| *index < hits.len())
+}
+
 pub fn focus_hover_point(hits: &[HitRegion], focus: Option<usize>) -> Option<(f64, f64)> {
     let hit = focus.and_then(|idx| hits.get(idx))?;
     Some((hit.rect.0 + hit.rect.2 / 2.0, hit.rect.1 + hit.rect.3 / 2.0))
@@ -305,6 +402,7 @@ mod tests {
 
     fn click(event: ToolbarEvent) -> HitRegion {
         HitRegion {
+            focus_id: None,
             rect: (10.0, 20.0, 30.0, 40.0),
             event,
             kind: HitKind::Click,
@@ -314,6 +412,7 @@ mod tests {
 
     fn thickness_slider() -> HitRegion {
         HitRegion {
+            focus_id: None,
             rect: (100.0, 0.0, 200.0, 20.0),
             event: ToolbarEvent::SetThickness(1.0),
             kind: HitKind::DragSetThickness {
@@ -339,6 +438,7 @@ mod tests {
     #[test]
     fn small_hit_rects_inflate_to_min_target() {
         let hit = HitRegion {
+            focus_id: None,
             rect: (100.0, 100.0, 14.0, 14.0),
             event: ToolbarEvent::Undo,
             kind: HitKind::Click,
@@ -353,8 +453,24 @@ mod tests {
     }
 
     #[test]
+    fn clipped_hit_cannot_reach_outside_visible_bounds() {
+        let mut hit = click(ToolbarEvent::Undo);
+        hit.rect = (10.0, 15.0, 12.0, 12.0);
+        assert!(clip_hit_region_to_bounds(
+            &mut hit,
+            (0.0, 20.0, 100.0, 40.0)
+        ));
+
+        assert!(hit.rect.1 >= 20.0);
+        assert!(hit.rect.1 + hit.rect.3 <= 60.0);
+        assert!(!hit.contains(hit.rect.0 + hit.rect.2 / 2.0, 19.9));
+        assert!(hit.contains(hit.rect.0 + hit.rect.2 / 2.0, 20.0));
+    }
+
+    #[test]
     fn large_hit_rects_do_not_inflate() {
         let hit = HitRegion {
+            focus_id: None,
             rect: (100.0, 100.0, 40.0, 40.0),
             event: ToolbarEvent::Undo,
             kind: HitKind::Click,
@@ -372,6 +488,7 @@ mod tests {
         // A full-width 21px section-header row must not swallow the first
         // body row's boundary below it.
         let hit = HitRegion {
+            focus_id: None,
             rect: (10.0, 100.0, 236.0, 21.0),
             event: ToolbarEvent::Undo,
             kind: HitKind::Click,
@@ -412,6 +529,7 @@ mod tests {
     #[test]
     fn sat_val_hit_maps_pointer_to_full_hsv_color() {
         let hit = HitRegion {
+            focus_id: None,
             rect: (100.0, 50.0, 200.0, 80.0),
             event: ToolbarEvent::SetColorHsv {
                 h: 0.5,
@@ -449,6 +567,7 @@ mod tests {
     #[test]
     fn hue_hit_maps_pointer_x_and_keeps_sat_val() {
         let hit = HitRegion {
+            focus_id: None,
             rect: (100.0, 150.0, 200.0, 14.0),
             event: ToolbarEvent::SetColorHsv {
                 h: 0.0,
@@ -487,6 +606,20 @@ mod tests {
         assert_eq!(next_focus_index(&hits, Some(2), false), Some(0));
         assert_eq!(next_focus_index(&hits, None, true), Some(2));
         assert_eq!(next_focus_index(&hits, Some(2), true), Some(0));
+    }
+
+    #[test]
+    fn stable_focus_id_survives_hit_reordering() {
+        let mut undo = click(ToolbarEvent::Undo);
+        undo.focus_id = Some("top.utility.undo".to_string());
+        let mut redo = click(ToolbarEvent::Redo);
+        redo.focus_id = Some("top.utility.redo".to_string());
+        let hits = vec![redo, undo];
+
+        assert_eq!(
+            resolve_focus_index(&hits, Some(0), Some("top.utility.undo")),
+            Some(1)
+        );
     }
 
     #[test]

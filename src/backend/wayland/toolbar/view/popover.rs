@@ -72,17 +72,6 @@ pub fn place_popover(spec: PopoverSpec) -> PopoverPlacement {
     }
 }
 
-/// Input rects for a bar with an optional open popover: the transparent
-/// grown area between them must not eat clicks meant for the canvas.
-// Wired to the layer-shell surfaces in the polish phase.
-#[allow(dead_code)]
-pub fn input_rects_with_popover(bar: Rect, popover: Option<Rect>) -> Vec<Rect> {
-    match popover {
-        Some(popover) => vec![bar, popover],
-        None => vec![bar],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,13 +123,5 @@ mod tests {
         });
         assert_eq!(placement.rect.0, 8.0);
         assert_eq!(placement.rect.1, 8.0);
-    }
-
-    #[test]
-    fn input_rects_cover_bar_and_open_popover_only() {
-        let bar = (0.0, 0.0, 400.0, 58.0);
-        assert_eq!(input_rects_with_popover(bar, None), vec![bar]);
-        let pop = (40.0, 64.0, 120.0, 80.0);
-        assert_eq!(input_rects_with_popover(bar, Some(pop)), vec![bar, pop]);
     }
 }

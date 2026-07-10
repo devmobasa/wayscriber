@@ -75,6 +75,7 @@ pub(super) fn draw_preset_slot(
         let badge_x = slot_x + layout_spec.slot_size - CLEAR_BADGE_SIZE - 2.0;
         let badge_y = layout_spec.slot_row_y + 2.0;
         hits.push(HitRegion {
+            focus_id: None,
             rect: (badge_x, badge_y, CLEAR_BADGE_SIZE, CLEAR_BADGE_SIZE),
             event: ToolbarEvent::ClearPreset(slot),
             kind: HitKind::Click,
@@ -135,6 +136,7 @@ pub(super) fn draw_preset_slot(
         let _ = ctx.fill();
 
         hits.push(HitRegion {
+            focus_id: None,
             rect: (
                 slot_x,
                 layout_spec.slot_row_y,

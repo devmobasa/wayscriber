@@ -26,11 +26,10 @@ pub enum ToolbarSectionFlag {
     Presets,
     StepSection,
     TextControls,
-    SettingsSection,
 }
 
 impl ToolbarSectionFlag {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 8] = [
         Self::Actions,
         Self::ActionsAdvanced,
         Self::ZoomActions,
@@ -39,7 +38,6 @@ impl ToolbarSectionFlag {
         Self::Presets,
         Self::StepSection,
         Self::TextControls,
-        Self::SettingsSection,
     ];
 
     /// The config item id that carries explicit overrides for this flag.
@@ -53,7 +51,6 @@ impl ToolbarSectionFlag {
             Self::Presets => ids::SIDE_GROUP_PRESETS,
             Self::StepSection => ids::SIDE_GROUP_STEP_UNDO,
             Self::TextControls => ids::SIDE_GROUP_TEXT_CONTROLS,
-            Self::SettingsSection => ids::SIDE_GROUP_SETTINGS,
         }
     }
 
@@ -81,9 +78,6 @@ impl ToolbarSectionFlag {
             Self::TextControls => over
                 .show_text_controls
                 .unwrap_or(defaults.show_text_controls),
-            Self::SettingsSection => over
-                .show_settings_section
-                .unwrap_or(defaults.show_settings_section),
         }
     }
 }
@@ -120,7 +114,6 @@ impl ToolbarSectionVisibility {
             ToolbarSectionFlag::Presets => self.show_presets,
             ToolbarSectionFlag::StepSection => self.show_step_section,
             ToolbarSectionFlag::TextControls => self.show_text_controls,
-            ToolbarSectionFlag::SettingsSection => self.show_settings_section,
         }
     }
 }
@@ -151,8 +144,22 @@ pub fn resolve_section_visibility(
         show_presets: value(ToolbarSectionFlag::Presets),
         show_step_section: value(ToolbarSectionFlag::StepSection),
         show_text_controls: value(ToolbarSectionFlag::TextControls),
-        show_settings_section: value(ToolbarSectionFlag::SettingsSection),
+        // Settings is navigation and the only route back to customization.
+        // The serialized legacy key remains readable, but no longer hides it.
+        show_settings_section: true,
     }
+}
+
+/// Record one explicit section choice in the item override store shared by
+/// the overlay and configurator. Returns whether the serialized store changed.
+pub fn set_section_visibility(
+    items: &mut ToolbarItemsConfig,
+    flag: ToolbarSectionFlag,
+    visible: bool,
+) -> bool {
+    let before = items.clone();
+    items.set_hidden(flag.item_id(), !visible);
+    *items != before
 }
 
 /// Fold the legacy `show_*` booleans of an existing config into explicit
@@ -285,5 +292,18 @@ mod tests {
             resolved.unknown_shown,
             vec!["future.mystery-id".to_string()]
         );
+    }
+
+    #[test]
+    fn settings_visibility_key_is_compatibility_only() {
+        let mut items = ToolbarItemsConfig::default();
+        items.hidden.push(ids::SIDE_GROUP_SETTINGS.to_string());
+
+        let visibility = resolve_section_visibility(
+            ToolbarLayoutMode::Simple,
+            &ToolbarModeOverrides::default(),
+            &items.resolved(),
+        );
+        assert!(visibility.show_settings_section);
     }
 }

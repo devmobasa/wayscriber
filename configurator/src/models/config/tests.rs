@@ -11,8 +11,8 @@ use wayscriber::config::{
     ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
     PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, QuickColorConfig,
     RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig,
-    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig, XdgFocusLossBehavior,
-    toolbar_item_ids as ids,
+    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig, ToolbarSectionFlag,
+    XdgFocusLossBehavior, toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -578,6 +578,43 @@ fn setters_update_draft_state() {
         DragToolOption::Pen,
     );
     assert_eq!(draft.drawing_drag_tools.right.drag_tool, DragTool::Pen);
+}
+
+#[test]
+fn section_toggle_replaces_overlay_item_override_on_save() {
+    let mut config = Config::default();
+    config
+        .ui
+        .toolbar
+        .items
+        .set_hidden(ToolbarSectionFlag::Presets.item_id(), true);
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_toolbar_show_presets);
+    draft.set_toggle(ToggleField::UiToolbarShowPresets, true);
+
+    let saved = draft
+        .to_config(&config)
+        .expect("toolbar config should save");
+    let resolved = saved.ui.toolbar.items.resolved();
+    assert!(
+        !resolved
+            .hidden
+            .contains(&ToolbarSectionFlag::Presets.item_id())
+    );
+    assert!(
+        resolved
+            .shown
+            .contains(&ToolbarSectionFlag::Presets.item_id())
+    );
+    assert!(
+        wayscriber::config::resolve_section_visibility(
+            saved.ui.toolbar.layout_mode,
+            &saved.ui.toolbar.mode_overrides,
+            &resolved,
+        )
+        .show_presets
+    );
 }
 
 #[test]

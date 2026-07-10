@@ -56,7 +56,9 @@ impl WaylandState {
     /// the next Tab re-seeds focus at the first focusable region.
     pub(in crate::backend::wayland) fn reset_side_toolbar_focus(&mut self) {
         self.toolbar.clear_side_focus();
-        if self.data.inline_side_focus_index.take().is_some() && self.inline_toolbars_active() {
+        let had_focus = self.data.inline_side_focus_index.take().is_some()
+            || self.data.inline_side_focus_id.take().is_some();
+        if had_focus && self.inline_toolbars_active() {
             self.input_state.needs_redraw = true;
         }
     }

@@ -67,14 +67,19 @@ impl WaylandState {
                 return;
             }
             if self.pointer_over_toolbar() {
+                if button == BTN_LEFT {
+                    self.dismiss_top_toolbar_menus();
+                }
                 return;
             }
         }
         if on_toolbar {
+            let mut handled = false;
             if button == BTN_LEFT
                 && let Some((intent, drag)) =
                     self.toolbar.pointer_press(&event.surface, event.position)
             {
+                handled = true;
                 let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
                 if matches!(
                     toolbar_event,
@@ -96,9 +101,16 @@ impl WaylandState {
                 self.input_state.needs_redraw = true;
                 self.refresh_keyboard_interactivity();
             }
+            if button == BTN_LEFT && !handled {
+                self.dismiss_top_toolbar_menus();
+            }
             return;
         } else if self.pointer_over_toolbar() {
             self.set_toolbar_dragging(false);
+            return;
+        }
+
+        if button == BTN_LEFT && self.dismiss_top_toolbar_menus() {
             return;
         }
 
@@ -141,5 +153,17 @@ impl WaylandState {
         self.input_state
             .on_mouse_press_with_canvas(mb, screen_x, screen_y, wx, wy);
         self.input_state.needs_redraw = true;
+    }
+
+    fn dismiss_top_toolbar_menus(&mut self) -> bool {
+        let changed =
+            self.input_state.toolbar_shapes_expanded || self.input_state.toolbar_top_overflow_open;
+        if changed {
+            self.input_state.toolbar_shapes_expanded = false;
+            self.input_state.toolbar_top_overflow_open = false;
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+        }
+        changed
     }
 }

@@ -90,9 +90,14 @@ impl ToolbarSurface {
         self.configured = false;
         self.dirty = false;
         self.suppressed = false;
+        // Compositor-owned regions do not survive the wl_surface. Keep the
+        // logical rect cache, but force it onto the next surface even when
+        // the next render computes the same rectangles.
+        self.input_region_dirty = true;
         self.hit_regions.clear();
         self.hover = None;
         self.focus_index = None;
+        self.focus_id = None;
     }
 
     pub fn handle_configure(&mut self, configure: &LayerSurfaceConfigure) -> bool {
@@ -116,5 +121,22 @@ impl ToolbarSurface {
         self.configured = true;
         self.dirty = true;
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use smithay_client_toolkit::shell::wlr_layer::Anchor;
+
+    #[test]
+    fn destroy_invalidates_cached_input_region() {
+        let mut surface = ToolbarSurface::new("test", Anchor::TOP, (0, 0, 0, 0));
+        surface.input_rects = Some(vec![(0.0, 0.0, 100.0, 40.0), (20.0, 48.0, 60.0, 30.0)]);
+        surface.input_region_dirty = false;
+
+        surface.destroy();
+
+        assert!(surface.input_region_dirty);
     }
 }

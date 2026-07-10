@@ -117,6 +117,8 @@ pub(super) fn is_section_toggle_id(id: ToolbarControlId) -> bool {
 
 fn overlay_item_override_allowed(definition: &ToolbarItemDefinition) -> bool {
     definition.group != Some(ToolbarGroupId::Settings)
+        && definition.id != ids::SIDE_GROUP_SETTINGS
+        && definition.id != ids::TOP_CHROME_OVERFLOW
 }
 
 pub(super) fn customize_groups() -> Vec<ToolbarSettingsCustomizeGroup> {

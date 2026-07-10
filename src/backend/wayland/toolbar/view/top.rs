@@ -33,6 +33,10 @@ pub(crate) const TOP_SWATCH_GAP: f64 = 4.0;
 pub(crate) const TOP_CHIP_SIZE: f64 = 28.0;
 /// Maximum quick-color swatches when width allows.
 pub(crate) const TOP_MAX_QUICK_COLORS: usize = 8;
+const TOP_COMPACT_BUTTON: f64 = 26.0;
+const TOP_COMPACT_GAP: f64 = 1.0;
+const TOP_COMPACT_CHROME: f64 = 18.0;
+const TOP_COMPACT_MARGIN_RIGHT: f64 = 8.0;
 
 /// What fits on the strip at the current viewport width: how many quick
 /// swatches render and which items degrade into the overflow menu.
@@ -44,6 +48,7 @@ pub struct TopStripPlan {
     pub dropped_tools: Vec<Tool>,
     pub dropped_utilities: Vec<model::TopUtilityButton>,
     pub show_overflow: bool,
+    pub compact: bool,
 }
 
 impl TopStripPlan {
@@ -53,6 +58,7 @@ impl TopStripPlan {
             dropped_tools: Vec::new(),
             dropped_utilities: Vec::new(),
             show_overflow: false,
+            compact: false,
         }
     }
 }
@@ -78,6 +84,16 @@ pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
         }
     }
     plan.show_overflow = true;
+    let visible_utilities = model::visible_top_utility_buttons(
+        snapshot,
+        snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple,
+        snapshot.use_icons,
+    );
+    let visible_tools: Vec<_> = model::visible_top_tool_buttons(
+        snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple,
+        snapshot,
+    )
+    .collect();
     let utility_candidates = [
         model::TopUtilityButton::Screenshot,
         model::TopUtilityButton::Highlight,
@@ -86,17 +102,86 @@ pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
     ];
     for candidate in utility_candidates {
         if fits(&plan) {
+            sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
             return plan;
         }
-        plan.dropped_utilities.push(candidate);
+        if visible_utilities.contains(&candidate) {
+            plan.dropped_utilities.push(candidate);
+        }
     }
     for candidate in [Tool::Arrow, Tool::Line] {
         if fits(&plan) {
+            sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
             return plan;
         }
-        plan.dropped_tools.push(candidate);
+        if visible_tools.contains(&candidate) {
+            plan.dropped_tools.push(candidate);
+        }
     }
+    if fits(&plan) {
+        sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
+        return plan;
+    }
+
+    // Last-resort compact presentation keeps the protected core available
+    // while switching text buttons to icons and tightening spacing.
+    plan.compact = true;
+    if fits(&plan) {
+        sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
+        return plan;
+    }
+    for candidate in [Tool::StepMarker, Tool::Marker, Tool::Select] {
+        if fits(&plan) {
+            break;
+        }
+        if visible_tools.contains(&candidate) {
+            plan.dropped_tools.push(candidate);
+        }
+    }
+
+    // The overflow preserves each configured group's visual order even
+    // though candidates degrade by priority.
+    sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
     plan
+}
+
+fn sort_dropped_items(
+    plan: &mut TopStripPlan,
+    visible_tools: &[Tool],
+    visible_utilities: &[model::TopUtilityButton],
+) {
+    plan.dropped_tools.sort_by_key(|tool| {
+        visible_tools
+            .iter()
+            .position(|candidate| candidate == tool)
+            .unwrap_or(usize::MAX)
+    });
+    plan.dropped_utilities.sort_by_key(|utility| {
+        visible_utilities
+            .iter()
+            .position(|candidate| candidate == utility)
+            .unwrap_or(usize::MAX)
+    });
+}
+
+fn planned_use_icons(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> bool {
+    snapshot.use_icons || plan.compact
+}
+
+fn planned_gap(plan: &TopStripPlan) -> f64 {
+    if plan.compact {
+        TOP_COMPACT_GAP
+    } else {
+        ToolbarLayoutSpec::TOP_GAP
+    }
+}
+
+fn planned_button_size(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> (f64, f64) {
+    if plan.compact {
+        (TOP_COMPACT_BUTTON, TOP_COMPACT_BUTTON)
+    } else {
+        ToolbarLayoutSpec::new(snapshot).top_button_size()
+    }
 }
 
 /// Build the complete top-strip tree for the given logical surface size.
@@ -114,8 +199,7 @@ fn build_top_view_planned(
     if snapshot.top_minimized {
         return build_top_minimized_tab(width, height);
     }
-    let spec = ToolbarLayoutSpec::new(snapshot);
-    let gap = ToolbarLayoutSpec::TOP_GAP;
+    let gap = planned_gap(plan);
     let mut tree = WidgetTree::new((width, height));
 
     tree.push(WidgetNode::decor(
@@ -124,7 +208,11 @@ fn build_top_view_planned(
         WidgetKind::Panel,
     ));
 
-    let mut x = ToolbarLayoutSpec::TOP_START_X;
+    let mut x = if plan.compact {
+        4.0
+    } else {
+        ToolbarLayoutSpec::TOP_START_X
+    };
     let handle_size = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
     let handle_visible = model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG);
     if handle_visible {
@@ -146,21 +234,23 @@ fn build_top_view_planned(
         model::current_shape_tool(snapshot.active_tool, snapshot.tool_override);
     let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
 
-    let (btn_w, btn_h) = spec.top_button_size();
-    let y = spec.top_button_y(height);
+    let use_icons = planned_use_icons(snapshot, plan);
+    let (btn_w, btn_h) = planned_button_size(snapshot, plan);
+    let base_height = if snapshot.use_icons {
+        ToolbarLayoutSpec::TOP_SIZE_ICONS.1 as f64
+    } else {
+        ToolbarLayoutSpec::TOP_SIZE_TEXT.1 as f64
+    };
+    let y = (base_height - btn_h) / 2.0;
 
     let push_divider = |tree: &mut WidgetTree, x: &mut f64, key: &str| {
+        let divider_span = if plan.compact { 3.0 } else { TOP_DIVIDER_SPAN };
         tree.push(WidgetNode::decor(
             format!("top.divider.{key}"),
-            (
-                *x + (TOP_DIVIDER_SPAN - 1.0) / 2.0,
-                y + 6.0,
-                1.0,
-                btn_h - 12.0,
-            ),
+            (*x + (divider_span - 1.0) / 2.0, y + 6.0, 1.0, btn_h - 12.0),
             WidgetKind::Divider { vertical: true },
         ));
-        *x += TOP_DIVIDER_SPAN + gap;
+        *x += divider_span + gap;
     };
 
     // --- Tool groups: pens | shapes ----------------------------------------
@@ -184,6 +274,7 @@ fn build_top_view_planned(
             model::toolbar_item_id_for_tool(tool).as_str(),
             (x, y, btn_w, btn_h),
             active,
+            use_icons,
         ));
         x += btn_w + gap;
         tool_drawn = true;
@@ -201,7 +292,7 @@ fn build_top_view_planned(
             ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
             Some("Shapes".to_string()),
         );
-        let kind = if snapshot.use_icons {
+        let kind = if use_icons {
             WidgetKind::IconButton {
                 glyph: semantic_icon_fn(model::semantic_icon_for_tool(icon_tool)),
                 icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE,
@@ -253,6 +344,7 @@ fn build_top_view_planned(
                             .binding_hints
                             .binding_for_action(Action::EnterTextMode),
                     ),
+                    use_icons,
                 ));
                 x += btn_w + gap;
             }
@@ -271,6 +363,7 @@ fn build_top_view_planned(
                             .binding_hints
                             .binding_for_action(Action::EnterStickyNoteMode),
                     ),
+                    use_icons,
                 ));
                 x += btn_w + gap;
             }
@@ -289,6 +382,7 @@ fn build_top_view_planned(
                             .binding_hints
                             .binding_for_action(Action::CaptureSelection),
                     ),
+                    use_icons,
                 ));
                 x += btn_w + gap;
             }
@@ -307,6 +401,7 @@ fn build_top_view_planned(
                             .binding_hints
                             .binding_for_action(Action::ToggleHighlightTool),
                     ),
+                    use_icons,
                 ));
                 if snapshot.highlight_tool_active && model::top_highlight_ring_visible(snapshot) {
                     let ring_y = y + btn_h + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
@@ -395,6 +490,7 @@ fn build_top_view_planned(
             Action::Undo,
             ToolbarEvent::Undo,
             snapshot.undo_available,
+            use_icons,
         ));
         x += btn_w + gap;
     }
@@ -407,6 +503,7 @@ fn build_top_view_planned(
             Action::Redo,
             ToolbarEvent::Redo,
             snapshot.redo_available,
+            use_icons,
         ));
         x += btn_w + gap;
     }
@@ -428,6 +525,7 @@ fn build_top_view_planned(
                     .binding_hints
                     .binding_for_action(Action::ClearCanvas),
             ),
+            use_icons,
         ));
     }
 
@@ -449,8 +547,9 @@ fn build_top_view_planned(
                 + grid_h.max(0.0)
                 + option_rows.len() as f64 * (option_h + gap)
                 + if rows.is_empty() { -gap } else { 0.0 };
+            let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
             let placement = super::popover::place_popover(super::popover::PopoverSpec {
-                anchor,
+                anchor: popover_anchor,
                 content: (content_w, content_h),
                 bounds: (width, height),
                 gap: ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP,
@@ -483,6 +582,7 @@ fn build_top_view_planned(
                         ),
                         (shape_x, row_y, btn_w, btn_h),
                         active,
+                        use_icons,
                     ));
                     shape_x += btn_w + gap;
                 }
@@ -501,9 +601,23 @@ fn build_top_view_planned(
     }
 
     // --- Right-aligned chrome ---------------------------------------------------
-    let chrome_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
-    let chrome_y = spec.top_pin_button_y(height);
-    let mut right_x = width - ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT - chrome_size;
+    let chrome_size = if plan.compact {
+        TOP_COMPACT_CHROME
+    } else {
+        ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE
+    };
+    let chrome_y = (base_height - chrome_size) / 2.0;
+    let chrome_gap = if plan.compact {
+        TOP_COMPACT_GAP
+    } else {
+        ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP
+    };
+    let chrome_margin_right = if plan.compact {
+        TOP_COMPACT_MARGIN_RIGHT
+    } else {
+        ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
+    };
+    let mut right_x = width - chrome_margin_right - chrome_size;
     if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE) {
         tree.push(WidgetNode::new(
             ids::TOP_CHROME_CLOSE.as_str(),
@@ -514,10 +628,10 @@ fn build_top_view_planned(
                 Some("Minimize (leaves a restore tab)".to_string()),
             )),
         ));
-        right_x -= chrome_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
+        right_x -= chrome_size + chrome_gap;
     }
     let mut overflow_anchor = None;
-    if plan.show_overflow && model::toolbar_item_visible(snapshot, ids::TOP_CHROME_OVERFLOW) {
+    if plan.show_overflow {
         let rect = (right_x, chrome_y, chrome_size, chrome_size);
         overflow_anchor = Some(rect);
         tree.push(WidgetNode::new(
@@ -533,7 +647,7 @@ fn build_top_view_planned(
                 Some("More tools".to_string()),
             )),
         ));
-        right_x -= chrome_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
+        right_x -= chrome_size + chrome_gap;
     }
     if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN) {
         tree.push(WidgetNode::new(
@@ -564,8 +678,9 @@ fn build_top_view_planned(
             let pad = 8.0;
             let content_w = cols as f64 * btn_w + (cols as f64 - 1.0) * gap + pad * 2.0;
             let content_h = rows as f64 * btn_h + (rows as f64 - 1.0) * gap + pad * 2.0;
+            let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
             let placement = super::popover::place_popover(super::popover::PopoverSpec {
-                anchor,
+                anchor: popover_anchor,
                 content: (content_w, content_h),
                 bounds: (width, height),
                 gap: 6.0,
@@ -602,6 +717,7 @@ fn build_top_view_planned(
                     ),
                     item_rect(index),
                     active,
+                    use_icons,
                 ));
                 index += 1;
             }
@@ -617,6 +733,7 @@ fn build_top_view_planned(
                         ButtonStyle::active(snapshot.text_active),
                         ToolbarEvent::EnterTextMode,
                         action_label(Action::EnterTextMode).to_string(),
+                        use_icons,
                     )),
                     model::TopUtilityButton::StickyNote => tree.push(utility_node(
                         snapshot,
@@ -627,6 +744,7 @@ fn build_top_view_planned(
                         ButtonStyle::active(snapshot.note_active),
                         ToolbarEvent::EnterStickyNoteMode,
                         action_label(Action::EnterStickyNoteMode).to_string(),
+                        use_icons,
                     )),
                     model::TopUtilityButton::Screenshot => tree.push(utility_node(
                         snapshot,
@@ -637,6 +755,7 @@ fn build_top_view_planned(
                         ButtonStyle::plain(),
                         ToolbarEvent::CaptureScreenshot,
                         action_label(Action::CaptureSelection).to_string(),
+                        use_icons,
                     )),
                     model::TopUtilityButton::Highlight => tree.push(utility_node(
                         snapshot,
@@ -647,6 +766,7 @@ fn build_top_view_planned(
                         ButtonStyle::active(snapshot.any_highlight_active),
                         ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
                         action_label(Action::ToggleHighlightTool).to_string(),
+                        use_icons,
                     )),
                     model::TopUtilityButton::ClearCanvas | model::TopUtilityButton::IconMode => {}
                 }
@@ -821,9 +941,9 @@ fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
         return 0.0;
     }
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    let spec = ToolbarLayoutSpec::new(snapshot);
-    let (_, btn_h) = spec.top_button_size();
-    let gap = ToolbarLayoutSpec::TOP_GAP;
+    let plan = plan_top_strip(snapshot);
+    let (_, btn_h) = planned_button_size(snapshot, &plan);
+    let gap = planned_gap(&plan);
     let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
     let rows = model::visible_shape_picker_rows(snapshot, is_simple);
     let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
@@ -844,15 +964,19 @@ fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
 /// The highlight ring row grows the bar only while the highlight tool is
 /// active — the lane is no longer permanently reserved.
 fn ring_row_height(snapshot: &ToolbarSnapshot) -> f64 {
+    let plan = plan_top_strip(snapshot);
+    ring_row_height_planned(snapshot, &plan)
+}
+
+fn ring_row_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    if !snapshot.use_icons
+    if !planned_use_icons(snapshot, plan)
         || is_simple
         || !snapshot.highlight_tool_active
         || !model::top_highlight_ring_visible(snapshot)
     {
         return 0.0;
     }
-    let plan = plan_top_strip(snapshot);
     let highlight_shown =
         model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
             .contains(&model::TopUtilityButton::Highlight)
@@ -865,6 +989,23 @@ fn ring_row_height(snapshot: &ToolbarSnapshot) -> f64 {
     ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT + 2.0
 }
 
+fn popover_anchor_below_ring(
+    anchor: (f64, f64, f64, f64),
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+    button_y: f64,
+    button_h: f64,
+) -> (f64, f64, f64, f64) {
+    if ring_row_height_planned(snapshot, plan) <= 0.0 {
+        return anchor;
+    }
+    let ring_bottom = button_y
+        + button_h
+        + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET
+        + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
+    (anchor.0, ring_bottom - anchor.3, anchor.2, anchor.3)
+}
+
 fn overflow_height(snapshot: &ToolbarSnapshot) -> f64 {
     if !snapshot.top_overflow_open {
         return 0.0;
@@ -874,11 +1015,10 @@ fn overflow_height(snapshot: &ToolbarSnapshot) -> f64 {
     if dropped_count == 0 || !plan.show_overflow {
         return 0.0;
     }
-    let spec = ToolbarLayoutSpec::new(snapshot);
-    let (_, btn_h) = spec.top_button_size();
+    let (_, btn_h) = planned_button_size(snapshot, &plan);
     let cols = dropped_count.min(5);
     let rows = dropped_count.div_ceil(cols) as f64;
-    rows * btn_h + (rows - 1.0) * ToolbarLayoutSpec::TOP_GAP + 8.0 * 2.0 + 6.0 + 4.0
+    rows * btn_h + (rows - 1.0) * planned_gap(&plan) + 8.0 * 2.0 + 6.0 + 4.0
 }
 
 /// Natural width of the strip: the left-to-right content walk plus the
@@ -899,7 +1039,7 @@ fn natural_width_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64
 }
 
 fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, height: f64) -> f64 {
-    let gap = ToolbarLayoutSpec::TOP_GAP;
+    let gap = planned_gap(plan);
     let tree = build_top_view_planned(snapshot, plan, 0.0, height);
     let left_end = tree
         .nodes()
@@ -917,15 +1057,29 @@ fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, hei
 
     let mut chrome_count = usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN))
         + usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE));
-    if plan.show_overflow && model::toolbar_item_visible(snapshot, ids::TOP_CHROME_OVERFLOW) {
+    if plan.show_overflow {
         chrome_count += 1;
     }
     let chrome = if chrome_count == 0 {
         0.0
     } else {
-        ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE * chrome_count as f64
-            + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP * chrome_count.saturating_sub(1) as f64
-            + ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
+        let chrome_size = if plan.compact {
+            TOP_COMPACT_CHROME
+        } else {
+            ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE
+        };
+        let chrome_gap = if plan.compact {
+            TOP_COMPACT_GAP
+        } else {
+            ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP
+        };
+        chrome_size * chrome_count as f64
+            + chrome_gap * chrome_count.saturating_sub(1) as f64
+            + if plan.compact {
+                TOP_COMPACT_MARGIN_RIGHT
+            } else {
+                ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
+            }
     };
     left_end + gap + chrome
 }
@@ -936,12 +1090,13 @@ fn tool_button_node(
     id: impl Into<super::node::WidgetId>,
     rect: (f64, f64, f64, f64),
     active: bool,
+    use_icons: bool,
 ) -> WidgetNode {
     let tooltip = tool_tooltip(snapshot, tool, tool_tooltip_label(tool));
-    let kind = if snapshot.use_icons {
+    let kind = if use_icons {
         WidgetKind::IconButton {
             glyph: semantic_icon_fn(model::semantic_icon_for_tool(tool)),
-            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE,
+            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0)),
             style: ButtonStyle::active(active),
         }
     } else {
@@ -963,7 +1118,7 @@ fn tool_button_node(
 
 #[allow(clippy::too_many_arguments)]
 fn utility_node(
-    snapshot: &ToolbarSnapshot,
+    _snapshot: &ToolbarSnapshot,
     id: impl Into<super::node::WidgetId>,
     rect: (f64, f64, f64, f64),
     glyph: IconFn,
@@ -971,11 +1126,12 @@ fn utility_node(
     style: ButtonStyle,
     event: ToolbarEvent,
     tooltip: String,
+    use_icons: bool,
 ) -> WidgetNode {
-    let kind = if snapshot.use_icons {
+    let kind = if use_icons {
         WidgetKind::IconButton {
             glyph,
-            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE,
+            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0)),
             style,
         }
     } else {
@@ -993,6 +1149,7 @@ fn utility_node(
 }
 
 /// Undo/Redo button: dimmed and non-interactive while unavailable.
+#[allow(clippy::too_many_arguments)]
 fn history_node(
     snapshot: &ToolbarSnapshot,
     id: &'static str,
@@ -1001,16 +1158,17 @@ fn history_node(
     action: Action,
     event: ToolbarEvent,
     enabled: bool,
+    use_icons: bool,
 ) -> WidgetNode {
     let style = if enabled {
         ButtonStyle::plain()
     } else {
         ButtonStyle::disabled()
     };
-    let kind = if snapshot.use_icons {
+    let kind = if use_icons {
         WidgetKind::IconButton {
             glyph,
-            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE,
+            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0)),
             style,
         }
     } else {

@@ -546,7 +546,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = false
 #
 # [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
@@ -557,7 +556,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = true
 #
 # [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
@@ -568,7 +566,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = true
 # show_text_controls = true
-# show_settings_section = true
 
 # Show top toolbar on startup (pinned)
 top_pinned = true
@@ -619,7 +616,8 @@ show_step_section = false
 # Keep text controls visible even when text is inactive
 show_text_controls = true
 
-# Show Settings section (config shortcuts + advanced toggles)
+# Deprecated compatibility mirror. Settings navigation is always reachable;
+# this value is preserved for older Wayscriber versions but is otherwise ignored.
 show_settings_section = true
 
 # Show delayed undo/redo sliders in the side toolbar
@@ -705,7 +703,7 @@ side_sections = [
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
 - **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo section.
-- **Settings**: `show_settings_section` hides/shows the settings footer (config buttons and toggles).
+- **Settings**: the Settings pane is always reachable. The serialized `show_settings_section` key and matching per-mode override are deprecated compatibility fields and no longer hide navigation.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
@@ -722,7 +720,7 @@ side_sections = [
 - **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
-- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip), `top.utility.undo`/`top.utility.redo`, and `top.chrome.overflow` (the » menu that receives width-dropped items on narrow outputs) are hideable ids. The icon/text mode toggle lives in the side palette's Settings pane.
+- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that always appears when width pressure moves visible controls into it. The icon/text mode toggle lives in the side palette's Settings pane.
 - **Per-tool options**: the Shapes popover hosts the options for the tool it owns — the Fill checkbox (`top.utility.fill`) and the polygon side count — instead of a permanently reserved mini-checkbox lane under the bar; the bar is 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 

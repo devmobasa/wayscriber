@@ -48,6 +48,7 @@ pub(super) fn draw_collapsible_header(
     draw_header_chevron(layout.ctx, chevron_x, chevron_y, size, collapsed, hover);
 
     layout.hits.push(HitRegion {
+        focus_id: None,
         rect: (layout.card_x, y, layout.card_w, hit_h),
         event: ToolbarEvent::ToggleSideSectionCollapsed(section, !collapsed),
         kind: HitKind::Click,
