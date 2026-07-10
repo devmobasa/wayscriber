@@ -29,9 +29,6 @@ pub fn draw_icon_plus(ctx: &Context, x: f64, y: f64, size: f64) {
 }
 
 /// Draw a "more" (three dots) icon
-// Unreferenced while the drawer's More button is retired; the top-strip
-// overflow phase draws its trigger with this icon and removes the allow.
-#[allow(dead_code)]
 pub fn draw_icon_more(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
     let r = (s * 0.09).max(1.5);

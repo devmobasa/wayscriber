@@ -19,6 +19,7 @@ pub(crate) enum ToolbarControlId {
     DrawerMore,
     BoardChip,
     SettingsContextAwareUi,
+    SettingsIconMode,
     SettingsTextControls,
     SettingsStatusBar,
     SettingsStatusBoardBadge,

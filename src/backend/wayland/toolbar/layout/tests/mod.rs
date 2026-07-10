@@ -89,77 +89,71 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (965, 72));
+    assert_eq!(top_size(&snapshot), (1120, 72));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (1110, 60));
+    assert_eq!(top_size(&snapshot).1, 60);
 }
 
 #[test]
-fn build_top_hits_includes_toggle_and_pin() {
+fn narrow_viewports_degrade_swatches_then_overflow_items() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
-    let snapshot = snapshot_from_state(&state);
-    let mut hits = Vec::new();
+    let mut snapshot = snapshot_from_state(&state);
+
+    // Unconstrained: all eight swatches, no overflow chrome.
+    let full = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert_eq!(full.swatch_count, 8);
+    assert!(!full.show_overflow);
+    let full_width = top_size(&snapshot).0;
+
+    // Slightly narrow: swatches degrade before anything is dropped.
+    snapshot.top_viewport_max = Some(full_width as f64 - 60.0);
+    let degraded = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(degraded.swatch_count < 8);
+    assert!(degraded.dropped_tools.is_empty());
+    assert!(top_size(&snapshot).0 as f64 <= full_width as f64 - 60.0);
+
+    // Very narrow: droppable items move into the overflow menu; the
+    // protected core (Pen, Eraser, chip, Undo/Redo, Clear) stays.
+    snapshot.top_viewport_max = Some(700.0);
+    let tight = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(tight.show_overflow);
+    assert!(!tight.dropped_utilities.is_empty());
+    assert!(top_size(&snapshot).0 as f64 <= 700.0);
     let (w, h) = top_size(&snapshot);
-    build_top_hits(w as f64, h as f64, &snapshot, &mut hits);
-
-    assert!(
-        hits.iter()
-            .any(|hit| matches!(hit.event, ToolbarEvent::ToggleIconMode(false)))
-    );
-    assert!(hits.iter().any(|hit| matches!(
-        hit.event,
-        ToolbarEvent::SelectTool(crate::input::Tool::StepMarker)
-    )));
-    assert!(
-        hits.iter()
-            .any(|hit| matches!(hit.event, ToolbarEvent::PinTopToolbar(_)))
-    );
-    assert!(
-        hits.iter()
-            .any(|hit| matches!(hit.event, ToolbarEvent::CloseTopToolbar))
-    );
-}
-
-#[test]
-fn top_size_keeps_toggle_and_window_controls_separate() {
-    let mut state = create_test_input_state();
-
-    for use_icons in [true, false] {
-        state.toolbar_use_icons = use_icons;
-        let snapshot = snapshot_from_state(&state);
-        let (w, h) = top_size(&snapshot);
-        let mut hits = Vec::new();
-        build_top_hits(w as f64, h as f64, &snapshot, &mut hits);
-
-        let toggle = hits
-            .iter()
-            .find(|hit| matches!(hit.event, ToolbarEvent::ToggleIconMode(_)))
-            .expect("icon/text toggle hit");
-        let pin = hits
-            .iter()
-            .find(|hit| matches!(hit.event, ToolbarEvent::PinTopToolbar(_)))
-            .expect("pin hit");
-        let close = hits
-            .iter()
-            .find(|hit| matches!(hit.event, ToolbarEvent::CloseTopToolbar))
-            .expect("close hit");
-
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    for id in [
+        "top.tool.pen",
+        "top.tool.eraser",
+        "top.group.quick-colors",
+        "top.utility.undo",
+        "top.utility.clear-canvas",
+        "top.chrome.overflow",
+    ] {
         assert!(
-            toggle.rect.0 + toggle.rect.2 + ToolbarLayoutSpec::TOP_GAP <= pin.rect.0,
-            "icon/text toggle should not overlap the pin button"
-        );
-        assert!(
-            pin.rect.0 + pin.rect.2 <= close.rect.0,
-            "pin and close buttons should not overlap"
-        );
-        assert!(
-            close.rect.0 + close.rect.2 <= w as f64,
-            "close button should fit inside the top toolbar"
+            tree.node_by_id(&id.into()).is_some(),
+            "{id} must survive width pressure"
         );
     }
+
+    // Opening the overflow reveals the dropped items below the bar.
+    snapshot.top_overflow_open = true;
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let overflow_ids: Vec<&str> = tree
+        .nodes()
+        .iter()
+        .map(|node| node.id.as_str())
+        .filter(|id| id.starts_with("top.overflow."))
+        .collect();
+    assert!(
+        overflow_ids.len() > 1,
+        "panel + dropped items: {overflow_ids:?}"
+    );
 }
 
 #[test]

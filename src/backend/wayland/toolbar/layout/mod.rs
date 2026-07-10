@@ -1,5 +1,4 @@
 mod spec;
-mod top;
 
 #[cfg(test)]
 mod tests;
@@ -7,7 +6,6 @@ mod tests;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 pub(super) use spec::ToolbarLayoutSpec;
-pub use top::build_top_hits;
 
 /// Compute the target logical size for the top toolbar given snapshot state.
 pub fn top_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {

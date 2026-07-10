@@ -149,6 +149,7 @@ impl InputState {
             resolved_toolbar_items: crate::config::ToolbarItemsConfig::default().resolved(),
             toolbar_customize_drag: None,
             toolbar_shapes_expanded: false,
+            toolbar_top_overflow_open: false,
             toolbar_picker_hsv: None,
             toolbar_side_pane: crate::ui::toolbar::SidePane::Draw,
             toolbar_side_scroll: [0.0; 4],

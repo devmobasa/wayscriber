@@ -19,8 +19,4 @@ impl ToolbarLayoutSpec {
             shape_picker_open: snapshot.shape_picker_open,
         }
     }
-
-    pub(in crate::backend::wayland::toolbar) fn use_icons(&self) -> bool {
-        self.use_icons
-    }
 }

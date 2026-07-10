@@ -86,6 +86,16 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         None,
     ),
     item(
+        ids::TOP_GROUP_QUICK_COLORS,
+        "Quick colors",
+        Top,
+        Group,
+        None,
+    ),
+    item(ids::TOP_UTILITY_UNDO, "Undo", Top, Utility, None),
+    item(ids::TOP_UTILITY_REDO, "Redo", Top, Utility, None),
+    item(ids::TOP_CHROME_OVERFLOW, "Overflow menu", Top, Chrome, None),
+    item(
         ids::TOP_UTILITY_ICON_MODE_ICONS,
         "Use icons",
         Top,

@@ -717,6 +717,7 @@ side_sections = [
 - **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
+- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip), `top.utility.undo`/`top.utility.redo`, and `top.chrome.overflow` (the » menu that receives width-dropped items on narrow outputs) are hideable ids. The icon/text mode toggle lives in the side palette's Settings pane.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
 **Defaults:** all set as above.

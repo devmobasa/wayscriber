@@ -38,13 +38,13 @@ pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessi
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
 #[allow(unused_imports)]
 pub(crate) use tools::{
-    SemanticToolIcon, TopUtilityButton, current_shape_tool, default_drag_hint,
+    SemanticToolIcon, TopToolGroup, TopUtilityButton, current_shape_tool, default_drag_hint,
     default_polygon_tool, default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool,
     ordered_pane_sections, ordered_side_sections, pane_for_section, polygon_tools,
     semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_id_for_tool,
     toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
-    top_highlight_visible, top_icon_mode_toggle_visible, top_screenshot_visible,
-    top_shape_picker_visible, top_sticky_note_visible, top_text_visible, top_tool_buttons,
+    top_highlight_visible, top_screenshot_visible, top_shape_picker_visible,
+    top_sticky_note_visible, top_text_visible, top_tool_buttons, top_tool_group,
     visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
     visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
 };

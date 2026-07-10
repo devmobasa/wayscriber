@@ -43,6 +43,13 @@ impl ToolbarSettingsModel {
                 "Show only the active tool's controls.",
             ),
             ToolbarSettingsToggle::new(
+                ToolbarControlId::SettingsIconMode,
+                "Icon buttons",
+                snapshot.use_icons,
+                ToolbarEvent::ToggleIconMode(!snapshot.use_icons),
+                "Icons instead of text labels.",
+            ),
+            ToolbarSettingsToggle::new(
                 ToolbarControlId::SettingsTextControls,
                 "Text controls",
                 snapshot.show_text_controls,

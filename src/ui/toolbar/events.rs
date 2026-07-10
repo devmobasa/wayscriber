@@ -262,6 +262,8 @@ pub enum ToolbarEvent {
     SetCustomRedoSteps(usize),
     CustomUndo,
     CustomRedo,
+    /// Open/close the top strip's overflow menu (width-dropped items)
+    ToggleTopOverflow(bool),
     /// Close the top toolbar panel
     CloseTopToolbar,
     /// Close the side toolbar panel

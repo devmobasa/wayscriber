@@ -91,6 +91,7 @@ impl InputState {
             ToolbarEvent::ToggleDelaySliders(show) => self.apply_toolbar_toggle_delay_sliders(show),
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
+            ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
             ToolbarEvent::CloseTopToolbar => self.apply_toolbar_close_top_toolbar(),
             ToolbarEvent::CloseSideToolbar => self.apply_toolbar_close_side_toolbar(),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),

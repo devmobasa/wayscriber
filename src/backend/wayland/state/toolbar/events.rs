@@ -59,7 +59,26 @@ impl WaylandState {
             ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
         populate_session_snapshot(&mut snapshot, self.session.options());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
+        snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot
+    }
+
+    /// Width available to the top strip in pre-scale spec units; content
+    /// past this degrades into the overflow menu instead of clipping off
+    /// the screen. Floored so a pathological output cannot empty the bar.
+    fn top_strip_viewport_max(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
+        const MIN_TOP_VIEWPORT: f64 = 480.0;
+        let screen_width = self.surface.width() as f64;
+        if screen_width <= 0.0 {
+            return None;
+        }
+        let scale = if snapshot.toolbar_scale.is_finite() {
+            snapshot.toolbar_scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+        let available = screen_width - Self::TOP_MARGIN_RIGHT * 2.0;
+        Some((available / scale).max(MIN_TOP_VIEWPORT))
     }
 
     /// Height available to the side palette in pre-scale spec units: the

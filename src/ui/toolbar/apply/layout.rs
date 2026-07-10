@@ -219,6 +219,15 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_top_overflow(&mut self, open: bool) -> bool {
+        if self.toolbar_top_overflow_open == open {
+            return false;
+        }
+        self.toolbar_top_overflow_open = open;
+        self.needs_redraw = true;
+        true
+    }
+
     pub(super) fn apply_toolbar_set_side_pane(
         &mut self,
         pane: crate::ui::toolbar::SidePane,

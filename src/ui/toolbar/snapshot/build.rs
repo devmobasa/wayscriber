@@ -187,6 +187,8 @@ impl ToolbarSnapshot {
             active_preset_slot: state.active_preset_slot,
             preset_feedback,
             shape_picker_open: state.toolbar_shapes_expanded,
+            top_overflow_open: state.toolbar_top_overflow_open,
+            top_viewport_max: None,
             active_side_pane,
             side_scroll,
             side_viewport_max: None,

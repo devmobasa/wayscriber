@@ -30,17 +30,26 @@ const SIMPLE_TOOL_BUTTONS: [Tool; 5] = [
     Tool::Eraser,
 ];
 
-const FULL_TOOL_BUTTONS: [Tool; 10] = [
+const FULL_TOOL_BUTTONS: [Tool; 7] = [
     Tool::Select,
     Tool::Pen,
     Tool::Marker,
     Tool::StepMarker,
     Tool::Eraser,
     Tool::Line,
+    Tool::Arrow,
+];
+
+/// Full-mode shape picker: everything the strip no longer shows inline.
+const FULL_SHAPE_PICKER_TOOLS: [Tool; 8] = [
     Tool::Rect,
     Tool::Ellipse,
-    Tool::Arrow,
     Tool::Blur,
+    Tool::Triangle,
+    Tool::Parallelogram,
+    Tool::Rhombus,
+    Tool::RegularPolygon,
+    Tool::FreeformPolygon,
 ];
 
 const SHAPE_TOOLS: [Tool; 10] = [
@@ -168,14 +177,6 @@ pub(crate) fn top_highlight_ring_visible(snapshot: &ToolbarSnapshot) -> bool {
     toolbar_item_visible(snapshot, ids::TOP_UTILITY_HIGHLIGHT_RING)
 }
 
-pub(crate) fn top_icon_mode_toggle_visible(snapshot: &ToolbarSnapshot) -> bool {
-    if snapshot.use_icons {
-        toolbar_item_visible(snapshot, ids::TOP_UTILITY_ICON_MODE_TEXT)
-    } else {
-        toolbar_item_visible(snapshot, ids::TOP_UTILITY_ICON_MODE_ICONS)
-    }
-}
-
 pub(crate) fn toolbar_item_id_for_tool(tool: Tool) -> ToolbarItemId {
     match tool {
         Tool::Select => ids::TOP_TOOL_SELECT,
@@ -243,8 +244,8 @@ const DEFAULT_TOP_UTILITY_BUTTONS: [TopUtilityButton; 5] = [
     TopUtilityButton::Text,
     TopUtilityButton::StickyNote,
     TopUtilityButton::Screenshot,
-    TopUtilityButton::ClearCanvas,
     TopUtilityButton::Highlight,
+    TopUtilityButton::ClearCanvas,
 ];
 
 impl TopUtilityButton {
@@ -333,6 +334,23 @@ pub(crate) fn shape_tools() -> &'static [Tool] {
     &SHAPE_TOOLS
 }
 
+/// Semantic strip group a tool belongs to, used to place divider chrome at
+/// group boundaries regardless of the user's custom order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TopToolGroup {
+    Pens,
+    Shapes,
+}
+
+pub(crate) fn top_tool_group(tool: Tool) -> TopToolGroup {
+    match tool {
+        Tool::Select | Tool::Pen | Tool::Marker | Tool::StepMarker | Tool::Eraser => {
+            TopToolGroup::Pens
+        }
+        _ => TopToolGroup::Shapes,
+    }
+}
+
 pub(crate) fn polygon_tools() -> &'static [Tool] {
     &POLYGON_TOOLS
 }
@@ -367,7 +385,7 @@ fn shape_picker_tools(is_simple: bool) -> &'static [Tool] {
     if is_simple {
         &SHAPE_TOOLS
     } else {
-        &POLYGON_TOOLS
+        &FULL_SHAPE_PICKER_TOOLS
     }
 }
 

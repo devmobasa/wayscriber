@@ -315,6 +315,11 @@ pub struct ToolbarSnapshot {
     pub show_floating_badge_always: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
+    /// Whether the top strip's overflow menu is open
+    pub top_overflow_open: bool,
+    /// Width available to the top strip in pre-scale spec units, when
+    /// known; content past this degrades into the overflow menu.
+    pub top_viewport_max: Option<f64>,
     /// Active side-palette pane
     pub active_side_pane: super::super::events::SidePane,
     /// Scroll offset of the active pane (logical pixels, clamped at render)

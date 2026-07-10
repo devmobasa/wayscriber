@@ -1,4 +1,4 @@
-use crate::config::{ToolbarLayoutMode, toolbar_item_ids as ids};
+use crate::config::ToolbarLayoutMode;
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model;
 
@@ -20,7 +20,6 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_TEXT_BUTTON_W: f64 = 60.0;
     pub(in crate::backend::wayland::toolbar) const TOP_TEXT_BUTTON_H: f64 = 36.0;
     pub(in crate::backend::wayland::toolbar) const TOP_TEXT_FILL_W: f64 = 64.0;
-    pub(in crate::backend::wayland::toolbar) const TOP_TOGGLE_WIDTH: f64 = 84.0;
     pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_SIZE: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_MARGIN_RIGHT: f64 = 15.0;
@@ -50,76 +49,12 @@ impl ToolbarLayoutSpec {
             height += row_count * (btn_h + Self::TOP_SHAPE_ROW_GAP);
         }
 
-        let gap = Self::TOP_GAP;
-        let btn_w = if self.use_icons {
-            Self::TOP_ICON_BUTTON
-        } else {
-            Self::TOP_TEXT_BUTTON_W
-        };
-        let tool_count = model::visible_top_tool_buttons(
-            self.layout_mode == ToolbarLayoutMode::Simple,
-            snapshot,
-        )
-        .count();
-        let mut x = Self::TOP_START_X;
-        if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG) {
-            x += Self::TOP_HANDLE_SIZE + gap;
-        }
-        x += tool_count as f64 * (btn_w + gap);
-        if model::top_shape_picker_visible(snapshot) {
-            x += btn_w + gap; // Shapes/Polygons picker
-        }
-        let fill_tool_active =
-            model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-        let fill_visible = !self.use_icons
-            && fill_tool_active
-            && !self.shape_picker_open
-            && model::top_fill_visible(snapshot);
-        if fill_visible {
-            x += Self::TOP_TEXT_FILL_W + gap;
-        }
-        x += model::visible_top_utility_buttons(
-            snapshot,
-            self.layout_mode == ToolbarLayoutMode::Simple,
-            self.use_icons,
-        )
-        .len() as f64
-            * (btn_w + gap);
-        let left_end = if model::top_icon_mode_toggle_visible(snapshot) {
-            x + Self::TOP_TOGGLE_WIDTH
-        } else {
-            x
-        };
-        let picker_right = if self.shape_picker_open && model::top_shape_picker_visible(snapshot) {
-            let picker_count = model::visible_shape_picker_max_row_len(
-                snapshot,
-                self.layout_mode == ToolbarLayoutMode::Simple,
-            );
-            if picker_count == 0 {
-                0.0
-            } else {
-                let picker_x = Self::TOP_START_X
-                    + if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG) {
-                        Self::TOP_HANDLE_SIZE + gap
-                    } else {
-                        0.0
-                    };
-                picker_x + picker_count as f64 * (btn_w + gap)
-            }
-        } else {
-            0.0
-        };
-        let right_control_count =
-            usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN))
-                + usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE));
-        let right_controls = if right_control_count == 0 {
-            0.0
-        } else {
-            Self::TOP_PIN_BUTTON_SIZE * right_control_count as f64
-                + Self::TOP_PIN_BUTTON_GAP * right_control_count.saturating_sub(1) as f64
-                + Self::TOP_PIN_BUTTON_MARGIN_RIGHT
-        };
-        let width = (left_end + gap + right_controls).max(picker_right + gap);
+        height += crate::backend::wayland::toolbar::view::top::top_overflow_height(snapshot);
+
+        // Width comes from the same tree walk the builder performs, so the
+        // size math and the builder cannot drift apart.
+        let width =
+            crate::backend::wayland::toolbar::view::top::top_natural_width(snapshot, height);
 
         (width.ceil() as u32, height.ceil() as u32)
     }
