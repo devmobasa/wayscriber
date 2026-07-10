@@ -122,7 +122,8 @@ impl ToolbarSettingsModel {
                     snapshot.show_actions_advanced,
                     ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
                     "Undo all, delayed undo, freeze.",
-                ),
+                )
+                .wide(),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsBoards,
                     "Boards",
@@ -143,7 +144,8 @@ impl ToolbarSettingsModel {
                     snapshot.show_step_section,
                     ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
                     "Undo/redo several strokes at once.",
-                ),
+                )
+                .wide(),
             ]);
         }
 
@@ -188,6 +190,30 @@ impl ToolbarSettingsModel {
 
     pub(crate) fn toggles(&self) -> &[ToolbarSettingsToggle] {
         &self.toggles
+    }
+
+    /// Toggle rows for the two-column grid: wide toggles take a full row,
+    /// the rest pair up in order. The section height math and the renderer
+    /// both consume this packing so they can never disagree.
+    pub(crate) fn toggle_rows(&self) -> Vec<Vec<&ToolbarSettingsToggle>> {
+        let mut rows: Vec<Vec<&ToolbarSettingsToggle>> = Vec::new();
+        let mut pending: Option<&ToolbarSettingsToggle> = None;
+        for toggle in &self.toggles {
+            if toggle.wide {
+                if let Some(narrow) = pending.take() {
+                    rows.push(vec![narrow]);
+                }
+                rows.push(vec![toggle]);
+            } else if let Some(narrow) = pending.take() {
+                rows.push(vec![narrow, toggle]);
+            } else {
+                pending = Some(toggle);
+            }
+        }
+        if let Some(narrow) = pending.take() {
+            rows.push(vec![narrow]);
+        }
+        rows
     }
 
     pub(crate) fn buttons(&self) -> &[ToolbarSettingsButton] {
@@ -294,6 +320,8 @@ pub(crate) struct ToolbarSettingsToggle {
     pub(crate) checked: bool,
     pub(crate) activation: ToolbarActivation,
     pub(crate) tooltip: ToolbarTooltip,
+    /// Label too long for a half-width cell: the toggle takes a full row.
+    pub(crate) wide: bool,
 }
 
 impl ToolbarSettingsToggle {
@@ -310,7 +338,13 @@ impl ToolbarSettingsToggle {
             checked,
             activation: ToolbarActivation::Click(event),
             tooltip: ToolbarTooltip::text(tooltip),
+            wide: false,
         }
+    }
+
+    fn wide(mut self) -> Self {
+        self.wide = true;
+        self
     }
 }
 

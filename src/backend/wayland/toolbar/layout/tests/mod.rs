@@ -508,6 +508,40 @@ fn side_settings_pane_hits_include_model_controls() {
 }
 
 #[test]
+fn wide_settings_toggles_span_the_full_content_width() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pane = SidePane::Settings;
+    state.toolbar_layout_mode = crate::config::ToolbarLayoutMode::Regular;
+    state.refresh_section_visibility();
+    let snapshot = snapshot_from_state(&state);
+    let hits = rendered_side_hits(&snapshot);
+
+    let full_width =
+        ToolbarLayoutSpec::SIDE_WIDTH as f64 - ToolbarLayoutSpec::SIDE_CONTENT_PADDING_X;
+    let step = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ToggleStepSection(_)))
+        .expect("multi-step toggle hit");
+    assert!(
+        (step.rect.2 - full_width).abs() < 1.0,
+        "long label takes a full row: {}",
+        step.rect.2
+    );
+    let advanced = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ToggleActionsAdvanced(_)))
+        .expect("advanced actions toggle hit");
+    assert!((advanced.rect.2 - full_width).abs() < 1.0);
+
+    // Narrow toggles still pair up in half-width cells.
+    let narrow = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ToggleContextAwareUi(_)))
+        .expect("context toggle hit");
+    assert!(narrow.rect.2 < full_width / 2.0 + 1.0);
+}
+
+#[test]
 fn side_session_pane_hits_include_model_controls_and_recents() {
     let mut state = create_test_input_state();
     state.toolbar_side_pane = SidePane::Session;

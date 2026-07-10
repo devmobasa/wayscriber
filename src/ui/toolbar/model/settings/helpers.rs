@@ -4,7 +4,7 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     vec![
         ToolbarSettingsButton {
             id: ToolbarControlId::CustomizeToolbarItems,
-            label: Cow::Borrowed("Customize toolbar"),
+            label: Cow::Borrowed("Customize"),
             event: ToolbarEvent::SetToolbarItemCustomizationOpen(true),
             icon: ToolbarIcon::Visibility,
             tooltip: ToolbarTooltip::text("Customize toolbar item visibility"),

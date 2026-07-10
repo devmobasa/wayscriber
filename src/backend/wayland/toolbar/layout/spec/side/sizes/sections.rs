@@ -171,8 +171,7 @@ impl ToolbarLayoutSpec {
         let Some(settings) = ToolbarSettingsModel::from_snapshot(snapshot) else {
             return 0.0;
         };
-        let toggle_count = settings.toggles().len();
-        let rows = toggle_count.div_ceil(2);
+        let rows = settings.toggle_rows().len();
         let toggle_rows_h = if rows > 0 {
             toggle_h * rows as f64 + toggle_gap * (rows as f64 - 1.0)
         } else {
@@ -181,6 +180,7 @@ impl ToolbarLayoutSpec {
         let button_rows = settings.buttons().len().div_ceil(2);
         let buttons_h = if button_rows > 0 {
             Self::SIDE_SETTINGS_BUTTON_HEIGHT * button_rows as f64
+                + Self::SIDE_SETTINGS_BUTTON_GAP * (button_rows as f64 - 1.0)
         } else {
             0.0
         };

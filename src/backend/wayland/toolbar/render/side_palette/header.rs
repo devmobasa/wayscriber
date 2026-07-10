@@ -8,7 +8,7 @@ use crate::ui::toolbar::model::{
     ToolbarPresentationPayload,
 };
 use crate::ui::toolbar::{SidePane, ToolbarEvent};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{
     COLOR_HEADER_BAND, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, FONT_SIZE_TOOLTIP, RADIUS_CARD,
@@ -243,32 +243,4 @@ fn board_chip_payload(model: &SideHeaderModel) -> Option<&ToolbarBoardChipPresen
         ToolbarPresentationPayload::BoardChip(chip) => Some(chip),
         ToolbarPresentationPayload::None => None,
     }
-}
-
-fn ellipsize_to_width(
-    ctx: &cairo::Context,
-    style: UiTextStyle<'_>,
-    text: &str,
-    max_width: f64,
-) -> String {
-    if max_width <= 0.0 {
-        return String::new();
-    }
-    if text_layout(ctx, style, text, None).ink_extents().width() <= max_width {
-        return text.to_string();
-    }
-    let mut chars: Vec<char> = text.chars().collect();
-    while chars.len() > 3 {
-        chars.pop();
-        let candidate: String = chars.iter().collect();
-        let candidate = format!("{candidate}...");
-        if text_layout(ctx, style, &candidate, None)
-            .ink_extents()
-            .width()
-            <= max_width
-        {
-            return candidate;
-        }
-    }
-    "...".to_string()
 }

@@ -207,6 +207,34 @@ mod tests {
     }
 
     #[test]
+    fn long_settings_toggles_take_a_full_row() {
+        let mut snapshot = snapshot();
+        snapshot.active_side_pane = SidePane::Settings;
+        snapshot.layout_mode = ToolbarLayoutMode::Regular;
+        snapshot.show_settings_section = true;
+
+        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let rows = model.toggle_rows();
+        assert_eq!(
+            rows.iter().map(|row| row.len()).sum::<usize>(),
+            model.toggles().len(),
+            "packing covers every toggle exactly once"
+        );
+        for row in &rows {
+            match row.as_slice() {
+                [only] if only.wide => {}
+                [only] => assert!(!only.wide, "narrow leftover row"),
+                [a, b] => assert!(!a.wide && !b.wide, "wide toggles never share a row"),
+                other => panic!("rows hold one or two toggles, got {}", other.len()),
+            }
+        }
+        assert!(
+            rows.iter().any(|row| row.len() == 1 && row[0].wide),
+            "the long labels (advanced actions, multi-step) are wide rows"
+        );
+    }
+
+    #[test]
     fn settings_model_moves_hidden_item_overrides_into_customization_panel() {
         let mut snapshot = snapshot();
         snapshot.active_side_pane = SidePane::Settings;

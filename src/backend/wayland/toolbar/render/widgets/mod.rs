@@ -20,6 +20,7 @@ pub(super) use color::{
 pub(super) use icons::set_icon_color;
 pub(super) use labels::{
     draw_label_center, draw_label_center_color, draw_label_left, draw_section_label,
+    ellipsize_to_width,
 };
 pub(super) use primitives::{draw_divider_vertical, draw_round_rect, point_in_rect};
 pub(super) use tooltip::draw_tooltip_with_delay;
