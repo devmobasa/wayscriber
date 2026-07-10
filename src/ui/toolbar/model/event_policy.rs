@@ -187,6 +187,8 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ToggleToolPreview(_)
         | ToolbarEvent::ToggleDelaySliders(_)
         | ToolbarEvent::SetToolbarLayoutMode(_)
+        | ToolbarEvent::SetSidePane(_)
+        | ToolbarEvent::ToggleSideSectionCollapsed(_, _)
         | ToolbarEvent::SetToolbarItemHidden(_, _)
         | ToolbarEvent::MoveToolbarItem { .. }
         | ToolbarEvent::DragToolbarItemOver { .. }
@@ -217,7 +219,10 @@ fn backend_route_for_event(event: &ToolbarEvent) -> ToolbarBackendRoute {
 }
 
 fn pre_apply_effects_for_event(event: &ToolbarEvent) -> Vec<ToolbarPreApplyEffect> {
-    if matches!(event, ToolbarEvent::ToggleDrawer(true)) {
+    if matches!(
+        event,
+        ToolbarEvent::SetSidePane(pane) if *pane != crate::ui::toolbar::SidePane::Draw
+    ) {
         vec![ToolbarPreApplyEffect::RecordDrawerHintShown]
     } else {
         Vec::new()

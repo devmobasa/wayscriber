@@ -7,15 +7,14 @@ use crate::config::{
     toolbar_item_order_group,
 };
 
-use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection, ToolbarSnapshot};
+use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
 use super::activation::{ToolbarActivation, ToolbarControlId};
 use super::control::{ToolbarIcon, ToolbarTooltip};
 
 mod helpers;
 use helpers::{
     control_visible, customize_buttons, customize_group_contains, customize_groups,
-    definition_order_group_for_customize, is_section_toggle_id, section_buttons, settings_buttons,
-    sort_customize_definitions,
+    definition_order_group_for_customize, settings_buttons, sort_customize_definitions,
 };
 
 #[derive(Debug, Clone)]
@@ -28,16 +27,10 @@ pub(crate) struct ToolbarSettingsModel {
 
 impl ToolbarSettingsModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        let customize_shortcut = snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize;
-        let sections_tab = snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
-        let customizing = snapshot.customize_items_open || customize_shortcut;
-        if !snapshot.drawer_open
-            || (!customize_shortcut
-                && !sections_tab
-                && (snapshot.side_section_hidden(ToolbarSideSection::Settings)
-                    || !snapshot.show_settings_section
-                    || snapshot.drawer_tab != crate::input::ToolbarDrawerTab::App))
-        {
+        // The Settings pane is navigation, not a hideable section: it is the
+        // single customization surface, so it must always be reachable.
+        let customizing = snapshot.customize_items_open;
+        if snapshot.active_side_pane != crate::ui::toolbar::SidePane::Settings {
             return None;
         }
 
@@ -147,11 +140,6 @@ impl ToolbarSettingsModel {
             ]);
         }
 
-        if sections_tab {
-            toggles.retain(|toggle| is_section_toggle_id(toggle.id));
-        } else {
-            toggles.retain(|toggle| !is_section_toggle_id(toggle.id));
-        }
         toggles.retain(|toggle| control_visible(snapshot, toggle.id));
         if customizing {
             toggles.clear();
@@ -159,8 +147,6 @@ impl ToolbarSettingsModel {
 
         let buttons = if customizing {
             customize_buttons(snapshot)
-        } else if sections_tab {
-            section_buttons(snapshot)
         } else {
             settings_buttons(snapshot)
         };

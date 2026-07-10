@@ -131,8 +131,8 @@ impl InputState {
             ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
                 self.apply_toolbar_toggle_floating_badge_always(show)
             }
-            ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
-            ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),
+            ToolbarEvent::SetSidePane(pane) => self.apply_toolbar_set_side_pane(pane),
+            ToolbarEvent::ScrollSidePane(offset) => self.apply_toolbar_scroll_side_pane(offset),
             ToolbarEvent::ToggleSideSectionCollapsed(section, collapsed) => {
                 self.apply_toolbar_toggle_side_section_collapsed(section, collapsed)
             }

@@ -10,7 +10,7 @@ pub mod view;
 #[allow(unused_imports)]
 pub use events::{HitKind, ToolbarCursorHint, hsv_to_rgb};
 #[allow(unused_imports)]
-pub use layout::{build_side_hits, build_top_hits, side_size, top_size};
+pub use layout::{build_top_hits, side_size, top_size};
 pub use main::*;
 pub use render::{render_side_palette, render_top_strip};
 #[allow(unused_imports)]

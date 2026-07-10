@@ -1,16 +1,31 @@
 use super::super::events::HitKind;
+use super::super::hit::HitRegion;
 use super::*;
 use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
-use crate::input::{ClickHighlightSettings, EraserMode, InputState, ToolbarDrawerTab};
+use crate::input::{ClickHighlightSettings, EraserMode, InputState};
 use crate::ui::toolbar::model::{
     ToolbarActivation, ToolbarSessionModel, ToolbarSettingsModel, ToolbarSliderSpec,
 };
 use crate::ui::toolbar::{
-    SessionRecentSnapshot, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot,
+    SessionRecentSnapshot, SidePane, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot,
 };
 
 mod collapsible;
+
+/// Render-time hit oracle: the side palette has no static hit builder, so
+/// hits come from drawing the palette at its computed size.
+fn rendered_side_hits(snapshot: &ToolbarSnapshot) -> Vec<HitRegion> {
+    let (w, h) = side_size(snapshot);
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx, w as f64, h as f64, snapshot, &mut hits, None, None,
+    )
+    .unwrap();
+    hits
+}
 
 fn create_test_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -148,13 +163,18 @@ fn top_size_keeps_toggle_and_window_controls_separate() {
 }
 
 #[test]
-fn build_side_hits_color_picker_height_tracks_palette_mode() {
+fn side_color_picker_keeps_input_height_and_more_colors_adds_swatches() {
+    let count_swatches = |hits: &[HitRegion]| {
+        hits.iter()
+            .filter(|hit| matches!(hit.event, ToolbarEvent::SetColor(_)))
+            .count()
+    };
+
     let mut state = create_test_input_state();
     state.show_more_colors = false;
     let snapshot = snapshot_from_state(&state);
-    let mut hits = Vec::new();
-    build_side_hits(260.0, 400.0, &snapshot, &mut hits);
-    let picker_height = hits.iter().find_map(|hit| {
+    let compact_hits = rendered_side_hits(&snapshot);
+    let picker_height = compact_hits.iter().find_map(|hit| {
         if let HitKind::PickColor { h, .. } = hit.kind {
             Some(h)
         } else {
@@ -165,68 +185,74 @@ fn build_side_hits_color_picker_height_tracks_palette_mode() {
 
     state.show_more_colors = true;
     let snapshot = snapshot_from_state(&state);
-    let mut hits = Vec::new();
-    build_side_hits(260.0, 400.0, &snapshot, &mut hits);
-    let picker_height = hits.iter().find_map(|hit| {
+    let expanded_hits = rendered_side_hits(&snapshot);
+    let picker_height = expanded_hits.iter().find_map(|hit| {
         if let HitKind::PickColor { h, .. } = hit.kind {
             Some(h)
         } else {
             None
         }
     });
-    assert_eq!(picker_height, Some(54.0));
-}
-
-#[test]
-fn side_header_static_hits_match_render_time_header_hits() {
-    let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    let snapshot = snapshot_from_state(&state);
-    let (w, h) = side_size(&snapshot);
-
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
-    let ctx = cairo::Context::new(&surface).unwrap();
-    let mut render_hits = Vec::new();
-    crate::backend::wayland::toolbar::render_side_palette(
-        &ctx,
-        w as f64,
-        h as f64,
-        &snapshot,
-        &mut render_hits,
-        None,
-        None,
-    )
-    .unwrap();
-
-    let mut static_hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
-
-    let header_len = 9;
-    let render_header: Vec<_> = render_hits
-        .iter()
-        .take(header_len)
-        .map(|hit| (event_name(&hit.event), format!("{:?}", hit.kind)))
-        .collect();
-    let static_header: Vec<_> = static_hits
-        .iter()
-        .take(header_len)
-        .map(|hit| (event_name(&hit.event), format!("{:?}", hit.kind)))
-        .collect();
-
-    assert_eq!(static_header, render_header);
-    assert_eq!(render_header[0].1, format!("{:?}", HitKind::DragMoveSide));
+    assert_eq!(picker_height, Some(24.0));
     assert!(
-        render_header
-            .iter()
-            .any(|(event, _)| event == "ToggleBoardPicker")
+        count_swatches(&expanded_hits) > count_swatches(&compact_hits),
+        "extended palette should add swatch hits"
     );
 }
 
 #[test]
-fn side_settings_static_hits_include_model_controls() {
+fn side_header_leads_with_drag_handle_and_offers_all_panes() {
+    let state = create_test_input_state();
+    let snapshot = snapshot_from_state(&state);
+    let hits = rendered_side_hits(&snapshot);
+
+    assert!(matches!(hits[0].kind, HitKind::DragMoveSide));
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::ToggleBoardPicker))
+    );
+    for pane in SidePane::ALL {
+        assert!(
+            hits.iter()
+                .any(|hit| hit.event == ToolbarEvent::SetSidePane(pane)),
+            "missing pane nav hit for {pane:?}"
+        );
+    }
+}
+
+#[test]
+fn side_size_caps_height_at_viewport_max_and_reports_scroll_bounds() {
+    let state = create_test_input_state();
+    let mut snapshot = snapshot_from_state(&state);
+
+    snapshot.side_viewport_max = None;
+    let (_, natural_height) = side_size(&snapshot);
+    let (natural, viewport) = side_scroll_bounds(&snapshot);
+    assert_eq!(viewport, natural_height as f64);
+    assert!(natural <= viewport);
+
+    let cap = (natural_height as f64 / 2.0).floor();
+    snapshot.side_viewport_max = Some(cap);
+    let (_, capped_height) = side_size(&snapshot);
+    assert_eq!(capped_height as f64, cap.ceil());
+    let (natural, viewport) = side_scroll_bounds(&snapshot);
+    assert!(
+        natural - viewport > 0.0,
+        "capped pane should report positive max scroll"
+    );
+
+    // The scrollbar hit carries the same max scroll for drag handling.
+    let hits = rendered_side_hits(&snapshot);
+    assert!(hits.iter().any(|hit| matches!(
+        hit.kind,
+        HitKind::DragScrollSide { max_scroll } if (max_scroll - (natural - viewport)).abs() < 1.0
+    )));
+}
+
+#[test]
+fn side_settings_pane_hits_include_model_controls() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    state.toolbar_side_pane = SidePane::Settings;
     state.show_settings_section = true;
     state.toolbar_layout_mode = crate::config::ToolbarLayoutMode::Regular;
     let snapshot = snapshot_from_state(&state);
@@ -243,9 +269,7 @@ fn side_settings_static_hits_include_model_controls() {
         )
         .collect();
 
-    let (w, h) = side_size(&snapshot);
-    let mut hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let hits = rendered_side_hits(&snapshot);
     let hit_events: Vec<_> = hits.iter().map(|hit| event_name(&hit.event)).collect();
 
     for expected_event in &expected {
@@ -258,10 +282,9 @@ fn side_settings_static_hits_include_model_controls() {
 }
 
 #[test]
-fn side_session_static_hits_include_model_controls_and_recents() {
+fn side_session_pane_hits_include_model_controls_and_recents() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
+    state.toolbar_side_pane = SidePane::Session;
     let mut snapshot = snapshot_from_state(&state);
     snapshot.active_session_path =
         Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
@@ -272,9 +295,7 @@ fn side_session_static_hits_include_model_controls_and_recents() {
     }];
     let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
 
-    let (w, h) = side_size(&snapshot);
-    let mut hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let hits = rendered_side_hits(&snapshot);
     let hit_events: Vec<_> = hits.iter().map(|hit| event_name(&hit.event)).collect();
 
     for button in &model.buttons {
@@ -292,8 +313,7 @@ fn side_session_static_hits_include_model_controls_and_recents() {
 #[test]
 fn side_session_overwrite_confirmation_hits_replace_action_buttons() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
+    state.toolbar_side_pane = SidePane::Session;
     let mut snapshot = snapshot_from_state(&state);
     let target = std::path::PathBuf::from("/tmp/existing.wayscriber-session");
     snapshot.active_session_path =
@@ -301,24 +321,7 @@ fn side_session_overwrite_confirmation_hits_replace_action_buttons() {
     snapshot.active_session_name = Some("current.wayscriber-session".to_string());
     snapshot.pending_save_as_overwrite_path = Some(target.clone());
 
-    let (w, h) = side_size(&snapshot);
-    let mut static_hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
-    assert_session_overwrite_confirmation_hits(&static_hits, &target);
-
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
-    let ctx = cairo::Context::new(&surface).unwrap();
-    let mut rendered_hits = Vec::new();
-    crate::backend::wayland::toolbar::render_side_palette(
-        &ctx,
-        w as f64,
-        h as f64,
-        &snapshot,
-        &mut rendered_hits,
-        None,
-        None,
-    )
-    .unwrap();
+    let rendered_hits = rendered_side_hits(&snapshot);
     assert_session_overwrite_confirmation_hits(&rendered_hits, &target);
 }
 

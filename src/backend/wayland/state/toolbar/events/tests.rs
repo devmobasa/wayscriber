@@ -79,7 +79,7 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
         ToolbarEvent::SaveSessionAsCancel,
         ToolbarEvent::SessionInfo,
         ToolbarEvent::ClearSession,
-        ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
+        ToolbarEvent::ScrollSidePane(24.0),
     ];
 
     for event in events {
@@ -111,6 +111,8 @@ fn toolbar_preference_events_save_toolbar_config() {
         ToolbarEvent::ToggleToolPreview(true),
         ToolbarEvent::ToggleDelaySliders(true),
         ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
+        ToolbarEvent::SetSidePane(crate::ui::toolbar::SidePane::Canvas),
+        ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
     ];
 
     for event in events {

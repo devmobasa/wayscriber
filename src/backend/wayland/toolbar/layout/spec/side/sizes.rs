@@ -1,6 +1,6 @@
 use crate::ui::toolbar::model::{
-    ToolbarActionsModel, ToolbarSessionModel, ToolbarSettingsModel, ordered_side_sections,
-    toolbar_boards_model, toolbar_pages_model,
+    ToolbarActionsModel, ToolbarSessionModel, ToolbarSettingsModel, toolbar_boards_model,
+    toolbar_pages_model,
 };
 use crate::ui::toolbar::snapshot::ToolContext;
 use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
@@ -14,34 +14,32 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
+        let natural = self.side_natural_height(snapshot);
+        let height = match snapshot.side_viewport_max {
+            Some(max) if max > 0.0 && natural > max => max,
+            _ => natural,
+        };
+        (Self::SIDE_WIDTH, height.ceil() as u32)
+    }
+
+    /// Unclamped content height of the active pane; when it exceeds the
+    /// viewport the pane scrolls instead of growing the surface.
+    pub(in crate::backend::wayland::toolbar) fn side_natural_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
         let base_height = self.side_content_start_y();
         let tool_context = ToolContext::from_snapshot(snapshot);
 
         let show_actions = ToolbarActionsModel::from_snapshot(snapshot).is_some();
         let show_pages = toolbar_pages_model(snapshot).is_some();
         let show_boards = toolbar_boards_model(snapshot).is_some();
-        let drawer_session =
-            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Session;
-        let drawer_customizing = snapshot.drawer_open
-            && (snapshot.customize_items_open
-                || snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize);
-        let drawer_sections =
-            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
         let show_presets = !snapshot.side_section_hidden(ToolbarSideSection::Presets)
             && snapshot.show_presets
             && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section
-            && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
             && !snapshot.side_section_hidden(ToolbarSideSection::StepUndo);
-        let show_settings_section = if drawer_customizing || drawer_sections {
-            ToolbarSettingsModel::from_snapshot(snapshot).is_some()
-        } else {
-            snapshot.show_settings_section
-                && snapshot.drawer_open
-                && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
-                && !snapshot.side_section_hidden(ToolbarSideSection::Settings)
-        };
+        let show_settings_section = ToolbarSettingsModel::from_snapshot(snapshot).is_some();
         let show_session_section = ToolbarSessionModel::from_snapshot(snapshot).is_some();
 
         let mut height: f64 = base_height;
@@ -51,22 +49,9 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        if drawer_customizing || drawer_session {
-            add_section(self.side_drawer_tabs_height(snapshot), &mut height);
-            if drawer_customizing && show_settings_section {
-                add_section(self.side_settings_height(snapshot), &mut height);
-            }
-            if drawer_session && show_session_section {
-                add_section(self.side_session_height(snapshot), &mut height);
-            }
-            height += Self::SIDE_FOOTER_PADDING;
-            return (Self::SIDE_WIDTH, height.ceil() as u32);
-        }
-
-        let mut drawer_tabs_added = false;
         let mut thickness_block_added = false;
         let mut text_block_added = false;
-        for section in ordered_side_sections(snapshot) {
+        for section in crate::ui::toolbar::model::ordered_pane_sections(snapshot) {
             match section {
                 ToolbarSideSection::Colors
                     if tool_context.needs_color
@@ -126,66 +111,33 @@ impl ToolbarLayoutSpec {
                         add_section(self.side_font_height(snapshot), &mut height);
                     }
                 }
-                ToolbarSideSection::Actions => {
-                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
-                    if show_actions {
-                        add_section(self.side_actions_height(snapshot), &mut height);
-                    }
+                ToolbarSideSection::Actions if show_actions => {
+                    add_section(self.side_actions_height(snapshot), &mut height);
                 }
-                ToolbarSideSection::Boards => {
-                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
-                    if show_boards {
-                        add_section(self.side_boards_height(snapshot), &mut height);
-                    }
+                ToolbarSideSection::Boards if show_boards => {
+                    add_section(self.side_boards_height(snapshot), &mut height);
                 }
-                ToolbarSideSection::Pages => {
-                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
-                    if show_pages {
-                        add_section(self.side_pages_height(snapshot), &mut height);
-                    }
+                ToolbarSideSection::Pages if show_pages => {
+                    add_section(self.side_pages_height(snapshot), &mut height);
                 }
-                ToolbarSideSection::StepUndo => {
-                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
-                    if show_step_section {
-                        add_section(self.side_step_height(snapshot), &mut height);
-                    }
+                ToolbarSideSection::StepUndo if show_step_section => {
+                    add_section(self.side_step_height(snapshot), &mut height);
                 }
-                ToolbarSideSection::Session => {
-                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
-                    if show_session_section {
-                        add_section(self.side_session_height(snapshot), &mut height);
-                    }
+                ToolbarSideSection::Session if show_session_section => {
+                    add_section(self.side_session_height(snapshot), &mut height);
                 }
-                ToolbarSideSection::Settings => {
-                    add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
-                    if show_settings_section {
-                        add_section(self.side_settings_height(snapshot), &mut height);
-                    }
+                ToolbarSideSection::Settings if show_settings_section => {
+                    add_section(self.side_settings_height(snapshot), &mut height);
                 }
                 _ => {}
             }
         }
-        add_drawer_tabs_once(self, snapshot, &mut height, &mut drawer_tabs_added);
 
-        height += Self::SIDE_FOOTER_PADDING;
-
-        (Self::SIDE_WIDTH, height.ceil() as u32)
+        height + Self::SIDE_FOOTER_PADDING
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_content_width(&self, width: f64) -> f64 {
         width - Self::SIDE_CONTENT_PADDING_X
-    }
-
-    pub(in crate::backend::wayland::toolbar) fn side_color_picker_height(
-        &self,
-        snapshot: &ToolbarSnapshot,
-    ) -> f64 {
-        let extra = if snapshot.show_more_colors {
-            Self::SIDE_COLOR_PICKER_EXTRA_HEIGHT
-        } else {
-            0.0
-        };
-        Self::SIDE_COLOR_PICKER_INPUT_HEIGHT + extra
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_colors_height(
@@ -315,24 +267,18 @@ impl ToolbarLayoutSpec {
         )
     }
 
-    /// Y position where Row 2 (mode controls row) starts
-    pub(in crate::backend::wayland::toolbar) fn side_header_row2_y(&self) -> f64 {
-        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT
+    /// Y position of the pane navigation row.
+    pub(in crate::backend::wayland::toolbar) fn side_pane_nav_y(&self) -> f64 {
+        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT + Self::SIDE_PANE_NAV_GAP
     }
 
-    /// Y position where Row 3 (board row) starts
-    pub(in crate::backend::wayland::toolbar) fn side_header_row3_y(&self) -> f64 {
-        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT + Self::SIDE_HEADER_ROW2_HEIGHT
-    }
-
-    /// Y position where content starts (after all header rows)
+    /// Y position where pane content starts (after header + nav rows).
+    /// = 12 + 30 + 6 + 26 + 8 = 82px
     pub(in crate::backend::wayland::toolbar) fn side_content_start_y(&self) -> f64 {
-        // After header rows + bottom gap
-        // = 12 + 30 + 28 + 24 + 8 = 102px
         Self::SIDE_TOP_PADDING
             + Self::SIDE_HEADER_ROW1_HEIGHT
-            + Self::SIDE_HEADER_ROW2_HEIGHT
-            + Self::SIDE_HEADER_ROW3_HEIGHT
+            + Self::SIDE_PANE_NAV_GAP
+            + Self::SIDE_PANE_NAV_HEIGHT
             + Self::SIDE_HEADER_BOTTOM_GAP
     }
 
@@ -359,20 +305,4 @@ impl ToolbarLayoutSpec {
             expanded_height
         }
     }
-}
-
-fn add_drawer_tabs_once(
-    spec: &ToolbarLayoutSpec,
-    snapshot: &ToolbarSnapshot,
-    height: &mut f64,
-    added: &mut bool,
-) {
-    if *added || !snapshot.drawer_open {
-        return;
-    }
-    let tabs_h = spec.side_drawer_tabs_height(snapshot);
-    if tabs_h > 0.0 {
-        *height += tabs_h + ToolbarLayoutSpec::SIDE_SECTION_GAP;
-    }
-    *added = true;
 }

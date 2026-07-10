@@ -576,6 +576,12 @@ top_pinned = true
 # Show side toolbar on startup (pinned)
 side_pinned = true
 
+# Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
+side_active_pane = "draw"
+
+# Side-palette sections collapsed to their header row
+collapsed_sections = []
+
 # Use icons instead of text labels in toolbars
 use_icons = true
 
@@ -699,6 +705,7 @@ side_sections = [
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
+- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.

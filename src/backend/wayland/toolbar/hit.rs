@@ -65,6 +65,7 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
             | HitKind::DragCustomRedoDelay
             | HitKind::DragMoveTop
             | HitKind::DragMoveSide
+            | HitKind::DragScrollSide { .. }
             | HitKind::DragToolbarItem { .. }
     );
 
@@ -135,6 +136,7 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         ),
         DragMoveTop => ToolbarEvent::MoveTopToolbar { x, y },
         DragMoveSide => ToolbarEvent::MoveSideToolbar { x, y },
+        DragScrollSide { max_scroll } => scroll_event_for_hit(max_scroll, hit, y),
         DragToolbarItem { group, id, .. } => ToolbarEvent::StartToolbarItemDrag { group, id },
         crate::backend::wayland::toolbar::events::HitKind::Click => hit.event.clone(),
     };
@@ -214,6 +216,9 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         ))),
         DragMoveTop => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
         DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
+        DragScrollSide { max_scroll } => {
+            Some(ToolbarIntent(scroll_event_for_hit(max_scroll, hit, y)))
+        }
         DragToolbarItem {
             group,
             target_index,
@@ -224,6 +229,14 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         })),
         _ => None,
     }
+}
+
+/// Map a pointer y within the scrollbar track to an absolute scroll offset.
+fn scroll_event_for_hit(max_scroll: f64, hit: &HitRegion, pointer_y: f64) -> ToolbarEvent {
+    let track_y = hit.rect.1;
+    let track_h = hit.rect.3.max(1.0);
+    let fraction = ((pointer_y - track_y) / track_h).clamp(0.0, 1.0);
+    ToolbarEvent::ScrollSidePane(fraction * max_scroll)
 }
 
 fn slider_event_for_hit(

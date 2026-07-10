@@ -14,13 +14,9 @@ use super::event_policy::full_mode_target;
 #[derive(Debug, Clone)]
 pub(crate) struct SideHeaderModel {
     pub(crate) drag: ToolbarControl,
-    pub(crate) icon_mode: ToolbarControl,
     pub(crate) pin: ToolbarControl,
     pub(crate) close: ToolbarControl,
-    pub(crate) layout_mode: ToolbarControl,
-    pub(crate) drawer_more: ToolbarControl,
     pub(crate) board_chip: ToolbarControl,
-    pub(crate) show_drawer_hint: bool,
 }
 
 impl SideHeaderModel {
@@ -30,7 +26,6 @@ impl SideHeaderModel {
                 ToolbarControlId::DragSide,
                 ToolbarDragTarget::MoveSideToolbar,
             ),
-            icon_mode: icon_mode_control(snapshot.use_icons),
             pin: single_button(
                 ToolbarControlId::PinSide,
                 ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
@@ -49,10 +44,7 @@ impl SideHeaderModel {
                 false,
                 ToolbarControlRole::Button,
             ),
-            layout_mode: layout_mode_control(snapshot.layout_mode),
-            drawer_more: drawer_more_control(snapshot.drawer_open),
             board_chip: board_chip_control(snapshot),
-            show_drawer_hint: snapshot.show_drawer_hint,
         }
     }
 }
@@ -100,39 +92,7 @@ fn drag_control(id: ToolbarControlId, target: ToolbarDragTarget) -> ToolbarContr
     }
 }
 
-fn icon_mode_control(use_icons: bool) -> ToolbarControl {
-    let segments = vec![
-        ToolbarSegment {
-            id: ToolbarControlId::IconModeIcons,
-            label: Cow::Borrowed("Ico"),
-            activation: ToolbarActivation::Click(ToolbarEvent::ToggleIconMode(true)),
-            action: None,
-            tooltip: ToolbarTooltip::text("Icons mode"),
-            enabled: true,
-        },
-        ToolbarSegment {
-            id: ToolbarControlId::IconModeText,
-            label: Cow::Borrowed("Txt"),
-            activation: ToolbarActivation::Click(ToolbarEvent::ToggleIconMode(false)),
-            action: None,
-            tooltip: ToolbarTooltip::text("Text mode"),
-            enabled: true,
-        },
-    ];
-    let active = if use_icons {
-        ToolbarControlId::IconModeIcons
-    } else {
-        ToolbarControlId::IconModeText
-    };
-    segmented_control(
-        ToolbarControlId::IconModeIcons,
-        active,
-        "Display mode",
-        segments,
-    )
-}
-
-fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
+pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
     let full_mode = full_mode_target(mode);
     let segments = vec![
         ToolbarSegment {
@@ -165,25 +125,6 @@ fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
         "Toolbar layout",
         segments,
     )
-}
-
-fn drawer_more_control(drawer_open: bool) -> ToolbarControl {
-    ToolbarControl {
-        id: ToolbarControlId::DrawerMore,
-        kind: ToolbarControlKind::Single(ToolbarSingleControl {
-            activation: ToolbarActivation::Click(ToolbarEvent::ToggleDrawer(!drawer_open)),
-            action: None,
-        }),
-        enabled: true,
-        active: drawer_open,
-        presentation: ToolbarControlPresentation {
-            label: Cow::Borrowed("More"),
-            tooltip: ToolbarTooltip::text("More options"),
-            icon: Some(ToolbarIcon::More),
-            role: ToolbarControlRole::Button,
-            payload: ToolbarPresentationPayload::None,
-        },
-    }
 }
 
 fn board_chip_control(snapshot: &ToolbarSnapshot) -> ToolbarControl {

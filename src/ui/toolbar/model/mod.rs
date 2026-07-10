@@ -31,7 +31,7 @@ pub(crate) use event_policy::{
     short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
-pub(crate) use header::{SideHeaderModel, board_chip_label};
+pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
@@ -40,13 +40,13 @@ pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSe
 pub(crate) use tools::{
     SemanticToolIcon, TopUtilityButton, current_shape_tool, default_drag_hint,
     default_polygon_tool, default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool,
-    ordered_side_sections, polygon_tools, semantic_icon_for_tool, shape_tools, tool_visible,
-    toolbar_item_id_for_tool, toolbar_item_visible, top_clear_canvas_visible, top_fill_visible,
-    top_highlight_ring_visible, top_highlight_visible, top_icon_mode_toggle_visible,
-    top_screenshot_visible, top_shape_picker_visible, top_sticky_note_visible, top_text_visible,
-    top_tool_buttons, visible_shape_picker_max_row_len, visible_shape_picker_row_count,
-    visible_shape_picker_rows, visible_tool_count, visible_top_tool_buttons,
-    visible_top_utility_buttons,
+    ordered_pane_sections, ordered_side_sections, pane_for_section, polygon_tools,
+    semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_id_for_tool,
+    toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
+    top_highlight_visible, top_icon_mode_toggle_visible, top_screenshot_visible,
+    top_shape_picker_visible, top_sticky_note_visible, top_text_visible, top_tool_buttons,
+    visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
+    visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
 };
 
 #[cfg(test)]
@@ -55,14 +55,12 @@ mod tests {
     use crate::config::{
         ToolbarGroupId, ToolbarLayoutMode, toolbar_item_definitions, toolbar_item_ids as ids,
     };
-    use crate::input::ToolbarDrawerTab;
     use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
+    use crate::ui::toolbar::{SidePane, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
     fn snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
-        state.toolbar_drawer_open = true;
-        state.toolbar_drawer_tab = ToolbarDrawerTab::View;
+        state.toolbar_side_pane = SidePane::Canvas;
         state.show_actions_section = true;
         state.show_actions_advanced = false;
         state.show_zoom_actions = true;
@@ -72,7 +70,7 @@ mod tests {
     }
 
     #[test]
-    fn actions_model_keeps_advanced_actions_in_view_drawer() {
+    fn actions_model_keeps_advanced_actions_in_canvas_pane() {
         let mut snapshot = snapshot();
         snapshot.show_actions_section = false;
         snapshot.show_actions_advanced = true;
@@ -87,7 +85,7 @@ mod tests {
         );
         assert_eq!(model.groups()[1].buttons.len(), 5);
 
-        snapshot.drawer_open = false;
+        snapshot.active_side_pane = SidePane::Draw;
         assert!(ToolbarActionsModel::from_snapshot(&snapshot).is_none());
     }
 
@@ -179,7 +177,7 @@ mod tests {
     #[test]
     fn settings_model_includes_context_ui_and_simple_mode_hides_advanced_toggles() {
         let mut snapshot = snapshot();
-        snapshot.drawer_tab = ToolbarDrawerTab::App;
+        snapshot.active_side_pane = SidePane::Settings;
         snapshot.layout_mode = ToolbarLayoutMode::Simple;
         snapshot.show_settings_section = true;
 
@@ -198,26 +196,20 @@ mod tests {
         snapshot.layout_mode = ToolbarLayoutMode::Regular;
         let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
         assert!(
-            !model
-                .toggles()
-                .iter()
-                .any(|toggle| toggle.id == ToolbarControlId::SettingsAdvancedActions)
-        );
-
-        snapshot.drawer_tab = ToolbarDrawerTab::Sections;
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
-        assert!(
             model
                 .toggles()
                 .iter()
                 .any(|toggle| toggle.id == ToolbarControlId::SettingsAdvancedActions)
         );
+
+        snapshot.active_side_pane = SidePane::Draw;
+        assert!(ToolbarSettingsModel::from_snapshot(&snapshot).is_none());
     }
 
     #[test]
     fn settings_model_moves_hidden_item_overrides_into_customization_panel() {
         let mut snapshot = snapshot();
-        snapshot.drawer_tab = ToolbarDrawerTab::App;
+        snapshot.active_side_pane = SidePane::Settings;
         snapshot.show_settings_section = true;
         snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
             hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
@@ -288,11 +280,28 @@ mod tests {
             ToolbarPersistence::RuntimeOnly
         );
         assert_eq!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleDrawer(true)).pre_apply_effects,
+            ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas)).persistence,
+            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar)
+        );
+        assert_eq!(
+            ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleSideSectionCollapsed(
+                crate::ui::toolbar::ToolbarSideSection::Colors,
+                true,
+            ))
+            .persistence,
+            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar)
+        );
+        assert_eq!(
+            ToolbarEventPolicy::for_event(&ToolbarEvent::ScrollSidePane(12.0)).persistence,
+            ToolbarPersistence::RuntimeOnly
+        );
+        assert_eq!(
+            ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas))
+                .pre_apply_effects,
             vec![ToolbarPreApplyEffect::RecordDrawerHintShown]
         );
         assert!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleDrawer(false))
+            ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Draw))
                 .pre_apply_effects
                 .is_empty()
         );

@@ -84,20 +84,6 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_drawer_tabs_height(
-        &self,
-        snapshot: &ToolbarSnapshot,
-    ) -> f64 {
-        if !snapshot.drawer_open {
-            return 0.0;
-        }
-        let rows = crate::input::ToolbarDrawerTab::ALL.len().div_ceil(3);
-        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
-            + Self::SIDE_TOGGLE_HEIGHT * rows as f64
-            + Self::SIDE_TOGGLE_GAP * rows.saturating_sub(1) as f64
-            + Self::SIDE_ACTION_BUTTON_GAP
-    }
-
     pub(in crate::backend::wayland::toolbar) fn side_pages_height(
         &self,
         snapshot: &ToolbarSnapshot,
@@ -172,12 +158,7 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        let dedicated_panel = snapshot.customize_items_open
-            || matches!(
-                snapshot.drawer_tab,
-                crate::input::ToolbarDrawerTab::Sections
-                    | crate::input::ToolbarDrawerTab::Customize
-            );
+        let dedicated_panel = snapshot.customize_items_open;
         if !dedicated_panel && snapshot.side_section_collapsed(ToolbarSideSection::Settings) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
@@ -219,7 +200,15 @@ impl ToolbarLayoutSpec {
         };
         let customize_h = group_rows_h + item_rows_h;
         let customize_gap = if customize_h > 0.0 { toggle_gap } else { 0.0 };
-        let content_h = toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
+        // Interim Simple/Full layout-mode row at the top of the pane (only
+        // outside the customization sub-panel).
+        let mode_row_h = if dedicated_panel {
+            0.0
+        } else {
+            Self::SIDE_SEGMENT_HEIGHT + toggle_gap
+        };
+        let content_h =
+            mode_row_h + toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 

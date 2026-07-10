@@ -6,7 +6,6 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::input::ToolbarDrawerTab;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
@@ -30,8 +29,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
 
     if snapshot.side_section_hidden(ToolbarSideSection::StepUndo)
         || !snapshot.show_step_section
-        || !snapshot.drawer_open
-        || snapshot.drawer_tab != ToolbarDrawerTab::App
+        || snapshot.active_side_pane != crate::ui::toolbar::SidePane::Canvas
     {
         return;
     }

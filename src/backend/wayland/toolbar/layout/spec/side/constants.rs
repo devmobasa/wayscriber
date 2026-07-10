@@ -8,8 +8,8 @@ impl ToolbarLayoutSpec {
 
     // Three-row header layout
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_ROW1_HEIGHT: f64 = 30.0; // Drag + pin/close
-    pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_ROW2_HEIGHT: f64 = 28.0; // Mode controls row
-    pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_ROW3_HEIGHT: f64 = 24.0; // Board row
+    pub(in crate::backend::wayland::toolbar) const SIDE_PANE_NAV_HEIGHT: f64 = 26.0; // Pane navigation row
+    pub(in crate::backend::wayland::toolbar) const SIDE_PANE_NAV_GAP: f64 = 6.0; // Gap between header row and nav
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_BOTTOM_GAP: f64 = 8.0;
 
     // Drag handle (compact size like before)
@@ -23,7 +23,6 @@ impl ToolbarLayoutSpec {
     // Segmented control height
     pub(in crate::backend::wayland::toolbar) const SIDE_SEGMENT_HEIGHT: f64 = 22.0;
 
-    pub(in crate::backend::wayland::toolbar) const SIDE_MODE_ICONS_WIDTH: f64 = 72.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_MODE_LAYOUT_WIDTH: f64 = 120.0;
 
     // Board chip (inline style)
@@ -32,7 +31,6 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_CONTENT_PADDING_X: f64 = 32.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CARD_INSET: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_OFFSET_Y: f64 = 24.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_EXTRA_HEIGHT: f64 = 30.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SLIDER_ROW_OFFSET: f64 = 26.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_NUDGE_SIZE: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_BUTTON_HEIGHT_ICON: f64 = 32.0;

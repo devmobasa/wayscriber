@@ -3,7 +3,6 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
-use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::model::{ToolbarActivation, ToolbarIcon, ToolbarSettingsModel};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
@@ -42,13 +41,10 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
 
     let settings_card_h = layout.spec.side_settings_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, settings_card_h);
-    let customizing =
-        snapshot.customize_items_open || snapshot.drawer_tab == ToolbarDrawerTab::Customize;
-    let dedicated_panel = customizing || snapshot.drawer_tab == ToolbarDrawerTab::Sections;
+    let customizing = snapshot.customize_items_open;
+    let dedicated_panel = customizing;
     let header_label = if customizing {
         "Customize toolbar"
-    } else if snapshot.drawer_tab == ToolbarDrawerTab::Sections {
-        "Toolbar sections"
     } else {
         ToolbarSideSection::Settings.label()
     };
@@ -70,7 +66,28 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let toggles = settings_model.toggles();
 
-    let toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+    let mut toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+
+    // Interim Simple/Full layout-mode control (moves into the visibility
+    // store UI in a later phase).
+    if !dedicated_panel {
+        let seg_h = ToolbarLayoutSpec::SIDE_SEGMENT_HEIGHT;
+        let seg_w = ToolbarLayoutSpec::SIDE_MODE_LAYOUT_WIDTH;
+        let mode_control = crate::ui::toolbar::model::layout_mode_control(snapshot.layout_mode);
+        draw_layout_mode_segments(
+            ctx,
+            hits,
+            hover,
+            &mode_control,
+            x,
+            toggle_y,
+            seg_w,
+            seg_h,
+            toggle_style,
+        );
+        toggle_y += seg_h + toggle_gap;
+    }
+
     let toggle_col_gap = toggle_gap;
     let toggle_col_w = row_item_width(content_width, 2, toggle_col_gap);
     let toggle_layout = grid_layout(
@@ -363,4 +380,47 @@ fn draw_back_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64) {
     ctx.line_to(x + size * 0.35, mid_y);
     ctx.line_to(x + size * 0.65, y + size * 0.75);
     let _ = ctx.stroke();
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_layout_mode_segments(
+    ctx: &cairo::Context,
+    hits: &mut Vec<HitRegion>,
+    hover: Option<(f64, f64)>,
+    control: &crate::ui::toolbar::model::ToolbarControl,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label_style: UiTextStyle<'_>,
+) {
+    let crate::ui::toolbar::model::ToolbarControlKind::Segmented(segmented) = &control.kind else {
+        return;
+    };
+    let segments = segmented.segments();
+    let labels = (
+        segments.first().map(|s| s.label.as_ref()).unwrap_or(""),
+        segments.get(1).map(|s| s.label.as_ref()).unwrap_or(""),
+    );
+    let active = segmented
+        .active_segment()
+        .and_then(|active| segments.iter().position(|s| s.id == active))
+        .unwrap_or(0);
+    let seg_hover = hover.and_then(|(hx, hy)| {
+        if point_in_rect(hx, hy, x, y, w, h) {
+            Some(if hx < x + w / 2.0 { 0 } else { 1 })
+        } else {
+            None
+        }
+    });
+    draw_segmented_control(ctx, x, y, w, h, labels, active, seg_hover, label_style);
+    let half_w = w / 2.0;
+    for (index, segment) in segments.iter().enumerate() {
+        hits.push(HitRegion {
+            rect: (x + half_w * index as f64, y, half_w, h),
+            event: segment.activation.compatibility_event(),
+            kind: HitKind::Click,
+            tooltip: segment.tooltip.as_string(),
+        });
+    }
 }

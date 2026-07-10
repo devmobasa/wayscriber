@@ -90,6 +90,22 @@ impl InputState {
         self.apply_toolbar_mode_overrides(layout_mode);
     }
 
+    /// Restore the persisted side-palette pane and collapsed sections
+    /// (called at startup). Unknown ids are ignored; they are preserved in
+    /// the config file itself for forward compatibility.
+    pub fn init_toolbar_side_panes_from_config(
+        &mut self,
+        active_pane_id: &str,
+        collapsed_section_ids: &[String],
+    ) {
+        self.toolbar_side_pane =
+            crate::ui::toolbar::SidePane::from_config_id(active_pane_id).unwrap_or_default();
+        self.toolbar_collapsed_side_sections = collapsed_section_ids
+            .iter()
+            .filter_map(|id| crate::ui::toolbar::ToolbarSideSection::from_config_id(id))
+            .collect();
+    }
+
     pub fn set_toolbar_item_hidden(&mut self, id: ToolbarItemId, hidden: bool) -> bool {
         if self.resolved_toolbar_items.is_hidden(id) == hidden {
             return false;
@@ -261,5 +277,40 @@ impl InputState {
     /// Wrapper for entering sticky note mode.
     pub fn toolbar_enter_sticky_note_mode(&mut self) {
         self.handle_action(Action::EnterStickyNoteMode);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::{SidePane, ToolbarSideSection};
+
+    #[test]
+    fn side_pane_config_restore_ignores_unknown_ids() {
+        let mut state = make_test_input_state();
+        state.init_toolbar_side_panes_from_config(
+            "session",
+            &[
+                "colors".to_string(),
+                "unknown-id".to_string(),
+                "step-undo".to_string(),
+            ],
+        );
+        assert_eq!(state.toolbar_side_pane, SidePane::Session);
+        assert!(
+            state
+                .toolbar_collapsed_side_sections
+                .contains(&ToolbarSideSection::Colors)
+        );
+        assert!(
+            state
+                .toolbar_collapsed_side_sections
+                .contains(&ToolbarSideSection::StepUndo)
+        );
+        assert_eq!(state.toolbar_collapsed_side_sections.len(), 2);
+
+        state.init_toolbar_side_panes_from_config("bogus", &[]);
+        assert_eq!(state.toolbar_side_pane, SidePane::Draw);
+        assert!(state.toolbar_collapsed_side_sections.is_empty());
     }
 }

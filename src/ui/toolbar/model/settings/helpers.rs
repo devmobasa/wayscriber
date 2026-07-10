@@ -59,8 +59,6 @@ pub(super) fn section_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettings
 pub(super) fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let back_event = if snapshot.customize_items_group.is_some() {
         ToolbarEvent::SetToolbarItemCustomizationGroup(None)
-    } else if snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize {
-        ToolbarEvent::SetDrawerTab(crate::input::ToolbarDrawerTab::App)
     } else {
         ToolbarEvent::SetToolbarItemCustomizationOpen(false)
     };

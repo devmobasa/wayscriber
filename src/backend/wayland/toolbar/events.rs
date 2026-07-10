@@ -26,6 +26,9 @@ pub enum HitKind {
     DragCustomRedoDelay,
     DragMoveTop,
     DragMoveSide,
+    DragScrollSide {
+        max_scroll: f64,
+    },
     DragToolbarItem {
         group: ToolbarItemOrderGroup,
         id: ToolbarItemId,
@@ -60,6 +63,7 @@ impl HitKind {
             | HitKind::DragCustomRedoDelay
             | HitKind::DragMoveTop
             | HitKind::DragMoveSide
+            | HitKind::DragScrollSide { .. }
             | HitKind::DragToolbarItem { .. } => ToolbarCursorHint::Grab,
             HitKind::PickColor { .. } => ToolbarCursorHint::Crosshair,
         }

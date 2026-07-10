@@ -99,8 +99,8 @@ impl ToolbarSnapshot {
                 })
             })
             .collect();
-        let drawer_open = state.toolbar_drawer_open;
-        let drawer_tab = state.toolbar_drawer_tab;
+        let active_side_pane = state.toolbar_side_pane;
+        let side_scroll = state.toolbar_side_scroll[state.toolbar_side_pane.index()];
         let customize_items_open = state.toolbar_customize_items_open;
         let customize_items_group = state.toolbar_customize_items_group;
         let show_actions_advanced = state.show_actions_advanced;
@@ -186,8 +186,9 @@ impl ToolbarSnapshot {
             active_preset_slot: state.active_preset_slot,
             preset_feedback,
             shape_picker_open: state.toolbar_shapes_expanded,
-            drawer_open,
-            drawer_tab,
+            active_side_pane,
+            side_scroll,
+            side_viewport_max: None,
             customize_items_open,
             customize_items_group,
             binding_hints,

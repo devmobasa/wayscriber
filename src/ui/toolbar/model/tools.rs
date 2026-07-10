@@ -66,6 +66,40 @@ const POLYGON_TOOLS: [Tool; 5] = [
     Tool::FreeformPolygon,
 ];
 
+/// Which pane a side section belongs to. The Draw pane holds per-tool
+/// drawing properties; Canvas holds canvas management; Session and Settings
+/// are their own panes.
+pub(crate) fn pane_for_section(
+    section: crate::ui::toolbar::ToolbarSideSection,
+) -> crate::ui::toolbar::SidePane {
+    use crate::ui::toolbar::{SidePane, ToolbarSideSection as S};
+    match section {
+        S::Colors
+        | S::Presets
+        | S::Thickness
+        | S::EraserMode
+        | S::PolygonSides
+        | S::ArrowLabels
+        | S::StepMarkers
+        | S::MarkerOpacity
+        | S::TextSize
+        | S::Font => SidePane::Draw,
+        S::Actions | S::Boards | S::Pages | S::StepUndo => SidePane::Canvas,
+        S::Session => SidePane::Session,
+        S::Settings => SidePane::Settings,
+    }
+}
+
+/// User-ordered side sections filtered to the active pane.
+pub(crate) fn ordered_pane_sections(
+    snapshot: &ToolbarSnapshot,
+) -> Vec<crate::ui::toolbar::ToolbarSideSection> {
+    ordered_side_sections(snapshot)
+        .into_iter()
+        .filter(|section| pane_for_section(*section) == snapshot.active_side_pane)
+        .collect()
+}
+
 pub(crate) fn top_tool_buttons(simple: bool) -> &'static [Tool] {
     if simple {
         &SIMPLE_TOOL_BUTTONS

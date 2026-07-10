@@ -1,5 +1,5 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
-use crate::input::{InputState, ToolbarDrawerTab};
+use crate::input::InputState;
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
@@ -244,56 +244,38 @@ impl InputState {
         }
     }
 
-    pub(super) fn apply_toolbar_toggle_drawer(&mut self, open: bool) -> bool {
-        if self.toolbar_drawer_open != open {
-            self.toolbar_drawer_open = open;
-            if !open {
-                self.toolbar_customize_items_open = false;
-                self.toolbar_customize_items_group = None;
-            }
-            self.needs_redraw = true;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub(super) fn apply_toolbar_set_drawer_tab(&mut self, tab: ToolbarDrawerTab) -> bool {
+    pub(super) fn apply_toolbar_set_side_pane(
+        &mut self,
+        pane: crate::ui::toolbar::SidePane,
+    ) -> bool {
         let mut changed = false;
-        if self.toolbar_drawer_tab != tab {
-            self.toolbar_drawer_tab = tab;
+        if self.toolbar_side_pane != pane {
+            self.toolbar_side_pane = pane;
             changed = true;
         }
-        match tab {
-            ToolbarDrawerTab::Customize => {
-                if !self.toolbar_customize_items_open
-                    || self.toolbar_customize_items_group.is_some()
-                {
-                    self.toolbar_customize_items_open = true;
-                    self.toolbar_customize_items_group = None;
-                    changed = true;
-                }
-            }
-            ToolbarDrawerTab::View
-            | ToolbarDrawerTab::App
-            | ToolbarDrawerTab::Session
-            | ToolbarDrawerTab::Sections => {
-                if self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some()
-                {
-                    self.toolbar_customize_items_open = false;
-                    self.toolbar_customize_items_group = None;
-                    changed = true;
-                }
-            }
-        }
-        if !self.toolbar_drawer_open {
-            self.toolbar_drawer_open = true;
+        // Leaving the Settings pane closes the customization sub-panel.
+        if pane != crate::ui::toolbar::SidePane::Settings
+            && (self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some())
+        {
+            self.toolbar_customize_items_open = false;
+            self.toolbar_customize_items_group = None;
             changed = true;
         }
         if changed {
             self.needs_redraw = true;
         }
         changed
+    }
+
+    pub(super) fn apply_toolbar_scroll_side_pane(&mut self, offset: f64) -> bool {
+        let pane = self.toolbar_side_pane.index();
+        let offset = offset.max(0.0);
+        if (self.toolbar_side_scroll[pane] - offset).abs() < 0.5 {
+            return false;
+        }
+        self.toolbar_side_scroll[pane] = offset;
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_side_section_collapsed(
@@ -317,7 +299,6 @@ impl InputState {
         if self.toolbar_layout_mode != mode {
             self.toolbar_layout_mode = mode;
             self.apply_toolbar_mode_defaults(mode);
-            self.toolbar_drawer_open = false;
             self.toolbar_shapes_expanded = false;
             true
         } else {
@@ -374,8 +355,7 @@ impl InputState {
         if !open {
             self.toolbar_customize_items_group = None;
         }
-        self.toolbar_drawer_open = true;
-        self.toolbar_drawer_tab = ToolbarDrawerTab::App;
+        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }
@@ -389,10 +369,7 @@ impl InputState {
         }
         self.toolbar_customize_items_open = true;
         self.toolbar_customize_items_group = group;
-        self.toolbar_drawer_open = true;
-        if self.toolbar_drawer_tab != ToolbarDrawerTab::Customize {
-            self.toolbar_drawer_tab = ToolbarDrawerTab::App;
-        }
+        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }

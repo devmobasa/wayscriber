@@ -378,6 +378,14 @@ top_pinned = true
 # Show side toolbar on startup (pinned)
 side_pinned = true
 
+# Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
+# The overlay updates this as you switch panes
+side_active_pane = "draw"
+
+# Side-palette sections collapsed to their header row
+# The overlay updates this as you collapse/expand sections
+collapsed_sections = []
+
 # Use icons instead of text labels in toolbars
 # Icons are more compact; text labels are more explicit
 use_icons = true
