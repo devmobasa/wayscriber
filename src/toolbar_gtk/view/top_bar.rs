@@ -58,7 +58,7 @@ const COMPACT_START_X: f64 = 4.0;
 const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 const BASE_MARGIN: (i32, i32) = (12, 12);
 
-type Updater = Box<dyn Fn(&ToolbarSnapshot)>;
+use super::Updater;
 
 /// Everything needed to render one utility button: painter, short label,
 /// tooltip, click event, and the optional active-state probe.

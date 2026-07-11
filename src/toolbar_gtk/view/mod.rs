@@ -1,6 +1,8 @@
-//! GTK toolbar windows: owns the top strip (and, in time, the side
-//! palette), the shared stylesheet, and output pinning.
+//! GTK toolbar windows: owns the top strip and side palette, the shared
+//! stylesheet, and output pinning.
 
+mod sections;
+mod side_bar;
 mod top_bar;
 
 use gtk4::prelude::*;
@@ -8,9 +10,14 @@ use gtk4_layer_shell::LayerShell;
 
 use super::GtkToolbarUpdate;
 use super::widgets::FeedbackSender;
+use crate::ui::toolbar::ToolbarSnapshot;
+
+/// Closure applying one control's state from a fresh snapshot.
+pub(super) type Updater = Box<dyn Fn(&ToolbarSnapshot)>;
 
 pub(super) struct Windows {
     top: top_bar::TopBar,
+    side: side_bar::SideBar,
     css_provider: gtk4::CssProvider,
     css_scale_milli: i64,
     pinned_output: Option<String>,
@@ -28,7 +35,8 @@ impl Windows {
             );
         }
         Self {
-            top: top_bar::TopBar::new(feedback),
+            top: top_bar::TopBar::new(feedback.clone()),
+            side: side_bar::SideBar::new(feedback),
             css_provider,
             css_scale_milli: 1000,
             pinned_output: None,
@@ -40,6 +48,8 @@ impl Windows {
         self.pin_to_output(update);
         self.top
             .apply(&update.snapshot, update.top_visible, update.top_offset);
+        self.side
+            .apply(&update.snapshot, update.side_visible, update.side_offset);
     }
 
     /// Regenerate the stylesheet when the toolbar scale changes.
@@ -67,6 +77,7 @@ impl Windows {
         let monitor = update.output_name.as_deref().and_then(monitor_by_connector);
         // None lets the compositor pick, matching a missing preference.
         self.top.window.set_monitor(monitor.as_ref());
+        self.side.window.set_monitor(monitor.as_ref());
     }
 }
 

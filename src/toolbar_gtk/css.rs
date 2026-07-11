@@ -196,6 +196,71 @@ window.wayscriber-toolbar {{
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.50);
 }}
 
+/* ===== Side palette ==================================================== */
+.wayscriber-toolbar .header-band {{
+    background-color: rgba(31, 33, 46, 0.45);
+    border-radius: {radius_card}px;
+    padding: 3px 4px;
+}}
+.wayscriber-toolbar .card {{
+    background-color: rgba(31, 31, 46, 0.35);
+    border-radius: {radius_card}px;
+    padding: {pad_card}px;
+}}
+.wayscriber-toolbar .section-title {{
+    color: rgba(204, 204, 217, 0.90);
+    font-size: {font_label}px;
+    font-weight: 700;
+}}
+.wayscriber-toolbar button.section-header {{
+    background: none;
+    background-color: transparent;
+    box-shadow: none;
+    padding: 2px 0;
+}}
+.wayscriber-toolbar button.section-header:hover {{
+    background-color: rgba(255, 255, 255, 0.04);
+}}
+.wayscriber-toolbar button.tab {{
+    font-size: {font_tooltip}px;
+    font-weight: 700;
+    padding: 2px 0;
+}}
+.wayscriber-toolbar button.tab.active {{
+    background-color: rgba(61, 92, 148, 1.0);
+    box-shadow: none;
+}}
+.wayscriber-toolbar button.board-chip {{
+    background-color: rgba(56, 61, 71, 0.95);
+    border: 1px solid rgba(166, 179, 204, 0.45);
+    border-radius: 6px;
+    padding: 1px 6px;
+    font-size: {font_label}px;
+    font-weight: 700;
+}}
+.wayscriber-toolbar button.board-chip:hover {{
+    background-color: rgba(71, 77, 87, 0.95);
+    border-color: rgba(166, 179, 204, 0.70);
+}}
+.wayscriber-toolbar entry {{
+    background-color: rgba(56, 61, 71, 0.95);
+    border: 1px solid rgba(166, 179, 204, 0.45);
+    border-radius: 4px;
+    color: {text_primary};
+    font-size: {font_tooltip}px;
+    min-height: 0;
+    padding: 1px 4px;
+    caret-color: {accent};
+}}
+.wayscriber-toolbar scrollbar {{
+    background: transparent;
+}}
+.wayscriber-toolbar scrollbar slider {{
+    background-color: rgba(255, 255, 255, 0.35);
+    border-radius: 2px;
+    min-width: 4px;
+}}
+
 /* ===== Tooltips ======================================================== */
 tooltip {{
     background-color: {tooltip_bg};
@@ -229,6 +294,8 @@ tooltip {{
         tooltip_border = rgba(TOOLTIP_BORDER),
         divider = rgba(DIVIDER),
         radius_panel = px(14.0),
+        radius_card = px(8.0),
+        pad_card = px(6.0),
         radius_button = px(6.0),
         radius_sm = px(3.0),
         pad_panel_v = px(6.0),
