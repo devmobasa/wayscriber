@@ -5,7 +5,9 @@
 //! paint time against each node's drawn rect (matching the legacy renderer),
 //! so pointer motion never rebuilds a tree.
 
-use crate::backend::wayland::toolbar::view::{ButtonStyle, WidgetKind, WidgetNode, WidgetTree};
+use crate::backend::wayland::toolbar::view::{
+    ButtonStyle, ShortcutBadgePlacement, WidgetKind, WidgetNode, WidgetTree,
+};
 use crate::ui_text::UiTextStyle;
 
 use super::widgets::constants::{
@@ -60,6 +62,45 @@ fn paint_button_body(
     } else {
         draw_button(ctx, x, y, w, h, style.active, hover);
     }
+}
+
+fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
+    let Some(badge) = &node.shortcut_badge else {
+        return;
+    };
+    let (x, y, w, _) = node.rect;
+    let badge_h = 10.0;
+    let badge_w = (badge.label.chars().count() as f64 * 5.0 + 4.0)
+        .max(10.0)
+        .min(w.max(10.0));
+    let badge_x = match badge.placement {
+        ShortcutBadgePlacement::Corner => x + w - badge_w - 2.0,
+        ShortcutBadgePlacement::Above => x + (w - badge_w) / 2.0,
+    };
+    let badge_y = match badge.placement {
+        ShortcutBadgePlacement::Corner => y + 2.0,
+        ShortcutBadgePlacement::Above => (y - badge_h - 1.0).max(1.0),
+    };
+
+    if badge.placement == ShortcutBadgePlacement::Corner {
+        ctx.set_source_rgba(0.035, 0.04, 0.06, 0.82);
+        draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
+        let _ = ctx.fill();
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.24);
+        ctx.set_line_width(1.0);
+        draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
+        let _ = ctx.stroke();
+    }
+    draw_label_center_color(
+        ctx,
+        label_style(8.0, true),
+        badge_x,
+        badge_y,
+        badge_w,
+        badge_h,
+        &badge.label,
+        COLOR_ICON_DEFAULT,
+    );
 }
 
 fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>) {
@@ -193,4 +234,5 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             draw_popover_panel(ctx, x, y, w, h, *caret_x, *caret_up);
         }
     }
+    paint_shortcut_badge(ctx, node);
 }

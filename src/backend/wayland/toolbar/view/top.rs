@@ -17,7 +17,9 @@ use crate::toolbar_icons;
 use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 
-use super::node::{ButtonStyle, IconFn, Interaction, LabelSpec, WidgetKind, WidgetNode};
+use super::node::{
+    ButtonStyle, IconFn, Interaction, LabelSpec, ShortcutBadgePlacement, WidgetKind, WidgetNode,
+};
 use super::tree::WidgetTree;
 
 const TOP_LABEL_FONT_SIZE: f64 = 14.0;
@@ -429,7 +431,20 @@ fn build_top_view_planned(
     // --- Quick colors + current-color chip ----------------------------------
     if model::toolbar_item_visible(snapshot, ids::TOP_GROUP_QUICK_COLORS) {
         push_divider(&mut tree, &mut x, "colors");
-        let swatch_y = y + (btn_h - TOP_SWATCH_SIZE) / 2.0;
+        let swatches_have_badges = snapshot
+            .quick_colors
+            .rendered_entries()
+            .iter()
+            .take(plan.swatch_count)
+            .enumerate()
+            .any(|(index, _)| snapshot.binding_hints.quick_color_badge(index).is_some());
+        let swatch_y = if swatches_have_badges {
+            // Reserve one 10px badge row plus a 1px gap above every swatch,
+            // keeping bound and unbound colors aligned in both bar modes.
+            y + (btn_h - (10.0 + 1.0 + TOP_SWATCH_SIZE)) / 2.0 + 11.0
+        } else {
+            y + (btn_h - TOP_SWATCH_SIZE) / 2.0
+        };
         for (index, entry) in snapshot
             .quick_colors
             .rendered_entries()
@@ -437,18 +452,27 @@ fn build_top_view_planned(
             .take(plan.swatch_count)
             .enumerate()
         {
-            tree.push(WidgetNode::new(
-                format!("top.quick-color.{index}"),
-                (x, swatch_y, TOP_SWATCH_SIZE, TOP_SWATCH_SIZE),
-                WidgetKind::Swatch {
-                    color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
-                    selected: entry.color == snapshot.color,
-                },
-                Some(Interaction::click(
-                    ToolbarEvent::SetColor(entry.color),
-                    Some(entry.label.clone()),
-                )),
-            ));
+            let action = crate::config::QuickColorPalette::action_for_index(index);
+            let binding =
+                action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
+            tree.push(
+                WidgetNode::new(
+                    format!("top.quick-color.{index}"),
+                    (x, swatch_y, TOP_SWATCH_SIZE, TOP_SWATCH_SIZE),
+                    WidgetKind::Swatch {
+                        color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
+                        selected: entry.color == snapshot.color,
+                    },
+                    Some(Interaction::click(
+                        ToolbarEvent::SetColor(entry.color),
+                        Some(format_binding_label(&entry.label, binding)),
+                    )),
+                )
+                .with_shortcut_badge(
+                    snapshot.binding_hints.quick_color_badge(index),
+                    ShortcutBadgePlacement::Above,
+                ),
+            );
             x += TOP_SWATCH_SIZE + TOP_SWATCH_GAP;
         }
         // The chip shows the current color and opens the full picker; it
@@ -1105,6 +1129,9 @@ fn tool_button_node(
             style: ButtonStyle::active(active),
         }
     };
+    let badge = (rect.2 > TOP_COMPACT_BUTTON)
+        .then(|| snapshot.binding_hints.badge_for_tool(tool))
+        .flatten();
     WidgetNode::new(
         id,
         rect,
@@ -1114,11 +1141,12 @@ fn tool_button_node(
             Some(tooltip),
         )),
     )
+    .with_shortcut_badge(badge, ShortcutBadgePlacement::Corner)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn utility_node(
-    _snapshot: &ToolbarSnapshot,
+    snapshot: &ToolbarSnapshot,
     id: impl Into<super::node::WidgetId>,
     rect: (f64, f64, f64, f64),
     glyph: IconFn,
@@ -1128,6 +1156,9 @@ fn utility_node(
     tooltip: String,
     use_icons: bool,
 ) -> WidgetNode {
+    let badge = (rect.2 > TOP_COMPACT_BUTTON)
+        .then(|| snapshot.binding_hints.badge_for_event(&event))
+        .flatten();
     let kind = if use_icons {
         WidgetKind::IconButton {
             glyph,
@@ -1146,6 +1177,7 @@ fn utility_node(
         kind,
         Some(Interaction::click(event, Some(tooltip))),
     )
+    .with_shortcut_badge(badge, ShortcutBadgePlacement::Corner)
 }
 
 /// Undo/Redo button: dimmed and non-interactive while unavailable.
@@ -1186,7 +1218,11 @@ fn history_node(
             )),
         )
     });
+    let badge = (rect.2 > TOP_COMPACT_BUTTON)
+        .then(|| snapshot.binding_hints.badge_for_action(action))
+        .flatten();
     WidgetNode::new(id, rect, kind, interact)
+        .with_shortcut_badge(badge, ShortcutBadgePlacement::Corner)
 }
 
 /// Tooltip text for a tool button: label plus binding and/or drag hint.
@@ -1327,6 +1363,50 @@ mod tests {
             chip.interact.as_ref().unwrap().event,
             ToolbarEvent::OpenColorPickerPopup
         ));
+    }
+
+    #[test]
+    fn shortcut_badges_follow_the_snapshot_bindings() {
+        let state = make_test_input_state();
+        let snapshot = ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::from_input_state(&state),
+        );
+        let tree = build(&snapshot);
+
+        let pen = tree.node_by_id(&"top.tool.pen".into()).expect("pen");
+        assert_eq!(
+            pen.shortcut_badge
+                .as_ref()
+                .map(|badge| badge.label.as_str()),
+            Some("F")
+        );
+        assert_eq!(
+            pen.shortcut_badge.as_ref().map(|badge| badge.placement),
+            Some(ShortcutBadgePlacement::Corner)
+        );
+
+        let red = tree
+            .node_by_id(&"top.quick-color.0".into())
+            .expect("red swatch");
+        assert_eq!(
+            red.shortcut_badge
+                .as_ref()
+                .map(|badge| badge.label.as_str()),
+            Some("R")
+        );
+        assert_eq!(
+            red.shortcut_badge.as_ref().map(|badge| badge.placement),
+            Some(ShortcutBadgePlacement::Above)
+        );
+        assert!(
+            red.interact
+                .as_ref()
+                .unwrap()
+                .tooltip
+                .as_deref()
+                .is_some_and(|text| text.contains("(R)"))
+        );
     }
 
     #[test]

@@ -188,6 +188,20 @@ window.wayscriber-toolbar {{
     color: rgba(179, 179, 191, 0.80);
     font-size: {font_small}px;
 }}
+.wayscriber-toolbar label.shortcut-badge {{
+    color: rgba(255, 255, 255, 0.96);
+    background-color: rgba(9, 10, 15, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: {radius_sm}px;
+    padding: 0 2px;
+    font-size: {font_badge}px;
+    font-weight: 700;
+}}
+.wayscriber-toolbar label.shortcut-badge.above-swatch {{
+    background-color: transparent;
+    border-color: transparent;
+    padding: 0;
+}}
 
 /* ===== Popovers ======================================================== */
 .wayscriber-toolbar popover > arrow {{
@@ -308,6 +322,7 @@ tooltip {{
         pad_popover = px(8.0),
         check_size = px(14.0),
         font_label = px(13.0),
+        font_badge = px(8.0),
         font_small = px(10.0),
         font_tooltip = px(12.0),
     )

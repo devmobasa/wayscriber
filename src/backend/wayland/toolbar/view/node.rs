@@ -181,6 +181,18 @@ pub enum WidgetKind {
     Popover { caret_x: f64, caret_up: bool },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutBadgePlacement {
+    Corner,
+    Above,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShortcutBadge {
+    pub label: String,
+    pub placement: ShortcutBadgePlacement,
+}
+
 /// What a node does when hit. Nodes without an interaction are decoration.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interaction {
@@ -208,6 +220,7 @@ pub struct WidgetNode {
     pub rect: (f64, f64, f64, f64),
     pub kind: WidgetKind,
     pub interact: Option<Interaction>,
+    pub shortcut_badge: Option<ShortcutBadge>,
 }
 
 impl WidgetNode {
@@ -222,7 +235,20 @@ impl WidgetNode {
             rect,
             kind,
             interact,
+            shortcut_badge: None,
         }
+    }
+
+    pub fn with_shortcut_badge(
+        mut self,
+        label: Option<&str>,
+        placement: ShortcutBadgePlacement,
+    ) -> Self {
+        self.shortcut_badge = label.map(|label| ShortcutBadge {
+            label: label.to_string(),
+            placement,
+        });
+        self
     }
 
     /// Decoration-only node.

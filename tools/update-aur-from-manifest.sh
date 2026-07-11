@@ -297,7 +297,6 @@ update_configurator() {
     remove_pkgbuild_array_item PKGBUILD git
     remove_srcinfo_field_value .SRCINFO makedepends git
     ensure_libxkbcommon_dependency
-    ensure_gtk4_dependencies
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_pkgbuild_array PKGBUILD source 'source=("wayscriber-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")'

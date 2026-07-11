@@ -29,7 +29,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Capture,
         false,
         true,
-        false
+        true
     ),
     meta!(
         CaptureClipboardFull,

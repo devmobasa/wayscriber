@@ -16,5 +16,5 @@ pub mod popover;
 pub mod top;
 pub mod tree;
 
-pub use node::{ButtonStyle, WidgetKind, WidgetNode};
+pub use node::{ButtonStyle, ShortcutBadgePlacement, WidgetKind, WidgetNode};
 pub use tree::WidgetTree;

@@ -13,6 +13,7 @@ use super::events::{
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ToolbarBindingHints {
     bindings: HashMap<Action, String>,
+    badges: HashMap<Action, String>,
 }
 
 impl ToolbarBindingHints {
@@ -20,19 +21,36 @@ impl ToolbarBindingHints {
         action_for_tool(tool).and_then(|action| self.binding_for_action(action))
     }
 
+    pub fn badge_for_tool(&self, tool: Tool) -> Option<&str> {
+        action_for_tool(tool).and_then(|action| self.badge_for_action(action))
+    }
+
     pub fn from_input_state(state: &InputState) -> Self {
         let mut bindings = HashMap::new();
+        let mut badges = HashMap::new();
         for meta in action_meta_iter().filter(|meta| meta.in_toolbar) {
             let labels = state.action_binding_labels(meta.action);
             if let Some(label) = join_binding_labels(&labels) {
                 bindings.insert(meta.action, label);
             }
+            if let Some(label) = labels.first().and_then(|label| compact_badge_label(label)) {
+                badges.insert(meta.action, label);
+            }
         }
-        Self { bindings }
+        Self { bindings, badges }
     }
 
     pub fn binding_for_action(&self, action: Action) -> Option<&str> {
         self.bindings.get(&action).map(String::as_str)
+    }
+
+    pub fn badge_for_action(&self, action: Action) -> Option<&str> {
+        self.badges.get(&action).map(String::as_str)
+    }
+
+    pub fn quick_color_badge(&self, index: usize) -> Option<&str> {
+        crate::config::QuickColorPalette::action_for_index(index)
+            .and_then(|action| self.badge_for_action(action))
     }
 
     pub fn apply_preset(&self, slot: usize) -> Option<&str> {
@@ -50,6 +68,21 @@ impl ToolbarBindingHints {
     pub fn binding_for_event(&self, event: &ToolbarEvent) -> Option<&str> {
         action_for_event(event).and_then(|action| self.binding_for_action(action))
     }
+
+    pub fn badge_for_event(&self, event: &ToolbarEvent) -> Option<&str> {
+        action_for_event(event).and_then(|action| self.badge_for_action(action))
+    }
+}
+
+/// A visible toolbar badge must fit inside the existing fixed-size control.
+/// Modifier chords and multi-binding lists remain available in the tooltip;
+/// abbreviating them here would make the displayed shortcut misleading.
+fn compact_badge_label(label: &str) -> Option<String> {
+    let trimmed = label.trim();
+    let compact = trimmed.chars().count() <= 3
+        && !trimmed.is_empty()
+        && (!trimmed.contains('+') || trimmed == "+");
+    compact.then(|| trimmed.to_string())
 }
 
 pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
@@ -190,6 +223,34 @@ mod tests {
         assert_eq!(hints.for_tool(Tool::Pen), Some("Ctrl+P"));
         assert_eq!(hints.for_tool(Tool::Eraser), Some("Ctrl+E"));
         assert_eq!(hints.for_tool(Tool::StepMarker), None);
+        assert_eq!(hints.badge_for_tool(Tool::Pen), None);
+    }
+
+    #[test]
+    fn toolbar_binding_badges_use_current_compact_primary_binding() {
+        let hints = ToolbarBindingHints::from_input_state(
+            &make_test_input_state_with_action_bindings(binding_map(&[
+                (Action::SelectPenTool, &["9", "Ctrl+P"]),
+                (Action::SelectEraserTool, &["Ctrl+E"]),
+                (Action::SetColorRed, &["F1"]),
+                (Action::CaptureSelection, &["S"]),
+            ])),
+        );
+
+        assert_eq!(hints.badge_for_tool(Tool::Pen), Some("9"));
+        assert_eq!(hints.badge_for_tool(Tool::Eraser), None);
+        assert_eq!(hints.quick_color_badge(0), Some("F1"));
+        assert_eq!(hints.quick_color_badge(8), None);
+        assert_eq!(hints.badge_for_action(Action::CaptureSelection), Some("S"));
+    }
+
+    #[test]
+    fn compact_badge_label_rejects_chords_and_accepts_short_keys() {
+        assert_eq!(compact_badge_label("R").as_deref(), Some("R"));
+        assert_eq!(compact_badge_label("F12").as_deref(), Some("F12"));
+        assert_eq!(compact_badge_label("+").as_deref(), Some("+"));
+        assert_eq!(compact_badge_label("Ctrl+R"), None);
+        assert_eq!(compact_badge_label("Space"), None);
     }
 
     #[test]

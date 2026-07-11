@@ -29,8 +29,8 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 use super::super::GtkToolbarFeedback;
 use super::super::icons::{IconWidget, tool_icon_painter};
 use super::super::widgets::{
-    FeedbackSender, SwatchButton, icon_button, send_event, set_active_class, sized_button,
-    text_button,
+    FeedbackSender, SwatchButton, add_shortcut_badge, icon_button, send_event, set_active_class,
+    sized_button, swatch_with_shortcut, text_button,
 };
 
 // Spec-unit design tokens mirrored from the built-in layout
@@ -71,6 +71,7 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool);
 /// Everything needed to render one utility button: painter, short label,
 /// tooltip, click event, and the optional active-state probe.
 type UtilitySpec = (
+    Action,
     super::super::icons::IconPainter,
     &'static str,
     String,
@@ -87,6 +88,7 @@ struct StructureKey {
     scale_milli: i64,
     items: crate::config::ResolvedToolbarItems,
     quick_colors: crate::config::QuickColorPalette,
+    binding_hints: crate::ui::toolbar::ToolbarBindingHints,
     plan: TopStripPlan,
     ring_row: bool,
 }
@@ -100,6 +102,7 @@ impl StructureKey {
             scale_milli: (effective_scale(snapshot) * 1000.0).round() as i64,
             items: snapshot.resolved_toolbar_items.clone(),
             quick_colors: snapshot.quick_colors.clone(),
+            binding_hints: snapshot.binding_hints.clone(),
             plan: plan.clone(),
             ring_row: ring_row_active(snapshot, plan),
         }
@@ -388,6 +391,7 @@ impl TopBar {
                 (sz(btn_w), sz(btn_h)),
                 sz(ICON_SIZE),
                 use_icons,
+                !plan.compact,
             );
             append_gap(&bar, button.as_ref(), gap);
             x += btn_w + gap;
@@ -433,6 +437,7 @@ impl TopBar {
                 (sz(btn_w), sz(btn_h)),
                 sz(ICON_SIZE),
                 use_icons,
+                !plan.compact,
             ) {
                 append_gap(&bar, button.as_ref(), gap);
                 x += btn_w + gap;
@@ -445,6 +450,14 @@ impl TopBar {
             crate::config::toolbar_item_ids::TOP_GROUP_QUICK_COLORS,
         ) {
             push_divider(&bar, &mut x);
+            let show_swatch_badge_row = !plan.compact
+                && snapshot
+                    .quick_colors
+                    .rendered_entries()
+                    .iter()
+                    .take(plan.swatch_count)
+                    .enumerate()
+                    .any(|(index, _)| snapshot.binding_hints.quick_color_badge(index).is_some());
             for (index, entry) in snapshot
                 .quick_colors
                 .rendered_entries()
@@ -453,11 +466,15 @@ impl TopBar {
                 .enumerate()
             {
                 let entry_color = entry.color;
+                let action = crate::config::QuickColorPalette::action_for_index(index);
+                let binding =
+                    action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
+                let tooltip = format_binding_label(&entry.label, binding);
                 let swatch = SwatchButton::new(
                     entry_color,
                     entry_color == snapshot.color,
                     sz(SWATCH_SIZE),
-                    &entry.label,
+                    &tooltip,
                 );
                 let sender = self.feedback.clone();
                 swatch.button.connect_clicked(move |_| {
@@ -467,11 +484,15 @@ impl TopBar {
                     == plan
                         .swatch_count
                         .min(snapshot.quick_colors.rendered_entries().len());
-                append_gap(
-                    &bar,
-                    swatch.button.as_ref(),
-                    if is_last { gap } else { SWATCH_GAP },
-                );
+                let badge = (!plan.compact)
+                    .then(|| snapshot.binding_hints.quick_color_badge(index))
+                    .flatten();
+                let swatch_root = if !show_swatch_badge_row {
+                    swatch.button.clone().upcast()
+                } else {
+                    swatch_with_shortcut(&swatch.button, badge, sz(SWATCH_SIZE), sz(10.0))
+                };
+                append_gap(&bar, &swatch_root, if is_last { gap } else { SWATCH_GAP });
                 x += SWATCH_SIZE + if is_last { gap } else { SWATCH_GAP };
                 self.updaters.borrow_mut().push(Box::new(move |snapshot| {
                     swatch.set_selected(entry_color == snapshot.color);
@@ -511,6 +532,7 @@ impl TopBar {
                 (sz(btn_w), sz(btn_h)),
                 sz(ICON_SIZE),
                 use_icons,
+                !plan.compact,
             );
             append_gap(&bar, button.as_ref(), gap);
             x += btn_w + gap;
@@ -525,6 +547,7 @@ impl TopBar {
                 (sz(btn_w), sz(btn_h)),
                 sz(ICON_SIZE),
                 use_icons,
+                !plan.compact,
             );
             append_gap(&bar, button.as_ref(), gap);
             x += btn_w + gap;
@@ -547,6 +570,12 @@ impl TopBar {
                     &action_tooltip(snapshot, Action::ClearCanvas),
                 )
             };
+            if !plan.compact {
+                add_shortcut_badge(
+                    &button,
+                    snapshot.binding_hints.badge_for_action(Action::ClearCanvas),
+                );
+            }
             button.add_css_class("destructive");
             button.set_margin_start(px(gap));
             let sender = self.feedback.clone();
@@ -627,6 +656,7 @@ impl TopBar {
         button_size: (f64, f64),
         icon_size: f64,
         use_icons: bool,
+        show_badge: bool,
     ) -> gtk4::Button {
         let tooltip = tool_tooltip(snapshot, tool);
         let button = if use_icons {
@@ -634,6 +664,9 @@ impl TopBar {
         } else {
             text_button(tool_label(tool), button_size, &tooltip)
         };
+        if show_badge {
+            add_shortcut_badge(&button, snapshot.binding_hints.badge_for_tool(tool));
+        }
         let sender = self.feedback.clone();
         button.connect_clicked(move |_| {
             send_event(&sender, ToolbarEvent::SelectTool(tool));
@@ -718,9 +751,11 @@ impl TopBar {
         button_size: (f64, f64),
         icon_size: f64,
         use_icons: bool,
+        show_badge: bool,
     ) -> Option<gtk4::Button> {
-        let (painter, label, tooltip, event, active): UtilitySpec = match utility {
+        let (action, painter, label, tooltip, event, active): UtilitySpec = match utility {
             model::TopUtilityButton::Text => (
+                Action::EnterTextMode,
                 toolbar_icons::draw_icon_text,
                 action_short_label(Action::EnterTextMode),
                 action_tooltip(snapshot, Action::EnterTextMode),
@@ -728,6 +763,7 @@ impl TopBar {
                 Some(|snapshot| snapshot.text_active),
             ),
             model::TopUtilityButton::StickyNote => (
+                Action::EnterStickyNoteMode,
                 toolbar_icons::draw_icon_note,
                 action_short_label(Action::EnterStickyNoteMode),
                 action_tooltip(snapshot, Action::EnterStickyNoteMode),
@@ -735,6 +771,7 @@ impl TopBar {
                 Some(|snapshot| snapshot.note_active),
             ),
             model::TopUtilityButton::Screenshot => (
+                Action::CaptureSelection,
                 toolbar_icons::draw_icon_screenshot,
                 "Shot",
                 action_tooltip(snapshot, Action::CaptureSelection),
@@ -742,6 +779,7 @@ impl TopBar {
                 None,
             ),
             model::TopUtilityButton::Highlight => (
+                Action::ToggleHighlightTool,
                 toolbar_icons::draw_icon_highlight,
                 "Highlight",
                 action_tooltip(snapshot, Action::ToggleHighlightTool),
@@ -758,6 +796,9 @@ impl TopBar {
         } else {
             text_button(label, button_size, &tooltip)
         };
+        if show_badge {
+            add_shortcut_badge(&button, snapshot.binding_hints.badge_for_action(action));
+        }
         let sender = self.feedback.clone();
         if utility == model::TopUtilityButton::Highlight {
             // Highlight toggles off the *current* state rather than firing a
@@ -800,6 +841,7 @@ impl TopBar {
         button_size: (f64, f64),
         icon_size: f64,
         use_icons: bool,
+        show_badge: bool,
     ) -> gtk4::Button {
         let tooltip = action_tooltip(snapshot, action);
         let button = if use_icons {
@@ -807,6 +849,9 @@ impl TopBar {
         } else {
             text_button(action_short_label(action), button_size, &tooltip)
         };
+        if show_badge {
+            add_shortcut_badge(&button, snapshot.binding_hints.badge_for_action(action));
+        }
         let sender = self.feedback.clone();
         button.connect_clicked(move |_| {
             send_event(&sender, event.clone());
@@ -1018,6 +1063,7 @@ impl TopBar {
                 } else {
                     text_button(tool_label(tool), button_size, &tooltip)
                 };
+                add_shortcut_badge(&button, snapshot.binding_hints.badge_for_tool(tool));
                 set_active_class(
                     &button,
                     snapshot.active_tool == tool || snapshot.tool_override == Some(tool),
@@ -1102,6 +1148,7 @@ impl TopBar {
             } else {
                 text_button(tool_label(tool), button_size, &tooltip)
             };
+            add_shortcut_badge(&button, snapshot.binding_hints.badge_for_tool(tool));
             set_active_class(
                 &button,
                 snapshot.active_tool == tool || snapshot.tool_override == Some(tool),
@@ -1113,38 +1160,38 @@ impl TopBar {
             attach(&button);
         }
         for utility in &plan.dropped_utilities {
-            let (painter, label, tooltip, event, active): (
+            let (action, painter, label, event, active): (
+                Action,
                 super::super::icons::IconPainter,
                 &str,
-                String,
                 ToolbarEvent,
                 bool,
             ) = match utility {
                 model::TopUtilityButton::Text => (
+                    Action::EnterTextMode,
                     toolbar_icons::draw_icon_text,
                     action_short_label(Action::EnterTextMode),
-                    action_label(Action::EnterTextMode).to_string(),
                     ToolbarEvent::EnterTextMode,
                     snapshot.text_active,
                 ),
                 model::TopUtilityButton::StickyNote => (
+                    Action::EnterStickyNoteMode,
                     toolbar_icons::draw_icon_note,
                     action_short_label(Action::EnterStickyNoteMode),
-                    action_label(Action::EnterStickyNoteMode).to_string(),
                     ToolbarEvent::EnterStickyNoteMode,
                     snapshot.note_active,
                 ),
                 model::TopUtilityButton::Screenshot => (
+                    Action::CaptureSelection,
                     toolbar_icons::draw_icon_screenshot,
                     "Shot",
-                    action_label(Action::CaptureSelection).to_string(),
                     ToolbarEvent::CaptureScreenshot,
                     false,
                 ),
                 model::TopUtilityButton::Highlight => (
+                    Action::ToggleHighlightTool,
                     toolbar_icons::draw_icon_highlight,
                     "Highlight",
-                    action_label(Action::ToggleHighlightTool).to_string(),
                     ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
                     snapshot.any_highlight_active,
                 ),
@@ -1152,11 +1199,13 @@ impl TopBar {
                     continue;
                 }
             };
+            let tooltip = action_tooltip(snapshot, action);
             let button = if use_icons {
                 icon_button(painter, button_size, icon_size, &tooltip).button
             } else {
                 text_button(label, button_size, &tooltip)
             };
+            add_shortcut_badge(&button, snapshot.binding_hints.badge_for_action(action));
             set_active_class(&button, active);
             let sender = self.feedback.clone();
             button.connect_clicked(move |_| {
@@ -1263,4 +1312,39 @@ pub(super) fn clamp_drag_offsets(
         max_y = (geometry.height() as f64 - base_y - 24.0).max(0.0);
     }
     (x.clamp(-base_x, max_x), y.clamp(-base_y, max_y))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::config::KeyBinding;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarBindingHints;
+
+    #[test]
+    fn top_structure_rebuilds_when_current_shortcuts_change() {
+        let mut state = make_test_input_state();
+        let initial = ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::from_input_state(&state),
+        );
+        let initial_plan = plan_top_strip(&initial);
+        let initial_key = StructureKey::of(&initial, &initial_plan);
+
+        state.set_action_bindings(HashMap::from([(
+            Action::SelectPenTool,
+            vec![KeyBinding::parse("9").expect("binding")],
+        )]));
+        let changed = ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::from_input_state(&state),
+        );
+        let changed_plan = plan_top_strip(&changed);
+        let changed_key = StructureKey::of(&changed, &changed_plan);
+
+        assert!(initial_key != changed_key);
+        assert_eq!(changed.binding_hints.badge_for_tool(Tool::Pen), Some("9"));
+    }
 }
