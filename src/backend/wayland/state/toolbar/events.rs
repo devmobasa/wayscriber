@@ -94,7 +94,10 @@ impl WaylandState {
         } else {
             1.0
         };
-        let base_x = if self.inline_toolbars_active() {
+        // The GTK bars position at inline_top_base_x too (side palette
+        // pushes the strip right); the width budget must share that
+        // origin or planning overshoots and the right chrome clips.
+        let base_x = if self.inline_toolbars_active() || self.gtk_toolbars_active() {
             self.inline_top_base_x(snapshot)
         } else {
             Self::TOP_MARGIN_RIGHT

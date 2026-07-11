@@ -133,7 +133,11 @@ pub(in crate::toolbar_gtk) struct SideBar {
     chrome_updaters: Vec<Updater>,
     content_updaters: Vec<Updater>,
     scrolled: Option<gtk4::ScrolledWindow>,
-    saved_scroll: Rc<Cell<f64>>,
+    /// Per-pane scroll positions, saved on rebuild and restored when the
+    /// same pane is built again — switching panes must not leak one
+    /// pane's scroll into another (the backend keeps per-pane offsets
+    /// too; this mirrors that behavior GTK-side).
+    saved_scroll: std::rc::Rc<std::cell::RefCell<Vec<(SidePane, f64)>>>,
     drag_active: Rc<Cell<bool>>,
     offsets: Rc<Cell<(f64, f64)>>,
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
@@ -169,7 +173,7 @@ impl SideBar {
             chrome_updaters: Vec::new(),
             content_updaters: Vec::new(),
             scrolled: None,
-            saved_scroll: Rc::new(Cell::new(0.0)),
+            saved_scroll: Rc::new(std::cell::RefCell::new(Vec::new())),
             drag_active: Rc::new(Cell::new(false)),
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             offset_seq: Rc::new(Cell::new(0)),
@@ -227,9 +231,13 @@ impl SideBar {
     }
 
     fn rebuild(&mut self, snapshot: &ToolbarSnapshot) {
-        // Preserve the scroll position across rebuilds.
-        if let Some(scrolled) = &self.scrolled {
-            self.saved_scroll.set(scrolled.vadjustment().value());
+        // Preserve the outgoing pane's scroll position, keyed by pane so
+        // it is only restored into the same pane.
+        if let (Some(scrolled), Some(key)) = (&self.scrolled, &self.structure) {
+            let value = scrolled.vadjustment().value();
+            let mut saved = self.saved_scroll.borrow_mut();
+            saved.retain(|(pane, _)| *pane != key.pane);
+            saved.push((key.pane, value));
         }
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
@@ -333,16 +341,25 @@ impl SideBar {
         scrolled.set_child(Some(&content));
         self.root.append(&scrolled);
 
-        // Restore the scroll position once the new content is laid out;
-        // one-shot so later size changes never yank the user's scroll.
+        // Restore this pane's scroll position once the new content is
+        // laid out; one-shot so later size changes never yank the user's
+        // scroll.
         let adjustment = scrolled.vadjustment();
-        let saved = self.saved_scroll.clone();
+        let pane = snapshot.active_side_pane;
+        let pending = std::cell::Cell::new(
+            self.saved_scroll
+                .borrow()
+                .iter()
+                .find(|(saved_pane, _)| *saved_pane == pane)
+                .map(|(_, value)| *value)
+                .unwrap_or(0.0),
+        );
         adjustment.connect_changed(move |adjustment| {
-            let target = saved.get();
+            let target = pending.get();
             let reachable = adjustment.upper() - adjustment.page_size();
             if target > 0.0 && reachable >= target {
                 adjustment.set_value(target);
-                saved.set(0.0);
+                pending.set(0.0);
             }
         });
         self.scrolled = Some(scrolled);

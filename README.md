@@ -71,6 +71,8 @@ Pick the block for your distro. Repo, AUR, and Nix installs are the best default
 
 Also use this path for Linux Mint, Pop!_OS, and other Debian-based distros.
 
+> **Requires Ubuntu 25.04+ or Debian 13 (trixie) or newer.** The packages depend on `libgtk4-layer-shell0` for the toolbars, which older releases — including Ubuntu 24.04 LTS, Mint 22, and Pop!_OS 22.04 — do not ship. On those, [build from source](#from-source); Pop!_OS 22.04 requires the GTK-less build option.
+
 ```bash
 sudo apt update
 sudo apt install curl gpg
@@ -180,6 +182,8 @@ For distro-specific package details, see [Installation](#installation). For keyb
 | Wayland (layer-shell) | ✅ Supported | Hyprland, Sway, River, Wayfire, Niri/Cosmic, Plasma/KWin |
 | GNOME | ⚠️ Partial | Normal overlay and Freeze via portal when available; Light Mode passthrough unavailable |
 | X11 | ❌ | Not supported |
+
+Prebuilt `.deb` packages need Ubuntu 25.04+ or Debian 13 (trixie)+ (they depend on `libgtk4-layer-shell0`); older Debian-based releases should [build from source](#from-source), using the GTK-less option on Pop!_OS 22.04. RPMs, the AUR packages, and Nix are unaffected.
 
 <details>
 <summary>Tested environments</summary>
@@ -299,7 +303,7 @@ If you prefer downloading files in a browser instead of using package-manager co
 
 1. Open [latest release](https://github.com/devmobasa/wayscriber/releases/latest).
 2. Install the main app package that matches your distro:
-   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) (Ubuntu, Debian, Linux Mint, Pop!_OS, and other Debian-based distros)
+   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) (Ubuntu 25.04+, Debian 13+, and other newer Debian-based distros — needs `libgtk4-layer-shell0`; on Ubuntu 24.04 LTS / Mint 22 / Pop!_OS 22.04 [build from source](#from-source) instead, using the GTK-less option on Pop!_OS 22.04)
    - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm) (Fedora, RHEL, Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros)
 3. Optional: install the configurator package (`wayscriber-configurator`) after wayscriber:
    - [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
@@ -311,6 +315,9 @@ If you prefer downloading files in a browser instead of using package-manager co
 Release packages are one-off installs (no auto-updates). Use repo installs below for automatic updates.
 
 ### Debian / Ubuntu (repo – recommended)
+
+> **Requires Ubuntu 25.04+ or Debian 13 (trixie) or newer** (the toolbar dependency `libgtk4-layer-shell0` is not in earlier releases). On Ubuntu 24.04 LTS, Mint 22, or Pop!_OS 22.04, [build from source](#from-source); Pop!_OS 22.04 requires the GTK-less build option.
+
 ```bash
 sudo apt update
 sudo apt install curl gpg
@@ -422,24 +429,57 @@ nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19#wayscriber-configur
 
 ### From Source
 
-**Dependencies:**
-
-Rust 1.95 or newer, plus native packages:
-
-```bash
-# Debian/Ubuntu
-sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev
-
-# Fedora
-sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel
-```
-
-**Build:**
+Rust 1.95 or newer. First clone the repository — the dependency and build
+steps below run from inside it:
 
 ```bash
 git clone https://github.com/devmobasa/wayscriber.git
 cd wayscriber
+```
+
+**Dependencies:**
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev
+
+# Ubuntu 25.04+ / Debian 13 (trixie)+ also ship the layer-shell dev package:
+sudo apt-get install libgtk4-layer-shell-dev
+
+# Fedora
+sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel gtk4-devel gtk4-layer-shell-devel
+```
+
+On **Ubuntu 24.04 LTS and Mint 22** there is no `libgtk4-layer-shell-dev`
+package, but GTK itself is new enough. Either build the small layer-shell
+library from the pinned source (needs `meson ninja-build wayland-protocols`,
+installs into `/usr`):
+
+```bash
+sudo apt-get install meson ninja-build wayland-protocols
+bash tools/install-gtk4-layer-shell.sh   # builds + installs gtk4-layer-shell 1.3.0
+```
+
+…or skip it and use the GTK-less build option below. That keeps the built-in
+Cairo toolbars and every other default feature.
+
+**Pop!_OS 22.04 ships GTK 4.6, below the GTK 4.12 API required by the default
+build.** Building only gtk4-layer-shell is therefore not enough there: use the
+GTK-less build below, unless you separately install GTK 4.12 or newer.
+
+**Build:**
+
+With the GTK toolbar frontend (the default):
+
+```bash
 cargo build --release
+# Binary: target/release/wayscriber
+```
+
+Without the GTK toolbar frontend:
+
+```bash
+cargo build --release --no-default-features --features tablet-input,portal,tray
 # Binary: target/release/wayscriber
 ```
 
@@ -844,7 +884,7 @@ min_thickness = 1.0
 max_thickness = 8.0
 ```
 
-It works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support: `cargo build --release --no-default-features` (or remove the `tablet-input` feature).
+It works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support, drop only that feature (bare `--no-default-features` would also strip portal capture, tray, and the GTK toolbars): `cargo build --release --no-default-features --features portal,tray,toolbar-gtk`.
 
 See https://wayscriber.com/docs/ for the full reference.
 
