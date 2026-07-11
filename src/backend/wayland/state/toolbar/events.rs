@@ -85,8 +85,8 @@ impl WaylandState {
 
     /// Width available to the top strip in pre-scale spec units; content
     /// past this degrades into the overflow menu instead of clipping off
-    /// the screen. Inline mode subtracts the real base X after any side-pane
-    /// push, so a zero drag offset cannot still place the bar off-screen.
+    /// the screen. Both inline and layer-shell placement use the pushed top
+    /// base X, so budgeting must subtract that same position.
     fn top_strip_viewport_max(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
         let screen_width = self.surface.width() as f64;
         let scale = if snapshot.toolbar_scale.is_finite() {
@@ -94,14 +94,7 @@ impl WaylandState {
         } else {
             1.0
         };
-        // The GTK bars position at inline_top_base_x too (side palette
-        // pushes the strip right); the width budget must share that
-        // origin or planning overshoots and the right chrome clips.
-        let base_x = if self.inline_toolbars_active() || self.gtk_toolbars_active() {
-            self.inline_top_base_x(snapshot)
-        } else {
-            Self::TOP_MARGIN_RIGHT
-        };
+        let base_x = self.inline_top_base_x(snapshot);
         super::geometry::remaining_top_width(screen_width, base_x, Self::TOP_MARGIN_RIGHT, scale)
     }
 

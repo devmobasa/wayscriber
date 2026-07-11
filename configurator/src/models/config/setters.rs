@@ -49,6 +49,7 @@ impl ConfigDraft {
         self.ui_toolbar_mode_overrides
             .for_mode_mut(mode)
             .set(field, value);
+        self.refresh_toolbar_section_visibility();
     }
 
     pub fn set_toolbar_item_visible(&mut self, id: ToolbarItemId, visible: bool) {

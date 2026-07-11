@@ -12,7 +12,7 @@
 use super::ids;
 use super::items::{ResolvedToolbarItems, ToolbarItemId, ToolbarItemsConfig};
 use super::mode::ToolbarLayoutMode;
-use super::overrides::ToolbarModeOverrides;
+use super::overrides::{ToolbarModeOverride, ToolbarModeOverrides};
 
 /// The section-level visibility flags with a stable item id each, so an
 /// explicit user choice survives layout-mode switches.
@@ -104,6 +104,36 @@ pub struct ToolbarSectionVisibility {
 }
 
 impl ToolbarSectionVisibility {
+    /// Apply the active layout mode's compatibility overrides to legacy
+    /// `show_*` values before they are folded into explicit item choices.
+    /// Settings remains always reachable and is intentionally ignored.
+    pub fn apply_mode_override(&mut self, overrides: &ToolbarModeOverride) {
+        if let Some(value) = overrides.show_actions_section {
+            self.show_actions_section = value;
+        }
+        if let Some(value) = overrides.show_actions_advanced {
+            self.show_actions_advanced = value;
+        }
+        if let Some(value) = overrides.show_zoom_actions {
+            self.show_zoom_actions = value;
+        }
+        if let Some(value) = overrides.show_pages_section {
+            self.show_pages_section = value;
+        }
+        if let Some(value) = overrides.show_boards_section {
+            self.show_boards_section = value;
+        }
+        if let Some(value) = overrides.show_presets {
+            self.show_presets = value;
+        }
+        if let Some(value) = overrides.show_step_section {
+            self.show_step_section = value;
+        }
+        if let Some(value) = overrides.show_text_controls {
+            self.show_text_controls = value;
+        }
+    }
+
     pub fn get(&self, flag: ToolbarSectionFlag) -> bool {
         match flag {
             ToolbarSectionFlag::Actions => self.show_actions_section,

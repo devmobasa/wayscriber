@@ -188,6 +188,16 @@ mod tests {
     }
 
     #[test]
+    fn layer_shell_budget_leaves_room_for_its_positioned_base() {
+        let base = compute_inline_top_base_x(24.0, true, 260.0, 24.0, 58.0, 16.0, true);
+        let budget = remaining_top_width(1366.0, base, 12.0, 1.0).unwrap();
+
+        assert_eq!(base, 300.0);
+        assert_eq!(budget, 1054.0);
+        assert_eq!(base + budget + 12.0, 1366.0);
+    }
+
+    #[test]
     fn top_budget_does_not_claim_a_480_pixel_floor() {
         assert_eq!(remaining_top_width(400.0, 12.0, 12.0, 1.0), Some(376.0));
     }
