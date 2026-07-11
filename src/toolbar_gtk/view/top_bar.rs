@@ -13,6 +13,7 @@
 //! survive snapshot churn.
 
 use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use gtk4::prelude::*;
@@ -59,6 +60,78 @@ const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 const BASE_MARGIN: (i32, i32) = (12, 12);
 
 use super::Updater;
+
+/// A layer-shell margin move changes the coordinate space that
+/// `GestureDrag` measures in. Keep only the newest residual motion and
+/// apply it once per compositor frame, otherwise several input events in
+/// one frame all add the same not-yet-consumed displacement and overshoot.
+#[derive(Default)]
+pub(super) struct FrameCoalescedDrag {
+    next_generation: Cell<u64>,
+    pending: RefCell<VecDeque<(u64, DragFrame)>>,
+}
+
+pub(super) struct DragFrame {
+    pub(super) delta: (f64, f64),
+    pub(super) done: bool,
+}
+
+impl FrameCoalescedDrag {
+    pub(super) fn begin(&self) -> u64 {
+        let generation = self.next_generation.get().wrapping_add(1);
+        self.next_generation.set(generation);
+        generation
+    }
+
+    pub(super) fn update(&self, generation: u64, dx: f64, dy: f64) {
+        let mut pending = self.pending.borrow_mut();
+        if let Some((queued_generation, frame)) = pending.back_mut()
+            && *queued_generation == generation
+            && !frame.done
+        {
+            frame.delta = (dx, dy);
+            return;
+        }
+        pending.push_back((
+            generation,
+            DragFrame {
+                delta: (dx, dy),
+                done: false,
+            },
+        ));
+    }
+
+    pub(super) fn end(&self, generation: u64, dx: f64, dy: f64) {
+        let mut pending = self.pending.borrow_mut();
+        if let Some((queued_generation, frame)) = pending.back_mut()
+            && *queued_generation == generation
+            && !frame.done
+        {
+            frame.delta = (dx, dy);
+            frame.done = true;
+            return;
+        }
+        pending.push_back((
+            generation,
+            DragFrame {
+                // If the last update was already consumed by a frame,
+                // drag-end repeats GTK's start-relative offset rather than
+                // contributing fresh residual motion. Complete without
+                // moving the surface again.
+                delta: (0.0, 0.0),
+                done: true,
+            },
+        ));
+    }
+
+    pub(super) fn take_frame(&self, generation: u64) -> Option<DragFrame> {
+        let mut pending = self.pending.borrow_mut();
+        let index = pending
+            .iter()
+            .position(|(queued_generation, _)| *queued_generation == generation)?;
+        pending.remove(index).map(|(_, frame)| frame)
+    }
+}
 
 /// Snapshot inputs the shapes-popover grid renders from: active tool,
 /// override, fill flag, polygon sides.
@@ -1224,8 +1297,10 @@ impl TopBar {
     ///
     /// GestureDrag deltas are surface-local, and the surface itself moves
     /// with every margin change, so each reported delta is the *residual*
-    /// pointer movement — re-anchor against the live offsets, not the
-    /// drag-start snapshot, for 1:1 tracking.
+    /// pointer movement. Coalesce raw motion to the GTK frame clock before
+    /// re-anchoring against live offsets; this prevents multiple events from
+    /// applying the same residual while the compositor is still moving the
+    /// surface.
     fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
@@ -1234,44 +1309,71 @@ impl TopBar {
         let offsets = self.offsets.clone();
         let base_x = self.base_x.clone();
         let seq = self.offset_seq.clone();
+        let pending = Rc::new(FrameCoalescedDrag::default());
+        let active_generation = Rc::new(Cell::new(0));
 
         let begin_active = drag_active.clone();
-        drag.connect_drag_begin(move |_, _, _| {
+        let begin_pending = pending.clone();
+        let begin_generation = active_generation.clone();
+        let frame_window = window.clone();
+        let frame_offsets = offsets.clone();
+        let frame_feedback = feedback.clone();
+        let frame_base = base_x.clone();
+        let frame_seq = seq.clone();
+        drag.connect_drag_begin(move |gesture, _, _| {
             begin_active.set(true);
+            let generation = begin_pending.begin();
+            begin_generation.set(generation);
+            let Some(grip) = gesture.widget() else {
+                begin_active.set(false);
+                return;
+            };
+
+            let pending = begin_pending.clone();
+            let window = frame_window.clone();
+            let offsets = frame_offsets.clone();
+            let feedback = frame_feedback.clone();
+            let base_x = frame_base.clone();
+            let seq = frame_seq.clone();
+            let drag_active = begin_active.clone();
+            let active_generation = begin_generation.clone();
+            grip.add_tick_callback(move |_, _| {
+                let Some(frame) = pending.take_frame(generation) else {
+                    return gtk4::glib::ControlFlow::Continue;
+                };
+                let base = base_x.get();
+                let (cx, cy) = offsets.get();
+                let (mut x, mut y) = (cx + frame.delta.0, cy + frame.delta.1);
+                (x, y) = clamp_drag_offsets(&window, (x, y), (base, BASE_MARGIN.0 as f64));
+                offsets.set((x, y));
+                window.set_margin(Edge::Left, (base + x).round() as i32);
+                window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
+                seq.set(seq.get() + 1);
+                let _ = feedback.send(GtkToolbarFeedback::SetTopOffset {
+                    x,
+                    y,
+                    seq: seq.get(),
+                    done: frame.done,
+                });
+                if frame.done {
+                    if active_generation.get() == generation {
+                        drag_active.set(false);
+                    }
+                    gtk4::glib::ControlFlow::Break
+                } else {
+                    gtk4::glib::ControlFlow::Continue
+                }
+            });
         });
 
-        let update_window = window.clone();
-        let update_offsets = offsets.clone();
-        let update_feedback = feedback.clone();
-        let update_base = base_x.clone();
-        let update_seq = seq.clone();
+        let update_pending = pending.clone();
+        let update_generation = active_generation.clone();
         drag.connect_drag_update(move |_, dx, dy| {
-            let base = update_base.get();
-            let (cx, cy) = update_offsets.get();
-            let (mut x, mut y) = (cx + dx, cy + dy);
-            (x, y) = clamp_drag_offsets(&update_window, (x, y), (base, BASE_MARGIN.0 as f64));
-            update_offsets.set((x, y));
-            update_window.set_margin(Edge::Left, (base + x).round() as i32);
-            update_window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
-            update_seq.set(update_seq.get() + 1);
-            let _ = update_feedback.send(GtkToolbarFeedback::SetTopOffset {
-                x,
-                y,
-                seq: update_seq.get(),
-                done: false,
-            });
+            update_pending.update(update_generation.get(), dx, dy);
         });
 
-        drag.connect_drag_end(move |_, _, _| {
-            drag_active.set(false);
-            let (x, y) = offsets.get();
-            seq.set(seq.get() + 1);
-            let _ = feedback.send(GtkToolbarFeedback::SetTopOffset {
-                x,
-                y,
-                seq: seq.get(),
-                done: true,
-            });
+        drag.connect_drag_end(move |_, dx, dy| {
+            pending.end(active_generation.get(), dx, dy);
         });
         grip.add_controller(drag);
     }
@@ -1325,6 +1427,44 @@ mod tests {
     use crate::config::KeyBinding;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarBindingHints;
+
+    #[test]
+    fn drag_updates_are_coalesced_to_the_latest_residual_per_frame() {
+        let drag = FrameCoalescedDrag::default();
+        let first = drag.begin();
+        drag.update(first, 2.0, 3.0);
+        drag.update(first, 5.0, 7.0);
+
+        let frame = drag.take_frame(first).expect("latest motion is pending");
+        assert_eq!(frame.delta, (5.0, 7.0));
+        assert!(!frame.done);
+        assert!(drag.take_frame(first).is_none());
+
+        drag.end(first, 5.0, 7.0);
+        let frame = drag.take_frame(first).expect("drag end is pending");
+        assert_eq!(frame.delta, (0.0, 0.0));
+        assert!(frame.done);
+    }
+
+    #[test]
+    fn consecutive_drags_keep_separate_final_frames() {
+        let drag = FrameCoalescedDrag::default();
+        let first = drag.begin();
+        drag.update(first, 4.0, 6.0);
+        drag.end(first, 4.0, 6.0);
+        let second = drag.begin();
+        drag.update(second, 1.0, 2.0);
+
+        let first_frame = drag.take_frame(first).expect("first drag end is retained");
+        assert_eq!(first_frame.delta, (4.0, 6.0));
+        assert!(first_frame.done);
+
+        let second_frame = drag
+            .take_frame(second)
+            .expect("second drag motion is retained");
+        assert_eq!(second_frame.delta, (1.0, 2.0));
+        assert!(!second_frame.done);
+    }
 
     #[test]
     fn top_structure_rebuilds_when_current_shortcuts_change() {

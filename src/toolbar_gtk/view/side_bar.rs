@@ -503,8 +503,8 @@ impl SideBar {
         button
     }
 
-    /// See `top_bar::attach_move_drag`: deltas are surface-local while the
-    /// surface moves, so re-anchor against the live offsets each update.
+    /// See `top_bar::attach_move_drag`: coalesce surface-local residual
+    /// motion to one layer-margin update per GTK frame.
     fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
@@ -512,45 +512,71 @@ impl SideBar {
         let drag_active = self.drag_active.clone();
         let offsets = self.offsets.clone();
         let seq = self.offset_seq.clone();
+        let pending = Rc::new(super::top_bar::FrameCoalescedDrag::default());
+        let active_generation = Rc::new(Cell::new(0));
 
         let begin_active = drag_active.clone();
-        drag.connect_drag_begin(move |_, _, _| {
+        let begin_pending = pending.clone();
+        let begin_generation = active_generation.clone();
+        let frame_window = window.clone();
+        let frame_offsets = offsets.clone();
+        let frame_feedback = feedback.clone();
+        let frame_seq = seq.clone();
+        drag.connect_drag_begin(move |gesture, _, _| {
             begin_active.set(true);
+            let generation = begin_pending.begin();
+            begin_generation.set(generation);
+            let Some(grip) = gesture.widget() else {
+                begin_active.set(false);
+                return;
+            };
+
+            let pending = begin_pending.clone();
+            let window = frame_window.clone();
+            let offsets = frame_offsets.clone();
+            let feedback = frame_feedback.clone();
+            let seq = frame_seq.clone();
+            let drag_active = begin_active.clone();
+            let active_generation = begin_generation.clone();
+            grip.add_tick_callback(move |_, _| {
+                let Some(frame) = pending.take_frame(generation) else {
+                    return gtk4::glib::ControlFlow::Continue;
+                };
+                let (cx, cy) = offsets.get();
+                let (x, y) = super::top_bar::clamp_drag_offsets(
+                    &window,
+                    (cx + frame.delta.0, cy + frame.delta.1),
+                    (BASE_MARGIN.1 as f64, BASE_MARGIN.0 as f64),
+                );
+                offsets.set((x, y));
+                window.set_margin(Edge::Left, BASE_MARGIN.1 + x.round() as i32);
+                window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
+                seq.set(seq.get() + 1);
+                let _ = feedback.send(GtkToolbarFeedback::SetSideOffset {
+                    x,
+                    y,
+                    seq: seq.get(),
+                    done: frame.done,
+                });
+                if frame.done {
+                    if active_generation.get() == generation {
+                        drag_active.set(false);
+                    }
+                    gtk4::glib::ControlFlow::Break
+                } else {
+                    gtk4::glib::ControlFlow::Continue
+                }
+            });
         });
 
-        let update_window = window.clone();
-        let update_offsets = offsets.clone();
-        let update_feedback = feedback.clone();
-        let update_seq = seq.clone();
+        let update_pending = pending.clone();
+        let update_generation = active_generation.clone();
         drag.connect_drag_update(move |_, dx, dy| {
-            let (cx, cy) = update_offsets.get();
-            let (x, y) = super::top_bar::clamp_drag_offsets(
-                &update_window,
-                (cx + dx, cy + dy),
-                (BASE_MARGIN.1 as f64, BASE_MARGIN.0 as f64),
-            );
-            update_offsets.set((x, y));
-            update_window.set_margin(Edge::Left, BASE_MARGIN.1 + x.round() as i32);
-            update_window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
-            update_seq.set(update_seq.get() + 1);
-            let _ = update_feedback.send(GtkToolbarFeedback::SetSideOffset {
-                x,
-                y,
-                seq: update_seq.get(),
-                done: false,
-            });
+            update_pending.update(update_generation.get(), dx, dy);
         });
 
-        drag.connect_drag_end(move |_, _, _| {
-            drag_active.set(false);
-            let (x, y) = offsets.get();
-            seq.set(seq.get() + 1);
-            let _ = feedback.send(GtkToolbarFeedback::SetSideOffset {
-                x,
-                y,
-                seq: seq.get(),
-                done: true,
-            });
+        drag.connect_drag_end(move |_, dx, dy| {
+            pending.end(active_generation.get(), dx, dy);
         });
         grip.add_controller(drag);
     }
