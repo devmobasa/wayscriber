@@ -1,6 +1,6 @@
-//! Backend-side glue for the GTK toolbar frontend: spawn decision, event
-//! draining, and state pushes. See `crate::toolbar_gtk` for the threading
-//! model.
+//! Backend-side glue for the GTK toolbar frontend: spawn decision,
+//! feedback draining, and state pushes. See `crate::toolbar_gtk` for the
+//! threading model.
 
 use std::time::Duration;
 
@@ -10,11 +10,11 @@ use super::WaylandState;
 use crate::toolbar_gtk::select::{
     GtkPreconditions, ToolbarFrontend, requested_backend, resolve_frontend,
 };
-use crate::toolbar_gtk::{GtkToolbarBridge, GtkToolbarUpdate};
+use crate::toolbar_gtk::{GtkToolbarBridge, GtkToolbarFeedback, GtkToolbarUpdate};
 
 impl WaylandState {
-    /// Bounds the main poll while the GTK thread can produce events, since
-    /// nothing it sends wakes the Wayland fd.
+    /// Bounds the main poll while the GTK thread can produce feedback,
+    /// since nothing it sends wakes the Wayland fd.
     const GTK_TOOLBAR_WAKE_INTERVAL: Duration = Duration::from_millis(25);
 
     /// True while the GTK frontend owns the toolbars (built-in bars stay
@@ -60,7 +60,7 @@ impl WaylandState {
             .map(|_| Self::GTK_TOOLBAR_WAKE_INTERVAL)
     }
 
-    /// Drains pending GTK toolbar events into the shared toolbar-event
+    /// Drains pending GTK toolbar feedback into the shared toolbar-event
     /// path, and falls back to the built-in bars if the GTK thread died.
     pub(in crate::backend::wayland) fn process_gtk_toolbar(
         &mut self,
@@ -81,12 +81,22 @@ impl WaylandState {
         let Some(bridge) = self.gtk_toolbar.as_ref() else {
             return;
         };
-        let mut events = Vec::new();
-        while let Some(event) = bridge.try_recv_event() {
-            events.push(event);
+        let mut pending = Vec::new();
+        while let Some(feedback) = bridge.try_recv_feedback() {
+            pending.push(feedback);
         }
-        for event in events {
-            self.handle_toolbar_event(event, Some(conn), Some(qh));
+        for feedback in pending {
+            match feedback {
+                GtkToolbarFeedback::Event(event) => {
+                    self.handle_toolbar_event(event, Some(conn), Some(qh));
+                }
+                GtkToolbarFeedback::SetTopOffset { x, y, done } => {
+                    self.apply_gtk_top_offset(x, y, done);
+                }
+                GtkToolbarFeedback::SetSideOffset { x, y, done } => {
+                    self.apply_gtk_side_offset(x, y, done);
+                }
+            }
         }
     }
 
@@ -100,6 +110,11 @@ impl WaylandState {
             snapshot: self.toolbar_snapshot(),
             top_visible: self.input_state.toolbar_top_visible(),
             side_visible: self.input_state.toolbar_side_visible(),
+            top_offset: (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
+            side_offset: (
+                self.data.toolbar_side_offset_x,
+                self.data.toolbar_side_offset,
+            ),
             output_name: self
                 .surface
                 .current_output()

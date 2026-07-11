@@ -52,7 +52,7 @@ serde_json = "1.0"
 png = "0.18"
 
 # GTK4 toolbar frontend (layer-shell compositors)
-gtk4 = { version = "0.11", optional = true }
+gtk4 = { version = "0.11", optional = true, features = ["v4_12"] }
 gtk4-layer-shell = { version = "0.8", optional = true }
 async-channel = { version = "2", optional = true }
 

@@ -7,13 +7,12 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use gtk4::glib;
 
-use super::GtkToolbarUpdate;
 use super::enabled::{STATUS_FAILED, STATUS_READY};
-use crate::ui::toolbar::ToolbarEvent;
+use super::{GtkToolbarFeedback, GtkToolbarUpdate};
 
 pub(super) fn run(
     updates: async_channel::Receiver<GtkToolbarUpdate>,
-    events: std::sync::mpsc::Sender<ToolbarEvent>,
+    feedback: std::sync::mpsc::Sender<GtkToolbarFeedback>,
     status: Arc<AtomicU8>,
 ) {
     if let Err(err) = gtk4::init() {
@@ -27,7 +26,6 @@ pub(super) fn run(
         return;
     }
 
-    super::view::install_css();
     status.store(STATUS_READY, Ordering::Release);
 
     let main_loop = glib::MainLoop::new(None, false);
@@ -36,7 +34,7 @@ pub(super) fn run(
         let mut windows: Option<super::view::Windows> = None;
         while let Ok(update) = updates.recv().await {
             windows
-                .get_or_insert_with(|| super::view::Windows::new(events.clone()))
+                .get_or_insert_with(|| super::view::Windows::new(feedback.clone()))
                 .apply(&update);
         }
         // The backend dropped the bridge; shut the GTK side down with it.

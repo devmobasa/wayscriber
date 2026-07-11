@@ -11,17 +11,23 @@
 //! connection and GLib main loop. The Wayland backend never calls GTK; the
 //! two sides talk exclusively through the [`GtkToolbarBridge`] channels.
 //! [`GtkToolbarUpdate`]s flow to the GTK thread whenever toolbar-relevant
-//! state changes, and [`crate::ui::toolbar::ToolbarEvent`]s flow back and
-//! are drained once per event-loop iteration into the same
+//! state changes, and [`GtkToolbarFeedback`] flows back and is drained
+//! once per event-loop iteration. Toolbar events feed the same
 //! `handle_toolbar_event` path the built-in bars use, so persistence and
 //! popover policy stay shared instead of duplicated.
 
 pub mod select;
 
 #[cfg(feature = "toolbar-gtk")]
+mod css;
+#[cfg(feature = "toolbar-gtk")]
+mod icons;
+#[cfg(feature = "toolbar-gtk")]
 mod runtime;
 #[cfg(feature = "toolbar-gtk")]
 mod view;
+#[cfg(feature = "toolbar-gtk")]
+mod widgets;
 
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
@@ -32,9 +38,31 @@ pub struct GtkToolbarUpdate {
     pub snapshot: ToolbarSnapshot,
     pub top_visible: bool,
     pub side_visible: bool,
+    /// Drag offsets relative to each bar's base margins, already clamped
+    /// by the backend.
+    pub top_offset: (f64, f64),
+    pub side_offset: (f64, f64),
     /// Connector name of the output hosting the overlay (e.g. "DP-1"),
     /// used to pin the GTK bars to the same monitor.
     pub output_name: Option<String>,
+}
+
+/// Messages from the GTK thread back to the backend.
+// Without the feature the stub bridge never constructs these; the backend
+// match arms still compile against them.
+#[cfg_attr(not(feature = "toolbar-gtk"), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq)]
+pub enum GtkToolbarFeedback {
+    /// A toolbar control fired; routed through `handle_toolbar_event`.
+    Event(ToolbarEvent),
+    /// Drag-to-move progress for the top bar. `done` marks the drag end,
+    /// which is when the offsets get clamped and persisted.
+    SetTopOffset { x: f64, y: f64, done: bool },
+    /// Drag-to-move progress for the side palette.
+    // Constructed once the GTK side palette lands; the backend match arm
+    // is already in place.
+    #[allow(dead_code)]
+    SetSideOffset { x: f64, y: f64, done: bool },
 }
 
 #[cfg(feature = "toolbar-gtk")]
@@ -45,7 +73,7 @@ mod enabled {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU8, Ordering};
 
-    use super::{GtkToolbarUpdate, ToolbarEvent};
+    use super::{GtkToolbarFeedback, GtkToolbarUpdate};
 
     pub(super) const STATUS_STARTING: u8 = 0;
     pub(super) const STATUS_READY: u8 = 1;
@@ -54,7 +82,7 @@ mod enabled {
     /// Main-thread handle to the GTK toolbar thread.
     pub struct GtkToolbarBridge {
         update_tx: async_channel::Sender<GtkToolbarUpdate>,
-        events_rx: std::sync::mpsc::Receiver<ToolbarEvent>,
+        feedback_rx: std::sync::mpsc::Receiver<GtkToolbarFeedback>,
         status: Arc<AtomicU8>,
         last_sent: Option<GtkToolbarUpdate>,
     }
@@ -65,16 +93,16 @@ mod enabled {
         /// asynchronously through [`Self::failed`].
         pub fn spawn() -> Option<Self> {
             let (update_tx, update_rx) = async_channel::unbounded();
-            let (event_tx, events_rx) = std::sync::mpsc::channel();
+            let (feedback_tx, feedback_rx) = std::sync::mpsc::channel();
             let status = Arc::new(AtomicU8::new(STATUS_STARTING));
             let thread_status = status.clone();
             let spawned = std::thread::Builder::new()
                 .name("gtk-toolbar".into())
-                .spawn(move || super::runtime::run(update_rx, event_tx, thread_status));
+                .spawn(move || super::runtime::run(update_rx, feedback_tx, thread_status));
             match spawned {
                 Ok(_join_handle) => Some(Self {
                     update_tx,
-                    events_rx,
+                    feedback_rx,
                     status,
                     last_sent: None,
                 }),
@@ -90,9 +118,9 @@ mod enabled {
             self.status.load(Ordering::Acquire) == STATUS_FAILED
         }
 
-        /// Non-blocking receive of one toolbar event from the GTK bars.
-        pub fn try_recv_event(&self) -> Option<ToolbarEvent> {
-            self.events_rx.try_recv().ok()
+        /// Non-blocking receive of one feedback message from the GTK bars.
+        pub fn try_recv_feedback(&self) -> Option<GtkToolbarFeedback> {
+            self.feedback_rx.try_recv().ok()
         }
 
         /// Sends the update if it differs from the previously sent one.
@@ -114,7 +142,7 @@ pub use disabled::GtkToolbarBridge;
 
 #[cfg(not(feature = "toolbar-gtk"))]
 mod disabled {
-    use super::{GtkToolbarUpdate, ToolbarEvent};
+    use super::{GtkToolbarFeedback, GtkToolbarUpdate};
 
     /// Stub bridge: without the `toolbar-gtk` feature `spawn` never
     /// succeeds, so the other methods are unreachable but keep call sites
@@ -130,7 +158,7 @@ mod disabled {
             false
         }
 
-        pub fn try_recv_event(&self) -> Option<ToolbarEvent> {
+        pub fn try_recv_feedback(&self) -> Option<GtkToolbarFeedback> {
             None
         }
 
