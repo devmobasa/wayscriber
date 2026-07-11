@@ -61,6 +61,11 @@ window.wayscriber-toolbar {{
     padding: {pad_panel_v}px {pad_panel_h}px;
 }}
 
+/* Minimized restore tabs hug the button, like the builtin 64x24 tab. */
+.wayscriber-toolbar .panel.minimized {{
+    padding: 0;
+}}
+
 /* ===== Buttons ========================================================= */
 .wayscriber-toolbar button {{
     min-width: 0;

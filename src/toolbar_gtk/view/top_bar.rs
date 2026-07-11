@@ -279,6 +279,14 @@ impl TopBar {
 
     fn build_minimized(&mut self, snapshot: &ToolbarSnapshot) {
         let scale = effective_scale(snapshot);
+        // A GTK toplevel never shrinks on its own; reset the default size
+        // or the tab keeps the full strip's width. The panel padding is
+        // dropped so the tab hugs the 64x24 builtin footprint.
+        self.window.set_default_size(
+            (MINIMIZED_SIZE.0 * scale).round() as i32,
+            (MINIMIZED_SIZE.1 * scale).round() as i32,
+        );
+        self.root.add_css_class("minimized");
         let restore = sized_button(MINIMIZED_SIZE.0 * scale, MINIMIZED_SIZE.1 * scale);
         restore.add_css_class("chrome");
         restore.set_tooltip_text(Some("Show toolbar"));
@@ -299,6 +307,7 @@ impl TopBar {
     // the two walks stay line-for-line comparable.
     #[allow(unused_assignments)]
     fn build_strip(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
+        self.root.remove_css_class("minimized");
         let scale = effective_scale(snapshot);
         let is_simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
         let use_icons = snapshot.use_icons || plan.compact;

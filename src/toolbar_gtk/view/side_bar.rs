@@ -247,6 +247,7 @@ impl SideBar {
 
     fn build_minimized(&mut self, snapshot: &ToolbarSnapshot) {
         let scale = effective_scale(snapshot);
+        self.root.add_css_class("minimized");
         // Drop the palette's 260px default width so the tab shrinks.
         self.window.set_default_size(
             (MINIMIZED_SIZE.0 * scale).round() as i32,
@@ -268,6 +269,7 @@ impl SideBar {
     }
 
     fn build_palette(&mut self, snapshot: &ToolbarSnapshot) {
+        self.root.remove_css_class("minimized");
         let scale = effective_scale(snapshot);
         let px = |value: f64| (value * scale).round() as i32;
         self.window
