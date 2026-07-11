@@ -1,35 +1,6 @@
 use cairo::Context;
 use std::f64::consts::PI;
 
-/// Common helper to draw a single curved arrow pointing left.
-/// Set `offset_y` when you want a subtle vertical shift (not used here, but kept
-/// for compatibility with older call sites).
-pub(super) fn draw_curved_arrow(ctx: &Context, x: f64, y: f64, size: f64, offset_y: bool) {
-    let s = size;
-    let stroke = (s * 0.12).max(1.5);
-    ctx.set_line_width(stroke);
-    ctx.set_line_cap(cairo::LineCap::Round);
-    ctx.set_line_join(cairo::LineJoin::Round);
-
-    let cx = x + s * 0.5;
-    let cy = y + s * 0.5 + if offset_y { s * 0.02 } else { 0.0 };
-    let r = s * 0.38;
-
-    // Sweep around most of the circle, leaving a small gap on the left where the head sits.
-    let start_angle = -PI * 0.9;
-    let end_angle = PI * 0.9;
-
-    ctx.save().ok();
-    // Slight clockwise tilt to match the rest of the toolbar
-    ctx.translate(cx, cy);
-    ctx.rotate(-10f64.to_radians());
-    ctx.translate(-cx, -cy);
-
-    draw_arc_with_head(ctx, cx, cy, r, start_angle, end_angle, s * 0.18);
-
-    ctx.restore().ok();
-}
-
 /// Helper to draw the "undo all / redo all" double curved arrow.
 ///
 /// Front arrow = same geometry as the single undo/redo.

@@ -3,30 +3,7 @@ use std::f64::consts::PI;
 
 /// Draw a clear/trash icon
 pub fn draw_icon_clear(ctx: &Context, x: f64, y: f64, size: f64) {
-    let s = size;
-    let stroke = (s * 0.1).max(1.5);
-    ctx.set_line_width(stroke);
-    ctx.set_line_cap(cairo::LineCap::Round);
-    ctx.set_line_join(cairo::LineJoin::Round);
-
-    // Trash can body
-    ctx.move_to(x + s * 0.25, y + s * 0.35);
-    ctx.line_to(x + s * 0.3, y + s * 0.8);
-    ctx.line_to(x + s * 0.7, y + s * 0.8);
-    ctx.line_to(x + s * 0.75, y + s * 0.35);
-    let _ = ctx.stroke();
-
-    // Lid
-    ctx.move_to(x + s * 0.2, y + s * 0.35);
-    ctx.line_to(x + s * 0.8, y + s * 0.35);
-    let _ = ctx.stroke();
-
-    // Handle
-    ctx.move_to(x + s * 0.4, y + s * 0.35);
-    ctx.line_to(x + s * 0.4, y + s * 0.25);
-    ctx.line_to(x + s * 0.6, y + s * 0.25);
-    ctx.line_to(x + s * 0.6, y + s * 0.35);
-    let _ = ctx.stroke();
+    super::svg::render_clear_canvas(ctx, x, y, size);
 }
 
 /// Draw a freeze/pause icon
@@ -250,25 +227,7 @@ pub fn draw_icon_copy(ctx: &Context, x: f64, y: f64, size: f64) {
 
 /// Draw a screenshot/camera icon.
 pub fn draw_icon_screenshot(ctx: &Context, x: f64, y: f64, size: f64) {
-    let s = size;
-    let stroke = (s * 0.09).max(1.5);
-    ctx.set_line_width(stroke);
-    ctx.set_line_join(cairo::LineJoin::Round);
-    ctx.set_line_cap(cairo::LineCap::Round);
-
-    ctx.rectangle(x + s * 0.18, y + s * 0.32, s * 0.64, s * 0.46);
-    let _ = ctx.stroke();
-
-    ctx.move_to(x + s * 0.34, y + s * 0.32);
-    ctx.line_to(x + s * 0.4, y + s * 0.22);
-    ctx.line_to(x + s * 0.6, y + s * 0.22);
-    ctx.line_to(x + s * 0.66, y + s * 0.32);
-    let _ = ctx.stroke();
-
-    ctx.arc(x + s * 0.5, y + s * 0.56, s * 0.13, 0.0, PI * 2.0);
-    let _ = ctx.stroke();
-    ctx.arc(x + s * 0.72, y + s * 0.4, s * 0.035, 0.0, PI * 2.0);
-    let _ = ctx.fill();
+    super::svg::render_screenshot(ctx, x, y, size);
 }
 
 /// Draw a visibility/eye icon.
@@ -335,6 +294,7 @@ pub fn draw_icon_chevron_right(ctx: &Context, x: f64, y: f64, size: f64) {
 }
 
 /// Draw a downward chevron icon (expand below).
+#[allow(dead_code)] // used by toolbar-gtk section controls when that feature is enabled
 pub fn draw_icon_chevron_down(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
     let stroke = (s * 0.12).max(1.5);

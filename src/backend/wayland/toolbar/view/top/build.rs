@@ -109,13 +109,12 @@ pub(super) fn build_top_view_planned(
         tool_drawn = true;
     }
 
-    // --- Shapes picker (face = last-used shape, caret grid below) ----------
+    // --- Shapes picker (family icon, caret grid below) ----------------------
     let mut picker_anchor: Option<(f64, f64, f64, f64)> = None;
     if model::top_shape_picker_visible(snapshot) {
         if previous_group == Some(model::TopToolGroup::Pens) {
             push_divider(&mut tree, &mut x, "tools");
         }
-        let icon_tool = current_shape_tool.unwrap_or_else(model::default_shape_tool);
         let picker_active = snapshot.shape_picker_open || current_shape_tool.is_some();
         let interact = Interaction::click(
             ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
@@ -123,7 +122,7 @@ pub(super) fn build_top_view_planned(
         );
         let kind = if use_icons {
             WidgetKind::IconButton {
-                glyph: semantic_icon_fn(model::semantic_icon_for_tool(icon_tool)),
+                glyph: IconFn(toolbar_icons::draw_icon_shape_picker),
                 icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE,
                 style: ButtonStyle::active(picker_active),
             }
@@ -644,7 +643,7 @@ fn build_top_minimized_tab(width: f64, height: f64) -> WidgetTree {
         "top.chrome.restore",
         (0.0, 0.0, width, height),
         WidgetKind::IconButton {
-            glyph: IconFn(toolbar_icons::draw_icon_chevron_down),
+            glyph: IconFn(toolbar_icons::draw_icon_restore),
             icon_size: (height * 0.75).min(18.0),
             style: ButtonStyle::plain(),
         },

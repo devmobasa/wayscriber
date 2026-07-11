@@ -6,15 +6,12 @@ use cairo::Context;
 
 /// Draw an undo icon (curved arrow left)
 pub fn draw_icon_undo(ctx: &Context, x: f64, y: f64, size: f64) {
-    arrows::draw_curved_arrow(ctx, x, y, size, false);
+    super::svg::render_undo(ctx, x, y, size);
 }
 
 /// Draw a redo icon (curved arrow right)
 pub fn draw_icon_redo(ctx: &Context, x: f64, y: f64, size: f64) {
-    // Mirror the undo arrow for perfect symmetry
-    with_horizontal_mirror(ctx, x, y, size, |ctx| {
-        arrows::draw_curved_arrow(ctx, 0.0, 0.0, size, false);
-    });
+    super::svg::render_redo(ctx, x, y, size);
 }
 
 /// Draw an undo all icon (double curved arrow left)

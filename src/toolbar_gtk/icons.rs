@@ -41,8 +41,8 @@ pub(super) fn tool_icon_painter(tool: Tool) -> IconPainter {
     }
 }
 
-/// Handle to an icon widget whose painter can be swapped (the shapes
-/// picker face shows the last-used shape).
+/// Handle to an icon widget whose painter can be swapped when live toolbar
+/// state changes the represented action (for example pin/unpin).
 #[derive(Clone)]
 pub(super) struct IconWidget {
     pub(super) area: gtk4::DrawingArea,

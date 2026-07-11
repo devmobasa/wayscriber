@@ -30,17 +30,7 @@ pub fn draw_icon_plus(ctx: &Context, x: f64, y: f64, size: f64) {
 
 /// Draw a "more" (three dots) icon
 pub fn draw_icon_more(ctx: &Context, x: f64, y: f64, size: f64) {
-    let s = size;
-    let r = (s * 0.09).max(1.5);
-    let cy = y + s * 0.5;
-    let start_x = x + s * 0.25;
-    let gap = s * 0.25;
-
-    for i in 0..3 {
-        let cx = start_x + gap * i as f64;
-        ctx.arc(cx, cy, r, 0.0, PI * 2.0);
-        let _ = ctx.fill();
-    }
+    super::svg::render_more(ctx, x, y, size);
 }
 
 /// Draw an information icon.
@@ -146,71 +136,64 @@ pub fn draw_icon_board(ctx: &Context, x: f64, y: f64, size: f64) {
 /// handles. Uses the context's current source color.
 #[allow(dead_code)] // referenced by the toolbar-gtk frontend only
 pub fn draw_icon_grip_bars(ctx: &Context, x: f64, y: f64, size: f64) {
-    let bar_w = size * 0.55;
-    let bar_h = (size * 0.11).max(1.5);
-    let bar_gap = bar_h;
-    let stack_h = 3.0 * bar_h + 2.0 * bar_gap;
-    let bar_x = x + (size - bar_w) / 2.0;
-    let mut bar_y = y + (size - stack_h) / 2.0;
-    for _ in 0..3 {
-        ctx.rectangle(bar_x, bar_y, bar_w, bar_h);
-        let _ = ctx.fill();
-        bar_y += bar_h + bar_gap;
-    }
+    draw_icon_drag(ctx, x, y, size);
+}
+
+/// Draw the toolbar drag handle.
+pub fn draw_icon_drag(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_drag(ctx, x, y, size);
 }
 
 /// Draw a minimize dash (not an X: the bar collapses to a restore tab).
 #[allow(dead_code)] // referenced by the toolbar-gtk frontend only
 pub fn draw_icon_dash(ctx: &Context, x: f64, y: f64, size: f64) {
-    ctx.set_line_width((size * 0.12).max(1.6));
-    ctx.set_line_cap(cairo::LineCap::Round);
-    let inset = size * 0.24;
-    let cy = y + size / 2.0;
-    ctx.move_to(x + inset, cy);
-    ctx.line_to(x + size - inset, cy);
-    let _ = ctx.stroke();
+    draw_icon_minimize(ctx, x, y, size);
 }
 
 /// Draw a pushpin glyph ("keep open at startup"): outline when unpinned,
 /// filled when pinned. Geometry mirrors the built-in pin chrome button.
 #[allow(dead_code)] // referenced by the toolbar-gtk frontend only
 pub fn draw_icon_pushpin(ctx: &Context, x: f64, y: f64, size: f64, filled: bool) {
-    let s = size / 2.0;
-    let cx = x + s;
-    let cy = y + s;
-
-    ctx.new_path();
-    ctx.move_to(cx - s * 0.45, cy - s * 0.85);
-    ctx.line_to(cx + s * 0.45, cy - s * 0.85);
-    ctx.line_to(cx + s * 0.3, cy - s * 0.55);
-    ctx.line_to(cx + s * 0.3, cy - s * 0.15);
-    ctx.line_to(cx + s * 0.6, cy + s * 0.15);
-    ctx.line_to(cx - s * 0.6, cy + s * 0.15);
-    ctx.line_to(cx - s * 0.3, cy - s * 0.15);
-    ctx.line_to(cx - s * 0.3, cy - s * 0.55);
-    ctx.close_path();
     if filled {
-        let _ = ctx.fill();
+        draw_icon_pin(ctx, x, y, size);
     } else {
-        ctx.set_line_width(1.3);
-        let _ = ctx.stroke();
+        draw_icon_unpin(ctx, x, y, size);
     }
-
-    ctx.set_line_width(if filled { 1.6 } else { 1.3 });
-    ctx.set_line_cap(cairo::LineCap::Round);
-    ctx.move_to(cx, cy + s * 0.15);
-    ctx.line_to(cx, cy + s * 0.85);
-    let _ = ctx.stroke();
 }
 
 /// Outline pushpin with the 4-arg painter shape used by icon widgets.
 #[allow(dead_code)] // referenced by the toolbar-gtk frontend only
 pub fn draw_icon_pin_outline(ctx: &Context, x: f64, y: f64, size: f64) {
-    draw_icon_pushpin(ctx, x, y, size, false);
+    draw_icon_unpin(ctx, x, y, size);
 }
 
 /// Filled pushpin with the 4-arg painter shape used by icon widgets.
 #[allow(dead_code)] // referenced by the toolbar-gtk frontend only
 pub fn draw_icon_pin_filled(ctx: &Context, x: f64, y: f64, size: f64) {
-    draw_icon_pushpin(ctx, x, y, size, true);
+    draw_icon_pin(ctx, x, y, size);
+}
+
+pub fn draw_icon_pin(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_pin(ctx, x, y, size);
+}
+
+pub fn draw_icon_unpin(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_unpin(ctx, x, y, size);
+}
+
+pub fn draw_icon_minimize(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_minimize(ctx, x, y, size);
+}
+
+pub fn draw_icon_side_minimize(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_side_minimize(ctx, x, y, size);
+}
+
+pub fn draw_icon_restore(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_restore(ctx, x, y, size);
+}
+
+#[allow(dead_code)] // part of the complete icon family; no close action today
+pub fn draw_icon_close(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_close(ctx, x, y, size);
 }

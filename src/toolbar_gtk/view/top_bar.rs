@@ -370,7 +370,7 @@ impl TopBar {
         restore.add_css_class("chrome");
         restore.set_tooltip_text(Some("Show toolbar"));
         let icon = IconWidget::new(
-            toolbar_icons::draw_icon_chevron_down,
+            toolbar_icons::draw_icon_restore,
             (MINIMIZED_SIZE.1 * 0.75 * scale).min(18.0 * scale),
         );
         restore.set_child(Some(&icon.area));
@@ -436,7 +436,7 @@ impl TopBar {
 
         // --- Drag grip -----------------------------------------------------
         if model::toolbar_item_visible(snapshot, crate::config::toolbar_item_ids::TOP_CHROME_DRAG) {
-            let grip = IconWidget::new(toolbar_icons::draw_icon_grip_bars, sz(HANDLE_SIZE));
+            let grip = IconWidget::new(toolbar_icons::draw_icon_drag, sz(HANDLE_SIZE));
             grip.area.set_can_target(true);
             grip.area.add_css_class("drag-handle");
             grip.area.set_tooltip_text(Some("Drag toolbar"));
@@ -755,31 +755,23 @@ impl TopBar {
         button
     }
 
-    /// Shapes picker button: face shows the last-used shape; the popover
-    /// carries the grid and per-tool option rows.
+    /// Shapes picker button: the family icon opens the grid and per-tool
+    /// option rows; individual shapes keep their own icons inside the popover.
     fn shapes_picker_button(
         &mut self,
-        snapshot: &ToolbarSnapshot,
+        _snapshot: &ToolbarSnapshot,
         button_size: (f64, f64),
         icon_size: f64,
         use_icons: bool,
     ) -> gtk4::Button {
-        let face_tool = model::current_shape_tool(snapshot.active_tool, snapshot.tool_override)
-            .unwrap_or_else(model::default_shape_tool);
         let button = if use_icons {
-            let icon = icon_button(
-                tool_icon_painter(face_tool),
+            icon_button(
+                toolbar_icons::draw_icon_shape_picker,
                 button_size,
                 icon_size,
                 "Shapes",
-            );
-            let icon_handle = icon.icon.clone();
-            self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                let face = model::current_shape_tool(snapshot.active_tool, snapshot.tool_override)
-                    .unwrap_or_else(model::default_shape_tool);
-                icon_handle.set_painter(tool_icon_painter(face));
-            }));
-            icon.button
+            )
+            .button
         } else {
             text_button("Shapes", button_size, "Shapes")
         };
@@ -944,9 +936,9 @@ impl TopBar {
         button.add_css_class("chrome");
         let icon = IconWidget::new(
             if snapshot.top_pinned {
-                toolbar_icons::draw_icon_pin_filled
+                toolbar_icons::draw_icon_pin
             } else {
-                toolbar_icons::draw_icon_pin_outline
+                toolbar_icons::draw_icon_unpin
             },
             size * 0.62,
         );
@@ -961,9 +953,9 @@ impl TopBar {
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
             pinned.set(snapshot.top_pinned);
             icon.set_painter(if snapshot.top_pinned {
-                toolbar_icons::draw_icon_pin_filled
+                toolbar_icons::draw_icon_pin
             } else {
-                toolbar_icons::draw_icon_pin_outline
+                toolbar_icons::draw_icon_unpin
             });
             if snapshot.top_pinned {
                 handle.add_css_class("pinned");
@@ -1025,7 +1017,7 @@ impl TopBar {
         button.add_css_class("chrome");
         button.add_css_class("minimize");
         button.set_tooltip_text(Some("Minimize (leaves a restore tab)"));
-        let icon = IconWidget::new(toolbar_icons::draw_icon_dash, size * 0.6);
+        let icon = IconWidget::new(toolbar_icons::draw_icon_minimize, size * 0.6);
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();
         button.connect_clicked(move |_| {

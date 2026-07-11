@@ -102,7 +102,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let close_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, close_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_minimize_button(ctx, close_x, btn_y, btn_size, close_hover);
+    draw_side_minimize_button(ctx, close_x, btn_y, btn_size, close_hover);
     hits.push(HitRegion {
         focus_id: None,
         rect: (close_x, btn_y, btn_size, btn_size),

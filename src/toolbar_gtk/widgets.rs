@@ -161,7 +161,6 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window) {
 
 pub(super) struct IconButton {
     pub(super) button: gtk4::Button,
-    pub(super) icon: IconWidget,
 }
 
 pub(super) fn icon_button(
@@ -174,7 +173,7 @@ pub(super) fn icon_button(
     let icon = IconWidget::new(painter, icon_size);
     button.set_child(Some(&icon.area));
     button.set_tooltip_text(Some(tooltip));
-    IconButton { button, icon }
+    IconButton { button }
 }
 
 pub(super) fn text_button(label: &str, button_size: (f64, f64), tooltip: &str) -> gtk4::Button {
