@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
+use super::{ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
 
 /// Toolbar visibility and pinning configuration.
 ///
@@ -9,6 +9,10 @@ use super::{ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolbarConfig {
+    /// Toolbar frontend ("auto", "gtk", "builtin")
+    #[serde(default)]
+    pub backend: ToolbarBackendKind,
+
     /// Toolbar layout preset (simple, regular, advanced)
     #[serde(default = "default_toolbar_layout_mode")]
     pub layout_mode: ToolbarLayoutMode,
@@ -137,6 +141,7 @@ pub struct ToolbarConfig {
 impl Default for ToolbarConfig {
     fn default() -> Self {
         Self {
+            backend: ToolbarBackendKind::default(),
             layout_mode: default_toolbar_layout_mode(),
             mode_overrides: ToolbarModeOverrides::default(),
             items: ToolbarItemsConfig::default(),

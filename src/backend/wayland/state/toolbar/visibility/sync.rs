@@ -56,9 +56,11 @@ impl WaylandState {
 
     /// Syncs toolbar visibility from the input state, ensures surfaces exist, and adjusts keyboard interactivity.
     pub(in crate::backend::wayland) fn sync_toolbar_visibility(&mut self, qh: &QueueHandle<Self>) {
-        // Sync individual toolbar visibility
-        let top_visible = self.input_state.toolbar_top_visible();
-        let side_visible = self.input_state.toolbar_side_visible();
+        // Sync individual toolbar visibility. While the GTK frontend owns
+        // the toolbars, the built-in surfaces stay unmapped.
+        let gtk_active = self.gtk_toolbars_active();
+        let top_visible = self.input_state.toolbar_top_visible() && !gtk_active;
+        let side_visible = self.input_state.toolbar_side_visible() && !gtk_active;
         let inline_active = self.inline_toolbars_active();
         let drag_preview = self.toolbar_drag_preview_active();
 

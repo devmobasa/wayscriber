@@ -51,6 +51,11 @@ zbus = { version = "5.0", optional = true, default-features = false, features = 
 serde_json = "1.0"
 png = "0.18"
 
+# GTK4 toolbar frontend (layer-shell compositors)
+gtk4 = { version = "0.11", optional = true }
+gtk4-layer-shell = { version = "0.8", optional = true }
+async-channel = { version = "2", optional = true }
+
 [build-dependencies]
 
 [features]
@@ -61,7 +66,10 @@ dbus = ["zbus"]
 portal = ["dbus"]
 tray = ["dbus", "ksni"]
 config-schema = ["dep:schemars"]
-default = ["tablet-input", "portal", "tray"]
+# GTK4-rendered toolbars on layer-shell compositors; the built-in Cairo
+# toolbars remain compiled in as the fallback for everything else.
+toolbar-gtk = ["dep:gtk4", "dep:gtk4-layer-shell", "dep:async-channel"]
+default = ["tablet-input", "portal", "tray", "toolbar-gtk"]
 
 [[bin]]
 name = "dump_config_schema"

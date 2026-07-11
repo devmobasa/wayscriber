@@ -332,6 +332,14 @@ radial_menu_mouse_binding = "middle"
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]
+# Toolbar frontend: "auto" uses GTK4-rendered toolbars on compositors where
+# the bars get their own layer surfaces (Hyprland, KWin, Wayfire, ...) and
+# the built-in toolbars everywhere else (GNOME, forced-inline, builds
+# without the toolbar-gtk feature). "gtk" requests GTK4 explicitly (warns
+# and falls back when unsupported); "builtin" always uses the built-in bars.
+# Env override: WAYSCRIBER_TOOLBAR_BACKEND
+backend = "auto"
+
 # Toolbar layout preset (simple / full)
 # Legacy values: regular / advanced
 layout_mode = "full"

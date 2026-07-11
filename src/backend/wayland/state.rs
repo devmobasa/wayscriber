@@ -90,6 +90,7 @@ mod clipboard;
 mod color_picker;
 mod core;
 mod data;
+mod gtk_toolbar;
 mod helpers;
 mod input_actions;
 mod onboarding;
@@ -180,6 +181,8 @@ pub(super) struct WaylandState {
     pub(super) input_state: InputState,
     pub(super) clipboard_publish_rx: Option<std::sync::mpsc::Receiver<ClipboardPublishCompletion>>,
     pub(super) clipboard_paste_rx: Option<std::sync::mpsc::Receiver<ClipboardPasteCompletion>>,
+    /// GTK toolbar frontend; `None` means the built-in bars are in charge.
+    pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,

@@ -1,3 +1,4 @@
+mod backend;
 mod config;
 pub mod ids;
 mod items;
@@ -5,6 +6,7 @@ mod mode;
 mod overrides;
 mod visibility;
 
+pub use backend::ToolbarBackendKind;
 pub use config::ToolbarConfig;
 pub use items::{
     ResolvedToolbarItems, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition,
