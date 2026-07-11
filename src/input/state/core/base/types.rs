@@ -183,35 +183,6 @@ pub enum OutputFocusAction {
     Prev,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolbarDrawerTab {
-    View,
-    App,
-    Session,
-    Sections,
-    Customize,
-}
-
-impl ToolbarDrawerTab {
-    pub const ALL: [Self; 5] = [
-        Self::View,
-        Self::App,
-        Self::Sections,
-        Self::Session,
-        Self::Customize,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::View => "Canvas",
-            Self::App => "Settings",
-            Self::Session => "Session",
-            Self::Sections => "Sections",
-            Self::Customize => "Customize",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum PresetAction {
     Save {

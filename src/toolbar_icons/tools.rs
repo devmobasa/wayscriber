@@ -55,7 +55,6 @@ pub fn draw_icon_polygon(ctx: &Context, x: f64, y: f64, size: f64) {
 pub fn draw_icon_freeform_polygon(ctx: &Context, x: f64, y: f64, size: f64) {
     let points = &[0.18, 0.64, 0.34, 0.18, 0.72, 0.28, 0.84, 0.76, 0.46, 0.88];
     draw_polygon_icon(ctx, x, y, size, points);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
     for pair in points.chunks_exact(2) {
         ctx.arc(
             x + pair[0] * size,
@@ -115,8 +114,9 @@ fn draw_polygon_icon(ctx: &Context, x: f64, y: f64, size: f64, normalized_points
     let Some(first) = pairs.next() else {
         return;
     };
+    // Inherit the caller's source color (hover/disabled states) like every
+    // other icon; only line style is scoped here.
     let _ = ctx.save();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
     ctx.set_line_width((size * 0.11).clamp(1.5, 2.4));
     ctx.set_line_join(cairo::LineJoin::Round);
     ctx.set_line_cap(cairo::LineCap::Round);

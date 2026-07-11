@@ -2,14 +2,16 @@ use super::super::ToolbarLayoutSpec;
 
 impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_WIDTH: u32 = 260;
+    /// Minimized side palette: the edge restore tab.
+    pub(in crate::backend::wayland::toolbar) const SIDE_MINIMIZED_SIZE: (u32, u32) = (24, 64);
 
     pub(in crate::backend::wayland::toolbar) const SIDE_START_X: f64 = 16.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_TOP_PADDING: f64 = 12.0;
 
     // Three-row header layout
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_ROW1_HEIGHT: f64 = 30.0; // Drag + pin/close
-    pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_ROW2_HEIGHT: f64 = 28.0; // Mode controls row
-    pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_ROW3_HEIGHT: f64 = 24.0; // Board row
+    pub(in crate::backend::wayland::toolbar) const SIDE_PANE_NAV_HEIGHT: f64 = 26.0; // Pane navigation row
+    pub(in crate::backend::wayland::toolbar) const SIDE_PANE_NAV_GAP: f64 = 6.0; // Gap between header row and nav
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_BOTTOM_GAP: f64 = 8.0;
 
     // Drag handle (compact size like before)
@@ -23,27 +25,28 @@ impl ToolbarLayoutSpec {
     // Segmented control height
     pub(in crate::backend::wayland::toolbar) const SIDE_SEGMENT_HEIGHT: f64 = 22.0;
 
-    pub(in crate::backend::wayland::toolbar) const SIDE_MODE_ICONS_WIDTH: f64 = 72.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_MODE_LAYOUT_WIDTH: f64 = 120.0;
-
     // Board chip (inline style)
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_CHIP_HEIGHT: f64 = 22.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_CHEVRON_SIZE: f64 = 20.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CONTENT_PADDING_X: f64 = 32.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CARD_INSET: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_OFFSET_Y: f64 = 24.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_EXTRA_HEIGHT: f64 = 30.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SLIDER_ROW_OFFSET: f64 = 26.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_NUDGE_SIZE: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_BUTTON_HEIGHT_ICON: f64 = 32.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_BUTTON_HEIGHT_TEXT: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_BUTTON_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_CONTENT_GAP_TEXT: f64 = 5.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_ACTION_GROUP_LABEL_HEIGHT: f64 = 16.0;
 
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_GAP: f64 = 12.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_TOGGLE_OFFSET_Y: f64 = 22.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SECTION_LABEL_HEIGHT: f64 = 28.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_INPUT_HEIGHT: f64 = 24.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SV_HEIGHT: f64 = 72.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HUE_HEIGHT: f64 = 14.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HUE_GAP: f64 = 6.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PICKER_BLOCK_HEIGHT: f64 =
+        Self::SIDE_COLOR_SV_HEIGHT + Self::SIDE_COLOR_HUE_GAP + Self::SIDE_COLOR_HUE_HEIGHT;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SECTION_BOTTOM_PADDING: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH_GAP: f64 = 6.0;
@@ -82,13 +85,10 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_CARD_HEIGHT: f64 = 100.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_CARD_HEIGHT: f64 = 74.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_SLOT_SIZE: f64 = 40.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_SLOT_GAP: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ACTION_HEIGHT: f64 = 20.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 4.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_FOOTER_PADDING: f64 = 10.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SETTINGS_BUTTON_HEIGHT: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SETTINGS_BUTTON_GAP: f64 = 6.0;

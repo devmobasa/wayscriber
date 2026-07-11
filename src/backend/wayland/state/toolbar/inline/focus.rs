@@ -1,6 +1,8 @@
 use super::*;
 use crate::backend::wayland::toolbar::ToolbarFocusTarget;
-use crate::backend::wayland::toolbar::hit::{focus_hover_point, focused_event, next_focus_index};
+use crate::backend::wayland::toolbar::hit::{
+    focus_hover_point, focused_event, next_focus_index, resolve_focus_index,
+};
 use crate::input::Key;
 
 impl WaylandState {
@@ -12,7 +14,14 @@ impl WaylandState {
             ToolbarFocusTarget::Top => &self.data.inline_top_hits,
             ToolbarFocusTarget::Side => &self.data.inline_side_hits,
         };
-        focus_hover_point(hits, self.inline_focus_index(target))
+        focus_hover_point(
+            hits,
+            resolve_focus_index(
+                hits,
+                self.inline_focus_index(target),
+                self.inline_focus_id(target),
+            ),
+        )
     }
 
     pub(in crate::backend::wayland) fn inline_toolbar_focus_next(
@@ -24,10 +33,16 @@ impl WaylandState {
             ToolbarFocusTarget::Top => &self.data.inline_top_hits,
             ToolbarFocusTarget::Side => &self.data.inline_side_hits,
         };
-        let current = self.inline_focus_index(target);
+        let current = resolve_focus_index(
+            hits,
+            self.inline_focus_index(target),
+            self.inline_focus_id(target),
+        );
         let next = next_focus_index(hits, current, reverse);
         if next != current {
+            let id = next.and_then(|index| hits[index].focus_id.clone());
             *self.inline_focus_index_mut(target) = next;
+            self.set_inline_focus_id(target, id);
             self.input_state.needs_redraw = true;
             return true;
         }
@@ -42,7 +57,14 @@ impl WaylandState {
             ToolbarFocusTarget::Top => &self.data.inline_top_hits,
             ToolbarFocusTarget::Side => &self.data.inline_side_hits,
         };
-        focused_event(hits, self.inline_focus_index(target))
+        focused_event(
+            hits,
+            resolve_focus_index(
+                hits,
+                self.inline_focus_index(target),
+                self.inline_focus_id(target),
+            ),
+        )
     }
 
     pub(in crate::backend::wayland) fn inline_toolbar_focus_target_from_hover(
@@ -95,6 +117,17 @@ impl WaylandState {
         conn: Option<&wayland_client::Connection>,
         qh: Option<&wayland_client::QueueHandle<Self>>,
     ) -> bool {
+        if matches!(key, Key::Escape)
+            && (self.input_state.toolbar_shapes_expanded
+                || self.input_state.toolbar_top_overflow_open)
+        {
+            self.input_state
+                .apply_toolbar_event(ToolbarEvent::ToggleShapePicker(false));
+            self.input_state
+                .apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(false));
+            self.toolbar.mark_dirty();
+            return true;
+        }
         if !should_route_toolbar_key(
             key,
             self.toolbar.is_visible(),

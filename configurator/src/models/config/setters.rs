@@ -4,21 +4,40 @@ use super::super::fields::{
     ToolbarOverrideField, TripletField,
 };
 use super::draft::ConfigDraft;
-use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{
+    ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag, section_flag_for_item,
+    set_section_visibility,
+};
 
 impl ConfigDraft {
     pub fn apply_toolbar_layout_mode(&mut self, mode: ToolbarLayoutModeOption) {
         self.ui_toolbar_layout_mode = mode;
-        let defaults = mode.to_mode().section_defaults();
-        self.ui_toolbar_show_actions_section = defaults.show_actions_section;
-        self.ui_toolbar_show_actions_advanced = defaults.show_actions_advanced;
-        self.ui_toolbar_show_zoom_actions = defaults.show_zoom_actions;
-        self.ui_toolbar_show_pages_section = defaults.show_pages_section;
-        self.ui_toolbar_show_boards_section = defaults.show_boards_section;
-        self.ui_toolbar_show_presets = defaults.show_presets;
-        self.ui_toolbar_show_step_section = defaults.show_step_section;
-        self.ui_toolbar_show_text_controls = defaults.show_text_controls;
-        self.ui_toolbar_show_settings_section = defaults.show_settings_section;
+        // Modes are non-destructive presets: resolve the section booleans
+        // against explicit item overrides so a mode change in the
+        // configurator matches the overlay's behavior.
+        self.refresh_toolbar_section_visibility();
+    }
+
+    fn refresh_toolbar_section_visibility(&mut self) {
+        let visibility = wayscriber::config::resolve_section_visibility(
+            self.ui_toolbar_layout_mode.to_mode(),
+            &self.ui_toolbar_mode_overrides.to_config(),
+            &self.ui_toolbar_items.resolved(),
+        );
+        self.ui_toolbar_show_actions_section = visibility.show_actions_section;
+        self.ui_toolbar_show_actions_advanced = visibility.show_actions_advanced;
+        self.ui_toolbar_show_zoom_actions = visibility.show_zoom_actions;
+        self.ui_toolbar_show_pages_section = visibility.show_pages_section;
+        self.ui_toolbar_show_boards_section = visibility.show_boards_section;
+        self.ui_toolbar_show_presets = visibility.show_presets;
+        self.ui_toolbar_show_step_section = visibility.show_step_section;
+        self.ui_toolbar_show_text_controls = visibility.show_text_controls;
+        self.ui_toolbar_show_settings_section = visibility.show_settings_section;
+    }
+
+    fn set_toolbar_section_visible(&mut self, flag: ToolbarSectionFlag, visible: bool) {
+        set_section_visibility(&mut self.ui_toolbar_items, flag, visible);
+        self.refresh_toolbar_section_visibility();
     }
 
     pub fn set_toolbar_override(
@@ -30,10 +49,14 @@ impl ConfigDraft {
         self.ui_toolbar_mode_overrides
             .for_mode_mut(mode)
             .set(field, value);
+        self.refresh_toolbar_section_visibility();
     }
 
     pub fn set_toolbar_item_visible(&mut self, id: ToolbarItemId, visible: bool) {
         self.ui_toolbar_items.set_hidden(id, !visible);
+        if section_flag_for_item(id).is_some() {
+            self.refresh_toolbar_section_visibility();
+        }
     }
 
     pub fn move_toolbar_item(
@@ -150,26 +173,29 @@ impl ConfigDraft {
             ToggleField::UiToolbarUseIcons => self.ui_toolbar_use_icons = value,
             ToggleField::UiToolbarShowMoreColors => self.ui_toolbar_show_more_colors = value,
             ToggleField::UiToolbarPresetToasts => self.ui_toolbar_show_preset_toasts = value,
-            ToggleField::UiToolbarShowPresets => self.ui_toolbar_show_presets = value,
+            ToggleField::UiToolbarShowPresets => {
+                self.set_toolbar_section_visible(ToolbarSectionFlag::Presets, value);
+            }
             ToggleField::UiToolbarShowActionsSection => {
-                self.ui_toolbar_show_actions_section = value;
+                self.set_toolbar_section_visible(ToolbarSectionFlag::Actions, value);
             }
             ToggleField::UiToolbarShowActionsAdvanced => {
-                self.ui_toolbar_show_actions_advanced = value;
+                self.set_toolbar_section_visible(ToolbarSectionFlag::ActionsAdvanced, value);
             }
             ToggleField::UiToolbarShowZoomActions => {
-                self.ui_toolbar_show_zoom_actions = value;
+                self.set_toolbar_section_visible(ToolbarSectionFlag::ZoomActions, value);
             }
             ToggleField::UiToolbarShowPagesSection => {
-                self.ui_toolbar_show_pages_section = value;
+                self.set_toolbar_section_visible(ToolbarSectionFlag::Pages, value);
             }
             ToggleField::UiToolbarShowBoardsSection => {
-                self.ui_toolbar_show_boards_section = value;
+                self.set_toolbar_section_visible(ToolbarSectionFlag::Boards, value);
             }
-            ToggleField::UiToolbarShowStepSection => self.ui_toolbar_show_step_section = value,
-            ToggleField::UiToolbarShowTextControls => self.ui_toolbar_show_text_controls = value,
-            ToggleField::UiToolbarShowSettingsSection => {
-                self.ui_toolbar_show_settings_section = value;
+            ToggleField::UiToolbarShowStepSection => {
+                self.set_toolbar_section_visible(ToolbarSectionFlag::StepSection, value);
+            }
+            ToggleField::UiToolbarShowTextControls => {
+                self.set_toolbar_section_visible(ToolbarSectionFlag::TextControls, value);
             }
             ToggleField::UiToolbarShowDelaySliders => {
                 self.ui_toolbar_show_delay_sliders = value;

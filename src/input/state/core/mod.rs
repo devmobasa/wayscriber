@@ -24,7 +24,7 @@ pub use base::{
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionHandle,
-    ShellMode, TextInputMode, ToolbarDrawerTab, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    ShellMode, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState};
 pub(crate) use base::{

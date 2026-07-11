@@ -95,6 +95,10 @@ impl WaylandState {
             return;
         }
         if on_toolbar || self.pointer_over_toolbar() {
+            if scroll_direction != 0 && self.wheel_over_side_toolbar(&event.surface, event.position)
+            {
+                self.scroll_side_pane_by_wheel(scroll_direction);
+            }
             return;
         }
         if self.input_state.modifiers.ctrl && self.input_state.modifiers.alt {

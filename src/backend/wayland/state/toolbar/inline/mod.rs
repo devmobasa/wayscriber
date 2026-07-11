@@ -22,6 +22,8 @@ impl WaylandState {
     pub(super) fn clear_inline_toolbar_focus(&mut self) {
         self.data.inline_top_focus_index = None;
         self.data.inline_side_focus_index = None;
+        self.data.inline_top_focus_id = None;
+        self.data.inline_side_focus_id = None;
     }
 
     fn inline_focus_index(&self, target: ToolbarFocusTarget) -> Option<usize> {
@@ -35,6 +37,20 @@ impl WaylandState {
         match target {
             ToolbarFocusTarget::Top => &mut self.data.inline_top_focus_index,
             ToolbarFocusTarget::Side => &mut self.data.inline_side_focus_index,
+        }
+    }
+
+    fn inline_focus_id(&self, target: ToolbarFocusTarget) -> Option<&str> {
+        match target {
+            ToolbarFocusTarget::Top => self.data.inline_top_focus_id.as_deref(),
+            ToolbarFocusTarget::Side => self.data.inline_side_focus_id.as_deref(),
+        }
+    }
+
+    fn set_inline_focus_id(&mut self, target: ToolbarFocusTarget, id: Option<String>) {
+        match target {
+            ToolbarFocusTarget::Top => self.data.inline_top_focus_id = id,
+            ToolbarFocusTarget::Side => self.data.inline_side_focus_id = id,
         }
     }
 

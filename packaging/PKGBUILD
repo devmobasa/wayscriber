@@ -13,6 +13,8 @@ depends=(
     'libxkbcommon'
     'gcc-libs'
     'glibc'
+    'gtk4'
+    'gtk4-layer-shell'
     'wl-clipboard'
     'grim'
     'slurp'

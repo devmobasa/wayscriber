@@ -82,6 +82,13 @@ impl ToolbarSurfaceManager {
         self.suppressed
     }
 
+    /// Apply pending input-region changes on both surfaces (no-op unless a
+    /// render declared partial input rects or suppression state changed).
+    pub fn apply_input_regions(&mut self, compositor: &CompositorState) {
+        self.top.apply_input_region(compositor);
+        self.side.apply_input_region(compositor);
+    }
+
     pub fn set_top_margins(&mut self, top: i32, left: i32) {
         let (_, right, bottom, _) = self.top.margin;
         self.top.set_margins(top, right, bottom, left);

@@ -7,7 +7,8 @@ use crate::ui_text::UiTextStyle;
 
 use super::super::super::widgets::constants::{COLOR_TEXT_DISABLED, set_color};
 use super::super::super::widgets::{
-    draw_button, draw_destructive_button, draw_label_center, point_in_rect, set_icon_color,
+    draw_button, draw_destructive_button, draw_disabled_button, draw_label_center,
+    draw_label_center_color, point_in_rect, set_icon_color,
 };
 
 pub(super) type ActionIconFn = fn(&cairo::Context, f64, f64, f64);
@@ -115,6 +116,64 @@ pub(super) fn render_icon_action_group(
     }
 }
 
+/// One left-aligned run of square icon buttons plus a right-aligned run
+/// (destructive actions), separated by the leftover width — the mockup's
+/// "Undo Redo ......... Clear" row.
+pub(super) fn render_icon_action_row_split(
+    ctx: &cairo::Context,
+    hits: &mut Vec<HitRegion>,
+    hover: Option<(f64, f64)>,
+    snapshot: &ToolbarSnapshot,
+    layout: IconActionLayout,
+    leading: &[ActionButton],
+    trailing: &[ActionButton],
+) -> (f64, bool) {
+    if leading.is_empty() && trailing.is_empty() {
+        return (layout.start_y, false);
+    }
+    let mut render_ctx = ActionButtonRenderContext {
+        ctx,
+        hits,
+        hover,
+        snapshot,
+    };
+    let mut action_y = layout.start_y;
+    if layout.add_gap {
+        action_y += layout.gap;
+    }
+
+    for (index, action) in leading.iter().enumerate() {
+        let bx = layout.x + index as f64 * (layout.button_size + layout.gap);
+        render_icon_action_button(
+            &mut render_ctx,
+            IconActionButtonGeometry {
+                x: bx,
+                y: action_y,
+                button_size: layout.button_size,
+                icon_size: layout.icon_size,
+            },
+            action,
+        );
+    }
+    for (index, action) in trailing.iter().enumerate() {
+        let bx = layout.x + layout.content_width
+            - (index + 1) as f64 * layout.button_size
+            - index as f64 * layout.gap;
+        render_icon_action_button(
+            &mut render_ctx,
+            IconActionButtonGeometry {
+                x: bx,
+                y: action_y,
+                button_size: layout.button_size,
+                icon_size: layout.icon_size,
+            },
+            action,
+        );
+    }
+
+    (action_y + layout.button_size, true)
+}
+
 pub(super) fn render_text_action_group(
     ctx: &cairo::Context,
     hits: &mut Vec<HitRegion>,
@@ -193,7 +252,7 @@ fn render_icon_action_button(
         })
         .unwrap_or(false);
 
-    let is_destructive = is_destructive_action(&action.event);
+    let is_destructive = action.event.is_destructive();
     if action.enabled {
         if is_destructive {
             draw_destructive_button(
@@ -217,14 +276,12 @@ fn render_icon_action_button(
         }
         set_icon_color(render_ctx.ctx, is_hover);
     } else {
-        draw_button(
+        draw_disabled_button(
             render_ctx.ctx,
             geometry.x,
             geometry.y,
             geometry.button_size,
             geometry.button_size,
-            false,
-            false,
         );
         set_color(render_ctx.ctx, COLOR_TEXT_DISABLED);
     }
@@ -235,6 +292,7 @@ fn render_icon_action_button(
 
     if action.enabled {
         render_ctx.hits.push(HitRegion {
+            focus_id: None,
             rect: (
                 geometry.x,
                 geometry.y,
@@ -267,7 +325,15 @@ fn render_text_action_button(
         .map(|(hx, hy)| point_in_rect(hx, hy, layout.x, layout.y, layout.width, layout.height))
         .unwrap_or(false);
 
-    if is_destructive_action(&action.event) && action.enabled {
+    if !action.enabled {
+        draw_disabled_button(
+            render_ctx.ctx,
+            layout.x,
+            layout.y,
+            layout.width,
+            layout.height,
+        );
+    } else if action.event.is_destructive() {
         draw_destructive_button(
             render_ctx.ctx,
             layout.x,
@@ -283,22 +349,36 @@ fn render_text_action_button(
             layout.y,
             layout.width,
             layout.height,
-            enabled_style && action.enabled,
-            is_hover && action.enabled,
+            enabled_style,
+            is_hover,
         );
     }
 
-    draw_label_center(
-        render_ctx.ctx,
-        label_style,
-        layout.x,
-        layout.y,
-        layout.width,
-        layout.height,
-        label,
-    );
+    if action.enabled {
+        draw_label_center(
+            render_ctx.ctx,
+            label_style,
+            layout.x,
+            layout.y,
+            layout.width,
+            layout.height,
+            label,
+        );
+    } else {
+        draw_label_center_color(
+            render_ctx.ctx,
+            label_style,
+            layout.x,
+            layout.y,
+            layout.width,
+            layout.height,
+            label,
+            COLOR_TEXT_DISABLED,
+        );
+    }
     if action.enabled {
         render_ctx.hits.push(HitRegion {
+            focus_id: None,
             rect: (layout.x, layout.y, layout.width, layout.height),
             event: action.event.clone(),
             kind: HitKind::Click,
@@ -311,11 +391,4 @@ fn render_text_action_button(
             )),
         });
     }
-}
-
-fn is_destructive_action(event: &ToolbarEvent) -> bool {
-    matches!(
-        event,
-        ToolbarEvent::ClearCanvas | ToolbarEvent::UndoAll | ToolbarEvent::UndoAllDelayed
-    )
 }

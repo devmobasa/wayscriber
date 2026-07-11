@@ -38,15 +38,20 @@ impl ConfigDraft {
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.items = self.ui_toolbar_items.clone();
-        config.ui.toolbar.show_presets = self.ui_toolbar_show_presets;
-        config.ui.toolbar.show_actions_section = self.ui_toolbar_show_actions_section;
-        config.ui.toolbar.show_actions_advanced = self.ui_toolbar_show_actions_advanced;
-        config.ui.toolbar.show_zoom_actions = self.ui_toolbar_show_zoom_actions;
-        config.ui.toolbar.show_pages_section = self.ui_toolbar_show_pages_section;
-        config.ui.toolbar.show_boards_section = self.ui_toolbar_show_boards_section;
-        config.ui.toolbar.show_step_section = self.ui_toolbar_show_step_section;
-        config.ui.toolbar.show_text_controls = self.ui_toolbar_show_text_controls;
-        config.ui.toolbar.show_settings_section = self.ui_toolbar_show_settings_section;
+        let visibility = wayscriber::config::resolve_section_visibility(
+            config.ui.toolbar.layout_mode,
+            &config.ui.toolbar.mode_overrides,
+            &config.ui.toolbar.items.resolved(),
+        );
+        config.ui.toolbar.show_presets = visibility.show_presets;
+        config.ui.toolbar.show_actions_section = visibility.show_actions_section;
+        config.ui.toolbar.show_actions_advanced = visibility.show_actions_advanced;
+        config.ui.toolbar.show_zoom_actions = visibility.show_zoom_actions;
+        config.ui.toolbar.show_pages_section = visibility.show_pages_section;
+        config.ui.toolbar.show_boards_section = visibility.show_boards_section;
+        config.ui.toolbar.show_step_section = visibility.show_step_section;
+        config.ui.toolbar.show_text_controls = visibility.show_text_controls;
+        config.ui.toolbar.show_settings_section = visibility.show_settings_section;
         config.ui.toolbar.show_delay_sliders = self.ui_toolbar_show_delay_sliders;
         config.ui.toolbar.show_marker_opacity_section = self.ui_toolbar_show_marker_opacity_section;
         config.ui.toolbar.show_tool_preview = self.ui_toolbar_show_tool_preview;

@@ -112,3 +112,75 @@ pub const TRANSPARENT: Color = Color {
     b: 0.0,
     a: 0.0,
 };
+
+/// Convert an HSV triple (all components in 0.0–1.0) to an opaque RGB color.
+pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
+    let h = (h - h.floor()).clamp(0.0, 1.0) * 6.0;
+    let i = h.floor();
+    let f = h - i;
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * f);
+    let t = v * (1.0 - s * (1.0 - f));
+    let (r, g, b) = match i as i32 {
+        0 => (v, t, p),
+        1 => (q, v, p),
+        2 => (p, v, t),
+        3 => (p, q, v),
+        4 => (t, p, v),
+        _ => (v, p, q),
+    };
+    Color { r, g, b, a: 1.0 }
+}
+
+/// Convert RGB components (0.0–1.0) to an HSV triple in 0.0–1.0.
+/// Hue is 0.0 for grays (delta = 0); callers that need hue continuity
+/// across gray colors must remember the last meaningful hue themselves.
+pub fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+
+    let value = max;
+    let saturation = if max == 0.0 { 0.0 } else { delta / max };
+
+    let hue = if delta == 0.0 {
+        0.0
+    } else if max == r {
+        ((g - b) / delta).rem_euclid(6.0) / 6.0
+    } else if max == g {
+        ((b - r) / delta + 2.0) / 6.0
+    } else {
+        ((r - g) / delta + 4.0) / 6.0
+    };
+
+    (hue, saturation, value)
+}
+
+#[cfg(test)]
+mod hsv_tests {
+    use super::*;
+
+    #[test]
+    fn hsv_round_trips_through_rgb() {
+        for &(h, s, v) in &[
+            (0.0, 1.0, 1.0),
+            (0.33, 0.5, 0.8),
+            (0.66, 1.0, 0.4),
+            (0.91, 0.2, 0.95),
+        ] {
+            let color = hsv_to_rgb(h, s, v);
+            let (rh, rs, rv) = rgb_to_hsv(color.r, color.g, color.b);
+            assert!((rh - h).abs() < 1e-6, "hue: {rh} vs {h}");
+            assert!((rs - s).abs() < 1e-6, "sat: {rs} vs {s}");
+            assert!((rv - v).abs() < 1e-6, "val: {rv} vs {v}");
+        }
+    }
+
+    #[test]
+    fn grays_report_zero_hue_and_saturation() {
+        let (h, s, v) = rgb_to_hsv(0.5, 0.5, 0.5);
+        assert_eq!(h, 0.0);
+        assert_eq!(s, 0.0);
+        assert!((v - 0.5).abs() < 1e-9);
+    }
+}

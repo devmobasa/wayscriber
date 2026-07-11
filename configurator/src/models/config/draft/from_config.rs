@@ -25,6 +25,36 @@ impl ConfigDraft {
         let (weight_option, weight_value) =
             FontWeightOption::from_value(&config.drawing.font_weight);
         let drawing_drag_tools = config.drawing.effective_drag_tools();
+        let mut toolbar_items = config.ui.toolbar.items.clone();
+        let mut legacy_toolbar_visibility = wayscriber::config::ToolbarSectionVisibility {
+            show_actions_section: config.ui.toolbar.show_actions_section,
+            show_actions_advanced: config.ui.toolbar.show_actions_advanced,
+            show_zoom_actions: config.ui.toolbar.show_zoom_actions,
+            show_pages_section: config.ui.toolbar.show_pages_section,
+            show_boards_section: config.ui.toolbar.show_boards_section,
+            show_presets: config.ui.toolbar.show_presets,
+            show_step_section: config.ui.toolbar.show_step_section,
+            show_text_controls: config.ui.toolbar.show_text_controls,
+            show_settings_section: config.ui.toolbar.show_settings_section,
+        };
+        legacy_toolbar_visibility.apply_mode_override(
+            config
+                .ui
+                .toolbar
+                .mode_overrides
+                .for_mode(config.ui.toolbar.layout_mode),
+        );
+        wayscriber::config::fold_legacy_section_flags(
+            &legacy_toolbar_visibility,
+            config.ui.toolbar.layout_mode,
+            &config.ui.toolbar.mode_overrides,
+            &mut toolbar_items,
+        );
+        let toolbar_visibility = wayscriber::config::resolve_section_visibility(
+            config.ui.toolbar.layout_mode,
+            &config.ui.toolbar.mode_overrides,
+            &toolbar_items.resolved(),
+        );
         Self {
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
             drawing_quick_colors: QuickColorsDraft::from_config(&config.drawing.quick_colors),
@@ -103,16 +133,16 @@ impl ConfigDraft {
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
             ),
-            ui_toolbar_items: config.ui.toolbar.items.clone(),
-            ui_toolbar_show_presets: config.ui.toolbar.show_presets,
-            ui_toolbar_show_actions_section: config.ui.toolbar.show_actions_section,
-            ui_toolbar_show_actions_advanced: config.ui.toolbar.show_actions_advanced,
-            ui_toolbar_show_zoom_actions: config.ui.toolbar.show_zoom_actions,
-            ui_toolbar_show_pages_section: config.ui.toolbar.show_pages_section,
-            ui_toolbar_show_boards_section: config.ui.toolbar.show_boards_section,
-            ui_toolbar_show_step_section: config.ui.toolbar.show_step_section,
-            ui_toolbar_show_text_controls: config.ui.toolbar.show_text_controls,
-            ui_toolbar_show_settings_section: config.ui.toolbar.show_settings_section,
+            ui_toolbar_items: toolbar_items,
+            ui_toolbar_show_presets: toolbar_visibility.show_presets,
+            ui_toolbar_show_actions_section: toolbar_visibility.show_actions_section,
+            ui_toolbar_show_actions_advanced: toolbar_visibility.show_actions_advanced,
+            ui_toolbar_show_zoom_actions: toolbar_visibility.show_zoom_actions,
+            ui_toolbar_show_pages_section: toolbar_visibility.show_pages_section,
+            ui_toolbar_show_boards_section: toolbar_visibility.show_boards_section,
+            ui_toolbar_show_step_section: toolbar_visibility.show_step_section,
+            ui_toolbar_show_text_controls: toolbar_visibility.show_text_controls,
+            ui_toolbar_show_settings_section: toolbar_visibility.show_settings_section,
             ui_toolbar_show_delay_sliders: config.ui.toolbar.show_delay_sliders,
             ui_toolbar_show_marker_opacity_section: config.ui.toolbar.show_marker_opacity_section,
             ui_toolbar_show_tool_preview: config.ui.toolbar.show_tool_preview,

@@ -161,7 +161,9 @@ impl KeyboardHandler for WaylandState {
             }
         }
         debug!("Key pressed: {:?}", key);
-        if should_try_toolbar_key(key, self.input_state.command_palette_open)
+        let modal_capture =
+            self.input_state.command_palette_open || self.input_state.is_color_picker_popup_open();
+        if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
             return;
@@ -259,7 +261,9 @@ impl KeyboardHandler for WaylandState {
         if self.input_state.command_palette_open && matches!(key, Key::Up | Key::Down) {
             return;
         }
-        if should_try_toolbar_key(key, self.input_state.command_palette_open)
+        let modal_capture =
+            self.input_state.command_palette_open || self.input_state.is_color_picker_popup_open();
+        if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
             return;
@@ -270,11 +274,11 @@ impl KeyboardHandler for WaylandState {
     }
 }
 
-fn should_try_toolbar_key(key: Key, command_palette_open: bool) -> bool {
-    if command_palette_open {
+fn should_try_toolbar_key(key: Key, modal_capture_active: bool) -> bool {
+    if modal_capture_active {
         return false;
     }
-    matches!(key, Key::Tab | Key::Return | Key::Space)
+    matches!(key, Key::Tab | Key::Return | Key::Space | Key::Escape)
 }
 
 #[cfg(test)]
@@ -282,7 +286,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn toolbar_routing_is_blocked_when_command_palette_is_open() {
+    fn toolbar_routing_is_blocked_while_a_modal_capture_is_active() {
         assert!(!should_try_toolbar_key(Key::Tab, true));
         assert!(!should_try_toolbar_key(Key::Return, true));
         assert!(!should_try_toolbar_key(Key::Space, true));
@@ -293,6 +297,7 @@ mod tests {
         assert!(should_try_toolbar_key(Key::Tab, false));
         assert!(should_try_toolbar_key(Key::Return, false));
         assert!(should_try_toolbar_key(Key::Space, false));
+        assert!(should_try_toolbar_key(Key::Escape, false));
         assert!(!should_try_toolbar_key(Key::Down, false));
     }
 }

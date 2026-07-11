@@ -9,7 +9,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     item(ids::TOP_CHROME_PIN, "Pin top toolbar", Top, Chrome, None),
     item(
         ids::TOP_CHROME_CLOSE,
-        "Close top toolbar",
+        "Minimize top toolbar",
         Top,
         Chrome,
         None,
@@ -85,6 +85,16 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Utility,
         None,
     ),
+    item(
+        ids::TOP_GROUP_QUICK_COLORS,
+        "Quick colors",
+        Top,
+        Group,
+        None,
+    ),
+    item(ids::TOP_UTILITY_UNDO, "Undo", Top, Utility, None),
+    item(ids::TOP_UTILITY_REDO, "Redo", Top, Utility, None),
+    item(ids::TOP_CHROME_OVERFLOW, "Overflow menu", Top, Chrome, None),
     item(
         ids::TOP_UTILITY_ICON_MODE_ICONS,
         "Use icons",
@@ -203,6 +213,27 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Side,
         Group,
         Some(ToolbarGroupId::Settings),
+    ),
+    item(
+        ids::SIDE_GROUP_ACTIONS_ADVANCED,
+        "Advanced actions",
+        Side,
+        Group,
+        None,
+    ),
+    item(
+        ids::SIDE_GROUP_ZOOM_ACTIONS,
+        "Zoom actions",
+        Side,
+        Group,
+        None,
+    ),
+    item(
+        ids::SIDE_GROUP_TEXT_CONTROLS,
+        "Text controls (persistent)",
+        Side,
+        Group,
+        None,
     ),
     item(
         ids::SIDE_GROUP_SESSION,
@@ -374,7 +405,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     ),
     item(
         ids::SIDE_SETTINGS_CONTEXT_AWARE_UI,
-        "Context UI",
+        "Adapt to tool",
         Side,
         Setting,
         Some(ToolbarGroupId::Settings),
@@ -465,7 +496,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     ),
     item(
         ids::SIDE_SETTINGS_STEP_CONTROLS,
-        "Step controls toggle",
+        "Multi-step undo/redo toggle",
         Side,
         Setting,
         Some(ToolbarGroupId::Settings),

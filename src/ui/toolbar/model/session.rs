@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
 use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
-use crate::input::ToolbarDrawerTab;
 
 use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
-const MAX_RECENT_SESSIONS: usize = 3;
+const MAX_RECENT_SESSIONS: usize = 5;
 pub(crate) const SESSION_BUTTON_COLUMNS: usize = 3;
 
 #[derive(Debug, Clone)]
@@ -20,8 +19,7 @@ pub(crate) struct ToolbarSessionModel {
 impl ToolbarSessionModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
         if snapshot.side_section_hidden(ToolbarSideSection::Session)
-            || !snapshot.drawer_open
-            || snapshot.drawer_tab != ToolbarDrawerTab::Session
+            || snapshot.active_side_pane != crate::ui::toolbar::SidePane::Session
         {
             return None;
         }
@@ -164,12 +162,11 @@ fn session_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
 mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::ToolbarBindingHints;
+    use crate::ui::toolbar::{SidePane, ToolbarBindingHints};
 
     fn app_snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
-        state.toolbar_drawer_open = true;
-        state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
+        state.toolbar_side_pane = SidePane::Session;
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
     }
 
@@ -178,7 +175,7 @@ mod tests {
         let mut snapshot = app_snapshot();
         snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
         snapshot.active_session_path = Some(PathBuf::from("/tmp/lecture.wayscriber-session"));
-        snapshot.recent_sessions = (0..5)
+        snapshot.recent_sessions = (0..8)
             .map(|index| SessionRecentSnapshot {
                 display_name: format!("recent-{index}.wayscriber-session"),
                 path: PathBuf::from(format!("/tmp/recent-{index}.wayscriber-session")),
@@ -245,13 +242,12 @@ mod tests {
     }
 
     #[test]
-    fn session_model_is_hidden_outside_app_drawer() {
+    fn session_model_is_hidden_outside_session_pane() {
         let mut snapshot = app_snapshot();
-        snapshot.drawer_tab = ToolbarDrawerTab::View;
+        snapshot.active_side_pane = SidePane::Canvas;
         assert!(ToolbarSessionModel::from_snapshot(&snapshot).is_none());
 
-        snapshot.drawer_tab = ToolbarDrawerTab::App;
-        snapshot.drawer_open = false;
+        snapshot.active_side_pane = SidePane::Draw;
         assert!(ToolbarSessionModel::from_snapshot(&snapshot).is_none());
     }
 }

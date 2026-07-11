@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
+use super::{ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
 
 /// Toolbar visibility and pinning configuration.
 ///
@@ -9,6 +9,10 @@ use super::{ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolbarConfig {
+    /// Toolbar frontend ("auto", "gtk", "builtin")
+    #[serde(default)]
+    pub backend: ToolbarBackendKind,
+
     /// Toolbar layout preset (simple, regular, advanced)
     #[serde(default = "default_toolbar_layout_mode")]
     pub layout_mode: ToolbarLayoutMode,
@@ -28,6 +32,22 @@ pub struct ToolbarConfig {
     /// Show the side toolbar (colors, settings) on startup
     #[serde(default = "default_toolbar_side_pinned")]
     pub side_pinned: bool,
+
+    /// Start the top toolbar minimized to its edge restore tab
+    #[serde(default)]
+    pub top_minimized: bool,
+
+    /// Start the side toolbar minimized to its edge restore tab
+    #[serde(default)]
+    pub side_minimized: bool,
+
+    /// Side-palette pane restored at startup ("draw", "canvas", "session", "settings")
+    #[serde(default = "default_side_active_pane")]
+    pub side_active_pane: String,
+
+    /// Side-palette sections collapsed to their header row
+    #[serde(default)]
+    pub collapsed_sections: Vec<String>,
 
     /// Use icons instead of text labels in toolbars
     #[serde(default = "default_toolbar_use_icons")]
@@ -73,7 +93,7 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_text_controls")]
     pub show_text_controls: bool,
 
-    /// Show the Settings section (config shortcuts, layout controls)
+    /// Deprecated compatibility mirror. Settings navigation is always reachable.
     #[serde(default = "default_show_settings_section")]
     pub show_settings_section: bool,
 
@@ -121,11 +141,16 @@ pub struct ToolbarConfig {
 impl Default for ToolbarConfig {
     fn default() -> Self {
         Self {
+            backend: ToolbarBackendKind::default(),
             layout_mode: default_toolbar_layout_mode(),
             mode_overrides: ToolbarModeOverrides::default(),
             items: ToolbarItemsConfig::default(),
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
+            top_minimized: false,
+            side_minimized: false,
+            side_active_pane: default_side_active_pane(),
+            collapsed_sections: Vec::new(),
             use_icons: default_toolbar_use_icons(),
             scale: default_toolbar_scale(),
             show_more_colors: default_show_more_colors(),
@@ -158,6 +183,10 @@ fn default_toolbar_top_pinned() -> bool {
 
 fn default_toolbar_side_pinned() -> bool {
     true
+}
+
+fn default_side_active_pane() -> String {
+    "draw".to_string()
 }
 
 fn default_toolbar_use_icons() -> bool {

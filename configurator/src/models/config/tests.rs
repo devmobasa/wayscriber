@@ -1,9 +1,9 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
-    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, PdfFitModeOption,
-    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
+    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, OverrideOption,
+    PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, QuadField, SessionStorageModeOption, TextField, ToggleField,
-    ToolOption, TripletField,
+    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
@@ -11,8 +11,8 @@ use wayscriber::config::{
     ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
     PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, QuickColorConfig,
     RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig,
-    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig, XdgFocusLossBehavior,
-    toolbar_item_ids as ids,
+    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig, ToolbarSectionFlag,
+    XdgFocusLossBehavior, toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -257,6 +257,7 @@ fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
             ids::SIDE_ACTIONS_UNDO_ALL.as_str().to_string(),
         ],
+        shown: Vec::new(),
         order: ToolbarItemOrderConfig::default(),
     };
 
@@ -275,6 +276,78 @@ fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
             ids::TOP_TOOL_PEN.as_str().to_string()
         ]
     );
+}
+
+#[test]
+fn config_draft_preserves_legacy_toolbar_section_visibility_on_unrelated_save() {
+    let mut config = Config::default();
+    config.ui.toolbar.show_zoom_actions = false;
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_toolbar_show_zoom_actions);
+    assert!(
+        draft
+            .ui_toolbar_items
+            .resolved()
+            .hidden
+            .contains(&ToolbarSectionFlag::ZoomActions.item_id())
+    );
+
+    draft.ui_toolbar_use_icons = !draft.ui_toolbar_use_icons;
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected legacy toolbar visibility to round trip");
+
+    assert!(!round_trip.ui.toolbar.show_zoom_actions);
+    assert!(
+        round_trip
+            .ui
+            .toolbar
+            .items
+            .resolved()
+            .hidden
+            .contains(&ToolbarSectionFlag::ZoomActions.item_id())
+    );
+}
+
+#[test]
+fn config_draft_applies_active_mode_override_before_folding_legacy_visibility() {
+    for (legacy_value, override_value) in [(true, false), (false, true)] {
+        let mut config = Config::default();
+        config.ui.toolbar.show_presets = legacy_value;
+        config.ui.toolbar.mode_overrides.regular.show_presets = Some(override_value);
+
+        let mut draft = ConfigDraft::from_config(&config);
+        assert_eq!(draft.ui_toolbar_show_presets, override_value);
+        let resolved = draft.ui_toolbar_items.resolved();
+        let presets_id = ToolbarSectionFlag::Presets.item_id();
+        assert!(!resolved.shown.contains(&presets_id));
+        assert!(!resolved.hidden.contains(&presets_id));
+
+        draft.ui_toolbar_use_icons = !draft.ui_toolbar_use_icons;
+        let round_trip = draft
+            .to_config(&config)
+            .expect("expected active mode override to survive an unrelated save");
+
+        assert_eq!(round_trip.ui.toolbar.show_presets, override_value);
+        let resolved = round_trip.ui.toolbar.items.resolved();
+        assert!(!resolved.shown.contains(&presets_id));
+        assert!(!resolved.hidden.contains(&presets_id));
+    }
+}
+
+#[test]
+fn active_toolbar_mode_override_refreshes_effective_section_visibility() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    assert!(draft.ui_toolbar_show_presets);
+
+    draft.set_toolbar_override(
+        ToolbarLayoutModeOption::Regular,
+        ToolbarOverrideField::ShowPresets,
+        OverrideOption::Off,
+    );
+
+    assert!(!draft.ui_toolbar_show_presets);
 }
 
 #[test]
@@ -577,6 +650,43 @@ fn setters_update_draft_state() {
         DragToolOption::Pen,
     );
     assert_eq!(draft.drawing_drag_tools.right.drag_tool, DragTool::Pen);
+}
+
+#[test]
+fn section_toggle_replaces_overlay_item_override_on_save() {
+    let mut config = Config::default();
+    config
+        .ui
+        .toolbar
+        .items
+        .set_hidden(ToolbarSectionFlag::Presets.item_id(), true);
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_toolbar_show_presets);
+    draft.set_toggle(ToggleField::UiToolbarShowPresets, true);
+
+    let saved = draft
+        .to_config(&config)
+        .expect("toolbar config should save");
+    let resolved = saved.ui.toolbar.items.resolved();
+    assert!(
+        !resolved
+            .hidden
+            .contains(&ToolbarSectionFlag::Presets.item_id())
+    );
+    assert!(
+        resolved
+            .shown
+            .contains(&ToolbarSectionFlag::Presets.item_id())
+    );
+    assert!(
+        wayscriber::config::resolve_section_visibility(
+            saved.ui.toolbar.layout_mode,
+            &saved.ui.toolbar.mode_overrides,
+            &resolved,
+        )
+        .show_presets
+    );
 }
 
 #[test]

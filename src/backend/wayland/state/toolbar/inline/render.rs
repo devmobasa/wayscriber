@@ -1,5 +1,4 @@
 use super::*;
-use crate::backend::wayland::toolbar::events::HitKind;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn render_inline_toolbars(
@@ -19,10 +18,12 @@ impl WaylandState {
         if !top_visible {
             self.data.inline_top_hover = None;
             self.data.inline_top_focus_index = None;
+            self.data.inline_top_focus_id = None;
         }
         if !side_visible {
             self.data.inline_side_hover = None;
             self.data.inline_side_focus_index = None;
+            self.data.inline_side_focus_id = None;
         }
 
         if !top_visible && !side_visible {
@@ -94,12 +95,6 @@ impl WaylandState {
                 hit.rect.1 = hit.rect.1 * ui_scale + top_offset.1;
                 hit.rect.2 *= ui_scale;
                 hit.rect.3 *= ui_scale;
-                if let HitKind::PickColor { x, y, w, h } = &mut hit.kind {
-                    *x = *x * ui_scale + top_offset.0;
-                    *y = *y * ui_scale + top_offset.1;
-                    *w *= ui_scale;
-                    *h *= ui_scale;
-                }
             }
             self.data.inline_top_rect = Some((
                 top_offset.0,
@@ -107,6 +102,11 @@ impl WaylandState {
                 top_size.0 as f64,
                 top_size.1 as f64,
             ));
+            crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(
+                &mut self.data.inline_top_hits,
+                0,
+                self.data.inline_top_rect.expect("top rect was just set"),
+            );
         } else {
             self.data.inline_top_rect = None;
         }
@@ -144,12 +144,6 @@ impl WaylandState {
                 hit.rect.1 = hit.rect.1 * ui_scale + side_offset.1;
                 hit.rect.2 *= ui_scale;
                 hit.rect.3 *= ui_scale;
-                if let HitKind::PickColor { x, y, w, h } = &mut hit.kind {
-                    *x = *x * ui_scale + side_offset.0;
-                    *y = *y * ui_scale + side_offset.1;
-                    *w *= ui_scale;
-                    *h *= ui_scale;
-                }
             }
             self.data.inline_side_rect = Some((
                 side_offset.0,
@@ -157,6 +151,11 @@ impl WaylandState {
                 side_size.0 as f64,
                 side_size.1 as f64,
             ));
+            crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(
+                &mut self.data.inline_side_hits,
+                0,
+                self.data.inline_side_rect.expect("side rect was just set"),
+            );
         } else {
             self.data.inline_side_rect = None;
         }

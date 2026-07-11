@@ -37,6 +37,35 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_label_center_color(
     layout.show_at_baseline(ctx, tx, ty);
 }
 
+/// Truncate `text` with a trailing ellipsis so it fits `max_width`.
+pub(in crate::backend::wayland::toolbar::render) fn ellipsize_to_width(
+    ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
+    text: &str,
+    max_width: f64,
+) -> String {
+    if max_width <= 0.0 {
+        return String::new();
+    }
+    if text_layout(ctx, style, text, None).ink_extents().width() <= max_width {
+        return text.to_string();
+    }
+    let mut chars: Vec<char> = text.chars().collect();
+    while chars.len() > 3 {
+        chars.pop();
+        let candidate: String = chars.iter().collect();
+        let candidate = format!("{candidate}...");
+        if text_layout(ctx, style, &candidate, None)
+            .ink_extents()
+            .width()
+            <= max_width
+        {
+            return candidate;
+        }
+    }
+    "...".to_string()
+}
+
 pub(in crate::backend::wayland::toolbar::render) fn draw_label_left(
     ctx: &cairo::Context,
     style: UiTextStyle<'_>,

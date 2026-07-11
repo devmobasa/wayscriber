@@ -27,6 +27,8 @@
               pango
               wayland
               libxkbcommon
+              gtk4
+              gtk4-layer-shell
             ];
 
             postInstall = ''
@@ -119,6 +121,8 @@
             pango
             wayland
             libxkbcommon
+            gtk4
+            gtk4-layer-shell
             vulkan-loader
             libGL
           ];

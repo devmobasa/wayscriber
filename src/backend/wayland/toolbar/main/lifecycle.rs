@@ -28,17 +28,11 @@ impl ToolbarSurfaceManager {
                     "Ensuring top toolbar surface exists at logical size {:?}, scale {}",
                     top_size, scale
                 );
-            } else if self.top.logical_size != (0, 0) && self.top.logical_size != top_size {
-                info!(
-                    "Top toolbar size change: {:?} -> {:?} (scale {})",
-                    self.top.logical_size, top_size, scale
-                );
-            }
-            if self.top.logical_size != (0, 0) && self.top.logical_size != top_size {
-                self.top.destroy();
-            }
-            if self.top.logical_size == (0, 0) || self.top.logical_size != top_size {
                 self.top.set_logical_size(top_size);
+            } else if self.top.logical_size != top_size {
+                // Resize the mapped surface in place — destroying and
+                // recreating it made every size change flicker.
+                self.top.resize(top_size);
             }
             self.top
                 .ensure_created(qh, compositor, layer_shell, scale, output);
@@ -50,17 +44,9 @@ impl ToolbarSurfaceManager {
                     "Ensuring side toolbar surface exists at logical size {:?}, scale {}",
                     side_size, scale
                 );
-            } else if self.side.logical_size != (0, 0) && self.side.logical_size != side_size {
-                info!(
-                    "Side toolbar size change: {:?} -> {:?} (scale {})",
-                    self.side.logical_size, side_size, scale
-                );
-            }
-            if self.side.logical_size != (0, 0) && self.side.logical_size != side_size {
-                self.side.destroy();
-            }
-            if self.side.logical_size == (0, 0) || self.side.logical_size != side_size {
                 self.side.set_logical_size(side_size);
+            } else if self.side.logical_size != side_size {
+                self.side.resize(side_size);
             }
             self.side
                 .ensure_created(qh, compositor, layer_shell, scale, output);

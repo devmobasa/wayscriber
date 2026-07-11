@@ -21,11 +21,27 @@ impl InputState {
             self.toolbar_shapes_expanded = false;
             changed = true;
         }
+        if self.toolbar_top_overflow_open {
+            self.toolbar_top_overflow_open = false;
+            changed = true;
+        }
         changed
     }
 
     pub(super) fn apply_toolbar_set_color(&mut self, color: Color) -> bool {
         self.apply_color_from_ui(color)
+    }
+
+    pub(super) fn apply_toolbar_set_color_hsv(&mut self, h: f64, s: f64, v: f64) -> bool {
+        let changed = self.apply_color_from_ui(crate::draw::color::hsv_to_rgb(h, s, v));
+        // Remember the picker position even when the color collapses to a
+        // gray/black RGB value that cannot express hue or saturation.
+        if self.toolbar_picker_hsv != Some((h, s, v)) {
+            self.toolbar_picker_hsv = Some((h, s, v));
+            self.needs_redraw = true;
+            return true;
+        }
+        changed
     }
 
     pub(super) fn apply_toolbar_set_thickness(&mut self, value: f64) -> bool {
@@ -83,25 +99,27 @@ impl InputState {
     pub(super) fn apply_toolbar_enter_text_mode(&mut self) -> bool {
         let _ = self.set_tool_override(None);
         self.toolbar_enter_text_mode();
+        self.close_top_toolbar_menus();
         true
     }
 
     pub(super) fn apply_toolbar_enter_sticky_note_mode(&mut self) -> bool {
         let _ = self.set_tool_override(None);
         self.toolbar_enter_sticky_note_mode();
+        self.close_top_toolbar_menus();
         true
     }
 
     pub(super) fn apply_toolbar_toggle_all_highlight(&mut self, enable: bool) -> bool {
         // set_highlight_tool already handles both highlight tool and click highlight
         let currently_active = self.highlight_tool_active() || self.click_highlight_enabled();
+        let mut changed = false;
         if currently_active != enable {
             self.set_highlight_tool(enable);
             self.needs_redraw = true;
-            true
-        } else {
-            false
+            changed = true;
         }
+        self.close_top_toolbar_menus() || changed
     }
 
     pub(super) fn apply_toolbar_toggle_highlight_tool_ring(&mut self, enable: bool) -> bool {
@@ -133,5 +151,51 @@ impl InputState {
     pub(super) fn apply_toolbar_open_color_picker_popup(&mut self) -> bool {
         self.open_color_picker_popup();
         true
+    }
+
+    /// Open the color picker popup ready for typing: the hex field is
+    /// focused and its content selected, so the first keystroke replaces it.
+    pub(super) fn apply_toolbar_edit_hex_color(&mut self) -> bool {
+        self.open_color_picker_popup();
+        self.color_picker_popup_set_hex_editing(true);
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn set_color_hsv_applies_color_and_remembers_picker_position() {
+        let mut state = make_test_input_state();
+
+        // A zero-saturation pick collapses to white in RGB; the remembered
+        // HSV triple is what keeps the picker's hue from snapping to red.
+        let changed = state.apply_toolbar_event(ToolbarEvent::SetColorHsv {
+            h: 0.4,
+            s: 0.0,
+            v: 1.0,
+        });
+
+        assert!(changed);
+        assert_eq!(state.toolbar_picker_hsv, Some((0.4, 0.0, 1.0)));
+        let color = state.current_color;
+        assert!((color.r - 1.0).abs() < 1e-9);
+        assert!((color.g - 1.0).abs() < 1e-9);
+        assert!((color.b - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn edit_hex_color_opens_popup_with_hex_focused() {
+        let mut state = make_test_input_state();
+
+        let changed = state.apply_toolbar_event(ToolbarEvent::EditHexColor);
+
+        assert!(changed);
+        assert!(state.is_color_picker_popup_open());
+        assert!(state.color_picker_popup_is_hex_editing());
+        assert!(state.color_picker_popup_hex_selected());
     }
 }

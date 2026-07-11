@@ -1,8 +1,18 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
-use crate::input::{InputState, ToolbarDrawerTab};
+use crate::input::InputState;
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
+    pub(super) fn close_top_toolbar_menus(&mut self) -> bool {
+        let changed = self.toolbar_shapes_expanded || self.toolbar_top_overflow_open;
+        self.toolbar_shapes_expanded = false;
+        self.toolbar_top_overflow_open = false;
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
     pub(super) fn apply_toolbar_toggle_custom_section(&mut self, enable: bool) -> bool {
         if self.custom_section_enabled != enable {
             self.custom_section_enabled = enable;
@@ -31,16 +41,27 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_close_top_toolbar(&mut self) -> bool {
-        self.toolbar_top_visible = false;
-        self.toolbar_shapes_expanded = false;
-        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+    /// Minimize keeps the surface mapped as a small restore tab instead of
+    /// hiding it, so a presenter who "closes" a bar is never stranded.
+    pub(super) fn apply_toolbar_set_top_minimized(&mut self, minimized: bool) -> bool {
+        if self.toolbar_top_minimized == minimized {
+            return false;
+        }
+        self.toolbar_top_minimized = minimized;
+        if minimized {
+            self.toolbar_shapes_expanded = false;
+            self.toolbar_top_overflow_open = false;
+        }
+        self.needs_redraw = true;
         true
     }
 
-    pub(super) fn apply_toolbar_close_side_toolbar(&mut self) -> bool {
-        self.toolbar_side_visible = false;
-        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+    pub(super) fn apply_toolbar_set_side_minimized(&mut self, minimized: bool) -> bool {
+        if self.toolbar_side_minimized == minimized {
+            return false;
+        }
+        self.toolbar_side_minimized = minimized;
+        self.needs_redraw = true;
         true
     }
 
@@ -95,75 +116,48 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_actions_section(&mut self, show: bool) -> bool {
-        if self.show_actions_section != show {
-            self.show_actions_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Actions, show)
     }
 
     pub(super) fn apply_toolbar_toggle_actions_advanced(&mut self, show: bool) -> bool {
-        if self.show_actions_advanced != show {
-            self.show_actions_advanced = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::ActionsAdvanced, show)
     }
 
     pub(super) fn apply_toolbar_toggle_zoom_actions(&mut self, show: bool) -> bool {
-        if self.show_zoom_actions != show {
-            self.show_zoom_actions = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::ZoomActions, show)
     }
 
     pub(super) fn apply_toolbar_toggle_pages_section(&mut self, show: bool) -> bool {
-        if self.show_pages_section != show {
-            self.show_pages_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Pages, show)
     }
 
     pub(super) fn apply_toolbar_toggle_boards_section(&mut self, show: bool) -> bool {
-        if self.show_boards_section != show {
-            self.show_boards_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Boards, show)
     }
 
     pub(super) fn apply_toolbar_toggle_presets(&mut self, show: bool) -> bool {
-        if self.show_presets != show {
-            self.show_presets = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::Presets, show)
     }
 
     pub(super) fn apply_toolbar_toggle_step_section(&mut self, show: bool) -> bool {
-        if self.show_step_section != show {
-            self.show_step_section = show;
-            true
-        } else {
-            false
-        }
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::StepSection, show)
     }
 
     pub(super) fn apply_toolbar_toggle_text_controls(&mut self, show: bool) -> bool {
-        if self.show_text_controls != show {
-            self.show_text_controls = show;
-            true
-        } else {
-            false
+        self.apply_section_flag(crate::config::ToolbarSectionFlag::TextControls, show)
+    }
+
+    /// Section toggles record an explicit override in the item store (the
+    /// single source of truth) and re-derive the mirror booleans, so the
+    /// choice survives layout-mode switches.
+    fn apply_section_flag(&mut self, flag: crate::config::ToolbarSectionFlag, show: bool) -> bool {
+        if !crate::config::set_section_visibility(&mut self.toolbar_items, flag, show) {
+            return false;
         }
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.refresh_section_visibility();
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_context_aware_ui(&mut self, enabled: bool) -> bool {
@@ -244,56 +238,54 @@ impl InputState {
         }
     }
 
-    pub(super) fn apply_toolbar_toggle_drawer(&mut self, open: bool) -> bool {
-        if self.toolbar_drawer_open != open {
-            self.toolbar_drawer_open = open;
-            if !open {
-                self.toolbar_customize_items_open = false;
-                self.toolbar_customize_items_group = None;
-            }
-            self.needs_redraw = true;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub(super) fn apply_toolbar_set_drawer_tab(&mut self, tab: ToolbarDrawerTab) -> bool {
+    pub(super) fn apply_toolbar_toggle_top_overflow(&mut self, open: bool) -> bool {
         let mut changed = false;
-        if self.toolbar_drawer_tab != tab {
-            self.toolbar_drawer_tab = tab;
+        if self.toolbar_top_overflow_open != open {
+            self.toolbar_top_overflow_open = open;
             changed = true;
         }
-        match tab {
-            ToolbarDrawerTab::Customize => {
-                if !self.toolbar_customize_items_open
-                    || self.toolbar_customize_items_group.is_some()
-                {
-                    self.toolbar_customize_items_open = true;
-                    self.toolbar_customize_items_group = None;
-                    changed = true;
-                }
-            }
-            ToolbarDrawerTab::View
-            | ToolbarDrawerTab::App
-            | ToolbarDrawerTab::Session
-            | ToolbarDrawerTab::Sections => {
-                if self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some()
-                {
-                    self.toolbar_customize_items_open = false;
-                    self.toolbar_customize_items_group = None;
-                    changed = true;
-                }
-            }
-        }
-        if !self.toolbar_drawer_open {
-            self.toolbar_drawer_open = true;
+        if open && self.toolbar_shapes_expanded {
+            self.toolbar_shapes_expanded = false;
             changed = true;
         }
         if changed {
             self.needs_redraw = true;
         }
         changed
+    }
+
+    pub(super) fn apply_toolbar_set_side_pane(
+        &mut self,
+        pane: crate::ui::toolbar::SidePane,
+    ) -> bool {
+        let mut changed = false;
+        if self.toolbar_side_pane != pane {
+            self.toolbar_side_pane = pane;
+            changed = true;
+        }
+        // Leaving the Settings pane closes the customization sub-panel.
+        if pane != crate::ui::toolbar::SidePane::Settings
+            && (self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some())
+        {
+            self.toolbar_customize_items_open = false;
+            self.toolbar_customize_items_group = None;
+            changed = true;
+        }
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
+    pub(super) fn apply_toolbar_scroll_side_pane(&mut self, offset: f64) -> bool {
+        let pane = self.toolbar_side_pane.index();
+        let offset = offset.max(0.0);
+        if (self.toolbar_side_scroll[pane] - offset).abs() < 0.5 {
+            return false;
+        }
+        self.toolbar_side_scroll[pane] = offset;
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_side_section_collapsed(
@@ -317,7 +309,6 @@ impl InputState {
         if self.toolbar_layout_mode != mode {
             self.toolbar_layout_mode = mode;
             self.apply_toolbar_mode_defaults(mode);
-            self.toolbar_drawer_open = false;
             self.toolbar_shapes_expanded = false;
             true
         } else {
@@ -374,8 +365,7 @@ impl InputState {
         if !open {
             self.toolbar_customize_items_group = None;
         }
-        self.toolbar_drawer_open = true;
-        self.toolbar_drawer_tab = ToolbarDrawerTab::App;
+        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }
@@ -389,20 +379,154 @@ impl InputState {
         }
         self.toolbar_customize_items_open = true;
         self.toolbar_customize_items_group = group;
-        self.toolbar_drawer_open = true;
-        if self.toolbar_drawer_tab != ToolbarDrawerTab::Customize {
-            self.toolbar_drawer_tab = ToolbarDrawerTab::App;
-        }
+        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }
 
     pub(super) fn apply_toolbar_toggle_shape_picker(&mut self, open: bool) -> bool {
+        let mut changed = false;
         if self.toolbar_shapes_expanded != open {
             self.toolbar_shapes_expanded = open;
-            true
-        } else {
-            false
+            changed = true;
         }
+        if open && self.toolbar_top_overflow_open {
+            self.toolbar_top_overflow_open = false;
+            changed = true;
+        }
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn section_toggles_survive_layout_mode_switches() {
+        let mut state = make_test_input_state();
+        assert!(state.show_zoom_actions);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleZoomActions(false));
+        assert!(!state.show_zoom_actions);
+
+        // The old behavior recomputed all section booleans from mode
+        // defaults on every switch, erasing the choice.
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Simple,
+        ));
+        assert!(!state.show_zoom_actions);
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Regular,
+        ));
+        assert!(!state.show_zoom_actions);
+
+        // Simple hides presets by baseline; an explicit show survives the
+        // round trip through other modes.
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Simple,
+        ));
+        assert!(!state.show_presets);
+        state.apply_toolbar_event(ToolbarEvent::TogglePresets(true));
+        assert!(state.show_presets);
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced,
+        ));
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Simple,
+        ));
+        assert!(state.show_presets);
+        assert!(
+            state
+                .resolved_toolbar_items
+                .shown
+                .contains(&ToolbarSectionFlag::Presets.item_id())
+        );
+    }
+
+    #[test]
+    fn minimize_keeps_bars_visible_and_close_is_an_alias() {
+        let mut state = make_test_input_state();
+
+        // The deprecated Close events now minimize: the surface stays
+        // visible as a restore tab instead of vanishing.
+        state.apply_toolbar_event(ToolbarEvent::CloseTopToolbar);
+        assert!(state.toolbar_top_minimized);
+        assert!(state.toolbar_top_visible());
+
+        state.apply_toolbar_event(ToolbarEvent::CloseSideToolbar);
+        assert!(state.toolbar_side_minimized);
+        assert!(state.toolbar_side_visible());
+
+        state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
+        state.apply_toolbar_event(ToolbarEvent::SetSideMinimized(false));
+        assert!(!state.toolbar_top_minimized);
+        assert!(!state.toolbar_side_minimized);
+    }
+
+    #[test]
+    fn minimizing_the_top_strip_closes_its_popups() {
+        let mut state = make_test_input_state();
+        state.toolbar_shapes_expanded = true;
+        state.toolbar_top_overflow_open = true;
+
+        state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
+
+        assert!(!state.toolbar_shapes_expanded);
+        assert!(!state.toolbar_top_overflow_open);
+    }
+
+    #[test]
+    fn top_menus_are_mutually_exclusive() {
+        let mut state = make_test_input_state();
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true));
+        assert!(state.toolbar_shapes_expanded);
+        state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
+        assert!(state.toolbar_top_overflow_open);
+        assert!(!state.toolbar_shapes_expanded);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true));
+        assert!(state.toolbar_shapes_expanded);
+        assert!(!state.toolbar_top_overflow_open);
+    }
+
+    #[test]
+    fn selecting_from_top_menu_closes_it() {
+        let mut state = make_test_input_state();
+        state.toolbar_top_overflow_open = true;
+
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Line));
+
+        assert!(!state.toolbar_top_overflow_open);
+    }
+
+    #[test]
+    fn customize_checkbox_and_section_toggle_share_one_store() {
+        let mut state = make_test_input_state();
+
+        // Hide the presets section through the item store (the customize
+        // checkbox path) — the section boolean mirrors it.
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarItemHidden(
+            ToolbarSectionFlag::Presets.item_id(),
+            true,
+        ));
+        assert!(!state.show_presets);
+
+        // Re-enable through the Settings toggle — the hidden entry is
+        // replaced, not fought, so the section comes back.
+        state.apply_toolbar_event(ToolbarEvent::TogglePresets(true));
+        assert!(state.show_presets);
+        assert!(
+            !state
+                .resolved_toolbar_items
+                .hidden
+                .contains(&ToolbarSectionFlag::Presets.item_id())
+        );
     }
 }

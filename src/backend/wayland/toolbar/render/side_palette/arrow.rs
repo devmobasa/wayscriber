@@ -82,6 +82,7 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         "Auto-number",
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, toggle_y, content_width, toggle_h),
         event: ToolbarEvent::ToggleArrowLabels(!snapshot.arrow_label_enabled),
         kind: HitKind::Click,
@@ -105,6 +106,7 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
             "Reset",
         );
         hits.push(HitRegion {
+            focus_id: None,
             rect: (x, reset_y, content_width, toggle_h),
             event: ToolbarEvent::ResetArrowLabelCounter,
             kind: HitKind::Click,

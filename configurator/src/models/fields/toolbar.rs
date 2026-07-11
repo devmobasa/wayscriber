@@ -101,21 +101,19 @@ pub enum ToolbarOverrideField {
     ShowBoardsSection,
     ShowStepSection,
     ShowTextControls,
-    ShowSettingsSection,
 }
 
 impl ToolbarOverrideField {
     pub fn label(&self) -> &'static str {
         match self {
             Self::ShowPresets => "Presets",
-            Self::ShowActionsSection => "Actions (basic)",
-            Self::ShowActionsAdvanced => "Actions (advanced)",
+            Self::ShowActionsSection => "Actions",
+            Self::ShowActionsAdvanced => "Advanced actions",
             Self::ShowZoomActions => "Zoom actions",
             Self::ShowPagesSection => "Pages",
             Self::ShowBoardsSection => "Boards",
-            Self::ShowStepSection => "Step controls",
+            Self::ShowStepSection => "Multi-step undo/redo",
             Self::ShowTextControls => "Text controls",
-            Self::ShowSettingsSection => "Settings section",
         }
     }
 }

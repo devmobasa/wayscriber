@@ -26,9 +26,15 @@ pub struct ToolbarSurface {
     pub(crate) configured: bool,
     pub(super) dirty: bool,
     pub(super) suppressed: bool,
+    /// Surface-local rects that accept input; None means the whole surface.
+    /// Set when the drawn content does not cover the surface (popovers,
+    /// overflow menus) so transparent areas pass clicks to the canvas.
+    pub(super) input_rects: Option<Vec<(f64, f64, f64, f64)>>,
+    pub(super) input_region_dirty: bool,
     pub(super) hit_regions: Vec<HitRegion>,
     pub(super) hover: Option<(f64, f64)>,
     pub(super) focus_index: Option<usize>,
+    pub(super) focus_id: Option<String>,
 }
 
 impl ToolbarSurface {
@@ -48,9 +54,12 @@ impl ToolbarSurface {
             configured: false,
             dirty: false,
             suppressed: false,
+            input_rects: None,
+            input_region_dirty: false,
             hit_regions: Vec::new(),
             hover: None,
             focus_index: None,
+            focus_id: None,
         }
     }
 

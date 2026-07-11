@@ -28,6 +28,7 @@ mod test_env;
 #[cfg(test)]
 mod test_temp;
 mod time_utils;
+mod toolbar_gtk;
 mod toolbar_icons;
 mod tray_action;
 mod ui;

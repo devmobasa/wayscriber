@@ -43,16 +43,16 @@ pub(super) fn draw_colors_section(
 
     let swatch = ToolbarLayoutSpec::SIDE_COLOR_SWATCH;
     let swatch_gap = ToolbarLayoutSpec::SIDE_COLOR_SWATCH_GAP;
-    let picker_h = ToolbarLayoutSpec::SIDE_COLOR_PICKER_INPUT_HEIGHT;
     let colors_card_h = layout.spec.side_colors_height(snapshot);
 
+    let title = super::section_header::scoped_title("Color", snapshot);
     draw_group_card(ctx, card_x, *y, card_w, colors_card_h);
     draw_collapsible_header(
         layout,
         *y,
         label_style,
         ToolbarSideSection::Colors,
-        ToolbarSideSection::Colors.label(),
+        &title,
         ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
     );
     if snapshot.side_section_collapsed(ToolbarSideSection::Colors) {
@@ -63,7 +63,7 @@ pub(super) fn draw_colors_section(
     let hits = &mut layout.hits;
     let picker_y = *y + ToolbarLayoutSpec::SIDE_COLOR_PICKER_OFFSET_Y;
     let picker_w = content_width;
-    draw_color_picker_area(ctx, hits, snapshot, x, picker_y, picker_w, picker_h);
+    let picker_h = draw_color_picker_area(ctx, hits, snapshot, x, picker_y, picker_w);
     let (preview_row_y, preview_size) =
         draw_preview_swatch_and_icon(ctx, hits, hover, snapshot, x, picker_y, picker_h);
 

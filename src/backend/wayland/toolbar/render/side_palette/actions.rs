@@ -17,7 +17,7 @@ use super::super::widgets::draw_group_card;
 use super::section_header::draw_collapsible_header;
 use helpers::{
     ActionButton, ActionIconFn, IconActionLayout, TextActionLayout, render_icon_action_group,
-    render_text_action_group,
+    render_icon_action_row_split, render_text_action_group,
 };
 
 pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -105,28 +105,62 @@ fn render_icon_action_sections(
     let mut has_group = false;
     for group in model.groups() {
         let actions = build_action_buttons(snapshot, group);
-        let (next_y, has_rows) = render_icon_action_group(
-            ctx,
-            hits,
-            hover,
-            snapshot,
-            IconActionLayout {
-                x,
-                content_width,
-                start_y: action_y,
-                button_size: icon_btn_size,
-                icon_size,
-                gap: icon_gap,
-                columns: icon_group_columns(group),
-                add_gap: has_group,
-            },
-            &actions,
-        );
+        if actions.is_empty() {
+            continue;
+        }
+        if has_group {
+            action_y += icon_gap;
+        }
+        action_y += draw_group_sub_label(ctx, x, action_y, group.kind);
+        let layout = IconActionLayout {
+            x,
+            content_width,
+            start_y: action_y,
+            button_size: icon_btn_size,
+            icon_size,
+            gap: icon_gap,
+            columns: icon_group_columns(group),
+            add_gap: false,
+        };
+        let (next_y, has_rows) = if group.kind == ToolbarCommandGroupKind::History {
+            // Destructive history actions (Clear) sit right-aligned, away
+            // from Undo/Redo.
+            let (leading, trailing): (Vec<_>, Vec<_>) = actions
+                .iter()
+                .cloned()
+                .partition(|action| !action.event.is_destructive());
+            render_icon_action_row_split(ctx, hits, hover, snapshot, layout, &leading, &trailing)
+        } else {
+            render_icon_action_group(ctx, hits, hover, snapshot, layout, &actions)
+        };
         if has_rows {
             action_y = next_y;
             has_group = true;
         }
     }
+}
+
+/// Draw the small muted group label ("History", "Zoom") above an action
+/// group; returns the height consumed.
+fn draw_group_sub_label(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    kind: ToolbarCommandGroupKind,
+) -> f64 {
+    let Some(label) = kind.sub_label() else {
+        return 0.0;
+    };
+    let style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL * 0.85,
+    };
+    let layout = crate::ui_text::text_layout(ctx, style, label, None);
+    ctx.set_source_rgba(0.62, 0.65, 0.72, 0.9);
+    layout.show_at_baseline(ctx, x, y + 11.0);
+    ToolbarLayoutSpec::SIDE_ACTION_GROUP_LABEL_HEIGHT
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -149,6 +183,13 @@ fn render_text_action_sections(
     let mut has_group = false;
     for group in model.groups() {
         let actions = build_action_buttons(snapshot, group);
+        if actions.is_empty() {
+            continue;
+        }
+        if has_group {
+            action_y += action_group_gap;
+        }
+        action_y += draw_group_sub_label(ctx, x, action_y, group.kind);
         let (action_w, columns, column_gap, enabled_style) =
             text_group_layout(content_width, action_col_gap, group.kind);
         let (next_y, has_rows) = render_text_action_group(
@@ -165,7 +206,7 @@ fn render_text_action_sections(
                 group_gap: action_group_gap,
                 row_gap: action_row_gap,
                 columns,
-                add_gap: has_group,
+                add_gap: false,
                 label_style,
                 enabled_style,
             },
@@ -195,8 +236,8 @@ fn build_action_buttons(
 
 fn icon_group_columns(group: &ToolbarCommandGroup) -> usize {
     match group.kind {
-        ToolbarCommandGroupKind::BasicActions => group.buttons.len(),
-        ToolbarCommandGroupKind::ViewActions | ToolbarCommandGroupKind::AdvancedActions => 5,
+        ToolbarCommandGroupKind::History => group.buttons.len(),
+        ToolbarCommandGroupKind::Zoom | ToolbarCommandGroupKind::AdvancedActions => 5,
         ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => group.buttons.len(),
     }
 }
@@ -207,8 +248,8 @@ fn text_group_layout(
     kind: ToolbarCommandGroupKind,
 ) -> (f64, usize, f64, bool) {
     match kind {
-        ToolbarCommandGroupKind::BasicActions => (content_width, 1, 0.0, false),
-        ToolbarCommandGroupKind::ViewActions => (
+        ToolbarCommandGroupKind::History => (content_width, 1, 0.0, false),
+        ToolbarCommandGroupKind::Zoom => (
             row_item_width(content_width, 2, action_col_gap),
             2,
             action_col_gap,

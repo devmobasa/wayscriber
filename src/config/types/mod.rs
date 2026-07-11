@@ -57,10 +57,14 @@ pub use tablet::{StylusButtonBinding, TabletInputConfig};
 pub use toolbar::ids as toolbar_item_ids;
 #[allow(unused_imports)]
 pub use toolbar::{
-    ResolvedToolbarItems, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
+    ResolvedToolbarItems, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
     ToolbarModeOverrides, ToolbarSectionDefaults, toolbar_item_definitions,
     toolbar_item_order_group,
+};
+pub use toolbar::{
+    ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
+    resolve_section_visibility, section_flag_for_item, set_section_visibility,
 };
 pub use ui::UiConfig;

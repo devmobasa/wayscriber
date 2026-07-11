@@ -31,6 +31,26 @@ pub(super) struct ColorSwatchRowLayout {
     pub(super) swatch_gap: f64,
 }
 
+/// HSV triple the picker should display. The remembered picker triple wins
+/// while it still resolves to the current color, so hue and saturation stay
+/// put when the RGB value collapses to gray/black; any other color source
+/// (swatch, hex, preset) falls back to a plain RGB→HSV conversion.
+pub(super) fn effective_hsv(snapshot: &ToolbarSnapshot) -> (f64, f64, f64) {
+    if let Some((h, s, v)) = snapshot.picker_hsv {
+        let remembered = crate::draw::color::hsv_to_rgb(h, s, v);
+        let current = snapshot.color;
+        if (remembered.r - current.r).abs() < 1e-3
+            && (remembered.g - current.g).abs() < 1e-3
+            && (remembered.b - current.b).abs() < 1e-3
+        {
+            return (h, s, v);
+        }
+    }
+    crate::draw::color::rgb_to_hsv(snapshot.color.r, snapshot.color.g, snapshot.color.b)
+}
+
+/// Draw the 2-D saturation/value area plus the hue bar; returns the total
+/// block height so the rows below can stack after it.
 pub(super) fn draw_color_picker_area(
     ctx: &cairo::Context,
     hits: &mut Vec<HitRegion>,
@@ -38,27 +58,40 @@ pub(super) fn draw_color_picker_area(
     x: f64,
     picker_y: f64,
     picker_w: f64,
-    picker_h: f64,
-) {
-    // Visual height is fixed - use it for hit region to avoid overlap with hex input below
-    let picker_visual_h = picker_h;
-    draw_color_picker(ctx, x, picker_y, picker_w, picker_visual_h);
+) -> f64 {
+    let sv_h = ToolbarLayoutSpec::SIDE_COLOR_SV_HEIGHT;
+    let hue_h = ToolbarLayoutSpec::SIDE_COLOR_HUE_HEIGHT;
+    let hue_gap = ToolbarLayoutSpec::SIDE_COLOR_HUE_GAP;
+    let (h, s, v) = effective_hsv(snapshot);
+
+    draw_sat_val_area(ctx, x, picker_y, picker_w, sv_h, h);
     hits.push(HitRegion {
-        rect: (x, picker_y, picker_w, picker_visual_h),
-        event: ToolbarEvent::SetColor(snapshot.color),
-        kind: HitKind::PickColor {
-            x,
-            y: picker_y,
-            w: picker_w,
-            h: picker_visual_h,
-        },
+        focus_id: None,
+        rect: (x, picker_y, picker_w, sv_h),
+        event: ToolbarEvent::SetColorHsv { h, s, v },
+        kind: HitKind::PickSatVal { hue: h },
         tooltip: None,
     });
+    draw_color_indicator(
+        ctx,
+        x + s * picker_w,
+        picker_y + (1.0 - v) * sv_h,
+        snapshot.color,
+    );
 
-    let (hue, _, value) = rgb_to_hsv(snapshot.color.r, snapshot.color.g, snapshot.color.b);
-    let indicator_x = x + hue * picker_w;
-    let indicator_y = picker_y + (1.0 - value) * picker_visual_h;
-    draw_color_indicator(ctx, indicator_x, indicator_y, snapshot.color);
+    let hue_y = picker_y + sv_h + hue_gap;
+    draw_hue_bar(ctx, x, hue_y, picker_w, hue_h);
+    hits.push(HitRegion {
+        focus_id: None,
+        rect: (x, hue_y, picker_w, hue_h),
+        event: ToolbarEvent::SetColorHsv { h, s, v },
+        kind: HitKind::PickHue { sat: s, val: v },
+        tooltip: None,
+    });
+    let hue_color = crate::draw::color::hsv_to_rgb(h, 1.0, 1.0);
+    draw_color_indicator(ctx, x + h * picker_w, hue_y + hue_h / 2.0, hue_color);
+
+    sv_h + hue_gap + hue_h
 }
 
 pub(super) fn draw_preview_swatch_and_icon(
@@ -142,6 +175,7 @@ pub(super) fn draw_preview_swatch_and_icon(
     let _ = ctx.stroke();
 
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, preview_row_y, preview_size, preview_size),
         event: ToolbarEvent::OpenColorPickerPopup,
         kind: HitKind::Click,
@@ -203,14 +237,14 @@ pub(super) fn draw_hex_input(
         let _ = ctx.stroke();
     }
 
-    let clip_icon_x = hex_input_x + hex_input_w - hex_icon_size - hex_icon_pad;
-    let clip_icon_y = hex_input_y + (hex_input_h - hex_icon_size) / 2.0;
+    let copy_icon_x = hex_input_x + hex_input_w - hex_icon_size - hex_icon_pad;
+    let copy_icon_y = hex_input_y + (hex_input_h - hex_icon_size) / 2.0;
     if hex_hover {
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85);
     } else {
         ctx.set_source_rgba(0.6, 0.6, 0.6, 0.5);
     }
-    toolbar_icons::draw_icon_paste(ctx, clip_icon_x, clip_icon_y, hex_icon_size);
+    toolbar_icons::draw_icon_copy(ctx, copy_icon_x, copy_icon_y, hex_icon_size);
 
     ctx.set_source_rgba(0.85, 0.85, 0.85, 1.0);
     let hex_layout = crate::ui_text::text_layout(ctx, hex_style, hex, None);
@@ -222,11 +256,20 @@ pub(super) fn draw_hex_input(
         hex_input_y + hex_input_h / 2.0 + hex_extents.height() / 2.0,
     );
 
+    // The copy icon is pushed first so it wins the overlap with the chip.
     hits.push(HitRegion {
-        rect: (hex_input_x, hex_input_y, hex_input_w, hex_input_h),
+        focus_id: None,
+        rect: (copy_icon_x, copy_icon_y, hex_icon_size, hex_icon_size),
         event: ToolbarEvent::CopyHexColor,
         kind: HitKind::Click,
-        tooltip: Some("Click to copy hex (Ctrl+V to paste)".to_string()),
+        tooltip: Some("Copy hex color".to_string()),
+    });
+    hits.push(HitRegion {
+        focus_id: None,
+        rect: (hex_input_x, hex_input_y, hex_input_w, hex_input_h),
+        event: ToolbarEvent::EditHexColor,
+        kind: HitKind::Click,
+        tooltip: Some("Type a hex color (Enter applies)".to_string()),
     });
 
     let paste_btn_x = hex_input_x + hex_input_w + 4.0;
@@ -260,6 +303,7 @@ pub(super) fn draw_hex_input(
         12.0,
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (paste_btn_x, hex_input_y, paste_btn_size, paste_btn_size),
         event: ToolbarEvent::PasteHexColor,
         kind: HitKind::Click,
@@ -289,6 +333,7 @@ pub(super) fn draw_color_swatch_row(
         let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
         let tooltip = format_binding_label(name, binding);
         hits.push(HitRegion {
+            focus_id: None,
             rect: (x, layout.row_y, layout.swatch, layout.swatch),
             event: ToolbarEvent::SetColor(*color),
             kind: HitKind::Click,
@@ -321,9 +366,37 @@ pub(super) fn draw_color_swatch_row(
         14.0,
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, layout.row_y, layout.swatch, layout.swatch),
         event: toggle.event,
         kind: HitKind::Click,
         tooltip: Some(toggle.tooltip.to_string()),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effective_hsv;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
+
+    #[test]
+    fn effective_hsv_prefers_matching_memory_and_rejects_stale() {
+        let state = make_test_input_state();
+        let mut snapshot =
+            ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
+
+        // White picked at hue 0.4: RGB loses the hue, memory keeps it.
+        snapshot.color = crate::draw::color::hsv_to_rgb(0.4, 0.0, 1.0);
+        snapshot.picker_hsv = Some((0.4, 0.0, 1.0));
+        assert_eq!(effective_hsv(&snapshot), (0.4, 0.0, 1.0));
+
+        // The color changed via another source (swatch/hex); stale memory
+        // must lose to the actual color.
+        snapshot.color = crate::draw::color::hsv_to_rgb(0.0, 1.0, 1.0);
+        let (h, s, v) = effective_hsv(&snapshot);
+        assert!(h.abs() < 1e-9);
+        assert!((s - 1.0).abs() < 1e-9);
+        assert!((v - 1.0).abs() < 1e-9);
+    }
 }

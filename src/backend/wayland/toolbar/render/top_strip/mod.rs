@@ -1,69 +1,18 @@
-mod icons;
-mod text;
+//! Top strip rendering: build the widget tree, paint it, emit its hits.
+//!
+//! All geometry lives in the tree builder (`view::top`); this module only
+//! connects it to the Cairo context and the legacy hit-region consumers.
 
 use std::time::Instant;
 
 use anyhow::Result;
 
-use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
-use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::config::toolbar_item_ids as ids;
-use crate::input::Tool;
+use crate::backend::wayland::toolbar::view;
 use crate::ui::toolbar::ToolbarSnapshot;
 
-use super::super::events::HitKind;
-use super::widgets::{
-    draw_close_button, draw_drag_handle, draw_panel_background, draw_pin_button,
-    draw_tooltip_with_delay, point_in_rect,
-};
-use crate::ui::toolbar::{ToolbarEvent, model};
-
-pub(super) const TOP_LABEL_FONT_SIZE: f64 = 14.0;
-pub(super) const ICON_TOGGLE_FONT_SIZE: f64 = 12.0;
-
-pub(super) struct TopStripLayout<'a> {
-    pub(super) ctx: &'a cairo::Context,
-    pub(super) height: f64,
-    pub(super) snapshot: &'a ToolbarSnapshot,
-    pub(super) hits: &'a mut Vec<HitRegion>,
-    pub(super) hover: Option<(f64, f64)>,
-    pub(super) spec: ToolbarLayoutSpec,
-    pub(super) gap: f64,
-}
-
-impl<'a> TopStripLayout<'a> {
-    fn new(
-        ctx: &'a cairo::Context,
-        height: f64,
-        snapshot: &'a ToolbarSnapshot,
-        hits: &'a mut Vec<HitRegion>,
-        hover: Option<(f64, f64)>,
-    ) -> Self {
-        let spec = ToolbarLayoutSpec::new(snapshot);
-        let gap = ToolbarLayoutSpec::TOP_GAP;
-        Self {
-            ctx,
-            height,
-            snapshot,
-            hits,
-            hover,
-            spec,
-            gap,
-        }
-    }
-
-    pub(super) fn tool_tooltip(&self, tool: Tool, label: &str) -> String {
-        let default_hint = model::default_drag_hint(tool);
-        let binding = match (self.snapshot.binding_hints.for_tool(tool), default_hint) {
-            (Some(binding), Some(fallback)) => Some(format!("{}, {}", binding, fallback)),
-            (Some(binding), None) => Some(binding.to_string()),
-            (None, Some(fallback)) => Some(fallback.to_string()),
-            (None, None) => None,
-        };
-        format_binding_label(label, binding.as_deref())
-    }
-}
+use super::paint::paint_tree;
+use super::widgets::draw_tooltip_with_delay;
 
 pub fn render_top_strip(
     ctx: &cairo::Context,
@@ -74,107 +23,9 @@ pub fn render_top_strip(
     hover: Option<(f64, f64)>,
     hover_start: Option<Instant>,
 ) -> Result<()> {
-    draw_panel_background(ctx, width, height);
-
-    let mut layout = TopStripLayout::new(ctx, height, snapshot, hits, hover);
-
-    let mut x = ToolbarLayoutSpec::TOP_START_X;
-    let handle_w = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
-    let handle_h = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
-    let handle_y = ToolbarLayoutSpec::TOP_HANDLE_Y;
-    let handle_visible = model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG);
-    if handle_visible {
-        let handle_hover = layout
-            .hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, handle_y, handle_w, handle_h))
-            .unwrap_or(false);
-        draw_drag_handle(ctx, x, handle_y, handle_w, handle_h, handle_hover);
-        layout.hits.push(HitRegion {
-            rect: (x, handle_y, handle_w, handle_h),
-            event: ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
-            kind: HitKind::DragMoveTop,
-            tooltip: Some("Drag toolbar".to_string()),
-        });
-        x += handle_w + layout.gap;
-    }
-    let picker_handle_w = if handle_visible { handle_w } else { 0.0 };
-
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    let current_shape_tool =
-        model::current_shape_tool(snapshot.active_tool, snapshot.tool_override);
-    let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-
-    if snapshot.use_icons {
-        icons::draw_icon_strip(
-            &mut layout,
-            x,
-            picker_handle_w,
-            is_simple,
-            current_shape_tool,
-            fill_tool_active,
-        );
-    } else {
-        text::draw_text_strip(
-            &mut layout,
-            x,
-            picker_handle_w,
-            is_simple,
-            current_shape_tool,
-            fill_tool_active,
-        );
-    }
-
-    let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
-    let btn_y = layout.spec.top_pin_button_y(height);
-    let mut right_x = width - ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT - btn_size;
-    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE) {
-        let close_hover = layout
-            .hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_close_button(ctx, right_x, btn_y, btn_size, close_hover);
-        layout.hits.push(HitRegion {
-            rect: (right_x, btn_y, btn_size, btn_size),
-            event: ToolbarEvent::CloseTopToolbar,
-            kind: HitKind::Click,
-            tooltip: Some("Close".to_string()),
-        });
-        right_x -= btn_size + ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP;
-    }
-
-    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN) {
-        let pin_hover = layout
-            .hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, right_x, btn_y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_pin_button(
-            ctx,
-            right_x,
-            btn_y,
-            btn_size,
-            snapshot.top_pinned,
-            pin_hover,
-        );
-        layout.hits.push(HitRegion {
-            rect: (right_x, btn_y, btn_size, btn_size),
-            event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
-            kind: HitKind::Click,
-            tooltip: Some(if snapshot.top_pinned {
-                "Pinned: opens at startup (click to disable)".to_string()
-            } else {
-                "Pin: click to open at startup".to_string()
-            }),
-        });
-    }
-
-    draw_tooltip_with_delay(
-        ctx,
-        layout.hits,
-        layout.hover,
-        width,
-        height,
-        false,
-        hover_start,
-    );
+    let tree = view::top::build_top_view(snapshot, width, height);
+    paint_tree(ctx, &tree, hover);
+    hits.extend(tree.to_hit_regions());
+    draw_tooltip_with_delay(ctx, hits, hover, width, height, false, hover_start);
     Ok(())
 }

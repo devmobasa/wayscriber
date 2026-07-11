@@ -17,6 +17,7 @@ impl InputState {
         match event {
             ToolbarEvent::SelectTool(tool) => self.apply_toolbar_select_tool(tool),
             ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
+            ToolbarEvent::SetColorHsv { h, s, v } => self.apply_toolbar_set_color_hsv(h, s, v),
             ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
@@ -90,8 +91,15 @@ impl InputState {
             ToolbarEvent::ToggleDelaySliders(show) => self.apply_toolbar_toggle_delay_sliders(show),
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
-            ToolbarEvent::CloseTopToolbar => self.apply_toolbar_close_top_toolbar(),
-            ToolbarEvent::CloseSideToolbar => self.apply_toolbar_close_side_toolbar(),
+            ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
+            ToolbarEvent::SetTopMinimized(minimized) => {
+                self.apply_toolbar_set_top_minimized(minimized)
+            }
+            ToolbarEvent::SetSideMinimized(minimized) => {
+                self.apply_toolbar_set_side_minimized(minimized)
+            }
+            ToolbarEvent::CloseTopToolbar => self.apply_toolbar_set_top_minimized(true),
+            ToolbarEvent::CloseSideToolbar => self.apply_toolbar_set_side_minimized(true),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),
             ToolbarEvent::PinSideToolbar(pin) => self.apply_toolbar_pin_side_toolbar(pin),
             ToolbarEvent::ToggleIconMode(use_icons) => {
@@ -100,6 +108,7 @@ impl InputState {
             ToolbarEvent::ToggleMoreColors(show) => self.apply_toolbar_toggle_more_colors(show),
             ToolbarEvent::CopyHexColor => self.apply_toolbar_copy_hex_color(),
             ToolbarEvent::PasteHexColor => self.apply_toolbar_paste_hex_color(),
+            ToolbarEvent::EditHexColor => self.apply_toolbar_edit_hex_color(),
             ToolbarEvent::OpenColorPickerPopup => self.apply_toolbar_open_color_picker_popup(),
             ToolbarEvent::ToggleActionsSection(show) => {
                 self.apply_toolbar_toggle_actions_section(show)
@@ -130,8 +139,8 @@ impl InputState {
             ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
                 self.apply_toolbar_toggle_floating_badge_always(show)
             }
-            ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
-            ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),
+            ToolbarEvent::SetSidePane(pane) => self.apply_toolbar_set_side_pane(pane),
+            ToolbarEvent::ScrollSidePane(offset) => self.apply_toolbar_scroll_side_pane(offset),
             ToolbarEvent::ToggleSideSectionCollapsed(section, collapsed) => {
                 self.apply_toolbar_toggle_side_section_collapsed(section, collapsed)
             }

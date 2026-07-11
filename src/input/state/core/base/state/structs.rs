@@ -16,8 +16,8 @@ use super::super::types::{
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PolygonClickState, PresetAction, PresetFeedbackState,
     PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionPublishState,
-    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab,
-    UiToastState, ZoomAction,
+    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, UiToastState,
+    ZoomAction,
 };
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PresenterModeConfig, QuickColorPalette,
@@ -215,10 +215,20 @@ pub struct InputState {
     pub toolbar_customize_drag: Option<(ToolbarItemOrderGroup, ToolbarItemId)>,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
+    /// Whether the top strip's overflow menu (width-dropped items) is open.
+    pub toolbar_top_overflow_open: bool,
+    /// Whether the top strip is minimized to its edge restore tab.
+    pub toolbar_top_minimized: bool,
+    /// Whether the side palette is minimized to its edge restore tab.
+    pub toolbar_side_minimized: bool,
+    /// Last HSV triple committed from the side palette's color picker;
+    /// preserves hue/saturation across gray colors where RGB loses them.
+    pub toolbar_picker_hsv: Option<(f64, f64, f64)>,
     /// Whether the toolbar drawer is open
-    pub toolbar_drawer_open: bool,
     /// Active toolbar drawer tab
-    pub toolbar_drawer_tab: ToolbarDrawerTab,
+    pub toolbar_side_pane: crate::ui::toolbar::SidePane,
+    /// Runtime scroll offsets per side-palette pane (Draw/Canvas/Session/Settings).
+    pub toolbar_side_scroll: [f64; 4],
     /// Whether the Settings drawer is showing the toolbar item customization sub-panel
     pub toolbar_customize_items_open: bool,
     /// Selected toolbar item customization group in the Settings drawer sub-panel

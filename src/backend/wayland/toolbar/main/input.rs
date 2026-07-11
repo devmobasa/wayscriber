@@ -92,6 +92,12 @@ impl ToolbarSurfaceManager {
         self.side.clear_focus();
     }
 
+    /// Drops side-toolbar focus only; used when a pane switch invalidates
+    /// the side hit list while top-toolbar focus stays meaningful.
+    pub fn clear_side_focus(&mut self) {
+        self.side.clear_focus();
+    }
+
     pub fn focus_next(&mut self, target: ToolbarFocusTarget, reverse: bool) -> bool {
         match target {
             ToolbarFocusTarget::Top => self.top.focus_next(reverse),

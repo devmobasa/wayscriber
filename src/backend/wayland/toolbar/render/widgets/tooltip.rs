@@ -12,18 +12,6 @@ use crate::ui_text::{UiTextStyle, text_layout};
 /// Delay before showing tooltips.
 const TOOLTIP_DELAY: Duration = Duration::from_millis(250);
 
-#[allow(dead_code)]
-pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
-    ctx: &cairo::Context,
-    hits: &[HitRegion],
-    hover: Option<(f64, f64)>,
-    panel_width: f64,
-    panel_height: f64,
-    above: bool,
-) {
-    draw_tooltip_with_delay(ctx, hits, hover, panel_width, panel_height, above, None);
-}
-
 pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip_with_delay(
     ctx: &cairo::Context,
     hits: &[HitRegion],

@@ -9,6 +9,18 @@
 // COLORS - RGBA tuples for UI elements
 // ============================================================================
 
+// Accent family — the single saturated blue is reserved for active/selected
+// state (the current tool). Every other accent use derives from these tokens
+// so the palette cannot drift again.
+/// The one saturated accent color (active tool, selected value)
+pub const COLOR_ACCENT: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 1.0);
+
+/// Soft accent glow halo behind active elements
+pub const COLOR_ACCENT_GLOW: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 0.25);
+
+/// Lighter accent tint (active-button bottom indicator)
+pub const COLOR_ACCENT_BRIGHT: (f64, f64, f64, f64) = (0.5, 0.75, 1.0, 0.95);
+
 /// White text/icon color with high opacity
 pub const COLOR_TEXT_PRIMARY: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.95);
 
@@ -24,8 +36,9 @@ pub const COLOR_LABEL_SECTION: (f64, f64, f64, f64) = (0.8, 0.8, 0.85, 0.9);
 /// Hint/secondary label color
 pub const COLOR_LABEL_HINT: (f64, f64, f64, f64) = (0.7, 0.7, 0.75, 0.8);
 
-/// Disabled text color (lower opacity for clearer distinction from enabled)
-pub const COLOR_TEXT_DISABLED: (f64, f64, f64, f64) = (0.4, 0.4, 0.45, 0.35);
+/// Disabled text/icon color: dimmed but still legible against the dimmed
+/// disabled button body (the body carries most of the "inert" signal)
+pub const COLOR_TEXT_DISABLED: (f64, f64, f64, f64) = (0.62, 0.62, 0.68, 0.45);
 
 // Icon colors
 /// Icon color when hovered (fully opaque white)
@@ -37,18 +50,29 @@ pub const COLOR_ICON_DEFAULT: (f64, f64, f64, f64) = (0.95, 0.95, 0.95, 0.9);
 /// Icon hover background glow (subtle highlight behind icons on hover)
 pub const COLOR_ICON_HOVER_BG: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.15);
 
-/// Keyboard focus ring color (blue accent)
-pub const COLOR_FOCUS_RING: (f64, f64, f64, f64) = (0.4, 0.6, 0.95, 0.9);
+/// Keyboard focus ring color (accent at reduced alpha)
+pub const COLOR_FOCUS_RING: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 0.9);
 
 // Button states
-/// Active/selected button background (brighter blue accent for better visibility)
-pub const COLOR_BUTTON_ACTIVE: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 1.0);
+/// Active/selected button background (the accent)
+pub const COLOR_BUTTON_ACTIVE: (f64, f64, f64, f64) = COLOR_ACCENT;
 
 /// Hovered button background
 pub const COLOR_BUTTON_HOVER: (f64, f64, f64, f64) = (0.35, 0.35, 0.45, 0.85);
 
 /// Default button background
 pub const COLOR_BUTTON_DEFAULT: (f64, f64, f64, f64) = (0.2, 0.22, 0.26, 0.75);
+
+/// Disabled button background: visibly dimmer than default so the tile
+/// itself reads inert (icon/label dimming alone is too subtle)
+pub const COLOR_BUTTON_DISABLED: (f64, f64, f64, f64) = (0.2, 0.22, 0.26, 0.35);
+
+/// Destructive button background (red-tinted so delete/clear never reads
+/// like navigation)
+pub const COLOR_BUTTON_DESTRUCTIVE: (f64, f64, f64, f64) = (0.34, 0.2, 0.2, 0.8);
+
+/// Destructive button background on hover
+pub const COLOR_BUTTON_DESTRUCTIVE_HOVER: (f64, f64, f64, f64) = (0.52, 0.24, 0.22, 0.9);
 
 // Checkbox states
 /// Checkbox hover state
@@ -67,8 +91,8 @@ pub const COLOR_MINI_CHECKBOX_HOVER: (f64, f64, f64, f64) = (0.32, 0.34, 0.4, 0.
 pub const COLOR_MINI_CHECKBOX_DEFAULT: (f64, f64, f64, f64) = (0.2, 0.22, 0.26, 0.7);
 
 // Pin button states
-/// Pinned state (blue accent - unified with other active states)
-pub const COLOR_PIN_ACTIVE: (f64, f64, f64, f64) = (0.3, 0.55, 0.95, 0.95);
+/// Pinned state (the accent - unified with other active states)
+pub const COLOR_PIN_ACTIVE: (f64, f64, f64, f64) = COLOR_ACCENT;
 
 /// Pin button hover
 pub const COLOR_PIN_HOVER: (f64, f64, f64, f64) = (0.35, 0.35, 0.45, 0.85);
@@ -87,8 +111,10 @@ pub const COLOR_CLOSE_DEFAULT: (f64, f64, f64, f64) = (0.5, 0.5, 0.55, 0.7);
 /// Segmented control outer background
 pub const COLOR_SEGMENT_BG: (f64, f64, f64, f64) = (0.15, 0.17, 0.22, 0.85);
 
-/// Active segment background (blue accent)
-pub const COLOR_SEGMENT_ACTIVE: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 1.0);
+/// Active segment background: a muted accent tint, deliberately quieter than
+/// COLOR_ACCENT so segmented-control selection (Ico/Txt, Simple/Full) never
+/// competes with the active-tool highlight
+pub const COLOR_SEGMENT_ACTIVE: (f64, f64, f64, f64) = (0.24, 0.36, 0.58, 1.0);
 
 /// Active segment text color
 pub const COLOR_SEGMENT_TEXT_ACTIVE: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 1.0);
@@ -106,8 +132,8 @@ pub const COLOR_SEGMENT_DIVIDER: (f64, f64, f64, f64) = (0.35, 0.38, 0.45, 0.5);
 /// Slider track background
 pub const COLOR_TRACK_BACKGROUND: (f64, f64, f64, f64) = (0.5, 0.5, 0.6, 0.6);
 
-/// Slider knob (blue accent)
-pub const COLOR_TRACK_KNOB: (f64, f64, f64, f64) = (0.25, 0.5, 0.95, 0.9);
+/// Slider knob (accent at reduced alpha)
+pub const COLOR_TRACK_KNOB: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 0.9);
 
 // Card/panel backgrounds
 /// Main panel background

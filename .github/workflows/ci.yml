@@ -32,6 +32,10 @@ jobs:
             libdbus-1-dev \
             libudev-dev \
             libgtk-3-dev \
+            libgtk-4-dev \
+            meson \
+            ninja-build \
+            wayland-protocols \
             libpango1.0-dev \
             libcairo2-dev \
             libpixman-1-dev \
@@ -41,6 +45,11 @@ jobs:
             libxcb-randr0-dev \
             libxcb1-dev \
             libx11-dev
+
+      - name: Build gtk4-layer-shell
+        # Ubuntu 24.04 (the current runner) has no libgtk4-layer-shell-dev
+        # package; build the pinned release from source for the GTK toolbars.
+        run: bash tools/install-gtk4-layer-shell.sh
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.95.0

@@ -1,9 +1,11 @@
 use super::constants::{
-    COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
-    COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
-    COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
-    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK,
-    RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
+    COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
+    COLOR_BUTTON_DESTRUCTIVE, COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED,
+    COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE,
+    COLOR_PIN_DEFAULT, COLOR_PIN_HOVER, COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG,
+    COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER, COLOR_SEGMENT_TEXT_ACTIVE,
+    COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD,
+    SPACING_XS, set_color,
 };
 use super::draw_round_rect;
 use crate::ui_text::{UiTextStyle, text_layout};
@@ -50,7 +52,9 @@ fn drag_handle_bar_start_y(y: f64, h: f64, bar_h: f64, bar_gap: f64) -> f64 {
     y + (h - stack_h) / 2.0
 }
 
-pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
+/// Minimize chrome button: a dash, not an X — the bar collapses to an
+/// edge restore tab instead of disappearing.
+pub(in crate::backend::wayland::toolbar::render) fn draw_minimize_button(
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -74,12 +78,9 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
 
     set_color(ctx, COLOR_TEXT_PRIMARY);
     ctx.set_line_width(LINE_WIDTH_THICK);
-    let inset = size * 0.3;
-    ctx.move_to(x + inset, y + inset);
-    ctx.line_to(x + size - inset, y + size - inset);
-    let _ = ctx.stroke();
-    ctx.move_to(x + size - inset, y + inset);
-    ctx.line_to(x + inset, y + size - inset);
+    let inset = size * 0.28;
+    ctx.move_to(x + inset, cy);
+    ctx.line_to(x + size - inset, cy);
     let _ = ctx.stroke();
 }
 
@@ -97,7 +98,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
 
     // Draw outer glow when pinned for visual feedback
     if pinned {
-        ctx.set_source_rgba(0.4, 0.65, 1.0, 0.3);
+        set_color(ctx, COLOR_ACCENT_GLOW);
         ctx.arc(cx, cy, r + 2.0, 0.0, PI * 2.0);
         let _ = ctx.fill();
     }
@@ -114,41 +115,43 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     ctx.arc(cx, cy, r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
-    // Draw star icon instead of pin
-    let star_size = size * 0.45;
-    draw_star(ctx, cx, cy, star_size, pinned);
+    let pin_size = size * 0.5;
+    draw_pushpin(ctx, cx, cy, pin_size, pinned);
 }
 
-/// Draw a 5-pointed star centered at (cx, cy)
-fn draw_star(ctx: &cairo::Context, cx: f64, cy: f64, size: f64, filled: bool) {
-    let outer_r = size;
-    let inner_r = size * 0.4;
-    let points = 5;
+/// Draw a pushpin glyph centered at (cx, cy). The control means
+/// "keep this toolbar open at startup", so the glyph is a thumbtack —
+/// filled when pinned, outline when not.
+fn draw_pushpin(ctx: &cairo::Context, cx: f64, cy: f64, size: f64, filled: bool) {
+    let s = size;
 
     ctx.new_path();
-    for i in 0..(points * 2) {
-        let angle = (i as f64) * PI / (points as f64) - PI / 2.0;
-        let r = if i % 2 == 0 { outer_r } else { inner_r };
-        let px = cx + r * angle.cos();
-        let py = cy + r * angle.sin();
-        if i == 0 {
-            ctx.move_to(px, py);
-        } else {
-            ctx.line_to(px, py);
-        }
-    }
+    // Head: flat cap at the top
+    ctx.move_to(cx - s * 0.45, cy - s * 0.85);
+    ctx.line_to(cx + s * 0.45, cy - s * 0.85);
+    ctx.line_to(cx + s * 0.3, cy - s * 0.55);
+    // Neck down to the flange
+    ctx.line_to(cx + s * 0.3, cy - s * 0.15);
+    // Flange: wider base plate
+    ctx.line_to(cx + s * 0.6, cy + s * 0.15);
+    ctx.line_to(cx - s * 0.6, cy + s * 0.15);
+    ctx.line_to(cx - s * 0.3, cy - s * 0.15);
+    ctx.line_to(cx - s * 0.3, cy - s * 0.55);
     ctx.close_path();
 
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     if filled {
-        // Filled star uses primary text color for theme consistency.
-        set_color(ctx, COLOR_TEXT_PRIMARY);
         let _ = ctx.fill();
     } else {
-        // Outline star when not pinned
-        set_color(ctx, COLOR_TEXT_PRIMARY);
-        ctx.set_line_width(1.5);
+        ctx.set_line_width(1.3);
         let _ = ctx.stroke();
     }
+
+    // Needle below the flange
+    ctx.set_line_width(if filled { 1.6 } else { 1.3 });
+    ctx.move_to(cx, cy + s * 0.15);
+    ctx.line_to(cx, cy + s * 0.85);
+    let _ = ctx.stroke();
 }
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_button(
@@ -169,7 +172,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
 
     // Active state: add outer glow ring
     if active {
-        ctx.set_source_rgba(0.3, 0.55, 1.0, 0.25);
+        set_color(ctx, COLOR_ACCENT_GLOW);
         draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_LG + 2.0);
         let _ = ctx.fill();
     }
@@ -187,7 +190,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
 
     // Active state: add bottom indicator line
     if active {
-        ctx.set_source_rgba(0.5, 0.75, 1.0, 0.95);
+        set_color(ctx, COLOR_ACCENT_BRIGHT);
         let indicator_w = w * 0.5;
         let indicator_h = 2.5;
         let indicator_x = x + (w - indicator_w) / 2.0;
@@ -195,6 +198,20 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
         draw_round_rect(ctx, indicator_x, indicator_y, indicator_w, indicator_h, 1.5);
         let _ = ctx.fill();
     }
+}
+
+/// Draw a disabled button body: dimmed background, no hover or active
+/// affordance, so the tile itself reads inert before the icon/label does.
+pub(in crate::backend::wayland::toolbar::render) fn draw_disabled_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
+    set_color(ctx, COLOR_BUTTON_DISABLED);
+    draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
+    let _ = ctx.fill();
 }
 
 /// Draw a keyboard focus ring around an element.
@@ -214,7 +231,8 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_focus_ring(
     let _ = ctx.stroke();
 }
 
-/// Draw a button with a subtle warning accent for destructive actions (e.g., Clear, UndoAll).
+/// Draw a button for destructive actions (e.g., Clear, board/page Delete):
+/// red-tinted body plus a red accent line so it never reads like navigation.
 pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     ctx: &cairo::Context,
     x: f64,
@@ -231,16 +249,16 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     }
 
     let color = if hover {
-        COLOR_BUTTON_HOVER
+        COLOR_BUTTON_DESTRUCTIVE_HOVER
     } else {
-        COLOR_BUTTON_DEFAULT
+        COLOR_BUTTON_DESTRUCTIVE
     };
     set_color(ctx, color);
     draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
     let _ = ctx.fill();
 
-    // Subtle red accent line at top edge
-    ctx.set_source_rgba(0.85, 0.35, 0.3, if hover { 0.8 } else { 0.5 });
+    // Red accent line at top edge
+    ctx.set_source_rgba(0.85, 0.35, 0.3, if hover { 0.9 } else { 0.7 });
     let accent_w = w * 0.6;
     let accent_h = 2.0;
     let accent_x = x + (w - accent_w) / 2.0;

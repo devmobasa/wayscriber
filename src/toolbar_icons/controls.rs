@@ -141,3 +141,76 @@ pub fn draw_icon_board(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.line_to(x0 + w, y0 + h * 0.5);
     let _ = ctx.stroke();
 }
+
+/// Draw a drag-grip glyph: three horizontal bars, as on the toolbar move
+/// handles. Uses the context's current source color.
+#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
+pub fn draw_icon_grip_bars(ctx: &Context, x: f64, y: f64, size: f64) {
+    let bar_w = size * 0.55;
+    let bar_h = (size * 0.11).max(1.5);
+    let bar_gap = bar_h;
+    let stack_h = 3.0 * bar_h + 2.0 * bar_gap;
+    let bar_x = x + (size - bar_w) / 2.0;
+    let mut bar_y = y + (size - stack_h) / 2.0;
+    for _ in 0..3 {
+        ctx.rectangle(bar_x, bar_y, bar_w, bar_h);
+        let _ = ctx.fill();
+        bar_y += bar_h + bar_gap;
+    }
+}
+
+/// Draw a minimize dash (not an X: the bar collapses to a restore tab).
+#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
+pub fn draw_icon_dash(ctx: &Context, x: f64, y: f64, size: f64) {
+    ctx.set_line_width((size * 0.12).max(1.6));
+    ctx.set_line_cap(cairo::LineCap::Round);
+    let inset = size * 0.24;
+    let cy = y + size / 2.0;
+    ctx.move_to(x + inset, cy);
+    ctx.line_to(x + size - inset, cy);
+    let _ = ctx.stroke();
+}
+
+/// Draw a pushpin glyph ("keep open at startup"): outline when unpinned,
+/// filled when pinned. Geometry mirrors the built-in pin chrome button.
+#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
+pub fn draw_icon_pushpin(ctx: &Context, x: f64, y: f64, size: f64, filled: bool) {
+    let s = size / 2.0;
+    let cx = x + s;
+    let cy = y + s;
+
+    ctx.new_path();
+    ctx.move_to(cx - s * 0.45, cy - s * 0.85);
+    ctx.line_to(cx + s * 0.45, cy - s * 0.85);
+    ctx.line_to(cx + s * 0.3, cy - s * 0.55);
+    ctx.line_to(cx + s * 0.3, cy - s * 0.15);
+    ctx.line_to(cx + s * 0.6, cy + s * 0.15);
+    ctx.line_to(cx - s * 0.6, cy + s * 0.15);
+    ctx.line_to(cx - s * 0.3, cy - s * 0.15);
+    ctx.line_to(cx - s * 0.3, cy - s * 0.55);
+    ctx.close_path();
+    if filled {
+        let _ = ctx.fill();
+    } else {
+        ctx.set_line_width(1.3);
+        let _ = ctx.stroke();
+    }
+
+    ctx.set_line_width(if filled { 1.6 } else { 1.3 });
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.move_to(cx, cy + s * 0.15);
+    ctx.line_to(cx, cy + s * 0.85);
+    let _ = ctx.stroke();
+}
+
+/// Outline pushpin with the 4-arg painter shape used by icon widgets.
+#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
+pub fn draw_icon_pin_outline(ctx: &Context, x: f64, y: f64, size: f64) {
+    draw_icon_pushpin(ctx, x, y, size, false);
+}
+
+/// Filled pushpin with the 4-arg painter shape used by icon widgets.
+#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
+pub fn draw_icon_pin_filled(ctx: &Context, x: f64, y: f64, size: f64) {
+    draw_icon_pushpin(ctx, x, y, size, true);
+}

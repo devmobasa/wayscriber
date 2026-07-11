@@ -4,7 +4,7 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     vec![
         ToolbarSettingsButton {
             id: ToolbarControlId::CustomizeToolbarItems,
-            label: Cow::Borrowed("Customize toolbar"),
+            label: Cow::Borrowed("Customize"),
             event: ToolbarEvent::SetToolbarItemCustomizationOpen(true),
             icon: ToolbarIcon::Visibility,
             tooltip: ToolbarTooltip::text("Customize toolbar item visibility"),
@@ -59,8 +59,6 @@ pub(super) fn section_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettings
 pub(super) fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let back_event = if snapshot.customize_items_group.is_some() {
         ToolbarEvent::SetToolbarItemCustomizationGroup(None)
-    } else if snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize {
-        ToolbarEvent::SetDrawerTab(crate::input::ToolbarDrawerTab::App)
     } else {
         ToolbarEvent::SetToolbarItemCustomizationOpen(false)
     };
@@ -119,6 +117,8 @@ pub(super) fn is_section_toggle_id(id: ToolbarControlId) -> bool {
 
 fn overlay_item_override_allowed(definition: &ToolbarItemDefinition) -> bool {
     definition.group != Some(ToolbarGroupId::Settings)
+        && definition.id != ids::SIDE_GROUP_SETTINGS
+        && definition.id != ids::TOP_CHROME_OVERFLOW
 }
 
 pub(super) fn customize_groups() -> Vec<ToolbarSettingsCustomizeGroup> {

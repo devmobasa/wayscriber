@@ -80,6 +80,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     let opacity_spec = ToolbarSliderSpec::MARKER_OPACITY;
     let opacity_step = opacity_spec.step.unwrap_or(0.05);
     hits.push(HitRegion {
+        focus_id: None,
         rect: (minus_x, marker_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgeMarkerOpacity(-opacity_step),
         kind: HitKind::Click,
@@ -107,6 +108,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         nudge_icon_size,
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (plus_x, marker_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgeMarkerOpacity(opacity_step),
         kind: HitKind::Click,
@@ -132,6 +134,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     let _ = ctx.fill();
 
     hits.push(HitRegion {
+        focus_id: None,
         rect: (track_x, marker_track_y - 6.0, track_w, track_h + 12.0),
         event: ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
         kind: HitKind::DragSetMarkerOpacity {

@@ -129,6 +129,9 @@ pub(super) fn run_event_loop(
             timeout,
             tray_action_flag.as_ref().map(|_| TRAY_ACTION_POLL_TIMEOUT),
         );
+        // GTK toolbar events arrive on a channel that cannot wake the
+        // Wayland poll, so keep the wait bounded while that frontend runs.
+        let timeout = min_timeout(timeout, state.gtk_toolbar_wake_timeout());
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
@@ -142,6 +145,8 @@ pub(super) fn run_event_loop(
         if process_tray_action(state) {
             state.sync_overlay_interactivity();
         }
+
+        state.process_gtk_toolbar(conn, qh);
 
         // Check immediately after dispatch returns.
         if state.input_state.should_exit {
@@ -221,6 +226,8 @@ pub(super) fn run_event_loop(
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
             warn!("Failed to autosave session state: {}", err);
         }
+
+        state.push_gtk_toolbar_update();
 
         if let Some(err) = render::maybe_render(
             state,

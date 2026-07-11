@@ -108,6 +108,7 @@ const TOOLBAR_ACTIONS: &[Action] = &[
     Action::SelectEraserTool,
     Action::EnterTextMode,
     Action::EnterStickyNoteMode,
+    Action::CaptureSelection,
     Action::ToggleFill,
     Action::Undo,
     Action::Redo,

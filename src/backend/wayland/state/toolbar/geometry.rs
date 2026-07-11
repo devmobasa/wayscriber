@@ -51,6 +51,23 @@ pub(super) fn compute_inline_top_base_x(
     }
 }
 
+pub(super) fn remaining_top_width(
+    screen_width: f64,
+    base_x: f64,
+    right_margin: f64,
+    scale: f64,
+) -> Option<f64> {
+    if screen_width <= 0.0 || !screen_width.is_finite() {
+        return None;
+    }
+    let scale = if scale.is_finite() {
+        scale.clamp(0.5, 3.0)
+    } else {
+        1.0
+    };
+    Some(((screen_width - base_x.max(0.0) - right_margin.max(0.0)) / scale).max(0.0))
+}
+
 pub(super) fn clamp_toolbar_offsets(
     offsets: ToolbarOffsets,
     input: ToolbarClampInput,
@@ -149,6 +166,40 @@ mod tests {
     fn inline_top_base_x_skips_push_when_not_allowed() {
         let result = compute_inline_top_base_x(24.0, true, 80.0, 10.0, 40.0, 16.0, false);
         assert_eq!(result, 24.0);
+    }
+
+    #[test]
+    fn inline_budget_subtracts_visible_side_palette_base() {
+        let base = compute_inline_top_base_x(24.0, true, 220.0, 12.0, 58.0, 16.0, true);
+        let budget = remaining_top_width(800.0, base, 12.0, 1.0).unwrap();
+
+        assert_eq!(base, 260.0);
+        assert_eq!(budget, 528.0);
+        assert_eq!(base + budget + 12.0, 800.0);
+
+        let state = crate::input::state::test_support::make_test_input_state();
+        let mut snapshot = crate::ui::toolbar::ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            crate::ui::toolbar::ToolbarBindingHints::default(),
+        );
+        snapshot.top_viewport_max = Some(budget);
+        let planned = crate::backend::wayland::toolbar::layout::top_size(&snapshot).0 as f64;
+        assert!(planned <= budget, "planned={planned}, budget={budget}");
+    }
+
+    #[test]
+    fn layer_shell_budget_leaves_room_for_its_positioned_base() {
+        let base = compute_inline_top_base_x(24.0, true, 260.0, 24.0, 58.0, 16.0, true);
+        let budget = remaining_top_width(1366.0, base, 12.0, 1.0).unwrap();
+
+        assert_eq!(base, 300.0);
+        assert_eq!(budget, 1054.0);
+        assert_eq!(base + budget + 12.0, 1366.0);
+    }
+
+    #[test]
+    fn top_budget_does_not_claim_a_480_pixel_floor() {
+        assert_eq!(remaining_top_width(400.0, 12.0, 12.0, 1.0), Some(376.0));
     }
 
     #[test]

@@ -332,6 +332,14 @@ radial_menu_mouse_binding = "middle"
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]
+# Toolbar frontend: "auto" uses GTK4-rendered toolbars on compositors where
+# the bars get their own layer surfaces (Hyprland, KWin, Wayfire, ...) and
+# the built-in toolbars everywhere else (GNOME, forced-inline, builds
+# without the toolbar-gtk feature). "gtk" requests GTK4 explicitly (warns
+# and falls back when unsupported); "builtin" always uses the built-in bars.
+# Env override: WAYSCRIBER_TOOLBAR_BACKEND
+backend = "auto"
+
 # Toolbar layout preset (simple / full)
 # Legacy values: regular / advanced
 layout_mode = "full"
@@ -348,7 +356,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = false
 #
 # [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
@@ -359,7 +366,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = true
 #
 # [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
@@ -370,13 +376,26 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = true
 # show_text_controls = true
-# show_settings_section = true
 
 # Show top toolbar on startup (pinned)
 top_pinned = true
 
 # Show side toolbar on startup (pinned)
 side_pinned = true
+
+# Start toolbars minimized to their edge restore tabs
+# The minimize button updates these; a minimized bar always leaves a
+# clickable tab on screen to bring it back
+top_minimized = false
+side_minimized = false
+
+# Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
+# The overlay updates this as you switch panes
+side_active_pane = "draw"
+
+# Side-palette sections collapsed to their header row
+# The overlay updates this as you collapse/expand sections
+collapsed_sections = []
 
 # Use icons instead of text labels in toolbars
 # Icons are more compact; text labels are more explicit
@@ -413,7 +432,8 @@ show_step_section = false
 # Keep text controls visible even when text is inactive
 show_text_controls = true
 
-# Show settings section (config buttons and advanced toggles)
+# Deprecated compatibility mirror. Settings navigation is always reachable;
+# this value is preserved for older Wayscriber versions but is otherwise ignored.
 show_settings_section = true
 
 # Show timing delay sliders in side toolbar
@@ -451,9 +471,16 @@ force_inline = false
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
 # The screenshot toolbar button is hidden by default.
+# Section-level ids (side.group.*) act as explicit overrides that beat the
+# layout-mode baseline and survive mode switches.
 hidden = [
   "top.utility.screenshot",
 ]
+
+# IDs explicitly shown, overriding the layout-mode baseline (for example
+# keeping presets visible in simple mode). The overlay updates this as you
+# toggle sections.
+shown = []
 
 [ui.toolbar.items.order]
 # Optional order overrides. Empty lists use the built-in order.

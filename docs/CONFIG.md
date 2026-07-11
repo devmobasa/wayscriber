@@ -294,7 +294,7 @@ custom_redo_steps = 5
 
 **Notes:**
 - `undo_all_delay_ms` / `redo_all_delay_ms` drive the "Undo all (delay)" and "Redo all (delay)" toolbar actions.
-- `custom_section_enabled` reveals the Step controls in the side toolbar; those controls use the custom delays and step counts above.
+- `custom_section_enabled` reveals the Step buttons in the side toolbar; those buttons use the custom delays and step counts above.
 
 ### `[performance]` - Performance Tuning
 
@@ -530,6 +530,10 @@ Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
 
 ```toml
 [ui.toolbar]
+# Toolbar frontend: "auto" (GTK4 bars where the compositor supports
+# layer-shell toolbars, built-in bars elsewhere), "gtk", or "builtin"
+backend = "auto"
+
 # Toolbar layout preset: "simple" or "full"
 # Legacy values: "regular" and "advanced" (both map to Full UI label)
 layout_mode = "full"
@@ -546,7 +550,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = false
 #
 # [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
@@ -557,7 +560,6 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
-# show_settings_section = true
 #
 # [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
@@ -568,13 +570,22 @@ layout_mode = "full"
 # show_boards_section = true
 # show_step_section = true
 # show_text_controls = true
-# show_settings_section = true
 
 # Show top toolbar on startup (pinned)
 top_pinned = true
 
 # Show side toolbar on startup (pinned)
 side_pinned = true
+
+# Start toolbars minimized to their edge restore tabs
+top_minimized = false
+side_minimized = false
+
+# Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
+side_active_pane = "draw"
+
+# Side-palette sections collapsed to their header row
+collapsed_sections = []
 
 # Use icons instead of text labels in toolbars
 use_icons = true
@@ -609,7 +620,8 @@ show_step_section = false
 # Keep text controls visible even when text is inactive
 show_text_controls = true
 
-# Show Settings section (config shortcuts + advanced toggles)
+# Deprecated compatibility mirror. Settings navigation is always reachable;
+# this value is preserved for older Wayscriber versions but is otherwise ignored.
 show_settings_section = true
 
 # Show delayed undo/redo sliders in the side toolbar
@@ -639,6 +651,8 @@ force_inline = false
 [ui.toolbar.items]
 # Hide individual toolbar items or whole side sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
+# Section-level ids (side.group.*) are explicit overrides that beat the
+# layout-mode baseline and survive mode switches.
 hidden = [
   "top.utility.screenshot",
   "top.tool.blur",
@@ -646,6 +660,10 @@ hidden = [
   "side.actions.undo-all",
   "side.group.presets",
 ]
+
+# IDs explicitly shown, overriding the layout-mode baseline (e.g. presets
+# kept visible in simple mode).
+shown = []
 
 [ui.toolbar.items.order]
 # Optional order overrides. Empty lists use the built-in order.
@@ -688,8 +706,8 @@ side_sections = [
 - **Boards**: `show_boards_section` toggles the board navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
-- **Step controls**: `show_step_section` hides/shows the Step Undo/Redo section.
-- **Settings**: `show_settings_section` hides/shows the settings footer (config buttons and toggles).
+- **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo section.
+- **Settings**: the Settings pane is always reachable. The serialized `show_settings_section` key and matching per-mode override are deprecated compatibility fields and no longer hide navigation.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
@@ -698,10 +716,17 @@ side_sections = [
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
+- **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
+- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F2/F9 still toggle full visibility.
+- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
+- **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
+- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that always appears when width pressure moves visible controls into it. The icon/text mode toggle lives in the side palette's Settings pane.
+- **Per-tool options**: the Shapes popover hosts the options for the tool it owns — the Fill checkbox (`top.utility.fill`) and the polygon side count — instead of a permanently reserved mini-checkbox lane under the bar; the bar is 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
 **Defaults:** all set as above.

@@ -5,7 +5,7 @@ use crate::config::{
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
-use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
+use crate::input::{EraserMode, Tool};
 use std::path::PathBuf;
 
 use super::super::bindings::ToolbarBindingHints;
@@ -222,6 +222,9 @@ pub struct ToolbarSnapshot {
     pub active_tool: Tool,
     pub tool_override: Option<Tool>,
     pub color: Color,
+    /// Last HSV triple committed from the palette color picker, when it
+    /// still matches `color`; keeps hue/saturation stable across grays.
+    pub picker_hsv: Option<(f64, f64, f64)>,
     pub quick_colors: QuickColorPalette,
     pub thickness: f64,
     pub eraser_size: f64,
@@ -312,10 +315,22 @@ pub struct ToolbarSnapshot {
     pub show_floating_badge_always: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
-    /// Whether the drawer is open
-    pub drawer_open: bool,
-    /// Active drawer tab
-    pub drawer_tab: ToolbarDrawerTab,
+    /// Whether the top strip's overflow menu is open
+    pub top_overflow_open: bool,
+    /// Whether the top strip is minimized to its edge restore tab
+    pub top_minimized: bool,
+    /// Whether the side palette is minimized to its edge restore tab
+    pub side_minimized: bool,
+    /// Width available to the top strip in pre-scale spec units, when
+    /// known; content past this degrades into the overflow menu.
+    pub top_viewport_max: Option<f64>,
+    /// Active side-palette pane
+    pub active_side_pane: super::super::events::SidePane,
+    /// Scroll offset of the active pane (logical pixels, clamped at render)
+    pub side_scroll: f64,
+    /// Height available to the side palette in pre-scale spec units, when
+    /// known; the pane scrolls instead of growing the surface past this.
+    pub side_viewport_max: Option<f64>,
     /// Whether the Settings drawer is showing the toolbar item customization sub-panel.
     pub customize_items_open: bool,
     /// Selected toolbar item customization group in the Settings drawer sub-panel.

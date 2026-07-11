@@ -5,7 +5,6 @@ use super::super::super::{
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PendingOnboardingUsage, PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode,
-    ToolbarDrawerTab,
 };
 use super::structs::InputState;
 use crate::config::{
@@ -150,8 +149,12 @@ impl InputState {
             resolved_toolbar_items: crate::config::ToolbarItemsConfig::default().resolved(),
             toolbar_customize_drag: None,
             toolbar_shapes_expanded: false,
-            toolbar_drawer_open: false,
-            toolbar_drawer_tab: ToolbarDrawerTab::View,
+            toolbar_top_overflow_open: false,
+            toolbar_top_minimized: false,
+            toolbar_side_minimized: false,
+            toolbar_picker_hsv: None,
+            toolbar_side_pane: crate::ui::toolbar::SidePane::Draw,
+            toolbar_side_scroll: [0.0; 4],
             toolbar_customize_items_open: false,
             toolbar_customize_items_group: None,
             screen_width: 0,

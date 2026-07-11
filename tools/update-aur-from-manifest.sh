@@ -185,6 +185,20 @@ ensure_libxkbcommon_dependency() {
     fi
 }
 
+# The GTK4 toolbar frontend (default feature) needs the gtk4 runtime;
+# insert before wl-clipboard to match the repo PKGBUILD ordering.
+ensure_gtk4_dependencies() {
+    local dep
+    for dep in gtk4 gtk4-layer-shell; do
+        if ! grep -Eq "^[[:space:]]*'${dep}'[[:space:]]*\$" PKGBUILD; then
+            sed -i "/^[[:space:]]*'wl-clipboard'/i\\    '${dep}'" PKGBUILD
+        fi
+        if ! grep -Eq "^[[:space:]]*depends = ${dep}\$" .SRCINFO; then
+            sed -i "/^[[:space:]]*depends = wl-clipboard/i\\\tdepends = ${dep}" .SRCINFO
+        fi
+    done
+}
+
 commit_metadata_changes() {
     local message="$1"
     shift
@@ -216,6 +230,7 @@ update_bin() {
     pushd "$dir" >/dev/null
     remove_install_hook "wayscriber-bin.install"
     ensure_libxkbcommon_dependency
+    ensure_gtk4_dependencies
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_pkgbuild_array PKGBUILD source_x86_64 "source_x86_64=(\"wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz\")"
@@ -248,6 +263,7 @@ update_source() {
     remove_pkgbuild_array_item PKGBUILD git
     remove_srcinfo_field_value .SRCINFO makedepends git
     ensure_libxkbcommon_dependency
+    ensure_gtk4_dependencies
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_pkgbuild_array PKGBUILD source 'source=("wayscriber-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")'

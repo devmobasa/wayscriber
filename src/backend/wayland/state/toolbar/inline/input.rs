@@ -11,6 +11,7 @@ impl WaylandState {
             return None;
         }
         if self.toolbar.is_top_visible()
+            && point_in_surface(self.data.inline_top_rect, position)
             && let Some(intent) = self
                 .data
                 .inline_top_hits
@@ -19,7 +20,8 @@ impl WaylandState {
         {
             return Some(intent);
         }
-        if self.toolbar.is_side_visible() {
+        if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
+        {
             return self
                 .data
                 .inline_side_hits
@@ -42,6 +44,7 @@ impl WaylandState {
             return Some(intent);
         }
         if self.toolbar.is_top_visible()
+            && point_in_surface(self.data.inline_top_rect, position)
             && let Some(intent) = self
                 .data
                 .inline_top_hits
@@ -50,7 +53,8 @@ impl WaylandState {
         {
             return Some(intent);
         }
-        if self.toolbar.is_side_visible() {
+        if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
+        {
             return self
                 .data
                 .inline_side_hits
@@ -179,7 +183,9 @@ impl WaylandState {
         let had_hover =
             self.data.inline_top_hover.is_some() || self.data.inline_side_hover.is_some();
         let had_focus = self.data.inline_top_focus_index.is_some()
-            || self.data.inline_side_focus_index.is_some();
+            || self.data.inline_side_focus_index.is_some()
+            || self.data.inline_top_focus_id.is_some()
+            || self.data.inline_side_focus_id.is_some();
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
         self.data.inline_top_hover_start = None;
@@ -228,5 +234,25 @@ impl WaylandState {
             return true;
         }
         false
+    }
+}
+
+fn point_in_surface(rect: Option<(f64, f64, f64, f64)>, position: (f64, f64)) -> bool {
+    rect.is_some_and(|(x, y, w, h)| geometry::point_in_rect(position.0, position.1, x, y, w, h))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::point_in_surface;
+
+    #[test]
+    fn inline_surface_gate_rejects_clicks_beyond_all_edges() {
+        let rect = Some((10.0, 20.0, 100.0, 50.0));
+        assert!(!point_in_surface(rect, (9.9, 45.0)));
+        assert!(!point_in_surface(rect, (110.1, 45.0)));
+        assert!(!point_in_surface(rect, (60.0, 19.9)));
+        assert!(!point_in_surface(rect, (60.0, 70.1)));
+        assert!(point_in_surface(rect, (10.0, 20.0)));
+        assert!(point_in_surface(rect, (110.0, 70.0)));
     }
 }

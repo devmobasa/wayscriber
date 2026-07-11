@@ -8,9 +8,17 @@ impl WaylandState {
         if self.overlay_passthrough_requested() {
             return KeyboardInteractivity::None;
         }
+        // GTK bars count as visible layer toolbars: the canvas must drop
+        // from Exclusive to OnDemand while they are mapped, or compositors
+        // that honor exclusivity (Hyprland) lock all input to the canvas
+        // and the bars become click-through.
+        let toolbar_visible = self.toolbar.is_visible()
+            || (self.gtk_toolbars_active()
+                && (self.input_state.toolbar_top_visible()
+                    || self.input_state.toolbar_side_visible()));
         desired_keyboard_interactivity_for(
             self.layer_shell.is_some(),
-            self.toolbar.is_visible(),
+            toolbar_visible,
             self.inline_toolbars_active(),
         )
     }
@@ -56,9 +64,11 @@ impl WaylandState {
 
     /// Syncs toolbar visibility from the input state, ensures surfaces exist, and adjusts keyboard interactivity.
     pub(in crate::backend::wayland) fn sync_toolbar_visibility(&mut self, qh: &QueueHandle<Self>) {
-        // Sync individual toolbar visibility
-        let top_visible = self.input_state.toolbar_top_visible();
-        let side_visible = self.input_state.toolbar_side_visible();
+        // Sync individual toolbar visibility. While the GTK frontend owns
+        // the toolbars, the built-in surfaces stay unmapped.
+        let gtk_active = self.gtk_toolbars_active();
+        let top_visible = self.input_state.toolbar_top_visible() && !gtk_active;
+        let side_visible = self.input_state.toolbar_side_visible() && !gtk_active;
         let inline_active = self.inline_toolbars_active();
         let drag_preview = self.toolbar_drag_preview_active();
 
@@ -204,6 +214,7 @@ impl WaylandState {
         let render_profile = self.input_state.active_ui_render_profile().cloned();
         self.toolbar
             .render(&self.shm, snapshot, None, render_profile.as_ref());
+        self.toolbar.apply_input_regions(&self.compositor_state);
     }
 
     pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {

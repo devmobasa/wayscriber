@@ -24,7 +24,7 @@ pub use core::{
     PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
     PressureThicknessEntryMode, RADIAL_TOOL_LABELS, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout,
     RadialMenuState, RadialSegmentId, SelectionAxis, SelectionHandle, SelectionState, ShellMode,
-    TextInputMode, ToolbarDrawerTab, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    TextInputMode, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
     color_picker_rgb_to_hsv, sub_ring_child_count, sub_ring_child_label,
 };
 pub(crate) use core::{

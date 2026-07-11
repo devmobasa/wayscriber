@@ -7,15 +7,14 @@ use crate::config::{
     toolbar_item_order_group,
 };
 
-use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection, ToolbarSnapshot};
+use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
 use super::activation::{ToolbarActivation, ToolbarControlId};
 use super::control::{ToolbarIcon, ToolbarTooltip};
 
 mod helpers;
 use helpers::{
     control_visible, customize_buttons, customize_group_contains, customize_groups,
-    definition_order_group_for_customize, is_section_toggle_id, section_buttons, settings_buttons,
-    sort_customize_definitions,
+    definition_order_group_for_customize, settings_buttons, sort_customize_definitions,
 };
 
 #[derive(Debug, Clone)]
@@ -28,26 +27,27 @@ pub(crate) struct ToolbarSettingsModel {
 
 impl ToolbarSettingsModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        let customize_shortcut = snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Customize;
-        let sections_tab = snapshot.drawer_tab == crate::input::ToolbarDrawerTab::Sections;
-        let customizing = snapshot.customize_items_open || customize_shortcut;
-        if !snapshot.drawer_open
-            || (!customize_shortcut
-                && !sections_tab
-                && (snapshot.side_section_hidden(ToolbarSideSection::Settings)
-                    || !snapshot.show_settings_section
-                    || snapshot.drawer_tab != crate::input::ToolbarDrawerTab::App))
-        {
+        // The Settings pane is navigation, not a hideable section: it is the
+        // single customization surface, so it must always be reachable.
+        let customizing = snapshot.customize_items_open;
+        if snapshot.active_side_pane != crate::ui::toolbar::SidePane::Settings {
             return None;
         }
 
         let mut toggles = vec![
             ToolbarSettingsToggle::new(
                 ToolbarControlId::SettingsContextAwareUi,
-                "Context UI",
+                "Adapt to tool",
                 snapshot.context_aware_ui,
                 ToolbarEvent::ToggleContextAwareUi(!snapshot.context_aware_ui),
-                "Show/hide controls based on active tool.",
+                "Show only the active tool's controls.",
+            ),
+            ToolbarSettingsToggle::new(
+                ToolbarControlId::SettingsIconMode,
+                "Icon buttons",
+                snapshot.use_icons,
+                ToolbarEvent::ToggleIconMode(!snapshot.use_icons),
+                "Icons instead of text labels.",
             ),
             ToolbarSettingsToggle::new(
                 ToolbarControlId::SettingsTextControls,
@@ -97,14 +97,14 @@ impl ToolbarSettingsModel {
             toggles.extend([
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsPresets,
-                    "Show presets",
+                    "Presets",
                     snapshot.show_presets,
                     ToolbarEvent::TogglePresets(!snapshot.show_presets),
                     "Presets: quick slots.",
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsActions,
-                    "Show actions",
+                    "Actions",
                     snapshot.show_actions_section,
                     ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
                     "Actions: undo/redo/clear.",
@@ -118,11 +118,12 @@ impl ToolbarSettingsModel {
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsAdvancedActions,
-                    "Adv. Actions",
+                    "Advanced actions",
                     snapshot.show_actions_advanced,
                     ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
-                    "Advanced: undo-all/delay/freeze.",
-                ),
+                    "Undo all, delayed undo, freeze.",
+                )
+                .wide(),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsBoards,
                     "Boards",
@@ -139,19 +140,15 @@ impl ToolbarSettingsModel {
                 ),
                 ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsStepControls,
-                    "Step controls",
+                    "Multi-step undo/redo",
                     snapshot.show_step_section,
                     ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
-                    "Step: step undo/redo.",
-                ),
+                    "Undo/redo several strokes at once.",
+                )
+                .wide(),
             ]);
         }
 
-        if sections_tab {
-            toggles.retain(|toggle| is_section_toggle_id(toggle.id));
-        } else {
-            toggles.retain(|toggle| !is_section_toggle_id(toggle.id));
-        }
         toggles.retain(|toggle| control_visible(snapshot, toggle.id));
         if customizing {
             toggles.clear();
@@ -159,8 +156,6 @@ impl ToolbarSettingsModel {
 
         let buttons = if customizing {
             customize_buttons(snapshot)
-        } else if sections_tab {
-            section_buttons(snapshot)
         } else {
             settings_buttons(snapshot)
         };
@@ -195,6 +190,30 @@ impl ToolbarSettingsModel {
 
     pub(crate) fn toggles(&self) -> &[ToolbarSettingsToggle] {
         &self.toggles
+    }
+
+    /// Toggle rows for the two-column grid: wide toggles take a full row,
+    /// the rest pair up in order. The section height math and the renderer
+    /// both consume this packing so they can never disagree.
+    pub(crate) fn toggle_rows(&self) -> Vec<Vec<&ToolbarSettingsToggle>> {
+        let mut rows: Vec<Vec<&ToolbarSettingsToggle>> = Vec::new();
+        let mut pending: Option<&ToolbarSettingsToggle> = None;
+        for toggle in &self.toggles {
+            if toggle.wide {
+                if let Some(narrow) = pending.take() {
+                    rows.push(vec![narrow]);
+                }
+                rows.push(vec![toggle]);
+            } else if let Some(narrow) = pending.take() {
+                rows.push(vec![narrow, toggle]);
+            } else {
+                pending = Some(toggle);
+            }
+        }
+        if let Some(narrow) = pending.take() {
+            rows.push(vec![narrow]);
+        }
+        rows
     }
 
     pub(crate) fn buttons(&self) -> &[ToolbarSettingsButton] {
@@ -301,6 +320,8 @@ pub(crate) struct ToolbarSettingsToggle {
     pub(crate) checked: bool,
     pub(crate) activation: ToolbarActivation,
     pub(crate) tooltip: ToolbarTooltip,
+    /// Label too long for a half-width cell: the toggle takes a full row.
+    pub(crate) wide: bool,
 }
 
 impl ToolbarSettingsToggle {
@@ -317,7 +338,13 @@ impl ToolbarSettingsToggle {
             checked,
             activation: ToolbarActivation::Click(event),
             tooltip: ToolbarTooltip::text(tooltip),
+            wide: false,
         }
+    }
+
+    fn wide(mut self) -> Self {
+        self.wide = true;
+        self
     }
 }
 

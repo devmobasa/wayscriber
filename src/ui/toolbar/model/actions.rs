@@ -1,15 +1,27 @@
 use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
-use crate::input::ToolbarDrawerTab;
 
 use super::super::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarCommandGroupKind {
-    BasicActions,
-    ViewActions,
+    History,
+    Zoom,
     AdvancedActions,
     Pages,
     Boards,
+}
+
+impl ToolbarCommandGroupKind {
+    /// Label drawn above the group inside the Canvas pane's Actions card;
+    /// Pages/Boards carry their own section headers instead.
+    pub(crate) fn sub_label(self) -> Option<&'static str> {
+        match self {
+            Self::History => Some("History"),
+            Self::Zoom => Some("Zoom"),
+            Self::AdvancedActions => Some("Advanced"),
+            Self::Pages | Self::Boards => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -67,10 +79,11 @@ impl ToolbarActionsModel {
             return None;
         }
 
-        let show_drawer_view = drawer_view_visible(snapshot);
-        let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
-        let show_view_actions = show_drawer_view
-            && snapshot.show_zoom_actions
+        if !canvas_pane_active(snapshot) {
+            return None;
+        }
+        let show_advanced = snapshot.show_actions_advanced;
+        let show_view_actions = snapshot.show_zoom_actions
             && (snapshot.show_actions_section || snapshot.show_actions_advanced);
         let show_actions = snapshot.show_actions_section || show_advanced;
 
@@ -83,7 +96,7 @@ impl ToolbarActionsModel {
             push_visible_group(
                 snapshot,
                 &mut groups,
-                ToolbarCommandGroupKind::BasicActions,
+                ToolbarCommandGroupKind::History,
                 vec![
                     ToolbarButtonModel::new(ToolbarEvent::Undo, snapshot.undo_available),
                     ToolbarButtonModel::new(ToolbarEvent::Redo, snapshot.redo_available),
@@ -96,7 +109,7 @@ impl ToolbarActionsModel {
             push_visible_group(
                 snapshot,
                 &mut groups,
-                ToolbarCommandGroupKind::ViewActions,
+                ToolbarCommandGroupKind::Zoom,
                 vec![
                     ToolbarButtonModel::new(ToolbarEvent::ZoomIn, true),
                     ToolbarButtonModel::new(ToolbarEvent::ZoomOut, true),
@@ -146,7 +159,7 @@ impl ToolbarActionsModel {
 pub(crate) fn toolbar_pages_model(snapshot: &ToolbarSnapshot) -> Option<ToolbarCommandGroup> {
     if snapshot.side_section_hidden(ToolbarSideSection::Pages)
         || !snapshot.show_pages_section
-        || !drawer_view_visible(snapshot)
+        || !canvas_pane_active(snapshot)
     {
         return None;
     }
@@ -170,7 +183,7 @@ pub(crate) fn toolbar_pages_model(snapshot: &ToolbarSnapshot) -> Option<ToolbarC
 pub(crate) fn toolbar_boards_model(snapshot: &ToolbarSnapshot) -> Option<ToolbarCommandGroup> {
     if snapshot.side_section_hidden(ToolbarSideSection::Boards)
         || !snapshot.show_boards_section
-        || !drawer_view_visible(snapshot)
+        || !canvas_pane_active(snapshot)
     {
         return None;
     }
@@ -189,8 +202,8 @@ pub(crate) fn toolbar_boards_model(snapshot: &ToolbarSnapshot) -> Option<Toolbar
     )
 }
 
-fn drawer_view_visible(snapshot: &ToolbarSnapshot) -> bool {
-    snapshot.drawer_open && snapshot.drawer_tab == ToolbarDrawerTab::View
+fn canvas_pane_active(snapshot: &ToolbarSnapshot) -> bool {
+    snapshot.active_side_pane == crate::ui::toolbar::SidePane::Canvas
 }
 
 fn push_visible_group(

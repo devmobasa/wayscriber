@@ -1,16 +1,31 @@
 use super::super::events::HitKind;
+use super::super::hit::HitRegion;
 use super::*;
 use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
-use crate::input::{ClickHighlightSettings, EraserMode, InputState, ToolbarDrawerTab};
+use crate::input::{ClickHighlightSettings, EraserMode, InputState};
 use crate::ui::toolbar::model::{
     ToolbarActivation, ToolbarSessionModel, ToolbarSettingsModel, ToolbarSliderSpec,
 };
 use crate::ui::toolbar::{
-    SessionRecentSnapshot, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot,
+    SessionRecentSnapshot, SidePane, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot,
 };
 
 mod collapsible;
+
+/// Render-time hit oracle: the side palette has no static hit builder, so
+/// hits come from drawing the palette at its computed size.
+fn rendered_side_hits(snapshot: &ToolbarSnapshot) -> Vec<HitRegion> {
+    let (w, h) = side_size(snapshot);
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx, w as f64, h as f64, snapshot, &mut hits, None, None,
+    )
+    .unwrap();
+    hits
+}
 
 fn create_test_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -74,159 +89,586 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (965, 72));
+    assert_eq!(top_size(&snapshot), (1120, 58));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (1110, 60));
+    assert_eq!(top_size(&snapshot).1, 60);
 }
 
 #[test]
-fn build_top_hits_includes_toggle_and_pin() {
+fn narrow_viewports_degrade_swatches_then_overflow_items() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
-    let snapshot = snapshot_from_state(&state);
-    let mut hits = Vec::new();
-    let (w, h) = top_size(&snapshot);
-    build_top_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let mut snapshot = snapshot_from_state(&state);
 
+    // Unconstrained: all eight swatches, no overflow chrome.
+    let full = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert_eq!(full.swatch_count, 8);
+    assert!(!full.show_overflow);
+    let full_width = top_size(&snapshot).0;
+
+    // Slightly narrow: swatches degrade before anything is dropped.
+    snapshot.top_viewport_max = Some(full_width as f64 - 60.0);
+    let degraded = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(degraded.swatch_count < 8);
+    assert!(degraded.dropped_tools.is_empty());
+    assert!(top_size(&snapshot).0 as f64 <= full_width as f64 - 60.0);
+
+    // Very narrow: droppable items move into the overflow menu; the
+    // protected core (Pen, Eraser, chip, Undo/Redo, Clear) stays.
+    snapshot.top_viewport_max = Some(700.0);
+    let tight = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(tight.show_overflow);
+    assert!(!tight.dropped_utilities.is_empty());
+    assert!(top_size(&snapshot).0 as f64 <= 700.0);
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    for id in [
+        "top.tool.pen",
+        "top.tool.eraser",
+        "top.group.quick-colors",
+        "top.utility.undo",
+        "top.utility.clear-canvas",
+        "top.chrome.overflow",
+    ] {
+        assert!(
+            tree.node_by_id(&id.into()).is_some(),
+            "{id} must survive width pressure"
+        );
+    }
+
+    // Opening the overflow reveals the dropped items below the bar.
+    snapshot.top_overflow_open = true;
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let overflow_ids: Vec<&str> = tree
+        .nodes()
+        .iter()
+        .map(|node| node.id.as_str())
+        .filter(|id| id.starts_with("top.overflow."))
+        .collect();
     assert!(
-        hits.iter()
-            .any(|hit| matches!(hit.event, ToolbarEvent::ToggleIconMode(false)))
-    );
-    assert!(hits.iter().any(|hit| matches!(
-        hit.event,
-        ToolbarEvent::SelectTool(crate::input::Tool::StepMarker)
-    )));
-    assert!(
-        hits.iter()
-            .any(|hit| matches!(hit.event, ToolbarEvent::PinTopToolbar(_)))
-    );
-    assert!(
-        hits.iter()
-            .any(|hit| matches!(hit.event, ToolbarEvent::CloseTopToolbar))
+        overflow_ids.len() > 1,
+        "panel + dropped items: {overflow_ids:?}"
     );
 }
 
 #[test]
-fn top_size_keeps_toggle_and_window_controls_separate() {
+fn overflow_contains_only_visible_items_and_is_structural() {
     let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state
+        .toolbar_items
+        .set_hidden(crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
+    state
+        .toolbar_items
+        .set_hidden(crate::config::toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
+    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = Some(700.0);
 
+    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(plan.show_overflow);
+    assert!(
+        !plan
+            .dropped_utilities
+            .contains(&crate::ui::toolbar::model::TopUtilityButton::Screenshot)
+    );
+    assert!(
+        !plan
+            .dropped_utilities
+            .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight)
+    );
+
+    snapshot.top_overflow_open = true;
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    assert!(tree.node_by_id(&"top.chrome.overflow".into()).is_some());
+    assert!(
+        tree.node_by_id(&"top.overflow.top.utility.screenshot".into())
+            .is_none()
+    );
+    assert!(
+        tree.node_by_id(&"top.overflow.top.utility.highlight".into())
+            .is_none()
+    );
+}
+
+#[test]
+fn top_strip_fits_480_pixels_in_icon_and_text_modes() {
     for use_icons in [true, false] {
+        let mut state = create_test_input_state();
         state.toolbar_use_icons = use_icons;
-        let snapshot = snapshot_from_state(&state);
-        let (w, h) = top_size(&snapshot);
-        let mut hits = Vec::new();
-        build_top_hits(w as f64, h as f64, &snapshot, &mut hits);
-
-        let toggle = hits
-            .iter()
-            .find(|hit| matches!(hit.event, ToolbarEvent::ToggleIconMode(_)))
-            .expect("icon/text toggle hit");
-        let pin = hits
-            .iter()
-            .find(|hit| matches!(hit.event, ToolbarEvent::PinTopToolbar(_)))
-            .expect("pin hit");
-        let close = hits
-            .iter()
-            .find(|hit| matches!(hit.event, ToolbarEvent::CloseTopToolbar))
-            .expect("close hit");
-
+        let mut snapshot = snapshot_from_state(&state);
+        snapshot.top_viewport_max = Some(480.0);
+        let (width, _) = top_size(&snapshot);
         assert!(
-            toggle.rect.0 + toggle.rect.2 + ToolbarLayoutSpec::TOP_GAP <= pin.rect.0,
-            "icon/text toggle should not overlap the pin button"
-        );
-        assert!(
-            pin.rect.0 + pin.rect.2 <= close.rect.0,
-            "pin and close buttons should not overlap"
-        );
-        assert!(
-            close.rect.0 + close.rect.2 <= w as f64,
-            "close button should fit inside the top toolbar"
+            width <= 480,
+            "{} mode planned width {width} exceeds 480",
+            if use_icons { "icon" } else { "text" }
         );
     }
 }
 
 #[test]
-fn build_side_hits_color_picker_height_tracks_palette_mode() {
+fn compact_top_strip_respects_budget_without_the_old_floor() {
     let mut state = create_test_input_state();
-    state.show_more_colors = false;
-    let snapshot = snapshot_from_state(&state);
-    let mut hits = Vec::new();
-    build_side_hits(260.0, 400.0, &snapshot, &mut hits);
-    let picker_height = hits.iter().find_map(|hit| {
-        if let HitKind::PickColor { h, .. } = hit.kind {
-            Some(h)
-        } else {
-            None
-        }
-    });
-    assert_eq!(picker_height, Some(24.0));
-
-    state.show_more_colors = true;
-    let snapshot = snapshot_from_state(&state);
-    let mut hits = Vec::new();
-    build_side_hits(260.0, 400.0, &snapshot, &mut hits);
-    let picker_height = hits.iter().find_map(|hit| {
-        if let HitKind::PickColor { h, .. } = hit.kind {
-            Some(h)
-        } else {
-            None
-        }
-    });
-    assert_eq!(picker_height, Some(54.0));
+    state.toolbar_use_icons = false;
+    let mut snapshot = snapshot_from_state(&state);
+    for budget in [376, 320, 300] {
+        snapshot.top_viewport_max = Some(budget as f64);
+        assert!(
+            top_size(&snapshot).0 <= budget,
+            "planned width {} exceeds {budget}",
+            top_size(&snapshot).0
+        );
+    }
 }
 
 #[test]
-fn side_header_static_hits_match_render_time_header_hits() {
+fn reordered_overflow_items_keep_visual_order() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    let snapshot = snapshot_from_state(&state);
-    let (w, h) = side_size(&snapshot);
+    state.toolbar_use_icons = true;
+    state.toolbar_items.set_hidden(
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        false,
+    );
+    state.toolbar_items.move_item_to_index(
+        crate::config::ToolbarItemOrderGroup::TopControls,
+        crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT,
+        0,
+    );
+    state.toolbar_items.move_item_to_index(
+        crate::config::ToolbarItemOrderGroup::TopControls,
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        1,
+    );
+    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = Some(560.0);
 
+    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    let highlight = plan
+        .dropped_utilities
+        .iter()
+        .position(|item| *item == crate::ui::toolbar::model::TopUtilityButton::Highlight)
+        .expect("highlight dropped");
+    let screenshot = plan
+        .dropped_utilities
+        .iter()
+        .position(|item| *item == crate::ui::toolbar::model::TopUtilityButton::Screenshot)
+        .expect("screenshot dropped");
+    assert!(highlight < screenshot);
+}
+
+#[test]
+fn shapes_popover_hosts_the_relocated_tool_options() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.set_tool_override(Some(crate::input::Tool::RegularPolygon));
+    state.toolbar_shapes_expanded = true;
+    let snapshot = snapshot_from_state(&state);
+    assert!(snapshot.shape_picker_open);
+
+    let (w, h) = top_size(&snapshot);
+    assert!(h > 58, "open popover grows the surface: {h}");
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+
+    // The grid renders inside popover chrome with a caret.
+    let panel = tree
+        .node_by_id(&"top.shapes.panel".into())
+        .expect("shapes popover panel");
+    assert!(matches!(
+        panel.kind,
+        crate::backend::wayland::toolbar::view::WidgetKind::Popover { .. }
+    ));
+
+    // The old mini-checkbox lane's controls live inside the popover now.
+    let fill = tree
+        .node_by_id(&"top.utility.fill".into())
+        .expect("fill option row");
+    let inside = |rect: (f64, f64, f64, f64)| {
+        rect.0 >= panel.rect.0
+            && rect.1 >= panel.rect.1
+            && rect.0 + rect.2 <= panel.rect.0 + panel.rect.2 + 0.5
+            && rect.1 + rect.3 <= panel.rect.1 + panel.rect.3 + 0.5
+    };
+    assert!(inside(fill.rect), "fill row sits inside the popover");
+    assert!(matches!(
+        fill.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleFill(_)
+    ));
+    let minus = tree
+        .node_by_id(&"top.options.sides-minus".into())
+        .expect("sides minus");
+    assert!(inside(minus.rect));
+    assert!(matches!(
+        minus.interact.as_ref().unwrap().event,
+        ToolbarEvent::NudgePolygonSides(-1)
+    ));
+
+    // With the popover closed the bar carries no fill checkbox at all —
+    // the permanently reserved mini-checkbox lane is gone.
+    state.toolbar_shapes_expanded = false;
+    let snapshot = snapshot_from_state(&state);
+    let (w, h) = top_size(&snapshot);
+    assert_eq!(h, 58);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    assert!(tree.node_by_id(&"top.utility.fill".into()).is_none());
+}
+
+#[test]
+fn highlight_ring_row_grows_the_bar_only_while_active() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    let snapshot = snapshot_from_state(&state);
+    assert_eq!(top_size(&snapshot).1, 58);
+
+    state.set_highlight_tool(true);
+    let snapshot = snapshot_from_state(&state);
+    assert!(snapshot.highlight_tool_active);
+    let (w, h) = top_size(&snapshot);
+    assert!(h > 58, "ring row grows the bar: {h}");
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let ring = tree
+        .node_by_id(&"top.utility.highlight-ring".into())
+        .expect("ring checkbox");
+    assert!(matches!(
+        ring.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleHighlightToolRing(_)
+    ));
+}
+
+#[test]
+fn highlight_ring_and_top_popovers_use_separate_lanes() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.set_highlight_tool(true);
+    state.toolbar_shapes_expanded = true;
+    let snapshot = snapshot_from_state(&state);
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let ring = tree
+        .node_by_id(&"top.utility.highlight-ring".into())
+        .expect("ring row");
+    let shapes = tree
+        .node_by_id(&"top.shapes.panel".into())
+        .expect("shapes panel");
+    assert!(shapes.rect.1 >= ring.rect.1 + ring.rect.3);
+
+    state.toolbar_shapes_expanded = false;
+    state.toolbar_top_overflow_open = true;
+    state.toolbar_items.set_hidden(
+        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        false,
+    );
+    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
+        snapshot.top_viewport_max = Some(budget as f64);
+        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+        (plan.show_overflow
+            && !plan
+                .dropped_utilities
+                .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight))
+        .then_some(budget as f64)
+    });
+    assert!(
+        snapshot.top_viewport_max.is_some(),
+        "overflow budget retaining highlight"
+    );
+    let (w, h) = top_size(&snapshot);
+    let tree =
+        crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    let ring = tree
+        .node_by_id(&"top.utility.highlight-ring".into())
+        .expect("ring row");
+    let overflow = tree
+        .node_by_id(&"top.overflow.panel".into())
+        .expect("overflow panel");
+    assert!(
+        overflow.rect.1 >= ring.rect.1 + ring.rect.3,
+        "ring={:?}, overflow={:?}, surface=({w}, {h}), budget={:?}",
+        ring.rect,
+        overflow.rect,
+        snapshot.top_viewport_max
+    );
+}
+
+#[test]
+fn scrolled_side_hits_are_clipped_at_both_viewport_edges() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pane = SidePane::Settings;
+    state.toolbar_side_scroll[SidePane::Settings.index()] = 17.3;
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.side_viewport_max = Some(240.0);
+    snapshot.side_scroll = 17.3;
+    let (_, height) = side_size(&snapshot);
+    let content_top = ToolbarLayoutSpec::new(&snapshot).side_content_start_y();
+    let hits = rendered_side_hits(&snapshot);
+    let content_hits = &hits[8..];
+
+    assert!(!content_hits.is_empty());
+    assert!(content_hits.iter().all(|hit| {
+        hit.rect.1 >= content_top - f64::EPSILON
+            && hit.rect.1 + hit.rect.3 <= height as f64 + f64::EPSILON
+    }));
+    assert!(content_hits.iter().any(|hit| {
+        (hit.rect.1 - content_top).abs() < 0.01
+            || (hit.rect.1 + hit.rect.3 - height as f64).abs() < 0.01
+    }));
+}
+
+#[test]
+fn minimized_side_palette_is_a_single_restore_tab() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_minimized = true;
+    let snapshot = snapshot_from_state(&state);
+
+    assert_eq!(side_size(&snapshot), (24, 64));
+
+    let hits = rendered_side_hits(&snapshot);
+    assert_eq!(hits.len(), 1, "one restore hit only: {hits:?}");
+    assert!(matches!(
+        hits[0].event,
+        ToolbarEvent::SetSideMinimized(false)
+    ));
+}
+
+#[test]
+fn side_color_picker_offers_sat_val_area_and_hue_bar() {
+    let count_swatches = |hits: &[HitRegion]| {
+        hits.iter()
+            .filter(|hit| matches!(hit.event, ToolbarEvent::SetColor(_)))
+            .count()
+    };
+
+    let mut state = create_test_input_state();
+    state.show_more_colors = false;
+    let snapshot = snapshot_from_state(&state);
+    let compact_hits = rendered_side_hits(&snapshot);
+    let sv = compact_hits
+        .iter()
+        .find(|hit| matches!(hit.kind, HitKind::PickSatVal { .. }))
+        .expect("sat/val area hit");
+    let hue = compact_hits
+        .iter()
+        .find(|hit| matches!(hit.kind, HitKind::PickHue { .. }))
+        .expect("hue bar hit");
+    assert_eq!(sv.rect.3, ToolbarLayoutSpec::SIDE_COLOR_SV_HEIGHT);
+    assert_eq!(hue.rect.3, ToolbarLayoutSpec::SIDE_COLOR_HUE_HEIGHT);
+    assert!(
+        hue.rect.1 > sv.rect.1 + sv.rect.3,
+        "hue bar sits below the sat/val area"
+    );
+
+    state.show_more_colors = true;
+    let snapshot = snapshot_from_state(&state);
+    let expanded_hits = rendered_side_hits(&snapshot);
+    assert!(
+        count_swatches(&expanded_hits) > count_swatches(&compact_hits),
+        "extended palette should add swatch hits"
+    );
+}
+
+#[test]
+fn canvas_pane_right_aligns_destructive_buttons() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pane = SidePane::Canvas;
+    state.toolbar_use_icons = true;
+    let snapshot = snapshot_from_state(&state);
+    let hits = rendered_side_hits(&snapshot);
+
+    let right_edge = ToolbarLayoutSpec::SIDE_START_X
+        + (ToolbarLayoutSpec::SIDE_WIDTH as f64 - ToolbarLayoutSpec::SIDE_CONTENT_PADDING_X);
+    for (event_name, matcher) in [
+        (
+            "ClearCanvas",
+            &(|hit: &HitRegion| matches!(hit.event, ToolbarEvent::ClearCanvas))
+                as &dyn Fn(&HitRegion) -> bool,
+        ),
+        ("BoardDelete", &|hit: &HitRegion| {
+            matches!(hit.event, ToolbarEvent::BoardDelete)
+        }),
+        ("PageDelete", &|hit: &HitRegion| {
+            matches!(hit.event, ToolbarEvent::PageDelete)
+        }),
+    ] {
+        let hit = hits
+            .iter()
+            .find(|hit| matcher(hit))
+            .unwrap_or_else(|| panic!("{event_name} hit"));
+        assert!(
+            (hit.rect.0 + hit.rect.2 - right_edge).abs() < 1.0,
+            "{event_name} should be right-aligned"
+        );
+    }
+
+    // The guard gap: the button before the delete does not abut it.
+    let duplicate = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::PageDuplicate))
+        .expect("page duplicate hit");
+    let delete = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::PageDelete))
+        .expect("page delete hit");
+    assert!(
+        duplicate.rect.0 + duplicate.rect.2 + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP
+            < delete.rect.0,
+        "destructive delete should sit apart from its neighbors"
+    );
+}
+
+#[test]
+fn preset_slots_save_on_empty_click_and_clear_on_hover_badge() {
+    let state = create_test_input_state();
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+        name: None,
+        tool: crate::input::Tool::Pen,
+        color: Color {
+            r: 1.0,
+            g: 0.5,
+            b: 0.0,
+            a: 1.0,
+        },
+        size: 4.0,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+    });
+
+    // Without hover: filled slot applies, empty slots save, and the old
+    // per-slot micro action row is gone.
+    let hits = rendered_side_hits(&snapshot);
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::ApplyPreset(1)))
+    );
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SavePreset(2)))
+    );
+    assert!(
+        !hits
+            .iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SavePreset(1))),
+        "filled slot should not save on click"
+    );
+    assert!(
+        !hits
+            .iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::ClearPreset(_))),
+        "clear affordance only appears on hover"
+    );
+
+    // Hovering the filled slot reveals the clear badge, and its hit takes
+    // precedence over the apply hit underneath.
+    let apply_hit = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ApplyPreset(1)))
+        .expect("apply hit");
+    let hover = (
+        apply_hit.rect.0 + apply_hit.rect.2 / 2.0,
+        apply_hit.rect.1 + apply_hit.rect.3 / 2.0,
+    );
+    let (w, h) = side_size(&snapshot);
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
-    let mut render_hits = Vec::new();
+    let mut hovered_hits = Vec::new();
     crate::backend::wayland::toolbar::render_side_palette(
         &ctx,
         w as f64,
         h as f64,
         &snapshot,
-        &mut render_hits,
-        None,
+        &mut hovered_hits,
+        Some(hover),
         None,
     )
     .unwrap();
-
-    let mut static_hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
-
-    let header_len = 9;
-    let render_header: Vec<_> = render_hits
+    let clear_index = hovered_hits
         .iter()
-        .take(header_len)
-        .map(|hit| (event_name(&hit.event), format!("{:?}", hit.kind)))
-        .collect();
-    let static_header: Vec<_> = static_hits
+        .position(|hit| matches!(hit.event, ToolbarEvent::ClearPreset(1)))
+        .expect("clear badge hit while hovered");
+    let apply_index = hovered_hits
         .iter()
-        .take(header_len)
-        .map(|hit| (event_name(&hit.event), format!("{:?}", hit.kind)))
-        .collect();
-
-    assert_eq!(static_header, render_header);
-    assert_eq!(render_header[0].1, format!("{:?}", HitKind::DragMoveSide));
+        .position(|hit| matches!(hit.event, ToolbarEvent::ApplyPreset(1)))
+        .expect("apply hit while hovered");
     assert!(
-        render_header
-            .iter()
-            .any(|(event, _)| event == "ToggleBoardPicker")
+        clear_index < apply_index,
+        "clear badge must win first-match hit testing over apply"
     );
 }
 
 #[test]
-fn side_settings_static_hits_include_model_controls() {
+fn side_header_leads_with_drag_handle_and_offers_all_panes() {
+    let state = create_test_input_state();
+    let snapshot = snapshot_from_state(&state);
+    let hits = rendered_side_hits(&snapshot);
+
+    assert!(matches!(hits[0].kind, HitKind::DragMoveSide));
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::ToggleBoardPicker))
+    );
+    for pane in SidePane::ALL {
+        assert!(
+            hits.iter()
+                .any(|hit| hit.event == ToolbarEvent::SetSidePane(pane)),
+            "missing pane nav hit for {pane:?}"
+        );
+    }
+}
+
+#[test]
+fn side_size_caps_height_at_viewport_max_and_reports_scroll_bounds() {
+    let state = create_test_input_state();
+    let mut snapshot = snapshot_from_state(&state);
+
+    snapshot.side_viewport_max = None;
+    let (_, natural_height) = side_size(&snapshot);
+    let (natural, viewport) = side_scroll_bounds(&snapshot);
+    assert_eq!(viewport, natural_height as f64);
+    assert!(natural <= viewport);
+
+    let cap = (natural_height as f64 / 2.0).floor();
+    snapshot.side_viewport_max = Some(cap);
+    let (_, capped_height) = side_size(&snapshot);
+    assert_eq!(capped_height as f64, cap.ceil());
+    let (natural, viewport) = side_scroll_bounds(&snapshot);
+    assert!(
+        natural - viewport > 0.0,
+        "capped pane should report positive max scroll"
+    );
+
+    // The scrollbar hit carries the same max scroll for drag handling.
+    let hits = rendered_side_hits(&snapshot);
+    assert!(hits.iter().any(|hit| matches!(
+        hit.kind,
+        HitKind::DragScrollSide { max_scroll } if (max_scroll - (natural - viewport)).abs() < 1.0
+    )));
+}
+
+#[test]
+fn side_settings_pane_hits_include_model_controls() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    state.toolbar_side_pane = SidePane::Settings;
     state.show_settings_section = true;
     state.toolbar_layout_mode = crate::config::ToolbarLayoutMode::Regular;
     let snapshot = snapshot_from_state(&state);
@@ -243,9 +685,7 @@ fn side_settings_static_hits_include_model_controls() {
         )
         .collect();
 
-    let (w, h) = side_size(&snapshot);
-    let mut hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let hits = rendered_side_hits(&snapshot);
     let hit_events: Vec<_> = hits.iter().map(|hit| event_name(&hit.event)).collect();
 
     for expected_event in &expected {
@@ -258,10 +698,43 @@ fn side_settings_static_hits_include_model_controls() {
 }
 
 #[test]
-fn side_session_static_hits_include_model_controls_and_recents() {
+fn wide_settings_toggles_span_the_full_content_width() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
+    state.toolbar_side_pane = SidePane::Settings;
+    state.toolbar_layout_mode = crate::config::ToolbarLayoutMode::Regular;
+    state.refresh_section_visibility();
+    let snapshot = snapshot_from_state(&state);
+    let hits = rendered_side_hits(&snapshot);
+
+    let full_width =
+        ToolbarLayoutSpec::SIDE_WIDTH as f64 - ToolbarLayoutSpec::SIDE_CONTENT_PADDING_X;
+    let step = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ToggleStepSection(_)))
+        .expect("multi-step toggle hit");
+    assert!(
+        (step.rect.2 - full_width).abs() < 1.0,
+        "long label takes a full row: {}",
+        step.rect.2
+    );
+    let advanced = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ToggleActionsAdvanced(_)))
+        .expect("advanced actions toggle hit");
+    assert!((advanced.rect.2 - full_width).abs() < 1.0);
+
+    // Narrow toggles still pair up in half-width cells.
+    let narrow = hits
+        .iter()
+        .find(|hit| matches!(hit.event, ToolbarEvent::ToggleContextAwareUi(_)))
+        .expect("context toggle hit");
+    assert!(narrow.rect.2 < full_width / 2.0 + 1.0);
+}
+
+#[test]
+fn side_session_pane_hits_include_model_controls_and_recents() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pane = SidePane::Session;
     let mut snapshot = snapshot_from_state(&state);
     snapshot.active_session_path =
         Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
@@ -272,9 +745,7 @@ fn side_session_static_hits_include_model_controls_and_recents() {
     }];
     let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
 
-    let (w, h) = side_size(&snapshot);
-    let mut hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let hits = rendered_side_hits(&snapshot);
     let hit_events: Vec<_> = hits.iter().map(|hit| event_name(&hit.event)).collect();
 
     for button in &model.buttons {
@@ -292,8 +763,7 @@ fn side_session_static_hits_include_model_controls_and_recents() {
 #[test]
 fn side_session_overwrite_confirmation_hits_replace_action_buttons() {
     let mut state = create_test_input_state();
-    state.toolbar_drawer_open = true;
-    state.toolbar_drawer_tab = ToolbarDrawerTab::Session;
+    state.toolbar_side_pane = SidePane::Session;
     let mut snapshot = snapshot_from_state(&state);
     let target = std::path::PathBuf::from("/tmp/existing.wayscriber-session");
     snapshot.active_session_path =
@@ -301,24 +771,7 @@ fn side_session_overwrite_confirmation_hits_replace_action_buttons() {
     snapshot.active_session_name = Some("current.wayscriber-session".to_string());
     snapshot.pending_save_as_overwrite_path = Some(target.clone());
 
-    let (w, h) = side_size(&snapshot);
-    let mut static_hits = Vec::new();
-    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
-    assert_session_overwrite_confirmation_hits(&static_hits, &target);
-
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
-    let ctx = cairo::Context::new(&surface).unwrap();
-    let mut rendered_hits = Vec::new();
-    crate::backend::wayland::toolbar::render_side_palette(
-        &ctx,
-        w as f64,
-        h as f64,
-        &snapshot,
-        &mut rendered_hits,
-        None,
-        None,
-    )
-    .unwrap();
+    let rendered_hits = rendered_side_hits(&snapshot);
     assert_session_overwrite_confirmation_hits(&rendered_hits, &target);
 }
 

@@ -70,7 +70,7 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowPresets,
             ),
             toggle_row(
-                "Show actions (basic)",
+                "Show actions",
                 self.draft.ui_toolbar_show_actions_section,
                 self.defaults.ui_toolbar_show_actions_section,
                 ToggleField::UiToolbarShowActionsSection,
@@ -100,7 +100,7 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowBoardsSection,
             ),
             toggle_row(
-                "Show Step Undo/Redo",
+                "Show multi-step undo/redo",
                 self.draft.ui_toolbar_show_step_section,
                 self.defaults.ui_toolbar_show_step_section,
                 ToggleField::UiToolbarShowStepSection,
@@ -110,12 +110,6 @@ impl ConfiguratorApp {
                 self.draft.ui_toolbar_show_text_controls,
                 self.defaults.ui_toolbar_show_text_controls,
                 ToggleField::UiToolbarShowTextControls,
-            ),
-            toggle_row(
-                "Show settings section",
-                self.draft.ui_toolbar_show_settings_section,
-                self.defaults.ui_toolbar_show_settings_section,
-                ToggleField::UiToolbarShowSettingsSection,
             ),
             toggle_row(
                 "Show delay sliders",
@@ -181,10 +175,6 @@ impl ConfiguratorApp {
                 ToolbarOverrideField::ShowTextControls,
                 overrides.show_text_controls
             ),
-            override_row(
-                ToolbarOverrideField::ShowSettingsSection,
-                overrides.show_settings_section,
-            ),
             text("Placement offsets").size(16),
             row![
                 labeled_input(
@@ -247,11 +237,12 @@ fn toolbar_item_visibility_section<'a>(
     let mut current_surface = None;
     let mut current_category = None;
 
-    if !resolved.unknown_hidden.is_empty() {
+    let unknown_count = resolved.unknown_hidden.len() + resolved.unknown_shown.len();
+    if unknown_count > 0 {
         rows = rows.push(
             text(format!(
                 "Preserving {} unknown toolbar item id(s) from config.",
-                resolved.unknown_hidden.len()
+                unknown_count
             ))
             .size(12),
         );
@@ -331,6 +322,11 @@ fn toolbar_item_definitions_for_display(
     let mut emitted_groups = BTreeSet::new();
 
     for definition in toolbar_item_definitions() {
+        if definition.id == wayscriber::config::toolbar_item_ids::SIDE_GROUP_SETTINGS
+            || definition.id == wayscriber::config::toolbar_item_ids::TOP_CHROME_OVERFLOW
+        {
+            continue;
+        }
         if let Some(group) = configurator_order_group(definition) {
             if emitted_groups.insert(group) {
                 for id in resolved.order.ordered_ids(group) {

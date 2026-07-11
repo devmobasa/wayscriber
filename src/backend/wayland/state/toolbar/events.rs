@@ -27,6 +27,26 @@ fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
     true
 }
 
+/// The top overflow menu is a plain flyout: any event other than the two menu
+/// toggles dismisses it (selecting a dropped tool, an unrelated keybinding, etc.).
+fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
+    !matches!(
+        event,
+        ToolbarEvent::ToggleShapePicker(_) | ToolbarEvent::ToggleTopOverflow(_)
+    )
+}
+
+/// The Shapes popover dismisses on everything the overflow does *except* its own
+/// inline options: the Fill checkbox and the polygon-sides stepper live inside
+/// the popover, so using them must not close it out from under the pointer.
+fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
+    event_dismisses_top_overflow(event)
+        && !matches!(
+            event,
+            ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_)
+        )
+}
+
 fn apply_toolbar_ui_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
@@ -54,11 +74,47 @@ impl WaylandState {
         let hints = ToolbarBindingHints::from_input_state(&self.input_state);
         let hint_max = crate::onboarding::DRAWER_HINT_MAX;
         let show_drawer_hint = self.onboarding.state().drawer_hint_count < hint_max
-            && !self.input_state.toolbar_drawer_open;
+            && self.input_state.toolbar_side_pane == crate::ui::toolbar::SidePane::Draw;
         let mut snapshot =
             ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
         populate_session_snapshot(&mut snapshot, self.session.options());
+        snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
+        snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot
+    }
+
+    /// Width available to the top strip in pre-scale spec units; content
+    /// past this degrades into the overflow menu instead of clipping off
+    /// the screen. Both inline and layer-shell placement use the pushed top
+    /// base X, so budgeting must subtract that same position.
+    fn top_strip_viewport_max(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
+        let screen_width = self.surface.width() as f64;
+        let scale = if snapshot.toolbar_scale.is_finite() {
+            snapshot.toolbar_scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+        let base_x = self.inline_top_base_x(snapshot);
+        super::geometry::remaining_top_width(screen_width, base_x, Self::TOP_MARGIN_RIGHT, scale)
+    }
+
+    /// Height available to the side palette in pre-scale spec units: the
+    /// screen space below the palette's top edge, floored so a pathological
+    /// drag offset cannot collapse the pane entirely.
+    fn side_pane_viewport_max(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
+        const MIN_SIDE_VIEWPORT: f64 = 180.0;
+        let screen_height = self.surface.height() as f64;
+        if screen_height <= 0.0 {
+            return None;
+        }
+        let scale = if snapshot.toolbar_scale.is_finite() {
+            snapshot.toolbar_scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+        let side_top = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
+        let available = screen_height - side_top - Self::SIDE_MARGIN_BOTTOM;
+        Some((available / scale).max(MIN_SIDE_VIEWPORT))
     }
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
@@ -68,6 +124,20 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        let dismiss_overflow =
+            self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
+        let dismiss_shapes =
+            self.input_state.toolbar_shapes_expanded && event_dismisses_shape_picker(&event);
+        if dismiss_overflow || dismiss_shapes {
+            if dismiss_overflow {
+                self.input_state.toolbar_top_overflow_open = false;
+            }
+            if dismiss_shapes {
+                self.input_state.toolbar_shapes_expanded = false;
+            }
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+        }
         if self.handle_toolbar_session_event(&event, conn, qh) {
             return;
         }
@@ -124,9 +194,14 @@ impl WaylandState {
         #[cfg(tablet)]
         let thickness_event = policy.tablet_thickness_sensitive;
 
+        let pane_switch = matches!(event, ToolbarEvent::SetSidePane(_));
+
         if self.input_state.apply_toolbar_event(event) {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
+            if pane_switch {
+                self.reset_side_toolbar_focus();
+            }
 
             #[cfg(tablet)]
             if thickness_event && self.sync_stylus_thickness_cache(prev_thickness) {
@@ -197,6 +272,28 @@ impl WaylandState {
         self.config.ui.toolbar.items = self.input_state.toolbar_items.clone();
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
+        self.config.ui.toolbar.top_minimized = self.input_state.toolbar_top_minimized;
+        self.config.ui.toolbar.side_minimized = self.input_state.toolbar_side_minimized;
+        self.config.ui.toolbar.side_active_pane =
+            self.input_state.toolbar_side_pane.config_id().to_string();
+        // Keep unknown ids (written by newer versions) so a round trip
+        // through this build does not drop them.
+        let mut collapsed: Vec<String> = self
+            .config
+            .ui
+            .toolbar
+            .collapsed_sections
+            .iter()
+            .filter(|id| crate::ui::toolbar::ToolbarSideSection::from_config_id(id).is_none())
+            .cloned()
+            .collect();
+        collapsed.extend(
+            self.input_state
+                .toolbar_collapsed_side_sections
+                .iter()
+                .map(|section| section.config_id().to_string()),
+        );
+        self.config.ui.toolbar.collapsed_sections = collapsed;
         self.config.ui.toolbar.use_icons = self.input_state.toolbar_use_icons;
         self.config.ui.toolbar.show_more_colors = self.input_state.show_more_colors;
         self.config.ui.toolbar.show_actions_section = self.input_state.show_actions_section;

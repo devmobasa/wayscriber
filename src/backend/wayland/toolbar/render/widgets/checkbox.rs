@@ -4,7 +4,7 @@ use super::constants::{
     COLOR_TEXT_TERTIARY, LINE_WIDTH_STD, LINE_WIDTH_THIN, RADIUS_SM, RADIUS_STD, SPACING_LG,
     SPACING_SM, SPACING_XS, set_color,
 };
-use super::{draw_label_left, draw_round_rect};
+use super::{draw_label_left, draw_round_rect, ellipsize_to_width};
 use crate::ui_text::{UiTextStyle, text_layout};
 
 #[allow(clippy::too_many_arguments)]
@@ -45,7 +45,10 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_checkbox(
     }
 
     let label_x = box_x + box_size + SPACING_LG;
-    draw_label_left(ctx, label_style, label_x, y, w - (label_x - x), h, label);
+    // Never let a long label escape the cell: truncate with an ellipsis.
+    let label_w = (x + w - label_x - SPACING_LG).max(0.0);
+    let display = ellipsize_to_width(ctx, label_style, label, label_w);
+    draw_label_left(ctx, label_style, label_x, y, label_w, h, &display);
 }
 
 #[allow(clippy::too_many_arguments)]

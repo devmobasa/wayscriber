@@ -6,7 +6,6 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::input::ToolbarDrawerTab;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
@@ -30,8 +29,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
 
     if snapshot.side_section_hidden(ToolbarSideSection::StepUndo)
         || !snapshot.show_step_section
-        || !snapshot.drawer_open
-        || snapshot.drawer_tab != ToolbarDrawerTab::App
+        || snapshot.active_side_pane != crate::ui::toolbar::SidePane::Canvas
     {
         return;
     }
@@ -75,13 +73,14 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         snapshot.custom_section_enabled,
         step_hover,
         label_style,
-        "Step controls",
+        "Step buttons",
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
         kind: HitKind::Click,
-        tooltip: Some("Step controls: multi-step undo/redo.".to_string()),
+        tooltip: Some("Step buttons: undo/redo several strokes at once.".to_string()),
     });
 
     let delay_toggle_y = custom_toggle_y + custom_toggle_h + toggle_gap;
@@ -100,6 +99,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         "Delay sliders",
     );
     hits.push(HitRegion {
+        focus_id: None,
         rect: (x, delay_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
         kind: HitKind::Click,

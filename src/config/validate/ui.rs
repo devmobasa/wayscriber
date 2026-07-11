@@ -53,9 +53,16 @@ impl Config {
             self.ui.toolbar.scale = self.ui.toolbar.scale.clamp(0.5, 3.0);
         }
 
-        for unknown in self.ui.toolbar.items.resolved().unknown_hidden {
+        let resolved_items = self.ui.toolbar.items.resolved();
+        for unknown in resolved_items.unknown_hidden {
             log::warn!(
                 "Unknown toolbar item id {:?} in ui.toolbar.items.hidden; preserving it for forward compatibility",
+                unknown
+            );
+        }
+        for unknown in resolved_items.unknown_shown {
+            log::warn!(
+                "Unknown toolbar item id {:?} in ui.toolbar.items.shown; preserving it for forward compatibility",
                 unknown
             );
         }

@@ -29,14 +29,16 @@ impl ToolbarLayoutSpec {
                     height += icon_gap;
                 }
                 let columns = match group.kind {
-                    ToolbarCommandGroupKind::BasicActions => group.buttons.len(),
-                    ToolbarCommandGroupKind::ViewActions
-                    | ToolbarCommandGroupKind::AdvancedActions => 5,
+                    ToolbarCommandGroupKind::History => group.buttons.len(),
+                    ToolbarCommandGroupKind::Zoom | ToolbarCommandGroupKind::AdvancedActions => 5,
                     ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => {
                         group.buttons.len()
                     }
                 };
                 let rows = group.buttons.len().div_ceil(columns);
+                if group.kind.sub_label().is_some() {
+                    height += Self::SIDE_ACTION_GROUP_LABEL_HEIGHT;
+                }
                 height += icon_btn * rows as f64 + icon_gap * (rows as f64 - 1.0);
                 has_group = true;
             }
@@ -54,14 +56,16 @@ impl ToolbarLayoutSpec {
                     height += Self::SIDE_ACTION_BUTTON_GAP;
                 }
                 let columns = match group.kind {
-                    ToolbarCommandGroupKind::BasicActions => 1,
-                    ToolbarCommandGroupKind::ViewActions
-                    | ToolbarCommandGroupKind::AdvancedActions => 2,
+                    ToolbarCommandGroupKind::History => 1,
+                    ToolbarCommandGroupKind::Zoom | ToolbarCommandGroupKind::AdvancedActions => 2,
                     ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => {
                         group.buttons.len().max(1)
                     }
                 };
                 let rows = group.buttons.len().div_ceil(columns);
+                if group.kind.sub_label().is_some() {
+                    height += Self::SIDE_ACTION_GROUP_LABEL_HEIGHT;
+                }
                 height += action_h * rows as f64 + action_gap * (rows as f64 - 1.0);
                 has_group = true;
             }
@@ -82,20 +86,6 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content + Self::SIDE_ACTION_BUTTON_GAP
         }
-    }
-
-    pub(in crate::backend::wayland::toolbar) fn side_drawer_tabs_height(
-        &self,
-        snapshot: &ToolbarSnapshot,
-    ) -> f64 {
-        if !snapshot.drawer_open {
-            return 0.0;
-        }
-        let rows = crate::input::ToolbarDrawerTab::ALL.len().div_ceil(3);
-        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
-            + Self::SIDE_TOGGLE_HEIGHT * rows as f64
-            + Self::SIDE_TOGGLE_GAP * rows.saturating_sub(1) as f64
-            + Self::SIDE_ACTION_BUTTON_GAP
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_pages_height(
@@ -172,12 +162,7 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        let dedicated_panel = snapshot.customize_items_open
-            || matches!(
-                snapshot.drawer_tab,
-                crate::input::ToolbarDrawerTab::Sections
-                    | crate::input::ToolbarDrawerTab::Customize
-            );
+        let dedicated_panel = snapshot.customize_items_open;
         if !dedicated_panel && snapshot.side_section_collapsed(ToolbarSideSection::Settings) {
             return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
         }
@@ -186,8 +171,7 @@ impl ToolbarLayoutSpec {
         let Some(settings) = ToolbarSettingsModel::from_snapshot(snapshot) else {
             return 0.0;
         };
-        let toggle_count = settings.toggles().len();
-        let rows = toggle_count.div_ceil(2);
+        let rows = settings.toggle_rows().len();
         let toggle_rows_h = if rows > 0 {
             toggle_h * rows as f64 + toggle_gap * (rows as f64 - 1.0)
         } else {
@@ -196,6 +180,7 @@ impl ToolbarLayoutSpec {
         let button_rows = settings.buttons().len().div_ceil(2);
         let buttons_h = if button_rows > 0 {
             Self::SIDE_SETTINGS_BUTTON_HEIGHT * button_rows as f64
+                + Self::SIDE_SETTINGS_BUTTON_GAP * (button_rows as f64 - 1.0)
         } else {
             0.0
         };
@@ -219,7 +204,15 @@ impl ToolbarLayoutSpec {
         };
         let customize_h = group_rows_h + item_rows_h;
         let customize_gap = if customize_h > 0.0 { toggle_gap } else { 0.0 };
-        let content_h = toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
+        // Interim Simple/Full layout-mode row at the top of the pane (only
+        // outside the customization sub-panel).
+        let mode_row_h = if dedicated_panel {
+            0.0
+        } else {
+            Self::SIDE_SEGMENT_HEIGHT + toggle_gap
+        };
+        let content_h =
+            mode_row_h + toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 

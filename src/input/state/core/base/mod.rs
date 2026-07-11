@@ -9,8 +9,8 @@ pub use types::{
     MIN_STROKE_THICKNESS, OutputFocusAction, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionHandle,
-    ShellMode, TEXT_EDIT_ENTRY_DURATION_MS, TextInputMode, ToolbarDrawerTab, UI_TOAST_DURATION_MS,
-    UiToastKind, ZoomAction,
+    ShellMode, TEXT_EDIT_ENTRY_DURATION_MS, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind,
+    ZoomAction,
 };
 pub(crate) use types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
