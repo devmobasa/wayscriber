@@ -105,6 +105,8 @@ overrides:
       - libpangocairo-1.0-0
       - libxkbcommon0
       - libstdc++6
+      - libgtk-4-1
+      - libgtk4-layer-shell0
       - wl-clipboard
       - grim
       - slurp
@@ -116,6 +118,8 @@ overrides:
       - pango
       - libxkbcommon
       - libstdc++
+      - gtk4
+      - gtk4-layer-shell
       - wl-clipboard
       - grim
       - slurp

@@ -32,6 +32,8 @@ jobs:
             libdbus-1-dev \
             libudev-dev \
             libgtk-3-dev \
+            libgtk-4-dev \
+            libgtk4-layer-shell-dev \
             libpango1.0-dev \
             libcairo2-dev \
             libpixman-1-dev \

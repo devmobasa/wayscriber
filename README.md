@@ -235,6 +235,12 @@ For distro-specific package details, see [Installation](#installation). For keyb
 
 ### Toolbars & UI
 - Floating toolbars (pin/unpin: <kbd>F2</kbd>/<kbd>F9</kbd>)
+- Two toolbar frontends: GTK4-rendered bars on layer-shell compositors
+  (Hyprland, KWin, Wayfire, River, ...) with automatic fallback to the
+  built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline
+  mode, builds without the `toolbar-gtk` feature). Select explicitly with
+  `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or
+  `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
 - Color picker with extended palettes
 - Status bar, board/page controls
@@ -912,6 +918,7 @@ Common toggles:
 - `WAYSCRIBER_DEBUG_TOOLBAR_DRAG=1` enables toolbar drag logging (default: off)
 - `WAYSCRIBER_DEBUG_TOOLBAR_COLOR=1` enables toolbar color picker logging (default: off)
 - `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
+- `WAYSCRIBER_TOOLBAR_BACKEND=auto|gtk|builtin` overrides the toolbar frontend (default: auto)
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
 
 See `docs/CONFIG.md` for the full list.
