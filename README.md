@@ -17,7 +17,7 @@ Docs: https://wayscriber.com/docs/
 | ![Radial tool menu](https://wayscriber.com/img/radial-menu.webp)<br>**Radial tool menu** | ![Boards and pages](https://wayscriber.com/img/boards-and-pages.webp)<br>**Boards & pages** |
 | ![Blackboard mode](https://wayscriber.com/img/blackboard.webp)<br>**Blackboard** | ![Whiteboard mode](https://wayscriber.com/img/whiteboard.webp)<br>**Whiteboard** |
 | ![Advanced toolbar](https://wayscriber.com/img/toolbar-advanced.webp)<br>**Advanced toolbar** | ![Command palette](https://wayscriber.com/img/command-palette.webp)<br>**Command palette** |
-| ![Built-in controls](https://wayscriber.com/img/controls-cheatsheet.webp)<br>**Built-in controls (F1)** | ![Shape picker](https://wayscriber.com/img/shape-picker.webp)<br>**Shape picker** |
+| ![Built-in controls](https://wayscriber.com/img/controls-cheatsheet.webp)<br>**Built-in controls (F1)** | ![Simple toolbar](https://wayscriber.com/img/toolbar-simple.webp)<br>**Simple toolbar** |
 
 </details>
 
