@@ -4,8 +4,7 @@ use super::constants::{
     COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE,
     COLOR_PIN_DEFAULT, COLOR_PIN_HOVER, COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG,
     COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER, COLOR_SEGMENT_TEXT_ACTIVE,
-    COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD,
-    SPACING_XS, set_color,
+    COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, RADIUS_LG, RADIUS_STD, set_color,
 };
 use super::draw_round_rect;
 use crate::ui_text::{UiTextStyle, text_layout};
@@ -32,34 +31,60 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
         let _ = ctx.stroke();
     }
 
-    ctx.set_line_width(1.1);
     let bar_alpha = if hover { 1.0 } else { 0.85 };
     ctx.set_source_rgba(1.0, 1.0, 1.0, bar_alpha);
-    let bar_w = w * 0.55;
-    let bar_h = SPACING_XS;
-    let bar_gap = SPACING_XS;
-    let bar_x = x + (w - bar_w) / 2.0;
-    let mut bar_y = drag_handle_bar_start_y(y, h, bar_h, bar_gap);
-    for _ in 0..3 {
-        draw_round_rect(ctx, bar_x, bar_y, bar_w, bar_h, 1.0);
-        let _ = ctx.fill();
-        bar_y += bar_h + bar_gap;
-    }
+    let icon_size = w.min(h);
+    crate::toolbar_icons::draw_icon_drag(
+        ctx,
+        x + (w - icon_size) / 2.0,
+        y + (h - icon_size) / 2.0,
+        icon_size,
+    );
 }
 
-fn drag_handle_bar_start_y(y: f64, h: f64, bar_h: f64, bar_gap: f64) -> f64 {
-    let stack_h = 3.0 * bar_h + 2.0 * bar_gap;
-    y + (h - stack_h) / 2.0
-}
-
-/// Minimize chrome button: a dash, not an X — the bar collapses to an
-/// edge restore tab instead of disappearing.
+/// Minimize the horizontal top bar into its edge restore tab.
 pub(in crate::backend::wayland::toolbar::render) fn draw_minimize_button(
     ctx: &cairo::Context,
     x: f64,
     y: f64,
     size: f64,
     hover: bool,
+) {
+    draw_collapse_button(
+        ctx,
+        x,
+        y,
+        size,
+        hover,
+        crate::toolbar_icons::draw_icon_minimize,
+    );
+}
+
+/// Minimize the vertical side palette into its edge restore tab.
+pub(in crate::backend::wayland::toolbar::render) fn draw_side_minimize_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    hover: bool,
+) {
+    draw_collapse_button(
+        ctx,
+        x,
+        y,
+        size,
+        hover,
+        crate::toolbar_icons::draw_icon_side_minimize,
+    );
+}
+
+fn draw_collapse_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    hover: bool,
+    glyph: fn(&cairo::Context, f64, f64, f64),
 ) {
     let r = size / 2.0;
     let cx = x + r;
@@ -77,11 +102,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_minimize_button(
     let _ = ctx.fill();
 
     set_color(ctx, COLOR_TEXT_PRIMARY);
-    ctx.set_line_width(LINE_WIDTH_THICK);
-    let inset = size * 0.28;
-    ctx.move_to(x + inset, cy);
-    ctx.line_to(x + size - inset, cy);
-    let _ = ctx.stroke();
+    let icon_size = size * 0.6;
+    glyph(
+        ctx,
+        x + (size - icon_size) / 2.0,
+        y + (size - icon_size) / 2.0,
+        icon_size,
+    );
 }
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
@@ -115,43 +142,15 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     ctx.arc(cx, cy, r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
-    let pin_size = size * 0.5;
-    draw_pushpin(ctx, cx, cy, pin_size, pinned);
-}
-
-/// Draw a pushpin glyph centered at (cx, cy). The control means
-/// "keep this toolbar open at startup", so the glyph is a thumbtack —
-/// filled when pinned, outline when not.
-fn draw_pushpin(ctx: &cairo::Context, cx: f64, cy: f64, size: f64, filled: bool) {
-    let s = size;
-
-    ctx.new_path();
-    // Head: flat cap at the top
-    ctx.move_to(cx - s * 0.45, cy - s * 0.85);
-    ctx.line_to(cx + s * 0.45, cy - s * 0.85);
-    ctx.line_to(cx + s * 0.3, cy - s * 0.55);
-    // Neck down to the flange
-    ctx.line_to(cx + s * 0.3, cy - s * 0.15);
-    // Flange: wider base plate
-    ctx.line_to(cx + s * 0.6, cy + s * 0.15);
-    ctx.line_to(cx - s * 0.6, cy + s * 0.15);
-    ctx.line_to(cx - s * 0.3, cy - s * 0.15);
-    ctx.line_to(cx - s * 0.3, cy - s * 0.55);
-    ctx.close_path();
-
     set_color(ctx, COLOR_TEXT_PRIMARY);
-    if filled {
-        let _ = ctx.fill();
+    let icon_size = size * 0.62;
+    let icon_x = x + (size - icon_size) / 2.0;
+    let icon_y = y + (size - icon_size) / 2.0;
+    if pinned {
+        crate::toolbar_icons::draw_icon_pin(ctx, icon_x, icon_y, icon_size);
     } else {
-        ctx.set_line_width(1.3);
-        let _ = ctx.stroke();
+        crate::toolbar_icons::draw_icon_unpin(ctx, icon_x, icon_y, icon_size);
     }
-
-    // Needle below the flange
-    ctx.set_line_width(if filled { 1.6 } else { 1.3 });
-    ctx.move_to(cx, cy + s * 0.15);
-    ctx.line_to(cx, cy + s * 0.85);
-    let _ = ctx.stroke();
 }
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_button(
@@ -352,24 +351,5 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
         let tx = label_x + (segment_w - ext.width()) / 2.0 - ext.x_bearing();
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
         layout.show_at_baseline(ctx, tx, ty);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn drag_handle_bars_center_full_stack_in_button() {
-        let y = 12.0;
-        let h = 18.0;
-        let bar_h = 2.0;
-        let bar_gap = 2.0;
-
-        let start_y = drag_handle_bar_start_y(y, h, bar_h, bar_gap);
-        let stack_h = 3.0 * bar_h + 2.0 * bar_gap;
-
-        assert_eq!(start_y, 16.0);
-        assert_eq!(start_y + stack_h / 2.0, y + h / 2.0);
     }
 }

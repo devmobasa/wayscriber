@@ -292,7 +292,7 @@ impl SideBar {
         let band = gtk4::Box::new(gtk4::Orientation::Horizontal, px(6.0));
         band.add_css_class("header-band");
 
-        let grip = IconWidget::new(toolbar_icons::draw_icon_grip_bars, 18.0 * scale);
+        let grip = IconWidget::new(toolbar_icons::draw_icon_drag, 18.0 * scale);
         grip.area.set_can_target(true);
         grip.area.add_css_class("drag-handle");
         grip.area.set_tooltip_text(Some("Drag toolbar"));
@@ -457,9 +457,9 @@ impl SideBar {
         button.add_css_class("chrome");
         let icon = IconWidget::new(
             if snapshot.side_pinned {
-                toolbar_icons::draw_icon_pin_filled
+                toolbar_icons::draw_icon_pin
             } else {
-                toolbar_icons::draw_icon_pin_outline
+                toolbar_icons::draw_icon_unpin
             },
             size * 0.62,
         );
@@ -474,9 +474,9 @@ impl SideBar {
         self.chrome_updaters.push(Box::new(move |snapshot| {
             pinned.set(snapshot.side_pinned);
             icon.set_painter(if snapshot.side_pinned {
-                toolbar_icons::draw_icon_pin_filled
+                toolbar_icons::draw_icon_pin
             } else {
-                toolbar_icons::draw_icon_pin_outline
+                toolbar_icons::draw_icon_unpin
             });
             if snapshot.side_pinned {
                 handle.add_css_class("pinned");
@@ -494,7 +494,7 @@ impl SideBar {
         button.add_css_class("chrome");
         button.add_css_class("minimize");
         button.set_tooltip_text(Some("Minimize (leaves a restore tab)"));
-        let icon = IconWidget::new(toolbar_icons::draw_icon_dash, size * 0.6);
+        let icon = IconWidget::new(toolbar_icons::draw_icon_side_minimize, size * 0.6);
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();
         button.connect_clicked(move |_| {
