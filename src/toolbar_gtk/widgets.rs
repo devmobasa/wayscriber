@@ -4,6 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk4::prelude::*;
+use gtk4_layer_shell::{KeyboardMode, LayerShell};
 
 use super::GtkToolbarFeedback;
 use super::icons::{IconPainter, IconWidget};
@@ -22,8 +23,140 @@ pub(super) fn sized_button(width: f64, height: f64) -> gtk4::Button {
     let button = gtk4::Button::new();
     button.set_size_request(width.round() as i32, height.round() as i32);
     button.set_valign(gtk4::Align::Center);
-    button.set_focusable(true);
+    // Pointer activation must not move keyboard focus away from the canvas:
+    // the GTK bars use a separate Wayland connection and cannot receive the
+    // application's shortcuts on its behalf.
+    button.set_focusable(false);
+    button.connect_clicked(release_window_keyboard_focus);
     button
+}
+
+/// Request layer-shell keyboard focus only while an editable field owns GTK
+/// focus, then return it to the canvas when editing finishes.
+pub(super) fn keyboard_on_demand_for_entry(entry: &gtk4::Entry) {
+    entry.connect_has_focus_notify(|entry| {
+        if entry.has_focus() {
+            set_entry_keyboard_mode(entry, true);
+        } else {
+            release_window_keyboard_focus(entry);
+        }
+    });
+    entry.connect_activate(|entry| {
+        release_entry_keyboard_focus(entry);
+    });
+
+    let key = gtk4::EventControllerKey::new();
+    key.connect_key_pressed(|controller, keyval, _, _| {
+        if keyval == gtk4::gdk::Key::Escape {
+            if let Some(entry) = controller.widget().and_downcast::<gtk4::Entry>() {
+                release_entry_keyboard_focus(&entry);
+            }
+            return gtk4::glib::Propagation::Stop;
+        }
+        gtk4::glib::Propagation::Proceed
+    });
+    entry.add_controller(key);
+}
+
+fn release_entry_keyboard_focus(entry: &gtk4::Entry) {
+    release_window_keyboard_focus(entry);
+}
+
+fn set_entry_keyboard_mode(entry: &gtk4::Entry, editing: bool) {
+    if let Some(window) = entry.root().and_downcast::<gtk4::Window>() {
+        window.set_keyboard_mode(if editing {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::None
+        });
+    }
+}
+
+fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
+    if let Some(window) = widget.root().and_downcast::<gtk4::Window>() {
+        window.set_keyboard_mode(KeyboardMode::None);
+        gtk4::prelude::GtkWindowExt::set_focus(&window, None::<&gtk4::Widget>);
+        // Interactivity is double-buffered. Re-arm OnDemand after the
+        // focus-dropping commit so a later click can focus an entry without
+        // making this surface retain the current keyboard focus.
+        let weak = window.downgrade();
+        gtk4::glib::idle_add_local_once(move || {
+            if let Some(window) = weak.upgrade() {
+                window.set_keyboard_mode(KeyboardMode::OnDemand);
+            }
+        });
+    }
+}
+
+/// Drop keyboard ownership when GTK focuses any non-entry control. Buttons
+/// also release from their clicked handler because they are non-focusable and
+/// may leave a previously focused entry as the logical focus widget.
+pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window) {
+    window.connect_focus_widget_notify(|window| {
+        let Some(focus) = gtk4::prelude::GtkWindowExt::focus(window) else {
+            return;
+        };
+        let entry_focused =
+            focus.is::<gtk4::Entry>() || focus.ancestor(gtk4::Entry::static_type()).is_some();
+        if !entry_focused {
+            release_window_keyboard_focus(window);
+        }
+    });
+
+    // A layer surface can gain compositor keyboard focus even when the
+    // clicked widget itself is not focusable (for example the drag grip).
+    // Inspect the pointer target after every click and keep focus only for
+    // the editable hex field.
+    let click = gtk4::GestureClick::new();
+    click.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    let weak = window.downgrade();
+    click.connect_released(move |_, _, x, y| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let entry_clicked = window
+            .pick(x, y, gtk4::PickFlags::DEFAULT)
+            .is_some_and(|target| {
+                target.is::<gtk4::Entry>() || target.ancestor(gtk4::Entry::static_type()).is_some()
+            });
+        if !entry_clicked {
+            release_window_keyboard_focus(&window);
+        }
+    });
+    window.add_controller(click);
+
+    let drag = gtk4::GestureDrag::new();
+    drag.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    let entry_drag = Rc::new(Cell::new(false));
+    let begin_entry_drag = entry_drag.clone();
+    let weak = window.downgrade();
+    drag.connect_drag_begin(move |_, x, y| {
+        let entry_target = weak
+            .upgrade()
+            .and_then(|window| window.pick(x, y, gtk4::PickFlags::DEFAULT))
+            .is_some_and(|target| {
+                target.is::<gtk4::Entry>() || target.ancestor(gtk4::Entry::static_type()).is_some()
+            });
+        begin_entry_drag.set(entry_target);
+    });
+    let end_entry_drag = entry_drag.clone();
+    let weak = window.downgrade();
+    drag.connect_drag_end(move |_, _, _| {
+        if !end_entry_drag.replace(false)
+            && let Some(window) = weak.upgrade()
+        {
+            release_window_keyboard_focus(&window);
+        }
+    });
+    let weak = window.downgrade();
+    drag.connect_cancel(move |_, _| {
+        if !entry_drag.replace(false)
+            && let Some(window) = weak.upgrade()
+        {
+            release_window_keyboard_focus(&window);
+        }
+    });
+    window.add_controller(drag);
 }
 
 pub(super) struct IconButton {

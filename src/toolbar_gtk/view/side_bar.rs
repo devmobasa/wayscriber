@@ -20,7 +20,9 @@ use crate::ui::toolbar::{SidePane, ToolbarEvent, ToolbarSideSection, ToolbarSnap
 
 use super::super::GtkToolbarFeedback;
 use super::super::icons::IconWidget;
-use super::super::widgets::{FeedbackSender, send_event, set_active_class, sized_button};
+use super::super::widgets::{
+    FeedbackSender, install_shortcut_focus_policy, send_event, set_active_class, sized_button,
+};
 use super::{Updater, sections};
 
 /// Board chip color dot, RGBA; `None` draws the empty outline.
@@ -156,7 +158,10 @@ impl SideBar {
         window.set_anchor(Edge::Top, true);
         window.set_margin(Edge::Top, BASE_MARGIN.0);
         window.set_margin(Edge::Left, BASE_MARGIN.1);
+        // Stay focusable for the editable hex field, but relinquish focus
+        // immediately after ordinary toolbar interaction.
         window.set_keyboard_mode(KeyboardMode::OnDemand);
+        install_shortcut_focus_policy(&window);
         // Match the built-in bars: do not shift for other exclusive zones
         // (panels/bars) and do not reserve one.
         window.set_exclusive_zone(-1);

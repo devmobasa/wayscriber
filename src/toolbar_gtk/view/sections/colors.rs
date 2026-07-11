@@ -295,6 +295,7 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     // Hex entry: Enter applies, invalid input is ignored. Snapshot updates
     // never overwrite the text while the user is editing.
     let entry = gtk4::Entry::new();
+    super::super::super::widgets::keyboard_on_demand_for_entry(&entry);
     entry.set_text(&color_to_hex(ctx.snapshot.color));
     entry.set_width_chars(7);
     entry.set_max_length(7);

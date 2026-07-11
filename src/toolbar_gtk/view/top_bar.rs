@@ -29,8 +29,8 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 use super::super::GtkToolbarFeedback;
 use super::super::icons::{IconWidget, tool_icon_painter};
 use super::super::widgets::{
-    FeedbackSender, SwatchButton, add_shortcut_badge, icon_button, send_event, set_active_class,
-    sized_button, swatch_with_shortcut, text_button,
+    FeedbackSender, SwatchButton, add_shortcut_badge, icon_button, install_shortcut_focus_policy,
+    send_event, set_active_class, sized_button, swatch_with_shortcut, text_button,
 };
 
 // Spec-unit design tokens mirrored from the built-in layout
@@ -187,7 +187,10 @@ impl TopBar {
         window.set_anchor(Edge::Left, true);
         window.set_margin(Edge::Top, BASE_MARGIN.0);
         window.set_margin(Edge::Left, BASE_MARGIN.1);
+        // Stay focusable for the editable hex field, but relinquish focus
+        // immediately after ordinary toolbar interaction.
         window.set_keyboard_mode(KeyboardMode::OnDemand);
+        install_shortcut_focus_policy(&window);
         // Match the built-in bars: do not shift for other exclusive zones
         // (panels/bars) and do not reserve one.
         window.set_exclusive_zone(-1);
