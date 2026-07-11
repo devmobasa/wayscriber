@@ -8,9 +8,17 @@ impl WaylandState {
         if self.overlay_passthrough_requested() {
             return KeyboardInteractivity::None;
         }
+        // GTK bars count as visible layer toolbars: the canvas must drop
+        // from Exclusive to OnDemand while they are mapped, or compositors
+        // that honor exclusivity (Hyprland) lock all input to the canvas
+        // and the bars become click-through.
+        let toolbar_visible = self.toolbar.is_visible()
+            || (self.gtk_toolbars_active()
+                && (self.input_state.toolbar_top_visible()
+                    || self.input_state.toolbar_side_visible()));
         desired_keyboard_interactivity_for(
             self.layer_shell.is_some(),
-            self.toolbar.is_visible(),
+            toolbar_visible,
             self.inline_toolbars_active(),
         )
     }

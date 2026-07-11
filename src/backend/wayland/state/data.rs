@@ -98,6 +98,10 @@ pub struct StateData {
     pub(super) toolbar_side_offset: f64,
     pub(super) toolbar_side_offset_x: f64,
     pub(super) toolbar_configure_miss_count: u32,
+    /// Highest GTK drag sequence numbers drained per bar; echoed in
+    /// updates so the GTK side can discard stale offset mirrors.
+    pub(super) gtk_top_offset_seq: u64,
+    pub(super) gtk_side_offset_seq: u64,
     pub(super) last_applied_top_margin: Option<i32>,
     pub(super) last_applied_side_margin: Option<i32>,
     pub(super) last_applied_top_margin_top: Option<i32>,
@@ -182,6 +186,8 @@ impl StateData {
             toolbar_side_offset: 0.0,
             toolbar_side_offset_x: 0.0,
             toolbar_configure_miss_count: 0,
+            gtk_top_offset_seq: 0,
+            gtk_side_offset_seq: 0,
             last_applied_top_margin: None,
             last_applied_side_margin: None,
             last_applied_top_margin_top: None,

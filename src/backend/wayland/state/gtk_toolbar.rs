@@ -90,10 +90,12 @@ impl WaylandState {
                 GtkToolbarFeedback::Event(event) => {
                     self.handle_toolbar_event(event, Some(conn), Some(qh));
                 }
-                GtkToolbarFeedback::SetTopOffset { x, y, done } => {
+                GtkToolbarFeedback::SetTopOffset { x, y, seq, done } => {
+                    self.data.gtk_top_offset_seq = seq;
                     self.apply_gtk_top_offset(x, y, done);
                 }
-                GtkToolbarFeedback::SetSideOffset { x, y, done } => {
+                GtkToolbarFeedback::SetSideOffset { x, y, seq, done } => {
+                    self.data.gtk_side_offset_seq = seq;
                     self.apply_gtk_side_offset(x, y, done);
                 }
             }
@@ -106,20 +108,29 @@ impl WaylandState {
         if self.gtk_toolbar.is_none() {
             return;
         }
+        let snapshot = self.toolbar_snapshot();
+        // Mirror the built-in suppression behavior: while the overlay is
+        // suppressed (capture, freeze, zoom, external dialog) or in light
+        // passthrough, the bars must unmap so they neither appear in
+        // captures nor swallow clicks.
+        let suppressed = self.toolbar.is_suppressed() || self.overlay_passthrough_requested();
         let update = GtkToolbarUpdate {
-            snapshot: self.toolbar_snapshot(),
-            top_visible: self.input_state.toolbar_top_visible(),
-            side_visible: self.input_state.toolbar_side_visible(),
+            top_visible: self.input_state.toolbar_top_visible() && !suppressed,
+            side_visible: self.input_state.toolbar_side_visible() && !suppressed,
             top_offset: (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
             side_offset: (
                 self.data.toolbar_side_offset_x,
                 self.data.toolbar_side_offset,
             ),
+            top_offset_seq: self.data.gtk_top_offset_seq,
+            side_offset_seq: self.data.gtk_side_offset_seq,
+            top_base_x: self.gtk_top_base_x(&snapshot),
             output_name: self
                 .surface
                 .current_output()
                 .and_then(|output| self.output_state.info(&output))
                 .and_then(|info| info.name),
+            snapshot,
         };
         if let Some(bridge) = self.gtk_toolbar.as_mut() {
             bridge.maybe_send(update);

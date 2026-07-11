@@ -197,11 +197,16 @@ impl SliderRow {
             let _ = ctx.fill();
         });
 
+        let value_label = gtk4::Label::new(Some(&format(initial)));
+        value_label.set_width_chars(5);
+        value_label.set_xalign(1.0);
+
         let drag = gtk4::GestureDrag::new();
         let drag_state = state.clone();
         let drag_area = area.clone();
         let start_value = Rc::new(Cell::new((0.0f64, 0.0f64)));
         let begin_start = start_value.clone();
+        let begin_label = value_label.clone();
         drag.connect_drag_begin(move |gesture, x, _| {
             drag_state.dragging.set(true);
             // Jump the knob to the pressed position, like the built-in track.
@@ -209,12 +214,14 @@ impl SliderRow {
             let t = (x / width).clamp(0.0, 1.0);
             let value = drag_state.min + t * (drag_state.max - drag_state.min);
             drag_state.value.set(value);
+            begin_label.set_text(&format(value));
             begin_start.set((x, value));
             drag_area.queue_draw();
         });
         let update_state = state.clone();
         let update_area = area.clone();
         let update_start = start_value.clone();
+        let update_label = value_label.clone();
         let change = Rc::new(on_change);
         let update_change = change.clone();
         drag.connect_drag_update(move |gesture, dx, _| {
@@ -223,6 +230,7 @@ impl SliderRow {
             let t = ((sx + dx) / width).clamp(0.0, 1.0);
             let value = update_state.min + t * (update_state.max - update_state.min);
             update_state.value.set(value);
+            update_label.set_text(&format(value));
             update_area.queue_draw();
             update_change(value);
         });
@@ -233,10 +241,6 @@ impl SliderRow {
             end_change(end_state.value.get());
         });
         area.add_controller(drag);
-
-        let value_label = gtk4::Label::new(Some(&format(initial)));
-        value_label.set_width_chars(5);
-        value_label.set_xalign(1.0);
 
         root.append(&area);
         root.append(&value_label);

@@ -12,7 +12,11 @@ impl WaylandState {
         {
             return x;
         }
-        let side_visible = self.toolbar.is_side_visible();
+        // The GTK frontend keeps the built-in side surface unmapped, but
+        // its side palette occupies the same space and must push the top
+        // strip identically.
+        let side_visible = self.toolbar.is_side_visible()
+            || (self.gtk_toolbars_active() && self.input_state.toolbar_side_visible());
         let side_size = side_size(snapshot);
         let top_size = top_size(snapshot);
         let side_start_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;

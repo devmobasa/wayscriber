@@ -13,8 +13,6 @@ pub(super) fn run_backend(backend: &mut WaylandBackend) -> Result<()> {
     let setup = setup_wayland()?;
     let mut runtime = init_state(backend, setup)?;
 
-    runtime.state.spawn_gtk_toolbar_if_selected();
-
     create_overlay_surface(&mut runtime.state, &runtime.qh)?;
     runtime.state.refresh_active_output_label();
     runtime.state.force_sync_overlay_interactivity();

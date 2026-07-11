@@ -42,6 +42,14 @@ pub struct GtkToolbarUpdate {
     /// by the backend.
     pub top_offset: (f64, f64),
     pub side_offset: (f64, f64),
+    /// Highest drag sequence number the backend has drained per bar; the
+    /// GTK side ignores offset echoes older than its own counter so a
+    /// mid-drag mirror can never snap a just-released bar backwards.
+    pub top_offset_seq: u64,
+    pub side_offset_seq: u64,
+    /// Base X for the top strip in spec units (the side palette pushes it
+    /// right when they would overlap), mirroring the backend clamp math.
+    pub top_base_x: f64,
     /// Connector name of the output hosting the overlay (e.g. "DP-1"),
     /// used to pin the GTK bars to the same monitor.
     pub output_name: Option<String>,
@@ -56,13 +64,22 @@ pub enum GtkToolbarFeedback {
     /// A toolbar control fired; routed through `handle_toolbar_event`.
     Event(ToolbarEvent),
     /// Drag-to-move progress for the top bar. `done` marks the drag end,
-    /// which is when the offsets get clamped and persisted.
-    SetTopOffset { x: f64, y: f64, done: bool },
+    /// which is when the offsets get clamped and persisted; `seq` is the
+    /// bar's monotonically increasing drag counter (see
+    /// [`GtkToolbarUpdate::top_offset_seq`]).
+    SetTopOffset {
+        x: f64,
+        y: f64,
+        seq: u64,
+        done: bool,
+    },
     /// Drag-to-move progress for the side palette.
-    // Constructed once the GTK side palette lands; the backend match arm
-    // is already in place.
-    #[allow(dead_code)]
-    SetSideOffset { x: f64, y: f64, done: bool },
+    SetSideOffset {
+        x: f64,
+        y: f64,
+        seq: u64,
+        done: bool,
+    },
 }
 
 #[cfg(feature = "toolbar-gtk")]

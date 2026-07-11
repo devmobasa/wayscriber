@@ -57,6 +57,9 @@ struct StructureKey {
     eraser_kind_targets: (bool, bool),
     polygon_active: bool,
     font_mono: bool,
+    /// Drives the scoped section titles ("Color — Pen"): tool or text/note
+    /// scope changes must rebuild even when nothing else did.
+    title_scope: (crate::input::Tool, bool, bool, bool),
 }
 
 impl StructureKey {
@@ -102,6 +105,12 @@ impl StructureKey {
             polygon_active: snapshot.active_tool == crate::input::Tool::RegularPolygon
                 || snapshot.tool_override == Some(crate::input::Tool::RegularPolygon),
             font_mono: snapshot.font.family.eq_ignore_ascii_case("monospace"),
+            title_scope: (
+                snapshot.active_tool,
+                snapshot.text_active,
+                snapshot.note_active,
+                snapshot.context_aware_ui,
+            ),
         }
     }
 }
@@ -127,6 +136,9 @@ pub(in crate::toolbar_gtk) struct SideBar {
     saved_scroll: Rc<Cell<f64>>,
     drag_active: Rc<Cell<bool>>,
     offsets: Rc<Cell<(f64, f64)>>,
+    /// Monotonic counter for outgoing drag offsets; stale echoes from the
+    /// backend are ignored by comparing against it.
+    offset_seq: Rc<Cell<u64>>,
 }
 
 impl SideBar {
@@ -141,6 +153,9 @@ impl SideBar {
         window.set_margin(Edge::Top, BASE_MARGIN.0);
         window.set_margin(Edge::Left, BASE_MARGIN.1);
         window.set_keyboard_mode(KeyboardMode::OnDemand);
+        // Match the built-in bars: do not shift for other exclusive zones
+        // (panels/bars) and do not reserve one.
+        window.set_exclusive_zone(-1);
 
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
@@ -157,20 +172,17 @@ impl SideBar {
             saved_scroll: Rc::new(Cell::new(0.0)),
             drag_active: Rc::new(Cell::new(false)),
             offsets: Rc::new(Cell::new((0.0, 0.0))),
+            offset_seq: Rc::new(Cell::new(0)),
         }
     }
 
-    pub(in crate::toolbar_gtk) fn apply(
-        &mut self,
-        snapshot: &ToolbarSnapshot,
-        visible: bool,
-        offsets: (f64, f64),
-    ) {
-        if !visible {
+    pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
+        let snapshot = &update.snapshot;
+        if !update.side_visible {
             self.window.set_visible(false);
             return;
         }
-        self.apply_offsets(offsets);
+        self.apply_offsets(update.side_offset, update.side_offset_seq);
 
         let key = StructureKey::of(snapshot);
         if self.structure.as_ref() != Some(&key) {
@@ -185,9 +197,10 @@ impl SideBar {
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in
-    /// flight. Side offsets are (x, y) like the update carries them.
-    fn apply_offsets(&self, offsets: (f64, f64)) {
-        if self.drag_active.get() {
+    /// flight or the echo is older than what this bar already sent. Side
+    /// offsets are (x, y) like the update carries them.
+    fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
+        if self.drag_active.get() || echo_seq < self.offset_seq.get() {
             return;
         }
         self.offsets.set(offsets);
@@ -234,6 +247,11 @@ impl SideBar {
 
     fn build_minimized(&mut self, snapshot: &ToolbarSnapshot) {
         let scale = effective_scale(snapshot);
+        // Drop the palette's 260px default width so the tab shrinks.
+        self.window.set_default_size(
+            (MINIMIZED_SIZE.0 * scale).round() as i32,
+            (MINIMIZED_SIZE.1 * scale).round() as i32,
+        );
         let restore = sized_button(MINIMIZED_SIZE.0 * scale, MINIMIZED_SIZE.1 * scale);
         restore.add_css_class("chrome");
         restore.set_tooltip_text(Some("Show toolbar"));
@@ -313,13 +331,16 @@ impl SideBar {
         scrolled.set_child(Some(&content));
         self.root.append(&scrolled);
 
-        // Restore the scroll position once the new content is laid out.
+        // Restore the scroll position once the new content is laid out;
+        // one-shot so later size changes never yank the user's scroll.
         let adjustment = scrolled.vadjustment();
         let saved = self.saved_scroll.clone();
         adjustment.connect_changed(move |adjustment| {
             let target = saved.get();
-            if target > 0.0 && adjustment.upper() > adjustment.page_size() {
-                adjustment.set_value(target.min(adjustment.upper() - adjustment.page_size()));
+            let reachable = adjustment.upper() - adjustment.page_size();
+            if target > 0.0 && reachable >= target {
+                adjustment.set_value(target);
+                saved.set(0.0);
             }
         });
         self.scrolled = Some(scrolled);
@@ -458,40 +479,54 @@ impl SideBar {
         button
     }
 
+    /// See `top_bar::attach_move_drag`: deltas are surface-local while the
+    /// surface moves, so re-anchor against the live offsets each update.
     fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
         let feedback = self.feedback.clone();
         let drag_active = self.drag_active.clone();
         let offsets = self.offsets.clone();
-        let start = Rc::new(Cell::new((0.0f64, 0.0f64)));
+        let seq = self.offset_seq.clone();
 
-        let begin_start = start.clone();
-        let begin_offsets = offsets.clone();
         let begin_active = drag_active.clone();
         drag.connect_drag_begin(move |_, _, _| {
             begin_active.set(true);
-            begin_start.set(begin_offsets.get());
         });
 
         let update_window = window.clone();
-        let update_start = start.clone();
         let update_offsets = offsets.clone();
         let update_feedback = feedback.clone();
+        let update_seq = seq.clone();
         drag.connect_drag_update(move |_, dx, dy| {
-            let (sx, sy) = update_start.get();
-            let x = (sx + dx).max(-(BASE_MARGIN.1 as f64));
-            let y = (sy + dy).max(-(BASE_MARGIN.0 as f64));
+            let (cx, cy) = update_offsets.get();
+            let (x, y) = super::top_bar::clamp_drag_offsets(
+                &update_window,
+                (cx + dx, cy + dy),
+                (BASE_MARGIN.1 as f64, BASE_MARGIN.0 as f64),
+            );
             update_offsets.set((x, y));
             update_window.set_margin(Edge::Left, BASE_MARGIN.1 + x.round() as i32);
             update_window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
-            let _ = update_feedback.send(GtkToolbarFeedback::SetSideOffset { x, y, done: false });
+            update_seq.set(update_seq.get() + 1);
+            let _ = update_feedback.send(GtkToolbarFeedback::SetSideOffset {
+                x,
+                y,
+                seq: update_seq.get(),
+                done: false,
+            });
         });
 
         drag.connect_drag_end(move |_, _, _| {
             drag_active.set(false);
             let (x, y) = offsets.get();
-            let _ = feedback.send(GtkToolbarFeedback::SetSideOffset { x, y, done: true });
+            seq.set(seq.get() + 1);
+            let _ = feedback.send(GtkToolbarFeedback::SetSideOffset {
+                x,
+                y,
+                seq: seq.get(),
+                done: true,
+            });
         });
         grip.add_controller(drag);
     }

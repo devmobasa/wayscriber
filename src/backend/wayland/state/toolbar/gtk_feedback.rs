@@ -7,6 +7,15 @@
 use super::super::WaylandState;
 
 impl WaylandState {
+    /// Base X the GTK top strip must use, matching the backend clamp and
+    /// overlap-push math (`inline_top_base_x` is toolbar-module private).
+    pub(in crate::backend::wayland) fn gtk_top_base_x(
+        &self,
+        snapshot: &crate::ui::toolbar::ToolbarSnapshot,
+    ) -> f64 {
+        self.inline_top_base_x(snapshot)
+    }
+
     pub(in crate::backend::wayland) fn apply_gtk_top_offset(&mut self, x: f64, y: f64, done: bool) {
         self.data.toolbar_top_offset = x;
         self.data.toolbar_top_offset_y = y;

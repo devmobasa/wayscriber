@@ -46,10 +46,8 @@ impl Windows {
     pub(super) fn apply(&mut self, update: &GtkToolbarUpdate) {
         self.refresh_css(update);
         self.pin_to_output(update);
-        self.top
-            .apply(&update.snapshot, update.top_visible, update.top_offset);
-        self.side
-            .apply(&update.snapshot, update.side_visible, update.side_offset);
+        self.top.apply(update);
+        self.side.apply(update);
     }
 
     /// Regenerate the stylesheet when the toolbar scale changes.
@@ -73,8 +71,13 @@ impl Windows {
         if self.pinned_output == update.output_name {
             return;
         }
-        self.pinned_output = update.output_name.clone();
         let monitor = update.output_name.as_deref().and_then(monitor_by_connector);
+        if monitor.is_none() && update.output_name.is_some() {
+            // GDK may not have seen the connector yet; leave the cache
+            // unset so the next update retries the lookup.
+            return;
+        }
+        self.pinned_output = update.output_name.clone();
         // None lets the compositor pick, matching a missing preference.
         self.top.window.set_monitor(monitor.as_ref());
         self.side.window.set_monitor(monitor.as_ref());

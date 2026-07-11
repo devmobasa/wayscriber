@@ -60,6 +60,14 @@ const BASE_MARGIN: (i32, i32) = (12, 12);
 
 use super::Updater;
 
+/// Snapshot inputs the shapes-popover grid renders from: active tool,
+/// override, fill flag, polygon sides.
+type ShapesContentKey = (Tool, Option<Tool>, bool, u8);
+
+/// Snapshot inputs the overflow grid renders from: active tool, override,
+/// text/note/highlight active flags.
+type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool);
+
 /// Everything needed to render one utility button: painter, short label,
 /// tooltip, click event, and the optional active-state probe.
 type UtilitySpec = (
@@ -152,8 +160,17 @@ pub(in crate::toolbar_gtk) struct TopBar {
     /// `closed` handlers distinguish user dismissal from state sync.
     shapes_expected_open: Rc<Cell<bool>>,
     overflow_expected_open: Rc<Cell<bool>>,
+    /// Discriminants of the currently built popover contents; skips the
+    /// per-snapshot rebuild that would reset hover and in-flight presses.
+    shapes_content_key: Cell<Option<ShapesContentKey>>,
+    overflow_content_key: Cell<Option<OverflowContentKey>>,
     drag_active: Rc<Cell<bool>>,
     offsets: Rc<Cell<(f64, f64)>>,
+    /// Base X in spec units from the backend (side palette pushes it).
+    base_x: Rc<Cell<f64>>,
+    /// Monotonic counter for outgoing drag offsets; stale echoes from the
+    /// backend are ignored by comparing against it.
+    offset_seq: Rc<Cell<u64>>,
 }
 
 impl TopBar {
@@ -168,6 +185,9 @@ impl TopBar {
         window.set_margin(Edge::Top, BASE_MARGIN.0);
         window.set_margin(Edge::Left, BASE_MARGIN.1);
         window.set_keyboard_mode(KeyboardMode::OnDemand);
+        // Match the built-in bars: do not shift for other exclusive zones
+        // (panels/bars) and do not reserve one.
+        window.set_exclusive_zone(-1);
 
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
@@ -183,22 +203,28 @@ impl TopBar {
             overflow_popover: None,
             shapes_expected_open: Rc::new(Cell::new(false)),
             overflow_expected_open: Rc::new(Cell::new(false)),
+            shapes_content_key: Cell::new(None),
+            overflow_content_key: Cell::new(None),
             drag_active: Rc::new(Cell::new(false)),
             offsets: Rc::new(Cell::new((0.0, 0.0))),
+            base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
+            offset_seq: Rc::new(Cell::new(0)),
         }
     }
 
-    pub(in crate::toolbar_gtk) fn apply(
-        &mut self,
-        snapshot: &ToolbarSnapshot,
-        visible: bool,
-        offsets: (f64, f64),
-    ) {
-        if !visible {
+    pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
+        let snapshot = &update.snapshot;
+        if !update.top_visible {
+            // Suppress the dismissal echoes a hide-triggered popover close
+            // would send, so an open picker survives a hide/show cycle
+            // like the built-in bars.
+            self.shapes_expected_open.set(false);
+            self.overflow_expected_open.set(false);
             self.window.set_visible(false);
             return;
         }
-        self.apply_offsets(offsets);
+        self.base_x.set(update.top_base_x);
+        self.apply_offsets(update.top_offset, update.top_offset_seq);
 
         let plan = plan_top_strip(snapshot);
         let key = StructureKey::of(snapshot, &plan);
@@ -214,25 +240,35 @@ impl TopBar {
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in
-    /// flight (the drag owns the margins until it ends).
-    fn apply_offsets(&self, offsets: (f64, f64)) {
-        if self.drag_active.get() {
+    /// flight or the echo is older than what this bar already sent.
+    fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
+        if self.drag_active.get() || echo_seq < self.offset_seq.get() {
             return;
         }
         self.offsets.set(offsets);
         self.window
-            .set_margin(Edge::Left, BASE_MARGIN.1 + offsets.0.round() as i32);
+            .set_margin(Edge::Left, (self.base_x.get() + offsets.0).round() as i32);
         self.window
             .set_margin(Edge::Top, BASE_MARGIN.0 + offsets.1.round() as i32);
     }
 
     fn rebuild(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
+        // Popovers are parented to bar buttons; unparent them before the
+        // buttons go away or GTK complains and leaks the popover widgets.
+        self.shapes_expected_open.set(false);
+        self.overflow_expected_open.set(false);
+        if let Some(popover) = self.shapes_popover.take() {
+            popover.unparent();
+        }
+        if let Some(popover) = self.overflow_popover.take() {
+            popover.unparent();
+        }
+        self.shapes_content_key.set(None);
+        self.overflow_content_key.set(None);
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }
         self.updaters.borrow_mut().clear();
-        self.shapes_popover = None;
-        self.overflow_popover = None;
 
         if snapshot.top_minimized {
             self.build_minimized(snapshot);
@@ -645,7 +681,16 @@ impl TopBar {
         let popover = gtk4::Popover::new();
         popover.set_parent(&button);
         popover.set_position(gtk4::PositionType::Bottom);
-        popover.set_autohide(true);
+        // No autohide grab: the built-in dismissal policy already closes
+        // the picker through the snapshot round-trip (any other toolbar
+        // event or a canvas press), so an outside click both dismisses AND
+        // activates the control under it — one click, like the builtin.
+        popover.set_autohide(false);
+        attach_escape_dismiss(
+            &popover,
+            &self.feedback,
+            ToolbarEvent::ToggleShapePicker(false),
+        );
         let sender = self.feedback.clone();
         let expected = self.shapes_expected_open.clone();
         popover.connect_closed(move |_| {
@@ -827,7 +872,13 @@ impl TopBar {
         let popover = gtk4::Popover::new();
         popover.set_parent(&button);
         popover.set_position(gtk4::PositionType::Bottom);
-        popover.set_autohide(true);
+        // See the shapes popover: dismissal stays with the backend policy.
+        popover.set_autohide(false);
+        attach_escape_dismiss(
+            &popover,
+            &self.feedback,
+            ToolbarEvent::ToggleTopOverflow(false),
+        );
         let sender = self.feedback.clone();
         let expected = self.overflow_expected_open.clone();
         popover.connect_closed(move |_| {
@@ -873,13 +924,24 @@ impl TopBar {
         if let Some(popover) = self.shapes_popover.clone() {
             let open = snapshot.shape_picker_open && model::top_shape_picker_visible(snapshot);
             if open {
-                popover.set_child(Some(&self.build_shapes_popover_content(
-                    snapshot,
-                    button_size,
-                    icon_size,
-                    use_icons,
-                    scale,
-                )));
+                // Only rebuild the grid when its inputs changed; a rebuild
+                // resets hover and cancels an in-flight press.
+                let content_key = (
+                    snapshot.active_tool,
+                    snapshot.tool_override,
+                    snapshot.fill_enabled,
+                    snapshot.polygon_sides,
+                );
+                if self.shapes_content_key.get() != Some(content_key) {
+                    popover.set_child(Some(&self.build_shapes_popover_content(
+                        snapshot,
+                        button_size,
+                        icon_size,
+                        use_icons,
+                        scale,
+                    )));
+                    self.shapes_content_key.set(Some(content_key));
+                }
             }
             self.shapes_expected_open.set(open);
             if open && !popover.is_visible() {
@@ -893,14 +955,24 @@ impl TopBar {
             let open = snapshot.top_overflow_open
                 && plan.dropped_tools.len() + plan.dropped_utilities.len() > 0;
             if open {
-                popover.set_child(Some(&self.build_overflow_popover_content(
-                    snapshot,
-                    plan,
-                    button_size,
-                    icon_size,
-                    use_icons,
-                    scale,
-                )));
+                let content_key = (
+                    snapshot.active_tool,
+                    snapshot.tool_override,
+                    snapshot.text_active,
+                    snapshot.note_active,
+                    snapshot.any_highlight_active,
+                );
+                if self.overflow_content_key.get() != Some(content_key) {
+                    popover.set_child(Some(&self.build_overflow_popover_content(
+                        snapshot,
+                        plan,
+                        button_size,
+                        icon_size,
+                        use_icons,
+                        scale,
+                    )));
+                    self.overflow_content_key.set(Some(content_key));
+                }
             }
             self.overflow_expected_open.set(open);
             if open && !popover.is_visible() {
@@ -957,13 +1029,12 @@ impl TopBar {
         if fill_tool_active && model::top_fill_visible(snapshot) {
             let fill = gtk4::CheckButton::with_label(action_short_label(Action::ToggleFill));
             fill.set_tooltip_text(Some(&action_tooltip(snapshot, Action::ToggleFill)));
+            // set_active runs before connect_toggled, so every later
+            // toggle is user input and forwards unconditionally.
             fill.set_active(snapshot.fill_enabled);
             let sender = self.feedback.clone();
-            let fill_enabled = snapshot.fill_enabled;
             fill.connect_toggled(move |check| {
-                if check.is_active() != fill_enabled {
-                    send_event(&sender, ToolbarEvent::ToggleFill(check.is_active()));
-                }
+                send_event(&sender, ToolbarEvent::ToggleFill(check.is_active()));
             });
             content.append(&fill);
         }
@@ -1089,41 +1160,98 @@ impl TopBar {
 
     /// Drag-to-move: the grip moves the layer margins live and reports the
     /// offsets so the backend can clamp and persist them at drag end.
+    ///
+    /// GestureDrag deltas are surface-local, and the surface itself moves
+    /// with every margin change, so each reported delta is the *residual*
+    /// pointer movement — re-anchor against the live offsets, not the
+    /// drag-start snapshot, for 1:1 tracking.
     fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
         let feedback = self.feedback.clone();
         let drag_active = self.drag_active.clone();
         let offsets = self.offsets.clone();
-        let start = Rc::new(Cell::new((0.0f64, 0.0f64)));
+        let base_x = self.base_x.clone();
+        let seq = self.offset_seq.clone();
 
-        let begin_start = start.clone();
-        let begin_offsets = offsets.clone();
         let begin_active = drag_active.clone();
         drag.connect_drag_begin(move |_, _, _| {
             begin_active.set(true);
-            begin_start.set(begin_offsets.get());
         });
 
         let update_window = window.clone();
-        let update_start = start.clone();
         let update_offsets = offsets.clone();
         let update_feedback = feedback.clone();
+        let update_base = base_x.clone();
+        let update_seq = seq.clone();
         drag.connect_drag_update(move |_, dx, dy| {
-            let (sx, sy) = update_start.get();
-            let x = (sx + dx).max(-(BASE_MARGIN.1 as f64));
-            let y = (sy + dy).max(-(BASE_MARGIN.0 as f64));
+            let base = update_base.get();
+            let (cx, cy) = update_offsets.get();
+            let (mut x, mut y) = (cx + dx, cy + dy);
+            (x, y) = clamp_drag_offsets(&update_window, (x, y), (base, BASE_MARGIN.0 as f64));
             update_offsets.set((x, y));
-            update_window.set_margin(Edge::Left, BASE_MARGIN.1 + x.round() as i32);
+            update_window.set_margin(Edge::Left, (base + x).round() as i32);
             update_window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
-            let _ = update_feedback.send(GtkToolbarFeedback::SetTopOffset { x, y, done: false });
+            update_seq.set(update_seq.get() + 1);
+            let _ = update_feedback.send(GtkToolbarFeedback::SetTopOffset {
+                x,
+                y,
+                seq: update_seq.get(),
+                done: false,
+            });
         });
 
         drag.connect_drag_end(move |_, _, _| {
             drag_active.set(false);
             let (x, y) = offsets.get();
-            let _ = feedback.send(GtkToolbarFeedback::SetTopOffset { x, y, done: true });
+            seq.set(seq.get() + 1);
+            let _ = feedback.send(GtkToolbarFeedback::SetTopOffset {
+                x,
+                y,
+                seq: seq.get(),
+                done: true,
+            });
         });
         grip.add_controller(drag);
     }
+}
+
+/// Without an autohide grab, Escape needs explicit wiring to dismiss an
+/// open popover through the backend state.
+pub(super) fn attach_escape_dismiss(
+    popover: &gtk4::Popover,
+    feedback: &FeedbackSender,
+    dismiss: ToolbarEvent,
+) {
+    let key = gtk4::EventControllerKey::new();
+    let sender = feedback.clone();
+    key.connect_key_pressed(move |_, keyval, _, _| {
+        if keyval == gtk4::gdk::Key::Escape {
+            send_event(&sender, dismiss.clone());
+            return gtk4::glib::Propagation::Stop;
+        }
+        gtk4::glib::Propagation::Proceed
+    });
+    popover.add_controller(key);
+}
+
+/// Keep a dragged bar reachable: offsets may pull it up to its base
+/// margins off the origin and never fully off the monitor.
+pub(super) fn clamp_drag_offsets(
+    window: &gtk4::Window,
+    (x, y): (f64, f64),
+    (base_x, base_y): (f64, f64),
+) -> (f64, f64) {
+    let mut max_x = f64::MAX;
+    let mut max_y = f64::MAX;
+    if let Some(surface) = window.surface()
+        && let Some(display) = gtk4::gdk::Display::default()
+        && let Some(monitor) = display.monitor_at_surface(&surface)
+    {
+        let geometry = monitor.geometry();
+        // Keep at least a grip-sized sliver on screen.
+        max_x = (geometry.width() as f64 - base_x - 40.0).max(0.0);
+        max_y = (geometry.height() as f64 - base_y - 24.0).max(0.0);
+    }
+    (x.clamp(-base_x, max_x), y.clamp(-base_y, max_y))
 }
