@@ -7,11 +7,17 @@ A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rus
 
 Docs: https://wayscriber.com/docs/
 
-<details>
-<summary>Screenshots</summary>
+![wayscriber annotating source code with arrows, highlights, shapes, step markers and text](https://wayscriber.com/img/annotate-over-code.webp)
 
-![Demo Poster](https://wayscriber.com/demo-poster-6.webp)
-![Demo Poster](https://wayscriber.com/demo-poster-2.webp)
+<details>
+<summary>More screenshots</summary>
+
+| | |
+| :---: | :---: |
+| ![Radial tool menu](https://wayscriber.com/img/radial-menu.webp)<br>**Radial tool menu** | ![Boards and pages](https://wayscriber.com/img/boards-and-pages.webp)<br>**Boards & pages** |
+| ![Blackboard mode](https://wayscriber.com/img/blackboard.webp)<br>**Blackboard** | ![Whiteboard mode](https://wayscriber.com/img/whiteboard.webp)<br>**Whiteboard** |
+| ![Advanced toolbar](https://wayscriber.com/img/toolbar-advanced.webp)<br>**Advanced toolbar** | ![Command palette](https://wayscriber.com/img/command-palette.webp)<br>**Command palette** |
+| ![Built-in controls](https://wayscriber.com/img/controls-cheatsheet.webp)<br>**Built-in controls (F1)** | ![Shape picker](https://wayscriber.com/img/shape-picker.webp)<br>**Shape picker** |
 
 </details>
 
