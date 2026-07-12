@@ -144,6 +144,7 @@ const TOOLBAR_ACTIONS: &[Action] = &[
     Action::ClearPreset4,
     Action::ClearPreset5,
     Action::OpenConfigurator,
+    Action::ToggleCommandPalette,
 ];
 
 const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[

@@ -262,6 +262,8 @@ pub enum ToolbarEvent {
     ClearSession,
     OpenConfigurator,
     OpenConfigFile,
+    /// Open (toggle) the command palette overlay.
+    OpenCommandPalette,
     ToggleCustomSection(bool),
     ToggleDelaySliders(bool),
     SetCustomUndoDelay(f64),

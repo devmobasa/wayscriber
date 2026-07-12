@@ -153,6 +153,7 @@ pub(crate) enum ToolbarControlRole {
 pub(crate) enum ToolbarIcon {
     Back,
     Settings,
+    Search,
     Visibility,
     File,
     More,

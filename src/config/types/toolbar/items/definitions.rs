@@ -502,6 +502,13 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Some(ToolbarGroupId::Settings),
     ),
     item(
+        ids::SIDE_SETTINGS_COMMAND_PALETTE,
+        "Open command palette",
+        Side,
+        Setting,
+        Some(ToolbarGroupId::Settings),
+    ),
+    item(
         ids::SIDE_SETTINGS_CONFIGURATOR,
         "Open configurator",
         Side,

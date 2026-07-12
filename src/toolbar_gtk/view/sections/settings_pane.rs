@@ -314,6 +314,7 @@ fn settings_icon_painter(icon: model::ToolbarIcon) -> IconPainter {
     match icon {
         model::ToolbarIcon::Back => draw_back_icon,
         model::ToolbarIcon::Settings => toolbar_icons::draw_icon_settings,
+        model::ToolbarIcon::Search => toolbar_icons::draw_icon_search,
         model::ToolbarIcon::Visibility => toolbar_icons::draw_icon_visibility,
         model::ToolbarIcon::File => toolbar_icons::draw_icon_file,
         model::ToolbarIcon::More | model::ToolbarIcon::Board => draw_no_icon,

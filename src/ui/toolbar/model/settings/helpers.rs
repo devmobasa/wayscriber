@@ -17,6 +17,19 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
             tooltip: ToolbarTooltip::text("Restore default hidden items"),
         },
         ToolbarSettingsButton {
+            id: ToolbarControlId::OpenCommandPalette,
+            label: Cow::Borrowed(action_short_label(Action::ToggleCommandPalette)),
+            event: ToolbarEvent::OpenCommandPalette,
+            icon: ToolbarIcon::Search,
+            tooltip: ToolbarTooltip::Binding {
+                label: Cow::Borrowed(action_label(Action::ToggleCommandPalette)),
+                binding: snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleCommandPalette)
+                    .map(str::to_string),
+            },
+        },
+        ToolbarSettingsButton {
             id: ToolbarControlId::OpenConfigurator,
             label: Cow::Borrowed(action_short_label(Action::OpenConfigurator)),
             event: ToolbarEvent::OpenConfigurator,
@@ -239,6 +252,7 @@ fn control_item_id(id: ToolbarControlId) -> Option<ToolbarItemId> {
         ToolbarControlId::SettingsBoards => ids::SIDE_SETTINGS_BOARDS,
         ToolbarControlId::SettingsPages => ids::SIDE_SETTINGS_PAGES,
         ToolbarControlId::SettingsStepControls => ids::SIDE_SETTINGS_STEP_CONTROLS,
+        ToolbarControlId::OpenCommandPalette => ids::SIDE_SETTINGS_COMMAND_PALETTE,
         ToolbarControlId::OpenConfigurator => ids::SIDE_SETTINGS_CONFIGURATOR,
         ToolbarControlId::OpenConfigFile => ids::SIDE_SETTINGS_CONFIG_FILE,
         _ => return None,

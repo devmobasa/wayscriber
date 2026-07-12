@@ -95,6 +95,7 @@ impl InputState {
             ToolbarEvent::ToggleDelaySliders(show) => self.apply_toolbar_toggle_delay_sliders(show),
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
+            ToolbarEvent::OpenCommandPalette => self.apply_toolbar_open_command_palette(),
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)

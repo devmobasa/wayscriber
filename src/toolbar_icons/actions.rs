@@ -1,5 +1,5 @@
 use cairo::Context;
-use std::f64::consts::PI;
+use std::f64::consts::{FRAC_1_SQRT_2, PI};
 
 /// Draw a clear/trash icon
 pub fn draw_icon_clear(ctx: &Context, x: f64, y: f64, size: f64) {
@@ -215,6 +215,27 @@ pub fn draw_icon_refresh(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.line_to(base_x - 0.5 * h * rc, base_y - 0.5 * h * rs);
     ctx.close_path();
     let _ = ctx.fill();
+}
+
+/// Draw a search / magnifying-glass icon (used for the command palette).
+pub fn draw_icon_search(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.11).max(1.6);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    // Lens.
+    let cx = x + s * 0.42;
+    let cy = y + s * 0.42;
+    let r = s * 0.24;
+    ctx.arc(cx, cy, r, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+
+    // Handle, running from the lower-right of the lens toward the corner.
+    let start = r + stroke * 0.25;
+    ctx.move_to(cx + start * FRAC_1_SQRT_2, cy + start * FRAC_1_SQRT_2);
+    ctx.line_to(x + s * 0.85, y + s * 0.85);
+    let _ = ctx.stroke();
 }
 
 /// Draw a copy/duplicate icon (two overlapping rectangles).

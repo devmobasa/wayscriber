@@ -180,7 +180,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         UI,
         true,
         true,
-        false
+        true
     ),
     meta!(
         ReplayTour,

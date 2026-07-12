@@ -108,6 +108,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::SavePreset(slot) => action_for_save_preset(*slot),
         ToolbarEvent::ClearPreset(slot) => action_for_clear_preset(*slot),
         ToolbarEvent::OpenConfigurator => Some(Action::OpenConfigurator),
+        ToolbarEvent::OpenCommandPalette => Some(Action::ToggleCommandPalette),
         ToolbarEvent::PickScreenColor => Some(Action::PickScreenColor),
         _ => None,
     }
