@@ -33,6 +33,15 @@ fn toast_text_style(size: f64) -> UiTextStyle<'static> {
     }
 }
 
+fn toast_fade(progress: f64) -> f64 {
+    if progress <= UI_TOAST_HOLD_RATIO {
+        1.0
+    } else {
+        let fade_progress = (progress - UI_TOAST_HOLD_RATIO) / (1.0 - UI_TOAST_HOLD_RATIO);
+        (1.0 - fade_progress).clamp(0.0, 1.0)
+    }
+}
+
 /// Box geometry for a toast label centered horizontally at a screen-height ratio.
 fn toast_box_geometry(
     label: &str,
@@ -179,12 +188,7 @@ pub fn render_preset_toast(
         return;
     };
 
-    let fade = if (progress as f64) <= UI_TOAST_HOLD_RATIO {
-        1.0
-    } else {
-        let t = ((progress as f64) - UI_TOAST_HOLD_RATIO) / (1.0 - UI_TOAST_HOLD_RATIO);
-        (1.0 - t).clamp(0.0, 1.0)
-    };
+    let fade = toast_fade(progress as f64);
     let (r, g, b) = match kind {
         PresetFeedbackKind::Apply => TOAST_INFO,
         PresetFeedbackKind::Save => TOAST_SUCCESS,
@@ -242,7 +246,7 @@ pub fn render_ui_toast(
         UI_TOAST_Y_RATIO,
     )?;
 
-    let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
+    let fade = toast_fade(progress as f64);
     let (r, g, b) = match toast.kind {
         UiToastKind::Info => TOAST_INFO,
         UiToastKind::Warning => TOAST_WARNING,
@@ -351,5 +355,18 @@ pub fn render_blocked_feedback(
     for (x, y, w, h) in blocked_feedback_rects(screen_width, screen_height) {
         ctx.rectangle(x, y, w, h);
         let _ = ctx.fill();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toast_stays_fully_visible_for_most_of_its_lifetime() {
+        assert_eq!(toast_fade(0.0), 1.0);
+        assert_eq!(toast_fade(UI_TOAST_HOLD_RATIO), 1.0);
+        assert_eq!(toast_fade(0.875), 0.5);
+        assert_eq!(toast_fade(1.0), 0.0);
     }
 }

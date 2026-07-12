@@ -188,6 +188,8 @@ fn settings_button(ctx: &SectionCtx, button_model: &model::ToolbarSettingsButton
         // Icon plus a left-aligned label, mirroring the built-in treatment:
         // icon-only glyphs were ambiguous here.
         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(5.0));
+        row.set_margin_start(ctx.px(6.0));
+        row.set_margin_end(ctx.px(6.0));
         let icon = IconWidget::new(settings_icon_painter(button_model.icon), ctx.sz(16.0));
         row.append(&icon.area);
         let label = gtk4::Label::new(Some(button_model.label.as_ref()));
