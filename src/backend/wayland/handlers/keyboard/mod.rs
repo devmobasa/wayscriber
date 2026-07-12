@@ -107,6 +107,12 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        if self.input_state.eyedropper_is_active() {
+            if matches!(key, Key::Escape) {
+                self.cancel_eyedropper();
+            }
+            return;
+        }
         if matches!(key, Key::Escape)
             && self.input_state.modifiers.shift
             && self.try_skip_first_run_onboarding()
@@ -182,6 +188,9 @@ impl KeyboardHandler for WaylandState {
     ) {
         let key = keysym_to_key(event.keysym);
         debug!("Key released: {:?}", key);
+        if self.input_state.eyedropper_is_active() {
+            return;
+        }
         if matches!(key, Key::Space) && self.board_pan_key_held() {
             self.set_board_pan_key_held(false);
             self.input_state.needs_redraw = true;
@@ -223,6 +232,9 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        if self.input_state.eyedropper_is_active() {
+            return;
+        }
         if matches!(key, Key::Space) && self.board_pan_key_held() {
             return;
         }

@@ -29,3 +29,7 @@ pub(crate) fn default_set_color_white() -> Vec<String> {
 pub(crate) fn default_set_color_black() -> Vec<String> {
     vec!["K".to_string()]
 }
+
+pub(crate) fn default_pick_screen_color() -> Vec<String> {
+    Vec::new()
+}

@@ -25,6 +25,12 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
     let fx = x as f64;
     let fy = y as f64;
 
+    if layout.point_in_eyedropper_button(fx, fy) {
+        state.close_color_picker_popup(true);
+        state.request_eyedropper_toggle();
+        return true;
+    }
+
     // Check OK button
     if layout.point_in_ok_button(fx, fy) {
         state.apply_color_picker_popup();

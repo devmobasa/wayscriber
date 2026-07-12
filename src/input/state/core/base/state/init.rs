@@ -240,6 +240,8 @@ impl InputState {
             properties_panel_needs_refresh: false,
             frozen_active: false,
             pending_frozen_toggle: false,
+            eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
+            pending_eyedropper_toggle: false,
             zoom_active: false,
             zoom_locked: false,
             zoom_scale: 1.0,

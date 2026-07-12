@@ -309,6 +309,43 @@ pub(super) fn draw_hex_input(
         kind: HitKind::Click,
         tooltip: Some("Paste hex color from clipboard".to_string()),
     });
+
+    let eyedropper_x = paste_btn_x + paste_btn_size + 4.0;
+    let eyedropper_hover = hover
+        .map(|(hx, hy)| {
+            point_in_rect(
+                hx,
+                hy,
+                eyedropper_x,
+                hex_input_y,
+                paste_btn_size,
+                paste_btn_size,
+            )
+        })
+        .unwrap_or(false);
+    draw_button(
+        ctx,
+        eyedropper_x,
+        hex_input_y,
+        paste_btn_size,
+        paste_btn_size,
+        false,
+        eyedropper_hover,
+    );
+    set_icon_color(ctx, eyedropper_hover);
+    toolbar_icons::draw_icon_eyedropper(
+        ctx,
+        eyedropper_x + 4.0,
+        hex_input_y + 4.0,
+        paste_btn_size - 8.0,
+    );
+    hits.push(HitRegion {
+        focus_id: None,
+        rect: (eyedropper_x, hex_input_y, paste_btn_size, paste_btn_size),
+        event: ToolbarEvent::PickScreenColor,
+        kind: HitKind::Click,
+        tooltip: Some("Pick color from screen".to_string()),
+    });
 }
 
 pub(super) fn draw_color_swatch_row(

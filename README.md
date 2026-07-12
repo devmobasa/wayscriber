@@ -121,7 +121,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Multiline text and sticky notes with smoothing
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
-- Color picker, palettes, size via hotkeys or scroll
+- Color picker and screen eyedropper, palettes, size via hotkeys or scroll
 - Render color profiles for print/projector/light-theme preview
 - Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection plus scroll size adjust
 
@@ -149,7 +149,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Two toolbar frontends: GTK4-rendered bars on layer-shell compositors (Hyprland, KWin, Wayfire, River, ...), with automatic fallback to the built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline mode, builds without the `toolbar-gtk` feature)
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
-- Color picker with extended palettes
+- Color picker with extended palettes and a screen eyedropper (toolbar, popup, or command palette)
 - Status bar, board/page controls
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
 - Command palette (<kbd>Ctrl+K</kbd>)
@@ -953,6 +953,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Blur tool
 - [x] Tablet/stylus support with pressure
 - [x] Color picker
+- [x] Eyedropper: pick a draw color from the screen
 - [x] Render color profiles
 - [x] Zoom (ZoomIt-style controls)
 - [x] Presets (tool/color/size slots)

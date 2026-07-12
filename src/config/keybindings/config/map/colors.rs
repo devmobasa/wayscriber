@@ -15,6 +15,7 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.colors.set_color_pink, Action::SetColorPink)?;
         inserter.insert_all(&self.colors.set_color_white, Action::SetColorWhite)?;
         inserter.insert_all(&self.colors.set_color_black, Action::SetColorBlack)?;
+        inserter.insert_all(&self.colors.pick_screen_color, Action::PickScreenColor)?;
         Ok(())
     }
 }

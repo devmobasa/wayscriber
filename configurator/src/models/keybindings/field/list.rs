@@ -94,6 +94,7 @@ impl KeybindingField {
             Self::SetColorPink,
             Self::SetColorWhite,
             Self::SetColorBlack,
+            Self::PickScreenColor,
             Self::CaptureFullScreen,
             Self::CaptureActiveWindow,
             Self::CaptureSelection,

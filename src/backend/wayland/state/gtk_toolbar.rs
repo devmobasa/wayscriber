@@ -88,6 +88,7 @@ impl WaylandState {
         for feedback in pending {
             match feedback {
                 GtkToolbarFeedback::Event(event) => {
+                    self.cancel_eyedropper();
                     self.handle_toolbar_event(event, Some(conn), Some(qh));
                 }
                 GtkToolbarFeedback::SetTopOffset { x, y, seq, done } => {

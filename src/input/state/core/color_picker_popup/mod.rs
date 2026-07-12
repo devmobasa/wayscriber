@@ -89,6 +89,12 @@ pub struct ColorPickerPopupLayout {
     pub hex_input_w: f64,
     /// Height of the hex input.
     pub hex_input_h: f64,
+    /// X position of the screen eyedropper button.
+    pub eyedropper_btn_x: f64,
+    /// Y position of the screen eyedropper button.
+    pub eyedropper_btn_y: f64,
+    /// Size of the square screen eyedropper button.
+    pub eyedropper_btn_size: f64,
     /// X position of the OK button.
     pub ok_btn_x: f64,
     /// Y position of the OK button.
@@ -131,6 +137,9 @@ impl ColorPickerPopupLayout {
         let hex_input_y = preview_row_y + (PREVIEW_SIZE - 24.0) / 2.0;
         let hex_input_w = HEX_INPUT_WIDTH;
         let hex_input_h = 24.0;
+        let eyedropper_btn_size = PREVIEW_SIZE;
+        let eyedropper_btn_x = hex_input_x + hex_input_w + 12.0;
+        let eyedropper_btn_y = preview_row_y;
 
         // Buttons at the bottom (centered)
         let btn_row_y = origin_y + height - PADDING - BUTTON_HEIGHT;
@@ -154,6 +163,9 @@ impl ColorPickerPopupLayout {
             hex_input_y,
             hex_input_w,
             hex_input_h,
+            eyedropper_btn_x,
+            eyedropper_btn_y,
+            eyedropper_btn_size,
             ok_btn_x,
             ok_btn_y: btn_row_y,
             cancel_btn_x,
@@ -187,6 +199,14 @@ impl ColorPickerPopupLayout {
             && y <= self.ok_btn_y + self.btn_height
     }
 
+    /// Check if a point is within the screen eyedropper button.
+    pub fn point_in_eyedropper_button(&self, x: f64, y: f64) -> bool {
+        x >= self.eyedropper_btn_x
+            && x <= self.eyedropper_btn_x + self.eyedropper_btn_size
+            && y >= self.eyedropper_btn_y
+            && y <= self.eyedropper_btn_y + self.eyedropper_btn_size
+    }
+
     /// Check if a point is within the Cancel button.
     pub fn point_in_cancel_button(&self, x: f64, y: f64) -> bool {
         x >= self.cancel_btn_x
@@ -210,7 +230,10 @@ impl ColorPickerPopupLayout {
             ColorPickerCursorHint::Text
         } else if self.point_in_gradient(x, y) {
             ColorPickerCursorHint::Crosshair
-        } else if self.point_in_ok_button(x, y) || self.point_in_cancel_button(x, y) {
+        } else if self.point_in_ok_button(x, y)
+            || self.point_in_cancel_button(x, y)
+            || self.point_in_eyedropper_button(x, y)
+        {
             ColorPickerCursorHint::Pointer
         } else {
             ColorPickerCursorHint::Default

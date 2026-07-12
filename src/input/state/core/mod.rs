@@ -4,6 +4,7 @@ pub(crate) mod board_picker;
 pub(crate) mod color_picker_popup;
 mod command_palette;
 mod dirty;
+mod eyedropper;
 mod highlight_controls;
 mod history;
 mod index;
@@ -42,6 +43,7 @@ pub(crate) use command_palette::{
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
 };
 pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint};
+pub use eyedropper::EyedropperUiState;
 #[allow(unused_imports)]
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,

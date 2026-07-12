@@ -193,6 +193,15 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 // Note: We keep the tool type in the map - tools persist across proximity events
             }
             Event::Down { .. } => {
+                if state.input_state.eyedropper_is_active() {
+                    if state.stylus_on_toolbar {
+                        state.cancel_eyedropper();
+                    } else if state.stylus_on_overlay {
+                        let (x, y) = state.current_or_pending_stylus_position();
+                        state.sample_eyedropper(x, y);
+                        return;
+                    }
+                }
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if inline_active {
                     let (sx, sy) = state.current_or_pending_stylus_position();
@@ -243,6 +252,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.queue_stylus_up();
             }
             Event::Motion { x, y } => {
+                if state.input_state.eyedropper_is_active() && state.stylus_on_overlay {
+                    state.stylus_last_pos = Some((x, y));
+                    state.set_current_mouse(x.round() as i32, y.round() as i32);
+                    state.update_eyedropper_hover(x, y);
+                    return;
+                }
                 if state.is_move_dragging()
                     && let Some(kind) = state.active_move_drag_kind()
                 {

@@ -111,8 +111,37 @@ pub fn render_color_picker_popup(
         hex_valid,
     );
 
-    // Determine button hover states
     let hover_pos = input_state.color_picker_popup_hover();
+    let eyedropper_hover = hover_pos
+        .map(|(hx, hy)| layout.point_in_eyedropper_button(hx, hy))
+        .unwrap_or(false);
+    draw_rounded_rect(
+        ctx,
+        layout.eyedropper_btn_x,
+        layout.eyedropper_btn_y,
+        layout.eyedropper_btn_size,
+        layout.eyedropper_btn_size,
+        RADIUS_MD,
+    );
+    if eyedropper_hover {
+        ctx.set_source_rgba(0.25, 0.55, 0.85, 0.8);
+    } else {
+        ctx.set_source_rgba(0.18, 0.2, 0.24, 0.95);
+    }
+    let _ = ctx.fill_preserve();
+    constants::set_color(ctx, BORDER_MODAL);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+    constants::set_color(ctx, TEXT_PRIMARY);
+    let icon_size = 18.0;
+    crate::toolbar_icons::draw_icon_eyedropper(
+        ctx,
+        layout.eyedropper_btn_x + (layout.eyedropper_btn_size - icon_size) / 2.0,
+        layout.eyedropper_btn_y + (layout.eyedropper_btn_size - icon_size) / 2.0,
+        icon_size,
+    );
+
+    // Determine button hover states
     let ok_hover = hover_pos
         .map(|(hx, hy)| layout.point_in_ok_button(hx, hy))
         .unwrap_or(false);

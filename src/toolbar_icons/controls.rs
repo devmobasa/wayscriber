@@ -53,6 +53,33 @@ pub fn draw_icon_info(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw an eyedropper/color picker icon.
+pub fn draw_icon_eyedropper(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.12).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    let tip_x = x + s * 0.2;
+    let tip_y = y + s * 0.8;
+    let bulb_x = x + s * 0.75;
+    let bulb_y = y + s * 0.25;
+
+    ctx.move_to(tip_x + s * 0.1, tip_y - s * 0.1);
+    ctx.line_to(bulb_x - s * 0.1, bulb_y + s * 0.1);
+    let _ = ctx.stroke();
+
+    ctx.move_to(tip_x, tip_y);
+    ctx.line_to(tip_x + s * 0.15, tip_y - s * 0.05);
+    ctx.line_to(tip_x + s * 0.05, tip_y - s * 0.15);
+    ctx.close_path();
+    let _ = ctx.fill();
+
+    ctx.arc(bulb_x, bulb_y, s * 0.12, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+}
+
 /// Draw a paste/clipboard icon
 pub fn draw_icon_paste(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

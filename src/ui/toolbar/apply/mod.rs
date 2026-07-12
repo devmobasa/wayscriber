@@ -110,6 +110,10 @@ impl InputState {
             ToolbarEvent::PasteHexColor => self.apply_toolbar_paste_hex_color(),
             ToolbarEvent::EditHexColor => self.apply_toolbar_edit_hex_color(),
             ToolbarEvent::OpenColorPickerPopup => self.apply_toolbar_open_color_picker_popup(),
+            ToolbarEvent::PickScreenColor => {
+                self.request_eyedropper_toggle();
+                true
+            }
             ToolbarEvent::ToggleActionsSection(show) => {
                 self.apply_toolbar_toggle_actions_section(show)
             }

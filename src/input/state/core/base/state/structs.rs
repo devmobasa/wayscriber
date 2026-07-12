@@ -403,6 +403,11 @@ pub struct InputState {
     pub(in crate::input::state::core) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
     pub(in crate::input::state::core) pending_frozen_toggle: bool,
+    /// Screen-color eyedropper UI lifecycle.
+    pub(in crate::input::state::core) eyedropper_ui_state:
+        crate::input::state::core::EyedropperUiState,
+    /// Pending eyedropper activation request for the Wayland backend.
+    pub(in crate::input::state::core) pending_eyedropper_toggle: bool,
     /// Whether zoom mode is currently active
     pub(in crate::input::state::core) zoom_active: bool,
     /// Whether zoom view is locked

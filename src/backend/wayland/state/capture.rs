@@ -17,6 +17,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn apply_capture_completion(&mut self) {
         if self.frozen.take_capture_done() {
             self.exit_overlay_suppression(OverlaySuppression::Frozen);
+            self.finish_pending_eyedropper_capture();
         }
         if self.zoom.take_capture_done() {
             self.exit_overlay_suppression(OverlaySuppression::Zoom);

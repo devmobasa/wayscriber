@@ -20,10 +20,11 @@ pub use boards::{
     BoardSpec, runtime_contrast_pen_color,
 };
 pub use events::{Key, MouseButton};
+#[allow(unused_imports)]
 pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
-    ContextMenuCursorHint, DrawingState, HelpOverlayCursorHint, InputState, OutputFocusAction,
-    SelectionHandle, TextInputMode, ZoomAction,
+    ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayCursorHint, InputState,
+    OutputFocusAction, SelectionHandle, TextInputMode, ZoomAction,
 };
 #[cfg(tablet)]
 #[allow(unused_imports)]

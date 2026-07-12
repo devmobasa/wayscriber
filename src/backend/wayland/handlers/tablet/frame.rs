@@ -139,6 +139,12 @@ impl WaylandState {
             return;
         }
 
+        if self.input_state.eyedropper_is_active() {
+            let (x, y) = self.current_stylus_position();
+            self.sample_eyedropper(x, y);
+            return;
+        }
+
         let hover_cursor_pos = self.stylus_hover_cursor_position();
         let (x, y) = self.current_stylus_position();
         self.set_current_mouse(x as i32, y as i32);

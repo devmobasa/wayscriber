@@ -81,6 +81,7 @@ pub enum KeybindingField {
     SetColorPink,
     SetColorWhite,
     SetColorBlack,
+    PickScreenColor,
     CaptureFullScreen,
     CaptureActiveWindow,
     CaptureSelection,

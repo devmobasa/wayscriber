@@ -292,6 +292,8 @@ pub enum ToolbarEvent {
     EditHexColor,
     /// Open the color picker popup
     OpenColorPickerPopup,
+    /// Pick a color from the displayed desktop image.
+    PickScreenColor,
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
     /// Toggle advanced action buttons

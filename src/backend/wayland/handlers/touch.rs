@@ -188,6 +188,19 @@ impl WaylandState {
         let screen_y = screen_position.1.round() as i32;
         self.set_current_mouse(screen_x, screen_y);
 
+        if self.input_state.eyedropper_is_active() {
+            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            let inline_hit = target == TouchTarget::Overlay
+                && inline_active
+                && self.inline_toolbar_motion(screen_position);
+            if target == TouchTarget::Toolbar || inline_hit {
+                self.cancel_eyedropper();
+            } else if target == TouchTarget::Overlay {
+                self.sample_eyedropper(screen_position.0, screen_position.1);
+                return TouchTarget::Other;
+            }
+        }
+
         if self.input_state.tour_active {
             return TouchTarget::Other;
         }
@@ -264,6 +277,13 @@ impl WaylandState {
         let screen_x = screen_position.0.round() as i32;
         let screen_y = screen_position.1.round() as i32;
         self.set_current_mouse(screen_x, screen_y);
+
+        if self.input_state.eyedropper_is_active() {
+            if target == TouchTarget::Overlay {
+                self.update_eyedropper_hover(screen_position.0, screen_position.1);
+            }
+            return;
+        }
 
         if self.is_move_dragging()
             && let Some(kind) = self.active_move_drag_kind()

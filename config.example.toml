@@ -202,6 +202,8 @@ set_color_orange = ["O"]
 set_color_pink = ["P"]
 set_color_white = ["W"]
 set_color_black = ["K"]
+# Optional screen eyedropper shortcut (also available from color UIs and command palette)
+pick_screen_color = []
 
 # Screenshot shortcuts
 capture_full_screen = ["Ctrl+Shift+P"]

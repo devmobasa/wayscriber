@@ -32,6 +32,7 @@ impl CompositorHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+        self.cancel_eyedropper_if_source_missing();
         self.toolbar
             .maybe_update_scale(self.surface.current_output().as_ref(), scale);
         self.toolbar.mark_dirty();
@@ -177,6 +178,7 @@ impl CompositorHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+        self.cancel_eyedropper_if_source_missing();
 
         // If freeze-on-start was requested, trigger it once the surface is configured and active.
         if self.pending_freeze_on_start() {

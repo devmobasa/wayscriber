@@ -90,6 +90,7 @@ mod clipboard;
 mod color_picker;
 mod core;
 mod data;
+mod eyedropper;
 mod gtk_toolbar;
 mod helpers;
 mod input_actions;

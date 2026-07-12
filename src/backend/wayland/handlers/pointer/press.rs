@@ -19,6 +19,25 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        if self.input_state.eyedropper_is_active() {
+            if on_toolbar || self.pointer_over_toolbar() {
+                self.cancel_eyedropper();
+            } else {
+                match button {
+                    BTN_LEFT => {
+                        self.sample_eyedropper(event.position.0, event.position.1);
+                        self.set_suppress_next_release(true);
+                    }
+                    BTN_RIGHT => {
+                        self.cancel_eyedropper();
+                        self.set_suppress_next_release(true);
+                    }
+                    _ => {}
+                }
+                return;
+            }
+        }
+
         // Block pointer input when tour is active
         if self.input_state.tour_active {
             return;
