@@ -182,28 +182,37 @@ pub fn draw_icon_delay(ctx: &Context, x: f64, y: f64, size: f64) {
 #[allow(dead_code)]
 pub fn draw_icon_refresh(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
-    let stroke = (s * 0.11).max(1.6);
+    let stroke = (s * 0.12).max(1.7);
     ctx.set_line_width(stroke);
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.set_line_join(cairo::LineJoin::Round);
 
     let cx = x + s * 0.5;
     let cy = y + s * 0.5;
-    let r = s * 0.32;
-    let start = 0.25 * PI;
-    let end = 1.9 * PI;
+    let r = s * 0.30;
+    let start = 0.30 * PI;
+    let end = 1.85 * PI;
 
     ctx.arc(cx, cy, r, start, end);
     let _ = ctx.stroke();
 
-    let arrow_x = cx + r * end.cos();
-    let arrow_y = cy + r * end.sin();
-    let head = s * 0.16;
-    let left = end + 0.7;
-    let right = end - 0.7;
-    ctx.move_to(arrow_x, arrow_y);
-    ctx.line_to(arrow_x - head * left.cos(), arrow_y - head * left.sin());
-    ctx.line_to(arrow_x - head * right.cos(), arrow_y - head * right.sin());
+    // Bold triangular head straddling the ring at the arc end and pointing along
+    // the tangent (direction of travel). It is intentionally large and protrudes
+    // past the stroke so the glyph reads as a rotating arrow — not a bare "C" —
+    // even at the ~16px size used in the command palette. Offsetting radially, as
+    // the original did, collapses the head onto the stroke and loses the arrow.
+    let ex = cx + r * end.cos();
+    let ey = cy + r * end.sin();
+    let (ts, tc) = (end + PI / 2.0).sin_cos(); // tangent (clockwise)
+    let (rs, rc) = end.sin_cos(); // radial (outward)
+    let h = s * 0.34;
+    let tip_x = ex + 0.55 * h * tc;
+    let tip_y = ey + 0.55 * h * ts;
+    let base_x = ex - 0.45 * h * tc;
+    let base_y = ey - 0.45 * h * ts;
+    ctx.move_to(tip_x, tip_y);
+    ctx.line_to(base_x + 0.5 * h * rc, base_y + 0.5 * h * rs);
+    ctx.line_to(base_x - 0.5 * h * rc, base_y - 0.5 * h * rs);
     ctx.close_path();
     let _ = ctx.fill();
 }
@@ -312,26 +321,48 @@ pub fn draw_icon_chevron_down(ctx: &Context, x: f64, y: f64, size: f64) {
 #[allow(dead_code)]
 pub fn draw_icon_pencil(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
-    let stroke = (s * 0.1).max(1.5);
-    ctx.set_line_width(stroke);
     ctx.set_line_join(cairo::LineJoin::Round);
-    ctx.set_line_cap(cairo::LineCap::Round);
 
-    // Pencil body (diagonal)
-    ctx.move_to(x + s * 0.7, y + s * 0.15);
-    ctx.line_to(x + s * 0.85, y + s * 0.3);
-    ctx.line_to(x + s * 0.3, y + s * 0.85);
-    ctx.line_to(x + s * 0.15, y + s * 0.7);
+    // Pencil laid along a 45° axis pointing to the lower-left, drawn as three
+    // filled bands — eraser cap, wooden body, sharpened nib — separated by thin
+    // unpainted gaps that stand in for the ferrule and the wood/graphite line.
+    // Additive fills only (the gaps merely reveal the row background), so it is
+    // safe on any surface and reads clearly at the ~16px palette size, where the
+    // old thin-outline parallelogram with no point just looked like a bar.
+    let inv_sqrt2 = std::f64::consts::FRAC_1_SQRT_2;
+    let ax = x + s * 0.76; // axis origin = center of the eraser end
+    let ay = y + s * 0.24;
+    let (ux, uy) = (-inv_sqrt2, inv_sqrt2); // down the pencil (toward the nib)
+    let (nx, ny) = (inv_sqrt2, inv_sqrt2); // across the pencil
+    let hw = s * 0.135; // half width
+
+    // Point on a pencil edge at axis distance `d` (icon units) and side `sign`.
+    let side = |d: f64, sign: f64| {
+        (
+            ax + s * d * ux + sign * hw * nx,
+            ay + s * d * uy + sign * hw * ny,
+        )
+    };
+    let band = |d0: f64, d1: f64| {
+        let (a0, b0) = (side(d0, -1.0), side(d0, 1.0));
+        let (b1, a1) = (side(d1, 1.0), side(d1, -1.0));
+        ctx.move_to(a0.0, a0.1);
+        ctx.line_to(b0.0, b0.1);
+        ctx.line_to(b1.0, b1.1);
+        ctx.line_to(a1.0, a1.1);
+        ctx.close_path();
+        let _ = ctx.fill();
+    };
+
+    band(0.0, 0.14); // eraser cap
+    band(0.20, 0.62); // wooden body (gap above it = the ferrule)
+
+    // Sharpened nib converging to a point (gap above it = the graphite line).
+    let (rr, ll) = (side(0.66, 1.0), side(0.66, -1.0));
+    let tip = (ax + s * 0.92 * ux, ay + s * 0.92 * uy);
+    ctx.move_to(rr.0, rr.1);
+    ctx.line_to(tip.0, tip.1);
+    ctx.line_to(ll.0, ll.1);
     ctx.close_path();
-    let _ = ctx.stroke();
-
-    // Tip line
-    ctx.move_to(x + s * 0.15, y + s * 0.7);
-    ctx.line_to(x + s * 0.3, y + s * 0.85);
-    let _ = ctx.stroke();
-
-    // Eraser line
-    ctx.move_to(x + s * 0.6, y + s * 0.25);
-    ctx.line_to(x + s * 0.75, y + s * 0.4);
-    let _ = ctx.stroke();
+    let _ = ctx.fill();
 }
