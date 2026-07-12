@@ -59,6 +59,8 @@ pub struct GtkToolbarUpdate {
     /// Backend-observed chord state. Wayland pointer events do not always
     /// expose keyboard modifiers to GTK when its surface lacks keyboard focus.
     pub rebind_modifier_active: bool,
+    /// Prevent move-drag gestures while a command-palette modal owns input.
+    pub modal_engaged: bool,
 }
 
 /// Messages from the GTK thread back to the backend.

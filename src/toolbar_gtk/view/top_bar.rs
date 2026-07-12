@@ -245,6 +245,7 @@ pub(in crate::toolbar_gtk) struct TopBar {
     shapes_content_key: Cell<Option<ShapesContentKey>>,
     overflow_content_key: Cell<Option<OverflowContentKey>>,
     drag_active: Rc<Cell<bool>>,
+    drag_blocked: Rc<Cell<bool>>,
     offsets: Rc<Cell<(f64, f64)>>,
     /// Base X in spec units from the backend (side palette pushes it).
     base_x: Rc<Cell<f64>>,
@@ -289,6 +290,7 @@ impl TopBar {
             shapes_content_key: Cell::new(None),
             overflow_content_key: Cell::new(None),
             drag_active: Rc::new(Cell::new(false)),
+            drag_blocked: Rc::new(Cell::new(false)),
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
             offset_seq: Rc::new(Cell::new(0)),
@@ -297,6 +299,7 @@ impl TopBar {
 
     pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
         let snapshot = &update.snapshot;
+        self.drag_blocked.set(update.modal_engaged);
         if !update.top_visible {
             // Suppress the dismissal echoes a hide-triggered popover close
             // would send, so an open picker survives a hide/show cycle
@@ -1321,6 +1324,7 @@ impl TopBar {
         let active_generation = Rc::new(Cell::new(0));
 
         let begin_active = drag_active.clone();
+        let begin_blocked = self.drag_blocked.clone();
         let begin_pending = pending.clone();
         let begin_generation = active_generation.clone();
         let frame_window = window.clone();
@@ -1329,6 +1333,10 @@ impl TopBar {
         let frame_base = base_x.clone();
         let frame_seq = seq.clone();
         drag.connect_drag_begin(move |gesture, _, _| {
+            if begin_blocked.get() {
+                gesture.set_state(gtk4::EventSequenceState::Denied);
+                return;
+            }
             begin_active.set(true);
             let generation = begin_pending.begin();
             begin_generation.set(generation);

@@ -102,6 +102,10 @@ pub struct StateData {
     /// updates so the GTK side can discard stale offset mirrors.
     pub(super) gtk_top_offset_seq: u64,
     pub(super) gtk_side_offset_seq: u64,
+    /// A GTK drag that emitted feedback while a modal was engaged stays
+    /// blocked until its matching drag-end feedback arrives.
+    pub(super) gtk_top_drag_blocked: bool,
+    pub(super) gtk_side_drag_blocked: bool,
     pub(super) last_applied_top_margin: Option<i32>,
     pub(super) last_applied_side_margin: Option<i32>,
     pub(super) last_applied_top_margin_top: Option<i32>,
@@ -188,6 +192,8 @@ impl StateData {
             toolbar_configure_miss_count: 0,
             gtk_top_offset_seq: 0,
             gtk_side_offset_seq: 0,
+            gtk_top_drag_blocked: false,
+            gtk_side_drag_blocked: false,
             last_applied_top_margin: None,
             last_applied_side_margin: None,
             last_applied_top_margin_top: None,

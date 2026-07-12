@@ -12,6 +12,51 @@ use crate::toolbar_gtk::select::{
 };
 use crate::toolbar_gtk::{GtkToolbarBridge, GtkToolbarFeedback, GtkToolbarUpdate};
 
+fn gtk_toolbar_feedback_blocked(input_state: &crate::input::InputState) -> bool {
+    input_state.command_palette_is_engaged()
+}
+
+fn acknowledge_blocked_gtk_drag_feedback(
+    top_seq: &mut u64,
+    side_seq: &mut u64,
+    feedback: &GtkToolbarFeedback,
+) {
+    match feedback {
+        GtkToolbarFeedback::SetTopOffset { seq, .. } => {
+            *top_seq = (*top_seq).max(*seq);
+        }
+        GtkToolbarFeedback::SetSideOffset { seq, .. } => {
+            *side_seq = (*side_seq).max(*seq);
+        }
+        GtkToolbarFeedback::Event { .. } => {}
+    }
+}
+
+fn gtk_toolbar_feedback_is_blocked(
+    modal_engaged: bool,
+    top_drag_blocked: &mut bool,
+    side_drag_blocked: &mut bool,
+    feedback: &GtkToolbarFeedback,
+) -> bool {
+    match feedback {
+        GtkToolbarFeedback::Event { .. } => modal_engaged,
+        GtkToolbarFeedback::SetTopOffset { done, .. } => {
+            let blocked = modal_engaged || *top_drag_blocked;
+            if blocked {
+                *top_drag_blocked = !done;
+            }
+            blocked
+        }
+        GtkToolbarFeedback::SetSideOffset { done, .. } => {
+            let blocked = modal_engaged || *side_drag_blocked;
+            if blocked {
+                *side_drag_blocked = !done;
+            }
+            blocked
+        }
+    }
+}
+
 impl WaylandState {
     /// Bounds the main poll while the GTK thread can produce feedback,
     /// since nothing it sends wakes the Wayland fd.
@@ -86,6 +131,25 @@ impl WaylandState {
             pending.push(feedback);
         }
         for feedback in pending {
+            // GTK uses a separate connection and bypasses the built-in
+            // pointer modal gate. A drag first observed under the modal stays
+            // blocked through its matching drag end even if Escape closes the
+            // modal first. Acknowledge rejected sequences so the authoritative
+            // backend offsets pushed later in this pass snap GTK back and do
+            // not become stale.
+            if gtk_toolbar_feedback_is_blocked(
+                gtk_toolbar_feedback_blocked(&self.input_state),
+                &mut self.data.gtk_top_drag_blocked,
+                &mut self.data.gtk_side_drag_blocked,
+                &feedback,
+            ) {
+                acknowledge_blocked_gtk_drag_feedback(
+                    &mut self.data.gtk_top_offset_seq,
+                    &mut self.data.gtk_side_offset_seq,
+                    &feedback,
+                );
+                continue;
+            }
             match feedback {
                 GtkToolbarFeedback::Event {
                     event,
@@ -144,10 +208,154 @@ impl WaylandState {
                 self.input_state.modifiers.shift,
                 self.input_state.modifiers.alt,
             ),
+            modal_engaged: gtk_toolbar_feedback_blocked(&self.input_state),
             snapshot,
         };
         if let Some(bridge) = self.gtk_toolbar.as_mut() {
             bridge.maybe_send(update);
         }
+    }
+}
+
+#[cfg(test)]
+mod modal_tests {
+    use super::*;
+    use crate::config::Action;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn command_palette_and_shortcut_capture_block_all_gtk_feedback() {
+        let mut input_state = make_test_input_state();
+        assert!(!gtk_toolbar_feedback_blocked(&input_state));
+
+        input_state.toggle_command_palette();
+        assert!(gtk_toolbar_feedback_blocked(&input_state));
+
+        input_state.toggle_command_palette();
+        assert!(input_state.begin_keybinding_capture(Action::Undo));
+        assert!(gtk_toolbar_feedback_blocked(&input_state));
+    }
+
+    #[test]
+    fn blocked_drag_feedback_advances_only_the_originating_sequence() {
+        let mut top_seq = 4;
+        let mut side_seq = 7;
+
+        acknowledge_blocked_gtk_drag_feedback(
+            &mut top_seq,
+            &mut side_seq,
+            &GtkToolbarFeedback::SetTopOffset {
+                x: 100.0,
+                y: 50.0,
+                seq: 9,
+                done: true,
+            },
+        );
+        assert_eq!((top_seq, side_seq), (9, 7));
+
+        acknowledge_blocked_gtk_drag_feedback(
+            &mut top_seq,
+            &mut side_seq,
+            &GtkToolbarFeedback::SetSideOffset {
+                x: 25.0,
+                y: 75.0,
+                seq: 11,
+                done: false,
+            },
+        );
+        assert_eq!((top_seq, side_seq), (9, 11));
+    }
+
+    #[test]
+    fn blocked_drag_feedback_never_regresses_a_sequence() {
+        let mut top_seq = 9;
+        let mut side_seq = 11;
+
+        acknowledge_blocked_gtk_drag_feedback(
+            &mut top_seq,
+            &mut side_seq,
+            &GtkToolbarFeedback::SetTopOffset {
+                x: 0.0,
+                y: 0.0,
+                seq: 8,
+                done: false,
+            },
+        );
+        assert_eq!((top_seq, side_seq), (9, 11));
+    }
+
+    #[test]
+    fn drag_started_under_modal_stays_blocked_until_done() {
+        let mut top_blocked = false;
+        let mut side_blocked = false;
+        let top_update = |done| GtkToolbarFeedback::SetTopOffset {
+            x: 10.0,
+            y: 20.0,
+            seq: 1,
+            done,
+        };
+
+        assert!(gtk_toolbar_feedback_is_blocked(
+            true,
+            &mut top_blocked,
+            &mut side_blocked,
+            &top_update(false),
+        ));
+        assert!(top_blocked);
+
+        assert!(gtk_toolbar_feedback_is_blocked(
+            false,
+            &mut top_blocked,
+            &mut side_blocked,
+            &top_update(false),
+        ));
+        assert!(top_blocked);
+
+        assert!(gtk_toolbar_feedback_is_blocked(
+            false,
+            &mut top_blocked,
+            &mut side_blocked,
+            &top_update(true),
+        ));
+        assert!(!top_blocked);
+
+        assert!(!gtk_toolbar_feedback_is_blocked(
+            false,
+            &mut top_blocked,
+            &mut side_blocked,
+            &top_update(false),
+        ));
+    }
+
+    #[test]
+    fn blocked_drag_latches_are_independent_per_bar() {
+        let mut top_blocked = false;
+        let mut side_blocked = false;
+        let top = GtkToolbarFeedback::SetTopOffset {
+            x: 0.0,
+            y: 0.0,
+            seq: 1,
+            done: false,
+        };
+        let side = GtkToolbarFeedback::SetSideOffset {
+            x: 0.0,
+            y: 0.0,
+            seq: 1,
+            done: false,
+        };
+
+        assert!(gtk_toolbar_feedback_is_blocked(
+            true,
+            &mut top_blocked,
+            &mut side_blocked,
+            &top,
+        ));
+        assert!(!gtk_toolbar_feedback_is_blocked(
+            false,
+            &mut top_blocked,
+            &mut side_blocked,
+            &side,
+        ));
+        assert_eq!((top_blocked, side_blocked), (true, false));
     }
 }

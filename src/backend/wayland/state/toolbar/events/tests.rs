@@ -200,6 +200,19 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
 }
 
 #[test]
+fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
+    let mut input_state = make_test_input_state();
+    assert!(!toolbar_event_blocked_by_modal(&input_state));
+
+    input_state.toggle_command_palette();
+    assert!(toolbar_event_blocked_by_modal(&input_state));
+
+    input_state.toggle_command_palette();
+    assert!(input_state.begin_keybinding_capture(crate::config::Action::Undo));
+    assert!(toolbar_event_blocked_by_modal(&input_state));
+}
+
+#[test]
 fn click_highlight_toolbar_events_are_explicit_config_exceptions() {
     let events = vec![
         ToolbarEvent::ToggleAllHighlight(true),

@@ -146,6 +146,7 @@ pub(in crate::toolbar_gtk) struct SideBar {
     /// too; this mirrors that behavior GTK-side).
     saved_scroll: std::rc::Rc<std::cell::RefCell<Vec<(SidePane, f64)>>>,
     drag_active: Rc<Cell<bool>>,
+    drag_blocked: Rc<Cell<bool>>,
     offsets: Rc<Cell<(f64, f64)>>,
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
     /// backend are ignored by comparing against it.
@@ -185,6 +186,7 @@ impl SideBar {
             scrolled: None,
             saved_scroll: Rc::new(std::cell::RefCell::new(Vec::new())),
             drag_active: Rc::new(Cell::new(false)),
+            drag_blocked: Rc::new(Cell::new(false)),
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             offset_seq: Rc::new(Cell::new(0)),
         }
@@ -192,6 +194,7 @@ impl SideBar {
 
     pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
         let snapshot = &update.snapshot;
+        self.drag_blocked.set(update.modal_engaged);
         if !update.side_visible {
             self.window.set_visible(false);
             return;
@@ -521,6 +524,7 @@ impl SideBar {
         let active_generation = Rc::new(Cell::new(0));
 
         let begin_active = drag_active.clone();
+        let begin_blocked = self.drag_blocked.clone();
         let begin_pending = pending.clone();
         let begin_generation = active_generation.clone();
         let frame_window = window.clone();
@@ -528,6 +532,10 @@ impl SideBar {
         let frame_feedback = feedback.clone();
         let frame_seq = seq.clone();
         drag.connect_drag_begin(move |gesture, _, _| {
+            if begin_blocked.get() {
+                gesture.set_state(gtk4::EventSequenceState::Denied);
+                return;
+            }
             begin_active.set(true);
             let generation = begin_pending.begin();
             begin_generation.set(generation);

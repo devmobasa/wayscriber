@@ -27,6 +27,10 @@ fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
     true
 }
 
+fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
+    input_state.command_palette_is_engaged()
+}
+
 /// The top overflow menu is a plain flyout: any event other than the two menu
 /// toggles dismisses it (selecting a dropped tool, an unrelated keybinding, etc.).
 fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
@@ -139,6 +143,11 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        // GTK toolbar feedback bypasses the built-in pointer modal gate, so
+        // enforce the same rule in the shared event path as well.
+        if toolbar_event_blocked_by_modal(&self.input_state) {
+            return;
+        }
         // A toolbar interaction replaces the modal sampler. Do this before
         // shortcut capture so the capture modal owns subsequent keys.
         self.cancel_eyedropper();
