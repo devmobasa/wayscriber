@@ -43,7 +43,7 @@ pub(crate) use command_palette::{
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
 };
 pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint};
-pub use eyedropper::EyedropperUiState;
+pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
 #[allow(unused_imports)]
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,

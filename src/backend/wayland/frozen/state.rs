@@ -14,6 +14,13 @@ struct PendingFrozenImage {
     image: FrozenImage,
     source_geometry: Option<OutputGeometry>,
     needs_output_transform: bool,
+    source: FrozenCaptureSource,
+}
+
+#[derive(Clone, Copy)]
+enum FrozenCaptureSource {
+    ActiveOutput,
+    Desktop,
 }
 
 /// End-to-end controller for frozen mode capture and image storage.
@@ -25,6 +32,7 @@ pub struct FrozenState {
     pub(super) active_geometry: Option<OutputGeometry>,
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<FrozenImage>,
+    image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
     pub(super) portal_rx: Option<PortalCaptureRx>,
     pub(super) portal_in_progress: bool,
@@ -45,6 +53,7 @@ impl FrozenState {
             active_geometry: None,
             capture: None,
             image: None,
+            image_target_dimensions: None,
             image_generation: 0,
             portal_rx: None,
             portal_in_progress: false,
@@ -83,21 +92,36 @@ impl FrozenState {
         self.image_generation
     }
 
+    #[cfg(test)]
     pub fn set_image(&mut self, image: FrozenImage) {
+        self.image_target_dimensions = Some((image.width, image.height));
         self.image = Some(image);
         self.bump_image_generation();
     }
 
-    pub fn set_pending_image(
+    pub fn set_pending_output_image(
         &mut self,
         image: FrozenImage,
         source_geometry: Option<OutputGeometry>,
-        needs_output_transform: bool,
     ) {
         self.pending_image = Some(PendingFrozenImage {
             image,
             source_geometry,
-            needs_output_transform,
+            needs_output_transform: true,
+            source: FrozenCaptureSource::ActiveOutput,
+        });
+    }
+
+    pub fn set_pending_desktop_image(
+        &mut self,
+        image: FrozenImage,
+        source_geometry: Option<OutputGeometry>,
+    ) {
+        self.pending_image = Some(PendingFrozenImage {
+            image,
+            source_geometry,
+            needs_output_transform: false,
+            source: FrozenCaptureSource::Desktop,
         });
     }
 
@@ -153,7 +177,9 @@ impl FrozenState {
             image = image.with_output_transform(output_transform);
         }
 
-        if image.width != phys_width || image.height != phys_height {
+        if matches!(pending.source, FrozenCaptureSource::Desktop)
+            && (image.width != phys_width || image.height != phys_height)
+        {
             let Some(cropped) = self.crop_pending_image(
                 image,
                 pending.source_geometry.as_ref(),
@@ -168,7 +194,9 @@ impl FrozenState {
             image = cropped;
         }
 
-        self.set_image(image);
+        self.image_target_dimensions = Some((phys_width, phys_height));
+        self.image = Some(image);
+        self.bump_image_generation();
         input_state.set_frozen_active(true);
         input_state.dirty_tracker.mark_full();
         input_state.needs_redraw = true;
@@ -217,8 +245,8 @@ impl FrozenState {
         phys_height: u32,
         input_state: &mut InputState,
     ) {
-        if let Some(img) = &self.image
-            && (img.width != phys_width || img.height != phys_height)
+        if let Some(target_dimensions) = self.image_target_dimensions
+            && target_dimensions != (phys_width, phys_height)
         {
             info!("Surface resized; clearing frozen image");
             self.clear_image();
@@ -248,6 +276,7 @@ impl FrozenState {
 
     fn clear_image(&mut self) -> bool {
         let had_image = self.image.take().is_some();
+        self.image_target_dimensions = None;
         if had_image {
             self.bump_image_generation();
         }
@@ -256,5 +285,64 @@ impl FrozenState {
 
     fn bump_image_generation(&mut self) {
         self.image_generation = self.image_generation.wrapping_add(1).max(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn active_output_capture_accepts_native_fractional_scale_dimensions() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 10,
+                height: 10,
+                stride: 40,
+                data: vec![0; 10 * 10 * 4],
+            },
+            None,
+        );
+
+        state
+            .activate_pending_image(12, 12, &mut input_state)
+            .expect("native output pixels should render into the fractional-scale buffer");
+
+        let image = state.image().expect("the frozen image should be active");
+        assert_eq!((image.width, image.height), (10, 10));
+        assert!(input_state.frozen_active());
+
+        state.handle_resize(12, 12, &mut input_state);
+        assert!(state.image().is_some());
+
+        state.handle_resize(13, 12, &mut input_state);
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_still_requires_a_crop_covering_the_target() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 4,
+                height: 3,
+                stride: 16,
+                data: vec![0; 4 * 3 * 4],
+            },
+            None,
+        );
+
+        assert!(
+            state
+                .activate_pending_image(6, 4, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
     }
 }

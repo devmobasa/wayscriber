@@ -1,6 +1,6 @@
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::draw::Color;
-use crate::input::state::UiToastKind;
+use crate::input::state::{EyedropperCaptureSource, UiToastKind};
 
 use super::WaylandState;
 
@@ -15,6 +15,38 @@ pub(super) struct BackgroundImageSource<'a> {
     pub image: &'a FrozenImage,
     pub kind: BackgroundImageKind,
     pub zoom_transformed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EyedropperEntryDecision {
+    Activate,
+    WaitForZoom,
+    AutoFreeze,
+    RefuseWhileZoomedOnSolidBoard,
+    RefuseSolidBoard,
+    CaptureUnavailable,
+}
+
+fn eyedropper_entry_decision(
+    has_source: bool,
+    board_is_transparent: bool,
+    zoom_engaged: bool,
+    zoom_active: bool,
+    frozen_enabled: bool,
+) -> EyedropperEntryDecision {
+    if has_source {
+        EyedropperEntryDecision::Activate
+    } else if !board_is_transparent && zoom_engaged {
+        EyedropperEntryDecision::RefuseWhileZoomedOnSolidBoard
+    } else if !board_is_transparent {
+        EyedropperEntryDecision::RefuseSolidBoard
+    } else if zoom_engaged && !zoom_active {
+        EyedropperEntryDecision::WaitForZoom
+    } else if !frozen_enabled || zoom_active {
+        EyedropperEntryDecision::CaptureUnavailable
+    } else {
+        EyedropperEntryDecision::AutoFreeze
+    }
 }
 
 pub(super) fn background_image_source<'a>(
@@ -98,23 +130,45 @@ impl WaylandState {
         self.end_toolbar_move_drag();
         self.unlock_pointer();
 
-        if self.background_image_source().is_some() {
-            self.input_state.activate_eyedropper(false);
-        } else if !self.input_state.board_is_transparent() {
-            self.input_state.set_ui_toast_with_action(
-                UiToastKind::Info,
-                "Eyedropper requires a transparent board or an active screen freeze.",
-                "Switch to transparent",
-                crate::config::Action::ReturnToTransparent,
-            );
-        } else if !self.frozen_enabled() {
-            self.input_state.set_ui_toast(
-                UiToastKind::Warning,
-                "Eyedropper is unavailable because screen capture is not available.",
-            );
-        } else {
-            self.input_state.set_eyedropper_pending_capture();
-            self.input_state.request_frozen_toggle();
+        let decision = eyedropper_entry_decision(
+            self.background_image_source().is_some(),
+            self.input_state.board_is_transparent(),
+            self.zoom.is_engaged(),
+            self.zoom.active,
+            self.frozen_enabled(),
+        );
+        match decision {
+            EyedropperEntryDecision::Activate => self.input_state.activate_eyedropper(false),
+            EyedropperEntryDecision::WaitForZoom => self
+                .input_state
+                .set_eyedropper_pending_capture(EyedropperCaptureSource::Zoom),
+            EyedropperEntryDecision::AutoFreeze => {
+                self.input_state
+                    .set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
+                self.input_state.request_frozen_toggle();
+            }
+            EyedropperEntryDecision::RefuseWhileZoomedOnSolidBoard => {
+                self.input_state.set_ui_toast_with_action(
+                    UiToastKind::Info,
+                    "Eyedropper isn't available while zoomed on a solid board.",
+                    "Switch to transparent",
+                    crate::config::Action::ReturnToTransparent,
+                );
+            }
+            EyedropperEntryDecision::RefuseSolidBoard => {
+                self.input_state.set_ui_toast_with_action(
+                    UiToastKind::Info,
+                    "Eyedropper requires a transparent board or an active screen freeze.",
+                    "Switch to transparent",
+                    crate::config::Action::ReturnToTransparent,
+                );
+            }
+            EyedropperEntryDecision::CaptureUnavailable => {
+                self.input_state.set_ui_toast(
+                    UiToastKind::Warning,
+                    "Eyedropper is unavailable because screen capture is not available.",
+                );
+            }
         }
     }
 
@@ -126,16 +180,20 @@ impl WaylandState {
         )
     }
 
-    pub(in crate::backend::wayland) fn finish_pending_eyedropper_capture(&mut self) {
-        if !self.input_state.eyedropper_state().is_pending() {
+    pub(in crate::backend::wayland) fn finish_pending_eyedropper_capture(
+        &mut self,
+        capture_source: EyedropperCaptureSource,
+    ) {
+        if self.input_state.eyedropper_state().pending_source() != Some(capture_source) {
             return;
         }
         if self.background_image_source().is_some() {
-            self.input_state.activate_eyedropper(true);
+            self.input_state
+                .activate_eyedropper(matches!(capture_source, EyedropperCaptureSource::Frozen));
         } else {
             self.input_state.cancel_eyedropper();
             self.input_state
-                .set_ui_toast(UiToastKind::Error, "Eyedropper screen capture failed.");
+                .report_eyedropper_capture_failure_if_unreported();
         }
     }
 
@@ -373,5 +431,33 @@ mod tests {
         zoom.active = false;
         zoom.request_activation();
         assert!(background_image_source(&zoom, &frozen, false).is_none());
+    }
+
+    #[test]
+    fn entry_waits_for_pending_zoom_instead_of_starting_frozen_capture() {
+        assert_eq!(
+            eyedropper_entry_decision(false, true, true, false, true),
+            EyedropperEntryDecision::WaitForZoom
+        );
+    }
+
+    #[test]
+    fn entry_distinguishes_solid_board_zoom_refusal() {
+        assert_eq!(
+            eyedropper_entry_decision(false, false, true, true, true),
+            EyedropperEntryDecision::RefuseWhileZoomedOnSolidBoard
+        );
+        assert_eq!(
+            eyedropper_entry_decision(false, false, false, false, true),
+            EyedropperEntryDecision::RefuseSolidBoard
+        );
+    }
+
+    #[test]
+    fn entry_uses_existing_source_before_board_policy() {
+        assert_eq!(
+            eyedropper_entry_decision(true, false, false, false, true),
+            EyedropperEntryDecision::Activate
+        );
     }
 }

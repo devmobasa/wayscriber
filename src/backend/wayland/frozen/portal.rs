@@ -96,7 +96,7 @@ impl FrozenState {
                         portal_output_matches(target_output, self.active_output_id);
 
                     if output_matches {
-                        self.set_pending_image(image, source_geometry, false);
+                        self.set_pending_desktop_image(image, source_geometry);
                     } else {
                         warn!("Portal capture for inactive output discarded");
                         input_state.set_frozen_active(false);
