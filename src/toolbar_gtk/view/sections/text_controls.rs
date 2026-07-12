@@ -1,8 +1,5 @@
 //! Text block: font-size slider and the Sans / Monospace font row.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::draw::FontDescriptor;
@@ -43,9 +40,6 @@ fn text_size_card(ctx: &mut SectionCtx) -> gtk4::Widget {
     let spec = model::ToolbarSliderSpec::FONT_SIZE;
     let step = spec.step.unwrap_or(2.0);
     let (min, max) = (spec.min, spec.max);
-    // The built-in nudge buttons send absolute `SetFontSize` values, so the
-    // click handlers need the live font size, not the build-time one.
-    let font_size = Rc::new(Cell::new(snapshot.font_size));
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(6.0));
     let btn = ctx.sz(NUDGE_BUTTON_SIZE);
     let icon = ctx.sz(NUDGE_ICON_SIZE);
@@ -57,12 +51,8 @@ fn text_size_card(ctx: &mut SectionCtx) -> gtk4::Widget {
         "Decrease font size",
     );
     let sender = ctx.feedback.clone();
-    let minus_size = font_size.clone();
     minus.button.connect_clicked(move |_| {
-        send_event(
-            &sender,
-            ToolbarEvent::SetFontSize((minus_size.get() - step).max(min)),
-        );
+        send_event(&sender, ToolbarEvent::NudgeFontSize(-step));
     });
     row.append(&minus.button);
 
@@ -86,18 +76,13 @@ fn text_size_card(ctx: &mut SectionCtx) -> gtk4::Widget {
         "Increase font size",
     );
     let sender = ctx.feedback.clone();
-    let plus_size = font_size.clone();
     plus.button.connect_clicked(move |_| {
-        send_event(
-            &sender,
-            ToolbarEvent::SetFontSize((plus_size.get() + step).min(max)),
-        );
+        send_event(&sender, ToolbarEvent::NudgeFontSize(step));
     });
     row.append(&plus.button);
 
     card.body.append(&row);
     ctx.updaters.push(Box::new(move |snapshot| {
-        font_size.set(snapshot.font_size);
         slider.set_value(snapshot.font_size);
     }));
     card.root.upcast()

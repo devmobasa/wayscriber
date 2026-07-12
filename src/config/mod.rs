@@ -52,8 +52,8 @@ pub use types::{
     ToolPresetConfig, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarSectionFlag, ToolbarSectionVisibility, UiConfig,
-    fold_legacy_section_flags, resolve_section_visibility, section_flag_for_item,
+    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionFlag, ToolbarSectionVisibility,
+    UiConfig, fold_legacy_section_flags, resolve_section_visibility, section_flag_for_item,
     set_section_visibility, toolbar_item_definitions, toolbar_item_ids, toolbar_item_order_group,
     validate_pdf_label_template,
 };

@@ -20,3 +20,4 @@ pub(crate) use types::{
     SelectionPublishState, TextClickState, TextEditEntryFeedback, ToastAction, UiToastState,
     WayscriberClipboardSelection,
 };
+pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};

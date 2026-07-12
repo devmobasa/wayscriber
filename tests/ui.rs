@@ -1,6 +1,7 @@
 use cairo::{Context, ImageSurface};
 use wayscriber::config::{
-    HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle, StatusPosition,
+    Action, HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle,
+    StatusPosition,
 };
 use wayscriber::draw::{Color, Shape};
 use wayscriber::input::{
@@ -138,6 +139,18 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     wayscriber::ui::render_help_overlay(
         &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0, false,
     );
+    drop(ctx);
+    assert!(surface_has_pixels(&mut surface));
+}
+
+#[test]
+fn render_keybinding_capture_draws_content() {
+    let (mut surface, ctx) = surface_with_context(800, 600);
+    let mut input = make_input_state();
+    input.keybinding_capture_action = Some(Action::SelectPenTool);
+
+    wayscriber::ui::render_command_palette(&ctx, &input, 800, 600);
+
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }

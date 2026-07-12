@@ -649,6 +649,10 @@ side_offset_x = 0.0
 # Force inline toolbars even when layer-shell is available
 force_inline = false
 
+# Modifier-click a toolbar action to capture a replacement shortcut.
+# Values: "ctrl_shift", "ctrl_alt", "shift_alt", "ctrl_shift_alt", "disabled"
+rebind_modifier = "ctrl_shift"
+
 [ui.toolbar.items]
 # Hide individual toolbar items or whole side sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
@@ -717,6 +721,7 @@ side_sections = [
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
+- **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 - **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F2/F9 still toggle full visibility.

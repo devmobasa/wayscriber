@@ -372,7 +372,10 @@ pub(super) fn draw_color_swatch_row(
         hits.push(HitRegion {
             focus_id: None,
             rect: (x, layout.row_y, layout.swatch, layout.swatch),
-            event: ToolbarEvent::SetColor(*color),
+            event: ToolbarEvent::SetQuickColor {
+                color: *color,
+                action: *action,
+            },
             kind: HitKind::Click,
             tooltip: Some(tooltip),
         });

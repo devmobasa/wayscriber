@@ -9,7 +9,7 @@ use crate::models::{
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, QuadField, SessionCompressionOption, SessionStorageModeOption,
     StatusPositionOption, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    TripletField,
+    ToolbarRebindModifierOption, TripletField,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -221,6 +221,16 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.apply_toolbar_layout_mode(option);
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_rebind_modifier_changed(
+        &mut self,
+        option: ToolbarRebindModifierOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_toolbar_rebind_modifier = option;
         self.refresh_dirty_flag();
         Task::none()
     }

@@ -161,6 +161,8 @@ pub struct InputState {
     pub(crate) command_palette_repeat_next_tick: Option<Instant>,
     /// Most recently executed command palette actions (most recent first)
     pub command_palette_recent: Vec<Action>,
+    /// Action whose next keyboard chord is being captured for rebinding.
+    pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
     /// Whether the status bar is currently visible (toggled via keybinding)

@@ -304,5 +304,13 @@ mod tests {
             action_for_event(&ToolbarEvent::ToggleFreeze),
             Some(Action::ToggleFrozenMode)
         );
+        assert_eq!(
+            action_for_event(&ToolbarEvent::NudgeFontSize(2.0)),
+            Some(Action::IncreaseFontSize)
+        );
+        assert_eq!(
+            action_for_event(&ToolbarEvent::ResetArrowLabelCounter),
+            Some(Action::ResetArrowLabelCounter)
+        );
     }
 }

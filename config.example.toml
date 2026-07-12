@@ -470,6 +470,11 @@ side_offset_x = 0.0
 # Force inline toolbars even when layer-shell is available
 force_inline = false
 
+# Hold this modifier chord while clicking a bindable toolbar control to edit
+# its shortcut. Values: "ctrl_shift", "ctrl_alt", "shift_alt",
+# "ctrl_shift_alt", or "disabled".
+rebind_modifier = "ctrl_shift"
+
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
 # The screenshot toolbar button is hidden by default.

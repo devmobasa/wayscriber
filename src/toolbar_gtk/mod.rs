@@ -29,6 +29,7 @@ mod view;
 #[cfg(feature = "toolbar-gtk")]
 mod widgets;
 
+use crate::config::ToolbarRebindModifier;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 /// State pushed to the GTK thread; sent only when it differs from the
@@ -53,6 +54,11 @@ pub struct GtkToolbarUpdate {
     /// Connector name of the output hosting the overlay (e.g. "DP-1"),
     /// used to pin the GTK bars to the same monitor.
     pub output_name: Option<String>,
+    /// Modifier chord that turns a GTK toolbar click into shortcut rebinding.
+    pub rebind_modifier: ToolbarRebindModifier,
+    /// Backend-observed chord state. Wayland pointer events do not always
+    /// expose keyboard modifiers to GTK when its surface lacks keyboard focus.
+    pub rebind_modifier_active: bool,
 }
 
 /// Messages from the GTK thread back to the backend.
@@ -62,7 +68,10 @@ pub struct GtkToolbarUpdate {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GtkToolbarFeedback {
     /// A toolbar control fired; routed through `handle_toolbar_event`.
-    Event(ToolbarEvent),
+    Event {
+        event: ToolbarEvent,
+        rebind_requested: bool,
+    },
     /// Drag-to-move progress for the top bar. `done` marks the drag end,
     /// which is when the offsets get clamped and persisted; `seq` is the
     /// bar's monotonically increasing drag counter (see

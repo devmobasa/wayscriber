@@ -87,9 +87,16 @@ impl WaylandState {
         }
         for feedback in pending {
             match feedback {
-                GtkToolbarFeedback::Event(event) => {
-                    self.cancel_eyedropper();
-                    self.handle_toolbar_event(event, Some(conn), Some(qh));
+                GtkToolbarFeedback::Event {
+                    event,
+                    rebind_requested,
+                } => {
+                    self.handle_toolbar_event_with_rebind(
+                        event,
+                        rebind_requested,
+                        Some(conn),
+                        Some(qh),
+                    );
                 }
                 GtkToolbarFeedback::SetTopOffset { x, y, seq, done } => {
                     self.data.gtk_top_offset_seq = seq;
@@ -131,6 +138,12 @@ impl WaylandState {
                 .current_output()
                 .and_then(|output| self.output_state.info(&output))
                 .and_then(|info| info.name),
+            rebind_modifier: self.config.ui.toolbar.rebind_modifier,
+            rebind_modifier_active: self.config.ui.toolbar.rebind_modifier.matches(
+                self.input_state.modifiers.ctrl,
+                self.input_state.modifiers.shift,
+                self.input_state.modifiers.alt,
+            ),
             snapshot,
         };
         if let Some(bridge) = self.gtk_toolbar.as_mut() {

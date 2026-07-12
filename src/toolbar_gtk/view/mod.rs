@@ -21,6 +21,7 @@ pub(super) struct Windows {
     css_provider: gtk4::CssProvider,
     css_scale_milli: i64,
     pinned_output: Option<String>,
+    feedback: FeedbackSender,
 }
 
 impl Windows {
@@ -36,14 +37,17 @@ impl Windows {
         }
         Self {
             top: top_bar::TopBar::new(feedback.clone()),
-            side: side_bar::SideBar::new(feedback),
+            side: side_bar::SideBar::new(feedback.clone()),
             css_provider,
             css_scale_milli: 1000,
             pinned_output: None,
+            feedback,
         }
     }
 
     pub(super) fn apply(&mut self, update: &GtkToolbarUpdate) {
+        self.feedback
+            .set_rebind_state(update.rebind_modifier, update.rebind_modifier_active);
         self.refresh_css(update);
         self.pin_to_output(update);
         self.top.apply(update);

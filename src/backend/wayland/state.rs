@@ -94,6 +94,7 @@ mod eyedropper;
 mod gtk_toolbar;
 mod helpers;
 mod input_actions;
+mod keybindings;
 mod onboarding;
 mod pdf_export;
 mod perf;

@@ -8,7 +8,8 @@ mod search;
 pub use layout::COMMAND_PALETTE_MAX_VISIBLE;
 pub(crate) use layout::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
+    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_TOP_RATIO,
 };
 pub use registry::{CommandEntry, command_palette_entries};
 
@@ -76,6 +77,111 @@ mod tests {
         );
         state.set_action_bindings(action_bindings);
         state
+    }
+
+    #[test]
+    fn shortcut_capture_emits_a_replace_request() {
+        let mut state = make_state();
+        assert!(state.begin_keybinding_capture(Action::SelectPenTool));
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('p')));
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::EditKeybinding(
+                crate::input::state::KeybindingEditRequest {
+                    action: Action::SelectPenTool,
+                    operation: crate::input::state::KeybindingEditOperation::Replace(vec![
+                        "Ctrl+P".to_string()
+                    ]),
+                }
+            ))
+        );
+        assert_eq!(state.keybinding_capture_action, None);
+    }
+
+    #[test]
+    fn palette_shortcut_controls_request_delete_and_reset() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+        let action = state.selected_command().expect("selected command").action;
+
+        state.modifiers.ctrl = true;
+        assert!(state.handle_command_palette_key(crate::input::Key::Delete));
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::EditKeybinding(
+                crate::input::state::KeybindingEditRequest {
+                    action,
+                    operation: crate::input::state::KeybindingEditOperation::Delete,
+                }
+            ))
+        );
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('r')));
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::EditKeybinding(
+                crate::input::state::KeybindingEditRequest {
+                    action,
+                    operation: crate::input::state::KeybindingEditOperation::Reset,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn palette_edit_icon_starts_capture_without_running_command() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+        let filtered = state.filtered_commands();
+        let action = filtered.first().expect("matching command").action;
+        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
+        let stride =
+            layout::COMMAND_PALETTE_ROW_ACTION_SIZE + layout::COMMAND_PALETTE_ROW_ACTION_GAP;
+        let actions_left = geometry.inner_x + geometry.inner_width
+            - stride * layout::COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+        let x = (geometry.x + actions_left + 2.0).round() as i32;
+        let y = (geometry.y + geometry.items_top + 4.0).round() as i32;
+
+        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
+        assert_eq!(state.keybinding_capture_action, Some(action));
+        assert!(state.command_palette_open);
+        assert!(state.take_pending_backend_action().is_none());
+    }
+
+    #[test]
+    fn palette_shortcut_controls_expose_specific_tooltips() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+        let filtered = state.filtered_commands();
+        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
+        let stride =
+            layout::COMMAND_PALETTE_ROW_ACTION_SIZE + layout::COMMAND_PALETTE_ROW_ACTION_GAP;
+        let actions_left = geometry.inner_x + geometry.inner_width
+            - stride * layout::COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+        let y = (geometry.y + geometry.items_top + 4.0).round() as i32;
+
+        for (slot, expected) in [
+            "Edit shortcut",
+            "Unbind shortcut",
+            "Reset shortcut to default",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let x = (geometry.x + actions_left + stride * slot as f64 + 2.0).round() as i32;
+            state.update_pointer_position(x, y);
+            assert_eq!(
+                state
+                    .command_palette_action_tooltip(1920, 1000)
+                    .map(|(tooltip, _, _)| tooltip),
+                Some(expected)
+            );
+        }
     }
 
     fn assert_palette_finds(query: &str, action: Action) {

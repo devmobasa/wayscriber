@@ -25,7 +25,9 @@ pub use toggles::{
     PresetTextField, PresetToggleField, QuadField, TextField, ToggleField, TripletField,
 };
 pub use tool::{DragColorOption, DragMouseButton, DragToolField, DragToolOption, ToolOption};
-pub use toolbar::{OverrideOption, ToolbarLayoutModeOption, ToolbarOverrideField};
+pub use toolbar::{
+    OverrideOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
+};
 
 #[cfg(test)]
 mod tests;

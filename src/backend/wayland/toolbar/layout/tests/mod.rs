@@ -447,7 +447,7 @@ fn minimized_side_palette_is_a_single_restore_tab() {
 fn side_color_picker_offers_sat_val_area_and_hue_bar() {
     let count_swatches = |hits: &[HitRegion]| {
         hits.iter()
-            .filter(|hit| matches!(hit.event, ToolbarEvent::SetColor(_)))
+            .filter(|hit| matches!(hit.event, ToolbarEvent::SetQuickColor { .. }))
             .count()
     };
 
@@ -812,16 +812,13 @@ fn font_size_nudge_hits_use_slider_spec_step() {
     .unwrap();
 
     let step = ToolbarSliderSpec::FONT_SIZE.step.expect("font size step");
-    let expected_minus = snapshot.font_size - step;
-    let expected_plus = snapshot.font_size + step;
-
     assert!(hits.iter().any(|hit| matches!(
         hit.event,
-        ToolbarEvent::SetFontSize(value) if (value - expected_minus).abs() < f64::EPSILON
+        ToolbarEvent::NudgeFontSize(value) if (value + step).abs() < f64::EPSILON
     )));
     assert!(hits.iter().any(|hit| matches!(
         hit.event,
-        ToolbarEvent::SetFontSize(value) if (value - expected_plus).abs() < f64::EPSILON
+        ToolbarEvent::NudgeFontSize(value) if (value - step).abs() < f64::EPSILON
     )));
 }
 

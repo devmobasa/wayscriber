@@ -153,6 +153,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Status bar, board/page controls
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
 - Command palette (<kbd>Ctrl+K</kbd>)
+- Search, run, edit, unbind, or reset action shortcuts from the command palette; hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> while clicking a bindable toolbar control for direct shortcut capture (the modifier chord is configurable)
 
 ### Multi-monitor
 - Move overlay focus between monitors: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>

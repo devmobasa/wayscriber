@@ -124,9 +124,34 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        let rebind_requested = self.config.ui.toolbar.rebind_modifier.matches(
+            self.input_state.modifiers.ctrl,
+            self.input_state.modifiers.shift,
+            self.input_state.modifiers.alt,
+        );
+        self.handle_toolbar_event_with_rebind(event, rebind_requested, conn, qh);
+    }
+
+    pub(in crate::backend::wayland) fn handle_toolbar_event_with_rebind(
+        &mut self,
+        event: ToolbarEvent,
+        rebind_requested: bool,
+        conn: Option<&Connection>,
+        qh: Option<&QueueHandle<Self>>,
+    ) {
+        // A toolbar interaction replaces the modal sampler. Do this before
+        // shortcut capture so the capture modal owns subsequent keys.
+        self.cancel_eyedropper();
+        if rebind_requested
+            && let Some(action) = crate::ui::toolbar::model::action_for_event(&event)
+        {
+            self.input_state.begin_keybinding_capture(action);
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            return;
+        }
         // Toolbar actions win over the modal sampler: cancel without sampling,
         // then apply the requested toolbar event normally.
-        self.cancel_eyedropper();
         let dismiss_overflow =
             self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
         let dismiss_shapes =

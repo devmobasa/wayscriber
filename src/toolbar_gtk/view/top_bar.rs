@@ -267,7 +267,7 @@ impl TopBar {
         // Stay focusable for the editable hex field, but relinquish focus
         // immediately after ordinary toolbar interaction.
         window.set_keyboard_mode(KeyboardMode::OnDemand);
-        install_shortcut_focus_policy(&window);
+        install_shortcut_focus_policy(&window, &feedback);
         // Match the built-in bars: do not shift for other exclusive zones
         // (panels/bars) and do not reserve one.
         window.set_exclusive_zone(-1);
@@ -564,7 +564,13 @@ impl TopBar {
                 );
                 let sender = self.feedback.clone();
                 swatch.button.connect_clicked(move |_| {
-                    send_event(&sender, ToolbarEvent::SetColor(entry_color));
+                    send_event(
+                        &sender,
+                        ToolbarEvent::SetQuickColor {
+                            color: entry_color,
+                            action,
+                        },
+                    );
                 });
                 let is_last = index + 1
                     == plan

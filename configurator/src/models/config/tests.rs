@@ -3,8 +3,29 @@ use super::super::fields::{
     DragMouseButton, DragToolField, DragToolOption, FontWeightOption, OverrideOption,
     PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, QuadField, SessionStorageModeOption, TextField, ToggleField,
-    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
+    TripletField,
 };
+
+#[test]
+fn config_draft_round_trips_toolbar_rebind_modifier() {
+    let mut config = Config::default();
+    config.ui.toolbar.rebind_modifier = wayscriber::config::ToolbarRebindModifier::CtrlAlt;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(
+        draft.ui_toolbar_rebind_modifier,
+        ToolbarRebindModifierOption::CtrlAlt
+    );
+
+    draft.ui_toolbar_rebind_modifier = ToolbarRebindModifierOption::ShiftAlt;
+    let round_trip = draft
+        .to_config(&config)
+        .expect("toolbar modifier round trip");
+    assert_eq!(
+        round_trip.ui.toolbar.rebind_modifier,
+        wayscriber::config::ToolbarRebindModifier::ShiftAlt
+    );
+}
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{

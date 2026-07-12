@@ -476,6 +476,7 @@ fn swatch_row(
 ) -> gtk4::Box {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(SWATCH_GAP));
     for (color, name, action) in colors {
+        let action = *action;
         let binding =
             action.and_then(|action| ctx.snapshot.binding_hints.binding_for_action(action));
         let tooltip = format_binding_label(name, binding);
@@ -484,7 +485,7 @@ fn swatch_row(
             rect_swatch(ctx, color, color == ctx.snapshot.color, &tooltip);
         let sender = ctx.feedback.clone();
         button.connect_clicked(move |_| {
-            send_event(&sender, ToolbarEvent::SetColor(color));
+            send_event(&sender, ToolbarEvent::SetQuickColor { color, action });
         });
         row.append(&button);
         tracked.push((color, selected, area));
