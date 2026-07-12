@@ -152,6 +152,27 @@ fn test_build_action_map() {
 }
 
 #[test]
+fn command_palette_and_full_screen_capture_defaults_are_distinct_and_ordered() {
+    let config = KeybindingsConfig::default();
+    assert_eq!(config.ui.toggle_command_palette, ["Ctrl+K", "Ctrl+Shift+P"]);
+    assert_eq!(config.capture.capture_full_screen, ["Ctrl+Alt+F"]);
+
+    let map = config.build_action_map().expect("default keymap is valid");
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+K").unwrap()),
+        Some(&Action::ToggleCommandPalette)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Shift+P").unwrap()),
+        Some(&Action::ToggleCommandPalette)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+F").unwrap()),
+        Some(&Action::CaptureFullScreen)
+    );
+}
+
+#[test]
 fn test_duplicate_keybinding_detection() {
     // Create a config with duplicate keybindings
     let mut config = KeybindingsConfig::default();

@@ -8,6 +8,9 @@ use super::types::{
 };
 use serde::{Deserialize, Serialize};
 
+/// Current revision for one-time in-memory configuration migrations.
+pub const CURRENT_CONFIG_REVISION: u32 = 1;
+
 /// Main configuration structure containing all user settings.
 ///
 /// This is the root configuration type that gets deserialized from the TOML file.
@@ -42,6 +45,11 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Persisted migration provenance. Missing in legacy files, which
+    /// deserialize as revision 0 and are upgraded during validation.
+    #[serde(default)]
+    pub config_revision: u32,
+
     /// Drawing tool defaults (color, thickness, font size)
     #[serde(default)]
     pub drawing: DrawingConfig,
@@ -107,6 +115,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            config_revision: CURRENT_CONFIG_REVISION,
             drawing: DrawingConfig::default(),
             presets: PresetSlotsConfig::default(),
             history: HistoryConfig::default(),

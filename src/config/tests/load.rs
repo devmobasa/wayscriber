@@ -38,6 +38,60 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
 }
 
 #[test]
+fn load_migrates_legacy_shortcut_defaults_in_memory_without_rewriting_file() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        let config_path = primary_dir.join("config.toml");
+        let original = "[keybindings]\ntoggle_command_palette = ['Ctrl+K']\ncapture_full_screen = ['Ctrl+Shift+P']\n";
+        fs::write(&config_path, original).unwrap();
+
+        let loaded = Config::load().expect("load succeeds");
+
+        assert_eq!(
+            loaded.config.keybindings.ui.toggle_command_palette,
+            ["Ctrl+K", "Ctrl+Shift+P"]
+        );
+        assert_eq!(
+            loaded.config.keybindings.capture.capture_full_screen,
+            ["Ctrl+Alt+F"]
+        );
+        assert_eq!(
+            loaded.config.config_revision,
+            crate::config::CURRENT_CONFIG_REVISION
+        );
+        assert_eq!(fs::read_to_string(config_path).unwrap(), original);
+    });
+}
+
+#[test]
+fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        let config_path = primary_dir.join("config.toml");
+        fs::write(
+            &config_path,
+            "[keybindings]\ntoggle_command_palette = ['Ctrl+K']\ncapture_full_screen = ['Ctrl+Shift+P']\n",
+        )
+        .unwrap();
+
+        let mut migrated = Config::load().expect("legacy load succeeds").config;
+        migrated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+        migrated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+        migrated.save().expect("saving revision succeeds");
+
+        let reloaded = Config::load().expect("current load succeeds").config;
+        assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert_eq!(reloaded.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
+        assert_eq!(
+            reloaded.keybindings.capture.capture_full_screen,
+            ["Ctrl+Shift+P"]
+        );
+    });
+}
+
+#[test]
 fn click_highlight_force_in_light_mode_defaults_true_and_parses_false() {
     let config: Config = toml::from_str("[ui.click_highlight]\nenabled = false\n")
         .expect("missing force_in_light_mode should use default");

@@ -476,7 +476,7 @@ enabled = true
 - Use `focus_prev_output` / `focus_next_output` (default: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>) to move overlay focus between outputs.
 - Toolbar surfaces and status bar follow the active output when focus changes.
 - Output switching is blocked while capture, frozen, or zoom is active/in progress; finish or exit those modes first.
-- Command palette (`Ctrl+K`) includes hidden aliases, so searching `monitor` or `display` finds output actions.
+- Command palette (`Ctrl+K` or `Ctrl+Shift+P`) includes hidden aliases, so searching `monitor` or `display` finds output actions.
 - For GNOME/xdg fallback, set `preferred_output` (or env override `WAYSCRIBER_XDG_OUTPUT`) to pin the overlay to a specific monitor.
 
 **Defaults:**
@@ -1080,6 +1080,8 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
+The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) once in memory and advances to `config_revision = 1`. Customized pairs are preserved, and the revision plus migrated values are written only on the next normal config save. Once revision 1 is saved, explicitly restoring the old pair remains untouched.
+
 ```toml
 [keybindings]
 # Exit overlay (or cancel current action)
@@ -1254,7 +1256,7 @@ open_context_menu = ["Shift+F10", "Menu"]
 open_configurator = ["F11"]
 
 # Toggle command palette
-toggle_command_palette = ["Ctrl+K"]
+toggle_command_palette = ["Ctrl+K", "Ctrl+Shift+P"]
 
 # Color selection shortcuts
 set_color_red = ["R"]
@@ -1269,7 +1271,7 @@ set_color_black = ["K"]
 pick_screen_color = ["I"]
 
 # Screenshot shortcuts
-capture_full_screen = ["Ctrl+Shift+P"]
+capture_full_screen = ["Ctrl+Alt+F"]
 capture_active_window = ["Ctrl+Shift+O"]
 capture_selection = ["Ctrl+Shift+I"]
 

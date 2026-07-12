@@ -152,7 +152,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Color picker with extended palettes and a screen eyedropper (toolbar, popup, or command palette)
 - Status bar, board/page controls
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
-- Command palette (<kbd>Ctrl+K</kbd>)
+- Command palette (<kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd>)
 - Search, run, edit, unbind, or reset action shortcuts from the command palette; hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> while clicking a bindable toolbar control for direct shortcut capture (the modifier chord is configurable)
 
 ### Multi-monitor
@@ -431,7 +431,7 @@ Once the overlay is up:
 
 - <kbd>F1</kbd> or <kbd>F10</kbd> — help overlay
 - <kbd>Shift+F1</kbd> — quick reference
-- <kbd>Ctrl+K</kbd> — command palette
+- <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd> — command palette
 - <kbd>F11</kbd> — configurator
 - <kbd>Escape</kbd> — hide or exit
 
@@ -547,7 +547,7 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 
 | Shortcut | Action |
 |----------|--------|
-| <kbd>Ctrl+Shift+P</kbd> | Capture full screen (respects `capture.copy_to_clipboard`) |
+| <kbd>Ctrl+Alt+F</kbd> | Capture full screen (respects `capture.copy_to_clipboard`) |
 | <kbd>Ctrl+Shift+O</kbd> | Capture active window (respects `capture.copy_to_clipboard`) |
 | <kbd>Ctrl+Shift+I</kbd> | Capture selection (respects `capture.copy_to_clipboard`) |
 | <kbd>Ctrl+C</kbd> | Copy full screen to clipboard |
@@ -575,7 +575,7 @@ Canvas export commands are available in the command palette and keybindings. `ex
 
 - **Help overlay:** <kbd>F1</kbd> or <kbd>F10</kbd>
 - **Quick reference:** <kbd>Shift+F1</kbd>
-- **Command palette:** <kbd>Ctrl+K</kbd> (search `monitor` or `display` for output actions)
+- **Command palette:** <kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd> (search `monitor` or `display` for output actions)
 - **About window:** `wayscriber --about`
 - **Full docs:** https://wayscriber.com/docs/
 
@@ -723,7 +723,7 @@ pick_screen_color = ["I"]
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
 | Quick reference | <kbd>Shift+F1</kbd> |
 | Configurator | <kbd>F11</kbd> |
-| Command palette | <kbd>Ctrl+K</kbd> |
+| Command palette | <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd> |
 | Screen eyedropper | <kbd>I</kbd>, toolbar/color picker, or <kbd>Ctrl+K</kbd> → **Pick screen color** |
 | Radial menu | <kbd>Middle-click</kbd> (idle) open/close; <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; scroll adjusts active tool size |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
