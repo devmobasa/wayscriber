@@ -1,7 +1,6 @@
 use super::super::outcome::ActionRoute;
 use crate::config::Action;
-use crate::input::state::{InputState, UiToastKind};
-use log::warn;
+use crate::input::state::InputState;
 
 pub(crate) fn close_properties_panel_before_action(state: &mut InputState) {
     state.close_properties_panel();
@@ -35,13 +34,6 @@ pub(crate) fn dispatch_action(state: &mut InputState, action: Action, route: Act
         }
         ActionRoute::Preset => {
             state.handle_preset_action(action);
-        }
-        ActionRoute::DeprecatedIgnored => {
-            warn!("Deprecated action pick_screen_color triggered; ignoring.");
-            state.set_ui_toast(
-                UiToastKind::Warning,
-                "Pick screen color was removed. Use the palette or paste a hex value.",
-            );
         }
     }
 }

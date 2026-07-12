@@ -121,7 +121,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Multiline text and sticky notes with smoothing
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
-- Color picker, palettes, size via hotkeys or scroll
+- Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
 - Render color profiles for print/projector/light-theme preview
 - Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection plus scroll size adjust
 
@@ -149,7 +149,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Two toolbar frontends: GTK4-rendered bars on layer-shell compositors (Hyprland, KWin, Wayfire, River, ...), with automatic fallback to the built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline mode, builds without the `toolbar-gtk` feature)
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
-- Color picker with extended palettes
+- Color picker with extended palettes and a screen eyedropper (toolbar, popup, or command palette)
 - Status bar, board/page controls
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
 - Command palette (<kbd>Ctrl+K</kbd>)
@@ -655,6 +655,13 @@ The polygon tools are available from the toolbar picker; their default keybindin
 
 The first eight quick colors map to the shortcuts above and are customizable — see [Quick colors](#quick-colors).
 
+Pick a color directly from the displayed desktop with the screen eyedropper: press <kbd>I</kbd>, use the eyedropper button in the toolbar or color picker, or search for **Pick screen color** in the command palette (<kbd>Ctrl+K</kbd>). Rebind it if you prefer another shortcut:
+
+```toml
+[keybindings.colors]
+pick_screen_color = ["I"]
+```
+
 | Action | Key |
 |--------|-----|
 | Increase thickness | <kbd>+</kbd> / <kbd>=</kbd> / scroll down |
@@ -716,6 +723,7 @@ The first eight quick colors map to the shortcuts above and are customizable —
 | Quick reference | <kbd>Shift+F1</kbd> |
 | Configurator | <kbd>F11</kbd> |
 | Command palette | <kbd>Ctrl+K</kbd> |
+| Screen eyedropper | <kbd>I</kbd>, toolbar/color picker, or <kbd>Ctrl+K</kbd> → **Pick screen color** |
 | Radial menu | <kbd>Middle-click</kbd> (idle) open/close; <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; scroll adjusts active tool size |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
@@ -953,6 +961,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Blur tool
 - [x] Tablet/stylus support with pressure
 - [x] Color picker
+- [x] Screen eyedropper: pick a draw color from the screen
 - [x] Render color profiles
 - [x] Zoom (ZoomIt-style controls)
 - [x] Presets (tool/color/size slots)

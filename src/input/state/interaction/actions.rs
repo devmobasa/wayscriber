@@ -111,8 +111,8 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SetColorOrange
         | Action::SetColorPink
         | Action::SetColorWhite
-        | Action::SetColorBlack => ActionRoute::Color,
-        Action::PickScreenColorDeprecated => ActionRoute::DeprecatedIgnored,
+        | Action::SetColorBlack
+        | Action::PickScreenColor => ActionRoute::Color,
         Action::CaptureFullScreen
         | Action::CaptureActiveWindow
         | Action::CaptureSelection

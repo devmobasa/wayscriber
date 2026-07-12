@@ -22,7 +22,8 @@ impl KeybindingField {
             | Self::SetColorOrange
             | Self::SetColorPink
             | Self::SetColorWhite
-            | Self::SetColorBlack => KeybindingsTabId::Drawing,
+            | Self::SetColorBlack
+            | Self::PickScreenColor => KeybindingsTabId::Drawing,
             Self::SelectSelectionTool
             | Self::SelectPenTool
             | Self::SelectEraserTool

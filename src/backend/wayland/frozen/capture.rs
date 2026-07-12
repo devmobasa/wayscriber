@@ -277,7 +277,7 @@ impl FrozenState {
         capture.frame.destroy();
 
         let source_geometry = self.active_geometry.clone();
-        self.set_pending_image(
+        self.set_pending_output_image(
             FrozenImage {
                 width: capture.width,
                 height: capture.height,
@@ -285,7 +285,6 @@ impl FrozenState {
                 data,
             },
             source_geometry,
-            true,
         );
 
         Ok(())

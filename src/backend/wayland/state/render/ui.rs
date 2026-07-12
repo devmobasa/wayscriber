@@ -168,6 +168,8 @@ impl WaylandState {
                 self.input_state.clear_color_picker_popup_layout();
             }
 
+            self.render_eyedropper_loupe(ctx, width, height);
+
             if self.input_state.is_radial_menu_open() {
                 self.input_state.update_radial_menu_layout(width, height);
                 crate::ui::render_radial_menu(ctx, &self.input_state, width, height);

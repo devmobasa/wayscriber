@@ -163,6 +163,14 @@ mod tests {
     }
 
     #[test]
+    fn action_for_event_maps_screen_eyedropper() {
+        assert_eq!(
+            action_for_event(&ToolbarEvent::PickScreenColor),
+            Some(Action::PickScreenColor)
+        );
+    }
+
+    #[test]
     fn action_for_event_returns_none_for_layout_only_events() {
         assert_eq!(action_for_event(&ToolbarEvent::OpenConfigFile), None);
         assert_eq!(

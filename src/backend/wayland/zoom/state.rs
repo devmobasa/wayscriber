@@ -132,7 +132,7 @@ impl ZoomState {
     }
 
     pub fn abort_capture(&mut self) -> bool {
-        let mut changed = false;
+        let mut changed = self.pending_activation;
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
             changed = true;
@@ -189,5 +189,23 @@ impl ZoomState {
 
     fn bump_image_generation(&mut self) {
         self.image_generation = self.image_generation.wrapping_add(1).max(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aborting_pending_activation_completes_the_capture_lifecycle() {
+        let mut state = ZoomState::new(None);
+        state.request_activation();
+        assert!(state.is_engaged());
+        assert!(!state.is_in_progress());
+
+        assert!(state.abort_capture());
+
+        assert!(!state.is_engaged());
+        assert!(state.take_capture_done());
     }
 }

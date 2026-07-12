@@ -233,6 +233,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::SetColorPink,
     Action::SetColorWhite,
     Action::SetColorBlack,
+    Action::PickScreenColor,
     Action::CaptureClipboardFull,
     Action::CaptureFileFull,
     Action::ExportCanvasFile,

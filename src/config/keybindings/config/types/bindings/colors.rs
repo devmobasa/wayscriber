@@ -28,6 +28,9 @@ pub struct ColorKeybindingsConfig {
 
     #[serde(default = "default_set_color_black")]
     pub set_color_black: Vec<String>,
+
+    #[serde(default = "default_pick_screen_color")]
+    pub pick_screen_color: Vec<String>,
 }
 
 impl Default for ColorKeybindingsConfig {
@@ -41,6 +44,7 @@ impl Default for ColorKeybindingsConfig {
             set_color_pink: default_set_color_pink(),
             set_color_white: default_set_color_white(),
             set_color_black: default_set_color_black(),
+            pick_screen_color: default_pick_screen_color(),
         }
     }
 }

@@ -61,6 +61,7 @@ pub(super) fn handle_pending_actions(
     state.poll_clipboard_publish_completion();
     state.poll_clipboard_paste_completion();
     state.drain_clipboard_requests();
+    state.handle_pending_eyedropper_toggle();
     handle_frozen_toggle(state);
 
     if let Some(action) = state.input_state.take_pending_backend_action() {

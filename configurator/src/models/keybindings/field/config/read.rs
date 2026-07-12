@@ -99,6 +99,7 @@ impl KeybindingField {
             Self::SetColorPink => &config.colors.set_color_pink,
             Self::SetColorWhite => &config.colors.set_color_white,
             Self::SetColorBlack => &config.colors.set_color_black,
+            Self::PickScreenColor => &config.colors.pick_screen_color,
             Self::CaptureFullScreen => &config.capture.capture_full_screen,
             Self::CaptureActiveWindow => &config.capture.capture_active_window,
             Self::CaptureSelection => &config.capture.capture_selection,

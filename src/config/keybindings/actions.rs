@@ -137,9 +137,8 @@ pub enum Action {
     SetColorPink,
     SetColorWhite,
     SetColorBlack,
-    // Deprecated: keep old configs with pick_screen_color from failing to parse.
-    #[serde(rename = "pick_screen_color")]
-    PickScreenColorDeprecated,
+    /// Pick a drawing color from the currently displayed desktop capture.
+    PickScreenColor,
 
     // Screenshot capture actions
     CaptureFullScreen,

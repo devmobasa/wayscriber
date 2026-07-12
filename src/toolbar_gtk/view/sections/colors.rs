@@ -350,6 +350,18 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     });
     row.append(&paste.button);
 
+    let eyedropper = icon_button(
+        toolbar_icons::draw_icon_eyedropper,
+        (ctx.sz(HEX_INPUT_HEIGHT), ctx.sz(HEX_INPUT_HEIGHT)),
+        ctx.sz(12.0),
+        "Pick color from screen",
+    );
+    let sender = ctx.feedback.clone();
+    eyedropper.button.connect_clicked(move |_| {
+        send_event(&sender, ToolbarEvent::PickScreenColor);
+    });
+    row.append(&eyedropper.button);
+
     body.append(&row);
 }
 

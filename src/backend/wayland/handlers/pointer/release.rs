@@ -14,6 +14,10 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        if self.input_state.eyedropper_is_active() {
+            return;
+        }
+
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self.take_suppress_next_release() {
             self.set_pending_toast_press(false);

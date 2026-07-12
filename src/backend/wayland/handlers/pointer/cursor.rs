@@ -34,6 +34,10 @@ impl WaylandState {
 
     /// Computes the appropriate cursor icon based on current context.
     fn compute_cursor_icon(&mut self, toolbar_hover: bool) -> CursorIcon {
+        if self.input_state.eyedropper_is_active() && !toolbar_hover {
+            return CursorIcon::Crosshair;
+        }
+
         // Check color picker popup first (takes priority)
         if self.input_state.is_color_picker_popup_open() {
             let (mx, my) = self.current_mouse();

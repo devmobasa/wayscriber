@@ -9,7 +9,7 @@ use wayland_client::{
     protocol::{wl_keyboard, wl_surface},
 };
 
-use crate::{input::Key, notification};
+use crate::{config::Action, input::Key, notification};
 
 use super::super::state::WaylandState;
 use translate::keysym_to_key;
@@ -107,6 +107,14 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        if self.input_state.eyedropper_is_engaged() {
+            if matches!(key, Key::Escape)
+                || self.input_state.action_for_key(key) == Some(Action::PickScreenColor)
+            {
+                self.cancel_eyedropper();
+            }
+            return;
+        }
         if matches!(key, Key::Escape)
             && self.input_state.modifiers.shift
             && self.try_skip_first_run_onboarding()
@@ -182,6 +190,9 @@ impl KeyboardHandler for WaylandState {
     ) {
         let key = keysym_to_key(event.keysym);
         debug!("Key released: {:?}", key);
+        if self.input_state.eyedropper_is_engaged() {
+            return;
+        }
         if matches!(key, Key::Space) && self.board_pan_key_held() {
             self.set_board_pan_key_held(false);
             self.input_state.needs_redraw = true;
@@ -223,6 +234,9 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        if self.input_state.eyedropper_is_engaged() {
+            return;
+        }
         if matches!(key, Key::Space) && self.board_pan_key_held() {
             return;
         }

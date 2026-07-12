@@ -7,6 +7,7 @@ mod outcome;
 mod pointer;
 
 pub(crate) use actions::route_action;
+pub(crate) use adapters::action_for_key_binding;
 pub(crate) use event::{
     CanvasPoint, PointerMotion, PointerPoints, PointerPress, PointerRelease, ScreenPoint,
 };
@@ -215,9 +216,6 @@ mod tests {
         assert_eq!(classify_action(Action::SetColorRed), ActionRoute::Color);
         assert_eq!(classify_action(Action::ZoomIn), ActionRoute::CaptureZoom);
         assert_eq!(classify_action(Action::ApplyPreset1), ActionRoute::Preset);
-        assert_eq!(
-            classify_action(Action::PickScreenColorDeprecated),
-            ActionRoute::DeprecatedIgnored
-        );
+        assert_eq!(classify_action(Action::PickScreenColor), ActionRoute::Color);
     }
 }

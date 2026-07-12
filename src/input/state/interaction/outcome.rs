@@ -86,5 +86,4 @@ pub(crate) enum ActionRoute {
     Color,
     CaptureZoom,
     Preset,
-    DeprecatedIgnored,
 }

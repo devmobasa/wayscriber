@@ -44,6 +44,31 @@ fn board_pdf_export_keybinding_field_is_visible_and_in_capture_tab() {
 }
 
 #[test]
+fn screen_eyedropper_keybinding_field_is_visible_and_in_drawing_tab() {
+    assert!(KeybindingField::all().contains(&KeybindingField::PickScreenColor));
+    assert_eq!(
+        KeybindingField::PickScreenColor.tab(),
+        KeybindingsTabId::Drawing
+    );
+}
+
+#[test]
+fn screen_eyedropper_keybinding_field_reads_and_writes_config() {
+    let mut config = KeybindingsConfig::default();
+    assert_eq!(
+        KeybindingField::PickScreenColor.get(&config),
+        &vec!["I".to_string()]
+    );
+
+    KeybindingField::PickScreenColor.set(&mut config, vec!["Ctrl+Shift+P".to_string()]);
+
+    assert_eq!(
+        config.colors.pick_screen_color,
+        vec!["Ctrl+Shift+P".to_string()]
+    );
+}
+
+#[test]
 fn board_pdf_export_keybinding_field_reads_and_writes_config() {
     let mut config = KeybindingsConfig::default();
     assert!(KeybindingField::ExportBoardPdfFile.get(&config).is_empty());

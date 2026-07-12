@@ -1,4 +1,5 @@
 use super::super::super::*;
+use crate::backend::wayland::state::eyedropper::{BackgroundImageKind, background_image_source};
 use crate::draw::Color;
 
 pub(super) struct CanvasEraserContext {
@@ -38,32 +39,20 @@ impl WaylandState {
         let mut logical_to_image_scale_x = 1.0;
         let mut logical_to_image_scale_y = 1.0;
 
-        let allow_background_image =
-            !self.zoom.is_engaged() || self.input_state.board_is_transparent();
-        let zoom_render_image = if self.zoom.active && allow_background_image {
-            self.zoom
-                .image()
-                .map(|image| (image, (self.zoom.image_generation() << 1) | 1))
-                .or_else(|| {
-                    self.frozen
-                        .image()
-                        .map(|image| (image, self.frozen.image_generation() << 1))
-                })
-        } else {
-            None
-        };
-        let zoom_render_active = self.zoom.active && zoom_render_image.is_some();
-        let background_image = if zoom_render_active {
-            zoom_render_image
-        } else if allow_background_image {
-            self.frozen
-                .image()
-                .map(|image| (image, self.frozen.image_generation() << 1))
-        } else {
-            None
-        };
+        let background_image = background_image_source(
+            &self.zoom,
+            &self.frozen,
+            self.input_state.board_is_transparent(),
+        )
+        .map(|source| {
+            let cache_key = match source.kind {
+                BackgroundImageKind::Zoom => (self.zoom.image_generation() << 1) | 1,
+                BackgroundImageKind::Frozen => self.frozen.image_generation() << 1,
+            };
+            (source.image, cache_key, source.zoom_transformed)
+        });
 
-        if let Some((image, cache_key)) = background_image {
+        if let Some((image, cache_key, zoom_render_active)) = background_image {
             // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
             // before commit, and we hold the buffer alive via `image.data`.
             let surface = unsafe {

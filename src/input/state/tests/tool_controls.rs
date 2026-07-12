@@ -52,6 +52,15 @@ fn blur_tool_override_requests_frozen_capture_when_needed() {
 }
 
 #[test]
+fn pick_screen_color_requests_backend_eyedropper_activation() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(Action::PickScreenColor);
+
+    assert!(state.take_pending_eyedropper_toggle());
+}
+
+#[test]
 fn presenter_locked_mode_rejects_non_highlight_tool_override() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Highlight)));

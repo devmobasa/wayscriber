@@ -282,6 +282,27 @@ fn build_action_map_includes_canvas_export_bindings() {
 }
 
 #[test]
+fn screen_eyedropper_defaults_to_i_and_maps_when_reconfigured() {
+    let mut config = KeybindingsConfig::default();
+    assert_eq!(config.colors.pick_screen_color, vec!["I".to_string()]);
+
+    let default_map = config.build_action_map().unwrap();
+    assert_eq!(
+        default_map.get(&KeyBinding::parse("I").unwrap()),
+        Some(&Action::PickScreenColor)
+    );
+
+    config.colors.pick_screen_color = vec!["Ctrl+Alt+Shift+E".to_string()];
+
+    let map = config.build_action_map().unwrap();
+
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+E").unwrap()),
+        Some(&Action::PickScreenColor)
+    );
+}
+
+#[test]
 fn canvas_export_actions_deserialize_from_config_names() {
     #[derive(serde::Deserialize)]
     struct ActionFixture {

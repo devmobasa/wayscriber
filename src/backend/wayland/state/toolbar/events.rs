@@ -124,6 +124,9 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        // Toolbar actions win over the modal sampler: cancel without sampling,
+        // then apply the requested toolbar event normally.
+        self.cancel_eyedropper();
         let dismiss_overflow =
             self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
         let dismiss_shapes =

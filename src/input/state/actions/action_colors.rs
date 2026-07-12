@@ -11,6 +11,10 @@ impl InputState {
     }
 
     pub(in crate::input::state) fn handle_color_action(&mut self, action: Action) -> bool {
+        if action == Action::PickScreenColor {
+            self.request_eyedropper_toggle();
+            return true;
+        }
         let Some(color) = self.quick_colors.color_for_action(action) else {
             return false;
         };

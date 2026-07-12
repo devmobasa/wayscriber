@@ -4,7 +4,9 @@ use iced::keyboard::{self, Key, Location, Modifiers, key};
 use std::path::PathBuf;
 
 use crate::models::session::SessionArtifactSummary;
-use crate::models::{KeybindingsTabId, SearchQuery, SessionCatalogItem, TabId, UiTabId};
+use crate::models::{
+    KeybindingField, KeybindingsTabId, SearchQuery, SessionCatalogItem, TabId, UiTabId,
+};
 use wayscriber::config::toolbar_item_ids as ids;
 
 #[test]
@@ -779,6 +781,22 @@ fn exact_keybinding_input_label_matches_keybinding_rows() {
 
     assert!(!keybindings.show_all());
     assert!(!keybindings.keybinding_tabs().is_empty());
+}
+
+#[test]
+fn eyedropper_search_exposes_screen_color_keybinding() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+    app.search_query = SearchQuery::new("eyedropper");
+
+    let summary = app.search_summary();
+    let keybindings = summary.tab(TabId::Keybindings).expect("keybindings match");
+
+    assert!(keybindings.keybinding_field_visible(KeybindingField::PickScreenColor));
+    assert!(
+        keybindings
+            .keybinding_tabs()
+            .contains(&KeybindingsTabId::Drawing)
+    );
 }
 
 fn catalog_item(id: &str) -> SessionCatalogItem {
