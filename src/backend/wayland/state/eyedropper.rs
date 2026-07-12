@@ -25,6 +25,7 @@ enum EyedropperEntryDecision {
     RefuseWhileZoomedOnSolidBoard,
     RefuseSolidBoard,
     CaptureUnavailable,
+    ZoomImageUnavailable,
 }
 
 fn eyedropper_entry_decision(
@@ -42,8 +43,10 @@ fn eyedropper_entry_decision(
         EyedropperEntryDecision::RefuseSolidBoard
     } else if zoom_engaged && !zoom_active {
         EyedropperEntryDecision::WaitForZoom
-    } else if !frozen_enabled || zoom_active {
+    } else if !frozen_enabled {
         EyedropperEntryDecision::CaptureUnavailable
+    } else if zoom_active {
+        EyedropperEntryDecision::ZoomImageUnavailable
     } else {
         EyedropperEntryDecision::AutoFreeze
     }
@@ -150,7 +153,7 @@ impl WaylandState {
             EyedropperEntryDecision::RefuseWhileZoomedOnSolidBoard => {
                 self.input_state.set_ui_toast_with_action(
                     UiToastKind::Info,
-                    "Eyedropper isn't available while zoomed on a solid board.",
+                    "Screen eyedropper isn't available while zoomed on a solid board.",
                     "Switch to transparent",
                     crate::config::Action::ReturnToTransparent,
                 );
@@ -158,7 +161,7 @@ impl WaylandState {
             EyedropperEntryDecision::RefuseSolidBoard => {
                 self.input_state.set_ui_toast_with_action(
                     UiToastKind::Info,
-                    "Eyedropper requires a transparent board or an active screen freeze.",
+                    "Screen eyedropper requires a transparent board or an active screen freeze.",
                     "Switch to transparent",
                     crate::config::Action::ReturnToTransparent,
                 );
@@ -166,7 +169,13 @@ impl WaylandState {
             EyedropperEntryDecision::CaptureUnavailable => {
                 self.input_state.set_ui_toast(
                     UiToastKind::Warning,
-                    "Eyedropper is unavailable because screen capture is not available.",
+                    "Screen eyedropper is unavailable because screen capture is not available.",
+                );
+            }
+            EyedropperEntryDecision::ZoomImageUnavailable => {
+                self.input_state.set_ui_toast(
+                    UiToastKind::Warning,
+                    "Screen eyedropper is unavailable because zoom has no captured screen image.",
                 );
             }
         }
@@ -191,7 +200,7 @@ impl WaylandState {
             self.input_state
                 .activate_eyedropper(matches!(capture_source, EyedropperCaptureSource::Frozen));
         } else {
-            self.input_state.cancel_eyedropper();
+            self.cancel_eyedropper();
             self.input_state
                 .report_eyedropper_capture_failure_if_unreported();
         }
@@ -349,12 +358,20 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cancel_eyedropper(&mut self) -> bool {
-        let was_active = self.input_state.eyedropper_state().is_active()
-            || self.input_state.eyedropper_state().is_pending();
+        let eyedropper_state = self.input_state.eyedropper_state();
+        let was_active = eyedropper_state.is_engaged();
+        let pending_source = eyedropper_state.pending_source();
         let auto_froze = self.input_state.cancel_eyedropper();
         if auto_froze {
             self.restore_xdg_after_frozen();
-            self.frozen.unfreeze(&mut self.input_state);
+            if pending_source == Some(EyedropperCaptureSource::Frozen)
+                && self.frozen.is_in_progress()
+            {
+                self.frozen.cancel(&mut self.input_state);
+                self.exit_overlay_suppression(super::OverlaySuppression::Frozen);
+            } else {
+                self.frozen.unfreeze(&mut self.input_state);
+            }
         }
         was_active
     }
@@ -458,6 +475,18 @@ mod tests {
         assert_eq!(
             eyedropper_entry_decision(true, false, false, false, true),
             EyedropperEntryDecision::Activate
+        );
+    }
+
+    #[test]
+    fn entry_reports_missing_zoom_image_separately_from_missing_capture_support() {
+        assert_eq!(
+            eyedropper_entry_decision(false, true, true, true, true),
+            EyedropperEntryDecision::ZoomImageUnavailable
+        );
+        assert_eq!(
+            eyedropper_entry_decision(false, true, false, false, false),
+            EyedropperEntryDecision::CaptureUnavailable
         );
     }
 }

@@ -84,7 +84,7 @@ pub const ENTRIES: &[ActionMeta] = &[
     meta!(
         PickScreenColor,
         "Pick screen color",
-        Some("Eyedropper"),
+        Some("Screen eyedropper"),
         "Pick a drawing color from the displayed desktop",
         Colors,
         true,

@@ -157,7 +157,7 @@ drag_tool = "default"
 - The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors, while the radial menu keeps the original first-eight color ring.
 - Extra entries have no quick-color action binding; explicit extra entries appear in toolbar and radial palette UIs, capped to the first 24 colors.
 - Help overlay badges are shown for the first eight shortcut-backed entries only.
-- The screen eyedropper is available from the toolbar color section, color picker popup, and command palette. Set `keybindings.colors.pick_screen_color` for an optional direct shortcut. It samples the captured desktop currently visible through Wayscriber; on a transparent board it can briefly use screen freeze when no captured image exists.
+- The screen eyedropper is available with <kbd>I</kbd>, from the toolbar color section, from the color picker popup, and from the command palette. Rebind `keybindings.colors.pick_screen_color` if you prefer another shortcut. It samples the captured desktop currently visible through Wayscriber; on a transparent board it can briefly use screen freeze when no captured image exists.
 
 **Runtime Adjustments:**
 - **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-50px)
@@ -1260,8 +1260,8 @@ set_color_orange = ["O"]
 set_color_pink = ["P"]
 set_color_white = ["W"]
 set_color_black = ["K"]
-# Optional direct shortcut for the screen eyedropper
-pick_screen_color = []
+# Screen eyedropper
+pick_screen_color = ["I"]
 
 # Screenshot shortcuts
 capture_full_screen = ["Ctrl+Shift+P"]

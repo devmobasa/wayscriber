@@ -268,6 +268,10 @@ impl FrozenState {
         }
         self.preflight_pending = false;
         self.preflight_use_fallback = false;
+        self.portal_in_progress = false;
+        self.portal_rx = None;
+        self.portal_target_output_id = None;
+        self.portal_started_at = None;
         self.pending_image = None;
         self.capture_done = true;
         input_state.set_frozen_active(false);
@@ -344,5 +348,18 @@ mod tests {
         );
         assert!(state.image().is_none());
         assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn cancel_clears_an_in_flight_portal_capture() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.portal_in_progress = true;
+        state.portal_started_at = Some(std::time::Instant::now());
+
+        state.cancel(&mut input_state);
+
+        assert!(!state.is_in_progress());
+        assert!(state.take_capture_done());
     }
 }

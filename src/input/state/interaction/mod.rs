@@ -7,6 +7,7 @@ mod outcome;
 mod pointer;
 
 pub(crate) use actions::route_action;
+pub(crate) use adapters::action_for_key_binding;
 pub(crate) use event::{
     CanvasPoint, PointerMotion, PointerPoints, PointerPress, PointerRelease, ScreenPoint,
 };

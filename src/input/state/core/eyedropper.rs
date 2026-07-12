@@ -1,4 +1,6 @@
 use super::{InputState, UiToastKind};
+use crate::config::Action;
+use crate::input::Key;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EyedropperCaptureSource {
@@ -28,6 +30,10 @@ impl EyedropperUiState {
 
     pub fn is_pending(self) -> bool {
         matches!(self, Self::PendingCapture { .. })
+    }
+
+    pub fn is_engaged(self) -> bool {
+        self.is_active() || self.is_pending()
     }
 
     pub fn hover(self) -> Option<(f64, f64)> {
@@ -70,6 +76,16 @@ impl InputState {
         self.eyedropper_ui_state.is_active()
     }
 
+    pub fn eyedropper_is_engaged(&self) -> bool {
+        self.eyedropper_ui_state.is_engaged()
+    }
+
+    pub(crate) fn action_for_key(&self, key: Key) -> Option<Action> {
+        crate::input::state::interaction::action_for_key_binding(self, key)
+            .ok()
+            .flatten()
+    }
+
     pub(crate) fn prepare_for_eyedropper(&mut self) {
         self.cancel_active_interaction();
         if self.show_help {
@@ -98,6 +114,10 @@ impl InputState {
     }
 
     pub(crate) fn activate_eyedropper(&mut self, auto_froze: bool) {
+        // A capture can take long enough for another interaction to begin while
+        // the eyedropper is pending. Entering the modal state must cancel it so
+        // the eyedropper cannot swallow the matching release event.
+        self.prepare_for_eyedropper();
         self.eyedropper_ui_state = EyedropperUiState::Active {
             hover: None,
             auto_froze,
@@ -129,7 +149,7 @@ impl InputState {
 
     pub(crate) fn report_eyedropper_capture_failure_if_unreported(&mut self) {
         if self.ui_toast.is_none() {
-            self.set_ui_toast(UiToastKind::Error, "Eyedropper screen capture failed.");
+            self.set_ui_toast(UiToastKind::Error, "Screen eyedropper capture failed.");
         }
     }
 }
@@ -138,6 +158,7 @@ impl InputState {
 mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
+    use crate::input::{DrawingState, MouseButton};
 
     #[test]
     fn cancel_reports_auto_frozen_ownership() {
@@ -182,7 +203,31 @@ mod tests {
 
         assert_eq!(
             state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
-            Some("Eyedropper screen capture failed.")
+            Some("Screen eyedropper capture failed.")
+        );
+    }
+
+    #[test]
+    fn activation_cancels_interaction_started_while_capture_was_pending() {
+        let mut state = make_test_input_state();
+        state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
+        state.on_mouse_press(MouseButton::Left, 10, 20);
+        assert!(matches!(state.state, DrawingState::Drawing { .. }));
+
+        state.activate_eyedropper(true);
+
+        assert!(matches!(state.state, DrawingState::Idle));
+        assert!(state.active_drag_button.is_none());
+        assert!(state.eyedropper_is_active());
+    }
+
+    #[test]
+    fn default_i_key_resolves_to_screen_eyedropper() {
+        let state = make_test_input_state();
+
+        assert_eq!(
+            state.action_for_key(Key::Char('i')),
+            Some(Action::PickScreenColor)
         );
     }
 }
