@@ -19,7 +19,7 @@ use std::rc::Rc;
 use gtk4::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
-use crate::backend::wayland::{TopStripPlan, plan_top_strip};
+use crate::backend::wayland::{TopStripPlan, plan_top_strip, top_toolbar_size};
 use crate::config::{Action, ToolbarLayoutMode, action_label, action_short_label};
 use crate::input::Tool;
 use crate::label_format::format_binding_label;
@@ -188,6 +188,10 @@ fn effective_scale(snapshot: &ToolbarSnapshot) -> f64 {
     } else {
         1.0
     }
+}
+
+fn top_default_width(snapshot: &ToolbarSnapshot) -> i32 {
+    top_toolbar_size(snapshot).0.min(i32::MAX as u32) as i32
 }
 
 fn ring_row_active(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> bool {
@@ -387,6 +391,12 @@ impl TopBar {
     #[allow(unused_assignments)]
     fn build_strip(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         self.root.remove_css_class("minimized");
+        // GTK toplevels retain their previous default width across widget-tree
+        // rebuilds. Reset it from the shared natural-size calculation so a
+        // narrower layout (notably `simple`) does not keep the regular strip's
+        // empty trailing area. Height remains content-driven for GTK popovers.
+        self.window
+            .set_default_size(top_default_width(snapshot), -1);
         let scale = effective_scale(snapshot);
         let is_simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
         let use_icons = snapshot.use_icons || plan.compact;
@@ -1481,5 +1491,26 @@ mod tests {
 
         assert!(initial_key != changed_key);
         assert_eq!(changed.binding_hints.badge_for_tool(Tool::Pen), Some("9"));
+    }
+
+    #[test]
+    fn simple_layout_requests_its_smaller_natural_width() {
+        let mut state = make_test_input_state();
+        state.toolbar_use_icons = true;
+        let regular = ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::from_input_state(&state),
+        );
+
+        state.toolbar_layout_mode = ToolbarLayoutMode::Simple;
+        let simple = ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::from_input_state(&state),
+        );
+
+        let regular_width = top_default_width(&regular);
+        let simple_width = top_default_width(&simple);
+        assert!(simple_width < regular_width);
+        assert_eq!(simple_width, top_toolbar_size(&simple).0 as i32);
     }
 }
