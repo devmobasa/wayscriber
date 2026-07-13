@@ -10,6 +10,8 @@ pub(crate) use runtime::start_system_tray;
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
 #[cfg(feature = "tray")]
+use crate::config::TrayIconStyle;
+#[cfg(feature = "tray")]
 use std::sync::Arc;
 #[cfg(feature = "tray")]
 use std::sync::atomic::{AtomicBool, AtomicU32};
@@ -20,6 +22,7 @@ pub(crate) struct WayscriberTray {
     quit_flag: Arc<AtomicBool>,
     configurator_binary: String,
     session_resume_enabled: bool,
+    icon_style: TrayIconStyle,
     overlay_pid: Arc<AtomicU32>,
     tray_status: Arc<TrayStatusShared>,
 }
@@ -31,6 +34,7 @@ impl WayscriberTray {
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
         session_resume_enabled: bool,
+        icon_style: TrayIconStyle,
         overlay_pid: Arc<AtomicU32>,
         tray_status: Arc<TrayStatusShared>,
     ) -> Self {
@@ -39,6 +43,7 @@ impl WayscriberTray {
             quit_flag,
             configurator_binary,
             session_resume_enabled,
+            icon_style,
             overlay_pid,
             tray_status,
         }
@@ -55,6 +60,7 @@ impl WayscriberTray {
             quit_flag,
             "true".into(),
             session_resume_enabled,
+            TrayIconStyle::Auto,
             Arc::new(AtomicU32::new(0)),
             Arc::new(TrayStatusShared::new()),
         )

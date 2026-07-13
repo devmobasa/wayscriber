@@ -279,6 +279,17 @@ clear_preset_5 = []
 #   redo = ["X"]
 #   clear_canvas = ["C"]
 # ═══════════════════════════════════════════════════════════════════════════════
+# SYSTEM TRAY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[tray]
+# Main tray icon rendering strategy:
+# - "auto": theme-adaptive symbolic icon where supported, colored fallback otherwise
+# - "symbolic": always request the theme-adaptive symbolic icon
+# - "colored": always use the yellow fallback pixmaps
+icon_style = "auto"
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # UI SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 

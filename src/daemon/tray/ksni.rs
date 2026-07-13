@@ -7,7 +7,7 @@ use super::runtime::update_session_resume_in_config;
 #[cfg(feature = "tray")]
 use super::shortcut_hint_io::configured_toggle_shortcut_hint;
 #[cfg(feature = "tray")]
-use crate::config::{Action, action_label};
+use crate::config::{Action, TrayIconStyle, action_label};
 #[cfg(feature = "tray")]
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, ICON_THEME_PATH_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV,
@@ -42,7 +42,7 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn icon_name(&self) -> String {
-        if tray_theme_icons_enabled() {
+        if tray_symbolic_icon_enabled(self.icon_style) {
             TRAY_ICON_NAME.into()
         } else {
             String::new()
@@ -86,7 +86,7 @@ impl ksni::Tray for WayscriberTray {
         }
 
         ksni::ToolTip {
-            icon_name: if tray_theme_icons_enabled() {
+            icon_name: if tray_symbolic_icon_enabled(self.icon_style) {
                 TRAY_ICON_NAME.into()
             } else {
                 String::new()
@@ -111,7 +111,7 @@ impl ksni::Tray for WayscriberTray {
 
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
-        let use_theme_icons = tray_theme_icons_enabled();
+        let use_theme_icons = menu_theme_icons_enabled();
         let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
         let toggle_label = toggle_overlay_menu_label();
 
@@ -298,10 +298,29 @@ impl ksni::Tray for WayscriberTray {
 }
 
 #[cfg(feature = "tray")]
-fn tray_theme_icons_enabled() -> bool {
+fn tray_symbolic_icon_enabled(icon_style: TrayIconStyle) -> bool {
+    let force_pixmap = env::var_os(TRAY_FORCE_PIXMAP_ENV).is_some();
+    let (desktop_env, session_env, desktop_session) = current_desktop_names();
+    resolve_symbolic_tray_icon(
+        icon_style,
+        force_pixmap,
+        &desktop_env,
+        &session_env,
+        &desktop_session,
+    )
+}
+
+#[cfg(feature = "tray")]
+fn menu_theme_icons_enabled() -> bool {
     if env::var_os(TRAY_FORCE_PIXMAP_ENV).is_some() {
         return false;
     }
+    let (desktop_env, session_env, desktop_session) = current_desktop_names();
+    tray_theme_icons_supported(&desktop_env, &session_env, &desktop_session)
+}
+
+#[cfg(feature = "tray")]
+fn current_desktop_names() -> (String, String, String) {
     let desktop_env = env::var(XDG_CURRENT_DESKTOP_ENV)
         .unwrap_or_default()
         .to_lowercase();
@@ -311,7 +330,27 @@ fn tray_theme_icons_enabled() -> bool {
     let desktop_session = env::var(DESKTOP_SESSION_ENV)
         .unwrap_or_default()
         .to_lowercase();
-    tray_theme_icons_supported(&desktop_env, &session_env, &desktop_session)
+    (desktop_env, session_env, desktop_session)
+}
+
+#[cfg(feature = "tray")]
+fn resolve_symbolic_tray_icon(
+    icon_style: TrayIconStyle,
+    force_pixmap: bool,
+    desktop_env: &str,
+    session_env: &str,
+    desktop_session: &str,
+) -> bool {
+    if force_pixmap {
+        return false;
+    }
+    match icon_style {
+        TrayIconStyle::Auto => {
+            tray_theme_icons_supported(desktop_env, session_env, desktop_session)
+        }
+        TrayIconStyle::Symbolic => true,
+        TrayIconStyle::Colored => false,
+    }
 }
 
 #[cfg(feature = "tray")]
@@ -364,7 +403,8 @@ fn toggle_overlay_menu_label() -> String {
 
 #[cfg(all(feature = "tray", test))]
 mod tests {
-    use super::{TRAY_ICON_NAME, tray_theme_icons_supported};
+    use super::{TRAY_ICON_NAME, resolve_symbolic_tray_icon, tray_theme_icons_supported};
+    use crate::config::TrayIconStyle;
 
     #[test]
     fn tray_uses_the_packaged_symbolic_icon_name() {
@@ -387,5 +427,52 @@ mod tests {
     fn tray_theme_icons_supported_blocks_existing_problem_shells() {
         assert!(!tray_theme_icons_supported("quickshell", "", ""));
         assert!(!tray_theme_icons_supported("", "noctalia", ""));
+    }
+
+    #[test]
+    fn auto_tray_icon_style_uses_desktop_compatibility_detection() {
+        assert!(resolve_symbolic_tray_icon(
+            TrayIconStyle::Auto,
+            false,
+            "hyprland",
+            "",
+            ""
+        ));
+        assert!(!resolve_symbolic_tray_icon(
+            TrayIconStyle::Auto,
+            false,
+            "quickshell",
+            "",
+            ""
+        ));
+    }
+
+    #[test]
+    fn explicit_tray_icon_styles_override_desktop_detection() {
+        assert!(resolve_symbolic_tray_icon(
+            TrayIconStyle::Symbolic,
+            false,
+            "quickshell",
+            "",
+            ""
+        ));
+        assert!(!resolve_symbolic_tray_icon(
+            TrayIconStyle::Colored,
+            false,
+            "hyprland",
+            "",
+            ""
+        ));
+    }
+
+    #[test]
+    fn force_pixmap_environment_override_wins_over_symbolic_config() {
+        assert!(!resolve_symbolic_tray_icon(
+            TrayIconStyle::Symbolic,
+            true,
+            "hyprland",
+            "",
+            ""
+        ));
     }
 }

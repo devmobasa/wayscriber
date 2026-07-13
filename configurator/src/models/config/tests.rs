@@ -972,3 +972,19 @@ fn config_draft_round_trips_xdg_focus_loss_behavior() {
         XdgFocusLossBehavior::Stay
     );
 }
+
+#[test]
+fn config_draft_preserves_tray_icon_style() {
+    let mut config = Config::default();
+    config.tray.icon_style = wayscriber::config::TrayIconStyle::Colored;
+
+    let draft = ConfigDraft::from_config(&config);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+
+    assert_eq!(
+        round_trip.tray.icon_style,
+        wayscriber::config::TrayIconStyle::Colored
+    );
+}
