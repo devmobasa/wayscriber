@@ -60,7 +60,9 @@ pub(super) fn run(
         let mut windows: Option<super::view::Windows> = None;
         while let Ok(update) = updates.recv().await {
             windows
-                .get_or_insert_with(|| super::view::Windows::new(feedback.clone()))
+                .get_or_insert_with(|| {
+                    super::view::Windows::new(super::widgets::FeedbackSender::new(feedback.clone()))
+                })
                 .apply(&update);
         }
         // The backend dropped the bridge; shut the GTK side down with it.

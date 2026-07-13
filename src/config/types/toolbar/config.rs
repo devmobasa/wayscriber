@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides};
+use super::{
+    ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
+    ToolbarRebindModifier,
+};
 
 /// Toolbar visibility and pinning configuration.
 ///
@@ -136,6 +139,10 @@ pub struct ToolbarConfig {
     /// Force inline toolbars even when layer-shell is available (debug/compatibility).
     #[serde(default)]
     pub force_inline: bool,
+
+    /// Modifier chord used to edit a clicked control's keyboard shortcut.
+    #[serde(default)]
+    pub rebind_modifier: ToolbarRebindModifier,
 }
 
 impl Default for ToolbarConfig {
@@ -173,6 +180,7 @@ impl Default for ToolbarConfig {
             side_offset: 0.0,
             side_offset_x: 0.0,
             force_inline: false,
+            rebind_modifier: ToolbarRebindModifier::default(),
         }
     }
 }

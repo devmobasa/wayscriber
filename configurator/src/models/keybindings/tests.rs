@@ -24,6 +24,20 @@ fn keybindings_draft_to_config_updates_fields() {
 }
 
 #[test]
+fn command_palette_and_full_screen_capture_fields_expose_current_defaults() {
+    let config = KeybindingsConfig::default();
+
+    assert_eq!(
+        KeybindingField::ToggleCommandPalette.get(&config),
+        &vec!["Ctrl+K".to_string(), "Ctrl+Shift+P".to_string()]
+    );
+    assert_eq!(
+        KeybindingField::CaptureFullScreen.get(&config),
+        &vec!["Ctrl+Alt+F".to_string()]
+    );
+}
+
+#[test]
 fn board_pdf_export_keybinding_field_is_visible_and_in_capture_tab() {
     assert!(
         KeybindingField::all().contains(&KeybindingField::ExportBoardPdfFile),

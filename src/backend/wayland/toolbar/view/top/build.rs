@@ -290,7 +290,10 @@ pub(super) fn build_top_view_planned(
                         selected: entry.color == snapshot.color,
                     },
                     Some(Interaction::click(
-                        ToolbarEvent::SetColor(entry.color),
+                        ToolbarEvent::SetQuickColor {
+                            color: entry.color,
+                            action,
+                        },
                         Some(format_binding_label(&entry.label, binding)),
                     )),
                 )

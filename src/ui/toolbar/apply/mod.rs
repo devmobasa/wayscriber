@@ -17,12 +17,16 @@ impl InputState {
         match event {
             ToolbarEvent::SelectTool(tool) => self.apply_toolbar_select_tool(tool),
             ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
+            ToolbarEvent::SetQuickColor { color, .. } => self.apply_toolbar_set_color(color),
             ToolbarEvent::SetColorHsv { h, s, v } => self.apply_toolbar_set_color_hsv(h, s, v),
             ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),
+            ToolbarEvent::NudgeFontSize(delta) => {
+                self.apply_toolbar_set_font_size(self.current_font_size + delta)
+            }
             ToolbarEvent::ToggleFill(enable) => self.apply_toolbar_toggle_fill(enable),
             ToolbarEvent::SetPolygonSides(sides) => self.apply_toolbar_set_polygon_sides(sides),
             ToolbarEvent::NudgePolygonSides(delta) => self.apply_toolbar_nudge_polygon_sides(delta),
@@ -91,6 +95,7 @@ impl InputState {
             ToolbarEvent::ToggleDelaySliders(show) => self.apply_toolbar_toggle_delay_sliders(show),
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
+            ToolbarEvent::OpenCommandPalette => self.apply_toolbar_open_command_palette(),
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)

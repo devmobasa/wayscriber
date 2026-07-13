@@ -476,7 +476,7 @@ enabled = true
 - Use `focus_prev_output` / `focus_next_output` (default: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>) to move overlay focus between outputs.
 - Toolbar surfaces and status bar follow the active output when focus changes.
 - Output switching is blocked while capture, frozen, or zoom is active/in progress; finish or exit those modes first.
-- Command palette (`Ctrl+K`) includes hidden aliases, so searching `monitor` or `display` finds output actions.
+- Command palette (`Ctrl+K` or `Ctrl+Shift+P`) includes hidden aliases, so searching `monitor` or `display` finds output actions.
 - For GNOME/xdg fallback, set `preferred_output` (or env override `WAYSCRIBER_XDG_OUTPUT`) to pin the overlay to a specific monitor.
 
 **Defaults:**
@@ -649,6 +649,10 @@ side_offset_x = 0.0
 # Force inline toolbars even when layer-shell is available
 force_inline = false
 
+# Modifier-click a toolbar action to capture a replacement shortcut.
+# Values: "ctrl_shift", "ctrl_alt", "shift_alt", "ctrl_shift_alt", "disabled"
+rebind_modifier = "ctrl_shift"
+
 [ui.toolbar.items]
 # Hide individual toolbar items or whole side sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
@@ -717,6 +721,7 @@ side_sections = [
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
+- **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 - **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F2/F9 still toggle full visibility.
@@ -1075,6 +1080,8 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
+The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) once in memory and advances to `config_revision = 1`. Customized pairs are preserved, and the revision plus migrated values are written only on the next normal config save. Once revision 1 is saved, explicitly restoring the old pair remains untouched.
+
 ```toml
 [keybindings]
 # Exit overlay (or cancel current action)
@@ -1249,7 +1256,7 @@ open_context_menu = ["Shift+F10", "Menu"]
 open_configurator = ["F11"]
 
 # Toggle command palette
-toggle_command_palette = ["Ctrl+K"]
+toggle_command_palette = ["Ctrl+K", "Ctrl+Shift+P"]
 
 # Color selection shortcuts
 set_color_red = ["R"]
@@ -1264,7 +1271,7 @@ set_color_black = ["K"]
 pick_screen_color = ["I"]
 
 # Screenshot shortcuts
-capture_full_screen = ["Ctrl+Shift+P"]
+capture_full_screen = ["Ctrl+Alt+F"]
 capture_active_window = ["Ctrl+Shift+O"]
 capture_selection = ["Ctrl+Shift+I"]
 

@@ -1,7 +1,14 @@
-use super::super::base::{InputState, UiToastKind};
+use super::super::base::{
+    InputState, KeybindingEditOperation, KeybindingEditRequest, PendingBackendAction, UiToastKind,
+};
 use super::layout;
-use super::{CommandPaletteCursorHint, layout::CommandPaletteGeometry};
+use super::{
+    CommandPaletteCursorHint,
+    layout::{CommandPaletteGeometry, CommandPaletteRowAction},
+};
+use crate::config::{Action, KeyBinding, KeybindingsConfig, action_label};
 use crate::input::events::Key;
+use crate::input::state::actions::key_press::bindings::key_to_action_label;
 use std::time::{Duration, Instant};
 
 const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280);
@@ -9,6 +16,55 @@ const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280
 const COMMAND_PALETTE_REPEAT_INTERVAL: Duration = Duration::from_millis(55);
 
 impl InputState {
+    pub(crate) fn command_palette_is_engaged(&self) -> bool {
+        self.command_palette_open || self.keybinding_capture_action.is_some()
+    }
+
+    pub(crate) fn begin_keybinding_capture(&mut self, action: Action) -> bool {
+        if KeybindingsConfig::default()
+            .bindings_for_action(action)
+            .is_none()
+        {
+            self.set_ui_toast(
+                UiToastKind::Warning,
+                format!(
+                    "{} has no configurable keyboard shortcut.",
+                    action_label(action)
+                ),
+            );
+            return false;
+        }
+        self.keybinding_capture_action = Some(action);
+        self.clear_command_palette_repeat();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn request_keybinding_edit(
+        &mut self,
+        action: Action,
+        operation: KeybindingEditOperation,
+    ) -> bool {
+        if KeybindingsConfig::default()
+            .bindings_for_action(action)
+            .is_none()
+        {
+            self.set_ui_toast(
+                UiToastKind::Warning,
+                format!(
+                    "{} has no configurable keyboard shortcut.",
+                    action_label(action)
+                ),
+            );
+            return false;
+        }
+        self.set_pending_backend_action(PendingBackendAction::EditKeybinding(
+            KeybindingEditRequest { action, operation },
+        ));
+        true
+    }
+
     fn open_command_palette_internal(&mut self, track_usage: bool) {
         self.command_palette_open = true;
         self.clear_command_palette_repeat();
@@ -46,8 +102,12 @@ impl InputState {
     /// Handle a key press while the command palette is open.
     /// Returns true if the key was handled.
     pub(crate) fn handle_command_palette_key(&mut self, key: Key) -> bool {
-        if !self.command_palette_open {
+        if !self.command_palette_is_engaged() {
             return false;
+        }
+
+        if let Some(action) = self.keybinding_capture_action {
+            return self.handle_keybinding_capture_key(action, key);
         }
 
         match key {
@@ -121,6 +181,24 @@ impl InputState {
                 self.clear_command_palette_query();
                 true
             }
+            Key::Char('e' | 'E') if self.modifiers.ctrl => {
+                if let Some(command) = self.selected_command() {
+                    self.begin_keybinding_capture(command.action);
+                }
+                true
+            }
+            Key::Delete if self.modifiers.ctrl => {
+                if let Some(command) = self.selected_command() {
+                    self.request_keybinding_edit(command.action, KeybindingEditOperation::Delete);
+                }
+                true
+            }
+            Key::Char('r' | 'R') if self.modifiers.ctrl => {
+                if let Some(command) = self.selected_command() {
+                    self.request_keybinding_edit(command.action, KeybindingEditOperation::Reset);
+                }
+                true
+            }
             Key::Char(ch) if !self.modifiers.ctrl && !ch.is_control() => {
                 self.command_palette_query.push(ch);
                 self.mark_command_palette_query_changed();
@@ -133,6 +211,37 @@ impl InputState {
             }
             _ => true, // Consume all other keys while palette is open
         }
+    }
+
+    fn handle_keybinding_capture_key(&mut self, action: Action, key: Key) -> bool {
+        if self.handle_modifier_key_press(key) {
+            self.needs_redraw = true;
+            return true;
+        }
+        if matches!(key, Key::Escape) {
+            self.keybinding_capture_action = None;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return true;
+        }
+        let Some(mut key_label) = key_to_action_label(key) else {
+            return true;
+        };
+        if key_label.len() == 1 && key_label.as_bytes()[0].is_ascii_alphabetic() {
+            key_label.make_ascii_uppercase();
+        }
+        let binding = KeyBinding {
+            key: key_label,
+            ctrl: self.modifiers.ctrl,
+            shift: self.modifiers.shift,
+            alt: self.modifiers.alt,
+        }
+        .to_string();
+        self.keybinding_capture_action = None;
+        self.request_keybinding_edit(action, KeybindingEditOperation::Replace(vec![binding]));
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
     }
 
     fn start_command_palette_repeat(&mut self, key: Key) {
@@ -260,8 +369,13 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> bool {
-        if !self.command_palette_open {
+        if !self.command_palette_is_engaged() {
             return false;
+        }
+        if self.keybinding_capture_action.take().is_some() {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return true;
         }
 
         let filtered = self.filtered_commands();
@@ -281,6 +395,33 @@ impl InputState {
             // Clicked on item at visible index, actual index accounts for scroll.
             let actual_index = self.command_palette_scroll + visible_index;
             self.command_palette_selected = actual_index;
+
+            if let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
+                && let Some(command) = filtered.get(actual_index).copied()
+                && KeybindingsConfig::default()
+                    .bindings_for_action(command.action)
+                    .is_some()
+            {
+                match row_action {
+                    CommandPaletteRowAction::Edit => {
+                        self.begin_keybinding_capture(command.action);
+                    }
+                    CommandPaletteRowAction::Delete => {
+                        self.request_keybinding_edit(
+                            command.action,
+                            KeybindingEditOperation::Delete,
+                        );
+                    }
+                    CommandPaletteRowAction::Reset => {
+                        self.request_keybinding_edit(
+                            command.action,
+                            KeybindingEditOperation::Reset,
+                        );
+                    }
+                }
+                self.needs_redraw = true;
+                return true;
+            }
 
             // Get the command label for feedback before executing.
             let label = filtered
@@ -326,6 +467,25 @@ impl InputState {
         let filtered = self.filtered_commands();
         let geometry = self.command_palette_geometry(screen_width, screen_height, filtered.len());
         command_palette_cursor_hint_from_local(geometry, x, y)
+    }
+
+    pub(crate) fn command_palette_action_tooltip(
+        &self,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> Option<(&'static str, i32, i32)> {
+        if !self.command_palette_open {
+            return None;
+        }
+        let filtered = self.filtered_commands();
+        let geometry = self.command_palette_geometry(screen_width, screen_height, filtered.len());
+        let (x, y) = self.pointer_position();
+        let (local_x, local_y) = geometry.local_point(x, y);
+        let (visible_index, action) = geometry.row_action_at(local_x, local_y)?;
+        let actual_index = self.command_palette_scroll + visible_index;
+        let command = filtered.get(actual_index)?;
+        KeybindingsConfig::default().bindings_for_action(command.action)?;
+        Some((action.tooltip(), x, y))
     }
 }
 

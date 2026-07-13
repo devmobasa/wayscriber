@@ -57,6 +57,15 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
             b: 0.3,
             a: 1.0,
         }),
+        ToolbarEvent::SetQuickColor {
+            color: Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+            action: Some(crate::config::Action::SetColorRed),
+        },
         ToolbarEvent::SetThickness(8.0),
         ToolbarEvent::NudgeThickness(1.0),
         ToolbarEvent::SetMarkerOpacity(0.5),
@@ -68,6 +77,7 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
             "italic".to_string(),
         )),
         ToolbarEvent::SetFontSize(44.0),
+        ToolbarEvent::NudgeFontSize(2.0),
         ToolbarEvent::ToggleFill(true),
         ToolbarEvent::ApplyPreset(1),
         ToolbarEvent::OpenSession,
@@ -187,6 +197,19 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
     assert!(config.ui.show_status_board_badge);
     assert!(config.ui.show_status_page_badge);
     assert!(!config.ui.show_floating_badge_always);
+}
+
+#[test]
+fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
+    let mut input_state = make_test_input_state();
+    assert!(!toolbar_event_blocked_by_modal(&input_state));
+
+    input_state.toggle_command_palette();
+    assert!(toolbar_event_blocked_by_modal(&input_state));
+
+    input_state.toggle_command_palette();
+    assert!(input_state.begin_keybinding_capture(crate::config::Action::Undo));
+    assert!(toolbar_event_blocked_by_modal(&input_state));
 }
 
 #[test]

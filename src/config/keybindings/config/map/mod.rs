@@ -7,6 +7,7 @@ mod board;
 mod capture;
 mod colors;
 mod core;
+mod edit;
 mod presets;
 mod selection;
 mod tools;

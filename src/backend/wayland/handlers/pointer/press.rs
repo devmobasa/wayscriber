@@ -44,7 +44,7 @@ impl WaylandState {
         }
 
         // Handle command palette clicks
-        if self.input_state.command_palette_open {
+        if self.input_state.command_palette_is_engaged() {
             if button == BTN_LEFT {
                 let screen_width = self.surface.width();
                 let screen_height = self.surface.height();

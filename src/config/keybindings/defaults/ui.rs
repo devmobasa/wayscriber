@@ -63,5 +63,5 @@ pub(crate) fn default_open_configurator() -> Vec<String> {
 }
 
 pub(crate) fn default_toggle_command_palette() -> Vec<String> {
-    vec!["Ctrl+K".to_string()]
+    vec!["Ctrl+K".to_string(), "Ctrl+Shift+P".to_string()]
 }

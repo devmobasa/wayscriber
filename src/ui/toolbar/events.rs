@@ -185,7 +185,14 @@ impl SidePane {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToolbarEvent {
     SelectTool(Tool),
+    #[cfg_attr(not(feature = "toolbar-gtk"), allow(dead_code))]
     SetColor(Color),
+    /// Set a configured quick-color slot while preserving which binding the
+    /// clicked swatch represents, even when multiple slots share an RGB value.
+    SetQuickColor {
+        color: Color,
+        action: Option<Action>,
+    },
     /// Set the color from the side palette's HSV picker. Carries the full
     /// triple so hue survives gray colors (where RGB alone loses it).
     SetColorHsv {
@@ -200,6 +207,7 @@ pub enum ToolbarEvent {
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
     SetFontSize(f64),
+    NudgeFontSize(f64),
     ToggleFill(bool),
     SetPolygonSides(u8),
     NudgePolygonSides(i8),
@@ -254,6 +262,8 @@ pub enum ToolbarEvent {
     ClearSession,
     OpenConfigurator,
     OpenConfigFile,
+    /// Open (toggle) the command palette overlay.
+    OpenCommandPalette,
     ToggleCustomSection(bool),
     ToggleDelaySliders(bool),
     SetCustomUndoDelay(f64),

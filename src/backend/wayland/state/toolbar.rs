@@ -4,6 +4,8 @@ use super::*;
 mod drag;
 mod events;
 mod geometry;
+#[cfg(feature = "toolbar-gtk")]
+pub(crate) use geometry::clamp_floating_axis_offset;
 mod gtk_feedback;
 mod inline;
 mod side_pane;

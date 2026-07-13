@@ -60,7 +60,7 @@ pub use toolbar::{
     ResolvedToolbarItems, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarSectionDefaults, toolbar_item_definitions,
+    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, toolbar_item_definitions,
     toolbar_item_order_group,
 };
 pub use toolbar::{

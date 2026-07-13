@@ -1,10 +1,11 @@
 //! Command palette UI rendering.
 
-use crate::config::action_meta::ActionMeta;
+use crate::config::{action_label, action_meta::ActionMeta};
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
+    COMMAND_PALETTE_TOP_RATIO,
 };
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -30,7 +31,8 @@ const COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X: f64 = 5.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT: f64 = 18.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_GAP: f64 = 12.0;
 const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
-const COMMAND_PALETTE_INPUT_HINT: &str = "Esc close • Ctrl+U clear • Ctrl+Backspace delete word";
+const COMMAND_PALETTE_INPUT_HINT: &str =
+    "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
 
 /// Render the command palette if open.
 pub fn render_command_palette(
@@ -39,7 +41,12 @@ pub fn render_command_palette(
     screen_width: u32,
     screen_height: u32,
 ) {
-    if !input_state.command_palette_open {
+    if !input_state.command_palette_is_engaged() {
+        return;
+    }
+
+    if let Some(action) = input_state.keybinding_capture_action {
+        render_keybinding_capture(ctx, input_state, action, screen_width, screen_height);
         return;
     }
 
@@ -95,7 +102,127 @@ pub fn render_command_palette(
         input_state.command_palette_scroll,
     );
 
+    if let Some((tooltip, pointer_x, pointer_y)) =
+        input_state.command_palette_action_tooltip(screen_width, screen_height)
+    {
+        draw_command_palette_action_tooltip(
+            ctx,
+            tooltip,
+            pointer_x as f64,
+            pointer_y as f64,
+            screen_width as f64,
+            screen_height as f64,
+        );
+    }
+
     draw_command_palette_escape_hint(ctx, x, y, palette_width, height);
+}
+
+fn draw_command_palette_action_tooltip(
+    ctx: &cairo::Context,
+    text: &str,
+    pointer_x: f64,
+    pointer_y: f64,
+    screen_width: f64,
+    screen_height: f64,
+) {
+    const PAD_X: f64 = 8.0;
+    const PAD_Y: f64 = 5.0;
+    const OFFSET: f64 = 12.0;
+    let style = command_palette_text_style(
+        COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Normal,
+    );
+    let extents = text_extents_for(
+        ctx,
+        COMMAND_PALETTE_FONT_FAMILY,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        style.size,
+        text,
+    );
+    let width = extents.width() + PAD_X * 2.0;
+    let height = style.size + PAD_Y * 2.0;
+    let x = (pointer_x + OFFSET).min((screen_width - width - 4.0).max(4.0));
+    let y = (pointer_y + OFFSET).min((screen_height - height - 4.0).max(4.0));
+
+    ctx.set_source_rgba(0.04, 0.05, 0.07, 0.98);
+    draw_rounded_rect(ctx, x, y, width, height, 5.0);
+    let _ = ctx.fill();
+    constants::set_color(ctx, TEXT_WHITE);
+    draw_text_baseline(ctx, style, text, x + PAD_X, y + PAD_Y + style.size, None);
+}
+
+fn render_keybinding_capture(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    action: crate::config::Action,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let width = 520.0_f64.min(screen_width as f64 - 24.0);
+    let height = 170.0;
+    let x = (screen_width as f64 - width) / 2.0;
+    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+    draw_command_palette_frame(
+        ctx,
+        screen_width as f64,
+        screen_height as f64,
+        x,
+        y,
+        width,
+        height,
+    );
+
+    let title_style =
+        command_palette_text_style(18.0, cairo::FontWeight::Bold, cairo::FontSlant::Normal);
+    let body_style =
+        command_palette_text_style(13.0, cairo::FontWeight::Normal, cairo::FontSlant::Normal);
+    constants::set_color(ctx, TEXT_WHITE);
+    draw_text_baseline(
+        ctx,
+        title_style,
+        &format!("Rebind {}", action_label(action)),
+        x + 22.0,
+        y + 38.0,
+        None,
+    );
+    let current = input_state.action_binding_labels(action);
+    constants::set_color(ctx, TEXT_DESCRIPTION);
+    draw_text_baseline(
+        ctx,
+        body_style,
+        &format!(
+            "Current: {}",
+            if current.is_empty() {
+                "Not bound".to_string()
+            } else {
+                current.join(", ")
+            }
+        ),
+        x + 22.0,
+        y + 70.0,
+        None,
+    );
+    constants::set_color(ctx, TEXT_WHITE);
+    draw_text_baseline(
+        ctx,
+        body_style,
+        "Press the new shortcut now",
+        x + 22.0,
+        y + 108.0,
+        None,
+    );
+    constants::set_color(ctx, TEXT_DESCRIPTION);
+    draw_text_baseline(
+        ctx,
+        body_style,
+        "Escape cancels • conflicts are rejected without changing your config",
+        x + 22.0,
+        y + 140.0,
+        None,
+    );
 }
 
 fn command_palette_text_style(

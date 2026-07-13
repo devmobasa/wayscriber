@@ -172,8 +172,23 @@ impl WaylandState {
             return;
         }
         self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
-        // Block pointer motion when modal overlays are active
-        if self.input_state.command_palette_open || self.input_state.tour_active {
+        // The command palette owns hover rendering (including shortcut-action
+        // tooltips), so keep its screen-space pointer cache and redraw current
+        // even though normal canvas motion remains blocked by the modal.
+        if self.input_state.command_palette_open {
+            let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+            self.input_state.update_pointer_positions(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+                wx,
+                wy,
+            );
+            self.input_state.dirty_tracker.mark_full();
+            self.input_state.needs_redraw = true;
+            return;
+        }
+        // Block normal pointer motion while the tour modal is active.
+        if self.input_state.tour_active {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);

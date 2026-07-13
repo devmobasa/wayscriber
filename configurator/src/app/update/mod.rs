@@ -125,6 +125,9 @@ impl ConfiguratorApp {
             Message::ToolbarLayoutModeChanged(option) => {
                 self.handle_toolbar_layout_mode_changed(option)
             }
+            Message::ToolbarRebindModifierChanged(option) => {
+                self.handle_toolbar_rebind_modifier_changed(option)
+            }
             Message::ToolbarOverrideModeChanged(option) => {
                 self.handle_toolbar_override_mode_changed(option)
             }

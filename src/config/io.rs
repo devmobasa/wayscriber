@@ -54,6 +54,22 @@ impl Config {
     /// - The file exists but cannot be read
     /// - The file exists but contains invalid TOML syntax
     pub fn load() -> Result<LoadedConfig> {
+        let mut loaded = Self::load_unvalidated()?;
+
+        // Validate and clamp values to acceptable ranges.
+        loaded.config.validate_and_clamp();
+
+        debug!("Config: {:?}", loaded.config);
+
+        Ok(loaded)
+    }
+
+    /// Reads and deserializes the active config without validation.
+    ///
+    /// Binary-only repair workflows use this to fix an invalid subsection
+    /// before normal validation. Ordinary consumers must use [`Self::load`].
+    #[allow(dead_code)] // Used by the binary crate's keybinding repair path.
+    pub(crate) fn load_unvalidated() -> Result<LoadedConfig> {
         let primary_path = primary_config_dir()?.join("config.toml");
 
         let (config_path, source) = if primary_path.exists() {
@@ -70,14 +86,10 @@ impl Config {
         let config_str = fs::read_to_string(&config_path)
             .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
 
-        let mut config: Config = toml::from_str(&config_str)
+        let config: Config = toml::from_str(&config_str)
             .with_context(|| format!("Failed to parse config from {}", config_path.display()))?;
 
-        // Validate and clamp values to acceptable ranges
-        config.validate_and_clamp();
-
         info!("Loaded config from {}", config_path.display());
-        debug!("Config: {:?}", config);
 
         Ok(LoadedConfig { config, source })
     }

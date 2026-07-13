@@ -23,6 +23,17 @@ impl InputState {
         self.action_bindings = action_bindings;
     }
 
+    #[allow(dead_code)] // Used by the binary Wayland backend.
+    pub(crate) fn set_keybinding_maps(
+        &mut self,
+        action_map: HashMap<KeyBinding, Action>,
+        action_bindings: HashMap<Action, Vec<KeyBinding>>,
+    ) {
+        self.action_map = action_map;
+        self.action_bindings = action_bindings;
+        self.needs_redraw = true;
+    }
+
     pub fn action_binding_labels(&self, action: Action) -> Vec<String> {
         if let Some(bindings) = self.action_bindings.get(&action) {
             let mut labels = Vec::new();

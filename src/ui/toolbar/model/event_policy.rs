@@ -62,9 +62,21 @@ pub(crate) enum ToolbarPreApplyEffect {
 pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
     match event {
         ToolbarEvent::SelectTool(tool) => action_for_tool(*tool),
+        ToolbarEvent::SetQuickColor { action, .. } => *action,
         ToolbarEvent::EnterTextMode => Some(Action::EnterTextMode),
         ToolbarEvent::EnterStickyNoteMode => Some(Action::EnterStickyNoteMode),
         ToolbarEvent::ToggleFill(_) => Some(Action::ToggleFill),
+        ToolbarEvent::NudgeThickness(delta) if *delta > 0.0 => Some(Action::IncreaseThickness),
+        ToolbarEvent::NudgeThickness(delta) if *delta < 0.0 => Some(Action::DecreaseThickness),
+        ToolbarEvent::NudgeMarkerOpacity(delta) if *delta > 0.0 => {
+            Some(Action::IncreaseMarkerOpacity)
+        }
+        ToolbarEvent::NudgeMarkerOpacity(delta) if *delta < 0.0 => {
+            Some(Action::DecreaseMarkerOpacity)
+        }
+        ToolbarEvent::SetEraserMode(_) => Some(Action::ToggleEraserMode),
+        ToolbarEvent::NudgeFontSize(delta) if *delta > 0.0 => Some(Action::IncreaseFontSize),
+        ToolbarEvent::NudgeFontSize(delta) if *delta < 0.0 => Some(Action::DecreaseFontSize),
         ToolbarEvent::Undo => Some(Action::Undo),
         ToolbarEvent::Redo => Some(Action::Redo),
         ToolbarEvent::UndoAll => Some(Action::UndoAll),
@@ -90,11 +102,13 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::ZoomOut => Some(Action::ZoomOut),
         ToolbarEvent::ResetZoom => Some(Action::ResetZoom),
         ToolbarEvent::ResetStepMarkerCounter => Some(Action::ResetStepMarkerCounter),
+        ToolbarEvent::ResetArrowLabelCounter => Some(Action::ResetArrowLabelCounter),
         ToolbarEvent::ToggleZoomLock => Some(Action::ToggleZoomLock),
         ToolbarEvent::ApplyPreset(slot) => action_for_apply_preset(*slot),
         ToolbarEvent::SavePreset(slot) => action_for_save_preset(*slot),
         ToolbarEvent::ClearPreset(slot) => action_for_clear_preset(*slot),
         ToolbarEvent::OpenConfigurator => Some(Action::OpenConfigurator),
+        ToolbarEvent::OpenCommandPalette => Some(Action::ToggleCommandPalette),
         ToolbarEvent::PickScreenColor => Some(Action::PickScreenColor),
         _ => None,
     }
@@ -231,5 +245,37 @@ fn pre_apply_effects_for_event(event: &ToolbarEvent) -> Vec<ToolbarPreApplyEffec
         vec![ToolbarPreApplyEffect::RecordDrawerHintShown]
     } else {
         Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::color::RED;
+
+    #[test]
+    fn duplicate_quick_colors_keep_the_clicked_binding_identity() {
+        let first = ToolbarEvent::SetQuickColor {
+            color: RED,
+            action: Some(Action::SetColorRed),
+        };
+        let duplicate = ToolbarEvent::SetQuickColor {
+            color: RED,
+            action: Some(Action::SetColorGreen),
+        };
+
+        assert_eq!(action_for_event(&first), Some(Action::SetColorRed));
+        assert_eq!(action_for_event(&duplicate), Some(Action::SetColorGreen));
+    }
+
+    #[test]
+    fn unbound_quick_color_slot_stays_unbound() {
+        assert_eq!(
+            action_for_event(&ToolbarEvent::SetQuickColor {
+                color: RED,
+                action: None,
+            }),
+            None
+        );
     }
 }

@@ -129,6 +129,8 @@ pub const SIDE_SETTINGS_BOARDS: ToolbarItemId = ToolbarItemId::from_known("side.
 pub const SIDE_SETTINGS_PAGES: ToolbarItemId = ToolbarItemId::from_known("side.settings.pages");
 pub const SIDE_SETTINGS_STEP_CONTROLS: ToolbarItemId =
     ToolbarItemId::from_known("side.settings.step-controls");
+pub const SIDE_SETTINGS_COMMAND_PALETTE: ToolbarItemId =
+    ToolbarItemId::from_known("side.settings.command-palette");
 pub const SIDE_SETTINGS_CONFIGURATOR: ToolbarItemId =
     ToolbarItemId::from_known("side.settings.configurator");
 pub const SIDE_SETTINGS_CONFIG_FILE: ToolbarItemId =

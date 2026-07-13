@@ -1,4 +1,59 @@
-use wayscriber::config::ToolbarLayoutMode;
+use wayscriber::config::{ToolbarLayoutMode, ToolbarRebindModifier};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarRebindModifierOption {
+    Disabled,
+    CtrlShift,
+    CtrlAlt,
+    ShiftAlt,
+    CtrlShiftAlt,
+}
+
+impl ToolbarRebindModifierOption {
+    pub const ALL: [Self; 5] = [
+        Self::CtrlShift,
+        Self::CtrlAlt,
+        Self::ShiftAlt,
+        Self::CtrlShiftAlt,
+        Self::Disabled,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::CtrlShift => "Ctrl+Shift",
+            Self::CtrlAlt => "Ctrl+Alt",
+            Self::ShiftAlt => "Shift+Alt",
+            Self::CtrlShiftAlt => "Ctrl+Shift+Alt",
+        }
+    }
+
+    pub fn from_config(value: ToolbarRebindModifier) -> Self {
+        match value {
+            ToolbarRebindModifier::Disabled => Self::Disabled,
+            ToolbarRebindModifier::CtrlShift => Self::CtrlShift,
+            ToolbarRebindModifier::CtrlAlt => Self::CtrlAlt,
+            ToolbarRebindModifier::ShiftAlt => Self::ShiftAlt,
+            ToolbarRebindModifier::CtrlShiftAlt => Self::CtrlShiftAlt,
+        }
+    }
+
+    pub fn to_config(self) -> ToolbarRebindModifier {
+        match self {
+            Self::Disabled => ToolbarRebindModifier::Disabled,
+            Self::CtrlShift => ToolbarRebindModifier::CtrlShift,
+            Self::CtrlAlt => ToolbarRebindModifier::CtrlAlt,
+            Self::ShiftAlt => ToolbarRebindModifier::ShiftAlt,
+            Self::CtrlShiftAlt => ToolbarRebindModifier::CtrlShiftAlt,
+        }
+    }
+}
+
+impl std::fmt::Display for ToolbarRebindModifierOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarLayoutModeOption {

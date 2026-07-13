@@ -69,7 +69,9 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn inline_toolbars_render_active(&self) -> bool {
-        self.inline_toolbars_active() || self.toolbar_drag_preview_active()
+        self.inline_toolbars_active()
+            || self.toolbar_drag_preview_active()
+            || self.data.gtk_drag_preview.is_some()
     }
 
     pub(in crate::backend::wayland) fn toolbar_surface_screen_coords(

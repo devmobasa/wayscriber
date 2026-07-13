@@ -94,11 +94,14 @@ mod eyedropper;
 mod gtk_toolbar;
 mod helpers;
 mod input_actions;
+mod keybindings;
 mod onboarding;
 mod pdf_export;
 mod perf;
 mod render;
 mod toolbar;
+#[cfg(feature = "toolbar-gtk")]
+pub(crate) use toolbar::clamp_floating_axis_offset;
 mod zoom;
 
 #[cfg(test)]

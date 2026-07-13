@@ -33,6 +33,7 @@ pub(crate) use base::{
     PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
     WayscriberClipboardSelection,
 };
+pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
@@ -40,7 +41,8 @@ pub use color_picker_popup::{
 };
 pub(crate) use command_palette::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
+    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_TOP_RATIO,
 };
 pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint};
 pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};

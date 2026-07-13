@@ -575,6 +575,113 @@ fn validate_and_clamp_resets_non_finite_toolbar_scale() {
     assert_eq!(config.ui.toolbar.scale, 1.0);
 }
 
+#[test]
+fn legacy_command_palette_and_capture_defaults_migrate_as_a_pair() {
+    let mut config = Config {
+        config_revision: 0,
+        ..Config::default()
+    };
+    config.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+    config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+
+    config.validate_and_clamp();
+
+    assert_eq!(
+        config.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        config.keybindings.capture.capture_full_screen,
+        ["Ctrl+Alt+F"]
+    );
+    assert_eq!(config.config_revision, CURRENT_CONFIG_REVISION);
+}
+
+#[test]
+fn legacy_shortcut_migration_handles_one_serde_filled_current_default() {
+    let mut legacy_command = Config {
+        config_revision: 0,
+        ..Config::default()
+    };
+    legacy_command.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+    legacy_command.validate_and_clamp();
+    assert_eq!(
+        legacy_command.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        legacy_command.keybindings.capture.capture_full_screen,
+        ["Ctrl+Alt+F"]
+    );
+
+    let mut legacy_capture = Config {
+        config_revision: 0,
+        ..Config::default()
+    };
+    legacy_capture.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+    legacy_capture.validate_and_clamp();
+    assert_eq!(
+        legacy_capture.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        legacy_capture.keybindings.capture.capture_full_screen,
+        ["Ctrl+Alt+F"]
+    );
+}
+
+#[test]
+fn legacy_shortcut_migration_preserves_customized_pairs() {
+    let mut custom_command = Config {
+        config_revision: 0,
+        ..Config::default()
+    };
+    custom_command.keybindings.ui.toggle_command_palette = vec!["Ctrl+Space".to_string()];
+    custom_command.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+    custom_command.validate_and_clamp();
+    assert_eq!(
+        custom_command.keybindings.ui.toggle_command_palette,
+        ["Ctrl+Space"]
+    );
+    assert_eq!(
+        custom_command.keybindings.capture.capture_full_screen,
+        ["Ctrl+Shift+P"]
+    );
+    assert_eq!(custom_command.config_revision, CURRENT_CONFIG_REVISION);
+
+    let mut custom_capture = Config {
+        config_revision: 0,
+        ..Config::default()
+    };
+    custom_capture.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+    custom_capture.keybindings.capture.capture_full_screen = vec!["Ctrl+Alt+G".to_string()];
+    custom_capture.validate_and_clamp();
+    assert_eq!(
+        custom_capture.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K"]
+    );
+    assert_eq!(
+        custom_capture.keybindings.capture.capture_full_screen,
+        ["Ctrl+Alt+G"]
+    );
+    assert_eq!(custom_capture.config_revision, CURRENT_CONFIG_REVISION);
+}
+
+#[test]
+fn intentional_legacy_shortcut_pair_is_preserved_after_current_default_edit() {
+    let mut config = Config::default();
+    config.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+    config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
+    assert_eq!(
+        config.keybindings.capture.capture_full_screen,
+        ["Ctrl+Shift+P"]
+    );
+}
+
 #[cfg(tablet)]
 #[test]
 fn validate_clamps_pressure_thickness_scale_step() {

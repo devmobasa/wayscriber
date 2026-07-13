@@ -4,6 +4,9 @@
 # All settings are optional. If not specified, defaults will be used.
 # Delete this file to reset to defaults.
 
+# Internal migration provenance. Keep this value when editing the file.
+config_revision = 1
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -191,7 +194,7 @@ open_context_menu = ["Shift+F10", "Menu"]
 open_configurator = ["F11"]
 
 # Toggle command palette
-toggle_command_palette = ["Ctrl+K"]
+toggle_command_palette = ["Ctrl+K", "Ctrl+Shift+P"]
 
 # Color selection shortcuts
 set_color_red = ["R"]
@@ -206,7 +209,7 @@ set_color_black = ["K"]
 pick_screen_color = ["I"]
 
 # Screenshot shortcuts
-capture_full_screen = ["Ctrl+Shift+P"]
+capture_full_screen = ["Ctrl+Alt+F"]
 capture_active_window = ["Ctrl+Shift+O"]
 capture_selection = ["Ctrl+Shift+I"]
 
@@ -469,6 +472,11 @@ side_offset_x = 0.0
 
 # Force inline toolbars even when layer-shell is available
 force_inline = false
+
+# Hold this modifier chord while clicking a bindable toolbar control to edit
+# its shortcut. Values: "ctrl_shift", "ctrl_alt", "shift_alt",
+# "ctrl_shift_alt", or "disabled".
+rebind_modifier = "ctrl_shift"
 
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.

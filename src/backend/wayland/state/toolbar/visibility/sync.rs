@@ -1,6 +1,20 @@
 use super::*;
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
+fn toolbar_visibility_for_frontend(
+    requested: (bool, bool),
+    gtk_active: bool,
+    gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
+) -> (bool, bool) {
+    if !gtk_active {
+        return requested;
+    }
+    (
+        requested.0 && gtk_drag_preview == Some(crate::toolbar_gtk::GtkToolbarKind::Top),
+        requested.1 && gtk_drag_preview == Some(crate::toolbar_gtk::GtkToolbarKind::Side),
+    )
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
@@ -67,10 +81,17 @@ impl WaylandState {
         // Sync individual toolbar visibility. While the GTK frontend owns
         // the toolbars, the built-in surfaces stay unmapped.
         let gtk_active = self.gtk_toolbars_active();
-        let top_visible = self.input_state.toolbar_top_visible() && !gtk_active;
-        let side_visible = self.input_state.toolbar_side_visible() && !gtk_active;
+        let (top_visible, side_visible) = toolbar_visibility_for_frontend(
+            (
+                self.input_state.toolbar_top_visible(),
+                self.input_state.toolbar_side_visible(),
+            ),
+            gtk_active,
+            self.data.gtk_drag_preview,
+        );
         let inline_active = self.inline_toolbars_active();
-        let drag_preview = self.toolbar_drag_preview_active();
+        let drag_preview =
+            self.toolbar_drag_preview_active() || self.data.gtk_drag_preview.is_some();
 
         if top_visible != self.toolbar.is_top_visible() {
             self.toolbar.set_top_visible(top_visible);
@@ -241,5 +262,35 @@ impl WaylandState {
         self.data.last_applied_top_margin_top = None;
         self.data.last_applied_side_margin = None;
         self.data.last_applied_side_margin_left = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::toolbar_gtk::GtkToolbarKind;
+
+    #[test]
+    fn gtk_frontend_maps_only_the_inline_preview_target() {
+        assert_eq!(
+            toolbar_visibility_for_frontend((true, true), true, None),
+            (false, false)
+        );
+        assert_eq!(
+            toolbar_visibility_for_frontend((true, true), true, Some(GtkToolbarKind::Top)),
+            (true, false)
+        );
+        assert_eq!(
+            toolbar_visibility_for_frontend((true, true), true, Some(GtkToolbarKind::Side)),
+            (false, true)
+        );
+    }
+
+    #[test]
+    fn builtin_frontend_ignores_gtk_preview_state() {
+        assert_eq!(
+            toolbar_visibility_for_frontend((true, false), false, Some(GtkToolbarKind::Side)),
+            (true, false)
+        );
     }
 }

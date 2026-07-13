@@ -53,6 +53,12 @@ impl InputState {
         true
     }
 
+    pub(super) fn apply_toolbar_open_command_palette(&mut self) -> bool {
+        self.handle_action(Action::ToggleCommandPalette);
+        self.close_top_toolbar_menus();
+        true
+    }
+
     pub(super) fn apply_toolbar_toggle_freeze(&mut self) -> bool {
         self.request_frozen_toggle();
         self.needs_redraw = true;
@@ -82,5 +88,26 @@ impl InputState {
     pub(super) fn apply_toolbar_refresh_zoom_capture(&mut self) -> bool {
         self.request_zoom_action(ZoomAction::RefreshCapture);
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarEvent;
+
+    #[test]
+    fn open_command_palette_event_toggles_the_palette() {
+        let mut state = make_test_input_state();
+        assert!(!state.command_palette_is_engaged());
+
+        let opened = state.apply_toolbar_event(ToolbarEvent::OpenCommandPalette);
+        assert!(opened);
+        assert!(state.command_palette_is_engaged());
+
+        // The toolbar hook reuses the same toggle as the Ctrl+K shortcut.
+        let closed = state.apply_toolbar_event(ToolbarEvent::OpenCommandPalette);
+        assert!(closed);
+        assert!(!state.command_palette_is_engaged());
     }
 }

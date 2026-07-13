@@ -14,7 +14,8 @@ use crate::models::{
     RenderProfileExportOption, RenderProfileMappingSide, RenderProfileTextField,
     SessionCatalogActionResult, SessionCatalogItem, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, TripletField,
+    UiTabId,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -77,6 +78,7 @@ pub enum Message {
     DrawingMouseDragColorChanged(DragMouseButton, DragToolField, DragColorOption),
     StatusPositionChanged(StatusPositionOption),
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
+    ToolbarRebindModifierChanged(ToolbarRebindModifierOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideChanged(ToolbarOverrideField, OverrideOption),
     ToolbarItemVisibilityChanged(ToolbarItemId, bool),

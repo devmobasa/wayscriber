@@ -8,14 +8,75 @@ use gtk4_layer_shell::{KeyboardMode, LayerShell};
 
 use super::GtkToolbarFeedback;
 use super::icons::{IconPainter, IconWidget};
+use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
 use crate::ui::toolbar::ToolbarEvent;
 
-/// Sender the view hands to every control closure.
-pub(super) type FeedbackSender = std::sync::mpsc::Sender<GtkToolbarFeedback>;
+/// Sender the view hands to every control closure. Clones share the configured
+/// rebind chord and modifier state captured from the actual GTK click.
+#[derive(Clone)]
+pub(super) struct FeedbackSender {
+    tx: std::sync::mpsc::Sender<GtkToolbarFeedback>,
+    rebind_modifier: Rc<Cell<ToolbarRebindModifier>>,
+    backend_rebind_active: Rc<Cell<bool>>,
+    click_rebind_requested: Rc<Cell<bool>>,
+    click_in_progress: Rc<Cell<bool>>,
+}
+
+impl FeedbackSender {
+    pub(super) fn new(tx: std::sync::mpsc::Sender<GtkToolbarFeedback>) -> Self {
+        Self {
+            tx,
+            rebind_modifier: Rc::new(Cell::new(ToolbarRebindModifier::default())),
+            backend_rebind_active: Rc::new(Cell::new(false)),
+            click_rebind_requested: Rc::new(Cell::new(false)),
+            click_in_progress: Rc::new(Cell::new(false)),
+        }
+    }
+
+    pub(super) fn set_rebind_state(&self, modifier: ToolbarRebindModifier, active: bool) {
+        self.rebind_modifier.set(modifier);
+        self.backend_rebind_active.set(active);
+        if active {
+            self.click_rebind_requested.set(true);
+        } else if !self.click_in_progress.get() {
+            self.click_rebind_requested.set(false);
+        }
+    }
+
+    fn capture_click_modifiers(&self, state: gtk4::gdk::ModifierType) {
+        self.click_in_progress.set(true);
+        if self.rebind_modifier.get().matches(
+            state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
+            state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
+            state.contains(gtk4::gdk::ModifierType::ALT_MASK),
+        ) {
+            self.click_rebind_requested.set(true);
+        }
+    }
+
+    fn finish_pointer_click(&self) {
+        self.click_in_progress.set(false);
+        if !self.backend_rebind_active.get() {
+            self.click_rebind_requested.set(false);
+        }
+    }
+
+    pub(super) fn send(
+        &self,
+        feedback: GtkToolbarFeedback,
+    ) -> Result<(), std::sync::mpsc::SendError<GtkToolbarFeedback>> {
+        self.tx.send(feedback)
+    }
+}
 
 pub(super) fn send_event(sender: &FeedbackSender, event: ToolbarEvent) {
-    let _ = sender.send(GtkToolbarFeedback::Event(event));
+    let rebind_requested = sender.click_rebind_requested.replace(false);
+    sender.click_in_progress.set(false);
+    let _ = sender.send(GtkToolbarFeedback::Event {
+        event,
+        rebind_requested,
+    });
 }
 
 /// Fixed-size button so GTK widths match the deterministic layout plan.
@@ -91,7 +152,7 @@ fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
 /// Drop keyboard ownership when GTK focuses any non-entry control. Buttons
 /// also release from their clicked handler because they are non-focusable and
 /// may leave a previously focused entry as the logical focus widget.
-pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window) {
+pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &FeedbackSender) {
     window.connect_focus_widget_notify(|window| {
         let Some(focus) = gtk4::prelude::GtkWindowExt::focus(window) else {
             return;
@@ -109,6 +170,15 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window) {
     // the editable hex field.
     let click = gtk4::GestureClick::new();
     click.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    let click_feedback = feedback.clone();
+    click.connect_pressed(move |gesture, _, _, _| {
+        click_feedback.capture_click_modifiers(gesture.current_event_state());
+    });
+    let release_feedback = feedback.clone();
+    click.connect_released(move |_, _, _, _| {
+        let release_feedback = release_feedback.clone();
+        gtk4::glib::idle_add_local_once(move || release_feedback.finish_pointer_click());
+    });
     let weak = window.downgrade();
     click.connect_released(move |_, _, x, y| {
         let Some(window) = weak.upgrade() else {
@@ -452,4 +522,55 @@ pub(super) fn rounded_rect_path(ctx: &cairo::Context, x: f64, y: f64, w: f64, h:
     ctx.arc(x + r, y + h - r, r, PI / 2.0, PI);
     ctx.arc(x + r, y + r, r, PI, 3.0 * PI / 2.0);
     ctx.close_path();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gtk_feedback_carries_rebind_state_once() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = FeedbackSender::new(tx);
+        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
+        sender.capture_click_modifiers(
+            gtk4::gdk::ModifierType::CONTROL_MASK | gtk4::gdk::ModifierType::SHIFT_MASK,
+        );
+        send_event(&sender, ToolbarEvent::Undo);
+        send_event(&sender, ToolbarEvent::Redo);
+
+        assert_eq!(
+            rx.recv().unwrap(),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::Undo,
+                rebind_requested: true,
+            }
+        );
+        assert_eq!(
+            rx.recv().unwrap(),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::Redo,
+                rebind_requested: false,
+            }
+        );
+    }
+
+    #[test]
+    fn backend_modifier_latch_survives_focus_reset_during_click() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = FeedbackSender::new(tx);
+        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
+        sender.capture_click_modifiers(gtk4::gdk::ModifierType::empty());
+        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, false);
+
+        send_event(&sender, ToolbarEvent::Undo);
+
+        assert_eq!(
+            rx.recv().unwrap(),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::Undo,
+                rebind_requested: true,
+            }
+        );
+    }
 }

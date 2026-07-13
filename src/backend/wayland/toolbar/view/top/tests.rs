@@ -90,7 +90,9 @@ fn quick_colors_render_in_slot_order_with_a_chip() {
         }
         assert!(matches!(
             node.interact.as_ref().unwrap().event,
-            ToolbarEvent::SetColor(c) if c == *color
+            ToolbarEvent::SetQuickColor { color: c, action }
+                if c == *color
+                    && action == crate::config::QuickColorPalette::action_for_index(index)
         ));
     }
 

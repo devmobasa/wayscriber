@@ -61,8 +61,6 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
             let hits = &mut layout.hits;
 
             let font_size_spec = ToolbarSliderSpec::FONT_SIZE;
-            let fs_min = font_size_spec.min;
-            let fs_max = font_size_spec.max;
             let fs_step = font_size_spec.step.unwrap_or(2.0);
             let fs_slider_row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
 
@@ -91,7 +89,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
             hits.push(HitRegion {
                 focus_id: None,
                 rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
-                event: ToolbarEvent::SetFontSize((snapshot.font_size - fs_step).max(fs_min)),
+                event: ToolbarEvent::NudgeFontSize(-fs_step),
                 kind: HitKind::Click,
                 tooltip: Some("Decrease font size".to_string()),
             });
@@ -121,7 +119,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
             hits.push(HitRegion {
                 focus_id: None,
                 rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
-                event: ToolbarEvent::SetFontSize((snapshot.font_size + fs_step).min(fs_max)),
+                event: ToolbarEvent::NudgeFontSize(fs_step),
                 kind: HitKind::Click,
                 tooltip: Some("Increase font size".to_string()),
             });

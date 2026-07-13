@@ -34,6 +34,20 @@ pub(super) struct ToolbarClampInput {
     pub side_margin_bottom: f64,
 }
 
+/// Clamp one floating surface axis using the same start/end margin policy
+/// shared by the built-in and GTK toolbar frontends.
+pub(crate) fn clamp_floating_axis_offset(
+    offset: f64,
+    viewport_size: f64,
+    surface_size: f64,
+    base_margin: f64,
+    end_margin: f64,
+) -> (f64, f64, f64) {
+    let min = -base_margin;
+    let max = (viewport_size - surface_size - base_margin - end_margin).max(0.0);
+    (offset.clamp(min, max), min, max)
+}
+
 pub(super) fn compute_inline_top_base_x(
     base: f64,
     side_visible: bool,
@@ -77,29 +91,40 @@ pub(super) fn clamp_toolbar_offsets(
     let side_w = input.side_size.0 as f64;
     let side_h = input.side_size.1 as f64;
 
-    let mut max_top_x = (input.width - top_w - input.top_base_x - input.top_margin_right).max(0.0);
-    let mut max_top_y =
-        (input.height - top_h - input.top_base_y - input.top_margin_bottom).max(0.0);
-    let mut max_side_y =
-        (input.height - side_h - input.side_base_margin_top - input.side_margin_bottom).max(0.0);
-    let mut max_side_x =
-        (input.width - side_w - input.side_base_margin_left - input.side_margin_right).max(0.0);
-
-    max_top_x = max_top_x.max(0.0);
-    max_top_y = max_top_y.max(0.0);
-    max_side_x = max_side_x.max(0.0);
-    max_side_y = max_side_y.max(0.0);
-
-    let min_top_x = -input.top_base_x;
-    let min_top_y = -input.top_base_y;
-    let min_side_x = -input.side_base_margin_left;
-    let min_side_y = -input.side_base_margin_top;
+    let (top_x, min_top_x, max_top_x) = clamp_floating_axis_offset(
+        offsets.top_x,
+        input.width,
+        top_w,
+        input.top_base_x,
+        input.top_margin_right,
+    );
+    let (top_y, min_top_y, max_top_y) = clamp_floating_axis_offset(
+        offsets.top_y,
+        input.height,
+        top_h,
+        input.top_base_y,
+        input.top_margin_bottom,
+    );
+    let (side_x, min_side_x, max_side_x) = clamp_floating_axis_offset(
+        offsets.side_x,
+        input.width,
+        side_w,
+        input.side_base_margin_left,
+        input.side_margin_right,
+    );
+    let (side_y, min_side_y, max_side_y) = clamp_floating_axis_offset(
+        offsets.side_y,
+        input.height,
+        side_h,
+        input.side_base_margin_top,
+        input.side_margin_bottom,
+    );
 
     let clamped = ToolbarOffsets {
-        top_x: offsets.top_x.clamp(min_top_x, max_top_x),
-        top_y: offsets.top_y.clamp(min_top_y, max_top_y),
-        side_x: offsets.side_x.clamp(min_side_x, max_side_x),
-        side_y: offsets.side_y.clamp(min_side_y, max_side_y),
+        top_x,
+        top_y,
+        side_x,
+        side_y,
     };
 
     let bounds = ToolbarClampBounds {

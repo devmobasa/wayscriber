@@ -74,6 +74,9 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
+            PendingBackendAction::EditKeybinding(request) => {
+                state.handle_keybinding_edit(request);
+            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {

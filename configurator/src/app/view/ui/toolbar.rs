@@ -10,7 +10,10 @@ use wayscriber::config::{
 use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
-use crate::models::{TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField};
+use crate::models::{
+    TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption,
+};
 
 use super::super::widgets::{labeled_control, labeled_input, override_row, toggle_row};
 
@@ -26,6 +29,11 @@ impl ConfiguratorApp {
             Some(self.override_mode),
             Message::ToolbarOverrideModeChanged,
         );
+        let rebind_modifier = pick_list(
+            ToolbarRebindModifierOption::ALL,
+            Some(self.draft.ui_toolbar_rebind_modifier),
+            Message::ToolbarRebindModifierChanged,
+        );
         let overrides = self
             .draft
             .ui_toolbar_mode_overrides
@@ -38,6 +46,12 @@ impl ConfiguratorApp {
                 toolbar_layout.width(Length::Fill).into(),
                 self.defaults.ui_toolbar_layout_mode.label().to_string(),
                 self.draft.ui_toolbar_layout_mode != self.defaults.ui_toolbar_layout_mode,
+            ),
+            labeled_control(
+                "Shortcut edit click",
+                rebind_modifier.width(Length::Fill).into(),
+                self.defaults.ui_toolbar_rebind_modifier.label().to_string(),
+                self.draft.ui_toolbar_rebind_modifier != self.defaults.ui_toolbar_rebind_modifier,
             ),
             toggle_row(
                 "Pin top toolbar",

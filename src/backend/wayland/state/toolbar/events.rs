@@ -27,6 +27,10 @@ fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
     true
 }
 
+fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
+    input_state.command_palette_is_engaged()
+}
+
 /// The top overflow menu is a plain flyout: any event other than the two menu
 /// toggles dismisses it (selecting a dropped tool, an unrelated keybinding, etc.).
 fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
@@ -124,9 +128,39 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        let rebind_requested = self.config.ui.toolbar.rebind_modifier.matches(
+            self.input_state.modifiers.ctrl,
+            self.input_state.modifiers.shift,
+            self.input_state.modifiers.alt,
+        );
+        self.handle_toolbar_event_with_rebind(event, rebind_requested, conn, qh);
+    }
+
+    pub(in crate::backend::wayland) fn handle_toolbar_event_with_rebind(
+        &mut self,
+        event: ToolbarEvent,
+        rebind_requested: bool,
+        conn: Option<&Connection>,
+        qh: Option<&QueueHandle<Self>>,
+    ) {
+        // GTK toolbar feedback bypasses the built-in pointer modal gate, so
+        // enforce the same rule in the shared event path as well.
+        if toolbar_event_blocked_by_modal(&self.input_state) {
+            return;
+        }
+        // A toolbar interaction replaces the modal sampler. Do this before
+        // shortcut capture so the capture modal owns subsequent keys.
+        self.cancel_eyedropper();
+        if rebind_requested
+            && let Some(action) = crate::ui::toolbar::model::action_for_event(&event)
+        {
+            self.input_state.begin_keybinding_capture(action);
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            return;
+        }
         // Toolbar actions win over the modal sampler: cancel without sampling,
         // then apply the requested toolbar event normally.
-        self.cancel_eyedropper();
         let dismiss_overflow =
             self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
         let dismiss_shapes =

@@ -169,8 +169,8 @@ impl KeyboardHandler for WaylandState {
             }
         }
         debug!("Key pressed: {:?}", key);
-        let modal_capture =
-            self.input_state.command_palette_open || self.input_state.is_color_picker_popup_open();
+        let modal_capture = self.input_state.command_palette_is_engaged()
+            || self.input_state.is_color_picker_popup_open();
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
@@ -275,8 +275,8 @@ impl KeyboardHandler for WaylandState {
         if self.input_state.command_palette_open && matches!(key, Key::Up | Key::Down) {
             return;
         }
-        let modal_capture =
-            self.input_state.command_palette_open || self.input_state.is_color_picker_popup_open();
+        let modal_capture = self.input_state.command_palette_is_engaged()
+            || self.input_state.is_color_picker_popup_open();
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {

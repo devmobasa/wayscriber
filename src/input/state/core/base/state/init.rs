@@ -122,6 +122,7 @@ impl InputState {
             command_palette_repeat_key: None,
             command_palette_repeat_next_tick: None,
             command_palette_recent: Vec::new(),
+            keybinding_capture_action: None,
             command_palette_toast_duration_ms: 1500,
             show_status_bar,
             show_status_board_badge: true,

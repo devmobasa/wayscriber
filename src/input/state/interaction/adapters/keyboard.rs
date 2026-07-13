@@ -19,7 +19,7 @@ pub(crate) fn handle_command_palette_key(
     state: &mut InputState,
     key: Key,
 ) -> Option<RoutingOutcome> {
-    (state.command_palette_open && state.handle_command_palette_key(key))
+    (state.command_palette_is_engaged() && state.handle_command_palette_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::CommandPalette))
 }
 

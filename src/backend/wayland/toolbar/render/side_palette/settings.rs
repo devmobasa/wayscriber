@@ -401,6 +401,7 @@ fn draw_settings_icon(ctx: &cairo::Context, icon: ToolbarIcon, x: f64, y: f64, s
     match icon {
         ToolbarIcon::Back => draw_back_icon(ctx, x, y, size),
         ToolbarIcon::Settings => toolbar_icons::draw_icon_settings(ctx, x, y, size),
+        ToolbarIcon::Search => toolbar_icons::draw_icon_search(ctx, x, y, size),
         ToolbarIcon::Visibility => toolbar_icons::draw_icon_visibility(ctx, x, y, size),
         ToolbarIcon::File => toolbar_icons::draw_icon_file(ctx, x, y, size),
         ToolbarIcon::More | ToolbarIcon::Board => {}

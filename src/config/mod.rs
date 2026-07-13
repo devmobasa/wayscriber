@@ -29,7 +29,7 @@ pub use action_meta::{
     ActionCategory, ActionMeta, action_description, action_display_label, action_label,
     action_meta, action_meta_iter, action_short_label,
 };
-pub use core::Config;
+pub use core::{CURRENT_CONFIG_REVISION, Config};
 pub use enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
@@ -52,8 +52,8 @@ pub use types::{
     ToolPresetConfig, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarSectionFlag, ToolbarSectionVisibility, UiConfig,
-    fold_legacy_section_flags, resolve_section_visibility, section_flag_for_item,
+    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionFlag, ToolbarSectionVisibility,
+    UiConfig, fold_legacy_section_flags, resolve_section_visibility, section_flag_for_item,
     set_section_visibility, toolbar_item_definitions, toolbar_item_ids, toolbar_item_order_group,
     validate_pdf_label_template,
 };

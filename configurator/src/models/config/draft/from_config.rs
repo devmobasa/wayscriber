@@ -4,6 +4,7 @@ use super::super::super::fields::{
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
+    ToolbarRebindModifierOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -132,6 +133,9 @@ impl ConfigDraft {
             ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
+            ),
+            ui_toolbar_rebind_modifier: ToolbarRebindModifierOption::from_config(
+                config.ui.toolbar.rebind_modifier,
             ),
             ui_toolbar_items: toolbar_items,
             ui_toolbar_show_presets: toolbar_visibility.show_presets,

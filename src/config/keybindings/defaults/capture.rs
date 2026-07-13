@@ -1,5 +1,5 @@
 pub(crate) fn default_capture_full_screen() -> Vec<String> {
-    vec!["Ctrl+Shift+P".to_string()]
+    vec!["Ctrl+Alt+F".to_string()]
 }
 
 pub(crate) fn default_capture_active_window() -> Vec<String> {
