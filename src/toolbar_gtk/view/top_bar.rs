@@ -19,13 +19,7 @@ mod strip;
 #[cfg(test)]
 mod tests;
 
-pub(super) use drag::{
-    FrameCoalescedDrag, ReservedDragSequence, cancel_move_drag, clamp_drag_offsets,
-    drag_frame_position,
-};
-
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
 use std::rc::Rc;
 
 use gtk4::prelude::*;
@@ -118,11 +112,6 @@ fn effective_scale(snapshot: &ToolbarSnapshot) -> f64 {
     } else {
         1.0
     }
-}
-
-pub(super) fn rounded_margin_and_offset(base: f64, offset: f64) -> (i32, f64) {
-    let margin = (base + offset).round() as i32;
-    (margin, margin as f64 - base)
 }
 
 fn top_default_width(snapshot: &ToolbarSnapshot) -> i32 {
@@ -291,8 +280,8 @@ impl TopBar {
             ));
             return;
         }
-        let (left, x) = rounded_margin_and_offset(self.base_x.get(), offsets.0);
-        let (top, y) = rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
+        let (left, x) = super::drag::rounded_margin_and_offset(self.base_x.get(), offsets.0);
+        let (top, y) = super::drag::rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
         self.offsets.set((x, y));
         self.window.set_margin(Edge::Left, left);
         self.window.set_margin(Edge::Top, top);

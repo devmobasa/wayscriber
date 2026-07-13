@@ -1,6 +1,7 @@
 //! GTK toolbar windows: owns the top strip and side palette, the shared
 //! stylesheet, and output pinning.
 
+mod drag;
 mod sections;
 mod side_bar;
 mod top_bar;
