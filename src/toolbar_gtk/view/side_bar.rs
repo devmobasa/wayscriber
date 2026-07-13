@@ -149,6 +149,7 @@ pub(in crate::toolbar_gtk) struct SideBar {
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
+    move_drag_cancel: Option<Rc<dyn Fn()>>,
     offsets: Rc<Cell<(f64, f64)>>,
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
     /// backend are ignored by comparing against it.
@@ -190,6 +191,7 @@ impl SideBar {
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
+            move_drag_cancel: None,
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             offset_seq: Rc::new(Cell::new(0)),
         }
@@ -552,7 +554,11 @@ impl SideBar {
     /// See `top_bar::attach_move_drag`: keep the input surface parked and
     /// coalesce stable start-relative motion into the inline preview.
     fn attach_move_drag(&mut self, grip: &gtk4::DrawingArea) {
+        if let Some(cancel) = self.move_drag_cancel.take() {
+            cancel();
+        }
         if let Some(previous) = self.move_drag.take() {
+            previous.reset();
             self.window.remove_controller(&previous);
         }
         let drag = gtk4::GestureDrag::new();
@@ -603,7 +609,7 @@ impl SideBar {
             let generation = begin_pending.begin();
             begin_generation.set(generation);
             begin_origin.set(frame_offsets.get());
-            frame_seq.set(frame_seq.get() + 1);
+            let start_seq = super::top_bar::ReservedDragSequence::reserve(&frame_seq);
             let origin = begin_origin.get();
             let start = GtkToolbarFeedback::SetSideOffset {
                 x: origin.0,
@@ -611,7 +617,7 @@ impl SideBar {
                 surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(
                     &frame_window,
                 ),
-                seq: frame_seq.get(),
+                seq: start_seq.value(),
                 phase: GtkToolbarDragPhase::Start,
             };
             super::set_drag_visual_hidden(
@@ -626,11 +632,13 @@ impl SideBar {
             let start_active = begin_active.clone();
             let start_generation = begin_generation.clone();
             let start_ready = begin_ready.clone();
+            let start_sequence = frame_seq.clone();
             super::after_next_surface_paint(&frame_window, move || {
                 if start_generation.get() != generation {
                     return;
                 }
                 if start_feedback.send(start).is_ok() {
+                    start_seq.publish(&start_sequence);
                     start_ready.set(generation);
                 } else {
                     super::set_drag_visual_hidden(
@@ -697,6 +705,8 @@ impl SideBar {
                 if frame.phase.is_end() {
                     if active_generation.get() == generation {
                         drag_active.set(false);
+                        active_generation.set(0);
+                        ready_generation.set(0);
                     }
                     gtk4::glib::ControlFlow::Break
                 } else {
@@ -715,15 +725,49 @@ impl SideBar {
             update_pending.update(generation, dx, dy);
         });
 
+        let end_pending = pending.clone();
+        let end_generation = active_generation.clone();
         drag.connect_drag_end(move |_, dx, dy| {
             crate::toolbar_gtk::drag_debug_log(format!(
                 "side end generation={} delta=({dx:.3},{dy:.3})",
-                active_generation.get(),
+                end_generation.get(),
             ));
-            pending.end(active_generation.get(), dx, dy);
+            end_pending.end(end_generation.get(), dx, dy);
         });
+
+        let cancel_window = window.downgrade();
+        let cancel_visual = self.root.downgrade();
+        let cancel_feedback = feedback;
+        let cancel_active = drag_active;
+        let cancel_generation = active_generation;
+        let cancel_ready = ready_generation;
+        let cancel_offsets = offsets;
+        let cancel_seq = seq;
+        let cancel: Rc<dyn Fn()> = Rc::new(move || {
+            let (Some(window), Some(visual)) = (cancel_window.upgrade(), cancel_visual.upgrade())
+            else {
+                cancel_active.set(false);
+                cancel_generation.set(0);
+                cancel_ready.set(0);
+                return;
+            };
+            super::top_bar::cancel_move_drag(
+                GtkToolbarKind::Side,
+                &window,
+                &visual,
+                &cancel_feedback,
+                &cancel_active,
+                &cancel_generation,
+                &cancel_ready,
+                &cancel_offsets,
+                &cancel_seq,
+            );
+        });
+        let signal_cancel = cancel.clone();
+        drag.connect_cancel(move |_, _| signal_cancel());
         window.add_controller(drag.clone());
         self.move_drag = Some(drag);
+        self.move_drag_cancel = Some(cancel);
     }
 }
 

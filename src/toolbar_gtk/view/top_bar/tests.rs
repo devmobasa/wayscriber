@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use super::drag::{CancelledDragAction, ReservedDragSequence, cancelled_drag_action};
 use super::*;
 use crate::config::KeyBinding;
 use crate::input::state::test_support::make_test_input_state;
@@ -60,6 +61,38 @@ fn consecutive_drags_keep_separate_final_frames() {
         .expect("second drag motion is retained");
     assert_eq!(second_frame.delta, (1.0, 2.0));
     assert_eq!(second_frame.phase, GtkToolbarDragPhase::Move);
+}
+
+#[test]
+fn cancellation_reveals_before_start_and_finishes_after_start() {
+    assert_eq!(cancelled_drag_action(0, 0), CancelledDragAction::Ignore);
+    assert_eq!(cancelled_drag_action(4, 0), CancelledDragAction::Reveal);
+    assert_eq!(cancelled_drag_action(4, 4), CancelledDragAction::Finish);
+}
+
+#[test]
+fn cancellation_before_start_does_not_advance_sequence_or_rehide_visual() {
+    let sequence = Cell::new(7);
+    let reserved = ReservedDragSequence::reserve(&sequence);
+
+    assert_eq!(reserved.value(), 8);
+    assert_eq!(cancelled_drag_action(4, 0), CancelledDragAction::Reveal);
+    assert_eq!(sequence.get(), 7);
+    assert!(!super::super::drag_visual_should_be_hidden(
+        None,
+        GtkToolbarKind::Top,
+        false,
+        sequence.get(),
+        7,
+    ));
+}
+
+#[test]
+fn successful_start_publishes_the_reserved_sequence() {
+    let sequence = Cell::new(7);
+    let reserved = ReservedDragSequence::reserve(&sequence);
+    reserved.publish(&sequence);
+    assert_eq!(sequence.get(), 8);
 }
 
 #[test]

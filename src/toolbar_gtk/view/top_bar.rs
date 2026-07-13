@@ -19,7 +19,10 @@ mod strip;
 #[cfg(test)]
 mod tests;
 
-pub(super) use drag::{FrameCoalescedDrag, clamp_drag_offsets, drag_frame_position};
+pub(super) use drag::{
+    FrameCoalescedDrag, ReservedDragSequence, cancel_move_drag, clamp_drag_offsets,
+    drag_frame_position,
+};
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -179,6 +182,7 @@ pub(in crate::toolbar_gtk) struct TopBar {
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
+    move_drag_cancel: Option<Rc<dyn Fn()>>,
     offsets: Rc<Cell<(f64, f64)>>,
     /// Base X in spec units from the backend (side palette pushes it).
     base_x: Rc<Cell<f64>>,
@@ -225,6 +229,7 @@ impl TopBar {
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
+            move_drag_cancel: None,
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
             offset_seq: Rc::new(Cell::new(0)),

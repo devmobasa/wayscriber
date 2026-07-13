@@ -123,9 +123,8 @@ impl WaylandState {
             .is_some_and(GtkToolbarBridge::failed)
         {
             log::warn!("GTK toolbar thread failed; falling back to built-in toolbars");
+            self.cancel_gtk_toolbar_drag_lifecycle();
             self.gtk_toolbar = None;
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
             return;
         }
         let Some(bridge) = self.gtk_toolbar.as_ref() else {

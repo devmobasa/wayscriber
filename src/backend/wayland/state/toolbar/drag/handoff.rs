@@ -1,6 +1,26 @@
 use super::*;
 use crate::backend::wayland::state::helpers::toolbar_drag_handoff_delay;
 
+fn reset_gtk_drag_lifecycle(
+    preview: &mut Option<crate::toolbar_gtk::GtkToolbarKind>,
+    handoff_at: &mut Option<Instant>,
+    frozen_top_base_x: &mut Option<f64>,
+    top_blocked: &mut bool,
+    side_blocked: &mut bool,
+) -> bool {
+    let had_state = preview.is_some()
+        || handoff_at.is_some()
+        || frozen_top_base_x.is_some()
+        || *top_blocked
+        || *side_blocked;
+    *preview = None;
+    *handoff_at = None;
+    *frozen_top_base_x = None;
+    *top_blocked = false;
+    *side_blocked = false;
+    had_state
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn toolbar_drag_handoff_timeout(
         &self,
@@ -76,6 +96,28 @@ impl WaylandState {
         self.schedule_toolbar_drag_handoff();
     }
 
+    pub(in crate::backend::wayland) fn cancel_gtk_toolbar_drag_lifecycle(&mut self) {
+        if self.data.gtk_drag_preview.is_some() {
+            self.reconcile_top_base_after_drag();
+        }
+        let had_state = reset_gtk_drag_lifecycle(
+            &mut self.data.gtk_drag_preview,
+            &mut self.data.toolbar_drag_handoff_at,
+            &mut self.data.drag_top_base_x,
+            &mut self.data.gtk_top_drag_blocked,
+            &mut self.data.gtk_side_drag_blocked,
+        );
+        if had_state {
+            drag_log("cancel GTK drag lifecycle (restore built-in toolbar rendering)");
+        }
+        self.request_toolbar_drag_flush();
+        self.clear_inline_toolbar_hits();
+        self.clear_inline_toolbar_hover();
+        self.toolbar.mark_dirty();
+        self.input_state.dirty_tracker.mark_full();
+        self.input_state.needs_redraw = true;
+    }
+
     fn finish_toolbar_drag_handoff(&mut self) {
         self.data.toolbar_drag_handoff_at = None;
         if self.data.gtk_drag_preview.take().is_some() {
@@ -100,5 +142,32 @@ impl WaylandState {
         self.clear_inline_toolbar_hover();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gtk_fallback_clears_the_entire_drag_lifecycle() {
+        let mut preview = Some(crate::toolbar_gtk::GtkToolbarKind::Top);
+        let mut handoff_at = Some(Instant::now());
+        let mut frozen_top_base_x = Some(42.0);
+        let mut top_blocked = true;
+        let mut side_blocked = true;
+
+        assert!(reset_gtk_drag_lifecycle(
+            &mut preview,
+            &mut handoff_at,
+            &mut frozen_top_base_x,
+            &mut top_blocked,
+            &mut side_blocked,
+        ));
+        assert_eq!(preview, None);
+        assert_eq!(handoff_at, None);
+        assert_eq!(frozen_top_base_x, None);
+        assert!(!top_blocked);
+        assert!(!side_blocked);
     }
 }
