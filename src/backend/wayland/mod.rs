@@ -17,6 +17,8 @@ mod toolbar_intent;
 // The GTK toolbar frontend reuses the width-degradation plan so both
 // frontends overflow identically.
 #[cfg(feature = "toolbar-gtk")]
+pub(crate) use state::clamp_floating_axis_offset;
+#[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::top_size as top_toolbar_size;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::view::top::{TopStripPlan, plan_top_strip};

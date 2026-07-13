@@ -55,38 +55,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn end_toolbar_move_drag(&mut self) {
         if self.data.toolbar_move_drag.is_some() {
-            // Preserve the top toolbar's screen position if its base X would change on release.
-            if let Some(old_base_x) = self.data.drag_top_base_x {
-                let snapshot = self.toolbar_snapshot();
-                let side_visible = self.toolbar.is_side_visible();
-                let side_size = side_size(&snapshot);
-                let top_size = top_size(&snapshot);
-                let side_start_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
-                let top_bottom_y =
-                    Self::TOP_BASE_MARGIN_TOP + self.data.toolbar_top_offset_y + top_size.1 as f64;
-                let base = Self::INLINE_SIDE_X;
-                let new_base_x = geometry::compute_inline_top_base_x(
-                    base,
-                    side_visible,
-                    side_size.0 as f64,
-                    side_start_y,
-                    top_bottom_y,
-                    Self::INLINE_TOP_PUSH,
-                    true,
-                );
-                let delta = old_base_x - new_base_x;
-                if delta.abs() > 0.01 {
-                    self.data.toolbar_top_offset += delta;
-                    drag_log(format!(
-                        "end move drag: preserve top position, old_base_x={:.3}, new_base_x={:.3}, delta={:.3}, top_offset=({}, {})",
-                        old_base_x,
-                        new_base_x,
-                        delta,
-                        self.data.toolbar_top_offset,
-                        self.data.toolbar_top_offset_y
-                    ));
-                }
-            }
+            self.reconcile_top_base_after_drag();
             drag_log(format!(
                 "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
                 self.data.toolbar_top_offset,

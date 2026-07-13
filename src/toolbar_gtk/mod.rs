@@ -32,6 +32,22 @@ mod widgets;
 use crate::config::ToolbarRebindModifier;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
+#[cfg(feature = "toolbar-gtk")]
+pub(crate) fn drag_debug_log(message: impl AsRef<str>) {
+    use std::sync::OnceLock;
+
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    let enabled = *ENABLED.get_or_init(|| {
+        let raw = std::env::var(crate::env_vars::DEBUG_TOOLBAR_DRAG_ENV)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        !(raw.is_empty() || raw == "0" || raw == "false" || raw == "off")
+    });
+    if enabled {
+        log::info!("[gtk-drag] {}", message.as_ref());
+    }
+}
+
 /// State pushed to the GTK thread; sent only when it differs from the
 /// previously delivered update.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +77,59 @@ pub struct GtkToolbarUpdate {
     pub rebind_modifier_active: bool,
     /// Prevent move-drag gestures while a command-palette modal owns input.
     pub modal_engaged: bool,
+    /// GTK keeps the gesture-owning surface mapped but transparent while the
+    /// backend renders this bar as an inline drag preview. This keeps
+    /// `GestureDrag` coordinates stable even though the preview moves.
+    pub drag_preview: Option<GtkToolbarKind>,
+}
+
+/// Identifies one of the two GTK toolbar surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GtkToolbarKind {
+    Top,
+    Side,
+}
+
+/// Explicit lifecycle for a GTK move gesture. The backend starts the inline
+/// preview on `Start`, mirrors `Move` positions, and keeps the preview visible
+/// after `End` until the GTK surface has settled at its final margin.
+#[cfg_attr(not(feature = "toolbar-gtk"), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GtkToolbarDragPhase {
+    Start,
+    Move,
+    End,
+}
+
+impl GtkToolbarDragPhase {
+    pub(crate) fn is_end(self) -> bool {
+        self == Self::End
+    }
+}
+
+/// Actual logical dimensions of a GTK toolbar layer surface at the time a
+/// drag update is emitted. The backend uses the final measurement instead of
+/// the built-in renderer's modeled size when it validates the resting offset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GtkToolbarSurfaceSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl GtkToolbarSurfaceSize {
+    #[cfg(feature = "toolbar-gtk")]
+    fn from_window(window: &gtk4::Window) -> Self {
+        use gtk4::prelude::WidgetExt as _;
+
+        Self {
+            width: window.width().max(0) as u32,
+            height: window.height().max(0) as u32,
+        }
+    }
+
+    pub(crate) fn is_configured(self) -> bool {
+        self.width > 0 && self.height > 0
+    }
 }
 
 /// Messages from the GTK thread back to the backend.
@@ -74,22 +143,24 @@ pub enum GtkToolbarFeedback {
         event: ToolbarEvent,
         rebind_requested: bool,
     },
-    /// Drag-to-move progress for the top bar. `done` marks the drag end,
-    /// which is when the offsets get clamped and persisted; `seq` is the
-    /// bar's monotonically increasing drag counter (see
+    /// Drag-to-move lifecycle for the top bar. `End` is when the offsets get
+    /// clamped and persisted; `seq` is the bar's monotonically increasing
+    /// drag counter (see
     /// [`GtkToolbarUpdate::top_offset_seq`]).
     SetTopOffset {
         x: f64,
         y: f64,
+        surface_size: GtkToolbarSurfaceSize,
         seq: u64,
-        done: bool,
+        phase: GtkToolbarDragPhase,
     },
     /// Drag-to-move progress for the side palette.
     SetSideOffset {
         x: f64,
         y: f64,
+        surface_size: GtkToolbarSurfaceSize,
         seq: u64,
-        done: bool,
+        phase: GtkToolbarDragPhase,
     },
 }
 

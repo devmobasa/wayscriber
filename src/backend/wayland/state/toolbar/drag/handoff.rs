@@ -49,8 +49,44 @@ impl WaylandState {
         self.schedule_toolbar_drag_handoff();
     }
 
+    pub(in crate::backend::wayland) fn begin_gtk_toolbar_drag_preview(
+        &mut self,
+        kind: crate::toolbar_gtk::GtkToolbarKind,
+    ) {
+        let snapshot = self.toolbar_snapshot();
+        let frozen_top_base_x = self.inline_top_base_x(&snapshot);
+        drag_log(format!(
+            "begin GTK {:?} drag preview (park transparent input surface, freeze top base at {frozen_top_base_x:.3})",
+            kind,
+        ));
+        self.data.toolbar_drag_handoff_at = None;
+        self.data.drag_top_base_x = Some(frozen_top_base_x);
+        self.data.gtk_drag_preview = Some(kind);
+        self.toolbar.mark_dirty();
+        self.input_state.dirty_tracker.mark_full();
+        self.input_state.needs_redraw = true;
+    }
+
+    pub(in crate::backend::wayland) fn begin_gtk_toolbar_drag_handoff(&mut self) {
+        if self.data.gtk_drag_preview.is_none() {
+            return;
+        }
+        drag_log("begin GTK drag handoff (move transparent surface before reveal)");
+        self.request_toolbar_drag_flush();
+        self.schedule_toolbar_drag_handoff();
+    }
+
     fn finish_toolbar_drag_handoff(&mut self) {
         self.data.toolbar_drag_handoff_at = None;
+        if self.data.gtk_drag_preview.take().is_some() {
+            drag_log("finish GTK drag handoff (reveal surface at final position)");
+            self.request_toolbar_drag_flush();
+            self.clear_inline_toolbar_hits();
+            self.clear_inline_toolbar_hover();
+            self.input_state.dirty_tracker.mark_full();
+            self.input_state.needs_redraw = true;
+            return;
+        }
         if !self.toolbar_drag_preview_active() {
             return;
         }

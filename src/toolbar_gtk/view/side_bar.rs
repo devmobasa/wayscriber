@@ -18,11 +18,11 @@ use crate::ui::toolbar::model::{SideHeaderModel, ToolbarPresentationPayload};
 use crate::ui::toolbar::snapshot::ToolContext;
 use crate::ui::toolbar::{SidePane, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
-use super::super::GtkToolbarFeedback;
 use super::super::icons::IconWidget;
 use super::super::widgets::{
     FeedbackSender, install_shortcut_focus_policy, send_event, set_active_class, sized_button,
 };
+use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 use super::{Updater, sections};
 
 /// Board chip color dot, RGBA; `None` draws the empty outline.
@@ -31,6 +31,7 @@ type BoardDotColor = Rc<Cell<Option<(f64, f64, f64, f64)>>>;
 const SIDE_WIDTH: f64 = 260.0;
 const MINIMIZED_SIZE: (f64, f64) = (24.0, 64.0);
 const BASE_MARGIN: (i32, i32) = (24, 24); // (top, left)
+const END_MARGIN: (f64, f64) = (0.0, 24.0);
 
 /// Discrete inputs that force a rebuild of the pane content.
 #[derive(PartialEq)]
@@ -195,6 +196,17 @@ impl SideBar {
     pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
         let snapshot = &update.snapshot;
         self.drag_blocked.set(update.modal_engaged);
+        let panel_opacity = if update.drag_preview == Some(GtkToolbarKind::Side) {
+            0.0
+        } else {
+            1.0
+        };
+        if (self.root.opacity() - panel_opacity).abs() > f64::EPSILON {
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "side panel opacity -> {panel_opacity:.1} (window remains mapped for drag input)"
+            ));
+            self.root.set_opacity(panel_opacity);
+        }
         if !update.side_visible {
             self.window.set_visible(false);
             return;
@@ -218,18 +230,41 @@ impl SideBar {
     /// offsets are (x, y) like the update carries them.
     fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
         if self.drag_active.get() || echo_seq < self.offset_seq.get() {
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "side echo rejected echo_seq={echo_seq} local_seq={} active={} backend=({:.3},{:.3}) local=({:.3},{:.3})",
+                self.offset_seq.get(),
+                self.drag_active.get(),
+                offsets.0,
+                offsets.1,
+                self.offsets.get().0,
+                self.offsets.get().1,
+            ));
             return;
         }
-        self.offsets.set(offsets);
-        self.window
-            .set_margin(Edge::Left, BASE_MARGIN.1 + offsets.0.round() as i32);
-        self.window
-            .set_margin(Edge::Top, BASE_MARGIN.0 + offsets.1.round() as i32);
+        let (left, x) = super::top_bar::rounded_margin_and_offset(BASE_MARGIN.1 as f64, offsets.0);
+        let (top, y) = super::top_bar::rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
+        self.offsets.set((x, y));
+        self.window.set_margin(Edge::Left, left);
+        self.window.set_margin(Edge::Top, top);
+        crate::toolbar_gtk::drag_debug_log(format!(
+            "side echo applied echo_seq={echo_seq} backend=({:.3},{:.3}) stored=({x:.3},{y:.3}) margin=({left},{top}) size={}x{}",
+            offsets.0,
+            offsets.1,
+            self.window.width(),
+            self.window.height(),
+        ));
     }
 
     /// Cap the scrolled body so the palette never grows past the screen
     /// space the backend reports.
     fn sync_viewport(&self, snapshot: &ToolbarSnapshot) {
+        // Resizing a layer surface while its gesture coordinates are being
+        // consumed makes the surface catch up after button release. Keep the
+        // allocated height stable for the gesture; the final backend echo
+        // applies the viewport for the accepted resting position.
+        if self.drag_active.get() {
+            return;
+        }
         let Some(scrolled) = &self.scrolled else {
             return;
         };
@@ -511,8 +546,8 @@ impl SideBar {
         button
     }
 
-    /// See `top_bar::attach_move_drag`: coalesce surface-local residual
-    /// motion to one layer-margin update per GTK frame.
+    /// See `top_bar::attach_move_drag`: keep the input surface parked and
+    /// coalesce stable start-relative motion into the inline preview.
     fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
@@ -522,11 +557,13 @@ impl SideBar {
         let seq = self.offset_seq.clone();
         let pending = Rc::new(super::top_bar::FrameCoalescedDrag::default());
         let active_generation = Rc::new(Cell::new(0));
+        let drag_origin = Rc::new(Cell::new((0.0, 0.0)));
 
         let begin_active = drag_active.clone();
         let begin_blocked = self.drag_blocked.clone();
         let begin_pending = pending.clone();
         let begin_generation = active_generation.clone();
+        let begin_origin = drag_origin.clone();
         let frame_window = window.clone();
         let frame_offsets = offsets.clone();
         let frame_feedback = feedback.clone();
@@ -536,13 +573,24 @@ impl SideBar {
                 gesture.set_state(gtk4::EventSequenceState::Denied);
                 return;
             }
+            let Some(grip) = gesture.widget() else {
+                return;
+            };
             begin_active.set(true);
             let generation = begin_pending.begin();
             begin_generation.set(generation);
-            let Some(grip) = gesture.widget() else {
-                begin_active.set(false);
-                return;
-            };
+            begin_origin.set(frame_offsets.get());
+            frame_seq.set(frame_seq.get() + 1);
+            let origin = begin_origin.get();
+            let _ = frame_feedback.send(GtkToolbarFeedback::SetSideOffset {
+                x: origin.0,
+                y: origin.1,
+                surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(
+                    &frame_window,
+                ),
+                seq: frame_seq.get(),
+                phase: GtkToolbarDragPhase::Start,
+            });
 
             let pending = begin_pending.clone();
             let window = frame_window.clone();
@@ -551,27 +599,43 @@ impl SideBar {
             let seq = frame_seq.clone();
             let drag_active = begin_active.clone();
             let active_generation = begin_generation.clone();
+            let drag_origin = begin_origin.clone();
             grip.add_tick_callback(move |_, _| {
                 let Some(frame) = pending.take_frame(generation) else {
                     return gtk4::glib::ControlFlow::Continue;
                 };
                 let (cx, cy) = offsets.get();
+                let (next_x, next_y) =
+                    super::top_bar::drag_frame_position(drag_origin.get(), frame.delta);
                 let (x, y) = super::top_bar::clamp_drag_offsets(
                     &window,
-                    (cx + frame.delta.0, cy + frame.delta.1),
+                    (next_x, next_y),
                     (BASE_MARGIN.1 as f64, BASE_MARGIN.0 as f64),
+                    END_MARGIN,
                 );
                 offsets.set((x, y));
-                window.set_margin(Edge::Left, BASE_MARGIN.1 + x.round() as i32);
-                window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
                 seq.set(seq.get() + 1);
+                crate::toolbar_gtk::drag_debug_log(format!(
+                    "side frame generation={generation} seq={} phase={:?} delta=({:.3},{:.3}) origin=({:.3},{:.3}) before=({cx:.3},{cy:.3}) preview=({x:.3},{y:.3}) parked_margin=({}, {}) size={}x{}",
+                    seq.get(),
+                    frame.phase,
+                    frame.delta.0,
+                    frame.delta.1,
+                    drag_origin.get().0,
+                    drag_origin.get().1,
+                    window.margin(Edge::Left),
+                    window.margin(Edge::Top),
+                    window.width(),
+                    window.height(),
+                ));
                 let _ = feedback.send(GtkToolbarFeedback::SetSideOffset {
                     x,
                     y,
+                    surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(&window),
                     seq: seq.get(),
-                    done: frame.done,
+                    phase: frame.phase,
                 });
-                if frame.done {
+                if frame.phase.is_end() {
                     if active_generation.get() == generation {
                         drag_active.set(false);
                     }
@@ -585,10 +649,18 @@ impl SideBar {
         let update_pending = pending.clone();
         let update_generation = active_generation.clone();
         drag.connect_drag_update(move |_, dx, dy| {
-            update_pending.update(update_generation.get(), dx, dy);
+            let generation = update_generation.get();
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "side raw generation={generation} start_relative=({dx:.3},{dy:.3})",
+            ));
+            update_pending.update(generation, dx, dy);
         });
 
         drag.connect_drag_end(move |_, dx, dy| {
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "side end generation={} delta=({dx:.3},{dy:.3})",
+                active_generation.get(),
+            ));
             pending.end(active_generation.get(), dx, dy);
         });
         grip.add_controller(drag);

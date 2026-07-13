@@ -27,12 +27,12 @@ use crate::toolbar_icons;
 use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 
-use super::super::GtkToolbarFeedback;
 use super::super::icons::{IconWidget, tool_icon_painter};
 use super::super::widgets::{
     FeedbackSender, SwatchButton, add_shortcut_badge, icon_button, install_shortcut_focus_policy,
     send_event, set_active_class, sized_button, swatch_with_shortcut, text_button,
 };
+use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 
 // Spec-unit design tokens mirrored from the built-in layout
 // (`layout/spec/top.rs`); the plan/natural-width math reuses the builtin
@@ -58,13 +58,13 @@ const COMPACT_MARGIN_RIGHT: f64 = 8.0;
 const COMPACT_START_X: f64 = 4.0;
 const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 const BASE_MARGIN: (i32, i32) = (12, 12);
+const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
 use super::Updater;
 
-/// A layer-shell margin move changes the coordinate space that
-/// `GestureDrag` measures in. Keep only the newest residual motion and
-/// apply it once per compositor frame, otherwise several input events in
-/// one frame all add the same not-yet-consumed displacement and overshoot.
+/// Keep only the newest start-relative `GestureDrag` offset and apply it once
+/// per compositor frame. The gesture-owning surface stays stationary, so the
+/// offset remains in one stable coordinate space for the whole drag.
 #[derive(Default)]
 pub(super) struct FrameCoalescedDrag {
     next_generation: Cell<u64>,
@@ -73,7 +73,7 @@ pub(super) struct FrameCoalescedDrag {
 
 pub(super) struct DragFrame {
     pub(super) delta: (f64, f64),
-    pub(super) done: bool,
+    pub(super) phase: GtkToolbarDragPhase,
 }
 
 impl FrameCoalescedDrag {
@@ -87,7 +87,7 @@ impl FrameCoalescedDrag {
         let mut pending = self.pending.borrow_mut();
         if let Some((queued_generation, frame)) = pending.back_mut()
             && *queued_generation == generation
-            && !frame.done
+            && frame.phase != GtkToolbarDragPhase::End
         {
             frame.delta = (dx, dy);
             return;
@@ -96,7 +96,7 @@ impl FrameCoalescedDrag {
             generation,
             DragFrame {
                 delta: (dx, dy),
-                done: false,
+                phase: GtkToolbarDragPhase::Move,
             },
         ));
     }
@@ -105,21 +105,20 @@ impl FrameCoalescedDrag {
         let mut pending = self.pending.borrow_mut();
         if let Some((queued_generation, frame)) = pending.back_mut()
             && *queued_generation == generation
-            && !frame.done
+            && frame.phase != GtkToolbarDragPhase::End
         {
             frame.delta = (dx, dy);
-            frame.done = true;
+            frame.phase = GtkToolbarDragPhase::End;
             return;
         }
         pending.push_back((
             generation,
             DragFrame {
-                // If the last update was already consumed by a frame,
-                // drag-end repeats GTK's start-relative offset rather than
-                // contributing fresh residual motion. Complete without
-                // moving the surface again.
-                delta: (0.0, 0.0),
-                done: true,
+                // Start-relative offsets are idempotent while the input
+                // surface is parked, so replaying the final coordinate cannot
+                // accumulate motion or produce a release jump.
+                delta: (dx, dy),
+                phase: GtkToolbarDragPhase::End,
             },
         ));
     }
@@ -131,6 +130,10 @@ impl FrameCoalescedDrag {
             .position(|(queued_generation, _)| *queued_generation == generation)?;
         pending.remove(index).map(|(_, frame)| frame)
     }
+}
+
+pub(super) fn drag_frame_position(origin: (f64, f64), delta: (f64, f64)) -> (f64, f64) {
+    (origin.0 + delta.0, origin.1 + delta.1)
 }
 
 /// Snapshot inputs the shapes-popover grid renders from: active tool,
@@ -188,6 +191,11 @@ fn effective_scale(snapshot: &ToolbarSnapshot) -> f64 {
     } else {
         1.0
     }
+}
+
+pub(super) fn rounded_margin_and_offset(base: f64, offset: f64) -> (i32, f64) {
+    let margin = (base + offset).round() as i32;
+    (margin, margin as f64 - base)
 }
 
 fn top_default_width(snapshot: &ToolbarSnapshot) -> i32 {
@@ -300,6 +308,17 @@ impl TopBar {
     pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
         let snapshot = &update.snapshot;
         self.drag_blocked.set(update.modal_engaged);
+        let panel_opacity = if update.drag_preview == Some(GtkToolbarKind::Top) {
+            0.0
+        } else {
+            1.0
+        };
+        if (self.root.opacity() - panel_opacity).abs() > f64::EPSILON {
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "top panel opacity -> {panel_opacity:.1} (window remains mapped for drag input)"
+            ));
+            self.root.set_opacity(panel_opacity);
+        }
         if !update.top_visible {
             // Suppress the dismissal echoes a hide-triggered popover close
             // would send, so an open picker survives a hide/show cycle
@@ -329,13 +348,29 @@ impl TopBar {
     /// flight or the echo is older than what this bar already sent.
     fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
         if self.drag_active.get() || echo_seq < self.offset_seq.get() {
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "top echo rejected echo_seq={echo_seq} local_seq={} active={} backend=({:.3},{:.3}) local=({:.3},{:.3})",
+                self.offset_seq.get(),
+                self.drag_active.get(),
+                offsets.0,
+                offsets.1,
+                self.offsets.get().0,
+                self.offsets.get().1,
+            ));
             return;
         }
-        self.offsets.set(offsets);
-        self.window
-            .set_margin(Edge::Left, (self.base_x.get() + offsets.0).round() as i32);
-        self.window
-            .set_margin(Edge::Top, BASE_MARGIN.0 + offsets.1.round() as i32);
+        let (left, x) = rounded_margin_and_offset(self.base_x.get(), offsets.0);
+        let (top, y) = rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
+        self.offsets.set((x, y));
+        self.window.set_margin(Edge::Left, left);
+        self.window.set_margin(Edge::Top, top);
+        crate::toolbar_gtk::drag_debug_log(format!(
+            "top echo applied echo_seq={echo_seq} backend=({:.3},{:.3}) stored=({x:.3},{y:.3}) margin=({left},{top}) size={}x{}",
+            offsets.0,
+            offsets.1,
+            self.window.width(),
+            self.window.height(),
+        ));
     }
 
     fn rebuild(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
@@ -1303,15 +1338,11 @@ impl TopBar {
         grid
     }
 
-    /// Drag-to-move: the grip moves the layer margins live and reports the
-    /// offsets so the backend can clamp and persist them at drag end.
-    ///
-    /// GestureDrag deltas are surface-local, and the surface itself moves
-    /// with every margin change, so each reported delta is the *residual*
-    /// pointer movement. Coalesce raw motion to the GTK frame clock before
-    /// re-anchoring against live offsets; this prevents multiple events from
-    /// applying the same residual while the compositor is still moving the
-    /// surface.
+    /// Drag-to-move: park the GTK input surface at its origin and let the main
+    /// overlay render the moving preview. Moving this surface during the
+    /// gesture changes GTK's local coordinate space and makes fast drags lag,
+    /// overshoot, or reverse. The backend moves the transparent surface only
+    /// after the gesture ends, then reveals it after the handoff delay.
     fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
@@ -1322,11 +1353,13 @@ impl TopBar {
         let seq = self.offset_seq.clone();
         let pending = Rc::new(FrameCoalescedDrag::default());
         let active_generation = Rc::new(Cell::new(0));
+        let drag_origin = Rc::new(Cell::new((0.0, 0.0)));
 
         let begin_active = drag_active.clone();
         let begin_blocked = self.drag_blocked.clone();
         let begin_pending = pending.clone();
         let begin_generation = active_generation.clone();
+        let begin_origin = drag_origin.clone();
         let frame_window = window.clone();
         let frame_offsets = offsets.clone();
         let frame_feedback = feedback.clone();
@@ -1337,13 +1370,24 @@ impl TopBar {
                 gesture.set_state(gtk4::EventSequenceState::Denied);
                 return;
             }
+            let Some(grip) = gesture.widget() else {
+                return;
+            };
             begin_active.set(true);
             let generation = begin_pending.begin();
             begin_generation.set(generation);
-            let Some(grip) = gesture.widget() else {
-                begin_active.set(false);
-                return;
-            };
+            begin_origin.set(frame_offsets.get());
+            frame_seq.set(frame_seq.get() + 1);
+            let origin = begin_origin.get();
+            let _ = frame_feedback.send(GtkToolbarFeedback::SetTopOffset {
+                x: origin.0,
+                y: origin.1,
+                surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(
+                    &frame_window,
+                ),
+                seq: frame_seq.get(),
+                phase: GtkToolbarDragPhase::Start,
+            });
 
             let pending = begin_pending.clone();
             let window = frame_window.clone();
@@ -1353,25 +1397,39 @@ impl TopBar {
             let seq = frame_seq.clone();
             let drag_active = begin_active.clone();
             let active_generation = begin_generation.clone();
+            let drag_origin = begin_origin.clone();
             grip.add_tick_callback(move |_, _| {
                 let Some(frame) = pending.take_frame(generation) else {
                     return gtk4::glib::ControlFlow::Continue;
                 };
                 let base = base_x.get();
                 let (cx, cy) = offsets.get();
-                let (mut x, mut y) = (cx + frame.delta.0, cy + frame.delta.1);
-                (x, y) = clamp_drag_offsets(&window, (x, y), (base, BASE_MARGIN.0 as f64));
+                let (mut x, mut y) = drag_frame_position(drag_origin.get(), frame.delta);
+                (x, y) =
+                    clamp_drag_offsets(&window, (x, y), (base, BASE_MARGIN.0 as f64), END_MARGIN);
                 offsets.set((x, y));
-                window.set_margin(Edge::Left, (base + x).round() as i32);
-                window.set_margin(Edge::Top, BASE_MARGIN.0 + y.round() as i32);
                 seq.set(seq.get() + 1);
+                crate::toolbar_gtk::drag_debug_log(format!(
+                    "top frame generation={generation} seq={} phase={:?} delta=({:.3},{:.3}) origin=({:.3},{:.3}) before=({cx:.3},{cy:.3}) preview=({x:.3},{y:.3}) parked_margin=({}, {}) size={}x{}",
+                    seq.get(),
+                    frame.phase,
+                    frame.delta.0,
+                    frame.delta.1,
+                    drag_origin.get().0,
+                    drag_origin.get().1,
+                    window.margin(Edge::Left),
+                    window.margin(Edge::Top),
+                    window.width(),
+                    window.height(),
+                ));
                 let _ = feedback.send(GtkToolbarFeedback::SetTopOffset {
                     x,
                     y,
+                    surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(&window),
                     seq: seq.get(),
-                    done: frame.done,
+                    phase: frame.phase,
                 });
-                if frame.done {
+                if frame.phase.is_end() {
                     if active_generation.get() == generation {
                         drag_active.set(false);
                     }
@@ -1385,10 +1443,18 @@ impl TopBar {
         let update_pending = pending.clone();
         let update_generation = active_generation.clone();
         drag.connect_drag_update(move |_, dx, dy| {
-            update_pending.update(update_generation.get(), dx, dy);
+            let generation = update_generation.get();
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "top raw generation={generation} start_relative=({dx:.3},{dy:.3})",
+            ));
+            update_pending.update(generation, dx, dy);
         });
 
         drag.connect_drag_end(move |_, dx, dy| {
+            crate::toolbar_gtk::drag_debug_log(format!(
+                "top end generation={} delta=({dx:.3},{dy:.3})",
+                active_generation.get(),
+            ));
             pending.end(active_generation.get(), dx, dy);
         });
         grip.add_controller(drag);
@@ -1414,25 +1480,36 @@ pub(super) fn attach_escape_dismiss(
     popover.add_controller(key);
 }
 
-/// Keep a dragged bar reachable: offsets may pull it up to its base
-/// margins off the origin and never fully off the monitor.
+/// Keep a dragged bar inside the same start/end margins enforced by the
+/// backend when it persists the final offsets.
 pub(super) fn clamp_drag_offsets(
     window: &gtk4::Window,
     (x, y): (f64, f64),
     (base_x, base_y): (f64, f64),
+    (end_x, end_y): (f64, f64),
 ) -> (f64, f64) {
-    let mut max_x = f64::MAX;
-    let mut max_y = f64::MAX;
     if let Some(surface) = window.surface()
         && let Some(display) = gtk4::gdk::Display::default()
         && let Some(monitor) = display.monitor_at_surface(&surface)
     {
         let geometry = monitor.geometry();
-        // Keep at least a grip-sized sliver on screen.
-        max_x = (geometry.width() as f64 - base_x - 40.0).max(0.0);
-        max_y = (geometry.height() as f64 - base_y - 24.0).max(0.0);
+        let (x, _, _) = crate::backend::wayland::clamp_floating_axis_offset(
+            x,
+            geometry.width() as f64,
+            window.width() as f64,
+            base_x,
+            end_x,
+        );
+        let (y, _, _) = crate::backend::wayland::clamp_floating_axis_offset(
+            y,
+            geometry.height() as f64,
+            window.height() as f64,
+            base_y,
+            end_y,
+        );
+        return (x, y);
     }
-    (x.clamp(-base_x, max_x), y.clamp(-base_y, max_y))
+    (x.max(-base_x), y.max(-base_y))
 }
 
 #[cfg(test)]
@@ -1445,7 +1522,7 @@ mod tests {
     use crate::ui::toolbar::ToolbarBindingHints;
 
     #[test]
-    fn drag_updates_are_coalesced_to_the_latest_residual_per_frame() {
+    fn drag_updates_are_coalesced_to_the_latest_start_relative_offset() {
         let drag = FrameCoalescedDrag::default();
         let first = drag.begin();
         drag.update(first, 2.0, 3.0);
@@ -1453,13 +1530,30 @@ mod tests {
 
         let frame = drag.take_frame(first).expect("latest motion is pending");
         assert_eq!(frame.delta, (5.0, 7.0));
-        assert!(!frame.done);
+        assert_eq!(frame.phase, GtkToolbarDragPhase::Move);
         assert!(drag.take_frame(first).is_none());
 
         drag.end(first, 5.0, 7.0);
         let frame = drag.take_frame(first).expect("drag end is pending");
-        assert_eq!(frame.delta, (0.0, 0.0));
-        assert!(frame.done);
+        assert_eq!(frame.delta, (5.0, 7.0));
+        assert_eq!(frame.phase, GtkToolbarDragPhase::End);
+    }
+
+    #[test]
+    fn rounded_offset_matches_the_integer_layer_margin() {
+        assert_eq!(rounded_margin_and_offset(12.0, 3.6), (16, 4.0));
+        assert_eq!(rounded_margin_and_offset(24.0, -24.0), (0, -24.0));
+        assert_eq!(rounded_margin_and_offset(100.25, 4.4), (105, 4.75));
+    }
+
+    #[test]
+    fn rapid_start_relative_updates_do_not_accumulate() {
+        let origin = (100.0, 200.0);
+        let first = drag_frame_position(origin, (25.0, 40.0));
+        let second = drag_frame_position(origin, (80.0, 90.0));
+
+        assert_eq!(first, (125.0, 240.0));
+        assert_eq!(second, (180.0, 290.0));
     }
 
     #[test]
@@ -1473,13 +1567,13 @@ mod tests {
 
         let first_frame = drag.take_frame(first).expect("first drag end is retained");
         assert_eq!(first_frame.delta, (4.0, 6.0));
-        assert!(first_frame.done);
+        assert_eq!(first_frame.phase, GtkToolbarDragPhase::End);
 
         let second_frame = drag
             .take_frame(second)
             .expect("second drag motion is retained");
         assert_eq!(second_frame.delta, (1.0, 2.0));
-        assert!(!second_frame.done);
+        assert_eq!(second_frame.phase, GtkToolbarDragPhase::Move);
     }
 
     #[test]
@@ -1526,5 +1620,19 @@ mod tests {
         let simple_width = top_default_width(&simple);
         assert!(simple_width < regular_width);
         assert_eq!(simple_width, top_toolbar_size(&simple).0 as i32);
+    }
+
+    #[test]
+    fn degraded_layout_requests_the_selected_plan_width() {
+        let state = make_test_input_state();
+        let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+            &state,
+            ToolbarBindingHints::from_input_state(&state),
+        );
+        snapshot.top_viewport_max = Some(700.0);
+
+        let plan = plan_top_strip(&snapshot);
+        assert!(plan.compact || plan.show_overflow || plan.swatch_count < 8);
+        assert!(top_default_width(&snapshot) <= 700);
     }
 }

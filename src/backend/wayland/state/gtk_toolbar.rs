@@ -40,17 +40,17 @@ fn gtk_toolbar_feedback_is_blocked(
 ) -> bool {
     match feedback {
         GtkToolbarFeedback::Event { .. } => modal_engaged,
-        GtkToolbarFeedback::SetTopOffset { done, .. } => {
+        GtkToolbarFeedback::SetTopOffset { phase, .. } => {
             let blocked = modal_engaged || *top_drag_blocked;
             if blocked {
-                *top_drag_blocked = !done;
+                *top_drag_blocked = !phase.is_end();
             }
             blocked
         }
-        GtkToolbarFeedback::SetSideOffset { done, .. } => {
+        GtkToolbarFeedback::SetSideOffset { phase, .. } => {
             let blocked = modal_engaged || *side_drag_blocked;
             if blocked {
-                *side_drag_blocked = !done;
+                *side_drag_blocked = !phase.is_end();
             }
             blocked
         }
@@ -61,6 +61,7 @@ impl WaylandState {
     /// Bounds the main poll while the GTK thread can produce feedback,
     /// since nothing it sends wakes the Wayland fd.
     const GTK_TOOLBAR_WAKE_INTERVAL: Duration = Duration::from_millis(25);
+    const GTK_TOOLBAR_DRAG_WAKE_INTERVAL: Duration = Duration::from_millis(8);
 
     /// True while the GTK frontend owns the toolbars (built-in bars stay
     /// unmapped).
@@ -100,9 +101,13 @@ impl WaylandState {
     /// Wake interval for the event-loop timeout chain; `None` when the GTK
     /// frontend is inactive.
     pub(in crate::backend::wayland) fn gtk_toolbar_wake_timeout(&self) -> Option<Duration> {
-        self.gtk_toolbar
-            .as_ref()
-            .map(|_| Self::GTK_TOOLBAR_WAKE_INTERVAL)
+        self.gtk_toolbar.as_ref().map(|_| {
+            if self.data.gtk_drag_preview.is_some() {
+                Self::GTK_TOOLBAR_DRAG_WAKE_INTERVAL
+            } else {
+                Self::GTK_TOOLBAR_WAKE_INTERVAL
+            }
+        })
     }
 
     /// Drains pending GTK toolbar feedback into the shared toolbar-event
@@ -148,6 +153,43 @@ impl WaylandState {
                     &mut self.data.gtk_side_offset_seq,
                     &feedback,
                 );
+                // If a modal opened after an accepted drag start, the blocked
+                // end still has to close the preview lifecycle. Keep the last
+                // accepted position rather than applying motion produced while
+                // the modal owned input.
+                match feedback {
+                    GtkToolbarFeedback::SetTopOffset {
+                        surface_size,
+                        phase,
+                        ..
+                    } if phase.is_end()
+                        && self.data.gtk_drag_preview
+                            == Some(crate::toolbar_gtk::GtkToolbarKind::Top) =>
+                    {
+                        self.apply_gtk_top_offset(
+                            self.data.toolbar_top_offset,
+                            self.data.toolbar_top_offset_y,
+                            surface_size,
+                            phase,
+                        );
+                    }
+                    GtkToolbarFeedback::SetSideOffset {
+                        surface_size,
+                        phase,
+                        ..
+                    } if phase.is_end()
+                        && self.data.gtk_drag_preview
+                            == Some(crate::toolbar_gtk::GtkToolbarKind::Side) =>
+                    {
+                        self.apply_gtk_side_offset(
+                            self.data.toolbar_side_offset_x,
+                            self.data.toolbar_side_offset,
+                            surface_size,
+                            phase,
+                        );
+                    }
+                    _ => {}
+                }
                 continue;
             }
             match feedback {
@@ -162,13 +204,33 @@ impl WaylandState {
                         Some(qh),
                     );
                 }
-                GtkToolbarFeedback::SetTopOffset { x, y, seq, done } => {
+                GtkToolbarFeedback::SetTopOffset {
+                    x,
+                    y,
+                    surface_size,
+                    seq,
+                    phase,
+                } => {
+                    super::drag_log(format!(
+                        "gtk top receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
+                        surface_size.width, surface_size.height,
+                    ));
                     self.data.gtk_top_offset_seq = seq;
-                    self.apply_gtk_top_offset(x, y, done);
+                    self.apply_gtk_top_offset(x, y, surface_size, phase);
                 }
-                GtkToolbarFeedback::SetSideOffset { x, y, seq, done } => {
+                GtkToolbarFeedback::SetSideOffset {
+                    x,
+                    y,
+                    surface_size,
+                    seq,
+                    phase,
+                } => {
+                    super::drag_log(format!(
+                        "gtk side receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
+                        surface_size.width, surface_size.height,
+                    ));
                     self.data.gtk_side_offset_seq = seq;
-                    self.apply_gtk_side_offset(x, y, done);
+                    self.apply_gtk_side_offset(x, y, surface_size, phase);
                 }
             }
         }
@@ -209,6 +271,7 @@ impl WaylandState {
                 self.input_state.modifiers.alt,
             ),
             modal_engaged: gtk_toolbar_feedback_blocked(&self.input_state),
+            drag_preview: self.data.gtk_drag_preview,
             snapshot,
         };
         if let Some(bridge) = self.gtk_toolbar.as_mut() {
@@ -222,6 +285,13 @@ mod modal_tests {
     use super::*;
     use crate::config::Action;
     use crate::input::state::test_support::make_test_input_state;
+    use crate::toolbar_gtk::GtkToolbarDragPhase;
+
+    const TEST_SURFACE_SIZE: crate::toolbar_gtk::GtkToolbarSurfaceSize =
+        crate::toolbar_gtk::GtkToolbarSurfaceSize {
+            width: 260,
+            height: 789,
+        };
 
     #[test]
     fn command_palette_and_shortcut_capture_block_all_gtk_feedback() {
@@ -247,8 +317,9 @@ mod modal_tests {
             &GtkToolbarFeedback::SetTopOffset {
                 x: 100.0,
                 y: 50.0,
+                surface_size: TEST_SURFACE_SIZE,
                 seq: 9,
-                done: true,
+                phase: GtkToolbarDragPhase::End,
             },
         );
         assert_eq!((top_seq, side_seq), (9, 7));
@@ -259,8 +330,9 @@ mod modal_tests {
             &GtkToolbarFeedback::SetSideOffset {
                 x: 25.0,
                 y: 75.0,
+                surface_size: TEST_SURFACE_SIZE,
                 seq: 11,
-                done: false,
+                phase: GtkToolbarDragPhase::Move,
             },
         );
         assert_eq!((top_seq, side_seq), (9, 11));
@@ -277,8 +349,9 @@ mod modal_tests {
             &GtkToolbarFeedback::SetTopOffset {
                 x: 0.0,
                 y: 0.0,
+                surface_size: TEST_SURFACE_SIZE,
                 seq: 8,
-                done: false,
+                phase: GtkToolbarDragPhase::Move,
             },
         );
         assert_eq!((top_seq, side_seq), (9, 11));
@@ -288,18 +361,19 @@ mod modal_tests {
     fn drag_started_under_modal_stays_blocked_until_done() {
         let mut top_blocked = false;
         let mut side_blocked = false;
-        let top_update = |done| GtkToolbarFeedback::SetTopOffset {
+        let top_update = |phase| GtkToolbarFeedback::SetTopOffset {
             x: 10.0,
             y: 20.0,
+            surface_size: TEST_SURFACE_SIZE,
             seq: 1,
-            done,
+            phase,
         };
 
         assert!(gtk_toolbar_feedback_is_blocked(
             true,
             &mut top_blocked,
             &mut side_blocked,
-            &top_update(false),
+            &top_update(GtkToolbarDragPhase::Start),
         ));
         assert!(top_blocked);
 
@@ -307,7 +381,7 @@ mod modal_tests {
             false,
             &mut top_blocked,
             &mut side_blocked,
-            &top_update(false),
+            &top_update(GtkToolbarDragPhase::Move),
         ));
         assert!(top_blocked);
 
@@ -315,7 +389,7 @@ mod modal_tests {
             false,
             &mut top_blocked,
             &mut side_blocked,
-            &top_update(true),
+            &top_update(GtkToolbarDragPhase::End),
         ));
         assert!(!top_blocked);
 
@@ -323,7 +397,7 @@ mod modal_tests {
             false,
             &mut top_blocked,
             &mut side_blocked,
-            &top_update(false),
+            &top_update(GtkToolbarDragPhase::Start),
         ));
     }
 
@@ -334,14 +408,16 @@ mod modal_tests {
         let top = GtkToolbarFeedback::SetTopOffset {
             x: 0.0,
             y: 0.0,
+            surface_size: TEST_SURFACE_SIZE,
             seq: 1,
-            done: false,
+            phase: GtkToolbarDragPhase::Start,
         };
         let side = GtkToolbarFeedback::SetSideOffset {
             x: 0.0,
             y: 0.0,
+            surface_size: TEST_SURFACE_SIZE,
             seq: 1,
-            done: false,
+            phase: GtkToolbarDragPhase::Start,
         };
 
         assert!(gtk_toolbar_feedback_is_blocked(

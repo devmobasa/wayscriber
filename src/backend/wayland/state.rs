@@ -100,6 +100,8 @@ mod pdf_export;
 mod perf;
 mod render;
 mod toolbar;
+#[cfg(feature = "toolbar-gtk")]
+pub(crate) use toolbar::clamp_floating_axis_offset;
 mod zoom;
 
 #[cfg(test)]
