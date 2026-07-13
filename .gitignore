@@ -36,6 +36,7 @@ packaging/**
 !packaging/package.configurator.yaml
 !packaging/icons/
 !packaging/icons/*.png
+!packaging/icons/*.svg
 !packaging/wayscriber.desktop
 !packaging/wayscriber-configurator.desktop
 

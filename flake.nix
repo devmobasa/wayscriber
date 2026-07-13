@@ -41,6 +41,10 @@
                 done
               done
               install -Dm644 packaging/icons/wayscriber-128.png $out/share/pixmaps/wayscriber.png
+              install -Dm644 packaging/icons/wayscriber.svg \
+                $out/share/icons/hicolor/scalable/apps/wayscriber.svg
+              install -Dm644 packaging/icons/wayscriber-symbolic.svg \
+                $out/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg
               install -Dm644 config.example.toml $out/share/doc/wayscriber/config.example.toml
               install -Dm644 README.md $out/share/doc/wayscriber/README.md
               install -Dm644 LICENSE $out/share/licenses/wayscriber/LICENSE
@@ -84,6 +88,8 @@
               done
               install -Dm644 packaging/icons/wayscriber-configurator-128.png \
                 $out/share/pixmaps/wayscriber-configurator.png
+              install -Dm644 packaging/icons/wayscriber-configurator.svg \
+                $out/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg
               install -Dm644 README.md $out/share/doc/wayscriber-configurator/README.md
               install -Dm644 LICENSE $out/share/licenses/wayscriber-configurator/LICENSE
 

@@ -69,6 +69,8 @@ package() {
     install -Dm644 packaging/icons/wayscriber-64.png "$pkgdir/usr/share/icons/hicolor/64x64/status/wayscriber.png"
     install -Dm644 packaging/icons/wayscriber-128.png "$pkgdir/usr/share/icons/hicolor/128x128/status/wayscriber.png"
     install -Dm644 packaging/icons/wayscriber-128.png "$pkgdir/usr/share/pixmaps/wayscriber.png"
+    install -Dm644 packaging/icons/wayscriber.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber.svg"
+    install -Dm644 packaging/icons/wayscriber-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg"
     install -Dm644 packaging/icons/wayscriber-configurator-16.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-19.png "$pkgdir/usr/share/icons/hicolor/19x19/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-22.png "$pkgdir/usr/share/icons/hicolor/22x22/apps/wayscriber-configurator.png"
@@ -77,6 +79,7 @@ package() {
     install -Dm644 packaging/icons/wayscriber-configurator-64.png "$pkgdir/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png"
     install -Dm644 packaging/icons/wayscriber-configurator-128.png "$pkgdir/usr/share/pixmaps/wayscriber-configurator.png"
+    install -Dm644 packaging/icons/wayscriber-configurator.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg"
 
     # Install documentation and example config
     install -Dm644 config.example.toml "$pkgdir/usr/share/doc/$pkgname/config.example.toml"

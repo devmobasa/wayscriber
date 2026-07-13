@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <title>Wayscriber symbolic tray icon</title>
+  <desc>Approved tray pencil icon.</desc>
+
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(7.0 1.0) rotate(40.0 4.85 9.90)">
+    <rect x="0.9" y="0.7" width="9.7" height="17.8" rx="2.35" stroke-width="2.35"/>
+    <path d="M1.1 17.6 L10.40 17.6 L8.75 20.25 L5.75 23.05 L2.15 20.25 Z" stroke-width="2.35"/>
+    <path d="M2.72 3.2 L6.11 3.2" stroke-width="1.5"/>
+  </g>
+</svg>

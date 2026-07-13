@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Wayscriber application icon</title>
+  <desc>Refined large-format pencil icon.</desc>
+  <g transform="rotate(40 256 256)">
+    <rect x="196" y="72" width="120" height="248" rx="28" fill="#F59E0B" stroke="#7186AA" stroke-width="22" stroke-linejoin="round"/>
+    <path d="M280 102 L298 120 L298 220 L280 202 Z" fill="#FBBF24"/>
+    <path d="M198 314 L314 314 L292 372 L256 446 L220 372 Z" fill="#F2C078" stroke="#7186AA" stroke-width="22" stroke-linejoin="round"/>
+    <path d="M244 386 L256 446 L268 386 Z" fill="#24324A"/>
+  </g>
+
+</svg>

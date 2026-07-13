@@ -29,6 +29,9 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "tray")]
+const TRAY_ICON_NAME: &str = "wayscriber-symbolic";
+
+#[cfg(feature = "tray")]
 impl ksni::Tray for WayscriberTray {
     fn id(&self) -> String {
         "wayscriber".into()
@@ -40,7 +43,7 @@ impl ksni::Tray for WayscriberTray {
 
     fn icon_name(&self) -> String {
         if tray_theme_icons_enabled() {
-            "wayscriber".into()
+            TRAY_ICON_NAME.into()
         } else {
             String::new()
         }
@@ -84,7 +87,7 @@ impl ksni::Tray for WayscriberTray {
 
         ksni::ToolTip {
             icon_name: if tray_theme_icons_enabled() {
-                "wayscriber".into()
+                TRAY_ICON_NAME.into()
             } else {
                 String::new()
             },
@@ -361,7 +364,12 @@ fn toggle_overlay_menu_label() -> String {
 
 #[cfg(all(feature = "tray", test))]
 mod tests {
-    use super::tray_theme_icons_supported;
+    use super::{TRAY_ICON_NAME, tray_theme_icons_supported};
+
+    #[test]
+    fn tray_uses_the_packaged_symbolic_icon_name() {
+        assert_eq!(TRAY_ICON_NAME, "wayscriber-symbolic");
+    }
 
     #[test]
     fn tray_theme_icons_supported_allows_common_desktops() {

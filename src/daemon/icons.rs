@@ -4,9 +4,28 @@ use log::warn;
 use png::Decoder;
 
 #[cfg(feature = "tray")]
+const TRAY_ICON_PNGS: &[&[u8]] = &[
+    include_bytes!("../../assets/tray/wayscriber-16.png"),
+    include_bytes!("../../assets/tray/wayscriber-20.png"),
+    include_bytes!("../../assets/tray/wayscriber-22.png"),
+    include_bytes!("../../assets/tray/wayscriber-24.png"),
+    include_bytes!("../../assets/tray/wayscriber-32.png"),
+    include_bytes!("../../assets/tray/wayscriber-48.png"),
+    include_bytes!("../../assets/tray/wayscriber-64.png"),
+];
+
+#[cfg(feature = "tray")]
 pub(crate) fn decode_tray_icon_png() -> Option<Vec<ksni::Icon>> {
-    const ICON_BYTES: &[u8] = include_bytes!("../../assets/tray_icon.png");
-    let decoder = Decoder::new(std::io::Cursor::new(ICON_BYTES));
+    TRAY_ICON_PNGS
+        .iter()
+        .map(|bytes| decode_icon_png(bytes))
+        .collect()
+}
+
+#[cfg(feature = "tray")]
+fn decode_icon_png(bytes: &[u8]) -> Option<ksni::Icon> {
+    let mut decoder = Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().ok()?;
     let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
@@ -50,15 +69,33 @@ pub(crate) fn decode_tray_icon_png() -> Option<Vec<ksni::Icon>> {
             }
         }
         _ => {
-            warn!("Unsupported tray icon color type; falling back to empty icon");
+            warn!("Unsupported tray icon color type; using procedural fallback");
             return None;
         }
     }
-    Some(vec![ksni::Icon {
+    Some(ksni::Icon {
         width: info.width as i32,
         height: info.height as i32,
         data,
-    }])
+    })
+}
+
+#[cfg(all(feature = "tray", test))]
+mod tests {
+    use super::decode_tray_icon_png;
+
+    #[test]
+    fn embedded_tray_fallbacks_cover_native_and_hidpi_sizes() {
+        let icons = decode_tray_icon_png().expect("embedded tray PNGs should decode");
+        let sizes: Vec<_> = icons.iter().map(|icon| icon.width).collect();
+        assert_eq!(sizes, [16, 20, 22, 24, 32, 48, 64]);
+
+        for icon in icons {
+            assert_eq!(icon.width, icon.height);
+            assert_eq!(icon.data.len(), (icon.width * icon.height * 4) as usize);
+            assert!(icon.data.chunks_exact(4).any(|pixel| pixel[0] > 0));
+        }
+    }
 }
 
 #[cfg(feature = "tray")]

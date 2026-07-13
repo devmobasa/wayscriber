@@ -498,7 +498,7 @@ Right-click the tray icon for options:
 - Open the log folder
 - Open configurator / open config file / quit
 
-Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is blank or the menu shows square placeholders (notably Noctalia/Quickshell), start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`.
+Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Noctalia/Quickshell/COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`.
 
 **Alternative — compositor autostart instead of systemd:**
 ```conf
