@@ -178,6 +178,7 @@ pub(in crate::toolbar_gtk) struct TopBar {
     overflow_content_key: Cell<Option<OverflowContentKey>>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
+    move_drag: Option<gtk4::GestureDrag>,
     offsets: Rc<Cell<(f64, f64)>>,
     /// Base X in spec units from the backend (side palette pushes it).
     base_x: Rc<Cell<f64>>,
@@ -223,6 +224,7 @@ impl TopBar {
             overflow_content_key: Cell::new(None),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
+            move_drag: None,
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
             offset_seq: Rc::new(Cell::new(0)),
@@ -232,17 +234,18 @@ impl TopBar {
     pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
         let snapshot = &update.snapshot;
         self.drag_blocked.set(update.modal_engaged);
-        let panel_opacity = if update.drag_preview == Some(GtkToolbarKind::Top) {
-            0.0
-        } else {
-            1.0
-        };
-        if (self.root.opacity() - panel_opacity).abs() > f64::EPSILON {
-            crate::toolbar_gtk::drag_debug_log(format!(
-                "top panel opacity -> {panel_opacity:.1} (window remains mapped for drag input)"
-            ));
-            self.root.set_opacity(panel_opacity);
-        }
+        super::set_drag_visual_hidden(
+            &self.window,
+            &self.root,
+            GtkToolbarKind::Top,
+            super::drag_visual_should_be_hidden(
+                update.drag_preview,
+                GtkToolbarKind::Top,
+                self.drag_active.get(),
+                self.offset_seq.get(),
+                update.top_offset_seq,
+            ),
+        );
         if !update.top_visible {
             // Suppress the dismissal echoes a hide-triggered popover close
             // would send, so an open picker survives a hide/show cycle

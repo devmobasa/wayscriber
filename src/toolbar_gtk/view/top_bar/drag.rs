@@ -87,7 +87,10 @@ impl TopBar {
     /// the moving preview. Moving this surface during the gesture changes GTK's
     /// local coordinate space and makes fast drags lag, overshoot, or reverse.
     /// The backend moves the transparent surface after the gesture ends.
-    pub(super) fn attach_move_drag(&self, grip: &gtk4::DrawingArea) {
+    pub(super) fn attach_move_drag(&mut self, grip: &gtk4::DrawingArea) {
+        if let Some(previous) = self.move_drag.take() {
+            self.window.remove_controller(&previous);
+        }
         let drag = gtk4::GestureDrag::new();
         let window = self.window.clone();
         let feedback = self.feedback.clone();
@@ -97,33 +100,50 @@ impl TopBar {
         let seq = self.offset_seq.clone();
         let pending = Rc::new(FrameCoalescedDrag::default());
         let active_generation = Rc::new(Cell::new(0));
+        let ready_generation = Rc::new(Cell::new(0));
         let drag_origin = Rc::new(Cell::new((0.0, 0.0)));
 
         let begin_active = drag_active.clone();
         let begin_blocked = self.drag_blocked.clone();
         let begin_pending = pending.clone();
         let begin_generation = active_generation.clone();
+        let begin_ready = ready_generation.clone();
         let begin_origin = drag_origin.clone();
-        let frame_window = window.clone();
+        let begin_window = window.downgrade();
+        let begin_visual = self.root.downgrade();
+        let begin_grip = grip.downgrade();
         let frame_offsets = offsets.clone();
         let frame_feedback = feedback.clone();
         let frame_base = base_x.clone();
         let frame_seq = seq.clone();
-        drag.connect_drag_begin(move |gesture, _, _| {
+        drag.connect_drag_begin(move |gesture, start_x, start_y| {
             if begin_blocked.get() {
                 gesture.set_state(gtk4::EventSequenceState::Denied);
                 return;
             }
-            let Some(grip) = gesture.widget() else {
+            let (Some(frame_window), Some(visual), Some(grip)) = (
+                begin_window.upgrade(),
+                begin_visual.upgrade(),
+                begin_grip.upgrade(),
+            ) else {
+                gesture.set_state(gtk4::EventSequenceState::Denied);
                 return;
             };
+            let start = gtk4::graphene::Point::new(start_x as f32, start_y as f32);
+            if !grip
+                .compute_bounds(&frame_window)
+                .is_some_and(|bounds| bounds.contains_point(&start))
+            {
+                gesture.set_state(gtk4::EventSequenceState::Denied);
+                return;
+            }
             begin_active.set(true);
             let generation = begin_pending.begin();
             begin_generation.set(generation);
             begin_origin.set(frame_offsets.get());
             frame_seq.set(frame_seq.get() + 1);
             let origin = begin_origin.get();
-            let _ = frame_feedback.send(GtkToolbarFeedback::SetTopOffset {
+            let start = GtkToolbarFeedback::SetTopOffset {
                 x: origin.0,
                 y: origin.1,
                 surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(
@@ -131,6 +151,35 @@ impl TopBar {
                 ),
                 seq: frame_seq.get(),
                 phase: GtkToolbarDragPhase::Start,
+            };
+            super::super::set_drag_visual_hidden(
+                &frame_window,
+                &visual,
+                GtkToolbarKind::Top,
+                true,
+            );
+            let start_feedback = frame_feedback.clone();
+            let start_window = frame_window.clone();
+            let start_visual = visual.clone();
+            let start_active = begin_active.clone();
+            let start_generation = begin_generation.clone();
+            let start_ready = begin_ready.clone();
+            super::super::after_next_surface_paint(&frame_window, move || {
+                if start_generation.get() != generation {
+                    return;
+                }
+                if start_feedback.send(start).is_ok() {
+                    start_ready.set(generation);
+                } else {
+                    super::super::set_drag_visual_hidden(
+                        &start_window,
+                        &start_visual,
+                        GtkToolbarKind::Top,
+                        false,
+                    );
+                    start_active.set(false);
+                    start_generation.set(0);
+                }
             });
 
             let pending = begin_pending.clone();
@@ -141,8 +190,15 @@ impl TopBar {
             let seq = frame_seq.clone();
             let drag_active = begin_active.clone();
             let active_generation = begin_generation.clone();
+            let ready_generation = begin_ready.clone();
             let drag_origin = begin_origin.clone();
-            grip.add_tick_callback(move |_, _| {
+            frame_window.add_tick_callback(move |_, _| {
+                if active_generation.get() != generation {
+                    return gtk4::glib::ControlFlow::Break;
+                }
+                if ready_generation.get() != generation {
+                    return gtk4::glib::ControlFlow::Continue;
+                }
                 let Some(frame) = pending.take_frame(generation) else {
                     return gtk4::glib::ControlFlow::Continue;
                 };
@@ -201,7 +257,8 @@ impl TopBar {
             ));
             pending.end(active_generation.get(), dx, dy);
         });
-        grip.add_controller(drag);
+        window.add_controller(drag.clone());
+        self.move_drag = Some(drag);
     }
 }
 
