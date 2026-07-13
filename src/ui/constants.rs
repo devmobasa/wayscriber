@@ -153,7 +153,7 @@ pub const SHADOW_DEEP: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.35);
 pub const TOAST_INFO: (f64, f64, f64) = (0.25, 0.70, 0.90);
 
 /// Warning toast background
-pub const TOAST_WARNING: (f64, f64, f64) = (0.58, 0.34, 0.08);
+pub const TOAST_WARNING: (f64, f64, f64) = (0.96, 0.62, 0.04);
 
 /// Error toast background
 pub const TOAST_ERROR: (f64, f64, f64) = (0.90, 0.30, 0.30);

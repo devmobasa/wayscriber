@@ -14,8 +14,10 @@ const BLOCKED_FEEDBACK_BORDER: f64 = 6.0;
 
 /// Vertical position for UI toasts (percentage of screen height from top)
 const UI_TOAST_Y_RATIO: f64 = 0.12;
-/// Portion of toast lifetime to keep fully opaque before fading
-const UI_TOAST_HOLD_RATIO: f64 = 0.75;
+/// Fixed final fade keeps long-lived UI toasts crisp for nearly their full lifetime.
+const UI_TOAST_FADE_SECONDS: f64 = 0.2;
+/// Portion of preset-toast lifetime to keep fully opaque before fading.
+const PRESET_TOAST_HOLD_RATIO: f64 = 0.75;
 /// Vertical position for preset toast (percentage of screen height from top)
 const PRESET_TOAST_Y_RATIO: f64 = 0.2;
 
@@ -23,6 +25,7 @@ const UI_TOAST_FONT_SIZE: f64 = 15.0;
 const PRESET_TOAST_FONT_SIZE: f64 = 16.0;
 const TOAST_PADDING_X: f64 = 16.0;
 const TOAST_PADDING_Y: f64 = 9.0;
+const TOAST_WARNING_TEXT: (f64, f64, f64) = (0.07, 0.09, 0.15);
 
 fn toast_text_style(size: f64) -> UiTextStyle<'static> {
     UiTextStyle {
@@ -33,12 +36,25 @@ fn toast_text_style(size: f64) -> UiTextStyle<'static> {
     }
 }
 
-fn toast_fade(progress: f64) -> f64 {
-    if progress <= UI_TOAST_HOLD_RATIO {
+fn preset_toast_fade(progress: f64) -> f64 {
+    if progress <= PRESET_TOAST_HOLD_RATIO {
         1.0
     } else {
-        let fade_progress = (progress - UI_TOAST_HOLD_RATIO) / (1.0 - UI_TOAST_HOLD_RATIO);
+        let fade_progress = (progress - PRESET_TOAST_HOLD_RATIO) / (1.0 - PRESET_TOAST_HOLD_RATIO);
         (1.0 - fade_progress).clamp(0.0, 1.0)
+    }
+}
+
+fn ui_toast_fade(elapsed_secs: f64, duration_secs: f64) -> f64 {
+    let fade_duration = duration_secs.min(UI_TOAST_FADE_SECONDS);
+    if fade_duration <= 0.0 {
+        return 0.0;
+    }
+    let fade_start = duration_secs - fade_duration;
+    if elapsed_secs <= fade_start {
+        1.0
+    } else {
+        ((duration_secs - elapsed_secs) / fade_duration).clamp(0.0, 1.0)
     }
 }
 
@@ -188,7 +204,7 @@ pub fn render_preset_toast(
         return;
     };
 
-    let fade = toast_fade(progress as f64);
+    let fade = preset_toast_fade(progress as f64);
     let (r, g, b) = match kind {
         PresetFeedbackKind::Apply => TOAST_INFO,
         PresetFeedbackKind::Save => TOAST_SUCCESS,
@@ -246,16 +262,39 @@ pub fn render_ui_toast(
         UI_TOAST_Y_RATIO,
     )?;
 
-    let fade = toast_fade(progress as f64);
+    let fade = ui_toast_fade(elapsed.as_secs_f64(), duration_secs as f64);
     let (r, g, b) = match toast.kind {
         UiToastKind::Info => TOAST_INFO,
         UiToastKind::Warning => TOAST_WARNING,
         UiToastKind::Error => TOAST_ERROR,
     };
 
-    constants::set_color_alpha(ctx, (r, g, b), 0.92 * fade);
+    let background_alpha = if toast.kind == UiToastKind::Warning {
+        1.0
+    } else {
+        0.92
+    };
+    constants::set_color_alpha(ctx, (r, g, b), background_alpha * fade);
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
+
+    // Keep the outline on the contrasting side of the semantic fill.
+    let outline = if toast.kind == UiToastKind::Warning {
+        TOAST_WARNING_TEXT
+    } else {
+        (1.0, 1.0, 1.0)
+    };
+    ctx.set_source_rgba(outline.0, outline.1, outline.2, 0.28 * fade);
+    ctx.set_line_width(1.0);
+    draw_rounded_rect(
+        ctx,
+        x + 0.5,
+        y + 0.5,
+        width - 1.0,
+        height - 1.0,
+        radius - 0.5,
+    );
+    let _ = ctx.stroke();
 
     // Draw countdown progress bar for confirmation toasts
     if toast.action.is_some() {
@@ -278,7 +317,17 @@ pub fn render_ui_toast(
 
         // Remaining time indicator (shrinks as time runs out)
         if remaining_width > 0.0 {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8 * fade);
+            let progress_color = if toast.kind == UiToastKind::Warning {
+                TOAST_WARNING_TEXT
+            } else {
+                (1.0, 1.0, 1.0)
+            };
+            ctx.set_source_rgba(
+                progress_color.0,
+                progress_color.1,
+                progress_color.2,
+                0.8 * fade,
+            );
             draw_rounded_rect(
                 ctx,
                 x + padding_x,
@@ -297,9 +346,12 @@ pub fn render_ui_toast(
     let text_x = x + (width - full_extents.width()) / 2.0 - full_extents.x_bearing();
     let text_y = y + (height - full_extents.height()) / 2.0 - full_extents.y_bearing();
 
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55 * fade);
-    label_layout.show_at_baseline(ctx, text_x + 1.0, text_y + 1.0);
-    ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, 1.0 * fade);
+    let text_color = if toast.kind == UiToastKind::Warning {
+        TOAST_WARNING_TEXT
+    } else {
+        (TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2)
+    };
+    ctx.set_source_rgba(text_color.0, text_color.1, text_color.2, fade);
     label_layout.show_at_baseline(ctx, text_x, text_y);
 
     // Draw action suffix with button-style background for better visibility
@@ -315,12 +367,12 @@ pub fn render_ui_toast(
         let btn_w = suffix_extents.width() + btn_padding * 2.0;
         let btn_h = suffix_extents.height() + btn_padding * 2.0;
 
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.2 * fade);
+        ctx.set_source_rgba(text_color.0, text_color.1, text_color.2, 0.16 * fade);
         draw_rounded_rect(ctx, btn_x, btn_y, btn_w, btn_h, RADIUS_SM);
         let _ = ctx.fill();
 
         // Action text
-        ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, 0.95 * fade);
+        ctx.set_source_rgba(text_color.0, text_color.1, text_color.2, 0.95 * fade);
         suffix_layout.show_at_baseline(ctx, suffix_x, text_y);
     }
 
@@ -363,10 +415,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn toast_stays_fully_visible_for_most_of_its_lifetime() {
-        assert_eq!(toast_fade(0.0), 1.0);
-        assert_eq!(toast_fade(UI_TOAST_HOLD_RATIO), 1.0);
-        assert_eq!(toast_fade(0.875), 0.5);
-        assert_eq!(toast_fade(1.0), 0.0);
+    fn ui_toast_uses_a_short_fixed_end_fade() {
+        assert_eq!(ui_toast_fade(0.0, 5.0), 1.0);
+        assert_eq!(ui_toast_fade(4.8, 5.0), 1.0);
+        assert!((ui_toast_fade(4.9, 5.0) - 0.5).abs() < 1e-9);
+        assert_eq!(ui_toast_fade(5.0, 5.0), 0.0);
+    }
+
+    #[test]
+    fn preset_toast_keeps_its_proportional_fade() {
+        assert_eq!(preset_toast_fade(0.0), 1.0);
+        assert_eq!(preset_toast_fade(PRESET_TOAST_HOLD_RATIO), 1.0);
+        assert_eq!(preset_toast_fade(0.875), 0.5);
+        assert_eq!(preset_toast_fade(1.0), 0.0);
     }
 }

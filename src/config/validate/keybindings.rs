@@ -16,7 +16,7 @@ fn bindings_equal(bindings: &[String], expected: &[&str]) -> bool {
 
 impl Config {
     pub(super) fn validate_keybindings(&mut self) {
-        self.migrate_legacy_command_palette_defaults();
+        self.apply_keybinding_migrations();
         // Validate keybindings (try to build action map to catch parse errors)
         if let Err(e) = self.keybindings.build_action_map() {
             log::warn!("Invalid keybinding configuration: {}. Using defaults.", e);
@@ -24,7 +24,8 @@ impl Config {
         }
     }
 
-    fn migrate_legacy_command_palette_defaults(&mut self) {
+    #[allow(dead_code)] // Used by the binary crate before keybinding repair validation.
+    pub(crate) fn apply_keybinding_migrations(&mut self) {
         if self.config_revision >= CURRENT_CONFIG_REVISION {
             return;
         }
