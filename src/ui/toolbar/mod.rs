@@ -1,8 +1,8 @@
 mod apply;
 pub(crate) mod bindings;
 mod events;
-// The model is consumed by the bin's backend render layer; the lib target
-// builds this crate without the backend, so references are target-dependent.
+// The shared model is being adopted incrementally by both toolbar frontends;
+// some staged controls are not wired into a renderer yet.
 #[allow(dead_code)]
 pub(crate) mod model;
 pub mod snapshot;

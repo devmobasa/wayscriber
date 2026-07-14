@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use wayscriber::systemd_user_service::{
+use crate::systemd_user_service::{
     USER_SERVICE_NAME, render_user_service_unit, user_service_unit_path,
 };
 

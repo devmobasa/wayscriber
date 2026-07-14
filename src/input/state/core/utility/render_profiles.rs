@@ -3,7 +3,6 @@ use crate::render_profiles::{RenderColorProfile, RenderProfileSet};
 use super::super::InputState;
 
 impl InputState {
-    #[allow(dead_code)] // Used by the binary Wayland backend; the library target has no backend entrypoint.
     pub(crate) fn set_render_profiles(&mut self, render_profiles: RenderProfileSet) {
         self.render_profiles = render_profiles;
     }
@@ -28,7 +27,6 @@ impl InputState {
         }
     }
 
-    #[allow(dead_code)] // Used by the Wayland backend; the lib crate doesn't compile backend modules.
     pub(crate) fn export_render_profile(&self) -> Option<RenderColorProfile> {
         self.render_profiles.export_profile()
     }

@@ -1,15 +1,15 @@
 #[cfg(feature = "tray")]
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 #[cfg(feature = "tray")]
-use std::env;
-#[cfg(feature = "tray")]
-use std::process::Command;
-#[cfg(feature = "tray")]
-use wayscriber::shortcut_hint::{
+use crate::shortcut_hint::{
     GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, PORTAL_SHORTCUT_ENV, ShortcutRuntimeBackend,
     current_shortcut_runtime_backend, gnome_shortcut_schema_with_path, is_gnome_desktop,
     normalize_shortcut_hint, resolve_toggle_shortcut_hint,
 };
+#[cfg(feature = "tray")]
+use std::env;
+#[cfg(feature = "tray")]
+use std::process::Command;
 
 #[cfg(feature = "tray")]
 pub(super) fn configured_toggle_shortcut_hint() -> Option<String> {

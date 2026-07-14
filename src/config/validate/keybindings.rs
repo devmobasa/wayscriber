@@ -24,7 +24,6 @@ impl Config {
         }
     }
 
-    #[allow(dead_code)] // Used by the binary crate before keybinding repair validation.
     pub(crate) fn apply_keybinding_migrations(&mut self) {
         if self.config_revision >= CURRENT_CONFIG_REVISION {
             return;

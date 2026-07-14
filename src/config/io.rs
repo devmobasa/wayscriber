@@ -68,7 +68,6 @@ impl Config {
     ///
     /// Binary-only repair workflows use this to fix an invalid subsection
     /// before normal validation. Ordinary consumers must use [`Self::load`].
-    #[allow(dead_code)] // Used by the binary crate's keybinding repair path.
     pub(crate) fn load_unvalidated() -> Result<LoadedConfig> {
         let primary_path = primary_config_dir()?.join("config.toml");
 

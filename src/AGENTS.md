@@ -5,9 +5,9 @@
 - Covers parent guidance for file-level modules and sibling Rust split-module roots.
 
 ## Architecture
-- `src/main.rs` owns binary wiring, initializes logging, and routes errors.
-- CLI parsing flows through `src/cli.rs` and `src/app/`, then into `src/daemon/` or the active Wayland backend.
-- `src/lib.rs` exports shared modules for integration tests and the configurator while keeping binary-only runtime modules private.
+- `src/main.rs` is a thin wrapper that returns `wayscriber::run_from_env()`.
+- `src/lib.rs` owns logging/error wiring and the canonical module graph; its public entry facade routes CLI outcomes through `src/app/` into `src/daemon/` or the active Wayland backend.
+- Reusable modules remain public for integration tests and the configurator, while runtime modules are private library implementation details.
 - Major domains are `backend`, `input`, `draw`, `ui`, `capture`, `config`, `session`, `daemon`, `canvas_export`, `paths`, `toolbar_icons`, `render_profiles`, and `runtime_capabilities`.
 
 ## Invariants

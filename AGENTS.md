@@ -8,8 +8,8 @@
 - The workspace default member is only the root crate; use `-p wayscriber-configurator` or `--workspace` when configurator coverage is needed.
 
 ## Architecture
-- The main app starts in `src/main.rs`, parses CLI state, then routes through `src/app/` into daemon mode or active Wayland overlay mode.
-- Shared library modules are exported from `src/lib.rs` for tests and the configurator; binary-only modules stay private to `src/main.rs`.
+- `src/main.rs` is a thin wrapper around the public `wayscriber::run_from_env()` entry facade.
+- `src/lib.rs` owns the canonical application module graph: reusable modules remain public for tests and the configurator, while runtime modules stay private behind the entry facade.
 - Core domains are backend/Wayland runtime, input state, drawing data/rendering, overlay UI, capture, config, session persistence, daemon lifecycle, canvas export, and configurator UI.
 - Start with `README.md`, `CONTRIBUTING.md`, `docs/codebase-overview.md`, `docs/CONFIG.md`, and `configurator/README.md` when changing behavior.
 

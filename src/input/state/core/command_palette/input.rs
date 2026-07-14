@@ -12,7 +12,6 @@ use crate::input::state::actions::key_press::bindings::key_to_action_label;
 use std::time::{Duration, Instant};
 
 const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280);
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 const COMMAND_PALETTE_REPEAT_INTERVAL: Duration = Duration::from_millis(55);
 
 impl InputState {
@@ -291,7 +290,6 @@ impl InputState {
         }
     }
 
-    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
     pub(crate) fn command_palette_repeat_timeout(&self, now: Instant) -> Option<Duration> {
         if !self.command_palette_open {
             return None;
@@ -300,7 +298,6 @@ impl InputState {
             .map(|next_tick| next_tick.saturating_duration_since(now))
     }
 
-    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
     pub(crate) fn tick_command_palette_repeat(&mut self, now: Instant) -> bool {
         if !self.command_palette_open {
             self.clear_command_palette_repeat();
