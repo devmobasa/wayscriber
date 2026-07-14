@@ -352,12 +352,24 @@ sudo dnf install ./wayscriber-configurator-x86_64.rpm
 
 ### From source
 
-Rust 1.95 or newer. First clone the repository — the dependency and build steps below run from inside it:
+Rust 1.95 or newer is required. If `rustup` is not already installed, install it (this also installs `cargo`), then load Cargo into your current shell:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+Then clone the repository — the dependency and build steps below run from inside it:
 
 ```bash
 git clone https://github.com/devmobasa/wayscriber.git
 cd wayscriber
+rustup toolchain install 1.95.0
+rustup override set 1.95.0
+cargo --version
 ```
+
+The override selects Rust 1.95 only inside this checkout and leaves your global default unchanged. You can instead keep any existing default that is already Rust 1.95 or newer.
 
 **Dependencies:**
 
