@@ -1,112 +1,40 @@
 use cairo::Context;
-use std::f64::consts::PI;
 
-/// Helper to draw the "undo all / redo all" double curved arrow.
-///
-/// Front arrow = same geometry as the single undo/redo.
-/// Back arrow   = smaller radius, shifted slightly, shorter arc so the heads
-///                are clearly separated.
+const VIEWBOX_SIZE: f64 = 24.0;
+
+/// Draw an "undo all" glyph in the same open, rounded style as the primary
+/// undo icon. The second chevron communicates "all" without turning the glyph
+/// into a circular refresh symbol. Callers mirror this painter for redo.
 pub(super) fn draw_double_curved_arrow(ctx: &Context, x: f64, y: f64, size: f64) {
-    let s = size;
+    if !size.is_finite() || size <= 0.0 {
+        return;
+    }
 
-    // Base stroke for the front arrow
-    let base_stroke = (s * 0.10).max(1.5);
+    let _ = ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size / VIEWBOX_SIZE, size / VIEWBOX_SIZE);
+    ctx.set_line_width(2.0);
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.set_line_join(cairo::LineJoin::Round);
 
-    // Center of the icon
-    let cx = x + s * 0.5;
-    let cy = y + s * 0.5;
+    // Two left-pointing chevrons. The inner one owns the return path while the
+    // outer one remains separate, so both heads stay legible at 18–20 px.
+    draw_chevron(ctx, 4.5);
+    draw_chevron(ctx, 9.5);
 
-    // Same angles as the single curved arrow
-    let start_angle = -PI * 0.9;
-    let end_angle = PI * 0.9;
+    ctx.new_path();
+    ctx.move_to(9.5, 11.0);
+    ctx.line_to(14.0, 11.0);
+    ctx.curve_to(17.31, 11.0, 20.0, 13.69, 20.0, 17.0);
+    let _ = ctx.stroke();
 
-    // Front (main) arrow
-    let r_front = s * 0.38;
-    let head_front = s * 0.18;
-
-    // Back arrow: slightly smaller radius, shifted down/right,
-    // and with an earlier end angle so the heads don't overlap.
-    let r_back = s * 0.30;
-    let head_back = s * 0.15;
-    let back_dx = s * 0.05;
-    let back_dy = s * 0.03;
-
-    // Angular separation between the two heads (~63 deg)
-    let head_separation = PI * 0.35;
-    let end_back = end_angle - head_separation;
-
-    ctx.save().ok();
-    // Same slight clockwise tilt as the single undo/redo
-    ctx.translate(cx, cy);
-    ctx.rotate(-10f64.to_radians());
-    ctx.translate(-cx, -cy);
-
-    // Draw back arrow first (thinner, so it visually sits behind)
-    ctx.set_line_width(base_stroke * 0.85);
-    draw_arc_with_head(
-        ctx,
-        cx + back_dx,
-        cy + back_dy,
-        r_back,
-        start_angle,
-        end_back,
-        head_back,
-    );
-
-    // Draw front arrow on top
-    ctx.set_line_width(base_stroke);
-    draw_arc_with_head(ctx, cx, cy, r_front, start_angle, end_angle, head_front);
-
-    ctx.restore().ok();
+    let _ = ctx.restore();
 }
 
-/// Draw an arc and a triangular arrow head whose direction follows the tangent
-/// at the end of the arc. The head is constructed so both sides stay clear of
-/// the circular stroke even at small icon sizes.
-fn draw_arc_with_head(
-    ctx: &Context,
-    cx: f64,
-    cy: f64,
-    r: f64,
-    start_angle: f64,
-    end_angle: f64,
-    head_len: f64,
-) {
-    // Circular portion.
-    ctx.arc(cx, cy, r, start_angle, end_angle);
-    let _ = ctx.stroke();
-
-    // Arrow tip at the end of the arc.
-    let tip_x = cx + r * end_angle.cos();
-    let tip_y = cy + r * end_angle.sin();
-
-    // Tangent direction (direction of travel along the arc).
-    let dir = end_angle + PI / 2.0;
-
-    // Build a proper isosceles triangle for the head:
-    // - move back a bit along the tangent
-    // - then offset to each side along the normal.
-    let back_offset = head_len * 0.7;
-    let side_len = head_len * 0.8;
-
-    let base_cx = tip_x - back_offset * dir.cos();
-    let base_cy = tip_y - back_offset * dir.sin();
-
-    let normal = dir + PI / 2.0;
-    let base1_x = base_cx + side_len * normal.cos();
-    let base1_y = base_cy + side_len * normal.sin();
-    let base2_x = base_cx - side_len * normal.cos();
-    let base2_y = base_cy - side_len * normal.sin();
-
-    // Outer edge of head
-    ctx.move_to(tip_x, tip_y);
-    ctx.line_to(base1_x, base1_y);
-    let _ = ctx.stroke();
-
-    // Inner edge of head
-    ctx.move_to(tip_x, tip_y);
-    ctx.line_to(base2_x, base2_y);
+fn draw_chevron(ctx: &Context, tip_x: f64) {
+    ctx.new_path();
+    ctx.move_to(tip_x + 4.0, 7.0);
+    ctx.line_to(tip_x, 11.0);
+    ctx.line_to(tip_x + 4.0, 15.0);
     let _ = ctx.stroke();
 }

@@ -498,7 +498,7 @@ Right-click the tray icon for options:
 - Open the log folder
 - Open configurator / open config file / quit
 
-Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is blank or the menu shows square placeholders (notably Noctalia/Quickshell), start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`.
+Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Noctalia/Quickshell/COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
 
 **Alternative — compositor autostart instead of systemd:**
 ```conf
@@ -923,6 +923,7 @@ Common toggles:
 - `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
 - `WAYSCRIBER_TOOLBAR_BACKEND=auto|gtk|builtin` overrides the toolbar frontend (default: auto)
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
+- `WAYSCRIBER_TRAY_FORCE_PIXMAP=1` forces colored tray pixmaps and overrides `[tray].icon_style`
 
 See `docs/CONFIG.md` for the full list.
 

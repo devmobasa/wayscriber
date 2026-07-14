@@ -362,6 +362,22 @@ scheduling, display scanout, and hardware can add more latency outside Wayscribe
 In local continuous-drawing measurements, 120 FPS low-latency mode held p95 around 8-9 ms and
 p99 around 8-9 ms for this proxy metric. Isolated max spikes existed, but p99 stayed under 16 ms.
 
+### `[tray]` - System Tray
+
+Controls the main system tray icon. Changes take effect after restarting the daemon.
+
+```toml
+[tray]
+# Options: "auto", "symbolic", "colored"
+icon_style = "auto"
+```
+
+- `auto` (default) uses a theme-adaptive symbolic icon on supported desktops and colored fallback pixmaps on known-incompatible tray hosts.
+- `symbolic` always requests the theme-adaptive icon. The tray host chooses its visible color.
+- `colored` always publishes the yellow, scale-aware fallback pixmaps.
+
+`WAYSCRIBER_TRAY_FORCE_PIXMAP=1` takes precedence over this setting and also disables named menu icons for compatibility with tray hosts that render them incorrectly.
+
 ### `[ui]` - User Interface
 
 Controls visual indicators, overlays, and UI styling.

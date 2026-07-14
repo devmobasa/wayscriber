@@ -50,6 +50,10 @@ contents:
     dst: /usr/share/pixmaps/wayscriber-configurator.png
     file_info:
       mode: 0644
+  - src: packaging/icons/wayscriber-configurator.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg
+    file_info:
+      mode: 0644
   - src: README.md
     dst: /usr/share/doc/wayscriber-configurator/README.md
     file_info:

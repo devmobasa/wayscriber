@@ -38,6 +38,29 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
 }
 
 #[test]
+fn tray_icon_style_defaults_to_auto_and_parses_explicit_values() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(default_config.tray.icon_style, TrayIconStyle::Auto);
+
+    for (value, expected) in [
+        ("auto", TrayIconStyle::Auto),
+        ("symbolic", TrayIconStyle::Symbolic),
+        ("colored", TrayIconStyle::Colored),
+    ] {
+        let config: Config = toml::from_str(&format!("[tray]\nicon_style = '{value}'\n"))
+            .expect("supported tray icon style should parse");
+        assert_eq!(config.tray.icon_style, expected);
+    }
+}
+
+#[test]
+fn tray_icon_style_rejects_unknown_values() {
+    let error = toml::from_str::<Config>("[tray]\nicon_style = 'yellow'\n")
+        .expect_err("unknown tray icon style should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
 fn load_migrates_legacy_shortcut_defaults_in_memory_without_rewriting_file() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);

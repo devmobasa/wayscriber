@@ -127,6 +127,12 @@ package_tar() {
            "${dist_dir}/usr/share/icons/hicolor/${size}x${size}/status/wayscriber.png"
     done
     cp "${REPO_ROOT}/packaging/icons/wayscriber-128.png" "${dist_dir}/usr/share/pixmaps/wayscriber.png"
+    mkdir -p "${dist_dir}/usr/share/icons/hicolor/scalable/apps" \
+             "${dist_dir}/usr/share/icons/hicolor/symbolic/apps"
+    cp "${REPO_ROOT}/packaging/icons/wayscriber.svg" \
+       "${dist_dir}/usr/share/icons/hicolor/scalable/apps/wayscriber.svg"
+    cp "${REPO_ROOT}/packaging/icons/wayscriber-symbolic.svg" \
+       "${dist_dir}/usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg"
     cp "${REPO_ROOT}/README.md" "${REPO_ROOT}/config.example.toml" "${dist_dir}/usr/share/doc/wayscriber/"
     [[ -f "${REPO_ROOT}/LICENSE" ]] && cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber/" || true
 
@@ -150,6 +156,7 @@ package_tar_configurator() {
              "${dist_dir}/usr/share/icons/hicolor/24x24/apps" \
              "${dist_dir}/usr/share/icons/hicolor/64x64/apps" \
              "${dist_dir}/usr/share/icons/hicolor/128x128/apps" \
+             "${dist_dir}/usr/share/icons/hicolor/scalable/apps" \
              "${dist_dir}/usr/share/doc/wayscriber-configurator" \
              "${dist_dir}/usr/share/pixmaps"
 
@@ -159,6 +166,7 @@ package_tar_configurator() {
     cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-64.png" "${dist_dir}/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png"
     cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-128.png" "${dist_dir}/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png"
     cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-128.png" "${dist_dir}/usr/share/pixmaps/wayscriber-configurator.png"
+    cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator.svg" "${dist_dir}/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg"
     cp "${REPO_ROOT}/README.md" "${dist_dir}/usr/share/doc/wayscriber-configurator/"
     [[ -f "${REPO_ROOT}/LICENSE" ]] && cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber-configurator/" || true
 

@@ -82,6 +82,14 @@ contents:
     dst: /usr/share/pixmaps/wayscriber.png
     file_info:
       mode: 0644
+  - src: packaging/icons/wayscriber.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/wayscriber.svg
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-symbolic.svg
+    dst: /usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg
+    file_info:
+      mode: 0644
   - src: config.example.toml
     dst: /usr/share/doc/wayscriber/config.example.toml
     file_info:

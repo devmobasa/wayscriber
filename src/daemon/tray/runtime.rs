@@ -24,7 +24,7 @@ use super::super::types::TrayStatusShared;
 #[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
-use crate::config::Config;
+use crate::config::{Config, TrayIconStyle};
 #[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
 
@@ -36,22 +36,24 @@ const STATUS_NOTIFIER_WATCHER_BUS: &str = "org.kde.StatusNotifierWatcher";
 const STATUS_NOTIFIER_WATCHER_PATH: &str = "/StatusNotifierWatcher";
 
 #[cfg(feature = "tray")]
-fn load_session_resume_enabled_from_config() -> bool {
+fn load_tray_settings_from_config() -> (bool, TrayIconStyle) {
     match Config::load() {
         Ok(loaded) => {
-            let session = loaded.config.session;
-            session.persist_transparent
+            let config = loaded.config;
+            let session = config.session;
+            let session_resume_enabled = session.persist_transparent
                 || session.persist_whiteboard
                 || session.persist_blackboard
                 || session.persist_history
-                || session.restore_tool_state
+                || session.restore_tool_state;
+            (session_resume_enabled, config.tray.icon_style)
         }
         Err(err) => {
             warn!(
-                "Failed to read config for session resume state; assuming disabled: {}",
+                "Failed to read config for tray settings; using safe defaults: {}",
                 err
             );
-            false
+            (false, TrayIconStyle::Auto)
         }
     }
 }
@@ -96,7 +98,7 @@ pub(crate) fn start_system_tray(
 ) -> Result<JoinHandle<()>> {
     let configurator_binary =
         std::env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
-    let session_resume_enabled = load_session_resume_enabled_from_config();
+    let (session_resume_enabled, icon_style) = load_tray_settings_from_config();
 
     let tray_quit_flag = quit_flag.clone();
     let tray = WayscriberTray::new(
@@ -104,6 +106,7 @@ pub(crate) fn start_system_tray(
         tray_quit_flag.clone(),
         configurator_binary,
         session_resume_enabled,
+        icon_style,
         overlay_pid,
         tray_status.clone(),
     );

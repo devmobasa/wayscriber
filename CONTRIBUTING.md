@@ -60,7 +60,7 @@ If you are working offline, prefetch dependencies first:
 ### Top-level directories
 
 #### `assets/`
-- `tray_icon.png` - Tray icon for daemon mode.
+- `tray/` - Embedded tray fallback PNGs at native and HiDPI sizes.
 
 <details>
 <summary>configurator/ (separate GUI configurator crate)</summary>
@@ -184,7 +184,10 @@ If you are working offline, prefetch dependencies first:
 - `wayscriber.desktop` - Desktop entry for the overlay.
 - `wayscriber-configurator.desktop` - Desktop entry for configurator.
 - `wayscriber.service` - Systemd user service unit.
-- `icons/` - PNG app icons.
+- `icons/` - Raster and scalable application icons.
+  - `wayscriber.svg` - Scalable application icon.
+  - `wayscriber-symbolic.svg` - Theme-adaptive tray icon.
+  - `wayscriber-configurator.svg` - Scalable configurator icon.
   - `wayscriber-24.png` - 24px icon.
   - `wayscriber-64.png` - 64px icon.
   - `wayscriber-128.png` - 128px icon.
