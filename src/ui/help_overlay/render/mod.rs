@@ -5,6 +5,7 @@ use super::sections::HelpOverlayBindings;
 
 mod cache;
 mod frame;
+mod header;
 mod metrics;
 mod palette;
 mod state;
@@ -14,11 +15,11 @@ use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
+use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
 pub use cache::invalidate_help_overlay_cache;
 
 const BULLET: &str = "\u{2022}";
-const ARROW: &str = "\u{2192}";
 
 /// Render help overlay showing all keybindings
 #[allow(clippy::too_many_arguments)]
@@ -42,7 +43,6 @@ pub fn render_help_overlay(
     } else {
         "Wayscriber Controls"
     };
-    let _commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
     let palette_binding = bindings
         .labels_for(Action::ToggleCommandPalette)
         .and_then(|labels| labels.first())
@@ -53,24 +53,32 @@ pub fn render_help_overlay(
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
         .unwrap_or(NOT_BOUND_LABEL);
-    let version_line = if quick_mode {
-        format!(
-            "Essential shortcuts  {}  {} {} {}",
-            BULLET, palette_binding, ARROW, "Command Palette (search all)"
-        )
+    let version_text = format!("v{}", crate::build_info::version());
+    let header_hints = if quick_mode {
+        vec![HeaderHint {
+            keys: palette_binding,
+            label: "Command Palette (search all)",
+        }]
     } else {
-        format!(
-            "{}  {}  {} {} {}  {}  {} {} {}",
-            crate::build_info::version(),
-            BULLET,
-            palette_binding,
-            ARROW,
-            "Command Palette",
-            BULLET,
-            config_binding,
-            ARROW,
-            action_label(Action::OpenConfigurator)
-        )
+        vec![
+            HeaderHint {
+                keys: palette_binding,
+                label: "Command Palette",
+            },
+            HeaderHint {
+                keys: config_binding,
+                label: action_label(Action::OpenConfigurator),
+            },
+        ]
+    };
+    let header = HeaderContent {
+        version: &version_text,
+        intro: if quick_mode {
+            Some("Essential shortcuts")
+        } else {
+            None
+        },
+        hints: &header_hints,
     };
     let help_binding = bindings
         .labels_for(Action::ToggleHelp)
@@ -110,7 +118,7 @@ pub fn render_help_overlay(
         capture_enabled,
         scroll_offset,
         title_text,
-        &version_line,
+        &header,
         note_text_base,
         close_hint_text,
         quick_mode,
@@ -142,13 +150,31 @@ pub fn render_help_overlay(
     let mut cursor_y = layout.box_y + padding;
     let inner_width = layout.box_width - padding * 2.0;
 
-    // Accent line
-    ctx.set_source_rgba(
+    // Accent line — solid on the left, fading out to the right so it reads as a
+    // deliberate flourish rather than a hard rule.
+    let accent_gradient = cairo::LinearGradient::new(inner_x, 0.0, inner_x + inner_width, 0.0);
+    accent_gradient.add_color_stop_rgba(
+        0.0,
         palette.accent[0],
         palette.accent[1],
         palette.accent[2],
         palette.accent[3],
     );
+    accent_gradient.add_color_stop_rgba(
+        0.55,
+        palette.accent[0],
+        palette.accent[1],
+        palette.accent[2],
+        palette.accent[3] * 0.55,
+    );
+    accent_gradient.add_color_stop_rgba(
+        1.0,
+        palette.accent[0],
+        palette.accent[1],
+        palette.accent[2],
+        0.0,
+    );
+    let _ = ctx.set_source(&accent_gradient);
     ctx.rectangle(inner_x, cursor_y, inner_width, metrics.accent_line_height);
     let _ = ctx.fill();
     cursor_y += metrics.accent_line_height + metrics.accent_line_bottom_spacing;
@@ -168,31 +194,41 @@ pub fn render_help_overlay(
     );
     let title_baseline = cursor_y + metrics.title_font_size;
     draw_text_baseline(ctx, title_style, title_text, inner_x, title_baseline, None);
+
+    // Version pill, right-aligned on the title row.
+    draw_version_pill(
+        ctx,
+        inner_x + inner_width,
+        title_baseline,
+        metrics.title_font_size,
+        help_font_family,
+        metrics.subtitle_font_size,
+        header.version,
+        palette.accent,
+        palette.accent_muted,
+    );
     cursor_y += metrics.title_font_size + metrics.title_bottom_spacing;
 
-    // Subtitle / version line
-    let subtitle_style = UiTextStyle {
-        family: help_font_family,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: metrics.subtitle_font_size,
-    };
-    ctx.set_source_rgba(
+    // Subtitle hint line — keycap chips matching the grid rows below.
+    let muted = [
         palette.subtitle[0],
         palette.subtitle[1],
         palette.subtitle[2],
-        palette.subtitle[3],
-    );
-    let subtitle_baseline = cursor_y + metrics.subtitle_font_size;
-    draw_text_baseline(
+        palette.subtitle[3] * 0.7,
+    ];
+    let subtitle_baseline = cursor_y + metrics.subtitle_font_size + header::KEYCAP_PAD_Y;
+    draw_hints(
         ctx,
-        subtitle_style,
-        &version_line,
         inner_x,
         subtitle_baseline,
-        None,
+        help_font_family,
+        metrics.subtitle_font_size,
+        &header,
+        &key_combo_style,
+        palette.subtitle,
+        muted,
     );
-    cursor_y += metrics.subtitle_font_size + metrics.subtitle_bottom_spacing;
+    cursor_y += metrics.subtitle_row_height + metrics.subtitle_bottom_spacing;
 
     let nav_draw_style = NavDrawStyle {
         font_family: help_font_family,

@@ -25,6 +25,7 @@ pub(super) struct RenderMetrics {
     pub(super) accent_line_height: f64,
     pub(super) accent_line_bottom_spacing: f64,
     pub(super) title_bottom_spacing: f64,
+    pub(super) subtitle_row_height: f64,
     pub(super) subtitle_bottom_spacing: f64,
     pub(super) nav_line_gap: f64,
     pub(super) nav_bottom_spacing: f64,
@@ -72,8 +73,12 @@ impl RenderMetrics {
         let badge_top_gap = 10.0 * scale;
         let accent_line_height = 2.0 * scale;
         let accent_line_bottom_spacing = 16.0 * scale;
-        let title_bottom_spacing = 8.0 * scale;
-        let subtitle_bottom_spacing = 28.0 * scale;
+        let title_bottom_spacing = 12.0 * scale;
+        // The subtitle row now hosts keycap chips, which stand ~4px above and below
+        // the text baseline. Reserve the full chip height so they never crowd the
+        // title above or the navigation line below.
+        let subtitle_row_height = subtitle_font_size + 8.0;
+        let subtitle_bottom_spacing = 22.0 * scale;
         let nav_line_gap = 6.0 * scale;
         let nav_bottom_spacing = 18.0 * scale;
         let extra_line_gap = 30.0 * scale;
@@ -110,6 +115,7 @@ impl RenderMetrics {
             accent_line_height,
             accent_line_bottom_spacing,
             title_bottom_spacing,
+            subtitle_row_height,
             subtitle_bottom_spacing,
             nav_line_gap,
             nav_bottom_spacing,

@@ -4,6 +4,7 @@ use super::super::layout::{GridLayout, build_grid, measure_sections};
 use super::super::nav::{NavState, build_nav_state};
 use super::super::sections::{HelpOverlayBindings, build_section_sets, filter_sections_for_search};
 use super::BULLET;
+use super::header::{HeaderContent, measure_hints, title_row_width};
 use super::metrics::RenderMetrics;
 use super::palette::RenderPalette;
 
@@ -43,7 +44,7 @@ pub(super) fn build_overlay_layout(
     capture_enabled: bool,
     scroll_offset: f64,
     title_text: &str,
-    version_line: &str,
+    header: &HeaderContent<'_>,
     note_text_base: &str,
     close_hint_text: &str,
     quick_mode: bool,
@@ -129,24 +130,20 @@ pub(super) fn build_overlay_layout(
         metrics.row_gap,
     );
 
-    let title_width = text_extents_for(
+    let title_row = title_row_width(
         ctx,
         help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
         metrics.title_font_size,
+        metrics.subtitle_font_size,
         title_text,
-    )
-    .width();
-    let subtitle_width = text_extents_for(
+        header.version,
+    );
+    let subtitle_width = measure_hints(
         ctx,
         help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
         metrics.subtitle_font_size,
-        version_line,
-    )
-    .width();
+        header,
+    );
     let close_hint_width = text_extents_for(
         ctx,
         help_font_family.as_str(),
@@ -162,7 +159,7 @@ pub(super) fn build_overlay_layout(
         + metrics.accent_line_bottom_spacing
         + metrics.title_font_size
         + metrics.title_bottom_spacing
-        + metrics.subtitle_font_size
+        + metrics.subtitle_row_height
         + metrics.subtitle_bottom_spacing
         + nav_state.nav_block_height;
     let footer_height = metrics.columns_bottom_spacing
@@ -196,7 +193,7 @@ pub(super) fn build_overlay_layout(
 
     let mut content_width = grid
         .grid_width
-        .max(title_width)
+        .max(title_row)
         .max(subtitle_width)
         .max(nav_state.nav_primary_width)
         .max(nav_state.nav_secondary_width)
@@ -204,7 +201,7 @@ pub(super) fn build_overlay_layout(
         .max(close_hint_width);
     // Don't let search text expand the overlay - it will be clamped/elided
     if grid.rows.is_empty() {
-        content_width = content_width.max(title_width).max(subtitle_width);
+        content_width = content_width.max(title_row).max(subtitle_width);
     }
     // Ensure minimum width for search box
     content_width = content_width.max(300.0);
