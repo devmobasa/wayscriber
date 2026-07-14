@@ -162,48 +162,70 @@ impl ksni::Tray for WayscriberTray {
                 ..Default::default()
             }
             .into(),
-            StandardItem {
-                label: format_binding_label(action_label(Action::ToggleLightMode), None),
-                icon_name: menu_icon_name("input-tablet", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action(TrayAction::ToggleLightMode);
-                }),
+            SubMenu {
+                label: "Drawing Modes".to_string(),
+                icon_name: menu_icon_name("applications-graphics", use_theme_icons),
+                submenu: vec![
+                    StandardItem {
+                        label: format_binding_label(action_label(Action::ToggleLightMode), None),
+                        icon_name: menu_icon_name("input-tablet", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.dispatch_overlay_action(TrayAction::ToggleLightMode);
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
+                        label: format_binding_label(
+                            action_label(Action::ToggleLightModeDrawing),
+                            None,
+                        ),
+                        icon_name: menu_icon_name("draw-freehand", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.dispatch_overlay_action(TrayAction::LightDrawToggle);
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                ],
                 ..Default::default()
             }
             .into(),
-            StandardItem {
-                label: format_binding_label(action_label(Action::ToggleLightModeDrawing), None),
-                icon_name: menu_icon_name("draw-freehand", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action(TrayAction::LightDrawToggle);
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: format_binding_label(action_label(Action::CaptureFullScreen), None),
+            SubMenu {
+                label: "Capture".to_string(),
                 icon_name: menu_icon_name("camera-photo", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action(TrayAction::CaptureFull);
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: format_binding_label(action_label(Action::CaptureActiveWindow), None),
-                icon_name: menu_icon_name("window-duplicate", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action(TrayAction::CaptureWindow);
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: format_binding_label(action_label(Action::CaptureSelection), None),
-                icon_name: menu_icon_name("selection-rectangular", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action(TrayAction::CaptureRegion);
-                }),
+                submenu: vec![
+                    StandardItem {
+                        label: format_binding_label(action_label(Action::CaptureFullScreen), None),
+                        icon_name: menu_icon_name("camera-photo", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.dispatch_overlay_action(TrayAction::CaptureFull);
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
+                        label: format_binding_label(
+                            action_label(Action::CaptureActiveWindow),
+                            None,
+                        ),
+                        icon_name: menu_icon_name("window-duplicate", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.dispatch_overlay_action(TrayAction::CaptureWindow);
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
+                        label: format_binding_label(action_label(Action::CaptureSelection), None),
+                        icon_name: menu_icon_name("selection-rectangular", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.dispatch_overlay_action(TrayAction::CaptureRegion);
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                ],
                 ..Default::default()
             }
             .into(),
@@ -216,56 +238,66 @@ impl ksni::Tray for WayscriberTray {
                 ..Default::default()
             }
             .into(),
-            StandardItem {
-                label: format_binding_label(action_label(Action::OpenConfigurator), None),
-                icon_name: menu_icon_name("preferences-desktop", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.launch_configurator();
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: "Open Config File".to_string(),
-                icon_name: menu_icon_name("text-x-generic", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.open_config_file();
-                }),
-                ..Default::default()
-            }
-            .into(),
-            CheckmarkItem {
-                label: if self.session_resume_enabled {
-                    "Session resume: enabled".to_string()
-                } else {
-                    "Session resume: disabled".to_string()
-                },
-                checked: self.session_resume_enabled,
-                icon_name: menu_icon_name("document-save", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    let target = !this.session_resume_enabled;
-                    let persisted =
-                        update_session_resume_in_config(target, this.session_resume_enabled);
-                    this.session_resume_enabled = persisted;
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: "Clear saved session data".to_string(),
-                icon_name: menu_icon_name("edit-clear", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.clear_session_files();
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: "Open log folder".to_string(),
-                icon_name: menu_icon_name("folder", use_theme_icons),
-                activate: Box::new(|this: &mut Self| {
-                    this.open_log_folder();
-                }),
+            SubMenu {
+                label: "Settings & Data".to_string(),
+                icon_name: menu_icon_name("preferences-system", use_theme_icons),
+                submenu: vec![
+                    StandardItem {
+                        label: format_binding_label(action_label(Action::OpenConfigurator), None),
+                        icon_name: menu_icon_name("preferences-desktop", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.launch_configurator();
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
+                        label: "Open Config File".to_string(),
+                        icon_name: menu_icon_name("text-x-generic", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.open_config_file();
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    CheckmarkItem {
+                        label: if self.session_resume_enabled {
+                            "Session resume: enabled".to_string()
+                        } else {
+                            "Session resume: disabled".to_string()
+                        },
+                        checked: self.session_resume_enabled,
+                        icon_name: menu_icon_name("document-save", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            let target = !this.session_resume_enabled;
+                            let persisted = update_session_resume_in_config(
+                                target,
+                                this.session_resume_enabled,
+                            );
+                            this.session_resume_enabled = persisted;
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
+                        label: "Clear saved session data".to_string(),
+                        icon_name: menu_icon_name("edit-clear", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.clear_session_files();
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                    StandardItem {
+                        label: "Open log folder".to_string(),
+                        icon_name: menu_icon_name("folder", use_theme_icons),
+                        activate: Box::new(|this: &mut Self| {
+                            this.open_log_folder();
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                ],
                 ..Default::default()
             }
             .into(),

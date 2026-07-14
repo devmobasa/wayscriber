@@ -500,7 +500,10 @@ Other desktops/window managers: bind `wayscriber --daemon-toggle` to any global 
 
 **System tray:**
 
-Right-click the tray icon for options:
+Right-click the tray icon for options. Less-frequent actions are grouped into
+Drawing Modes, Capture, and Settings & Data submenus so the menu remains usable
+on shorter or scaled displays:
+
 - Toggle overlay visibility
 - Freeze/unfreeze the current overlay
 - Capture full screen / active window / region

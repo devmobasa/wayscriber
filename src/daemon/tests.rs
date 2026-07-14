@@ -72,34 +72,58 @@ fn hide_overlay_is_idempotent() {
 
 #[cfg(feature = "tray")]
 fn activate_menu_item(tray: &mut WayscriberTray, label: &str) {
-    for item in tray.menu() {
-        match item {
-            MenuItem::Standard(standard) if standard.label.contains(label) => {
-                let activate = standard.activate;
-                activate(tray);
-                return;
+    fn activate_in(
+        tray: &mut WayscriberTray,
+        items: Vec<MenuItem<WayscriberTray>>,
+        label: &str,
+    ) -> bool {
+        for item in items {
+            let activated = match item {
+                MenuItem::Standard(standard) if standard.label.contains(label) => {
+                    (standard.activate)(tray);
+                    true
+                }
+                MenuItem::Checkmark(check) if check.label.contains(label) => {
+                    (check.activate)(tray);
+                    true
+                }
+                MenuItem::SubMenu(submenu) => activate_in(tray, submenu.submenu, label),
+                _ => false,
+            };
+            if activated {
+                return true;
             }
-            MenuItem::Checkmark(check) if check.label.contains(label) => {
-                let activate = check.activate;
-                activate(tray);
-                return;
-            }
-            _ => {}
         }
+        false
+    }
+
+    let items = tray.menu();
+    if activate_in(tray, items, label) {
+        return;
     }
     panic!("Menu item '{label}' not found");
 }
 
 #[cfg(feature = "tray")]
+fn collect_menu_labels(items: Vec<MenuItem<WayscriberTray>>, labels: &mut Vec<String>) {
+    for item in items {
+        match item {
+            MenuItem::Standard(standard) => labels.push(standard.label),
+            MenuItem::Checkmark(check) => labels.push(check.label),
+            MenuItem::SubMenu(submenu) => {
+                labels.push(submenu.label);
+                collect_menu_labels(submenu.submenu, labels);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[cfg(feature = "tray")]
 fn menu_labels(tray: &WayscriberTray) -> Vec<String> {
-    tray.menu()
-        .into_iter()
-        .filter_map(|item| match item {
-            MenuItem::Standard(standard) => Some(standard.label),
-            MenuItem::Checkmark(check) => Some(check.label),
-            _ => None,
-        })
-        .collect()
+    let mut labels = Vec::new();
+    collect_menu_labels(tray.menu(), &mut labels);
+    labels
 }
 
 #[cfg(feature = "tray")]
@@ -125,6 +149,29 @@ fn tray_menu_exposes_minimal_light_actions() {
     assert!(labels.iter().any(|label| label.contains("Light Drawing")));
     assert!(!labels.iter().any(|label| label.contains("Light Draw On")));
     assert!(!labels.iter().any(|label| label.contains("Light Draw Off")));
+}
+
+#[cfg(feature = "tray")]
+#[test]
+fn tray_menu_groups_actions_to_fit_short_displays() {
+    let toggle = Arc::new(AtomicBool::new(false));
+    let quit = Arc::new(AtomicBool::new(false));
+    let tray = WayscriberTray::new_for_tests(toggle, quit, false);
+    let menu = tray.menu();
+
+    assert!(menu.len() <= 12, "top-level tray menu grew too tall");
+
+    let submenu_labels: Vec<_> = menu
+        .into_iter()
+        .filter_map(|item| match item {
+            MenuItem::SubMenu(submenu) => Some(submenu.label),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        submenu_labels,
+        ["Drawing Modes", "Capture", "Settings & Data"]
+    );
 }
 
 #[cfg(feature = "tray")]
