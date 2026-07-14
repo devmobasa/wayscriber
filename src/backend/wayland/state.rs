@@ -141,6 +141,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub onboarding: crate::onboarding::OnboardingStore,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
+    pub persistence: crate::backend::wayland::session::PersistenceController,
     pub tokio_handle: tokio::runtime::Handle,
     pub exit_after_capture_mode: ExitAfterCaptureMode,
     pub frozen_enabled: bool,
@@ -267,6 +268,7 @@ pub(super) struct WaylandState {
 
     // Session persistence
     pub(super) session: SessionState,
+    pub(super) persistence: crate::backend::wayland::session::PersistenceController,
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,

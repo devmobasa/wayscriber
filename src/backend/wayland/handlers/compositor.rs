@@ -8,7 +8,6 @@ use wayland_client::{
 };
 
 use super::super::state::{FullDamageReason, WaylandState};
-use crate::session;
 
 impl CompositorHandler for WaylandState {
     fn scale_factor_changed(
@@ -119,11 +118,7 @@ impl CompositorHandler for WaylandState {
         debug!("Surface entered output");
 
         let previous_output = self.surface.current_output();
-        let had_confirmed_surface_enter = self.has_seen_surface_enter();
         let output_changed = previous_output.as_ref() != Some(output);
-        if output_changed && previous_output.is_some() && had_confirmed_surface_enter {
-            self.persist_session_for_output(previous_output.as_ref(), "surface output change");
-        }
         self.surface.set_current_output(output.clone());
         self.set_has_seen_surface_enter(true);
         if output_changed {
@@ -188,50 +183,8 @@ impl CompositorHandler for WaylandState {
         }
 
         let identity = self.output_identity_for(output);
-
-        let mut load_result = None;
-        let already_loaded = self.session.is_loaded();
-        let mut load_requested = false;
-        if let Some(options) = self.session_options_mut() {
-            let changed = options.set_output_identity(identity.as_deref());
-
-            if changed && let Some(id) = options.output_identity() {
-                info!(
-                    "Persisting session using monitor identity '{}' (session file: {}).",
-                    id,
-                    options.session_file_path().display()
-                );
-            }
-
-            if changed || !already_loaded {
-                info!(
-                    "Loading session snapshot from {} (per_output={}, output_identity={:?})",
-                    options.session_file_path().display(),
-                    options.per_output,
-                    options.output_identity()
-                );
-                load_result = Some(session::load_snapshot_with_outcome(options));
-                load_requested = true;
-            }
-        }
-
-        if let Some(result) = load_result {
-            let mut loaded_board_data = false;
-            match result {
-                Ok(outcome) => {
-                    loaded_board_data = outcome.has_board_data();
-                    self.handle_session_load_outcome(outcome, "output load");
-                }
-                Err(err) => {
-                    warn!("Failed to load session state: {}", err);
-                }
-            }
-
-            if load_requested {
-                self.session.mark_loaded(loaded_board_data);
-                self.input_state.needs_redraw = true;
-            }
-        }
+        self.begin_session_output_transition(identity, "surface output change");
+        self.input_state.needs_redraw = true;
     }
 
     fn surface_leave(

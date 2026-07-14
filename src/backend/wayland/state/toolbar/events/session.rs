@@ -247,11 +247,22 @@ impl WaylandState {
                 "Opened session {}",
                 session_display_name(&report.opened_path)
             )),
-            Err(err) if forget_missing_recent_session_after_open_error(path, &err) => self
-                .set_session_toolbar_error(format!(
-                    "Session file missing; removed from recent sessions: {}",
-                    session_display_name(path)
-                )),
+            Err(err) if missing_session_error_matches_path(path, &err) => {
+                match self.forget_named_session_by_path(path.to_path_buf()) {
+                    Ok(true) => self.set_session_toolbar_error(format!(
+                        "Session file missing; removed from recent sessions: {}",
+                        session_display_name(path)
+                    )),
+                    Ok(false) => self.set_session_toolbar_error(format!(
+                        "Session file missing; no recent-session entry matched: {}",
+                        session_display_name(path)
+                    )),
+                    Err(catalog_err) => self.set_session_toolbar_error(format!(
+                        "Session file missing and recent-session cleanup failed for {}: {catalog_err:#}",
+                        session_display_name(path)
+                    )),
+                }
+            }
             Err(err) => self.set_session_toolbar_error(format!("Open session failed: {err:#}")),
         }
     }
@@ -341,14 +352,7 @@ impl WaylandState {
     }
 
     fn handle_toolbar_session_info(&mut self) {
-        let Some(options) = self.session.options().cloned() else {
-            self.set_session_toolbar_error(
-                "Session info unavailable: no active persisted session target",
-            );
-            return;
-        };
-
-        match crate::session::inspect_session(&options) {
+        match self.inspect_active_session() {
             Ok(inspection) => self.set_session_toolbar_info(session_info_summary(&inspection)),
             Err(err) => self.set_session_toolbar_error(format!("Session info failed: {err:#}")),
         }
@@ -394,6 +398,7 @@ impl WaylandState {
     }
 }
 
+#[cfg(test)]
 pub(super) fn forget_missing_recent_session_after_open_error(
     path: &Path,
     err: &AnyhowError,

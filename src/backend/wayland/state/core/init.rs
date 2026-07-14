@@ -11,6 +11,7 @@ impl WaylandState {
             onboarding,
             capture_manager,
             session_options,
+            persistence,
             tokio_handle,
             exit_after_capture_mode,
             frozen_enabled,
@@ -168,6 +169,7 @@ impl WaylandState {
             #[cfg(tablet)]
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
+            persistence,
             tokio_handle,
         }
     }

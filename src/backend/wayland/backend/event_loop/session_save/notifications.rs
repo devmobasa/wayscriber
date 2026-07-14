@@ -129,6 +129,7 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+#[cfg(test)]
 pub(super) fn record_autosave_success(
     session_state: &mut SessionState,
     now: Instant,

@@ -1,5 +1,5 @@
 // Responds to layer-shell configure/close events, keeping dimensions in sync with the compositor.
-use log::{debug, info, warn};
+use log::{debug, info};
 use smithay_client_toolkit::shell::{
     WaylandSurface,
     wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
@@ -7,7 +7,6 @@ use smithay_client_toolkit::shell::{
 use wayland_client::{Connection, Proxy, QueueHandle};
 
 use super::super::state::{FullDamageReason, WaylandState};
-use crate::session;
 
 impl LayerShellHandler for WaylandState {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
@@ -113,31 +112,7 @@ impl LayerShellHandler for WaylandState {
         self.sync_toolbar_visibility(qh);
 
         // Fallback: on xdg-only environments we might never get surface_enter before configure.
-        // Try to load a session snapshot once even without output identity; compositor handler
-        // will still reload with a concrete identity if it arrives later.
-        if !self.session.is_loaded()
-            && let Some(options) = self.session_options_mut()
-        {
-            let load_result = session::load_snapshot_with_outcome(options);
-            let mut load_succeeded = false;
-            let mut loaded_board_data = false;
-            match load_result {
-                Ok(outcome) => {
-                    load_succeeded = true;
-                    loaded_board_data = outcome.has_board_data();
-                    self.handle_session_load_outcome(outcome, "fallback load");
-                }
-                Err(err) => {
-                    warn!("Fallback session load failed: {}", err);
-                }
-            }
-            // Mark loaded to avoid reapplying on every configure when load succeeded; compositor
-            // enter still reloads when a concrete output identity arrives because that changes
-            // the identity and triggers a fresh load.
-            if load_succeeded {
-                self.session.mark_loaded(loaded_board_data);
-            }
-            self.input_state.needs_redraw = true;
-        }
+        // Enter the same epoch-bound, interaction-safe transition path used by surface_enter.
+        self.begin_configure_fallback_session_transition("layer configure fallback");
     }
 }

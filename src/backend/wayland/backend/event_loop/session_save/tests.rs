@@ -1,6 +1,101 @@
 use super::*;
+use crate::backend::wayland::session::{PersistenceController, PersistenceOperation};
 use crate::session::SaveSnapshotOutcome;
 use std::path::PathBuf;
+
+#[test]
+fn final_save_retries_after_failed_autosave_while_worker_is_healthy() {
+    let error = anyhow::anyhow!("autosave failed");
+    let recovered = final_save_barrier_policy(Err(error), true)
+        .expect("healthy worker should remain available for the final save");
+    assert!(recovered.is_some());
+}
+
+#[test]
+fn final_save_does_not_retry_through_an_unhealthy_worker() {
+    let error = anyhow::anyhow!("worker disconnected");
+    let propagated = final_save_barrier_policy(Err(error), false)
+        .expect_err("unhealthy worker must enter shutdown fallback handling");
+    assert!(propagated.to_string().contains("worker disconnected"));
+}
+
+#[test]
+fn pointer_and_stylus_both_gate_persistence_transitions() {
+    assert!(persistence_interaction_active(
+        true, false, false, false, false, false
+    ));
+    assert!(persistence_interaction_active(
+        false, false, false, false, false, true
+    ));
+    assert!(!persistence_interaction_active(
+        false, false, false, false, false, false
+    ));
+}
+
+#[test]
+fn unhealthy_worker_removes_dirty_session_from_automatic_schedule() {
+    let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+    options.persist_transparent = true;
+    options.autosave_enabled = true;
+    options.autosave_idle = Duration::from_millis(1);
+    options.autosave_interval = Duration::from_millis(1);
+    let now = Instant::now();
+    let mut state = SessionState::new(Some(options.clone()));
+    state.record_input_dirty(now, true);
+    let due = now + Duration::from_millis(2);
+
+    assert_eq!(
+        scheduled_autosave_timeout(&state, Some(&options), false, due),
+        None
+    );
+    assert_eq!(
+        scheduled_autosave_timeout(&state, Some(&options), true, due),
+        Some(Duration::ZERO)
+    );
+}
+
+#[test]
+fn accepted_autosave_worker_panic_restores_dirty_and_requests_one_notification() {
+    let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "disconnect-test");
+    options.persist_transparent = true;
+    options.autosave_enabled = true;
+    options.autosave_idle = Duration::from_millis(1);
+    options.autosave_interval = Duration::from_millis(1);
+    options.autosave_failure_backoff = Duration::from_millis(50);
+    let started = Instant::now();
+    let mut session = SessionState::new(Some(options.clone()));
+    session.record_input_dirty(started, true);
+    let dirty_window = session.prepare_autosave_submission().unwrap();
+    let mut controller = PersistenceController::start().unwrap();
+    let request_id = controller
+        .try_submit(0, PersistenceOperation::PanicForTest)
+        .unwrap();
+    session.commit_autosave_submission(request_id, dirty_window);
+
+    let err = controller
+        .wait_for_completion()
+        .expect_err("worker panic must disconnect the completion channel");
+    assert!(err.to_string().contains("disconnected"));
+    assert!(!controller.is_healthy());
+
+    let failure_at = Instant::now();
+    let notification_requests = [
+        restore_autosave_after_transport_failure(&mut session, Some(&options), failure_at),
+        restore_autosave_after_transport_failure(&mut session, Some(&options), failure_at),
+    ]
+    .into_iter()
+    .filter(|requested| *requested)
+    .count();
+    assert_eq!(notification_requests, 1);
+    assert!(session.is_dirty());
+    assert_eq!(
+        scheduled_autosave_timeout(&session, Some(&options), false, failure_at),
+        None
+    );
+
+    assert!(controller.shutdown(0).is_err());
+    assert!(controller.is_stopped());
+}
 
 #[test]
 fn persistence_enabled_respects_any_enabled_boards() {
@@ -34,6 +129,18 @@ fn persistence_enabled_is_false_when_nothing_is_enabled() {
     options.restore_tool_state = false;
 
     assert!(!persistence_enabled(&options));
+}
+
+#[test]
+fn final_save_skips_fully_disabled_persistence() {
+    let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+    options.persist_transparent = false;
+    options.persist_whiteboard = false;
+    options.persist_blackboard = false;
+    options.persist_history = false;
+    options.restore_tool_state = false;
+
+    assert!(should_skip_disabled_final_save(&options));
 }
 
 #[test]

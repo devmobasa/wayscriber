@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::backend::ExitAfterCaptureMode;
 
-mod event_loop;
+pub(in crate::backend::wayland) mod event_loop;
 mod helpers;
 mod run;
 mod setup;

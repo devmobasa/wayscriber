@@ -6,7 +6,6 @@ use std::time::Instant;
 use wayland_client::{Connection, QueueHandle};
 
 use super::super::state::{FullDamageReason, WaylandState};
-use crate::session;
 
 impl WindowHandler for WaylandState {
     fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window) {
@@ -157,30 +156,9 @@ impl WindowHandler for WaylandState {
         // Surface is now sized; re-apply toolbar offsets so margins reflect configured bounds.
         self.sync_toolbar_visibility(qh);
 
-        // Fallback: xdg may not emit surface_enter before configure; attempt a session load once.
-        if !self.session.is_loaded()
-            && let Some(options) = self.session_options_mut()
-        {
-            let load_result = session::load_snapshot_with_outcome(options);
-            let mut load_succeeded = false;
-            let mut loaded_board_data = false;
-            match load_result {
-                Ok(outcome) => {
-                    load_succeeded = true;
-                    loaded_board_data = outcome.has_board_data();
-                    self.handle_session_load_outcome(outcome, "fallback load");
-                }
-                Err(err) => {
-                    warn!("Fallback session load failed: {}", err);
-                }
-            }
-            // Mark loaded to avoid repeated loads when load succeeded; compositor enter still
-            // reloads when it sets a new output identity.
-            if load_succeeded {
-                self.session.mark_loaded(loaded_board_data);
-            }
-            self.input_state.needs_redraw = true;
-        }
+        // Fallback: xdg may not emit surface_enter before configure. Use the same epoch-bound,
+        // interaction-safe transition path as surface_enter instead of loading directly.
+        self.begin_configure_fallback_session_transition("xdg configure fallback");
     }
 }
 
