@@ -67,6 +67,32 @@ fn alpha_at(surface: &mut ImageSurface, x: i32, y: i32) -> u8 {
     surface.data().unwrap()[offset]
 }
 
+fn alpha_bounds(surface: &mut ImageSurface) -> Option<(i32, i32, i32, i32)> {
+    let width = surface.width();
+    let height = surface.height();
+    let stride = surface.stride() as usize;
+    let data = surface.data().ok()?;
+    let mut min_x = width;
+    let mut min_y = height;
+    let mut max_x = -1;
+    let mut max_y = -1;
+
+    for y in 0..height {
+        for x in 0..width {
+            let alpha = data[y as usize * stride + x as usize * 4 + 3];
+            if alpha == 0 {
+                continue;
+            }
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+        }
+    }
+
+    (max_x >= 0).then_some((min_x, min_y, max_x, max_y))
+}
+
 #[test]
 fn render_status_bar_draws_for_all_positions() {
     let mut input = make_input_state();
@@ -216,4 +242,25 @@ fn render_onboarding_card_tiny_surface_does_not_panic() {
     wayscriber::ui::render_onboarding_card(&ctx, 200, 40, &card);
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
+}
+
+#[test]
+fn render_onboarding_card_without_checklist_stays_compact() {
+    let (mut surface, ctx) = surface_with_context(700, 500);
+    let card = wayscriber::ui::OnboardingCard {
+        eyebrow: "Step 1 / 5".to_string(),
+        title: "Enable background mode?".to_string(),
+        body: "Keeps Wayscriber ready in the background for quick overlay access.".to_string(),
+        items: Vec::new(),
+        footer: "Y = set up now • N = skip • Shift+Escape = skip onboarding".to_string(),
+    };
+
+    wayscriber::ui::render_onboarding_card(&ctx, 700, 500, &card);
+    drop(ctx);
+    let (_, min_y, _, max_y) = alpha_bounds(&mut surface).expect("rendered onboarding card");
+
+    assert!(
+        max_y - min_y < 180,
+        "zero-item onboarding card should not reserve checklist space; bounds={min_y}..={max_y}"
+    );
 }

@@ -1,5 +1,5 @@
 use crate::backend::wayland::state::WaylandState;
-use crate::config::{RadialMenuMouseBinding, keybindings::Action};
+use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier, keybindings::Action};
 use crate::draw::DirtyFullReason;
 use crate::input::{
     Key,
@@ -97,7 +97,7 @@ impl WaylandState {
             FirstRunStep::BackgroundModeSetup => OnboardingCard {
                 eyebrow: eyebrow.to_string(),
                 title: "Enable background mode?".to_string(),
-                body: "Keeps Wayscriber ready in the background so you can toggle overlay quickly."
+                body: "Keeps Wayscriber ready in the background for quick overlay access."
                     .to_string(),
                 items: Vec::new(),
                 footer: "Y = set up now   •   N = skip   •   Shift+Escape = skip onboarding"
@@ -141,9 +141,8 @@ impl WaylandState {
             }
             FirstRunStep::Reference => OnboardingCard {
                 eyebrow: eyebrow.to_string(),
-                title: "Find anything fast".to_string(),
-                body: "Use help for full shortcuts and command palette for searchable actions."
-                    .to_string(),
+                title: "Find and customize anything".to_string(),
+                body: "Palette controls can edit, unbind, or reset shortcuts.".to_string(),
                 items: vec![
                     OnboardingChecklistItem {
                         label: format!(
@@ -160,7 +159,7 @@ impl WaylandState {
                         done: state.used_command_palette,
                     },
                 ],
-                footer,
+                footer: shortcut_rebind_footer(self.config.ui.toolbar.rebind_modifier).to_string(),
             },
         };
 
@@ -500,6 +499,26 @@ pub(super) fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
         FirstRunStep::DrawUndo => "Step 3 / 5",
         FirstRunStep::QuickAccess => "Step 4 / 5",
         FirstRunStep::Reference => "Step 5 / 5",
+    }
+}
+
+pub(super) fn shortcut_rebind_footer(modifier: ToolbarRebindModifier) -> &'static str {
+    match modifier {
+        ToolbarRebindModifier::Disabled => {
+            "Toolbar shortcut-click editing disabled • Shift+Escape to skip"
+        }
+        ToolbarRebindModifier::CtrlShift => {
+            "Ctrl+Shift+click a bindable toolbar control to rebind • Shift+Escape to skip"
+        }
+        ToolbarRebindModifier::CtrlAlt => {
+            "Ctrl+Alt+click a bindable toolbar control to rebind • Shift+Escape to skip"
+        }
+        ToolbarRebindModifier::ShiftAlt => {
+            "Shift+Alt+click a bindable toolbar control to rebind • Shift+Escape to skip"
+        }
+        ToolbarRebindModifier::CtrlShiftAlt => {
+            "Ctrl+Shift+Alt+click a bindable toolbar control to rebind • Shift+Escape to skip"
+        }
     }
 }
 

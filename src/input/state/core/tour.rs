@@ -60,10 +60,10 @@ impl TourStep {
                 "Click and drag to draw with the pen tool.\nUse R/G/B/Y keys to change colors.\nScroll wheel or +/- to adjust thickness.\nMiddle-click opens the radial menu for quick tool/color changes."
             }
             Self::ToolbarIntro => {
-                "Press F2 to toggle the toolbar.\nThe toolbar provides quick access to all tools and settings."
+                "Press F2 to toggle the toolbar.\nThe toolbar provides quick access to all tools and settings.\nBy default, Ctrl+Shift+click a bindable control to change its shortcut."
             }
             Self::CommandPalette => {
-                "Press Ctrl+K to open the command palette.\nQuickly search and run any action by typing.\nAccess all features without memorizing shortcuts."
+                "Press Ctrl+K to open the command palette.\nQuickly search and run any action by typing.\nUse the row controls to edit, unbind, or reset shortcuts."
             }
             Self::ContextMenu => {
                 "Right-click anywhere for quick actions.\nAccess boards, pages, and common commands.\nShape-specific options when clicking on shapes."
@@ -174,5 +174,23 @@ impl InputState {
             }
             _ => true, // Consume all other keys while tour is active
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TourStep;
+
+    #[test]
+    fn tour_introduces_both_shortcut_editing_paths() {
+        assert!(
+            TourStep::ToolbarIntro
+                .description()
+                .contains("Ctrl+Shift+click")
+        );
+        let palette_description = TourStep::CommandPalette.description();
+        assert!(palette_description.contains("edit"));
+        assert!(palette_description.contains("unbind"));
+        assert!(palette_description.contains("reset"));
     }
 }

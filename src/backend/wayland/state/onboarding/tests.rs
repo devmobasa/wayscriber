@@ -1,9 +1,9 @@
 use super::first_run::{
     apply_persisted_usage_signals, background_mode_prompt_active, background_mode_prompt_choice,
     first_run_card_hidden_by_ui_state, first_run_skip_allowed, first_run_step_eyebrow,
-    quick_access_completed,
+    quick_access_completed, shortcut_rebind_footer,
 };
-use crate::config::RadialMenuMouseBinding;
+use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
 use crate::input::{Key, state::PendingOnboardingUsage};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 
@@ -60,6 +60,22 @@ fn first_run_eyebrow_shows_progress() {
         first_run_step_eyebrow(FirstRunStep::Reference),
         "Step 5 / 5"
     );
+}
+
+#[test]
+fn shortcut_rebind_footer_uses_configured_modifier() {
+    for (modifier, expected_chord) in [
+        (ToolbarRebindModifier::CtrlShift, "Ctrl+Shift+click"),
+        (ToolbarRebindModifier::CtrlAlt, "Ctrl+Alt+click"),
+        (ToolbarRebindModifier::ShiftAlt, "Shift+Alt+click"),
+        (ToolbarRebindModifier::CtrlShiftAlt, "Ctrl+Shift+Alt+click"),
+    ] {
+        let footer = shortcut_rebind_footer(modifier);
+        assert!(footer.contains(expected_chord), "footer={footer:?}");
+        assert!(footer.contains("bindable toolbar control to rebind"));
+    }
+
+    assert!(shortcut_rebind_footer(ToolbarRebindModifier::Disabled).contains("editing disabled"));
 }
 
 #[test]

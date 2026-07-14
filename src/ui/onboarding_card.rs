@@ -1,4 +1,4 @@
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
 
 pub struct OnboardingChecklistItem {
     pub label: String,
@@ -21,7 +21,10 @@ const CARD_RADIUS: f64 = 12.0;
 const ITEM_DOT_SIZE: f64 = 10.0;
 const ITEM_GAP_Y: f64 = 24.0;
 const TEXT_OFFSET_Y: f64 = 5.0;
-const BASE_CONTENT_HEIGHT: f64 = 126.0;
+const EYEBROW_CONTENT_HEIGHT: f64 = 20.0;
+const TITLE_CONTENT_HEIGHT: f64 = 30.0;
+const BODY_BOTTOM_GAP: f64 = 12.0;
+const FOOTER_CONTENT_HEIGHT: f64 = 20.0;
 const CARD_SCALE: f64 = 1.3;
 const ELLIPSIS: &str = "...";
 
@@ -40,24 +43,16 @@ pub fn render_onboarding_card(
     let item_gap_y = ITEM_GAP_Y * CARD_SCALE;
     let text_offset_y = TEXT_OFFSET_Y * CARD_SCALE;
 
-    let card_width = (width as f64 - margin * 2.0).clamp(card_min_width, card_max_width);
+    let available_width = (width as f64 - margin * 2.0).max(1.0);
+    let card_width = available_width
+        .min(card_max_width)
+        .max(card_min_width.min(available_width));
     let x = (width as f64 - card_width - margin).max(margin);
     let min_y = margin;
     let max_y = (height as f64 - margin).max(min_y);
     let y = (height as f64 * 0.06).clamp(min_y, max_y);
-    let content_height = BASE_CONTENT_HEIGHT * CARD_SCALE + card.items.len() as f64 * item_gap_y;
-    let card_height = content_height + card_padding * 2.0;
-
-    rounded_rect(ctx, x, y, card_width, card_height, card_radius);
-    ctx.set_source_rgba(0.07, 0.09, 0.12, 0.85);
-    let _ = ctx.fill_preserve();
-    ctx.set_source_rgba(0.36, 0.46, 0.58, 0.8);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-
-    let mut cursor_y = y + card_padding;
     let content_x = x + card_padding;
-    let content_w = card_width - card_padding * 2.0;
+    let content_w = (card_width - card_padding * 2.0).max(1.0);
 
     let eyebrow_style = UiTextStyle {
         family: "Sans",
@@ -90,6 +85,26 @@ pub fn render_onboarding_card(
         size: 11.0 * CARD_SCALE,
     };
 
+    let body_height = text_layout(ctx, body_style, &card.body, Some(content_w))
+        .ink_extents()
+        .height()
+        .max(body_style.size);
+    let content_height =
+        (EYEBROW_CONTENT_HEIGHT + TITLE_CONTENT_HEIGHT + BODY_BOTTOM_GAP + FOOTER_CONTENT_HEIGHT)
+            * CARD_SCALE
+            + body_height
+            + card.items.len() as f64 * item_gap_y;
+    let card_height = content_height + card_padding * 2.0;
+
+    rounded_rect(ctx, x, y, card_width, card_height, card_radius);
+    ctx.set_source_rgba(0.07, 0.09, 0.12, 0.96);
+    let _ = ctx.fill_preserve();
+    ctx.set_source_rgba(0.36, 0.46, 0.58, 0.8);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    let mut cursor_y = y + card_padding;
+
     ctx.set_source_rgba(0.65, 0.74, 0.88, 1.0);
     draw_text_baseline(
         ctx,
@@ -99,7 +114,7 @@ pub fn render_onboarding_card(
         cursor_y + 12.0 * CARD_SCALE,
         None,
     );
-    cursor_y += 20.0 * CARD_SCALE;
+    cursor_y += EYEBROW_CONTENT_HEIGHT * CARD_SCALE;
 
     ctx.set_source_rgba(0.96, 0.98, 1.0, 1.0);
     draw_text_baseline(
@@ -110,18 +125,18 @@ pub fn render_onboarding_card(
         cursor_y + 20.0 * CARD_SCALE,
         None,
     );
-    cursor_y += 30.0 * CARD_SCALE;
+    cursor_y += TITLE_CONTENT_HEIGHT * CARD_SCALE;
 
     ctx.set_source_rgba(0.78, 0.84, 0.92, 1.0);
     draw_text_baseline(
         ctx,
         body_style,
-        &fit_text(ctx, &card.body, body_style, content_w),
+        &card.body,
         content_x,
         cursor_y + 13.0 * CARD_SCALE,
-        None,
+        Some(content_w),
     );
-    cursor_y += 26.0 * CARD_SCALE;
+    cursor_y += body_height + BODY_BOTTOM_GAP * CARD_SCALE;
 
     for item in &card.items {
         let dot_x = content_x + item_dot_size * 0.5;
