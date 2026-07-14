@@ -247,7 +247,7 @@ fn render_onboarding_card_tiny_surface_does_not_panic() {
 #[test]
 fn render_onboarding_card_without_checklist_stays_compact() {
     let (mut surface, ctx) = surface_with_context(700, 500);
-    let card = wayscriber::ui::OnboardingCard {
+    let compact_card = wayscriber::ui::OnboardingCard {
         eyebrow: "Step 1 / 5".to_string(),
         title: "Enable background mode?".to_string(),
         body: "Keeps Wayscriber ready in the background for quick overlay access.".to_string(),
@@ -255,12 +255,32 @@ fn render_onboarding_card_without_checklist_stays_compact() {
         footer: "Y = set up now • N = skip • Shift+Escape = skip onboarding".to_string(),
     };
 
-    wayscriber::ui::render_onboarding_card(&ctx, 700, 500, &card);
+    wayscriber::ui::render_onboarding_card(&ctx, 700, 500, &compact_card);
     drop(ctx);
-    let (_, min_y, _, max_y) = alpha_bounds(&mut surface).expect("rendered onboarding card");
+    let (_, compact_min_y, _, compact_max_y) =
+        alpha_bounds(&mut surface).expect("rendered compact onboarding card");
+    let compact_height = compact_max_y - compact_min_y;
+
+    let (mut checklist_surface, checklist_ctx) = surface_with_context(700, 500);
+    let checklist_card = wayscriber::ui::OnboardingCard {
+        items: vec![wayscriber::ui::OnboardingChecklistItem {
+            label: "Open the configurator".to_string(),
+            done: false,
+        }],
+        ..compact_card
+    };
+    wayscriber::ui::render_onboarding_card(&checklist_ctx, 700, 500, &checklist_card);
+    drop(checklist_ctx);
+    let (_, checklist_min_y, _, checklist_max_y) =
+        alpha_bounds(&mut checklist_surface).expect("rendered checklist onboarding card");
+    let checklist_height = checklist_max_y - checklist_min_y;
 
     assert!(
-        max_y - min_y < 180,
-        "zero-item onboarding card should not reserve checklist space; bounds={min_y}..={max_y}"
+        compact_height <= 190,
+        "zero-item onboarding card should remain compact; compact_height={compact_height}"
+    );
+    assert!(
+        checklist_height >= compact_height + 20,
+        "zero-item onboarding card should not reserve checklist space; compact_height={compact_height}, checklist_height={checklist_height}"
     );
 }
