@@ -78,21 +78,20 @@ fn activate_menu_item(tray: &mut WayscriberTray, label: &str) {
         label: &str,
     ) -> bool {
         for item in items {
-            match item {
+            let activated = match item {
                 MenuItem::Standard(standard) if standard.label.contains(label) => {
                     (standard.activate)(tray);
-                    return true;
+                    true
                 }
                 MenuItem::Checkmark(check) if check.label.contains(label) => {
                     (check.activate)(tray);
-                    return true;
+                    true
                 }
-                MenuItem::SubMenu(submenu) => {
-                    if activate_in(tray, submenu.submenu, label) {
-                        return true;
-                    }
-                }
-                _ => {}
+                MenuItem::SubMenu(submenu) => activate_in(tray, submenu.submenu, label),
+                _ => false,
+            };
+            if activated {
+                return true;
             }
         }
         false
