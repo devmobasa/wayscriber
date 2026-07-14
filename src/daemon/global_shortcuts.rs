@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 #[cfg(feature = "portal")]
-use std::sync::atomic::Ordering;
+use crate::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
 #[cfg(feature = "portal")]
-use wayscriber::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
+use std::sync::atomic::Ordering;
 
 #[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};

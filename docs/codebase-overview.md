@@ -4,18 +4,20 @@ This document explains how the application boots, how user input travels through
 
 ---
 
-## 1. Execution Flow From `main.rs`
+## 1. Execution Flow From the Library Entry Facade
 
-1. **CLI parsing (`src/main.rs`)**
-   - Uses the manual parser in `src/cli.rs` for `--daemon`, `--active`, `--mode`, named session, and session maintenance flags.
-   - Verifies `WAYLAND_DISPLAY` when a Wayland session is required.
+1. **Binary entry (`src/main.rs` and `src/lib.rs`)**
+   - `src/main.rs` only returns `wayscriber::run_from_env()`.
+   - The library facade uses the manual parser in `src/cli.rs`, prints help/version or argument diagnostics, initializes logging for runtime commands, and maps application errors to process exit codes.
 
-2. **Mode selection**
+2. **Mode selection (`src/app/`)**
    - `--daemon`: instantiate `daemon::Daemon` with the optional initial board mode and call `run()`.
    - `--active`: print usage/help tips, then call `backend::run_wayland`.
    - No flags: print a usage summary and exit.
+   - Modes that require a compositor verify `WAYLAND_DISPLAY` before runtime startup.
 
-3. **Shared subsystems automatically pulled in**
+3. **Canonical module graph**
+   - `src/lib.rs` declares both reusable public modules and private runtime modules, so the binary does not compile a second copy of shared types or unit tests.
    - `config`: loads user settings, key bindings, and drawing defaults.
    - `session`: builds configured or named session targets, validates `--session-file`, loads saved state, and records named-session catalog entries.
 
@@ -168,7 +170,8 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 | Path | Role |
 |------|------|
-| `src/main.rs` | CLI entry point, mode selection. |
+| `src/main.rs` | Thin binary wrapper around the library entry facade. |
+| `src/lib.rs` | Canonical module graph, CLI/error entry facade, and reusable public exports. |
 | `src/daemon.rs` | Background daemon, tray menu, signal handling, overlay toggling. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
 | `src/input/` | Event/state machine for drawing tools, board modes, and capture triggers. |

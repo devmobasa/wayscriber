@@ -127,7 +127,6 @@ impl InputState {
         }
     }
 
-    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
     pub(crate) fn render_provisional_tool_stroke_for_damage(
         &self,
         ctx: &cairo::Context,
@@ -293,7 +292,6 @@ impl InputState {
         }
     }
 
-    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
     pub(crate) fn render_provisional_shape_for_damage(
         &self,
         ctx: &cairo::Context,
@@ -310,7 +308,6 @@ impl InputState {
     }
 }
 
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 fn path_damage_ranges(
     points: &[(i32, i32)],
     damage_regions: &[Rect],
@@ -352,12 +349,10 @@ fn path_damage_ranges(
     ranges
 }
 
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 fn single_range(range: Range<usize>) -> Vec<Range<usize>> {
     std::iter::once(range).collect()
 }
 
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 fn push_merged_range(ranges: &mut Vec<Range<usize>>, next: Range<usize>) {
     if next.start >= next.end {
         return;
@@ -373,12 +368,10 @@ fn push_merged_range(ranges: &mut Vec<Range<usize>>, next: Range<usize>) {
     ranges.push(next);
 }
 
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 fn segment_bounds(a: (i32, i32), b: (i32, i32), stroke_width: f64) -> Option<Rect> {
     bounding_box_for_points(&[a, b], stroke_width)
 }
 
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 fn rects_intersect(a: Rect, b: Rect) -> bool {
     let a_right = a.x.saturating_add(a.width);
     let a_bottom = a.y.saturating_add(a.height);
@@ -388,7 +381,6 @@ fn rects_intersect(a: Rect, b: Rect) -> bool {
     !(a.x >= b_right || a_right <= b.x || a.y >= b_bottom || a_bottom <= b.y)
 }
 
-#[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
 fn pressure_preview_needs_full_mask_render(color: Color, ranges: &[Range<usize>]) -> bool {
     color.a < 1.0 && ranges.len() > 1
 }

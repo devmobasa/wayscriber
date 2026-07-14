@@ -122,8 +122,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     if cli.runtime_capabilities {
         print!(
             "{}",
-            wayscriber::runtime_capabilities::render_runtime_capabilities(
-                wayscriber::runtime_capabilities::current_runtime_capabilities()
+            crate::runtime_capabilities::render_runtime_capabilities(
+                crate::runtime_capabilities::current_runtime_capabilities()
             )
         );
         return Ok(());

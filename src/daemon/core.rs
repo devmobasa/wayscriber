@@ -12,15 +12,15 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-#[cfg(test)]
-use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::env_vars::NO_TRAY_ENV;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
 #[cfg(test)]
+use crate::session_override::SESSION_OVERRIDE_FOLLOW_CONFIG;
+use crate::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
+#[cfg(test)]
 use crate::tray_action::TrayAction;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
-use wayscriber::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 
 use super::control::DaemonToggleRequest;
 #[cfg(test)]

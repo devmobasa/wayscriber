@@ -219,9 +219,9 @@ If you are working offline, prefetch dependencies first:
 ### `src/` (main crate) detailed map
 
 #### Root files in `src/`
-- `src/main.rs` - CLI entry point; selects daemon/overlay execution.
-- `src/lib.rs` - Library root for shared modules and tests.
-- `src/cli.rs` - CLI definitions and argument parsing (clap).
+- `src/main.rs` - Thin binary wrapper around `wayscriber::run_from_env()`.
+- `src/lib.rs` - Canonical application module graph, public entry facade, and reusable library exports.
+- `src/cli.rs` - Manual CLI definitions, parsing, and explicit help/version outcomes.
 - `src/notification.rs` - Desktop notification helpers.
 - `src/session_override.rs` - CLI overrides for session persistence behavior.
 - `src/time_utils.rs` - Time formatting helpers.

@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Used by the binary Wayland backend; the library build exports input only.
-
 use super::super::super::base::{ClipboardPasteRequest, InputState, UiToastKind};
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};

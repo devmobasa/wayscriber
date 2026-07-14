@@ -1,52 +1,83 @@
 use std::path::PathBuf;
 
-use super::Cli;
+use super::{Cli, CliOutcome};
 use crate::tray_action::TrayAction;
+
+fn parse_cli<const N: usize>(args: [&str; N]) -> Cli {
+    match Cli::try_parse_from(args).unwrap() {
+        CliOutcome::Run(cli) => cli,
+        outcome => panic!("expected CLI run outcome, got {outcome:?}"),
+    }
+}
+
+#[test]
+fn help_and_version_are_explicit_outcomes_including_clusters() {
+    for args in [
+        ["wayscriber", "--help"],
+        ["wayscriber", "-h"],
+        ["wayscriber", "-dh"],
+    ] {
+        assert!(matches!(
+            Cli::try_parse_from(args).unwrap(),
+            CliOutcome::Help
+        ));
+    }
+
+    for args in [
+        ["wayscriber", "--version"],
+        ["wayscriber", "-V"],
+        ["wayscriber", "-aV"],
+    ] {
+        assert!(matches!(
+            Cli::try_parse_from(args).unwrap(),
+            CliOutcome::Version
+        ));
+    }
+}
 
 #[test]
 fn active_mode_with_explicit_board_id() {
-    let cli = Cli::try_parse_from(["wayscriber", "--active", "--mode", "whiteboard"]).unwrap();
+    let cli = parse_cli(["wayscriber", "--active", "--mode", "whiteboard"]);
     assert!(cli.active);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
 }
 
 #[test]
 fn clap_compatible_short_mode_forms_are_supported() {
-    let cli = Cli::try_parse_from(["wayscriber", "-mwhiteboard"]).unwrap();
+    let cli = parse_cli(["wayscriber", "-mwhiteboard"]);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
 
-    let cli = Cli::try_parse_from(["wayscriber", "-m=whiteboard"]).unwrap();
+    let cli = parse_cli(["wayscriber", "-m=whiteboard"]);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
 
-    let cli = Cli::try_parse_from(["wayscriber", "-dm=whiteboard"]).unwrap();
+    let cli = parse_cli(["wayscriber", "-dm=whiteboard"]);
     assert!(cli.daemon);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
 
-    let cli = Cli::try_parse_from(["wayscriber", "-am", "whiteboard"]).unwrap();
+    let cli = parse_cli(["wayscriber", "-am", "whiteboard"]);
     assert!(cli.active);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
 
-    let cli = Cli::try_parse_from(["wayscriber", "-amwhiteboard"]).unwrap();
+    let cli = parse_cli(["wayscriber", "-amwhiteboard"]);
     assert!(cli.active);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
 }
 
 #[test]
 fn daemon_mode_accepts_freeze_on_show() {
-    let cli = Cli::try_parse_from(["wayscriber", "--daemon", "--freeze-on-show"]).unwrap();
+    let cli = parse_cli(["wayscriber", "--daemon", "--freeze-on-show"]);
     assert!(cli.daemon);
     assert!(cli.freeze_on_show);
 }
 
 #[test]
 fn daemon_mode_accepts_session_file() {
-    let cli = Cli::try_parse_from([
+    let cli = parse_cli([
         "wayscriber",
         "--daemon",
         "--session-file",
         "/tmp/wayscriber-daemon.session",
-    ])
-    .unwrap();
+    ]);
     assert!(cli.daemon);
     assert_eq!(
         cli.session_file,
@@ -56,7 +87,7 @@ fn daemon_mode_accepts_session_file() {
 
 #[test]
 fn daemon_toggle_accepts_overlay_launch_args() {
-    let cli = Cli::try_parse_from([
+    let cli = parse_cli([
         "wayscriber",
         "--daemon-toggle",
         "--freeze",
@@ -64,8 +95,7 @@ fn daemon_toggle_accepts_overlay_launch_args() {
         "whiteboard",
         "--exit-after-capture",
         "--resume-session",
-    ])
-    .unwrap();
+    ]);
     assert!(cli.daemon_toggle);
     assert!(cli.freeze);
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
@@ -75,13 +105,12 @@ fn daemon_toggle_accepts_overlay_launch_args() {
 
 #[test]
 fn daemon_toggle_accepts_session_file() {
-    let cli = Cli::try_parse_from([
+    let cli = parse_cli([
         "wayscriber",
         "--daemon-toggle",
         "--session-file",
         "/tmp/wayscriber-toggle.session",
-    ])
-    .unwrap();
+    ]);
     assert!(cli.daemon_toggle);
     assert_eq!(
         cli.session_file,
@@ -91,38 +120,35 @@ fn daemon_toggle_accepts_session_file() {
 
 #[test]
 fn session_file_accepts_separated_and_attached_values() {
-    let cli = Cli::try_parse_from([
+    let cli = parse_cli([
         "wayscriber",
         "--active",
         "--session-file",
         "/tmp/wayscriber-active.session",
-    ])
-    .unwrap();
+    ]);
     assert!(cli.active);
     assert_eq!(
         cli.session_file,
         Some(PathBuf::from("/tmp/wayscriber-active.session"))
     );
 
-    let cli = Cli::try_parse_from([
+    let cli = parse_cli([
         "wayscriber",
         "--session-info",
         "--session-file=/tmp/wayscriber-info.session",
-    ])
-    .unwrap();
+    ]);
     assert!(cli.session_info);
     assert_eq!(
         cli.session_file,
         Some(PathBuf::from("/tmp/wayscriber-info.session"))
     );
 
-    let cli = Cli::try_parse_from([
+    let cli = parse_cli([
         "wayscriber",
         "--clear-tool-state",
         "--session-file",
         "/tmp/wayscriber-tool-state.session",
-    ])
-    .unwrap();
+    ]);
     assert!(cli.clear_tool_state);
     assert_eq!(
         cli.session_file,
@@ -248,7 +274,7 @@ fn offline_session_commands_conflict_with_each_other() {
 
 #[test]
 fn daemon_action_accepts_light_mode_actions() {
-    let cli = Cli::try_parse_from(["wayscriber", "--daemon-action", "light_draw_toggle"]).unwrap();
+    let cli = parse_cli(["wayscriber", "--daemon-action", "light_draw_toggle"]);
     assert_eq!(cli.daemon_action.as_deref(), Some("light_draw_toggle"));
     assert_eq!(
         cli.daemon_overlay_action().unwrap(),
@@ -266,7 +292,7 @@ fn friendly_light_aliases_resolve_to_tray_actions() {
     ];
 
     for (flag, expected) in cases {
-        let cli = Cli::try_parse_from(["wayscriber", flag]).unwrap();
+        let cli = parse_cli(["wayscriber", flag]);
         assert_eq!(cli.daemon_overlay_action().unwrap(), Some(expected));
     }
 }
@@ -290,7 +316,7 @@ fn friendly_light_aliases_conflict_with_each_other() {
 
 #[test]
 fn raw_daemon_action_reports_unknown_action() {
-    let cli = Cli::try_parse_from(["wayscriber", "--daemon-action", "not_real"]).unwrap();
+    let cli = parse_cli(["wayscriber", "--daemon-action", "not_real"]);
     assert_eq!(
         cli.daemon_overlay_action().unwrap_err(),
         "unknown daemon action 'not_real'"

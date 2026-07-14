@@ -58,7 +58,6 @@ impl EyedropperUiState {
     }
 }
 
-#[allow(dead_code)] // Backend lifecycle methods are consumed only by the binary target.
 impl InputState {
     pub(crate) fn request_eyedropper_toggle(&mut self) {
         self.pending_eyedropper_toggle = true;

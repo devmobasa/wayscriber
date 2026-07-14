@@ -72,19 +72,19 @@ pub struct Cli {
     pub runtime_capabilities: bool,
 }
 
+#[derive(Debug)]
+pub(crate) enum CliOutcome {
+    Run(Cli),
+    Help,
+    Version,
+}
+
 impl Cli {
-    pub(crate) fn parse() -> Self {
-        match Self::try_parse_from(std::env::args_os()) {
-            Ok(cli) => cli,
-            Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Try 'wayscriber --help' for usage.");
-                std::process::exit(2);
-            }
-        }
+    pub(crate) fn parse() -> Result<CliOutcome, String> {
+        Self::try_parse_from(std::env::args_os())
     }
 
-    pub(crate) fn try_parse_from<I, T>(args: I) -> Result<Self, String>
+    pub(crate) fn try_parse_from<I, T>(args: I) -> Result<CliOutcome, String>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString>,
@@ -107,14 +107,8 @@ impl Cli {
         while index < args.len() {
             let arg = &args[index];
             match arg.as_str() {
-                "-h" | "--help" => {
-                    print_help();
-                    std::process::exit(0);
-                }
-                "-V" | "--version" => {
-                    print_version();
-                    std::process::exit(0);
-                }
+                "-h" | "--help" => return Ok(CliOutcome::Help),
+                "-V" | "--version" => return Ok(CliOutcome::Version),
                 "-d" | "--daemon" => cli.daemon = true,
                 "--daemon-toggle" => cli.daemon_toggle = true,
                 "--daemon-action" => {
@@ -146,7 +140,7 @@ impl Cli {
                 "--resume-session" => cli.resume_session = true,
                 "--no-resume-session" => cli.no_resume_session = true,
                 "--about" => cli.about = true,
-                wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
+                crate::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
                     cli.runtime_capabilities = true;
                 }
                 _ if arg.starts_with("--daemon-action=") => {
@@ -160,7 +154,11 @@ impl Cli {
                         Some(PathBuf::from(value_from_equals(arg, "--session-file")?));
                 }
                 _ if is_short_option_cluster(arg) => {
-                    index = parse_short_option_cluster(&args, index, &mut cli)?;
+                    match parse_short_option_cluster(&args, index, &mut cli)? {
+                        ShortOptionOutcome::Continue(next_index) => index = next_index,
+                        ShortOptionOutcome::Help => return Ok(CliOutcome::Help),
+                        ShortOptionOutcome::Version => return Ok(CliOutcome::Version),
+                    }
                 }
                 _ => return Err(format!("unknown argument '{arg}'")),
             }
@@ -168,7 +166,7 @@ impl Cli {
         }
 
         cli.validate()?;
-        Ok(cli)
+        Ok(CliOutcome::Run(cli))
     }
 
     pub(crate) fn daemon_overlay_action(&self) -> Result<Option<TrayAction>, String> {
@@ -382,22 +380,22 @@ fn is_short_option_cluster(arg: &str) -> bool {
     arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2
 }
 
+enum ShortOptionOutcome {
+    Continue(usize),
+    Help,
+    Version,
+}
+
 fn parse_short_option_cluster(
     args: &[String],
     index: usize,
     cli: &mut Cli,
-) -> Result<usize, String> {
+) -> Result<ShortOptionOutcome, String> {
     let arg = &args[index];
     for (offset, flag) in arg[1..].char_indices() {
         match flag {
-            'h' => {
-                print_help();
-                std::process::exit(0);
-            }
-            'V' => {
-                print_version();
-                std::process::exit(0);
-            }
+            'h' => return Ok(ShortOptionOutcome::Help),
+            'V' => return Ok(ShortOptionOutcome::Version),
             'd' => cli.daemon = true,
             'a' => cli.active = true,
             'm' => {
@@ -408,16 +406,16 @@ fn parse_short_option_cluster(
                     value_after(args, index + 1, "-m")?
                 };
                 cli.mode = Some(value);
-                return Ok(if value_start < arg.len() {
+                return Ok(ShortOptionOutcome::Continue(if value_start < arg.len() {
                     index
                 } else {
                     index + 1
-                });
+                }));
             }
             _ => return Err(format!("unknown short option '-{flag}'")),
         }
     }
-    Ok(index)
+    Ok(ShortOptionOutcome::Continue(index))
 }
 
 fn value_after(args: &[String], index: usize, name: &str) -> Result<String, String> {
@@ -455,7 +453,7 @@ fn conflict(left: &str, right: &str) -> String {
     format!("{left} conflicts with {right}")
 }
 
-fn print_help() {
+pub(crate) fn print_help() {
     println!("wayscriber: Screen annotation tool for Wayland compositors");
     println!();
     println!("Usage:");
@@ -500,7 +498,7 @@ fn print_help() {
     println!("  -V, --version                 Show version");
 }
 
-fn print_version() {
+pub(crate) fn print_version() {
     println!("wayscriber {}", crate::build_info::version());
 }
 

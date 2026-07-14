@@ -23,7 +23,6 @@ impl InputState {
         self.action_bindings = action_bindings;
     }
 
-    #[allow(dead_code)] // Used by the binary Wayland backend.
     pub(crate) fn set_keybinding_maps(
         &mut self,
         action_map: HashMap<KeyBinding, Action>,

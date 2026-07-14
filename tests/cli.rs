@@ -2,9 +2,22 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::process::Stdio;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
-use wayscriber::env_vars::{NO_DETACH_ENV, WAYLAND_DISPLAY_ENV, XDG_CONFIG_HOME_ENV};
+#[cfg(unix)]
+use std::thread;
+#[cfg(unix)]
+use std::time::{Duration, Instant};
+use wayscriber::env_vars::{
+    HOME_ENV, NO_DETACH_ENV, WAYLAND_DISPLAY_ENV, XDG_CONFIG_HOME_ENV, XDG_CURRENT_DESKTOP_ENV,
+    XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV, XDG_SESSION_DESKTOP_ENV,
+};
+#[cfg(unix)]
+use wayscriber::env_vars::{
+    NO_TRAY_ENV, PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV, PORTAL_SHORTCUT_OPT_IN_ENV, RUST_LOG_ENV,
+};
 use wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG;
 
 static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -50,6 +63,17 @@ struct CommandOutput {
 }
 
 impl CommandOutput {
+    fn code(self, expected: i32) -> Self {
+        assert_eq!(
+            self.output.status.code(),
+            Some(expected),
+            "unexpected exit code\nstdout:\n{}\nstderr:\n{}",
+            self.stdout_text(),
+            self.stderr_text()
+        );
+        self
+    }
+
     fn success(self) -> Self {
         assert!(
             self.output.status.success(),
@@ -118,6 +142,56 @@ impl CommandOutput {
 fn run_command(command: &mut Command) -> CommandOutput {
     CommandOutput {
         output: command.output().expect("run wayscriber command"),
+    }
+}
+
+#[cfg(unix)]
+fn run_command_with_timeout(
+    command: &mut Command,
+    temp: &TempDir,
+    timeout: Duration,
+) -> CommandOutput {
+    let stdout_path = temp.path().join("child.stdout");
+    let stderr_path = temp.path().join("child.stderr");
+    let stdout = fs::File::create(&stdout_path).expect("create child stdout file");
+    let stderr = fs::File::create(&stderr_path).expect("create child stderr file");
+    let command_context = format!("{command:?}");
+    let mut child = command
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr))
+        .spawn()
+        .expect("spawn wayscriber command");
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return CommandOutput {
+                    output: Output {
+                        status,
+                        stdout: fs::read(&stdout_path).unwrap_or_default(),
+                        stderr: fs::read(&stderr_path).unwrap_or_default(),
+                    },
+                };
+            }
+            Ok(None) if Instant::now() < deadline => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => {
+                let kill_result = child.kill();
+                let wait_result = child.wait();
+                let stdout = fs::read_to_string(&stdout_path).unwrap_or_default();
+                let stderr = fs::read_to_string(&stderr_path).unwrap_or_default();
+                panic!(
+                    "wayscriber child exceeded {timeout:?}\ncommand: {command_context}\nkill: {kill_result:?}\nwait: {wait_result:?}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+                );
+            }
+            Err(err) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("failed to poll wayscriber child ({command_context}): {err}");
+            }
+        }
     }
 }
 
@@ -234,6 +308,7 @@ fn wayscriber_cmd() -> Command {
 fn wayscriber_help_prints_usage() {
     run_command(wayscriber_cmd().arg("--help"))
         .success()
+        .code(0)
         .stdout_contains("Screen annotation tool for Wayland compositors")
         .stdout_contains("--light-toggle            Toggle light passthrough mode")
         .stdout_contains("--light-draw-toggle")
@@ -246,6 +321,7 @@ fn wayscriber_version_prints_binary_name() {
     for arg in ["--version", "-V"] {
         run_command(wayscriber_cmd().arg(arg))
             .success()
+            .code(0)
             .stdout_starts_with("wayscriber ")
             .stdout_contains(wayscriber::build_info::version());
     }
@@ -266,8 +342,36 @@ fn wayscriber_runtime_capabilities_reports_portal_feature() {
 fn bare_usage_mentions_freeze_on_show() {
     run_command(&mut wayscriber_cmd())
         .success()
+        .code(0)
         .stdout_contains("--freeze-on-show")
         .stdout_contains("--daemon-toggle");
+}
+
+#[test]
+fn clustered_help_and_version_exit_zero_without_runtime_startup() {
+    run_command(wayscriber_cmd().env_remove(WAYLAND_DISPLAY_ENV).arg("-dh"))
+        .success()
+        .code(0)
+        .stdout_contains("Screen annotation tool for Wayland compositors");
+
+    run_command(wayscriber_cmd().env_remove(WAYLAND_DISPLAY_ENV).arg("-aV"))
+        .success()
+        .code(0)
+        .stdout_starts_with("wayscriber ");
+}
+
+#[test]
+fn invalid_arguments_exit_two() {
+    for (args, diagnostic) in [
+        (vec!["--not-a-real-option"], "unknown argument"),
+        (vec!["--mode"], "--mode requires a value"),
+    ] {
+        run_command(wayscriber_cmd().args(args))
+            .failure()
+            .code(2)
+            .stderr_contains(diagnostic)
+            .stderr_contains("Try 'wayscriber --help' for usage.");
+    }
 }
 
 #[test]
@@ -278,7 +382,56 @@ fn active_mode_requires_wayland_env() {
             .arg("--active"),
     )
     .failure()
+    .code(1)
     .stderr_contains(&format!("{WAYLAND_DISPLAY_ENV} not set"));
+}
+
+#[cfg(unix)]
+#[test]
+fn daemon_lock_conflict_exits_seventy_five_without_starting_runtime_services() {
+    let temp = TempDir::new().unwrap();
+    let runtime_dir = temp.path().join("runtime");
+    let config_dir = temp.path().join("config");
+    let data_dir = temp.path().join("data");
+    let home_dir = temp.path().join("home");
+    for path in [&runtime_dir, &config_dir, &data_dir, &home_dir] {
+        fs::create_dir_all(path).unwrap();
+    }
+
+    let lock_dir = runtime_dir.join("wayscriber");
+    fs::create_dir_all(&lock_dir).unwrap();
+    let lock_path = lock_dir.join("wayscriber.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .unwrap();
+    wayscriber::session::try_lock_exclusive(&lock_file).unwrap();
+
+    let mut command = wayscriber_cmd();
+    command
+        .env(XDG_RUNTIME_DIR_ENV, &runtime_dir)
+        .env(XDG_CONFIG_HOME_ENV, &config_dir)
+        .env(XDG_DATA_HOME_ENV, &data_dir)
+        .env(HOME_ENV, &home_dir)
+        .env(WAYLAND_DISPLAY_ENV, "wayscriber-cli-test")
+        .env(NO_TRAY_ENV, "1")
+        .env(RUST_LOG_ENV, "off")
+        .env(XDG_CURRENT_DESKTOP_ENV, "GNOME")
+        .env(XDG_SESSION_DESKTOP_ENV, "GNOME")
+        .env_remove(PORTAL_SHORTCUT_OPT_IN_ENV)
+        .env_remove(PORTAL_SHORTCUT_ENV)
+        .env_remove(PORTAL_APP_ID_ENV)
+        .args(["--daemon", "--no-tray"]);
+
+    run_command_with_timeout(&mut command, &temp, Duration::from_secs(5))
+        .failure()
+        .code(75)
+        .stderr_contains("wayscriber daemon is already running");
+
+    drop(lock_file);
 }
 
 #[test]

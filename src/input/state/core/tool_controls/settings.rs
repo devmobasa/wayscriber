@@ -102,7 +102,7 @@ impl InputState {
         clamped
     }
 
-    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
+    #[cfg(tablet)]
     pub(crate) fn replace_active_drawing_pressure_samples(&mut self, thickness: f64) -> bool {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS) as f32;
         let DrawingState::Drawing {
