@@ -5,6 +5,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 
+use crate::backend::wayland::backend::runtime_wake::RuntimeWakeHandle;
+#[cfg(test)]
+use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
 use crate::session::{
     self, ClearToolStateOutcome, LoadSnapshotOutcome, SaveAsOverwrite, SaveSnapshotOutcome,
     SaveSnapshotReport, SessionInspection, SessionOptions, SessionSnapshot,
@@ -182,7 +185,7 @@ pub(in crate::backend::wayland) struct PersistenceController {
 }
 
 impl PersistenceController {
-    pub(in crate::backend::wayland) fn start() -> Result<Self> {
+    pub(in crate::backend::wayland) fn start(wake: RuntimeWakeHandle) -> Result<Self> {
         assert_send_static::<SessionSnapshot>();
         assert_send_static::<LoadSnapshotOutcome>();
         assert_send_static::<PersistenceOperation>();
@@ -192,7 +195,7 @@ impl PersistenceController {
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let worker = thread::Builder::new()
             .name("wayscriber-persistence".to_string())
-            .spawn(move || worker_main(request_rx, completion_tx))
+            .spawn(move || worker_main(request_rx, completion_tx, wake))
             .context("failed to start session persistence worker")?;
 
         Ok(Self {
@@ -203,6 +206,12 @@ impl PersistenceController {
             next_sequence: 0,
             healthy: true,
         })
+    }
+
+    #[cfg(test)]
+    pub(in crate::backend::wayland) fn start_for_test() -> Result<Self> {
+        let wake = RuntimeWakeSource::new().context("failed to create test runtime wake source")?;
+        Self::start(wake.handle())
     }
 
     pub(in crate::backend::wayland) fn is_active(&self) -> bool {
@@ -424,7 +433,9 @@ impl Drop for PersistenceController {
 fn worker_main(
     request_rx: Receiver<PersistenceRequest>,
     completion_tx: SyncSender<PersistenceCompletion>,
+    wake: RuntimeWakeHandle,
 ) {
+    let publisher = PersistenceCompletionPublisher::new(completion_tx, wake);
     while let Ok(request) = request_rx.recv() {
         let PersistenceRequest {
             id,
@@ -440,21 +451,58 @@ fn worker_main(
         let execution_time = started.elapsed();
         let worker_thread_id = thread::current().id();
         let finished_at = Instant::now();
-        if completion_tx
-            .send(PersistenceCompletion {
-                id,
-                result,
-                queue_wait,
-                execution_time,
-                worker_thread_id,
-                finished_at,
-            })
-            .is_err()
-        {
+        if !publisher.publish(PersistenceCompletion {
+            id,
+            result,
+            queue_wait,
+            execution_time,
+            worker_thread_id,
+            finished_at,
+        }) {
             break;
         }
         if shutdown {
             break;
+        }
+    }
+}
+
+struct PersistenceCompletionPublisher {
+    completion_tx: Option<SyncSender<PersistenceCompletion>>,
+    wake: RuntimeWakeHandle,
+}
+
+impl PersistenceCompletionPublisher {
+    fn new(completion_tx: SyncSender<PersistenceCompletion>, wake: RuntimeWakeHandle) -> Self {
+        Self {
+            completion_tx: Some(completion_tx),
+            wake,
+        }
+    }
+
+    fn publish(&self, completion: PersistenceCompletion) -> bool {
+        let Some(completion_tx) = self.completion_tx.as_ref() else {
+            return false;
+        };
+        if completion_tx.send(completion).is_err() {
+            return false;
+        }
+        if let Err(err) = self.wake.wake() {
+            log::error!("Failed to wake runtime after persistence completion: {err}");
+            return false;
+        }
+        true
+    }
+}
+
+impl Drop for PersistenceCompletionPublisher {
+    fn drop(&mut self) {
+        // Close the completion channel before waking. The event loop can therefore
+        // observe disconnect immediately even when the worker unwinds without a
+        // completion packet.
+        self.completion_tx.take();
+        if let Err(err) = self.wake.wake() {
+            log::error!("Failed to wake runtime after persistence worker exit: {err}");
         }
     }
 }
@@ -611,6 +659,8 @@ fn log_snapshot_summary(
 
 #[cfg(test)]
 mod tests {
+    use std::os::fd::AsRawFd;
+
     use super::*;
 
     #[test]
@@ -630,11 +680,114 @@ mod tests {
         options
     }
 
+    fn controller_with_wake() -> (RuntimeWakeSource, PersistenceController) {
+        let wake = RuntimeWakeSource::new().unwrap();
+        let controller = PersistenceController::start(wake.handle()).unwrap();
+        (wake, controller)
+    }
+
+    fn wait_for_runtime_wake(wake: &RuntimeWakeSource) {
+        let mut pollfd = libc::pollfd {
+            fd: wake.poll_fd().as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        loop {
+            // SAFETY: pollfd and the runtime-owned descriptor remain valid for
+            // this bounded test wait.
+            let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
+            if ready > 0 {
+                assert_ne!(pollfd.revents & libc::POLLIN, 0);
+                return;
+            }
+            if ready == 0 {
+                panic!("persistence worker did not wake runtime within one second");
+            }
+            let err = std::io::Error::last_os_error();
+            if err.kind() != std::io::ErrorKind::Interrupted {
+                panic!("runtime wake poll failed: {err}");
+            }
+        }
+    }
+
+    #[test]
+    fn real_worker_publishes_completion_before_waking_runtime() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let options = test_options(temp.path().to_path_buf());
+        let (wake, mut controller) = controller_with_wake();
+        controller
+            .try_submit(7, PersistenceOperation::HasArtifacts { options })
+            .unwrap();
+
+        wait_for_runtime_wake(&wake);
+        wake.drain().unwrap();
+        let completion = controller
+            .try_receive()
+            .unwrap()
+            .expect("wake must follow completion publication");
+        assert!(matches!(
+            completion.result.unwrap(),
+            PersistenceOutcome::HasArtifacts(false)
+        ));
+        controller.shutdown(7).unwrap();
+    }
+
+    #[test]
+    fn production_error_completion_wakes_runtime_and_worker_remains_healthy() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let missing = temp.path().join("missing.wayscriber-session");
+        let (wake, mut controller) = controller_with_wake();
+        controller
+            .try_submit(0, PersistenceOperation::ValidateNamedOpen { path: missing })
+            .unwrap();
+
+        wait_for_runtime_wake(&wake);
+        wake.drain().unwrap();
+        let completion = controller.try_receive().unwrap().unwrap();
+        assert!(completion.result.is_err());
+        assert!(controller.is_healthy());
+        controller.shutdown(0).unwrap();
+    }
+
+    #[test]
+    fn worker_panic_closes_completion_channel_before_waking_runtime() {
+        let (wake, mut controller) = controller_with_wake();
+        controller
+            .try_submit(0, PersistenceOperation::PanicForTest)
+            .unwrap();
+
+        wait_for_runtime_wake(&wake);
+        wake.drain().unwrap();
+        let err = controller
+            .try_receive()
+            .expect_err("exit wake must expose the already-closed completion channel");
+        assert!(err.to_string().contains("disconnected"));
+        assert!(!controller.is_healthy());
+        assert!(controller.shutdown(0).is_err());
+        assert!(controller.is_stopped());
+    }
+
+    #[test]
+    fn synchronous_barriers_and_shutdown_tolerate_redundant_unread_wake() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let options = test_options(temp.path().to_path_buf());
+        let (wake, mut controller) = controller_with_wake();
+
+        assert!(matches!(
+            controller
+                .run(0, PersistenceOperation::HasArtifacts { options })
+                .unwrap(),
+            PersistenceOutcome::HasArtifacts(false)
+        ));
+        controller.shutdown(0).unwrap();
+        assert!(wake.drain().unwrap().reads > 0);
+    }
+
     #[test]
     fn real_worker_executes_production_operation_off_caller_thread() {
         let temp = crate::test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
-        let mut controller = PersistenceController::start().unwrap();
+        let mut controller = PersistenceController::start_for_test().unwrap();
         controller
             .try_submit(7, PersistenceOperation::HasArtifacts { options })
             .unwrap();
@@ -659,7 +812,7 @@ mod tests {
             boards: Vec::new(),
             tool_state: None,
         };
-        let mut controller = PersistenceController::start().unwrap();
+        let mut controller = PersistenceController::start_for_test().unwrap();
         let outcome = controller
             .run(
                 0,
@@ -694,7 +847,7 @@ mod tests {
         let temp = crate::test_temp::tempdir().unwrap();
         let missing = temp.path().join("missing.wayscriber-session");
         let options = test_options(temp.path().to_path_buf());
-        let mut controller = PersistenceController::start().unwrap();
+        let mut controller = PersistenceController::start_for_test().unwrap();
         assert!(
             controller
                 .run(0, PersistenceOperation::ValidateNamedOpen { path: missing })
@@ -728,7 +881,7 @@ mod tests {
             boards: Vec::new(),
             tool_state: None,
         };
-        let mut controller = PersistenceController::start().unwrap();
+        let mut controller = PersistenceController::start_for_test().unwrap();
 
         assert!(
             controller
@@ -776,7 +929,7 @@ mod tests {
 
         let mut options = test_options(temp.path().to_path_buf());
         options.set_named_file_target(alias_path);
-        let mut controller = PersistenceController::start().unwrap();
+        let mut controller = PersistenceController::start_for_test().unwrap();
         let err = controller
             .run(
                 0,
@@ -799,7 +952,7 @@ mod tests {
         std::fs::write(&current_path, b"{}").unwrap();
         let mut options = test_options(temp.path().to_path_buf());
         options.set_named_file_target(current_path.clone());
-        let mut controller = PersistenceController::start().unwrap();
+        let mut controller = PersistenceController::start_for_test().unwrap();
 
         let outcome = controller
             .run(

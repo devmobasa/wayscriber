@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use wayland_client::{Connection, EventQueue};
 
 use super::super::state::WaylandState;
+use super::runtime_wake::RuntimeWakeSource;
 use super::signals::setup_signal_handlers;
 use super::tray::process_tray_action;
 
@@ -33,6 +34,7 @@ pub(super) fn run_event_loop(
     event_queue: &mut EventQueue<WaylandState>,
     qh: &wayland_client::QueueHandle<WaylandState>,
     state: &mut WaylandState,
+    runtime_wake: &RuntimeWakeSource,
 ) -> EventLoopOutcome {
     // Gracefully exit the overlay when external signals request termination.
     let (exit_flag, tray_action_flag) = setup_signal_handlers();
@@ -134,7 +136,9 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, state.gtk_toolbar_wake_timeout());
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
-        if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
+        if let Err(e) =
+            dispatch::dispatch_events(event_queue, state, runtime_wake, capture_active, timeout)
+        {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
             break;

@@ -5,6 +5,7 @@ use std::env;
 
 use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
+use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
 use super::tray::process_tray_action;
 use crate::backend::wayland::portal_capture::screenshot_portal_available;
@@ -29,6 +30,9 @@ pub(super) struct BackendRuntime {
     pub(super) event_queue: wayland_client::EventQueue<WaylandState>,
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
     pub(super) state: WaylandState,
+    // Declared after state so the persistence controller and worker are dropped
+    // before the last runtime-owned wake source during startup-error unwinding.
+    pub(super) runtime_wake: RuntimeWakeSource,
 }
 
 pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Result<BackendRuntime> {
@@ -40,7 +44,10 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let config_dir = Config::config_directory_from_source(&source)?;
     let session_options =
         session::build_session_options(&config, &config_dir, backend.named_session_file.clone());
-    let persistence = crate::backend::wayland::session::PersistenceController::start()?;
+    let runtime_wake = RuntimeWakeSource::new()
+        .map_err(|err| anyhow::anyhow!("failed to create runtime wake descriptor: {err}"))?;
+    let persistence =
+        crate::backend::wayland::session::PersistenceController::start(runtime_wake.handle())?;
     let output_prefs = output::resolve(&config);
 
     #[cfg(tablet)]
@@ -152,6 +159,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         event_queue: setup.event_queue,
         qh: setup.qh,
         state,
+        runtime_wake,
     })
 }
 

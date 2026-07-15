@@ -8,6 +8,7 @@ use crate::backend::ExitAfterCaptureMode;
 pub(in crate::backend::wayland) mod event_loop;
 mod helpers;
 mod run;
+pub(in crate::backend::wayland) mod runtime_wake;
 mod setup;
 mod signals;
 mod state_init;

@@ -10,7 +10,6 @@ use crate::{
 use std::time::{Duration, Instant};
 
 const AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS: u64 = 500;
-const PERSISTENCE_COMPLETION_POLL_MS: u64 = 25;
 
 mod notifications;
 
@@ -186,19 +185,12 @@ pub(super) fn autosave_timeout(state: &WaylandState, now: Instant) -> Option<Dur
         state.persistence.is_healthy(),
         now,
     );
-    let completion = state
-        .persistence
-        .is_active()
-        .then_some(Duration::from_millis(PERSISTENCE_COMPLETION_POLL_MS));
     let output_transition = state
         .persistence
         .is_healthy()
         .then(|| state.session.output_transition_timeout(now))
         .flatten();
-    min_optional_timeout(
-        min_optional_timeout(autosave, completion),
-        output_transition,
-    )
+    min_optional_timeout(autosave, output_transition)
 }
 
 fn scheduled_autosave_timeout(
@@ -384,15 +376,71 @@ pub(in crate::backend::wayland) fn run_persistence_operation(
 pub(in crate::backend::wayland) fn drain_persistence_completion(
     state: &mut WaylandState,
 ) -> Result<(), anyhow::Error> {
-    let completion = match state.persistence.try_receive() {
+    drain_persistence_completion_for_runtime(state)
+}
+
+pub(in crate::backend::wayland) trait PersistenceCompletionRuntime {
+    fn try_receive_persistence_completion(
+        &mut self,
+    ) -> Result<Option<PersistenceCompletion>, anyhow::Error>;
+
+    fn apply_persistence_completion(
+        &mut self,
+        completion: PersistenceCompletion,
+    ) -> Result<(), anyhow::Error>;
+
+    fn persistence_session_options(&self) -> Option<session::SessionOptions>;
+
+    fn persistence_session(&mut self) -> &mut SessionState;
+
+    fn show_persistence_worker_failure(&mut self);
+
+    fn notify_persistence_worker_failure(&mut self, err: &anyhow::Error);
+}
+
+impl PersistenceCompletionRuntime for WaylandState {
+    fn try_receive_persistence_completion(
+        &mut self,
+    ) -> Result<Option<PersistenceCompletion>, anyhow::Error> {
+        self.persistence.try_receive()
+    }
+
+    fn apply_persistence_completion(
+        &mut self,
+        completion: PersistenceCompletion,
+    ) -> Result<(), anyhow::Error> {
+        apply_persistence_completion(self, completion)
+    }
+
+    fn persistence_session_options(&self) -> Option<session::SessionOptions> {
+        self.session_options().cloned()
+    }
+
+    fn persistence_session(&mut self) -> &mut SessionState {
+        &mut self.session
+    }
+
+    fn show_persistence_worker_failure(&mut self) {
+        show_persistence_worker_failure_toast(self);
+    }
+
+    fn notify_persistence_worker_failure(&mut self, err: &anyhow::Error) {
+        notify_persistence_worker_failure(self, err);
+    }
+}
+
+pub(in crate::backend::wayland) fn drain_persistence_completion_for_runtime(
+    state: &mut impl PersistenceCompletionRuntime,
+) -> Result<(), anyhow::Error> {
+    let completion = match state.try_receive_persistence_completion() {
         Ok(completion) => completion,
         Err(err) => {
-            handle_persistence_transport_failure(state, Instant::now(), &err);
+            handle_persistence_transport_failure_for_runtime(state, Instant::now(), &err);
             return Err(err);
         }
     };
     if let Some(completion) = completion {
-        apply_persistence_completion(state, completion)?;
+        state.apply_persistence_completion(completion)?;
     }
     Ok(())
 }
@@ -451,10 +499,18 @@ fn handle_persistence_transport_failure(
     now: Instant,
     err: &anyhow::Error,
 ) {
-    let options = state.session_options().cloned();
-    if record_persistence_transport_failure(&mut state.session, options.as_ref(), now) {
-        show_persistence_worker_failure_toast(state);
-        notify_persistence_worker_failure(state, err);
+    handle_persistence_transport_failure_for_runtime(state, now, err);
+}
+
+fn handle_persistence_transport_failure_for_runtime(
+    state: &mut impl PersistenceCompletionRuntime,
+    now: Instant,
+    err: &anyhow::Error,
+) {
+    let options = state.persistence_session_options();
+    if record_persistence_transport_failure(state.persistence_session(), options.as_ref(), now) {
+        state.show_persistence_worker_failure();
+        state.notify_persistence_worker_failure(err);
     }
 }
 
