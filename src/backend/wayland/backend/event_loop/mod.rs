@@ -11,7 +11,7 @@ use super::tray::process_tray_action;
 mod capture;
 mod dispatch;
 mod render;
-mod session_save;
+pub(in crate::backend::wayland) mod session_save;
 
 const TRAY_ACTION_POLL_TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -138,6 +138,12 @@ pub(super) fn run_event_loop(
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
             break;
+        }
+
+        if !state.input_state.should_exit {
+            state.reconcile_live_source_interaction_if_idle(
+                "post-dispatch interaction reconciliation",
+            );
         }
 
         // The timeout above is also a fallback for action signals that arrive before

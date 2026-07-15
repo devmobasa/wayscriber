@@ -1817,3 +1817,108 @@ fn contentless_save_guard_allows_noop_when_no_session_artifact_exists() {
         false, false, false, false, false,
     ));
 }
+
+#[test]
+fn autosave_completion_does_not_clear_newer_generation() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "generation-test");
+    options.persist_transparent = true;
+    options.autosave_enabled = true;
+    options.autosave_idle = Duration::from_millis(1);
+    options.autosave_interval = Duration::from_millis(1);
+    let mut state = SessionState::new(Some(options.clone()));
+    let started = Instant::now();
+    state.record_input_dirty(started, true);
+    let request_id = RequestId {
+        target_epoch: state.target_epoch(),
+        sequence: 1,
+    };
+    let window = state.prepare_autosave_submission().unwrap();
+    state.commit_autosave_submission(request_id, window);
+
+    let newer_edit = started + Duration::from_millis(2);
+    state.record_input_dirty(newer_edit, true);
+    let result = Ok(SaveCompletion {
+        report: Some(crate::session::SaveSnapshotReport {
+            path: PathBuf::from("/tmp/generation-test.json"),
+            outcome: crate::session::SaveSnapshotOutcome::Full,
+            raw_size: 1,
+            written_size: 1,
+            max_file_size_bytes: 1024,
+            compressed: false,
+        }),
+        committed_board_data: false,
+    });
+    assert!(
+        state
+            .complete_autosave(request_id, newer_edit, &result)
+            .unwrap()
+    );
+    assert!(state.is_dirty());
+    assert!(state.autosave_due(newer_edit + Duration::from_millis(2), &options));
+}
+
+#[test]
+fn failed_autosave_restores_original_dirty_window() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "failure-window");
+    options.persist_transparent = true;
+    options.autosave_enabled = true;
+    options.autosave_idle = Duration::from_millis(1);
+    options.autosave_interval = Duration::from_millis(1);
+    let mut state = SessionState::new(Some(options.clone()));
+    let started = Instant::now();
+    state.record_input_dirty(started, true);
+    let request_id = RequestId {
+        target_epoch: state.target_epoch(),
+        sequence: 2,
+    };
+    let window = state.prepare_autosave_submission().unwrap();
+    state.commit_autosave_submission(request_id, window);
+    let result = Err(anyhow!("expected test failure"));
+    assert!(
+        !state
+            .complete_autosave(request_id, started, &result)
+            .unwrap()
+    );
+    assert!(state.is_dirty());
+    assert!(state.autosave_due(started + Duration::from_millis(2), &options));
+}
+
+#[test]
+fn target_commit_invalidates_pending_output_transition_epoch() {
+    let options = SessionOptions::new(PathBuf::from("/tmp"), "source-output");
+    let mut staged = options.clone();
+    staged.set_output_identity(Some("target-output"));
+    let mut state = SessionState::new(Some(options));
+    state.stage_output_transition(
+        staged.clone(),
+        Some("target-output".to_string()),
+        Instant::now(),
+    );
+    assert_eq!(
+        state
+            .pending_output_transition()
+            .expect("pending transition")
+            .source_epoch,
+        0
+    );
+
+    state.commit_runtime_open(staged, false);
+
+    assert_eq!(state.target_epoch(), 1);
+    assert!(state.pending_output_transition().is_none());
+}
+
+#[test]
+fn output_transition_deferral_moves_deadline_forward() {
+    let options = SessionOptions::new(PathBuf::from("/tmp"), "source-output");
+    let mut staged = options.clone();
+    staged.set_output_identity(Some("target-output"));
+    let mut state = SessionState::new(Some(options));
+    let now = Instant::now();
+    state.stage_output_transition(staged, Some("target-output".to_string()), now);
+    state.defer_output_transition(now, Duration::from_millis(500));
+    assert_eq!(
+        state.output_transition_timeout(now),
+        Some(Duration::from_millis(500))
+    );
+}

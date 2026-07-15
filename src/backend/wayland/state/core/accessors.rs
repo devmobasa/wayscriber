@@ -176,6 +176,7 @@ impl WaylandState {
         self.data.pending_freeze_on_start = value;
     }
 
+    #[allow(dead_code)]
     pub(in crate::backend::wayland) fn has_seen_surface_enter(&self) -> bool {
         self.data.has_seen_surface_enter
     }
@@ -325,6 +326,7 @@ impl WaylandState {
         self.session.options()
     }
 
+    #[allow(dead_code)]
     pub(in crate::backend::wayland) fn session_options_mut(
         &mut self,
     ) -> Option<&mut SessionOptions> {

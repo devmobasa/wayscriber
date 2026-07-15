@@ -40,6 +40,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let config_dir = Config::config_directory_from_source(&source)?;
     let session_options =
         session::build_session_options(&config, &config_dir, backend.named_session_file.clone());
+    let persistence = crate::backend::wayland::session::PersistenceController::start()?;
     let output_prefs = output::resolve(&config);
 
     #[cfg(tablet)]
@@ -124,6 +125,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         onboarding,
         capture_manager,
         session_options,
+        persistence,
         tokio_handle,
         exit_after_capture_mode,
         frozen_enabled: frozen_supported,
