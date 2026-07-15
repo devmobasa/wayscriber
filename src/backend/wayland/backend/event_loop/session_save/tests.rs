@@ -80,8 +80,8 @@ fn accepted_autosave_worker_panic_restores_dirty_and_requests_one_notification()
 
     let failure_at = Instant::now();
     let notification_requests = [
-        restore_autosave_after_transport_failure(&mut session, Some(&options), failure_at),
-        restore_autosave_after_transport_failure(&mut session, Some(&options), failure_at),
+        record_persistence_transport_failure(&mut session, Some(&options), failure_at),
+        record_persistence_transport_failure(&mut session, Some(&options), failure_at),
     ]
     .into_iter()
     .filter(|requested| *requested)
@@ -95,6 +95,26 @@ fn accepted_autosave_worker_panic_restores_dirty_and_requests_one_notification()
 
     assert!(controller.shutdown(0).is_err());
     assert!(controller.is_stopped());
+}
+
+#[test]
+fn synchronous_worker_loss_without_autosave_ticket_requests_one_notification() {
+    let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "sync-disconnect");
+    options.persist_transparent = true;
+    let mut session = SessionState::new(Some(options.clone()));
+    let failure_at = Instant::now();
+
+    assert!(record_persistence_transport_failure(
+        &mut session,
+        Some(&options),
+        failure_at,
+    ));
+    assert!(!record_persistence_transport_failure(
+        &mut session,
+        Some(&options),
+        failure_at,
+    ));
+    assert!(!session.is_dirty());
 }
 
 #[test]

@@ -50,6 +50,7 @@ pub struct SessionState {
     pending_output_transition: Option<PendingOutputTransition>,
     live_source_resolution_pending: bool,
     notified_failure: bool,
+    notified_worker_failure: bool,
     notified_near_limit_paths: HashSet<PathBuf>,
     notified_trimmed_history: bool,
     notified_visible_only: bool,
@@ -76,6 +77,7 @@ impl SessionState {
             pending_output_transition: None,
             live_source_resolution_pending: false,
             notified_failure: false,
+            notified_worker_failure: false,
             notified_near_limit_paths: HashSet::new(),
             notified_trimmed_history: false,
             notified_visible_only: false,
@@ -221,6 +223,15 @@ impl SessionState {
             false
         } else {
             self.notified_failure = true;
+            true
+        }
+    }
+
+    pub(in crate::backend::wayland) fn mark_worker_failure_notified(&mut self) -> bool {
+        if self.notified_worker_failure {
+            false
+        } else {
+            self.notified_worker_failure = true;
             true
         }
     }

@@ -165,10 +165,32 @@ pub(in crate::backend::wayland::backend::event_loop) fn notify_session_failure(
     );
 }
 
+pub(super) fn notify_persistence_worker_failure(state: &WaylandState, err: &anyhow::Error) {
+    notification::send_notification_with_timeout_async(
+        &state.tokio_handle,
+        "Session Persistence Stopped".to_string(),
+        format!(
+            "Automatic session persistence stopped because its background worker failed. Wayscriber will retry the final save during shutdown. Details: {err}"
+        ),
+        Some("dialog-error".to_string()),
+        SESSION_SAVE_NOTIFICATION_TIMEOUT_MS,
+    );
+}
+
 pub(super) fn show_session_failure_toast(state: &mut WaylandState) {
     state.input_state.set_ui_toast_with_action_and_duration(
         UiToastKind::Warning,
         "Session save failed; drawings may not restore. Check max_file_size_mb.",
+        "Settings",
+        Action::OpenConfigurator,
+        SESSION_SAVE_WARNING_TOAST_MS,
+    );
+}
+
+pub(super) fn show_persistence_worker_failure_toast(state: &mut WaylandState) {
+    state.input_state.set_ui_toast_with_action_and_duration(
+        UiToastKind::Warning,
+        "Automatic session persistence stopped; final save will be retried on exit.",
         "Settings",
         Action::OpenConfigurator,
         SESSION_SAVE_WARNING_TOAST_MS,

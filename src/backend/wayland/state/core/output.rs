@@ -66,6 +66,19 @@ fn live_source_reconciliation_ready(
         && worker_healthy
 }
 
+fn replace_output_session_snapshot(
+    input_state: &mut crate::input::InputState,
+    snapshot: Option<SessionSnapshot>,
+    options: &session::SessionOptions,
+) -> anyhow::Result<()> {
+    let snapshot = snapshot.unwrap_or_else(|| SessionSnapshot {
+        active_board_id: input_state.board_id().to_string(),
+        boards: Vec::new(),
+        tool_state: None,
+    });
+    session::apply_snapshot_replacing_boards(input_state, snapshot, options)
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn preferred_fullscreen_output(
         &self,
@@ -392,7 +405,7 @@ impl WaylandState {
             return Err(anyhow::anyhow!("unexpected output-load worker outcome"));
         };
         let loaded_board_data = load_outcome.has_board_data();
-        self.handle_session_load_outcome_for_options(load_outcome, &staged_options, "output load");
+        self.handle_session_load_outcome_for_options(load_outcome, &staged_options, "output load")?;
         self.session
             .commit_output_options(staged_options, loaded_board_data);
         info!(
@@ -465,7 +478,7 @@ impl WaylandState {
             return Err(anyhow::anyhow!("unexpected configured-load worker outcome"));
         };
         let loaded_board_data = load_outcome.has_board_data();
-        self.handle_session_load_outcome_for_options(load_outcome, &options, context);
+        self.handle_session_load_outcome_for_options(load_outcome, &options, context)?;
         self.session
             .commit_output_options(options, loaded_board_data);
         Ok(())
@@ -494,7 +507,7 @@ impl WaylandState {
         outcome: session::LoadSnapshotOutcome,
         options: &session::SessionOptions,
         context: &str,
-    ) {
+    ) -> anyhow::Result<()> {
         match outcome {
             session::LoadSnapshotOutcome::Loaded(snapshot) => {
                 debug!(
@@ -502,7 +515,7 @@ impl WaylandState {
                     context,
                     options.session_file_path().display()
                 );
-                session::apply_snapshot(&mut self.input_state, *snapshot, options);
+                replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
             }
             session::LoadSnapshotOutcome::LoadedFromBackup(snapshot) => {
                 warn!(
@@ -510,7 +523,7 @@ impl WaylandState {
                     context,
                     options.backup_file_path().display()
                 );
-                session::apply_snapshot(&mut self.input_state, *snapshot, options);
+                replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
                 self.input_state.set_ui_toast(
                     UiToastKind::Warning,
                     "Restored drawings from the session backup; the primary session had no board data.",
@@ -522,7 +535,7 @@ impl WaylandState {
                     context,
                     options.recovery_file_path().display()
                 );
-                session::apply_snapshot(&mut self.input_state, *snapshot, options);
+                replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
                 self.input_state.set_ui_toast(
                     UiToastKind::Warning,
                     "Restored session from recovery file; normal save previously exceeded the size limit.",
@@ -534,6 +547,7 @@ impl WaylandState {
                     options.session_file_path().display(),
                     context
                 );
+                replace_output_session_snapshot(&mut self.input_state, None, options)?;
             }
             session::LoadSnapshotOutcome::NonRegularArtifact { path } => {
                 debug!(
@@ -541,11 +555,13 @@ impl WaylandState {
                     path.display(),
                     context
                 );
+                replace_output_session_snapshot(&mut self.input_state, None, options)?;
             }
             session::LoadSnapshotOutcome::ExpandedTooLarge {
                 path,
                 max_expanded_size,
             } => {
+                replace_output_session_snapshot(&mut self.input_state, None, options)?;
                 self.session.protect_session_path(path.clone());
                 if self.session.mark_expanded_load_notified(&path) {
                     notification::send_notification_async(
@@ -562,6 +578,7 @@ impl WaylandState {
             }
         }
         self.mark_clean_after_session_load();
+        Ok(())
     }
 
     fn mark_clean_after_session_load(&mut self) {
@@ -768,11 +785,98 @@ impl WaylandState {
 mod tests {
     use super::{
         OutputTransitionStart, live_source_reconciliation_ready, output_transition_retry_at,
-        output_transition_start,
+        output_transition_start, replace_output_session_snapshot,
     };
-    use crate::{backend::wayland::session::SessionState, session::SessionOptions};
+    use crate::{
+        backend::wayland::session::SessionState,
+        draw::{Color, Frame, Shape},
+        input::state::test_support::make_test_input_state,
+        session::{BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot},
+    };
     use std::path::PathBuf;
     use std::time::{Duration, Instant};
+
+    fn add_test_line(input: &mut crate::input::InputState) {
+        input.boards.active_frame_mut().add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 20,
+            y2: 20,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 2.0,
+        });
+    }
+
+    #[test]
+    fn empty_output_load_replaces_source_board_contents() {
+        let options = SessionOptions::new(PathBuf::from("/tmp"), "empty-output");
+        let mut input = make_test_input_state();
+        add_test_line(&mut input);
+        assert_eq!(input.boards.active_frame().shapes.len(), 1);
+
+        replace_output_session_snapshot(&mut input, None, &options)
+            .expect("empty output replacement");
+
+        assert!(input.boards.active_frame().shapes.is_empty());
+    }
+
+    #[test]
+    fn partial_output_load_clears_boards_omitted_from_snapshot() {
+        let options = SessionOptions::new(PathBuf::from("/tmp"), "partial-output");
+        let mut input = make_test_input_state();
+        input.switch_board_force("transparent");
+        add_test_line(&mut input);
+        assert_eq!(input.boards.active_frame().shapes.len(), 1);
+        let snapshot = SessionSnapshot {
+            active_board_id: "whiteboard".to_string(),
+            boards: vec![BoardSnapshot {
+                id: "whiteboard".to_string(),
+                pages: BoardPagesSnapshot {
+                    pages: vec![Frame::new()],
+                    active: 0,
+                },
+            }],
+            tool_state: None,
+        };
+
+        replace_output_session_snapshot(&mut input, Some(snapshot), &options)
+            .expect("partial output replacement");
+
+        input.switch_board_force("transparent");
+        assert!(input.boards.active_frame().shapes.is_empty());
+    }
+
+    #[test]
+    fn failed_output_replacement_preserves_source_board_contents() {
+        let options = SessionOptions::new(PathBuf::from("/tmp"), "oversized-output");
+        let mut input = make_test_input_state();
+        add_test_line(&mut input);
+        let boards = (0..=input.boards.max_count())
+            .map(|index| BoardSnapshot {
+                id: format!("replacement-{index}"),
+                pages: BoardPagesSnapshot {
+                    pages: vec![Frame::new()],
+                    active: 0,
+                },
+            })
+            .collect();
+        let snapshot = SessionSnapshot {
+            active_board_id: "replacement-0".to_string(),
+            boards,
+            tool_state: None,
+        };
+
+        let err = replace_output_session_snapshot(&mut input, Some(snapshot), &options)
+            .expect_err("oversized replacement must fail before mutating live boards");
+
+        assert!(err.to_string().contains("current runtime allows"));
+        assert_eq!(input.boards.active_frame().shapes.len(), 1);
+    }
 
     #[test]
     fn configure_retry_keeps_matching_epoch_bound_transition() {

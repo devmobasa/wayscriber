@@ -22,7 +22,8 @@ use notifications::{
     SessionSaveNotification, pending_save_notifications, session_save_notification_text,
 };
 use notifications::{
-    notify_session_save_report, record_autosave_failure, show_session_failure_toast,
+    notify_persistence_worker_failure, notify_session_save_report, record_autosave_failure,
+    show_persistence_worker_failure_toast, show_session_failure_toast,
 };
 
 pub(super) fn persist_session(state: &mut WaylandState) -> Result<(), anyhow::Error> {
@@ -289,7 +290,9 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
                 drop_started.elapsed()
             );
             let failed_at = Instant::now();
-            if record_autosave_failure(&mut state.session, failed_at, &options) {
+            if !state.persistence.is_healthy() {
+                handle_persistence_transport_failure(state, failed_at, &err);
+            } else if record_autosave_failure(&mut state.session, failed_at, &options) {
                 show_session_failure_toast(state);
                 notify_session_failure(state, &err);
             }
@@ -367,9 +370,15 @@ pub(in crate::backend::wayland) fn run_persistence_operation(
     operation: PersistenceOperation,
 ) -> Result<PersistenceOutcome, anyhow::Error> {
     persistence_barrier(state)?;
-    state
+    let result = state
         .persistence
-        .run(state.session.target_epoch(), operation)
+        .run(state.session.target_epoch(), operation);
+    if let Err(err) = &result
+        && !state.persistence.is_healthy()
+    {
+        handle_persistence_transport_failure(state, Instant::now(), err);
+    }
+    result
 }
 
 pub(in crate::backend::wayland) fn drain_persistence_completion(
@@ -443,21 +452,25 @@ fn handle_persistence_transport_failure(
     err: &anyhow::Error,
 ) {
     let options = state.session_options().cloned();
-    if restore_autosave_after_transport_failure(&mut state.session, options.as_ref(), now) {
-        show_session_failure_toast(state);
-        notify_session_failure(state, err);
+    if record_persistence_transport_failure(&mut state.session, options.as_ref(), now) {
+        show_persistence_worker_failure_toast(state);
+        notify_persistence_worker_failure(state, err);
     }
 }
 
-fn restore_autosave_after_transport_failure(
+fn record_persistence_transport_failure(
     session: &mut SessionState,
     options: Option<&session::SessionOptions>,
     now: Instant,
 ) -> bool {
-    if !session.restore_in_flight_autosave() {
+    let restored_autosave = session.restore_in_flight_autosave();
+    let Some(options) = options else {
         return false;
+    };
+    if restored_autosave {
+        let _ = record_autosave_failure(session, now, options);
     }
-    options.is_some_and(|options| record_autosave_failure(session, now, options))
+    session.mark_worker_failure_notified()
 }
 
 pub(in crate::backend::wayland) fn should_defer_for_interaction(state: &WaylandState) -> bool {
