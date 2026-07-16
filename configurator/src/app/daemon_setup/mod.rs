@@ -20,17 +20,26 @@ use service::{
 };
 use shortcut::{apply_shortcut, read_configured_shortcut, read_portal_shortcut_dropin_state};
 
+use super::blocking_jobs::{BlockingJobKind, run_blocking};
+
 pub(super) async fn load_daemon_runtime_status() -> Result<DaemonRuntimeStatus, String> {
-    load_daemon_runtime_status_sync()
+    run_blocking(
+        BlockingJobKind::DaemonStatus,
+        load_daemon_runtime_status_sync,
+    )
+    .await
 }
 
 pub(super) async fn perform_daemon_action(
     action: DaemonAction,
     shortcut_input: String,
 ) -> Result<DaemonActionResult, String> {
-    let message = perform_daemon_action_sync(action, shortcut_input.trim())?;
-    let status = load_daemon_runtime_status_sync()?;
-    Ok(DaemonActionResult { status, message })
+    run_blocking(BlockingJobKind::DaemonAction, move || {
+        let message = perform_daemon_action_sync(action, shortcut_input.trim())?;
+        let status = load_daemon_runtime_status_sync()?;
+        Ok(DaemonActionResult { status, message })
+    })
+    .await
 }
 
 fn perform_daemon_action_sync(
@@ -83,7 +92,7 @@ fn perform_daemon_action_sync(
     }
 }
 
-fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
+pub(super) fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
     let desktop = DesktopEnvironment::detect_current();
     let systemctl_available = command_available("systemctl");
     let gsettings_available = command_available("gsettings");

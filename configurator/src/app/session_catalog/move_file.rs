@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem};
 
-use super::super::daemon_setup::load_daemon_runtime_status;
+use super::super::blocking_jobs::{BlockingJobKind, run_blocking};
+use super::super::daemon_setup::load_daemon_runtime_status_sync;
 use super::{
     CatalogOperation, RuntimeLockKind, acquire_runtime_lock_for_inactive_operation,
     load_session_catalog_sync, service_status_blocker,
@@ -12,8 +13,11 @@ pub(crate) async fn move_session_catalog_entry(
     id: String,
     target: PathBuf,
 ) -> Result<SessionCatalogActionResult, String> {
-    let status = load_daemon_runtime_status().await?;
-    move_session_catalog_entry_sync(&id, &target, &status)
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let status = load_daemon_runtime_status_sync()?;
+        move_session_catalog_entry_sync(&id, &target, &status)
+    })
+    .await
 }
 
 fn move_session_catalog_entry_sync(

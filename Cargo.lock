@@ -3202,6 +3202,7 @@ name = "wayscriber-configurator"
 version = "0.9.22"
 dependencies = [
  "iced",
+ "tokio",
  "wayscriber",
 ]
 

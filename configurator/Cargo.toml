@@ -11,6 +11,7 @@ workspace = true
 # The configurator edits config and service files; it does not call portal D-Bus APIs directly.
 wayscriber = { path = "..", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["tokio", "tiny-skia", "wayland"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
 
 [features]
 default = ["tablet-input"]

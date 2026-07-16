@@ -6,8 +6,8 @@ use crate::app::session_catalog::{
     clear_session_catalog_entry, clear_session_catalog_tool_state_entry,
     duplicate_session_catalog_entry, forget_session_catalog_entry, load_session_catalog,
     move_session_catalog_entry, rename_session_catalog_entry, reveal_session_catalog_entry,
-    session_clear_blocker, session_clear_tool_state_blocker, session_duplicate_blocker,
-    session_move_blocker,
+    session_clear_cached_status_blocker, session_clear_tool_state_cached_status_blocker,
+    session_duplicate_cached_status_blocker, session_move_cached_status_blocker,
 };
 use crate::messages::Message;
 use crate::models::{SessionCatalogActionResult, SessionCatalogItem};
@@ -111,7 +111,8 @@ impl ConfiguratorApp {
         if self.session_catalog.busy {
             return Task::none();
         }
-        if let Some(blocker) = session_duplicate_blocker(self.daemon_status.as_ref()) {
+        if let Some(blocker) = session_duplicate_cached_status_blocker(self.daemon_status.as_ref())
+        {
             self.status = StatusMessage::warning(blocker);
             return Task::none();
         }
@@ -147,7 +148,7 @@ impl ConfiguratorApp {
         if self.session_catalog.busy {
             return Task::none();
         }
-        if let Some(blocker) = session_move_blocker(self.daemon_status.as_ref()) {
+        if let Some(blocker) = session_move_cached_status_blocker(self.daemon_status.as_ref()) {
             self.status = StatusMessage::warning(blocker);
             return Task::none();
         }
@@ -190,7 +191,9 @@ impl ConfiguratorApp {
         if self.session_catalog.busy {
             return Task::none();
         }
-        if let Some(blocker) = session_clear_tool_state_blocker(self.daemon_status.as_ref()) {
+        if let Some(blocker) =
+            session_clear_tool_state_cached_status_blocker(self.daemon_status.as_ref())
+        {
             self.status = StatusMessage::warning(blocker);
             return Task::none();
         }
@@ -212,7 +215,7 @@ impl ConfiguratorApp {
         if self.session_catalog.busy {
             return Task::none();
         }
-        if let Some(blocker) = session_clear_blocker(self.daemon_status.as_ref()) {
+        if let Some(blocker) = session_clear_cached_status_blocker(self.daemon_status.as_ref()) {
             self.status = StatusMessage::warning(blocker);
             return Task::none();
         }
