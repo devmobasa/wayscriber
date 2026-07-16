@@ -81,7 +81,7 @@ pub(super) fn run_event_loop(
             break;
         }
 
-        capture::poll_portal_captures(state);
+        capture::poll_portal_captures(state, Instant::now());
 
         let capture_active = state.capture.is_in_progress()
             || state.frozen.is_in_progress()
@@ -91,7 +91,8 @@ pub(super) fn run_event_loop(
         let vsync_enabled = state.config.performance.enable_vsync;
 
         // Calculate timeout for dispatch:
-        // - If capture active, not configured, or waiting for VSync: block indefinitely
+        // - If capture active, not configured, or waiting for VSync: block until a
+        //   producer wakes us or a real operation deadline expires
         // - If VSync disabled and needs_redraw: use frame rate cap timeout
         // - Otherwise: use animation timeout
         let should_block = capture_active
@@ -103,6 +104,7 @@ pub(super) fn run_event_loop(
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
+        let capture_timeout = capture::capture_timeout(state, now);
         let timeout = if should_block {
             min_timeout(autosave_timeout, focus_exit_timeout)
         } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -127,14 +129,10 @@ pub(super) fn run_event_loop(
         };
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
-        if let Err(e) = dispatch::dispatch_events(
-            event_queue,
-            state,
-            runtime_wake,
-            signal_state,
-            capture_active,
-            timeout,
-        ) {
+        let timeout = min_timeout(timeout, capture_timeout);
+        if let Err(e) =
+            dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
+        {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
             break;
@@ -218,7 +216,6 @@ pub(super) fn run_event_loop(
             state.input_state.needs_redraw = true;
         }
 
-        capture::flush_if_capture_active(conn, capture_active);
         capture::handle_pending_actions(state, qh);
         state.sync_overlay_interactivity();
         state.apply_onboarding_hints();
@@ -310,8 +307,27 @@ fn should_defer_xdg_unfocused_exit(
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
+    use std::time::Duration;
 
-    use super::{finalize_event_loop, install_then_scan, should_defer_xdg_unfocused_exit};
+    use super::{
+        finalize_event_loop, install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
+    };
+
+    #[test]
+    fn runtime_deadlines_merge_without_a_fallback_tick() {
+        assert_eq!(
+            min_timeout(
+                Some(Duration::from_secs(10)),
+                Some(Duration::from_millis(1500)),
+            ),
+            Some(Duration::from_millis(1500))
+        );
+        assert_eq!(
+            min_timeout(None, Some(Duration::from_millis(1500))),
+            Some(Duration::from_millis(1500))
+        );
+        assert_eq!(min_timeout(None, None), None);
+    }
 
     #[test]
     fn defers_exit_only_for_unfocused_xdg_stay_without_explicit_close() {

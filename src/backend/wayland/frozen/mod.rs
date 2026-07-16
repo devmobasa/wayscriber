@@ -14,4 +14,3 @@ type PortalCaptureResult = Result<
     ),
     String,
 >;
-type PortalCaptureRx = std::sync::mpsc::Receiver<PortalCaptureResult>;

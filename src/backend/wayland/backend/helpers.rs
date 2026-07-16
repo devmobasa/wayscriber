@@ -402,6 +402,46 @@ mod tests {
     }
 
     #[test]
+    fn runtime_poll_observes_wayland_only_readiness() {
+        let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
+        let wake = RuntimeWakeSource::new().unwrap();
+        wayland_write.write_all(&[1]).unwrap();
+
+        assert_eq!(
+            poll_runtime_fds(
+                wayland_read.as_raw_fd(),
+                wake.poll_fd().as_raw_fd(),
+                Some(Duration::ZERO),
+            )
+            .unwrap(),
+            RuntimePollReadiness {
+                wayland: true,
+                wake: false,
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_wake_preempts_a_future_deadline() {
+        let (wayland_read, _wayland_write) = UnixStream::pair().unwrap();
+        let wake = RuntimeWakeSource::new().unwrap();
+        wake.handle().wake().unwrap();
+
+        assert_eq!(
+            poll_runtime_fds(
+                wayland_read.as_raw_fd(),
+                wake.poll_fd().as_raw_fd(),
+                Some(Duration::from_secs(30)),
+            )
+            .unwrap(),
+            RuntimePollReadiness {
+                wayland: false,
+                wake: true,
+            }
+        );
+    }
+
+    #[test]
     fn runtime_poll_observes_combined_wayland_and_wake_readiness() {
         let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
         let wake = RuntimeWakeSource::new().unwrap();

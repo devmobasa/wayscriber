@@ -5,8 +5,8 @@
 
 use crate::{
     capture::{
-        CaptureManager, CaptureRequest, DesktopBackdropCaptureRequest, ImageOperationKind,
-        file::FileSaveConfig,
+        CaptureManager, CaptureRequest, CaptureRequestId, DesktopBackdropCaptureRequest,
+        ImageOperationKind, file::FileSaveConfig,
     },
     config::Action,
 };
@@ -46,6 +46,7 @@ pub(in crate::backend::wayland) struct PendingPdfExport {
 pub struct CaptureState {
     manager: CaptureManager,
     in_progress: bool,
+    accepted_id: Option<CaptureRequestId>,
     exit_on_success: bool,
     preflight: CapturePreflight,
     pending_request: Option<CapturePreflightRequest>,
@@ -58,6 +59,7 @@ impl CaptureState {
         Self {
             manager,
             in_progress: false,
+            accepted_id: None,
             exit_on_success: false,
             preflight: CapturePreflight::None,
             pending_request: None,
@@ -134,6 +136,29 @@ impl CaptureState {
     /// Marks capture as finished.
     pub fn clear_in_progress(&mut self) {
         self.in_progress = false;
+        self.accepted_id = None;
+    }
+
+    /// Records the manager identity accepted for the current lifecycle.
+    pub fn record_accepted(&mut self, id: CaptureRequestId) -> bool {
+        if !self.in_progress || self.accepted_id.is_some() {
+            return false;
+        }
+        self.accepted_id = Some(id);
+        true
+    }
+
+    /// Consumes the accepted identity only when the completion matches it.
+    pub fn consume_accepted(&mut self, id: CaptureRequestId) -> bool {
+        if self.accepted_id != Some(id) {
+            return false;
+        }
+        self.accepted_id = None;
+        true
+    }
+
+    pub fn accepted_id(&self) -> Option<CaptureRequestId> {
+        self.accepted_id
     }
 
     /// Marks whether the current capture should exit the overlay on success.
@@ -179,5 +204,27 @@ mod tests {
             Some(CapturePreflightRequest::Screenshot(_))
         ));
         assert!(!state.preflight_pending());
+    }
+
+    #[test]
+    fn accepted_identity_is_owned_by_exactly_one_active_lifecycle() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let first = CaptureRequestId::for_test(7);
+        let other = CaptureRequestId::for_test(8);
+
+        assert!(!state.record_accepted(first));
+        state.mark_in_progress();
+        assert!(state.record_accepted(first));
+        assert!(!state.record_accepted(other));
+        assert!(!state.consume_accepted(other));
+        assert_eq!(state.accepted_id(), Some(first));
+        assert!(state.consume_accepted(first));
+        assert_eq!(state.accepted_id(), None);
+
+        assert!(state.record_accepted(other));
+        state.clear_in_progress();
+        assert_eq!(state.accepted_id(), None);
+        assert!(!state.is_in_progress());
     }
 }

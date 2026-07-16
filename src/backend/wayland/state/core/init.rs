@@ -93,7 +93,7 @@ impl WaylandState {
             runtime_wake.clone(),
         );
         let clipboard_paste =
-            ClipboardOperationController::new(clipboard_operation_ids, runtime_wake);
+            ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
 
         Self {
             registry_state,
@@ -120,8 +120,8 @@ impl WaylandState {
             ui_animation_next_tick: None,
             ui_animation_interval,
             capture: CaptureState::new(capture_manager),
-            frozen: FrozenState::new(screencopy_manager),
-            zoom: ZoomState::new(zoom_manager),
+            frozen: FrozenState::new_with_runtime_wake(screencopy_manager, runtime_wake.clone()),
+            zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake),
             perf: perf::PerfMetrics::from_env(),
             exit_after_capture_mode,
             themed_pointer: None,

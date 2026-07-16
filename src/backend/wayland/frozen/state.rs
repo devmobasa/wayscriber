@@ -2,12 +2,14 @@ use log::info;
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
+use crate::backend::wayland::RuntimeWakeHandle;
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::crop_argb;
+use crate::backend::wayland::portal_task::PortalTask;
 use crate::input::InputState;
 
-use super::PortalCaptureRx;
+use super::PortalCaptureResult;
 use super::capture::CaptureSession;
 
 struct PendingFrozenImage {
@@ -34,10 +36,10 @@ pub struct FrozenState {
     pub(super) image: Option<FrozenImage>,
     image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
-    pub(super) portal_rx: Option<PortalCaptureRx>,
+    pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
     pub(super) portal_in_progress: bool,
     pub(super) portal_target_output_id: Option<u32>,
-    pub(super) portal_started_at: Option<std::time::Instant>,
+    pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight_pending: bool,
     pub(super) preflight_use_fallback: bool,
     pub(super) capture_done: bool,
@@ -45,7 +47,22 @@ pub struct FrozenState {
 }
 
 impl FrozenState {
+    #[cfg(test)]
     pub fn new(manager: Option<ZwlrScreencopyManagerV1>) -> Self {
+        Self::new_inner(manager, None)
+    }
+
+    pub(in crate::backend::wayland) fn new_with_runtime_wake(
+        manager: Option<ZwlrScreencopyManagerV1>,
+        runtime_wake: RuntimeWakeHandle,
+    ) -> Self {
+        Self::new_inner(manager, Some(runtime_wake))
+    }
+
+    fn new_inner(
+        manager: Option<ZwlrScreencopyManagerV1>,
+        runtime_wake: Option<RuntimeWakeHandle>,
+    ) -> Self {
         Self {
             manager,
             active_output: None,
@@ -55,10 +72,10 @@ impl FrozenState {
             image: None,
             image_target_dimensions: None,
             image_generation: 0,
-            portal_rx: None,
+            portal_task: None,
             portal_in_progress: false,
             portal_target_output_id: None,
-            portal_started_at: None,
+            runtime_wake,
             preflight_pending: false,
             preflight_use_fallback: false,
             capture_done: false,
@@ -269,9 +286,10 @@ impl FrozenState {
         self.preflight_pending = false;
         self.preflight_use_fallback = false;
         self.portal_in_progress = false;
-        self.portal_rx = None;
+        if let Some(mut task) = self.portal_task.take() {
+            task.cancel();
+        }
         self.portal_target_output_id = None;
-        self.portal_started_at = None;
         self.pending_image = None;
         self.capture_done = true;
         input_state.set_frozen_active(false);
@@ -355,7 +373,6 @@ mod tests {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
         state.portal_in_progress = true;
-        state.portal_started_at = Some(std::time::Instant::now());
 
         state.cancel(&mut input_state);
 

@@ -112,7 +112,13 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     onboarding.save();
     apply_initial_mode(backend, &config, &mut input_state);
 
-    let capture_manager = CaptureManager::new(backend.tokio_runtime.handle());
+    let capture_wake = runtime_wake.handle();
+    let capture_manager =
+        CaptureManager::with_completion_notifier(backend.tokio_runtime.handle(), move || {
+            if let Err(err) = capture_wake.wake() {
+                log::error!("Failed to wake runtime for capture completion: {err}");
+            }
+        });
     info!("Capture manager initialized");
 
     let freeze_on_start = if backend.freeze_on_start && !frozen_supported {

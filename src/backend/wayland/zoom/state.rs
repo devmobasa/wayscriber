@@ -1,12 +1,14 @@
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
+use crate::backend::wayland::RuntimeWakeHandle;
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::backend::wayland::portal_task::PortalTask;
 use crate::input::InputState;
 
 use super::capture::CaptureSession;
-use super::{MIN_ZOOM_SCALE, PortalCaptureRx};
+use super::{MIN_ZOOM_SCALE, PortalCaptureResult};
 
 /// Zoom state, capture logic, and pan/lock bookkeeping.
 pub struct ZoomState {
@@ -17,10 +19,10 @@ pub struct ZoomState {
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<FrozenImage>,
     image_generation: u64,
-    pub(super) portal_rx: Option<PortalCaptureRx>,
+    pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
     pub(super) portal_in_progress: bool,
     pub(super) portal_target_output_id: Option<u32>,
-    pub(super) portal_started_at: Option<std::time::Instant>,
+    pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight_pending: bool,
     pub(super) capture_done: bool,
     pub(super) pending_activation: bool,
@@ -33,7 +35,22 @@ pub struct ZoomState {
 }
 
 impl ZoomState {
+    #[cfg(test)]
     pub fn new(manager: Option<ZwlrScreencopyManagerV1>) -> Self {
+        Self::new_inner(manager, None)
+    }
+
+    pub(in crate::backend::wayland) fn new_with_runtime_wake(
+        manager: Option<ZwlrScreencopyManagerV1>,
+        runtime_wake: RuntimeWakeHandle,
+    ) -> Self {
+        Self::new_inner(manager, Some(runtime_wake))
+    }
+
+    fn new_inner(
+        manager: Option<ZwlrScreencopyManagerV1>,
+        runtime_wake: Option<RuntimeWakeHandle>,
+    ) -> Self {
         Self {
             manager,
             active_output: None,
@@ -42,10 +59,10 @@ impl ZoomState {
             capture: None,
             image: None,
             image_generation: 0,
-            portal_rx: None,
+            portal_task: None,
             portal_in_progress: false,
             portal_target_output_id: None,
-            portal_started_at: None,
+            runtime_wake,
             preflight_pending: false,
             capture_done: false,
             pending_activation: false,
@@ -142,9 +159,10 @@ impl ZoomState {
         }
         self.preflight_pending = false;
         self.portal_in_progress = false;
-        self.portal_rx = None;
+        if let Some(mut task) = self.portal_task.take() {
+            task.cancel();
+        }
         self.portal_target_output_id = None;
-        self.portal_started_at = None;
         self.pending_activation = false;
         if changed {
             self.capture_done = true;
@@ -170,9 +188,10 @@ impl ZoomState {
         self.preflight_pending = false;
         self.capture_done = true;
         self.portal_in_progress = false;
-        self.portal_rx = None;
+        if let Some(mut task) = self.portal_task.take() {
+            task.cancel();
+        }
         self.portal_target_output_id = None;
-        self.portal_started_at = None;
         self.pending_activation = false;
 
         if force_reset || self.image.is_none() {
