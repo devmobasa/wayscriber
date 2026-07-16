@@ -139,6 +139,16 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 ## 6. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
+- **`ConfigDocument`** is the configurator-facing edit owner. It keeps validated `Config`, the
+  lossless TOML source, unknown-path diagnostics, source path, and exact source revision behind one
+  interface. Guarded saves merge known fields while retaining comments and unsupported settings,
+  then reuse the normal backup and durable atomic-write policy. Its editor load path can expose a
+  backup-protected defaults-based repair document for readable but invalid config, while true I/O
+  failures leave the configurator's last good document untouched. Runtime callers can continue
+  using the typed `Config::load()` and `Config::save*()` interfaces.
+- The Performance section is the first bounded scalar-metadata slice: core config owns its field
+  IDs, paths, labels, help/search terms, and numeric constraints while the configurator keeps typed
+  draft fields and messages.
 
 ---
 

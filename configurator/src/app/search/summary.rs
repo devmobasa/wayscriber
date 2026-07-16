@@ -1,6 +1,8 @@
 use crate::app::state::ConfiguratorApp;
 use crate::models::{KeybindingsTabId, SearchQuery, TabId, UiTabId};
-use wayscriber::config::toolbar_item_definitions;
+use wayscriber::config::{
+    PERFORMANCE_FIELD_METADATA, PerformanceFieldGroup, toolbar_item_definitions,
+};
 
 use super::terms::*;
 use super::types::{AppSearchSummary, SearchArea, TabSearchSummary};
@@ -143,20 +145,30 @@ fn history_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
 }
 
 fn performance_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
-    add_area_if(
-        query,
-        summary,
-        TabId::Performance,
-        SearchArea::PerformanceRendering,
-        PERFORMANCE_RENDERING_TERMS,
-    );
-    add_area_if(
-        query,
-        summary,
-        TabId::Performance,
-        SearchArea::PerformanceAnimations,
-        PERFORMANCE_ANIMATION_TERMS,
-    );
+    for (group, area, identity) in [
+        (
+            PerformanceFieldGroup::Rendering,
+            SearchArea::PerformanceRendering,
+            "rendering",
+        ),
+        (
+            PerformanceFieldGroup::Animations,
+            SearchArea::PerformanceAnimations,
+            "animations",
+        ),
+    ] {
+        let mut parts = vec![identity];
+        for metadata in PERFORMANCE_FIELD_METADATA
+            .iter()
+            .filter(|metadata| metadata.group == group)
+        {
+            parts.extend([metadata.path, metadata.label, metadata.help]);
+            parts.extend_from_slice(metadata.search_terms);
+        }
+        if query.matches_parts_scoped_to_tab(TabId::Performance, parts) {
+            summary.add_area(area);
+        }
+    }
 }
 
 fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {

@@ -1,22 +1,21 @@
-use std::{path::PathBuf, sync::Arc, time::SystemTime};
+use std::{path::PathBuf, sync::Arc};
 
-use wayscriber::config::Config;
+use wayscriber::config::{Config, ConfigDocument};
 
-pub(super) async fn load_config_from_disk() -> Result<Arc<Config>, String> {
-    Config::load()
-        .map(|loaded| Arc::new(loaded.config))
-        .map_err(|err| err.to_string())
+pub(super) async fn load_config_from_disk() -> Result<(Arc<ConfigDocument>, Option<String>), String>
+{
+    ConfigDocument::load_for_editing()
+        .map(|(document, warning)| (Arc::new(document), warning))
+        .map_err(|err| format!("{err:#}"))
 }
 
 pub(super) async fn save_config_to_disk(
+    document: Arc<ConfigDocument>,
     config: Config,
-) -> Result<(Option<PathBuf>, Arc<Config>), String> {
-    let backup = config.save_with_backup().map_err(|err| err.to_string())?;
-    Ok((backup, Arc::new(config)))
-}
-
-pub(super) fn load_config_mtime(path: &Option<PathBuf>) -> Option<SystemTime> {
-    let path = path.as_ref()?;
-    let metadata = std::fs::metadata(path).ok()?;
-    metadata.modified().ok()
+) -> Result<(Option<PathBuf>, Arc<ConfigDocument>), String> {
+    let outcome = document
+        .save_with_backup(config)
+        .map_err(|err| format!("{err:#}"))?;
+    let (document, backup) = outcome.into_parts();
+    Ok((backup, Arc::new(document)))
 }

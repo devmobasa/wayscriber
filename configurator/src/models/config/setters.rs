@@ -5,8 +5,8 @@ use super::super::fields::{
 };
 use super::draft::ConfigDraft;
 use wayscriber::config::{
-    ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag, section_flag_for_item,
-    set_section_visibility,
+    PerformanceFieldId, ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag,
+    section_flag_for_item, set_section_visibility,
 };
 
 impl ConfigDraft {
@@ -155,7 +155,9 @@ impl ConfigDraft {
             ToggleField::DrawingFillEnabled => {
                 self.drawing_default_fill_enabled = value;
             }
-            ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
+            ToggleField::PerformanceVsync => {
+                self.set_performance_bool(PerformanceFieldId::EnableVsync, value);
+            }
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiShowCapabilitiesWarning => self.ui_show_capabilities_warning = value,
@@ -309,8 +311,12 @@ impl ConfigDraft {
             TextField::DrawingUndoStackLimit => self.drawing_undo_stack_limit = value,
             TextField::ArrowLength => self.arrow_length = value,
             TextField::ArrowAngle => self.arrow_angle = value,
-            TextField::PerformanceMaxFpsNoVsync => self.performance_max_fps_no_vsync = value,
-            TextField::PerformanceUiAnimationFps => self.performance_ui_animation_fps = value,
+            TextField::PerformanceMaxFpsNoVsync => {
+                self.set_performance_text(PerformanceFieldId::MaxFpsNoVsync, value);
+            }
+            TextField::PerformanceUiAnimationFps => {
+                self.set_performance_text(PerformanceFieldId::UiAnimationFps, value);
+            }
             TextField::HistoryUndoAllDelayMs => self.history_undo_all_delay_ms = value,
             TextField::HistoryRedoAllDelayMs => self.history_redo_all_delay_ms = value,
             TextField::HistoryCustomUndoDelayMs => self.history_custom_undo_delay_ms = value,

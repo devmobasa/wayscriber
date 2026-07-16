@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 /// Represents the source used to load configuration data.
 #[derive(Debug, Clone)]
 pub enum ConfigSource {
-    /// Configuration file loaded from the Wayscriber config path.
+    /// Configuration file loaded from the selected config path.
     Primary,
     /// Defaults were used because no configuration file was found.
     Default,
@@ -95,25 +95,14 @@ impl Config {
 
     fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
         let config_path = Self::get_config_path()?;
-
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create config directory")?;
-        }
-
+        prepare_config_parent(&config_path)?;
         let backup_path = if create_backup && config_path.exists() {
-            Some(Self::create_backup(&config_path)?)
+            Some(create_config_backup(&config_path)?)
         } else {
             None
         };
-
         let config_str = toml::to_string_pretty(self).context("Failed to serialize config")?;
-
-        crate::durable_io::write_text_atomic(
-            &config_path,
-            &config_str,
-            AtomicWriteOptions::user_config_file(),
-        )
-        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
+        write_config_text_atomic(&config_path, &config_str, OverwriteMode::Replace)?;
 
         if let Some(path) = &backup_path {
             info!(
@@ -140,29 +129,6 @@ impl Config {
     #[allow(dead_code)]
     pub fn save_with_backup(&self) -> Result<Option<PathBuf>> {
         self.write_config(true)
-    }
-
-    fn create_backup(path: &Path) -> Result<PathBuf> {
-        let timestamp = format_with_template(now_local(), "%Y%m%d_%H%M%S");
-        let filename = match path.file_name().and_then(|name| name.to_str()) {
-            Some(name) => format!("{name}.{}.bak", timestamp),
-            None => format!("config.toml.{}.bak", timestamp),
-        };
-
-        let backup_path = path
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .join(filename);
-
-        fs::copy(path, &backup_path).with_context(|| {
-            format!(
-                "Failed to create config backup from {} to {}",
-                path.display(),
-                backup_path.display()
-            )
-        })?;
-
-        Ok(backup_path)
     }
 
     /// Creates a default configuration file with documentation comments.
@@ -207,4 +173,42 @@ impl Config {
         info!("Created default config at {}", config_path.display());
         Ok(())
     }
+}
+
+pub(super) fn prepare_config_parent(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).context("Failed to create config directory")?;
+    }
+    Ok(())
+}
+
+pub(super) fn create_config_backup(path: &Path) -> Result<PathBuf> {
+    let timestamp = format_with_template(now_local(), "%Y%m%d_%H%M%S");
+    let filename = match path.file_name().and_then(|name| name.to_str()) {
+        Some(name) => format!("{name}.{}.bak", timestamp),
+        None => format!("config.toml.{}.bak", timestamp),
+    };
+    let backup_path = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(filename);
+    fs::copy(path, &backup_path).with_context(|| {
+        format!(
+            "Failed to create config backup from {} to {}",
+            path.display(),
+            backup_path.display()
+        )
+    })?;
+    Ok(backup_path)
+}
+
+pub(super) fn write_config_text_atomic(
+    path: &Path,
+    contents: &str,
+    overwrite: OverwriteMode,
+) -> Result<()> {
+    let mut options = AtomicWriteOptions::user_config_file();
+    options.overwrite = overwrite;
+    crate::durable_io::write_text_atomic(path, contents, options)
+        .with_context(|| format!("Failed to write config to {}", path.display()))
 }

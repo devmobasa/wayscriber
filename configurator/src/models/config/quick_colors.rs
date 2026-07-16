@@ -57,11 +57,26 @@ impl QuickColorsDraft {
         }
 
         if errors.len() == initial_error_count {
-            if next_entries == config.effective_entries() {
-                config.replace_entries_preserving_source(next_entries);
-            } else {
-                config.set_entries(next_entries);
+            let effective_entries = config.effective_entries();
+            if next_entries == effective_entries {
+                return;
             }
+
+            let persist_len = if next_entries.len() != effective_entries.len() {
+                next_entries.len()
+            } else {
+                let source_len = config
+                    .configured_entry_count()
+                    .unwrap_or(config.entries.len());
+                let changed_len = next_entries
+                    .iter()
+                    .zip(&effective_entries)
+                    .rposition(|(next, previous)| next != previous)
+                    .map_or(0, |index| index + 1);
+                source_len.max(changed_len).min(next_entries.len())
+            };
+            next_entries.truncate(persist_len);
+            config.set_entries(next_entries);
         }
     }
 

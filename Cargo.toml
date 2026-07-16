@@ -36,7 +36,9 @@ pangocairo = "0.22"
 log = { version = "0.4", features = ["std"] }
 anyhow = "1.0"
 toml = "1.1"
+toml_edit = "0.25"
 serde = { version = "1.0", features = ["derive"] }
+serde_ignored = "0.1"
 schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 flate2 = "1.0"

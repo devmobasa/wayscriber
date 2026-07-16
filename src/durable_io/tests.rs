@@ -150,6 +150,42 @@ fn followed_symlink_change_is_rejected_before_finalization() {
 
 #[cfg(unix)]
 #[test]
+fn followed_symlink_target_replacement_is_rejected_before_finalization() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let target = temp.path().join("target.toml");
+    let link = temp.path().join("config.toml");
+    fs::write(&target, "old").unwrap();
+    symlink(&target, &link).unwrap();
+    let options = AtomicWriteOptions::user_config_file();
+    let destination = inspect_destination(&link, options).unwrap();
+    let _old_file = fs::File::open(&target).unwrap();
+    fs::remove_file(&target).unwrap();
+    fs::write(&target, "replacement").unwrap();
+
+    let err = revalidate_destination(&destination, options).unwrap_err();
+
+    assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
+}
+
+#[cfg(unix)]
+#[test]
+fn follow_policy_detects_replaced_regular_file() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let path = temp.path().join("config.toml");
+    fs::write(&path, "old").unwrap();
+    let options = AtomicWriteOptions::user_config_file();
+    let destination = inspect_destination(&path, options).unwrap();
+    let _old_file = fs::File::open(&path).unwrap();
+    fs::remove_file(&path).unwrap();
+    fs::write(&path, "replacement").unwrap();
+
+    let err = revalidate_destination(&destination, options).unwrap_err();
+
+    assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
+}
+
+#[cfg(unix)]
+#[test]
 fn reject_policy_rejects_destination_symlink() {
     let temp = crate::test_temp::tempdir().unwrap();
     let target = temp.path().join("target");
@@ -220,21 +256,73 @@ fn reject_policy_detects_created_regular_file_after_missing_inspect() {
 
 #[cfg(unix)]
 #[test]
-fn dangling_followed_symlink_is_rejected() {
+fn dangling_followed_symlink_creates_target_and_preserves_link() {
     let temp = crate::test_temp::tempdir().unwrap();
     let link = temp.path().join("config.toml");
+    let target = temp.path().join("missing-target.toml");
     symlink("missing-target.toml", &link).unwrap();
 
-    let err = write_text_atomic(&link, "new", AtomicWriteOptions::user_config_file()).unwrap_err();
+    write_text_atomic(&link, "new", AtomicWriteOptions::user_config_file()).unwrap();
 
-    assert!(matches!(
-        err,
-        DurableIoError::Io {
-            operation: DurableIoOperation::InspectDestination,
-            ..
-        }
-    ));
-    assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+    assert_eq!(fs::read_to_string(target).unwrap(), "new");
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn follows_multi_level_symlink_chain() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let target = temp.path().join("target.toml");
+    let middle = temp.path().join("middle.toml");
+    let link = temp.path().join("config.toml");
+    fs::write(&target, "old").unwrap();
+    symlink("target.toml", &middle).unwrap();
+    symlink("middle.toml", &link).unwrap();
+
+    write_text_atomic(&link, "new", AtomicWriteOptions::user_config_file()).unwrap();
+
+    assert_eq!(fs::read_to_string(target).unwrap(), "new");
+    assert!(
+        fs::symlink_metadata(&middle)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn changed_intermediate_symlink_is_rejected_before_finalization() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let first = temp.path().join("first.toml");
+    let second = temp.path().join("second.toml");
+    let middle = temp.path().join("middle.toml");
+    let link = temp.path().join("config.toml");
+    fs::write(&first, "first").unwrap();
+    fs::write(&second, "second").unwrap();
+    symlink("first.toml", &middle).unwrap();
+    symlink("middle.toml", &link).unwrap();
+    let options = AtomicWriteOptions::user_config_file();
+    let destination = inspect_destination(&link, options).unwrap();
+    fs::remove_file(&middle).unwrap();
+    symlink("second.toml", &middle).unwrap();
+
+    let err = revalidate_destination(&destination, options).unwrap_err();
+
+    assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
+    assert_eq!(fs::read_to_string(first).unwrap(), "first");
+    assert_eq!(fs::read_to_string(second).unwrap(), "second");
 }
 
 #[cfg(unix)]

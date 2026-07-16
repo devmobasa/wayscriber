@@ -17,6 +17,7 @@ mod widgets;
 
 use iced::widget::{Column, Row, Space, button, column, container, row, rule, text, text_input};
 use iced::{Element, Length};
+use wayscriber::config::Config;
 
 use crate::messages::Message;
 use crate::models::TabId;
@@ -199,7 +200,12 @@ impl ConfiguratorApp {
     fn footer_view(&self) -> Element<'_, Message> {
         let mut info = Column::new().spacing(4);
 
-        if let Some(path) = &self.config_path {
+        let config_path = self
+            .base_document
+            .as_ref()
+            .map(|document| document.source_path().to_path_buf())
+            .or_else(|| Config::get_config_path().ok());
+        if let Some(path) = config_path {
             info = info.push(text(format!("Config path: {}", path.display())).size(14));
         }
         if let Some(path) = &self.last_backup_path {

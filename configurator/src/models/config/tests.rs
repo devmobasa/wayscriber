@@ -29,11 +29,11 @@ fn config_draft_round_trips_toolbar_rebind_modifier() {
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
-    ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
-    PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, QuickColorConfig,
-    RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig,
-    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig, ToolbarSectionFlag,
-    XdgFocusLossBehavior, toolbar_item_ids as ids,
+    ColorSpec, Config, ConfigDocument, PdfFitMode, PdfLabelContentMode, PdfLabelPosition,
+    PdfOrientation, PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig,
+    QuickColorConfig, RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode,
+    ToolPresetConfig, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig,
+    ToolbarSectionFlag, XdgFocusLossBehavior, toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -57,6 +57,81 @@ fn config_draft_to_config_reports_errors() {
     assert!(fields.contains(&"drawing.default_thickness"));
     assert!(fields.contains(&"ui.click_highlight.duration_ms"));
     assert!(fields.contains(&"drawing.default_color"));
+}
+
+#[test]
+fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
+    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let path = temp.path().join("config.toml");
+    let original = "config_revision = 1\n# intentionally sparse\n";
+    std::fs::write(&path, original).expect("write sparse config");
+    let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
+    let draft = ConfigDraft::from_config(document.config());
+    let updated = draft
+        .to_config(document.config())
+        .expect("convert untouched sparse draft");
+
+    document
+        .save_with_backup(updated)
+        .expect("save untouched sparse draft");
+
+    assert_eq!(
+        std::fs::read_to_string(path).expect("read sparse config"),
+        original
+    );
+}
+
+#[test]
+fn config_draft_round_trips_precise_floats_without_truncation() {
+    let mut config = Config::default();
+    config.drawing.default_thickness = 1.234_567_890_123_45;
+    config.ui.toolbar.top_offset = -9.876_543_210_987_65;
+    config.export.pdf.custom_width = 812.345_678_901_234;
+
+    let draft = ConfigDraft::from_config(&config);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("precise floats should round trip");
+
+    assert_eq!(
+        round_trip.drawing.default_thickness.to_bits(),
+        config.drawing.default_thickness.to_bits()
+    );
+    assert_eq!(
+        round_trip.ui.toolbar.top_offset.to_bits(),
+        config.ui.toolbar.top_offset.to_bits()
+    );
+    assert_eq!(
+        round_trip.export.pdf.custom_width.to_bits(),
+        config.export.pdf.custom_width.to_bits()
+    );
+}
+
+#[test]
+fn sparse_configurator_edit_adds_only_the_edited_field_path() {
+    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let path = temp.path().join("config.toml");
+    std::fs::write(&path, "# intentionally sparse\n").expect("write sparse config");
+    let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
+    let mut draft = ConfigDraft::from_config(document.config());
+    draft.performance_max_fps_no_vsync = "144".to_string();
+    let updated = draft
+        .to_config(document.config())
+        .expect("convert sparse draft edit");
+
+    document
+        .save_with_backup(updated)
+        .expect("save sparse draft edit");
+
+    let saved = std::fs::read_to_string(path).expect("read sparse config");
+    assert!(saved.contains("# intentionally sparse"));
+    assert!(saved.contains("[performance]"));
+    assert!(saved.contains("max_fps_no_vsync = 144"));
+    assert!(saved.find("# intentionally sparse").unwrap() < saved.find("[performance]").unwrap());
+    assert!(!saved.contains("[drawing]"));
+    assert!(!saved.contains("[drawing.drag_tools"));
+    assert!(!saved.contains("[boards]"));
+    assert!(!saved.contains("[[boards.items]]"));
 }
 
 #[test]
@@ -116,6 +191,46 @@ fn config_draft_preserves_implicit_quick_color_defaults() {
 
     assert_eq!(saved.drawing.quick_colors.configured_entry_count(), None);
     assert!(saved.drawing.quick_colors.is_implicit_default());
+}
+
+#[test]
+fn config_draft_preserves_sparse_explicit_quick_colors_without_padding_the_file() {
+    let temp = crate::test_temp::tempdir().expect("create temp directory");
+    let path = temp.path().join("config.toml");
+    let original = r#"config_revision = 1
+[[drawing.quick_colors]]
+label = "Only configured color"
+color = "blue"
+"#;
+    std::fs::write(&path, original).expect("write sparse quick colors");
+    let document = ConfigDocument::load_from_path(&path).expect("load sparse quick colors");
+    assert_eq!(
+        document
+            .config()
+            .drawing
+            .quick_colors
+            .configured_entry_count(),
+        Some(1)
+    );
+
+    let draft = ConfigDraft::from_config(document.config());
+    assert_eq!(draft.drawing_quick_colors.entries.len(), 8);
+    let updated = draft
+        .to_config(document.config())
+        .expect("untouched sparse quick colors should round trip");
+    assert_eq!(
+        updated.drawing.quick_colors.configured_entry_count(),
+        Some(1)
+    );
+    assert_eq!(updated.drawing.quick_colors.entries.len(), 1);
+
+    document
+        .save_with_backup(updated)
+        .expect("save sparse quick colors");
+    assert_eq!(
+        std::fs::read_to_string(path).expect("read sparse quick colors"),
+        original
+    );
 }
 
 #[test]

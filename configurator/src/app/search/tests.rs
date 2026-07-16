@@ -147,7 +147,13 @@ fn exact_drawing_color_and_font_labels_match_their_sections() {
 
 #[test]
 fn exact_performance_rendering_labels_match_rendering_section() {
-    for query in ["buffer count", "enable vsync", "max fps"] {
+    for query in [
+        "buffer count",
+        "enable vsync",
+        "max fps",
+        "performance buffer count",
+        "render performance buffer count",
+    ] {
         let (mut app, _task) = ConfiguratorApp::new_app();
         app.search_query = SearchQuery::new(query);
 

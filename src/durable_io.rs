@@ -18,9 +18,8 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 struct Destination {
-    original_path: PathBuf,
     final_path: PathBuf,
-    followed_target: Option<PathBuf>,
+    followed_links: Vec<(PathBuf, PathBuf)>,
     existing_mode: Option<u32>,
     existing_identity: Option<FileIdentity>,
     existed_at_inspect: bool,
@@ -113,52 +112,65 @@ fn inspect_destination(
 }
 
 fn inspect_follow_destination(path: &Path) -> Result<Destination, DurableIoError> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            let target = read_resolved_link(path)?;
-            let target_metadata = fs::symlink_metadata(&target).map_err(|source| {
-                io_error(DurableIoOperation::InspectDestination, &target, source)
-            })?;
-            if target_metadata.file_type().is_symlink() {
-                return Err(DurableIoError::SymlinkRejected { path: target });
-            }
-            if !target_metadata.is_file() {
-                return Err(DurableIoError::UnsupportedFileType { path: target });
-            }
-            Ok(Destination {
-                original_path: path.to_path_buf(),
-                final_path: target.clone(),
-                followed_target: Some(target),
-                existing_mode: metadata_mode(&target_metadata),
-                existing_identity: file_identity(&target_metadata),
-                existed_at_inspect: true,
-            })
-        }
+    let (current, followed_links) = resolve_symlink_chain(path)?;
+    match fs::symlink_metadata(&current) {
         Ok(metadata) if metadata.is_file() => Ok(Destination {
-            original_path: path.to_path_buf(),
-            final_path: path.to_path_buf(),
-            followed_target: None,
+            final_path: current,
+            followed_links,
             existing_mode: metadata_mode(&metadata),
             existing_identity: file_identity(&metadata),
             existed_at_inspect: true,
         }),
-        Ok(_) => Err(DurableIoError::UnsupportedFileType {
-            path: path.to_path_buf(),
-        }),
+        Ok(_) => Err(DurableIoError::UnsupportedFileType { path: current }),
         Err(source) if source.kind() == ErrorKind::NotFound => Ok(Destination {
-            original_path: path.to_path_buf(),
-            final_path: path.to_path_buf(),
-            followed_target: None,
+            final_path: current,
+            followed_links,
             existing_mode: None,
             existing_identity: None,
             existed_at_inspect: false,
         }),
         Err(source) => Err(io_error(
             DurableIoOperation::InspectDestination,
-            path,
+            &current,
             source,
         )),
     }
+}
+
+pub(crate) fn resolve_symlink_chain(
+    path: &Path,
+) -> Result<(PathBuf, Vec<(PathBuf, PathBuf)>), DurableIoError> {
+    let mut current = path.to_path_buf();
+    let mut followed_links = Vec::new();
+    for _ in 0..40 {
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                if followed_links
+                    .iter()
+                    .any(|(link, _): &(PathBuf, PathBuf)| link == &current)
+                {
+                    return Err(DurableIoError::Conflict {
+                        operation: DurableIoOperation::ReadLink,
+                        path: current,
+                        reason: "symlink cycle detected".to_string(),
+                    });
+                }
+                let target = read_resolved_link(&current)?;
+                followed_links.push((current, target.clone()));
+                current = target;
+            }
+            Ok(_) => return Ok((current, followed_links)),
+            Err(source) if source.kind() == ErrorKind::NotFound => {
+                return Ok((current, followed_links));
+            }
+            Err(source) => return Err(io_error(DurableIoOperation::ReadLink, &current, source)),
+        }
+    }
+    Err(DurableIoError::Conflict {
+        operation: DurableIoOperation::ReadLink,
+        path: current,
+        reason: "symlink chain exceeds 40 links".to_string(),
+    })
 }
 
 fn inspect_reject_destination(path: &Path) -> Result<Destination, DurableIoError> {
@@ -167,9 +179,8 @@ fn inspect_reject_destination(path: &Path) -> Result<Destination, DurableIoError
             path: path.to_path_buf(),
         }),
         Ok(metadata) if metadata.is_file() => Ok(Destination {
-            original_path: path.to_path_buf(),
             final_path: path.to_path_buf(),
-            followed_target: None,
+            followed_links: Vec::new(),
             existing_mode: metadata_mode(&metadata),
             existing_identity: file_identity(&metadata),
             existed_at_inspect: true,
@@ -178,9 +189,8 @@ fn inspect_reject_destination(path: &Path) -> Result<Destination, DurableIoError
             path: path.to_path_buf(),
         }),
         Err(source) if source.kind() == ErrorKind::NotFound => Ok(Destination {
-            original_path: path.to_path_buf(),
             final_path: path.to_path_buf(),
-            followed_target: None,
+            followed_links: Vec::new(),
             existing_mode: None,
             existing_identity: None,
             existed_at_inspect: false,
@@ -197,17 +207,15 @@ fn revalidate_destination(
     destination: &Destination,
     options: AtomicWriteOptions,
 ) -> Result<(), DurableIoError> {
-    if let Some(expected) = &destination.followed_target {
-        let current = read_resolved_link(&destination.original_path).map_err(|_| {
-            DurableIoError::DestinationChanged {
-                operation: DurableIoOperation::ReadLink,
-                path: destination.original_path.clone(),
-            }
+    for (link, expected) in &destination.followed_links {
+        let current = read_resolved_link(link).map_err(|_| DurableIoError::DestinationChanged {
+            operation: DurableIoOperation::ReadLink,
+            path: link.clone(),
         })?;
         if current != *expected {
             return Err(DurableIoError::DestinationChanged {
                 operation: DurableIoOperation::ReadLink,
-                path: destination.original_path.clone(),
+                path: link.clone(),
             });
         }
     }
@@ -229,14 +237,11 @@ fn revalidate_destination(
                 source,
             )),
         },
-        OverwriteMode::Replace => revalidate_replace_destination(destination, options.symlink),
+        OverwriteMode::Replace => revalidate_replace_destination(destination),
     }
 }
 
-fn revalidate_replace_destination(
-    destination: &Destination,
-    symlink: SymlinkPolicy,
-) -> Result<(), DurableIoError> {
+fn revalidate_replace_destination(destination: &Destination) -> Result<(), DurableIoError> {
     match fs::symlink_metadata(&destination.final_path) {
         Ok(metadata) if metadata.file_type().is_symlink() => Err(DurableIoError::SymlinkRejected {
             path: destination.final_path.clone(),
@@ -245,14 +250,13 @@ fn revalidate_replace_destination(
             path: destination.final_path.clone(),
         }),
         Ok(metadata) => {
-            if symlink == SymlinkPolicy::Reject && !destination.existed_at_inspect {
+            if !destination.existed_at_inspect {
                 return Err(DurableIoError::DestinationChanged {
                     operation: DurableIoOperation::InspectDestination,
                     path: destination.final_path.clone(),
                 });
             }
-            if symlink == SymlinkPolicy::Reject
-                && let Some(expected) = destination.existing_identity
+            if let Some(expected) = destination.existing_identity
                 && file_identity(&metadata) != Some(expected)
             {
                 return Err(DurableIoError::DestinationChanged {
@@ -284,10 +288,7 @@ fn finalize_overwrite_mode(
     destination: &Destination,
     options: AtomicWriteOptions,
 ) -> OverwriteMode {
-    if options.overwrite == OverwriteMode::Replace
-        && options.symlink == SymlinkPolicy::Reject
-        && !destination.existed_at_inspect
-    {
+    if options.overwrite == OverwriteMode::Replace && !destination.existed_at_inspect {
         OverwriteMode::CreateNew
     } else {
         options.overwrite
