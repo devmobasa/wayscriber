@@ -19,6 +19,8 @@
 pub mod select;
 
 #[cfg(feature = "toolbar-gtk")]
+mod bridge;
+#[cfg(feature = "toolbar-gtk")]
 mod css;
 #[cfg(feature = "toolbar-gtk")]
 mod icons;
@@ -165,76 +167,7 @@ pub enum GtkToolbarFeedback {
 }
 
 #[cfg(feature = "toolbar-gtk")]
-pub use enabled::GtkToolbarBridge;
-
-#[cfg(feature = "toolbar-gtk")]
-mod enabled {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicU8, Ordering};
-
-    use super::{GtkToolbarFeedback, GtkToolbarUpdate};
-
-    pub(super) const STATUS_STARTING: u8 = 0;
-    pub(super) const STATUS_READY: u8 = 1;
-    pub(super) const STATUS_FAILED: u8 = 2;
-
-    /// Main-thread handle to the GTK toolbar thread.
-    pub struct GtkToolbarBridge {
-        update_tx: async_channel::Sender<GtkToolbarUpdate>,
-        feedback_rx: std::sync::mpsc::Receiver<GtkToolbarFeedback>,
-        status: Arc<AtomicU8>,
-        last_sent: Option<GtkToolbarUpdate>,
-    }
-
-    impl GtkToolbarBridge {
-        /// Spawns the GTK thread. Returns `None` only when the OS thread
-        /// cannot be created; GTK-level failures are reported
-        /// asynchronously through [`Self::failed`].
-        pub fn spawn() -> Option<Self> {
-            let (update_tx, update_rx) = async_channel::unbounded();
-            let (feedback_tx, feedback_rx) = std::sync::mpsc::channel();
-            let status = Arc::new(AtomicU8::new(STATUS_STARTING));
-            let thread_status = status.clone();
-            let spawned = std::thread::Builder::new()
-                .name("gtk-toolbar".into())
-                .spawn(move || super::runtime::run(update_rx, feedback_tx, thread_status));
-            match spawned {
-                Ok(_join_handle) => Some(Self {
-                    update_tx,
-                    feedback_rx,
-                    status,
-                    last_sent: None,
-                }),
-                Err(err) => {
-                    log::error!("Failed to spawn GTK toolbar thread: {err}");
-                    None
-                }
-            }
-        }
-
-        /// True once the GTK thread reported an unrecoverable failure.
-        pub fn failed(&self) -> bool {
-            self.status.load(Ordering::Acquire) == STATUS_FAILED
-        }
-
-        /// Non-blocking receive of one feedback message from the GTK bars.
-        pub fn try_recv_feedback(&self) -> Option<GtkToolbarFeedback> {
-            self.feedback_rx.try_recv().ok()
-        }
-
-        /// Sends the update if it differs from the previously sent one.
-        pub fn maybe_send(&mut self, update: GtkToolbarUpdate) {
-            if self.last_sent.as_ref() == Some(&update) {
-                return;
-            }
-            // try_send on an unbounded channel only fails when the GTK
-            // thread is gone; the failed() flag covers that case.
-            if self.update_tx.try_send(update.clone()).is_ok() {
-                self.last_sent = Some(update);
-            }
-        }
-    }
-}
+pub use bridge::GtkToolbarBridge;
 
 #[cfg(not(feature = "toolbar-gtk"))]
 pub use disabled::GtkToolbarBridge;
@@ -242,6 +175,7 @@ pub use disabled::GtkToolbarBridge;
 #[cfg(not(feature = "toolbar-gtk"))]
 mod disabled {
     use super::{GtkToolbarFeedback, GtkToolbarUpdate};
+    use crate::backend::wayland::RuntimeWakeHandle;
 
     /// Stub bridge: without the `toolbar-gtk` feature `spawn` never
     /// succeeds, so the other methods are unreachable but keep call sites
@@ -249,7 +183,7 @@ mod disabled {
     pub struct GtkToolbarBridge {}
 
     impl GtkToolbarBridge {
-        pub fn spawn() -> Option<Self> {
+        pub fn spawn(_runtime_wake: RuntimeWakeHandle) -> Option<Self> {
             None
         }
 
@@ -257,8 +191,8 @@ mod disabled {
             false
         }
 
-        pub fn try_recv_feedback(&self) -> Option<GtkToolbarFeedback> {
-            None
+        pub fn drain_feedback(&self) -> Vec<GtkToolbarFeedback> {
+            Vec::new()
         }
 
         pub fn maybe_send(&mut self, _update: GtkToolbarUpdate) {}

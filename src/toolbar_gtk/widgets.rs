@@ -7,6 +7,7 @@ use gtk4::prelude::*;
 use gtk4_layer_shell::{KeyboardMode, LayerShell};
 
 use super::GtkToolbarFeedback;
+use super::bridge::FeedbackPublisher;
 use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
@@ -16,17 +17,34 @@ use crate::ui::toolbar::ToolbarEvent;
 /// rebind chord and modifier state captured from the actual GTK click.
 #[derive(Clone)]
 pub(super) struct FeedbackSender {
-    tx: std::sync::mpsc::Sender<GtkToolbarFeedback>,
+    sink: Rc<dyn FeedbackSink>,
     rebind_modifier: Rc<Cell<ToolbarRebindModifier>>,
     backend_rebind_active: Rc<Cell<bool>>,
     click_rebind_requested: Rc<Cell<bool>>,
     click_in_progress: Rc<Cell<bool>>,
 }
 
+pub(super) trait FeedbackSink {
+    fn publish(&self, feedback: GtkToolbarFeedback) -> bool;
+}
+
+impl FeedbackSink for FeedbackPublisher {
+    fn publish(&self, feedback: GtkToolbarFeedback) -> bool {
+        self.publish(feedback).is_ok()
+    }
+}
+
+#[cfg(test)]
+impl FeedbackSink for std::sync::mpsc::Sender<GtkToolbarFeedback> {
+    fn publish(&self, feedback: GtkToolbarFeedback) -> bool {
+        self.send(feedback).is_ok()
+    }
+}
+
 impl FeedbackSender {
-    pub(super) fn new(tx: std::sync::mpsc::Sender<GtkToolbarFeedback>) -> Self {
+    pub(super) fn new(sink: impl FeedbackSink + 'static) -> Self {
         Self {
-            tx,
+            sink: Rc::new(sink),
             rebind_modifier: Rc::new(Cell::new(ToolbarRebindModifier::default())),
             backend_rebind_active: Rc::new(Cell::new(false)),
             click_rebind_requested: Rc::new(Cell::new(false)),
@@ -62,11 +80,8 @@ impl FeedbackSender {
         }
     }
 
-    pub(super) fn send(
-        &self,
-        feedback: GtkToolbarFeedback,
-    ) -> Result<(), std::sync::mpsc::SendError<GtkToolbarFeedback>> {
-        self.tx.send(feedback)
+    pub(super) fn send(&self, feedback: GtkToolbarFeedback) -> Result<(), ()> {
+        self.sink.publish(feedback).then_some(()).ok_or(())
     }
 }
 
