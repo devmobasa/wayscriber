@@ -3,15 +3,18 @@ use log::{info, warn};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
+use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+#[cfg(test)]
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::backend::wayland::RuntimeWakeSource;
 use crate::env_vars::NO_TRAY_ENV;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
@@ -38,6 +41,9 @@ use super::types::{AlreadyRunningError, BackendRunner, OverlayState};
 // Suppress only duplicate plain toggles after a successful toggle completes, so
 // typed requests still run.
 const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
+// This remains a real child/process/tray lifecycle deadline. Signal delivery
+// and signal-listener failure independently wake the daemon control owner.
+const DAEMON_LIFECYCLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 mod toggles;
 
@@ -66,6 +72,8 @@ pub struct Daemon {
     pub(super) overlay_spawn_next_retry: Option<std::time::Instant>,
     pub(super) overlay_spawn_backoff_logged: bool,
     pub(super) last_plain_visibility_toggle_completed_at: Option<Instant>,
+    #[cfg(unix)]
+    signal_listener: Option<crate::unix_signals::SignalListener>,
     #[cfg(feature = "tray")]
     pub(super) tray_status: Arc<TrayStatusShared>,
 }
@@ -105,6 +113,8 @@ impl Daemon {
             overlay_spawn_next_retry: None,
             overlay_spawn_backoff_logged: false,
             last_plain_visibility_toggle_completed_at: None,
+            #[cfg(unix)]
+            signal_listener: None,
             #[cfg(feature = "tray")]
             tray_status: Arc::new(TrayStatusShared::new()),
         }
@@ -141,6 +151,8 @@ impl Daemon {
             overlay_spawn_next_retry: None,
             overlay_spawn_backoff_logged: false,
             last_plain_visibility_toggle_completed_at: None,
+            #[cfg(unix)]
+            signal_listener: None,
             #[cfg(feature = "tray")]
             tray_status: Arc::new(TrayStatusShared::new()),
         }
@@ -237,46 +249,62 @@ impl Daemon {
         let signal_toggle_flag = self.signal_toggle_requested.clone();
         let quit_flag = self.should_quit.clone();
 
-        // The signal listener thread runs until process termination. The daemon
-        // exits shortly after quit signals, and the OS cleans up the detached thread.
+        let daemon_wake =
+            RuntimeWakeSource::new().context("Failed to create daemon control wake descriptor")?;
+
         #[cfg(unix)]
-        crate::unix_signals::spawn_listener(&DAEMON_SIGNALS, move |sig| {
-            if quit_flag.load(Ordering::Acquire) {
-                info!("Signal handler thread exiting");
-                return;
-            }
-            match sig {
-                libc::SIGUSR1 => {
-                    info!("Received SIGUSR1 - toggling overlay");
-                    // Use Release ordering to ensure all prior memory operations
-                    // are visible to the thread that reads this flag
-                    signal_toggle_flag.store(true, Ordering::Release);
-                    toggle_flag.store(true, Ordering::Release);
-                }
-                libc::SIGTERM | libc::SIGINT => {
-                    info!(
-                        "Received {} - initiating graceful shutdown",
-                        if sig == libc::SIGTERM {
-                            "SIGTERM"
-                        } else {
-                            "SIGINT"
+        {
+            let listener_wake = daemon_wake.handle();
+            self.signal_listener = Some(
+                crate::unix_signals::spawn_listener(
+                    &DAEMON_SIGNALS,
+                    move |sig| {
+                        if quit_flag.load(Ordering::Acquire) {
+                            return;
                         }
-                    );
-                    // Use Release ordering to ensure all prior memory operations
-                    // are visible to the thread that reads this flag
-                    quit_flag.store(true, Ordering::Release);
-                }
-                _ => {
-                    warn!("Received unexpected signal: {}", sig);
-                }
-            }
-        })
-        .context("Failed to register signal handler")?;
+                        match sig {
+                            libc::SIGUSR1 => {
+                                info!("Received SIGUSR1 - toggling overlay");
+                                signal_toggle_flag.store(true, Ordering::Release);
+                                toggle_flag.store(true, Ordering::Release);
+                            }
+                            libc::SIGTERM | libc::SIGINT => {
+                                info!(
+                                    "Received {} - initiating graceful shutdown",
+                                    if sig == libc::SIGTERM {
+                                        "SIGTERM"
+                                    } else {
+                                        "SIGINT"
+                                    }
+                                );
+                                quit_flag.store(true, Ordering::Release);
+                            }
+                            _ => warn!("Received unexpected signal: {sig}"),
+                        }
+                    },
+                    move || {
+                        if let Err(err) = listener_wake.wake() {
+                            warn!("Failed to wake daemon after signal publication: {err}");
+                        }
+                    },
+                )
+                .context("Failed to register signal handler")?,
+            );
+        }
 
         // Only publish the pid after SIGUSR1 is handled. A racing
         // `--daemon-toggle` sends SIGUSR1 to this pid, and the default action
         // before handler installation would terminate the daemon.
-        crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)?;
+        if let Err(err) =
+            crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)
+        {
+            if let Err(stop_err) = self.stop_signal_listener() {
+                warn!(
+                    "Failed to stop signal listener after readiness publication error: {stop_err}"
+                );
+            }
+            return Err(err);
+        }
 
         // Start system tray (optional)
         if self.tray_enabled {
@@ -325,8 +353,27 @@ impl Daemon {
 
         info!("Daemon ready - waiting for toggle signal");
 
-        // Main daemon loop
+        let run_result = self.run_control_loop_and_invalidate_on_failure(&daemon_wake);
+        let cleanup_result = self.shutdown_after_run();
+        run_result.and(cleanup_result)
+    }
+
+    fn run_control_loop_and_invalidate_on_failure(
+        &mut self,
+        daemon_wake: &RuntimeWakeSource,
+    ) -> Result<()> {
+        let result = self.run_control_loop(daemon_wake);
+        if result.is_err()
+            && let Err(err) = crate::daemon::clear_daemon_pid_file()
+        {
+            warn!("Failed to invalidate daemon readiness after runtime failure: {err}");
+        }
+        result
+    }
+
+    fn run_control_loop(&mut self, daemon_wake: &RuntimeWakeSource) -> Result<()> {
         loop {
+            self.ensure_signal_listener_healthy()?;
             self.update_overlay_process_state()?;
 
             // Check for quit signal
@@ -358,10 +405,12 @@ impl Daemon {
                 }
             }
 
-            // Small sleep to avoid busy-waiting
-            thread::sleep(Duration::from_millis(100));
+            wait_for_daemon_lifecycle(daemon_wake)?;
         }
+        Ok(())
+    }
 
+    fn shutdown_after_run(&mut self) -> Result<()> {
         info!("Daemon shutting down");
         // Ensure overlay is stopped before exit
         if let Err(err) = self.hide_overlay() {
@@ -386,7 +435,86 @@ impl Daemon {
         if let Err(err) = crate::daemon::clear_daemon_pid_file() {
             warn!("Failed to clear daemon pid file: {}", err);
         }
+        self.stop_signal_listener()
+    }
+
+    fn ensure_signal_listener_healthy(&self) -> Result<()> {
+        #[cfg(unix)]
+        {
+            let listener = self
+                .signal_listener
+                .as_ref()
+                .context("daemon signal listener is not installed")?;
+            match listener.health() {
+                crate::unix_signals::SignalListenerHealth::Running => Ok(()),
+                crate::unix_signals::SignalListenerHealth::Failed(failure) => {
+                    Err(anyhow::anyhow!("daemon signal listener failed: {failure}"))
+                }
+                health => Err(anyhow::anyhow!(
+                    "daemon signal listener stopped unexpectedly: {health:?}"
+                )),
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            Ok(())
+        }
+    }
+
+    fn stop_signal_listener(&mut self) -> Result<()> {
+        #[cfg(unix)]
+        if let Some(mut listener) = self.signal_listener.take() {
+            let failure = match listener.health() {
+                crate::unix_signals::SignalListenerHealth::Failed(failure) => Some(failure),
+                _ => None,
+            };
+            listener
+                .stop_and_join()
+                .context("failed to stop daemon signal listener")?;
+            if let Some(failure) = failure {
+                return Err(anyhow::anyhow!(
+                    "daemon signal listener failed before teardown: {failure}"
+                ));
+            }
+        }
         Ok(())
+    }
+}
+
+fn wait_for_daemon_lifecycle(daemon_wake: &RuntimeWakeSource) -> Result<()> {
+    let mut pollfd = libc::pollfd {
+        fd: daemon_wake.poll_fd().as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let deadline = Instant::now() + DAEMON_LIFECYCLE_POLL_INTERVAL;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let timeout_ms = remaining.as_millis().min(i32::MAX as u128) as i32;
+        // SAFETY: the descriptor remains owned by `daemon_wake` throughout poll.
+        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+        if ready == 0 {
+            return Ok(());
+        }
+        if ready < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err).context("daemon lifecycle poll failed");
+        }
+        let terminal = pollfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL);
+        if terminal != 0 || pollfd.revents & libc::POLLIN == 0 {
+            return Err(anyhow::anyhow!(
+                "daemon wake descriptor returned invalid readiness {:#x}",
+                pollfd.revents
+            ));
+        }
+        daemon_wake
+            .drain()
+            .context("failed to drain daemon wake descriptor")?;
+        return Ok(());
     }
 }
 

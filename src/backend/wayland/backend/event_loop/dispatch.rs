@@ -5,6 +5,8 @@ use wayland_client::{EventQueue, backend::WaylandError};
 use super::super::super::state::WaylandState;
 use super::super::helpers::dispatch_with_timeout;
 use super::super::runtime_wake::RuntimeWakeSource;
+use super::super::signals::OverlaySignalState;
+use super::super::tray::process_tray_action;
 
 trait PersistenceWakeDrain {
     fn drain_woken_persistence(&mut self) -> Result<(), anyhow::Error>;
@@ -20,6 +22,25 @@ fn route_woken_persistence(state: &mut impl PersistenceWakeDrain) {
     if let Err(err) = state.drain_woken_persistence() {
         log::warn!("Failed to apply woken persistence completion: {err}");
     }
+}
+
+fn route_woken_sources(
+    state: &mut WaylandState,
+    signals: &mut OverlaySignalState,
+) -> Result<(), anyhow::Error> {
+    route_woken_persistence(state);
+
+    if signals.exit_requested() {
+        state.input_state.should_exit = true;
+    }
+    let _signal_hint = signals.take_tray_action_requested();
+    if process_tray_action(state) {
+        state.sync_overlay_interactivity();
+    }
+    if let Some(failure) = signals.failure() {
+        return Err(anyhow::anyhow!("overlay signal listener failed: {failure}"));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +104,7 @@ pub(super) fn dispatch_events(
     event_queue: &mut EventQueue<WaylandState>,
     state: &mut WaylandState,
     runtime_wake: &RuntimeWakeSource,
+    signals: &mut OverlaySignalState,
     capture_active: bool,
     animation_timeout: Option<Duration>,
 ) -> Result<(), anyhow::Error> {
@@ -94,7 +116,7 @@ pub(super) fn dispatch_events(
             event_queue,
             state,
             runtime_wake,
-            route_woken_persistence,
+            |state| route_woken_sources(state, signals),
             animation_timeout,
         )
         .map_err(|e| anyhow::anyhow!("Wayland event queue error: {}", e))

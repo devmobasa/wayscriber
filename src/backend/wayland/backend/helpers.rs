@@ -223,7 +223,7 @@ trait RuntimeDispatchOps {
         &mut self,
         timeout: Option<Duration>,
     ) -> Result<Option<RuntimeReadOutcome>>;
-    fn process_runtime_wake(&mut self);
+    fn process_runtime_wake(&mut self) -> Result<()>;
 }
 
 fn dispatch_runtime_cycle(
@@ -246,7 +246,7 @@ fn dispatch_runtime_cycle(
             );
         }
         if outcome.wake_drain.is_some() {
-            ops.process_runtime_wake();
+            ops.process_runtime_wake()?;
         }
         if outcome.wayland_read {
             ops.dispatch_pending()?;
@@ -265,7 +265,7 @@ struct RealRuntimeDispatchOps<'a, F> {
 
 impl<F> RuntimeDispatchOps for RealRuntimeDispatchOps<'_, F>
 where
-    F: FnMut(&mut WaylandState),
+    F: FnMut(&mut WaylandState) -> Result<()>,
 {
     fn dispatch_pending(&mut self) -> Result<usize> {
         self.event_queue
@@ -293,8 +293,8 @@ where
             .transpose()
     }
 
-    fn process_runtime_wake(&mut self) {
-        (self.on_runtime_wake)(self.state);
+    fn process_runtime_wake(&mut self) -> Result<()> {
+        (self.on_runtime_wake)(self.state)
     }
 }
 
@@ -302,7 +302,7 @@ pub(super) fn dispatch_with_timeout(
     event_queue: &mut EventQueue<WaylandState>,
     state: &mut WaylandState,
     runtime_wake: &RuntimeWakeSource,
-    on_runtime_wake: impl FnMut(&mut WaylandState),
+    on_runtime_wake: impl FnMut(&mut WaylandState) -> Result<()>,
     timeout: Option<Duration>,
 ) -> Result<()> {
     let mut ops = RealRuntimeDispatchOps {
@@ -551,8 +551,9 @@ mod tests {
             Ok(self.prepared_outcome)
         }
 
-        fn process_runtime_wake(&mut self) {
+        fn process_runtime_wake(&mut self) -> Result<()> {
             self.calls.push(DispatchCall::ProcessRuntimeWake);
+            Ok(())
         }
     }
 

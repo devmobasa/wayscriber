@@ -7,7 +7,6 @@ use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
 use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
-use super::tray::process_tray_action;
 use crate::backend::wayland::portal_capture::screenshot_portal_available;
 use crate::env_vars::{DESKTOP_SESSION_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 use crate::{
@@ -151,9 +150,6 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     state.spawn_gtk_toolbar_if_selected();
     // Ensure pinned toolbars are created immediately if visible on startup.
     state.sync_toolbar_visibility(&setup.qh);
-    // Process any pending tray action that may have been queued before overlay start.
-    process_tray_action(&mut state);
-
     Ok(BackendRuntime {
         conn: setup.conn,
         event_queue: setup.event_queue,
