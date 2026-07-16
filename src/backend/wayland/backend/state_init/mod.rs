@@ -132,6 +132,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         capture_manager,
         session_options,
         persistence,
+        runtime_wake: runtime_wake.handle(),
         tokio_handle,
         exit_after_capture_mode,
         frozen_enabled: frozen_supported,

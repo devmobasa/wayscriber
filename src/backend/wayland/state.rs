@@ -57,6 +57,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, Config},
+    input::state::ClipboardPasteRequest,
     input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -66,7 +67,10 @@ use self::data::{MoveDrag, StateData};
 pub use self::data::{MoveDragKind, OverlaySuppression, XdgFrozenFullscreenState};
 use super::{
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
-    clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion},
+    clipboard::{
+        ClipboardOperationController, ClipboardOperationIdSource, ClipboardPasteCompletion,
+        ClipboardPublishCompletion,
+    },
     frozen::FrozenState,
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
@@ -142,6 +146,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
     pub persistence: crate::backend::wayland::session::PersistenceController,
+    pub runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
     pub tokio_handle: tokio::runtime::Handle,
     pub exit_after_capture_mode: ExitAfterCaptureMode,
     pub frozen_enabled: bool,
@@ -184,8 +189,9 @@ pub(super) struct WaylandState {
 
     // Input state
     pub(super) input_state: InputState,
-    pub(super) clipboard_publish_rx: Option<std::sync::mpsc::Receiver<ClipboardPublishCompletion>>,
-    pub(super) clipboard_paste_rx: Option<std::sync::mpsc::Receiver<ClipboardPasteCompletion>>,
+    pub(super) clipboard_publish: ClipboardOperationController<u64, ClipboardPublishCompletion>,
+    pub(super) clipboard_paste:
+        ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
     pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,

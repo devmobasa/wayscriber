@@ -2,12 +2,11 @@
 
 use super::WaylandState;
 use crate::backend::wayland::clipboard::{
-    self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPublishCompletion,
-    FailedLocalSelectionProbe, PasteAction, TransferEffect, TransferPlan, TransferWarning,
-    transfer,
+    self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPoll,
+    ClipboardPublishCompletion, FailedLocalSelectionProbe, PasteAction, TransferEffect,
+    TransferPlan, TransferWarning, transfer,
 };
 use crate::input::state::{ClipboardPasteRequest, UiToastKind};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 mod session_paste;
@@ -16,7 +15,7 @@ use session_paste::{PastePersistenceDecision, SessionPasteWarning};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn drain_clipboard_requests(&mut self) {
-        if self.clipboard_publish_rx.is_none()
+        if !self.clipboard_publish.is_active()
             && let Some(request) = self.input_state.take_pending_selection_clipboard_publish()
         {
             self.start_selection_clipboard_publish(request.generation, request.payload_json);
@@ -28,36 +27,109 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn poll_clipboard_publish_completion(&mut self) {
-        let Some(rx) = &self.clipboard_publish_rx else {
-            return;
-        };
-        let Ok(completion) = rx.try_recv() else {
-            return;
-        };
-        self.clipboard_publish_rx = None;
-        self.apply_selection_clipboard_publish_completion(completion);
+        match self.clipboard_publish.poll() {
+            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
+            ClipboardPoll::Ready {
+                id,
+                context: generation,
+                outcome,
+            } => {
+                if outcome.generation == generation {
+                    self.apply_selection_clipboard_publish_completion(outcome);
+                } else {
+                    log::error!(
+                        "Clipboard publish operation {id} returned generation {}, expected {generation}",
+                        outcome.generation
+                    );
+                    self.apply_selection_clipboard_publish_completion(
+                        failed_clipboard_publish_completion(generation),
+                    );
+                }
+            }
+            ClipboardPoll::ProducerFailed {
+                id,
+                context: generation,
+                reason,
+            } => {
+                log::warn!("Clipboard publish operation {id} failed: {reason}");
+                self.apply_selection_clipboard_publish_completion(
+                    failed_clipboard_publish_completion(generation),
+                );
+            }
+            ClipboardPoll::Disconnected {
+                id,
+                context: generation,
+            } => {
+                log::warn!("Clipboard publish operation {id} disconnected");
+                self.apply_selection_clipboard_publish_completion(
+                    failed_clipboard_publish_completion(generation),
+                );
+            }
+        }
     }
 
     pub(in crate::backend::wayland) fn poll_clipboard_paste_completion(&mut self) {
-        let Some(rx) = &self.clipboard_paste_rx else {
-            return;
-        };
-        let Ok(completion) = rx.try_recv() else {
-            return;
-        };
-        self.clipboard_paste_rx = None;
-        self.apply_clipboard_paste_completion(completion);
+        match self.clipboard_paste.poll() {
+            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
+            ClipboardPoll::Ready {
+                id,
+                context: request,
+                outcome,
+            } => {
+                if outcome.request.id == request.id {
+                    self.apply_clipboard_paste_completion(ClipboardPasteCompletion {
+                        request,
+                        result: outcome.result,
+                    });
+                } else {
+                    log::error!(
+                        "Clipboard paste operation {id} returned request {}, expected {}",
+                        outcome.request.id,
+                        request.id
+                    );
+                    self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                        request,
+                        "clipboard producer returned a mismatched request",
+                    ));
+                }
+            }
+            ClipboardPoll::ProducerFailed {
+                id,
+                context: request,
+                reason,
+            } => {
+                log::warn!("Clipboard paste operation {id} failed: {reason}");
+                self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                    request, &reason,
+                ));
+            }
+            ClipboardPoll::Disconnected {
+                id,
+                context: request,
+            } => {
+                log::warn!("Clipboard paste operation {id} disconnected");
+                self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                    request,
+                    "clipboard producer disconnected",
+                ));
+            }
+        }
     }
 
     fn start_selection_clipboard_publish(&mut self, generation: u64, payload_json: String) {
         self.suppress_focus_exit_for(Duration::from_millis(1500));
-        let (tx, rx) = mpsc::channel();
-        self.clipboard_publish_rx = Some(rx);
-        std::thread::spawn(move || {
-            let completion =
-                transfer::resolve_selection_clipboard_publish(generation, payload_json);
-            let _ = tx.send(completion);
-        });
+        if let Err(failure) =
+            self.clipboard_publish
+                .try_submit(generation, "clipboard-publish", move || {
+                    transfer::resolve_selection_clipboard_publish(generation, payload_json)
+                })
+        {
+            let (error, generation) = failure.into_parts();
+            log::warn!("Could not submit clipboard publish operation: {error}");
+            self.apply_selection_clipboard_publish_completion(failed_clipboard_publish_completion(
+                generation,
+            ));
+        }
     }
 
     fn apply_selection_clipboard_publish_completion(
@@ -269,19 +341,31 @@ impl WaylandState {
 
     fn start_system_clipboard_read(&mut self, request: ClipboardPasteRequest) {
         log::info!("Reading system clipboard for paste request {}", request.id);
-        let (tx, rx) = mpsc::channel();
-        self.clipboard_paste_rx = Some(rx);
-        std::thread::spawn(move || {
-            let started = Instant::now();
-            let result = transfer::resolve_system_clipboard();
-            log::info!(
-                "System clipboard read for paste request {} completed in {:?}: {}",
-                request.id,
-                started.elapsed(),
-                result.summary()
+        let context = request.clone();
+        if let Err(failure) =
+            self.clipboard_paste
+                .try_submit(context, "clipboard-paste", move || {
+                    let started = Instant::now();
+                    let result = transfer::resolve_system_clipboard();
+                    log::info!(
+                        "System clipboard read for paste request {} completed in {:?}: {}",
+                        request.id,
+                        started.elapsed(),
+                        result.summary()
+                    );
+                    ClipboardPasteCompletion { request, result }
+                })
+        {
+            let (error, request) = failure.into_parts();
+            log::warn!(
+                "Could not submit clipboard paste operation for request {}: {error}",
+                request.id
             );
-            let _ = tx.send(ClipboardPasteCompletion { request, result });
-        });
+            self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                request,
+                &error.to_string(),
+            ));
+        }
     }
 
     fn apply_transfer_effect(&mut self, effect: TransferEffect) {
@@ -390,5 +474,68 @@ impl WaylandState {
                 "Wayscriber clipboard selection could not be read.",
             ),
         }
+    }
+}
+
+fn failed_clipboard_publish_completion(generation: u64) -> ClipboardPublishCompletion {
+    ClipboardPublishCompletion {
+        generation,
+        fingerprint: None,
+        copied: false,
+        warning: Some(TransferWarning::PublishUnavailable),
+    }
+}
+
+fn failed_clipboard_paste_completion(
+    request: ClipboardPasteRequest,
+    reason: &str,
+) -> ClipboardPasteCompletion {
+    ClipboardPasteCompletion {
+        request,
+        result: ClipboardPasteResult::ClipboardError(reason.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+    use crate::input::state::PasteAnchor;
+    use crate::util::Rect;
+
+    fn request(id: u64) -> ClipboardPasteRequest {
+        ClipboardPasteRequest {
+            id,
+            target_board_id: "board".to_string(),
+            target_page_index: 2,
+            target_page_generation: 3,
+            anchor: PasteAnchor::VisibleCenter { x: 10, y: 20 },
+            visible_canvas_rect: Rect::new(0, 0, 100, 100).unwrap(),
+            screen_size: (100, 100),
+            selection_clipboard_generation_at_request: 4,
+            local_selection_fallback_generation: Some(5),
+        }
+    }
+
+    #[test]
+    fn publish_transport_failure_preserves_generation_without_sync_probe() {
+        let completion = failed_clipboard_publish_completion(17);
+        assert_eq!(completion.generation, 17);
+        assert_eq!(completion.fingerprint, None);
+        assert!(!completion.copied);
+        assert_eq!(
+            completion.warning,
+            Some(TransferWarning::PublishUnavailable)
+        );
+    }
+
+    #[test]
+    fn paste_transport_failure_preserves_original_request_context() {
+        let original = request(19);
+        let completion = failed_clipboard_paste_completion(original.clone(), "disconnected");
+        assert_eq!(completion.request, original);
+        assert!(matches!(
+            completion.result,
+            ClipboardPasteResult::ClipboardError(ref reason) if reason == "disconnected"
+        ));
     }
 }

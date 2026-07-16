@@ -12,6 +12,7 @@ impl WaylandState {
             capture_manager,
             session_options,
             persistence,
+            runtime_wake,
             tokio_handle,
             exit_after_capture_mode,
             frozen_enabled,
@@ -86,6 +87,13 @@ impl WaylandState {
             WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);
 
         let buffer_count = config.performance.buffer_count as usize;
+        let clipboard_operation_ids = ClipboardOperationIdSource::new();
+        let clipboard_publish = ClipboardOperationController::new(
+            clipboard_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
+        let clipboard_paste =
+            ClipboardOperationController::new(clipboard_operation_ids, runtime_wake);
 
         Self {
             registry_state,
@@ -105,8 +113,8 @@ impl WaylandState {
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             config,
             input_state,
-            clipboard_publish_rx: None,
-            clipboard_paste_rx: None,
+            clipboard_publish,
+            clipboard_paste,
             gtk_toolbar: None,
             onboarding,
             ui_animation_next_tick: None,
