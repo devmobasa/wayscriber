@@ -14,7 +14,8 @@ pub const PAGE_UNDO_EXPIRE_MS: u64 = 30_000;
 pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
 use crate::capture::{ImageOperationKind, file::FileSaveConfig};
-use crate::config::{Action, ToolPresetConfig};
+use crate::config::ToolPresetConfig;
+use crate::domain::Action;
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
@@ -213,7 +214,7 @@ pub enum UiToastKind {
 pub struct ToastAction {
     pub label: String,
     #[allow(dead_code)] // Used in check_toast_click via WaylandState
-    pub action: crate::config::keybindings::Action,
+    pub action: Action,
 }
 
 #[derive(Debug, Clone)]

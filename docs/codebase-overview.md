@@ -18,6 +18,7 @@ This document explains how the application boots, how user input travels through
 
 3. **Canonical module graph**
    - `src/lib.rs` declares both reusable public modules and private runtime modules, so the binary does not compile a second copy of shared types or unit tests.
+   - `domain`: owns stable action, tool, color, and board value identities used across higher layers.
    - `config`: loads user settings, key bindings, and drawing defaults.
    - `session`: builds configured or named session targets, validates `--session-file`, loads saved state, and records named-session catalog entries.
 
@@ -152,7 +153,23 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 7. Configuration
+## 7. Domain Values and Dependency Direction
+
+- **`src/domain/`** is the canonical owner of dependency-light action, tool, color, and board
+  value identities. Production code there depends only on the standard library, serde, and the
+  optional schema derive; runtime policy and mutable state stay in higher layers.
+- Existing paths such as `config::Action`, `input::Tool`, `input::BoardBackground`, and
+  `draw::Color` are compatibility re-exports of the same domain types. They preserve public Rust
+  API and serialized config/session formats while callers migrate incrementally.
+- `src/config/` retains config representation, keybinding syntax/defaults, validation, and action
+  metadata. `src/input/` retains tool catalogs/behavior and board state. `src/draw/` retains shapes,
+  history, and rendering.
+- New dependency-light identities belong in `domain`; I/O, toolkit types, rendering behavior,
+  state machines, and config-specific metadata do not.
+
+---
+
+## 8. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
 - **`ConfigDocument`** is the configurator-facing edit owner. It keeps validated `Config`, the
@@ -168,7 +185,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 8. Session Persistence and Named Session Manager
+## 9. Session Persistence and Named Session Manager
 
 **Modules:**
 - `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
@@ -188,7 +205,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 9. Utility Modules
+## 10. Utility Modules
 
 - **`src/draw/`**: Shape definitions, Cairo helpers, arrow geometry, fonts, and the `CanvasSet` abstraction (with undo/history per board mode).
 - **`src/ui.rs`**: Composes the status bar and help overlay using Cairo.
@@ -198,12 +215,13 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 10. Directory Map (excluding configurator)
+## 11. Directory Map (excluding configurator)
 
 | Path | Role |
 |------|------|
 | `src/main.rs` | Thin binary wrapper around the library entry facade. |
 | `src/lib.rs` | Canonical module graph, CLI/error entry facade, and reusable public exports. |
+| `src/domain/` | Stable action, tool, color, and board values with no upward runtime dependencies. |
 | `src/daemon.rs` | Background daemon, tray menu, signal handling, overlay toggling. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
 | `src/input/` | Event/state machine for drawing tools, board modes, and capture triggers. |
@@ -218,7 +236,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 11. Putting It Together
+## 12. Putting It Together
 
 1. **Launch** via CLI → choose daemon vs active.
 2. **Daemon** provides lifecycle management, tray integration, and toggles the backend on demand.

@@ -1,6 +1,6 @@
 use super::adapters;
 use super::outcome::{ActionRoute, RoutingOutcome};
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::state::InputState;
 
 pub(crate) fn classify_action(action: Action) -> ActionRoute {

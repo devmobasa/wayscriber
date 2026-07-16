@@ -1,5 +1,6 @@
 use crate::config::BoardColorConfig;
-use crate::draw::{BLACK, Color, WHITE};
+use crate::domain::Color;
+use crate::domain::color::{BLACK, WHITE};
 
 pub fn runtime_contrast_pen_color(background: Color) -> Color {
     let [r, g, b] = runtime_contrast_pen_rgb([background.r, background.g, background.b]);

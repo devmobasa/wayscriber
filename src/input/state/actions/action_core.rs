@@ -1,5 +1,5 @@
 use super::super::{DrawingState, InputState, TextInputMode, UiToastKind};
-use crate::config::Action;
+use crate::domain::Action;
 use log::info;
 
 impl InputState {

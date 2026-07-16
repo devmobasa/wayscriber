@@ -1,4 +1,4 @@
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::{OutputFocusAction, ZoomAction};
 
 use super::super::{InputState, PendingBackendAction};

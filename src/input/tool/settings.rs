@@ -1,7 +1,7 @@
-use crate::draw::Color;
+use crate::domain::{Color, Tool};
 use serde::{Deserialize, Serialize};
 
-use super::{Tool, ToolSettingsSlot};
+use super::ToolSettingsSlot;
 
 /// Color and thickness stored independently for a drawing tool.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -89,16 +89,4 @@ impl PerToolDrawingSettings {
         }
         self
     }
-}
-
-/// Eraser behavior mode.
-#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum EraserMode {
-    /// Brush-style eraser that clears pixels along its stroke.
-    #[default]
-    Brush,
-    /// Stroke eraser that deletes any shape it touches.
-    Stroke,
 }

@@ -1,5 +1,5 @@
 use super::{ACTIONS_CHILDREN, RadialMenuState, RadialSegmentId, SHAPES_CHILDREN, TEXT_CHILDREN};
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::DrawingState;
 use crate::input::state::InputState;
 use crate::input::state::TextInputMode;

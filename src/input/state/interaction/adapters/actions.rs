@@ -1,5 +1,5 @@
 use super::super::outcome::ActionRoute;
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::state::InputState;
 
 pub(crate) fn close_properties_panel_before_action(state: &mut InputState) {

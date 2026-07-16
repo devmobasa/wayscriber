@@ -1,8 +1,6 @@
 use crate::config::enums::ColorSpec;
-use crate::config::keybindings::Action;
-use crate::draw::Color;
+use crate::domain::{Action, Color, DragBindableTool, DragTool, EraserMode};
 use crate::draw::shape::REGULAR_POLYGON_DEFAULT_SIDES;
-use crate::input::{DragBindableTool, DragTool, EraserMode};
 use serde::{Deserialize, Serialize};
 
 /// Maximum quick colors rendered by dense palette UIs.

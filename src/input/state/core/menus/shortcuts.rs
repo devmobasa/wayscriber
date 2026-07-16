@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::config::Action;
+use crate::domain::Action;
 
 impl InputState {
     /// Get the display string for the first keybinding of an action.

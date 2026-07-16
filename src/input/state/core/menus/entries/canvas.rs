@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 impl InputState {
