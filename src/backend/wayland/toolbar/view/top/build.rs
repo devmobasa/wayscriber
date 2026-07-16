@@ -9,7 +9,6 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::{Action, action_label, action_short_label, toolbar_item_ids as ids};
 use crate::input::Tool;
 use crate::toolbar_icons;
-use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 
 use super::super::node::{
@@ -29,8 +28,9 @@ pub(super) fn build_top_view_planned(
     width: f64,
     height: f64,
 ) -> WidgetTree {
+    let spec = model::TopToolbarSpec::build(snapshot, plan);
     if snapshot.top_minimized {
-        return build_top_minimized_tab(width, height);
+        return build_top_minimized_tab(snapshot, &spec, width, height);
     }
     let gap = planned_gap(plan);
     let mut tree = WidgetTree::new((width, height));
@@ -46,25 +46,7 @@ pub(super) fn build_top_view_planned(
     } else {
         ToolbarLayoutSpec::TOP_START_X
     };
-    let handle_size = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
-    let handle_visible = model::toolbar_item_visible(snapshot, ids::TOP_CHROME_DRAG);
-    if handle_visible {
-        tree.push(WidgetNode::new(
-            ids::TOP_CHROME_DRAG.as_str(),
-            (x, ToolbarLayoutSpec::TOP_HANDLE_Y, handle_size, handle_size),
-            WidgetKind::DragHandle,
-            Some(Interaction {
-                event: ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
-                kind: HitKind::DragMoveTop,
-                tooltip: Some("Drag toolbar".to_string()),
-            }),
-        ));
-        x += handle_size + gap;
-    }
-
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    let current_shape_tool =
-        model::current_shape_tool(snapshot.active_tool, snapshot.tool_override);
     let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
 
     let use_icons = planned_use_icons(snapshot, plan);
@@ -82,309 +64,142 @@ pub(super) fn build_top_view_planned(
         *x += divider_span + gap;
     };
 
-    // --- Tool groups: pens | shapes ----------------------------------------
-    let mut previous_group: Option<model::TopToolGroup> = None;
-    let mut tool_drawn = false;
-    for tool in model::visible_top_tool_buttons(is_simple, snapshot) {
-        if plan.dropped_tools.contains(&tool) {
-            continue;
-        }
-        let group = model::top_tool_group(tool);
-        if let Some(previous) = previous_group
-            && previous != group
-        {
-            push_divider(&mut tree, &mut x, "tools");
-        }
-        previous_group = Some(group);
-        let active = snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
-        tree.push(tool_button_node(
-            snapshot,
-            tool,
-            model::toolbar_item_id_for_tool(tool).as_str(),
-            (x, y, btn_w, btn_h),
-            active,
-            use_icons,
-        ));
-        x += btn_w + gap;
-        tool_drawn = true;
-    }
-
-    // --- Shapes picker (family icon, caret grid below) ----------------------
     let mut picker_anchor: Option<(f64, f64, f64, f64)> = None;
-    if model::top_shape_picker_visible(snapshot) {
-        if previous_group == Some(model::TopToolGroup::Pens) {
-            push_divider(&mut tree, &mut x, "tools");
-        }
-        let picker_active = snapshot.shape_picker_open || current_shape_tool.is_some();
-        let interact = Interaction::click(
-            ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
-            Some("Shapes".to_string()),
-        );
-        let kind = if use_icons {
-            WidgetKind::IconButton {
-                glyph: IconFn(toolbar_icons::draw_icon_shape_picker),
-                icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE,
-                style: ButtonStyle::active(picker_active),
-            }
-        } else {
-            WidgetKind::TextButton {
-                label: LabelSpec::new("Shapes", TOP_LABEL_FONT_SIZE, true),
-                style: ButtonStyle::active(picker_active),
-            }
-        };
-        tree.push(WidgetNode::new(
-            ids::TOP_UTILITY_SHAPE_PICKER.as_str(),
-            (x, y, btn_w, btn_h),
-            kind,
-            Some(interact),
-        ));
-        picker_anchor = Some((x, y, btn_w, btn_h));
-        x += btn_w + gap;
-        tool_drawn = true;
-    }
+    let contextual_ring = spec.contextual().first().copied();
+    let swatches_have_badges = spec.strip().iter().any(|node| {
+        matches!(
+            node,
+            model::TopToolbarNode::Control(model::TopToolbarControl::QuickColor(index))
+                if snapshot.binding_hints.quick_color_badge(*index).is_some()
+        )
+    });
+    let swatch_y = if swatches_have_badges {
+        y + (btn_h - (10.0 + 1.0 + TOP_SWATCH_SIZE)) / 2.0 + 11.0
+    } else {
+        y + (btn_h - TOP_SWATCH_SIZE) / 2.0
+    };
 
-    // --- Annotation utilities    // --- Annotation utilities (Clear is pulled out and isolated below) ------
-    let utilities: Vec<model::TopUtilityButton> =
-        model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
-            .into_iter()
-            .filter(|button| *button != model::TopUtilityButton::ClearCanvas)
-            .filter(|button| !plan.dropped_utilities.contains(button))
-            .collect();
-    let clear_visible = model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
-        .contains(&model::TopUtilityButton::ClearCanvas);
-    if !utilities.is_empty() && tool_drawn {
-        push_divider(&mut tree, &mut x, "annotations");
-    }
-    for button in utilities {
-        match button {
-            model::TopUtilityButton::Text => {
-                tree.push(utility_node(
-                    snapshot,
-                    ids::TOP_UTILITY_TEXT.as_str(),
-                    (x, y, btn_w, btn_h),
-                    IconFn(toolbar_icons::draw_icon_text),
-                    action_short_label(Action::EnterTextMode),
-                    ButtonStyle::active(snapshot.text_active),
-                    ToolbarEvent::EnterTextMode,
-                    format_binding_label(
-                        action_label(Action::EnterTextMode),
-                        snapshot
-                            .binding_hints
-                            .binding_for_action(Action::EnterTextMode),
-                    ),
-                    use_icons,
-                ));
-                x += btn_w + gap;
+    for node in spec.strip() {
+        match *node {
+            model::TopToolbarNode::Divider(divider) => {
+                let key = divider.id().trim_start_matches("top.divider.");
+                push_divider(&mut tree, &mut x, key);
             }
-            model::TopUtilityButton::StickyNote => {
-                tree.push(utility_node(
-                    snapshot,
-                    ids::TOP_UTILITY_STICKY_NOTE.as_str(),
-                    (x, y, btn_w, btn_h),
-                    IconFn(toolbar_icons::draw_icon_note),
-                    action_short_label(Action::EnterStickyNoteMode),
-                    ButtonStyle::active(snapshot.note_active),
-                    ToolbarEvent::EnterStickyNoteMode,
-                    format_binding_label(
-                        action_label(Action::EnterStickyNoteMode),
-                        snapshot
-                            .binding_hints
-                            .binding_for_action(Action::EnterStickyNoteMode),
-                    ),
-                    use_icons,
-                ));
-                x += btn_w + gap;
-            }
-            model::TopUtilityButton::Screenshot => {
-                tree.push(utility_node(
-                    snapshot,
-                    ids::TOP_UTILITY_SCREENSHOT.as_str(),
-                    (x, y, btn_w, btn_h),
-                    IconFn(toolbar_icons::draw_icon_screenshot),
-                    "Shot",
-                    ButtonStyle::plain(),
-                    ToolbarEvent::CaptureScreenshot,
-                    format_binding_label(
-                        action_label(Action::CaptureSelection),
-                        snapshot
-                            .binding_hints
-                            .binding_for_action(Action::CaptureSelection),
-                    ),
-                    use_icons,
-                ));
-                x += btn_w + gap;
-            }
-            model::TopUtilityButton::Highlight => {
-                tree.push(utility_node(
-                    snapshot,
-                    ids::TOP_UTILITY_HIGHLIGHT.as_str(),
-                    (x, y, btn_w, btn_h),
-                    IconFn(toolbar_icons::draw_icon_highlight),
-                    "Highlight",
-                    ButtonStyle::active(snapshot.any_highlight_active),
-                    ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
-                    format_binding_label(
-                        action_label(Action::ToggleHighlightTool),
-                        snapshot
-                            .binding_hints
-                            .binding_for_action(Action::ToggleHighlightTool),
-                    ),
-                    use_icons,
-                ));
-                if snapshot.highlight_tool_active && model::top_highlight_ring_visible(snapshot) {
-                    let ring_y = y + btn_h + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+            model::TopToolbarNode::Control(control) => match control {
+                model::TopToolbarControl::DragHandle => {
+                    let size = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
                     tree.push(WidgetNode::new(
-                        ids::TOP_UTILITY_HIGHLIGHT_RING.as_str(),
-                        (x, ring_y, btn_w, ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT),
-                        WidgetKind::MiniCheckbox {
-                            checked: snapshot.highlight_tool_ring_enabled,
-                            label: LabelSpec::new("Ring", MINI_LABEL_FONT_SIZE, false),
+                        control.id().render_id().into_owned(),
+                        (x, ToolbarLayoutSpec::TOP_HANDLE_Y, size, size),
+                        WidgetKind::DragHandle,
+                        Some(Interaction {
+                            event: control.event(snapshot),
+                            kind: HitKind::DragMoveTop,
+                            tooltip: Some(control.tooltip(snapshot)),
+                        }),
+                    ));
+                    x += size + gap;
+                }
+                model::TopToolbarControl::Tool(_)
+                | model::TopToolbarControl::Utility(_)
+                | model::TopToolbarControl::ShapePicker
+                | model::TopToolbarControl::Undo
+                | model::TopToolbarControl::Redo
+                | model::TopToolbarControl::ClearCanvas => {
+                    if control == model::TopToolbarControl::ClearCanvas {
+                        x += gap;
+                    }
+                    let rect = (x, y, btn_w, btn_h);
+                    tree.push(control_button_node(
+                        snapshot,
+                        control,
+                        control.id().render_id().into_owned(),
+                        rect,
+                        use_icons,
+                    ));
+                    if control == model::TopToolbarControl::ShapePicker {
+                        picker_anchor = Some(rect);
+                    }
+                    if matches!(
+                        control,
+                        model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight)
+                    ) && let Some(ring) = contextual_ring
+                    {
+                        let ring_y = y + btn_h + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+                        tree.push(WidgetNode::new(
+                            ring.id().render_id().into_owned(),
+                            (x, ring_y, btn_w, ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT),
+                            WidgetKind::MiniCheckbox {
+                                checked: ring.active(snapshot),
+                                label: LabelSpec::new(
+                                    ring.label(snapshot),
+                                    MINI_LABEL_FONT_SIZE,
+                                    false,
+                                ),
+                            },
+                            Some(Interaction::click(
+                                ring.event(snapshot),
+                                Some(ring.tooltip(snapshot)),
+                            )),
+                        ));
+                    }
+                    x += btn_w + gap;
+                }
+                model::TopToolbarControl::QuickColor(index) => {
+                    let entry = &snapshot.quick_colors.rendered_entries()[index];
+                    let badge = control.shortcut_badge(snapshot);
+                    tree.push(
+                        WidgetNode::new(
+                            control.id().render_id().into_owned(),
+                            (x, swatch_y, TOP_SWATCH_SIZE, TOP_SWATCH_SIZE),
+                            WidgetKind::Swatch {
+                                color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
+                                selected: control.active(snapshot),
+                            },
+                            Some(Interaction::click(
+                                control.event(snapshot),
+                                Some(control.tooltip(snapshot)),
+                            )),
+                        )
+                        .with_shortcut_badge(badge.as_deref(), ShortcutBadgePlacement::Above),
+                    );
+                    x += TOP_SWATCH_SIZE + TOP_SWATCH_GAP;
+                }
+                model::TopToolbarControl::CurrentColor => {
+                    let chip_y = y + (btn_h - TOP_CHIP_SIZE) / 2.0;
+                    x += gap - TOP_SWATCH_GAP;
+                    tree.push(WidgetNode::new(
+                        control.id().render_id().into_owned(),
+                        (x, chip_y, TOP_CHIP_SIZE, TOP_CHIP_SIZE),
+                        WidgetKind::Swatch {
+                            color: (
+                                snapshot.color.r,
+                                snapshot.color.g,
+                                snapshot.color.b,
+                                snapshot.color.a,
+                            ),
+                            selected: control.active(snapshot),
                         },
                         Some(Interaction::click(
-                            ToolbarEvent::ToggleHighlightToolRing(
-                                !snapshot.highlight_tool_ring_enabled,
-                            ),
-                            Some("Highlight ring".to_string()),
+                            control.event(snapshot),
+                            Some(control.tooltip(snapshot)),
                         )),
                     ));
+                    x += TOP_CHIP_SIZE + gap;
                 }
-                x += btn_w + gap;
-            }
-            model::TopUtilityButton::ClearCanvas | model::TopUtilityButton::IconMode => {}
-        }
-    }
-
-    // --- Quick colors + current-color chip ----------------------------------
-    if model::toolbar_item_visible(snapshot, ids::TOP_GROUP_QUICK_COLORS) {
-        push_divider(&mut tree, &mut x, "colors");
-        let swatches_have_badges = snapshot
-            .quick_colors
-            .rendered_entries()
-            .iter()
-            .take(plan.swatch_count)
-            .enumerate()
-            .any(|(index, _)| snapshot.binding_hints.quick_color_badge(index).is_some());
-        let swatch_y = if swatches_have_badges {
-            // Reserve one 10px badge row plus a 1px gap above every swatch,
-            // keeping bound and unbound colors aligned in both bar modes.
-            y + (btn_h - (10.0 + 1.0 + TOP_SWATCH_SIZE)) / 2.0 + 11.0
-        } else {
-            y + (btn_h - TOP_SWATCH_SIZE) / 2.0
-        };
-        for (index, entry) in snapshot
-            .quick_colors
-            .rendered_entries()
-            .iter()
-            .take(plan.swatch_count)
-            .enumerate()
-        {
-            let action = crate::config::QuickColorPalette::action_for_index(index);
-            let binding =
-                action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
-            tree.push(
-                WidgetNode::new(
-                    format!("top.quick-color.{index}"),
-                    (x, swatch_y, TOP_SWATCH_SIZE, TOP_SWATCH_SIZE),
-                    WidgetKind::Swatch {
-                        color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
-                        selected: entry.color == snapshot.color,
-                    },
-                    Some(Interaction::click(
-                        ToolbarEvent::SetQuickColor {
-                            color: entry.color,
-                            action,
-                        },
-                        Some(format_binding_label(&entry.label, binding)),
-                    )),
-                )
-                .with_shortcut_badge(
-                    snapshot.binding_hints.quick_color_badge(index),
-                    ShortcutBadgePlacement::Above,
-                ),
-            );
-            x += TOP_SWATCH_SIZE + TOP_SWATCH_GAP;
-        }
-        // The chip shows the current color and opens the full picker; it
-        // never collapses under width pressure.
-        let chip_y = y + (btn_h - TOP_CHIP_SIZE) / 2.0;
-        x += gap - TOP_SWATCH_GAP;
-        tree.push(WidgetNode::new(
-            ids::TOP_GROUP_QUICK_COLORS.as_str(),
-            (x, chip_y, TOP_CHIP_SIZE, TOP_CHIP_SIZE),
-            WidgetKind::Swatch {
-                color: (
-                    snapshot.color.r,
-                    snapshot.color.g,
-                    snapshot.color.b,
-                    snapshot.color.a,
-                ),
-                selected: true,
+                model::TopToolbarControl::Restore
+                | model::TopToolbarControl::Pin
+                | model::TopToolbarControl::Overflow
+                | model::TopToolbarControl::Minimize
+                | model::TopToolbarControl::HighlightRing => {
+                    unreachable!("control belongs outside the main strip")
+                }
             },
-            Some(Interaction::click(
-                ToolbarEvent::OpenColorPickerPopup,
-                Some("Color picker".to_string()),
-            )),
-        ));
-        x += TOP_CHIP_SIZE + gap;
-    }
-
-    // --- History -------------------------------------------------------------
-    let undo_visible = model::toolbar_item_visible(snapshot, ids::TOP_UTILITY_UNDO);
-    let redo_visible = model::toolbar_item_visible(snapshot, ids::TOP_UTILITY_REDO);
-    if undo_visible || redo_visible {
-        push_divider(&mut tree, &mut x, "history");
-    }
-    if undo_visible {
-        tree.push(history_node(
-            snapshot,
-            ids::TOP_UTILITY_UNDO.as_str(),
-            (x, y, btn_w, btn_h),
-            IconFn(toolbar_icons::draw_icon_undo),
-            Action::Undo,
-            ToolbarEvent::Undo,
-            snapshot.undo_available,
-            use_icons,
-        ));
-        x += btn_w + gap;
-    }
-    if redo_visible {
-        tree.push(history_node(
-            snapshot,
-            ids::TOP_UTILITY_REDO.as_str(),
-            (x, y, btn_w, btn_h),
-            IconFn(toolbar_icons::draw_icon_redo),
-            Action::Redo,
-            ToolbarEvent::Redo,
-            snapshot.redo_available,
-            use_icons,
-        ));
-        x += btn_w + gap;
-    }
-
-    // --- Destructive Clear, isolated by a double gap --------------------------
-    if clear_visible {
-        x += gap;
-        tree.push(utility_node(
-            snapshot,
-            ids::TOP_UTILITY_CLEAR_CANVAS.as_str(),
-            (x, y, btn_w, btn_h),
-            IconFn(toolbar_icons::draw_icon_clear),
-            action_short_label(Action::ClearCanvas),
-            ButtonStyle::destructive(),
-            ToolbarEvent::ClearCanvas,
-            format_binding_label(
-                action_label(Action::ClearCanvas),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::ClearCanvas),
-            ),
-            use_icons,
-        ));
+        }
     }
 
     // --- Shapes popover: the grid plus per-tool options ------------------------
     if snapshot.shape_picker_open
-        && model::top_shape_picker_visible(snapshot)
         && let Some(anchor) = picker_anchor
     {
         let rows = model::visible_shape_picker_rows(snapshot, is_simple);
@@ -425,8 +240,6 @@ pub(super) fn build_top_view_planned(
                     if !model::tool_visible(snapshot, tool) {
                         continue;
                     }
-                    let active =
-                        snapshot.active_tool == tool || snapshot.tool_override == Some(tool);
                     tree.push(tool_button_node(
                         snapshot,
                         tool,
@@ -435,7 +248,6 @@ pub(super) fn build_top_view_planned(
                             model::toolbar_item_id_for_tool(tool).as_str()
                         ),
                         (shape_x, row_y, btn_w, btn_h),
-                        active,
                         use_icons,
                     ));
                     shape_x += btn_w + gap;
@@ -471,61 +283,47 @@ pub(super) fn build_top_view_planned(
     } else {
         ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
     };
-    let mut right_x = width - chrome_margin_right - chrome_size;
-    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE) {
-        tree.push(WidgetNode::new(
-            ids::TOP_CHROME_CLOSE.as_str(),
-            (right_x, chrome_y, chrome_size, chrome_size),
-            WidgetKind::MinimizeButton,
-            Some(Interaction::click(
-                ToolbarEvent::SetTopMinimized(true),
-                Some("Minimize (leaves a restore tab)".to_string()),
-            )),
-        ));
-        right_x -= chrome_size + chrome_gap;
-    }
+    let chrome_count = spec.chrome().len();
+    let chrome_width =
+        chrome_size * chrome_count as f64 + chrome_gap * chrome_count.saturating_sub(1) as f64;
+    let mut chrome_x = width - chrome_margin_right - chrome_width;
     let mut overflow_anchor = None;
-    if plan.show_overflow {
-        let rect = (right_x, chrome_y, chrome_size, chrome_size);
-        overflow_anchor = Some(rect);
+    for control in spec.chrome().iter().copied() {
+        let rect = (chrome_x, chrome_y, chrome_size, chrome_size);
+        let kind = match control {
+            model::TopToolbarControl::Pin => WidgetKind::PinButton {
+                pinned: control.active(snapshot),
+            },
+            model::TopToolbarControl::Overflow => {
+                overflow_anchor = Some(rect);
+                WidgetKind::IconButton {
+                    glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
+                        control.icon(snapshot).expect("overflow icon"),
+                    )),
+                    icon_size: chrome_size * 0.7,
+                    style: ButtonStyle::active(control.active(snapshot)),
+                }
+            }
+            model::TopToolbarControl::Minimize => WidgetKind::MinimizeButton,
+            _ => unreachable!("non-chrome control in chrome specification"),
+        };
         tree.push(WidgetNode::new(
-            ids::TOP_CHROME_OVERFLOW.as_str(),
+            control.id().render_id().into_owned(),
             rect,
-            WidgetKind::IconButton {
-                glyph: IconFn(toolbar_icons::draw_icon_more),
-                icon_size: chrome_size * 0.7,
-                style: ButtonStyle::active(snapshot.top_overflow_open),
-            },
+            kind,
             Some(Interaction::click(
-                ToolbarEvent::ToggleTopOverflow(!snapshot.top_overflow_open),
-                Some("More tools".to_string()),
+                control.event(snapshot),
+                Some(control.tooltip(snapshot)),
             )),
         ));
-        right_x -= chrome_size + chrome_gap;
-    }
-    if model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN) {
-        tree.push(WidgetNode::new(
-            ids::TOP_CHROME_PIN.as_str(),
-            (right_x, chrome_y, chrome_size, chrome_size),
-            WidgetKind::PinButton {
-                pinned: snapshot.top_pinned,
-            },
-            Some(Interaction::click(
-                ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
-                Some(if snapshot.top_pinned {
-                    "Pinned: opens at startup (click to disable)".to_string()
-                } else {
-                    "Pin: click to open at startup".to_string()
-                }),
-            )),
-        ));
+        chrome_x += chrome_size + chrome_gap;
     }
 
     // --- Overflow popover: the width-dropped items ---------------------------
     if snapshot.top_overflow_open
         && let Some(anchor) = overflow_anchor
     {
-        let dropped_count = plan.dropped_tools.len() + plan.dropped_utilities.len();
+        let dropped_count = spec.overflow().len();
         if dropped_count > 0 {
             let cols = dropped_count.min(5);
             let rows = dropped_count.div_ceil(cols);
@@ -550,7 +348,6 @@ pub(super) fn build_top_view_planned(
                     caret_up: placement.side == super::super::popover::PopoverSide::Below,
                 },
             ));
-            let mut index = 0usize;
             let item_rect = |index: usize| {
                 let col = index % cols;
                 let row = index / cols;
@@ -561,71 +358,15 @@ pub(super) fn build_top_view_planned(
                     btn_h,
                 )
             };
-            for tool in &plan.dropped_tools {
-                let active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
-                tree.push(tool_button_node(
+            for (index, control) in spec.overflow().iter().copied().enumerate() {
+                let id = format!("top.overflow.{}", control.id().render_id());
+                tree.push(overflow_control_button_node(
                     snapshot,
-                    *tool,
-                    format!(
-                        "top.overflow.{}",
-                        model::toolbar_item_id_for_tool(*tool).as_str()
-                    ),
+                    control,
+                    id,
                     item_rect(index),
-                    active,
                     use_icons,
                 ));
-                index += 1;
-            }
-            for utility in &plan.dropped_utilities {
-                let rect = item_rect(index);
-                match utility {
-                    model::TopUtilityButton::Text => tree.push(utility_node(
-                        snapshot,
-                        "top.overflow.top.utility.text",
-                        rect,
-                        IconFn(toolbar_icons::draw_icon_text),
-                        action_short_label(Action::EnterTextMode),
-                        ButtonStyle::active(snapshot.text_active),
-                        ToolbarEvent::EnterTextMode,
-                        action_label(Action::EnterTextMode).to_string(),
-                        use_icons,
-                    )),
-                    model::TopUtilityButton::StickyNote => tree.push(utility_node(
-                        snapshot,
-                        "top.overflow.top.utility.sticky-note",
-                        rect,
-                        IconFn(toolbar_icons::draw_icon_note),
-                        action_short_label(Action::EnterStickyNoteMode),
-                        ButtonStyle::active(snapshot.note_active),
-                        ToolbarEvent::EnterStickyNoteMode,
-                        action_label(Action::EnterStickyNoteMode).to_string(),
-                        use_icons,
-                    )),
-                    model::TopUtilityButton::Screenshot => tree.push(utility_node(
-                        snapshot,
-                        "top.overflow.top.utility.screenshot",
-                        rect,
-                        IconFn(toolbar_icons::draw_icon_screenshot),
-                        "Shot",
-                        ButtonStyle::plain(),
-                        ToolbarEvent::CaptureScreenshot,
-                        action_label(Action::CaptureSelection).to_string(),
-                        use_icons,
-                    )),
-                    model::TopUtilityButton::Highlight => tree.push(utility_node(
-                        snapshot,
-                        "top.overflow.top.utility.highlight",
-                        rect,
-                        IconFn(toolbar_icons::draw_icon_highlight),
-                        "Highlight",
-                        ButtonStyle::active(snapshot.any_highlight_active),
-                        ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
-                        action_label(Action::ToggleHighlightTool).to_string(),
-                        use_icons,
-                    )),
-                    model::TopUtilityButton::ClearCanvas | model::TopUtilityButton::IconMode => {}
-                }
-                index += 1;
             }
         }
     }
@@ -635,7 +376,16 @@ pub(super) fn build_top_view_planned(
 
 /// Minimized top strip: the whole tab is one restore button. It is not an
 /// item id on purpose — the way back must not be hideable.
-fn build_top_minimized_tab(width: f64, height: f64) -> WidgetTree {
+fn build_top_minimized_tab(
+    snapshot: &ToolbarSnapshot,
+    spec: &model::TopToolbarSpec,
+    width: f64,
+    height: f64,
+) -> WidgetTree {
+    let control = match spec.strip() {
+        [model::TopToolbarNode::Control(control)] => *control,
+        _ => unreachable!("minimized specification contains one restore control"),
+    };
     let mut tree = WidgetTree::new((width, height));
     tree.push(WidgetNode::decor(
         "top.panel",
@@ -643,16 +393,18 @@ fn build_top_minimized_tab(width: f64, height: f64) -> WidgetTree {
         WidgetKind::Panel,
     ));
     tree.push(WidgetNode::new(
-        "top.chrome.restore",
+        control.id().render_id().into_owned(),
         (0.0, 0.0, width, height),
         WidgetKind::IconButton {
-            glyph: IconFn(toolbar_icons::draw_icon_restore),
+            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
+                control.icon(snapshot).expect("restore icon"),
+            )),
             icon_size: (height * 0.75).min(18.0),
             style: ButtonStyle::plain(),
         },
         Some(Interaction::click(
-            ToolbarEvent::SetTopMinimized(false),
-            Some("Show toolbar".to_string()),
+            control.event(snapshot),
+            Some(control.tooltip(snapshot)),
         )),
     ));
     tree
@@ -750,11 +502,11 @@ fn push_option_row(
 }
 
 pub(super) fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
-    if !snapshot.shape_picker_open || !model::top_shape_picker_visible(snapshot) {
+    if !snapshot.shape_picker_open || !model::TopToolbarSpec::shape_picker_visible(snapshot) {
         return 0.0;
     }
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let plan = plan_top_strip(snapshot);
+    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let (_, btn_h) = planned_button_size(snapshot, &plan);
     let gap = planned_gap(&plan);
     let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
@@ -782,21 +534,7 @@ pub(super) fn ring_row_height(snapshot: &ToolbarSnapshot) -> f64 {
 }
 
 pub(super) fn ring_row_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
-    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    if !planned_use_icons(snapshot, plan)
-        || is_simple
-        || !snapshot.highlight_tool_active
-        || !model::top_highlight_ring_visible(snapshot)
-    {
-        return 0.0;
-    }
-    let highlight_shown =
-        model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
-            .contains(&model::TopUtilityButton::Highlight)
-            && !plan
-                .dropped_utilities
-                .contains(&model::TopUtilityButton::Highlight);
-    if !highlight_shown {
+    if !model::TopToolbarSpec::contextual_highlight_ring_visible(snapshot, plan) {
         return 0.0;
     }
     ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT + 2.0
@@ -824,8 +562,8 @@ pub(super) fn overflow_height(snapshot: &ToolbarSnapshot) -> f64 {
         return 0.0;
     }
     let plan = plan_top_strip(snapshot);
-    let dropped_count = plan.dropped_tools.len() + plan.dropped_utilities.len();
-    if dropped_count == 0 || !plan.show_overflow {
+    let dropped_count = model::TopToolbarSpec::overflow_control_count(snapshot, &plan);
+    if dropped_count == 0 {
         return 0.0;
     }
     let (_, btn_h) = planned_button_size(snapshot, &plan);
@@ -839,149 +577,79 @@ fn tool_button_node(
     tool: Tool,
     id: impl Into<super::super::node::WidgetId>,
     rect: (f64, f64, f64, f64),
-    active: bool,
     use_icons: bool,
 ) -> WidgetNode {
-    let tooltip = tool_tooltip(snapshot, tool, tool_tooltip_label(tool));
-    let kind = if use_icons {
-        WidgetKind::IconButton {
-            glyph: semantic_icon_fn(model::semantic_icon_for_tool(tool)),
-            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0)),
-            style: ButtonStyle::active(active),
-        }
-    } else {
-        WidgetKind::TextButton {
-            label: LabelSpec::new(tool_label(tool), TOP_LABEL_FONT_SIZE, true),
-            style: ButtonStyle::active(active),
-        }
-    };
-    let badge = (rect.2 > super::TOP_COMPACT_BUTTON)
-        .then(|| snapshot.binding_hints.badge_for_tool(tool))
-        .flatten();
-    WidgetNode::new(
+    control_button_node(
+        snapshot,
+        model::TopToolbarControl::Tool(tool),
         id,
         rect,
-        kind,
-        Some(Interaction::click(
-            ToolbarEvent::SelectTool(tool),
-            Some(tooltip),
-        )),
+        use_icons,
     )
-    .with_shortcut_badge(badge, ShortcutBadgePlacement::Corner)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn utility_node(
+fn control_button_node(
     snapshot: &ToolbarSnapshot,
+    control: model::TopToolbarControl,
     id: impl Into<super::super::node::WidgetId>,
     rect: (f64, f64, f64, f64),
-    glyph: IconFn,
-    label: &str,
-    style: ButtonStyle,
-    event: ToolbarEvent,
-    tooltip: String,
     use_icons: bool,
 ) -> WidgetNode {
-    let badge = (rect.2 > super::TOP_COMPACT_BUTTON)
-        .then(|| snapshot.binding_hints.badge_for_event(&event))
-        .flatten();
-    let kind = if use_icons {
-        WidgetKind::IconButton {
-            glyph,
-            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0)),
-            style,
-        }
-    } else {
-        WidgetKind::TextButton {
-            label: LabelSpec::new(label, TOP_LABEL_FONT_SIZE, true),
-            style,
-        }
-    };
-    WidgetNode::new(
-        id,
-        rect,
-        kind,
-        Some(Interaction::click(event, Some(tooltip))),
-    )
-    .with_shortcut_badge(badge, ShortcutBadgePlacement::Corner)
+    let tooltip = control.tooltip(snapshot);
+    control_button_node_with_tooltip(snapshot, control, id, rect, use_icons, tooltip)
 }
 
-/// Undo/Redo button: dimmed and non-interactive while unavailable.
-#[allow(clippy::too_many_arguments)]
-fn history_node(
+fn overflow_control_button_node(
     snapshot: &ToolbarSnapshot,
-    id: &'static str,
+    control: model::TopToolbarControl,
+    id: impl Into<super::super::node::WidgetId>,
     rect: (f64, f64, f64, f64),
-    glyph: IconFn,
-    action: Action,
-    event: ToolbarEvent,
-    enabled: bool,
     use_icons: bool,
 ) -> WidgetNode {
-    let style = if enabled {
-        ButtonStyle::plain()
-    } else {
+    let tooltip = control.overflow_tooltip(snapshot);
+    control_button_node_with_tooltip(snapshot, control, id, rect, use_icons, tooltip)
+}
+
+fn control_button_node_with_tooltip(
+    snapshot: &ToolbarSnapshot,
+    control: model::TopToolbarControl,
+    id: impl Into<super::super::node::WidgetId>,
+    rect: (f64, f64, f64, f64),
+    use_icons: bool,
+    tooltip: String,
+) -> WidgetNode {
+    let enabled = control.enabled(snapshot);
+    let style = if !enabled {
         ButtonStyle::disabled()
+    } else {
+        match control.role() {
+            model::TopToolbarControlRole::Destructive => ButtonStyle::destructive(),
+            _ => ButtonStyle::active(control.active(snapshot)),
+        }
     };
     let kind = if use_icons {
+        let icon_size = if control == model::TopToolbarControl::ShapePicker {
+            ToolbarLayoutSpec::TOP_ICON_SIZE
+        } else {
+            ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0))
+        };
         WidgetKind::IconButton {
-            glyph,
-            icon_size: ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0)),
+            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
+                control.icon(snapshot).expect("button icon"),
+            )),
+            icon_size,
             style,
         }
     } else {
         WidgetKind::TextButton {
-            label: LabelSpec::new(action_short_label(action), TOP_LABEL_FONT_SIZE, true),
+            label: LabelSpec::new(control.label(snapshot), TOP_LABEL_FONT_SIZE, true),
             style,
         }
     };
-    let interact = enabled.then(|| {
-        Interaction::click(
-            event,
-            Some(format_binding_label(
-                action_label(action),
-                snapshot.binding_hints.binding_for_action(action),
-            )),
-        )
-    });
+    let interact = enabled.then(|| Interaction::click(control.event(snapshot), Some(tooltip)));
     let badge = (rect.2 > super::TOP_COMPACT_BUTTON)
-        .then(|| snapshot.binding_hints.badge_for_action(action))
+        .then(|| control.shortcut_badge(snapshot))
         .flatten();
     WidgetNode::new(id, rect, kind, interact)
-        .with_shortcut_badge(badge, ShortcutBadgePlacement::Corner)
-}
-
-/// Tooltip text for a tool button: label plus binding and/or drag hint.
-fn tool_tooltip(snapshot: &ToolbarSnapshot, tool: Tool, label: &str) -> String {
-    let default_hint = model::default_drag_hint(tool);
-    let binding = match (snapshot.binding_hints.for_tool(tool), default_hint) {
-        (Some(binding), Some(fallback)) => Some(format!("{}, {}", binding, fallback)),
-        (Some(binding), None) => Some(binding.to_string()),
-        (None, Some(fallback)) => Some(fallback.to_string()),
-        (None, None) => None,
-    };
-    format_binding_label(label, binding.as_deref())
-}
-
-/// Glyph function for a semantic tool icon.
-fn semantic_icon_fn(icon: model::SemanticToolIcon) -> IconFn {
-    use model::SemanticToolIcon as S;
-    IconFn(match icon {
-        S::Select => toolbar_icons::draw_icon_select,
-        S::Pen => toolbar_icons::draw_icon_pen,
-        S::Line => toolbar_icons::draw_icon_line,
-        S::Rect => toolbar_icons::draw_icon_rect,
-        S::Circle => toolbar_icons::draw_icon_circle,
-        S::Triangle => toolbar_icons::draw_icon_triangle,
-        S::Parallelogram => toolbar_icons::draw_icon_parallelogram,
-        S::Rhombus => toolbar_icons::draw_icon_rhombus,
-        S::Polygon => toolbar_icons::draw_icon_polygon,
-        S::FreeformPolygon => toolbar_icons::draw_icon_freeform_polygon,
-        S::Arrow => toolbar_icons::draw_icon_arrow,
-        S::Blur => toolbar_icons::draw_icon_blur,
-        S::Marker => toolbar_icons::draw_icon_marker,
-        S::Highlight => toolbar_icons::draw_icon_highlight,
-        S::StepMarker => toolbar_icons::draw_icon_step_marker,
-        S::Eraser => toolbar_icons::draw_icon_eraser,
-    })
+        .with_shortcut_badge(badge.as_deref(), ShortcutBadgePlacement::Corner)
 }

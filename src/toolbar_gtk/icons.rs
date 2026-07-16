@@ -16,29 +16,13 @@ use crate::input::Tool;
 use crate::toolbar_icons;
 use crate::ui::toolbar::model;
 
-pub(super) type IconPainter = fn(&cairo::Context, f64, f64, f64);
+pub(super) type IconPainter = toolbar_icons::ToolbarIconPainter;
 
 /// Painter for a tool's semantic icon; mirrors the built-in mapping.
 pub(super) fn tool_icon_painter(tool: Tool) -> IconPainter {
-    use model::SemanticToolIcon as S;
-    match model::semantic_icon_for_tool(tool) {
-        S::Select => toolbar_icons::draw_icon_select,
-        S::Pen => toolbar_icons::draw_icon_pen,
-        S::Line => toolbar_icons::draw_icon_line,
-        S::Rect => toolbar_icons::draw_icon_rect,
-        S::Circle => toolbar_icons::draw_icon_circle,
-        S::Triangle => toolbar_icons::draw_icon_triangle,
-        S::Parallelogram => toolbar_icons::draw_icon_parallelogram,
-        S::Rhombus => toolbar_icons::draw_icon_rhombus,
-        S::Polygon => toolbar_icons::draw_icon_polygon,
-        S::FreeformPolygon => toolbar_icons::draw_icon_freeform_polygon,
-        S::Arrow => toolbar_icons::draw_icon_arrow,
-        S::Blur => toolbar_icons::draw_icon_blur,
-        S::Marker => toolbar_icons::draw_icon_marker,
-        S::Highlight => toolbar_icons::draw_icon_highlight,
-        S::StepMarker => toolbar_icons::draw_icon_step_marker,
-        S::Eraser => toolbar_icons::draw_icon_eraser,
-    }
+    toolbar_icons::top_toolbar_icon_painter(model::TopToolbarIcon::Tool(
+        model::semantic_icon_for_tool(tool),
+    ))
 }
 
 /// Handle to an icon widget whose painter can be swapped when live toolbar

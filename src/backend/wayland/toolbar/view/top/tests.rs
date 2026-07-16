@@ -1,7 +1,7 @@
 use super::*;
 use crate::backend::wayland::toolbar::layout::{ToolbarLayoutSpec, top_size};
 use crate::backend::wayland::toolbar::view::{ShortcutBadgePlacement, WidgetKind, WidgetTree};
-use crate::config::toolbar_item_ids as ids;
+use crate::config::{Action, action_label, toolbar_item_ids as ids};
 use crate::input::state::test_support::make_test_input_state;
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
@@ -288,6 +288,48 @@ fn minimized_strip_is_a_single_restore_tab() {
         interactive[0].interact.as_ref().unwrap().event,
         ToolbarEvent::SetTopMinimized(false)
     ));
+}
+
+#[test]
+fn compact_shape_picker_preserves_its_full_semantic_icon_size() {
+    let snapshot = snapshot();
+    let mut plan = TopStripPlan::unconstrained();
+    plan.compact = true;
+    let tree = super::build::build_top_view_planned(&snapshot, &plan, 800.0, 100.0);
+    let picker = tree
+        .node_by_id(&ids::TOP_UTILITY_SHAPE_PICKER.as_str().into())
+        .expect("shape picker");
+
+    assert!(matches!(
+        picker.kind,
+        WidgetKind::IconButton { icon_size, .. }
+            if (icon_size - ToolbarLayoutSpec::TOP_ICON_SIZE).abs() < f64::EPSILON
+    ));
+}
+
+#[test]
+fn overflow_utility_tooltips_remain_bare_action_labels() {
+    let state = make_test_input_state();
+    let mut snapshot = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    snapshot.top_overflow_open = true;
+    let mut plan = TopStripPlan::unconstrained();
+    plan.swatch_count = 0;
+    plan.show_overflow = true;
+    plan.dropped_utilities = vec![model::TopUtilityButton::Text];
+
+    let tree = super::build::build_top_view_planned(&snapshot, &plan, 800.0, 160.0);
+    let text = tree
+        .node_by_id(&"top.overflow.top.utility.text".into())
+        .expect("overflow text control");
+    assert_eq!(
+        text.interact
+            .as_ref()
+            .and_then(|interaction| interaction.tooltip.as_deref()),
+        Some(action_label(Action::EnterTextMode))
+    );
 }
 
 #[test]
