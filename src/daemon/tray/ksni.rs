@@ -130,7 +130,7 @@ impl ksni::Tray for WayscriberTray {
                 label: toggle_label,
                 icon_name: menu_icon_name("tool-pointer", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
-                    this.toggle_flag.store(true, Ordering::Release);
+                    this.request_toggle();
                 }),
                 ..Default::default()
             }
@@ -306,7 +306,7 @@ impl ksni::Tray for WayscriberTray {
                 label: "Quit".to_string(),
                 icon_name: menu_icon_name("window-close", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
-                    this.quit_flag.store(true, Ordering::Release);
+                    this.request_quit();
                 }),
                 ..Default::default()
             }

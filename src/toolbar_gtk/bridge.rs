@@ -172,33 +172,24 @@ impl FeedbackPublisher {
             if state.queue.len() < GTK_FEEDBACK_CAPACITY {
                 state.queue.push_back(feedback);
             } else if let Some(kind) = feedback.move_kind() {
-                let mut replacement = None;
-                for (index, queued) in state.queue.iter().enumerate().rev() {
-                    if queued.is_non_coalescible_boundary() {
-                        break;
+                match full_queue_move_action(&state.queue, kind) {
+                    Some(FullQueueMoveAction::Replace(index)) => state.queue[index] = feedback,
+                    Some(FullQueueMoveAction::Reclaim(index)) => {
+                        // A boundary prevents replacement in the current
+                        // segment. Move feedback is intermediate and each
+                        // drag End carries authoritative coordinates, so
+                        // reclaim one queued Move and append this one
+                        // without moving any ordered boundary.
+                        state.queue.remove(index);
+                        state.queue.push_back(feedback);
                     }
-                    if queued.move_kind() == Some(kind) {
-                        replacement = Some(index);
-                        break;
-                    }
-                }
-                match replacement {
-                    Some(index) => state.queue[index] = feedback,
                     None => {
                         state.accepting = false;
                         overflowed = true;
                     }
                 }
             } else {
-                let reclaim = feedback
-                    .drag_kind()
-                    .and_then(|kind| oldest_move_in_current_segment(&state.queue, kind))
-                    .or_else(|| {
-                        state
-                            .queue
-                            .iter()
-                            .position(|queued| queued.move_kind().is_some())
-                    });
+                let reclaim = reclaim_move_for_boundary(&state.queue, feedback.drag_kind());
                 if let Some(index) = reclaim {
                     state.queue.remove(index);
                     state.queue.push_back(feedback);
@@ -299,19 +290,50 @@ impl GtkToolbarFeedback {
     }
 }
 
-fn oldest_move_in_current_segment(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FullQueueMoveAction {
+    Replace(usize),
+    Reclaim(usize),
+}
+
+fn full_queue_move_action(
     queue: &VecDeque<GtkToolbarFeedback>,
     kind: GtkToolbarKind,
+) -> Option<FullQueueMoveAction> {
+    let mut in_current_segment = true;
+    let mut oldest_move = None;
+    for (index, feedback) in queue.iter().enumerate().rev() {
+        if in_current_segment && feedback.is_non_coalescible_boundary() {
+            in_current_segment = false;
+            continue;
+        }
+        if feedback.move_kind().is_some() {
+            oldest_move = Some(index);
+            if in_current_segment && feedback.move_kind() == Some(kind) {
+                return Some(FullQueueMoveAction::Replace(index));
+            }
+        }
+    }
+    oldest_move.map(FullQueueMoveAction::Reclaim)
+}
+
+fn reclaim_move_for_boundary(
+    queue: &VecDeque<GtkToolbarFeedback>,
+    kind: Option<GtkToolbarKind>,
 ) -> Option<usize> {
-    let segment_start = queue
-        .iter()
-        .rposition(GtkToolbarFeedback::is_non_coalescible_boundary)
-        .map_or(0, |index| index + 1);
-    queue
-        .iter()
-        .enumerate()
-        .skip(segment_start)
-        .find_map(|(index, feedback)| (feedback.move_kind() == Some(kind)).then_some(index))
+    let mut oldest_move = None;
+    let mut oldest_matching_move_in_current_segment = None;
+    for (index, feedback) in queue.iter().enumerate() {
+        let Some(move_kind) = feedback.move_kind() else {
+            oldest_matching_move_in_current_segment = None;
+            continue;
+        };
+        oldest_move.get_or_insert(index);
+        if Some(move_kind) == kind {
+            oldest_matching_move_in_current_segment.get_or_insert(index);
+        }
+    }
+    oldest_matching_move_in_current_segment.or(oldest_move)
 }
 
 struct LatestValueSender<T> {
@@ -450,9 +472,12 @@ impl Drop for GtkToolbarBridge {
             GTK_THREAD_SHUTDOWN_TIMEOUT,
         ) {
             ThreadShutdownOutcome::Joined => self.health.mark_stopped(),
-            ThreadShutdownOutcome::Panicked => self
-                .health
-                .fail("GTK toolbar thread panicked during shutdown"),
+            // begin_stopping deliberately closes terminal-state publication,
+            // so report a join panic directly instead of routing it through
+            // BridgeHealth::fail where STATUS_STOPPING would suppress it.
+            ThreadShutdownOutcome::Panicked => {
+                log::warn!("GTK toolbar thread panicked during shutdown")
+            }
             ThreadShutdownOutcome::TimedOut => {
                 log::warn!(
                     "GTK toolbar thread did not stop within {:?}; detaching it safely",
@@ -599,7 +624,59 @@ mod tests {
     }
 
     #[test]
-    fn move_never_crosses_an_event_boundary_or_toolbar_kind() {
+    fn event_reclaims_the_oldest_move_when_the_feedback_queue_is_full() {
+        let (_wake, health, publisher) = channel();
+        let oldest_move = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 1);
+        let newer_move = drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 2);
+        publisher.publish(oldest_move.clone()).unwrap();
+        publisher.publish(newer_move.clone()).unwrap();
+        for _ in 2..GTK_FEEDBACK_CAPACITY {
+            publisher.publish(event()).unwrap();
+        }
+
+        publisher
+            .publish(event())
+            .expect("ordered feedback can reclaim an older coalescible move");
+
+        assert!(!health.failed());
+        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+        assert!(!drained.contains(&oldest_move));
+        assert!(drained.contains(&newer_move));
+        assert_eq!(drained.last(), Some(&event()));
+    }
+
+    #[test]
+    fn drag_boundaries_prefer_a_matching_move_in_the_current_segment() {
+        for phase in [GtkToolbarDragPhase::Start, GtkToolbarDragPhase::End] {
+            let (_wake, health, publisher) = channel();
+            let oldest_move = drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1);
+            let matching_move = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 2);
+            publisher.publish(oldest_move.clone()).unwrap();
+            publisher.publish(event()).unwrap();
+            publisher.publish(matching_move.clone()).unwrap();
+            for seq in 3..GTK_FEEDBACK_CAPACITY as u64 {
+                publisher
+                    .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, seq))
+                    .unwrap();
+            }
+            let boundary = drag(GtkToolbarKind::Top, phase, GTK_FEEDBACK_CAPACITY as u64);
+
+            publisher
+                .publish(boundary.clone())
+                .expect("drag boundary can reclaim a same-kind move in its current segment");
+
+            assert!(!health.failed());
+            let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+            assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+            assert_eq!(drained.first(), Some(&oldest_move));
+            assert!(!drained.contains(&matching_move));
+            assert_eq!(drained.last(), Some(&boundary));
+        }
+    }
+
+    #[test]
+    fn move_reclaims_oldest_move_without_reordering_event_boundary() {
         let (_wake, health, publisher) = channel();
         for seq in 0..(GTK_FEEDBACK_CAPACITY - 2) as u64 {
             publisher
@@ -611,12 +688,23 @@ mod tests {
             .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1))
             .unwrap();
 
-        assert_eq!(
-            publisher.publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999)),
-            Err(FeedbackPublishError::Failed)
-        );
-        assert!(health.failed());
+        publisher
+            .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999))
+            .expect("an older coalescible move can be reclaimed safely");
+        assert!(!health.failed());
         assert_eq!(publisher.pending_len(), GTK_FEEDBACK_CAPACITY);
+        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        let event_index = drained
+            .iter()
+            .position(|feedback| feedback == &event())
+            .unwrap();
+        let latest_index = drained
+            .iter()
+            .position(|feedback| {
+                feedback == &drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999)
+            })
+            .unwrap();
+        assert!(event_index < latest_index);
     }
 
     #[test]
@@ -646,6 +734,15 @@ mod tests {
         publisher.publish(event()).unwrap();
         assert!(wake_is_readable(&wake));
         assert_eq!(publisher.pending_len(), 1);
+        assert_eq!(publisher.drain(1), vec![event()]);
+    }
+
+    #[test]
+    fn committed_feedback_remains_drainable_after_terminal_failure() {
+        let (_wake, health, publisher) = channel();
+        publisher.publish(event()).unwrap();
+        health.fail("expected terminal bridge failure");
+
         assert_eq!(publisher.drain(1), vec![event()]);
     }
 
@@ -705,6 +802,20 @@ mod tests {
         assert_eq!(
             finish_thread_within(&mut thread, &completion_rx, Duration::from_secs(1)),
             ThreadShutdownOutcome::Joined
+        );
+        assert!(thread.is_none());
+    }
+
+    #[test]
+    fn panicking_thread_reports_panicked_shutdown_outcome() {
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let mut thread = Some(std::thread::spawn(move || {
+            let _completion = ThreadCompletion(completion_tx);
+            panic!("expected GTK shutdown panic");
+        }));
+        assert_eq!(
+            finish_thread_within(&mut thread, &completion_rx, Duration::from_secs(1)),
+            ThreadShutdownOutcome::Panicked
         );
         assert!(thread.is_none());
     }

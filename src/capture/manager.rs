@@ -268,6 +268,9 @@ impl CaptureManager {
 
     pub fn poll(&mut self) -> CapturePoll {
         let message = self.completion_rx.try_recv();
+        if self.shutdown_requested.load(Ordering::Acquire) || self.terminal_reported {
+            return CapturePoll::Idle;
+        }
         match (self.active, message) {
             (None, Err(TryRecvError::Empty)) => CapturePoll::Idle,
             (Some(active), Err(TryRecvError::Empty)) => CapturePoll::Pending {
@@ -275,9 +278,6 @@ impl CaptureManager {
                 operation: active.operation,
             },
             (active, Err(TryRecvError::Disconnected)) => {
-                if self.shutdown_requested.load(Ordering::Acquire) || self.terminal_reported {
-                    return CapturePoll::Idle;
-                }
                 self.terminal_reported = true;
                 self.healthy = false;
                 self.active = None;
@@ -646,6 +646,21 @@ mod transport_tests {
             } if error.contains("without an active request")
         ));
         assert!(matches!(unowned.poll(), CapturePoll::Idle));
+    }
+
+    #[test]
+    fn buffered_completion_after_terminal_shutdown_is_discarded() {
+        let (mut manager, _request_rx, completion_tx) = harness();
+        completion_tx
+            .try_send(CaptureCompletion {
+                id: CaptureRequestId(7),
+                outcome: cancelled(),
+            })
+            .unwrap();
+        manager.mark_unhealthy();
+
+        assert!(matches!(manager.poll(), CapturePoll::Idle));
+        assert!(matches!(manager.poll(), CapturePoll::Idle));
     }
 
     #[test]

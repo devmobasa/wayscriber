@@ -780,7 +780,7 @@ mod tests {
             PersistenceOutcome::HasArtifacts(false)
         ));
         controller.shutdown(0).unwrap();
-        assert!(wake.drain().unwrap().reads > 0);
+        assert!(wake.drain().unwrap());
     }
 
     #[test]

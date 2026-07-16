@@ -101,23 +101,13 @@ impl WaylandState {
         conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        if self
-            .gtk_toolbar
-            .as_ref()
-            .is_some_and(GtkToolbarBridge::failed)
-        {
-            self.cancel_gtk_toolbar_drag_lifecycle();
-            self.gtk_toolbar = None;
-            return;
-        }
         let Some(bridge) = self.gtk_toolbar.as_ref() else {
             return;
         };
-        let pending = bridge.drain_feedback();
-        if bridge.failed() {
-            self.cancel_gtk_toolbar_drag_lifecycle();
-            self.gtk_toolbar = None;
-            return;
+        let mut pending = bridge.drain_feedback();
+        let bridge_failed = bridge.failed();
+        if bridge_failed {
+            pending.extend(bridge.drain_feedback());
         }
         for feedback in pending {
             // GTK uses a separate connection and bypasses the built-in
@@ -217,6 +207,14 @@ impl WaylandState {
                     self.apply_gtk_side_offset(x, y, surface_size, phase);
                 }
             }
+        }
+
+        // Feedback was committed before the bridge's wake/failure state. Apply
+        // the drained batch first, then fail over, so a concurrent terminal
+        // transition cannot discard an already-accepted Undo or drag end.
+        if bridge_failed {
+            self.cancel_gtk_toolbar_drag_lifecycle();
+            self.gtk_toolbar = None;
         }
     }
 
