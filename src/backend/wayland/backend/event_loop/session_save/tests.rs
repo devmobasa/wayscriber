@@ -66,7 +66,7 @@ fn accepted_autosave_worker_panic_restores_dirty_and_requests_one_notification()
     let mut session = SessionState::new(Some(options.clone()));
     session.record_input_dirty(started, true);
     let dirty_window = session.prepare_autosave_submission().unwrap();
-    let mut controller = PersistenceController::start().unwrap();
+    let mut controller = PersistenceController::start_for_test().unwrap();
     let request_id = controller
         .try_submit(0, PersistenceOperation::PanicForTest)
         .unwrap();

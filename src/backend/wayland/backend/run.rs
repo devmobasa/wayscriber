@@ -22,6 +22,7 @@ pub(super) fn run_backend(backend: &mut WaylandBackend) -> Result<()> {
         &mut runtime.event_queue,
         &runtime.qh,
         &mut runtime.state,
+        &runtime.runtime_wake,
     );
 
     match outcome.loop_error {
