@@ -21,7 +21,7 @@ impl WaylandState {
             main_surface_uses_overlay_layer,
             pending_freeze_on_start,
             screencopy_manager,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_manager,
         } = init;
         let WaylandGlobals {
@@ -37,7 +37,7 @@ impl WaylandState {
             seat_state,
         } = globals;
 
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         let tablet_settings = {
             TabletSettings {
                 enabled: config.tablet.enabled,
@@ -132,49 +132,49 @@ impl WaylandState {
             locked_pointer: None,
             relative_pointer: None,
             cursor_hidden: false,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_manager,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_seats: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablets: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_tools: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_pads: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_pad_groups: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_pad_rings: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_pad_strips: Vec::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_settings,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet_found_logged: false,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_tip_down: false,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_on_overlay: false,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_on_toolbar: false,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_base_thickness: None,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_pressure_thickness: None,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_surface: None,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_last_pos: None,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_peak_thickness: None,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             pending_stylus_frame: crate::backend::wayland::state::PendingStylusFrame::default(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_tool_types: std::collections::HashMap::new(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_auto_switched_to_eraser: false,
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             persistence,

@@ -13,7 +13,6 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
   * Cargo.toml (wayscriber)
   * configurator/Cargo.toml
   * Cargo.lock (via cargo generate-lockfile)
-  * configurator/Cargo.lock local package versions
   * flake.nix package version follows Cargo.toml automatically
   * packaging/PKGBUILD pkgver and template sha256sums=('SKIP')
   * packaging/.SRCINFO (via makepkg --printsrcinfo)
@@ -133,26 +132,6 @@ update_version_field() {
 
 update_version_field "Cargo.toml"
 update_version_field "configurator/Cargo.toml"
-
-update_lock_package_version() {
-    local file="$1"
-    local package="$2"
-    if ! [[ -f "$file" ]]; then
-        echo "warn: $file not found, skipping $package lockfile entry" >&2
-        return
-    fi
-    if $DRY_RUN; then
-        echo "dry-run: would update $package entry in $file"
-    else
-        PACKAGE_NAME="$package" NEXT_VERSION="$cargo_version" perl -0777 -pi -e '
-            my $name = quotemeta($ENV{PACKAGE_NAME});
-            s/(\[\[package\]\]\nname\s*=\s*"$name"\nversion\s*=\s*")\K[^"]+/$ENV{NEXT_VERSION}/s
-        ' "$file"
-    fi
-}
-
-update_lock_package_version "configurator/Cargo.lock" "wayscriber"
-update_lock_package_version "configurator/Cargo.lock" "wayscriber-configurator"
 
 if [[ -f Cargo.lock ]]; then
     if $DRY_RUN; then

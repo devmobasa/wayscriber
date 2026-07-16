@@ -53,7 +53,7 @@ impl WaylandState {
         self.stylus_hover_cursor_position().is_none() && self.pointer_over_toolbar()
     }
 
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn stylus_hover_cursor_visible(&self) -> bool {
         self.stylus_on_overlay
             && !self.stylus_on_toolbar
@@ -61,7 +61,7 @@ impl WaylandState {
             && self.stylus_last_pos.is_some()
     }
 
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn stylus_hover_cursor_position(&self) -> Option<(f64, f64)> {
         if self.stylus_hover_cursor_visible() {
             self.stylus_last_pos
@@ -70,12 +70,12 @@ impl WaylandState {
         }
     }
 
-    #[cfg(not(tablet))]
+    #[cfg(not(feature = "tablet-input"))]
     pub(in crate::backend::wayland) fn stylus_hover_cursor_visible(&self) -> bool {
         false
     }
 
-    #[cfg(not(tablet))]
+    #[cfg(not(feature = "tablet-input"))]
     pub(in crate::backend::wayland) fn stylus_hover_cursor_position(&self) -> Option<(f64, f64)> {
         None
     }

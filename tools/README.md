@@ -19,7 +19,12 @@ Helper scripts for development, installation, packaging, and release workflows.
 - **code-health-report.sh** - Report local maintainability metrics
   - Reports Rust files over 500 lines, functions over 120 lines, production unwrap/expect/panic/unsafe markers, selected allowances, and direct `fs::write` usage
   - Does not fail on reported findings; intended for baseline visibility before adding quality gates
-  - Usage: `bash tools/code-health-report.sh`
+  - Usage: `./tools/code-health-report.sh`
+
+- **check-rust-source-coverage.py** - Reject Rust sources outside the supported Cargo module graph
+  - Uses current rustc dep-info from all-target/all-feature and no-default-feature checks
+  - Runs as a hard gate in local and GitHub CI
+  - Usage: `./tools/check-rust-source-coverage.py`
 
 - **reload-daemon.sh** - Restart running daemon
   - Kills and restarts the daemon to pick up config/code changes
@@ -44,14 +49,14 @@ Helper scripts for development, installation, packaging, and release workflows.
 ## Version & Release
 
 - **bump-version.sh** - Bump version numbers
-  - Updates Cargo.toml, configurator/Cargo.toml, Cargo.lock, configurator/Cargo.lock, PKGBUILD, .SRCINFO
+  - Updates Cargo.toml, configurator/Cargo.toml, the workspace Cargo.lock, PKGBUILD, and .SRCINFO
   - flake.nix package version follows Cargo.toml automatically
   - Auto-increments patch version if no version specified
   - Supports MAJOR.MINOR.PATCH.HOTFIX for packaging-only hotfix releases
   - Usage: `./tools/bump-version.sh [--dry-run] [new_version]`
 
 - **check-version-consistency.sh** - Check release metadata alignment
-  - Verifies Cargo manifests, lockfiles, packaging metadata, and flake version sourcing
+  - Verifies Cargo manifests, the workspace lockfile, packaging metadata, and flake version sourcing
   - With `--release-version X.Y.Z[.N]`, rejects tags that do not match Cargo or an explicit packaging hotfix of Cargo
   - Usage: `bash tools/check-version-consistency.sh [--release-version X.Y.Z[.N]]`
 

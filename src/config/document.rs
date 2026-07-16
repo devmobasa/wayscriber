@@ -396,7 +396,7 @@ fn collect_flattened_unknown_paths(
 }
 
 fn is_known_feature_gated_path(_path: &str) -> bool {
-    #[cfg(not(tablet))]
+    #[cfg(not(feature = "tablet-input"))]
     if _path == "tablet" || _path.starts_with("tablet.") {
         return true;
     }

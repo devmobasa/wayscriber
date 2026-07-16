@@ -581,12 +581,12 @@ fn defer_pending_autosave_for_interaction(
     true
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 fn stylus_tip_down(state: &WaylandState) -> bool {
     state.stylus_tip_down
 }
 
-#[cfg(not(tablet))]
+#[cfg(not(feature = "tablet-input"))]
 fn stylus_tip_down(_state: &WaylandState) -> bool {
     false
 }

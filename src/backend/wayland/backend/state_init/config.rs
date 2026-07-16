@@ -52,12 +52,12 @@ fn log_config(config: &Config) {
         "  Help overlay font size: {}",
         config.ui.help_overlay_style.font_size
     );
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     info!(
         "Tablet feature: compiled=yes, runtime_enabled={}",
         config.tablet.enabled
     );
-    #[cfg(not(tablet))]
+    #[cfg(not(feature = "tablet-input"))]
     info!("Tablet feature: compiled=no");
 }
 

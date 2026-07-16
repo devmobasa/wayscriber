@@ -26,7 +26,7 @@ use wayland_client::{
     Proxy, QueueHandle,
     protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface, wl_touch},
 };
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
     zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2, zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
@@ -40,7 +40,7 @@ use wayland_protocols::wp::{
     relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
 };
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 use crate::input::tablet::TabletSettings;
 use crate::{
     backend::ExitAfterCaptureMode,
@@ -155,7 +155,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub main_surface_uses_overlay_layer: bool,
     pub pending_freeze_on_start: bool,
     pub screencopy_manager: Option<ScreencopyManager>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub tablet_manager: Option<ZwpTabletManagerV2>,
 }
 
@@ -221,55 +221,55 @@ pub(super) struct WaylandState {
     pub(super) cursor_hidden: bool,
 
     // Tablet / stylus (feature-gated)
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_manager: Option<ZwpTabletManagerV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_seats: Vec<ZwpTabletSeatV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablets: Vec<ZwpTabletV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_tools: Vec<ZwpTabletToolV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_pads: Vec<ZwpTabletPadV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_pad_groups: Vec<ZwpTabletPadGroupV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_pad_rings: Vec<ZwpTabletPadRingV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_pad_strips: Vec<ZwpTabletPadStripV2>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_settings: TabletSettings,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) tablet_found_logged: bool,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_tip_down: bool,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_on_overlay: bool,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_on_toolbar: bool,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_base_thickness: Option<f64>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_pressure_thickness: Option<f64>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_surface: Option<wl_surface::WlSurface>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_last_pos: Option<(f64, f64)>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_peak_thickness: Option<f64>,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) pending_stylus_frame: PendingStylusFrame,
     /// Map of tool object IDs to their physical types (pen, eraser, etc.)
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_tool_types: std::collections::HashMap<
         wayland_client::backend::ObjectId,
         crate::backend::wayland::TabletToolType,
     >,
     /// Whether we auto-switched to eraser (if true, restore previous tool on proximity out)
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_auto_switched_to_eraser: bool,
     /// Tool override that was active before auto-switching to eraser
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) stylus_pre_eraser_tool_override: Option<crate::input::Tool>,
 
     // Session persistence
@@ -280,7 +280,7 @@ pub(super) struct WaylandState {
     pub(super) tokio_handle: tokio::runtime::Handle,
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[derive(Clone, Debug, Default)]
 pub(super) struct PendingStylusFrame {
     pub(super) motion: Option<(f64, f64)>,
@@ -355,7 +355,7 @@ impl TouchState {
     }
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 impl PendingStylusFrame {
     pub(super) fn is_empty(&self) -> bool {
         self.motion.is_none()

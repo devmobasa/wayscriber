@@ -35,7 +35,7 @@ mod relative_pointer;
 mod screencopy;
 mod seat;
 mod shm;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 mod tablet;
 mod touch;
 mod xdg;

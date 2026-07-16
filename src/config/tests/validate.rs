@@ -682,7 +682,7 @@ fn intentional_legacy_shortcut_pair_is_preserved_after_current_default_edit() {
     );
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn validate_clamps_pressure_thickness_scale_step() {
     let mut config = Config::default();

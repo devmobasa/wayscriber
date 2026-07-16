@@ -39,7 +39,7 @@ impl WaylandState {
     }
 
     fn apply_input_update(&mut self, update: impl FnOnce(&mut InputState)) {
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         let prev_thickness = self.input_state.current_thickness;
         let highlight_before =
             ClickHighlightPreferencesSnapshot::from_input_state(&self.input_state);
@@ -54,7 +54,7 @@ impl WaylandState {
             self.save_click_highlight_preferences();
         }
 
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         self.sync_stylus_thickness_after_input_update(prev_thickness);
 
         self.drain_input_action_followups();
@@ -76,7 +76,7 @@ impl WaylandState {
         self.drain_clipboard_requests();
     }
 
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     fn sync_stylus_thickness_after_input_update(&mut self, prev: f64) {
         if !self.sync_stylus_thickness_cache(prev) {
             return;

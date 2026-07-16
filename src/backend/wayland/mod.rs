@@ -10,7 +10,7 @@ mod portal_task;
 mod session;
 mod state;
 mod surface;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 mod tablet_types;
 mod toolbar;
 mod toolbar_intent;
@@ -31,5 +31,5 @@ mod zoom;
 
 pub use backend::WaylandBackend;
 pub(crate) use backend::runtime_wake::{RuntimeWakeHandle, RuntimeWakeSource};
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 pub use tablet_types::TabletToolType;

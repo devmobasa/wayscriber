@@ -4,10 +4,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    if env::var_os("CARGO_FEATURE_TABLET_INPUT").is_some() {
-        println!("cargo:rustc-cfg=tablet");
-    }
-
     println!("cargo:rerun-if-env-changed=WAYSCRIBER_RELEASE_VERSION");
     match env::var("WAYSCRIBER_RELEASE_VERSION") {
         Ok(release_version) if !release_version.is_empty() => {

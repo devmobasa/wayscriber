@@ -46,7 +46,7 @@ const VSYNC_ASSUMED_FRAME_BUDGET: Duration = Duration::from_micros(16_667);
 const SLOW_RENDER_FALLBACK: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(not(tablet), allow(dead_code))]
+#[cfg_attr(not(feature = "tablet-input"), allow(dead_code))]
 pub(in crate::backend::wayland) enum PerfInputSource {
     Pointer,
     Touch,

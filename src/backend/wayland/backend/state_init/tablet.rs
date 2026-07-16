@@ -1,17 +1,17 @@
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 use log::{debug, info, warn};
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 
 use crate::config::Config;
 
 use super::super::setup::WaylandSetup;
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 const TABLET_MANAGER_MAX_VERSION: u32 = 2;
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 pub(super) fn bind_tablet_manager(
     setup: &WaylandSetup,
     config: &Config,

@@ -1146,7 +1146,7 @@ fn document_save_preserves_symlink_permissions_and_backs_up_source_contents() {
     );
 }
 
-#[cfg(not(tablet))]
+#[cfg(not(feature = "tablet-input"))]
 #[test]
 fn disabled_tablet_section_round_trips_without_unknown_warning() {
     let temp = TempConfig::new("disabled-tablet");
@@ -1165,7 +1165,7 @@ fn disabled_tablet_section_round_trips_without_unknown_warning() {
     assert!(saved.contains("future_tablet_setting = 12"));
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn enabled_tablet_section_reports_and_preserves_nested_unknown_setting() {
     let temp = TempConfig::new("enabled-tablet");

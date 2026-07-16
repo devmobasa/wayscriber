@@ -168,7 +168,7 @@ fn force_inline_toolbars_requested_uses_config_or_env() {
     ));
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn pending_stylus_frame_treats_button_presses_as_work() {
     let mut pending = PendingStylusFrame::default();

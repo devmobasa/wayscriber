@@ -9,7 +9,7 @@ pub mod events;
 pub mod hit_test;
 pub mod modifiers;
 pub mod state;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 pub mod tablet;
 pub mod tool;
 
@@ -26,7 +26,7 @@ pub use state::{
     ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayCursorHint, InputState,
     OutputFocusAction, SelectionHandle, TextInputMode, ZoomAction,
 };
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;
 pub use tool::{DragBindableTool, DragTool, EraserMode, PerToolDrawingSettings, Tool};

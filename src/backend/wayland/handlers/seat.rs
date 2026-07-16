@@ -66,7 +66,7 @@ impl SeatHandler for WaylandState {
             }
         }
 
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         if let Some(manager) = &self.tablet_manager
             && self.tablet_seats.is_empty()
         {
