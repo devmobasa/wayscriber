@@ -151,19 +151,11 @@ impl WaylandState {
             operation,
         };
 
-        if let Err(err) = self
+        let submission = self
             .capture
             .manager_mut()
-            .request_document_delivery(request)
-        {
-            log::error!("Failed to request board PDF export delivery: {}", err);
-            self.capture.clear_in_progress();
-            self.capture.clear_exit_on_success();
-            self.input_state.set_ui_toast(
-                crate::input::state::UiToastKind::Error,
-                format!("Board PDF export failed: {err}"),
-            );
-        }
+            .request_document_delivery(request);
+        self.accept_capture_submission(submission, operation);
     }
 
     fn board_pdf_save_config(&self, action: Action) -> FileSaveConfig {

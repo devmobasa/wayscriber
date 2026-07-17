@@ -1,22 +1,38 @@
 use log::{info, warn};
-use wayland_client::Connection;
+use std::time::{Duration, Instant};
 
 use super::super::super::state::{OverlaySuppression, WaylandState};
 use super::super::helpers::friendly_capture_error;
-use crate::capture::CaptureOutcome;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
+use crate::capture::{CaptureOutcome, CapturePoll, ImageOperationKind};
 use crate::config::Action;
 use crate::input::state::{PendingBackendAction, UiToastKind};
 use crate::notification;
 
-pub(super) fn poll_portal_captures(state: &mut WaylandState) {
+pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
     // Apply any completed portal fallback captures without blocking.
-    state.frozen.poll_portal_capture(&mut state.input_state);
-    handle_pending_frozen_image(state);
-    state.zoom.poll_portal_capture(&mut state.input_state);
+    state
+        .frozen
+        .poll_portal_capture(&mut state.input_state, now);
+    handle_pending_frozen_image(state, now);
+    state.zoom.poll_portal_capture(&mut state.input_state, now);
+    // Portal completion can make the capture controller idle before dispatch.
+    // Release its overlay suppression now so the normal blocking dispatch does
+    // not wait forever for a wake that has already been consumed.
+    state.apply_capture_completion();
 }
 
-fn handle_pending_frozen_image(state: &mut WaylandState) {
+pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
+    super::min_timeout(
+        state.frozen.portal_timeout(now),
+        super::min_timeout(
+            state.zoom.portal_timeout(now),
+            state.xdg_frozen_fullscreen_timeout(now),
+        ),
+    )
+}
+
+fn handle_pending_frozen_image(state: &mut WaylandState, now: Instant) {
     if !state.frozen.has_pending_image() {
         return;
     }
@@ -29,7 +45,7 @@ fn handle_pending_frozen_image(state: &mut WaylandState) {
             return;
         }
         if state.xdg_frozen_fullscreen_pending_configure() {
-            if state.xdg_frozen_fullscreen_timed_out() {
+            if state.xdg_frozen_fullscreen_timed_out(now) {
                 warn!("Frozen xdg fullscreen configure timed out; cancelling freeze");
                 state.input_state.set_ui_toast(
                     UiToastKind::Error,
@@ -44,13 +60,6 @@ fn handle_pending_frozen_image(state: &mut WaylandState) {
         return;
     }
     state.activate_pending_frozen_image_for_current_surface();
-}
-
-pub(super) fn flush_if_capture_active(conn: &Connection, capture_active: bool) {
-    if capture_active {
-        let _ = conn.flush();
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
 }
 
 pub(super) fn handle_pending_actions(
@@ -138,13 +147,36 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
 }
 
 fn handle_capture_results(state: &mut WaylandState) {
-    if !state.capture.is_in_progress() {
+    let (id, operation, outcome) = match state.capture.manager_mut().poll() {
+        CapturePoll::Idle | CapturePoll::Pending { .. } => return,
+        CapturePoll::Ready {
+            id,
+            operation,
+            outcome,
+        } => (id, operation, outcome),
+        CapturePoll::WorkerFailed {
+            active_id,
+            operation,
+            error,
+        } => {
+            if let Some(id) = active_id {
+                let _ = state.capture.consume_accepted(id);
+            }
+            handle_capture_manager_failure(state, operation, &error);
+            return;
+        }
+    };
+
+    if !state.capture.consume_accepted(id) {
+        let expected = state.capture.accepted_id();
+        state.capture.manager_mut().mark_unhealthy();
+        handle_capture_manager_failure(
+            state,
+            Some(operation),
+            &format!("capture completion {id} did not match accepted identity {expected:?}"),
+        );
         return;
     }
-
-    let Some(outcome) = state.capture.manager_mut().try_take_result() else {
-        return;
-    };
 
     info!("Capture completed");
 
@@ -293,4 +325,38 @@ fn handle_capture_results(state: &mut WaylandState) {
     if should_exit {
         state.input_state.should_exit = true;
     }
+}
+
+fn handle_capture_manager_failure(
+    state: &mut WaylandState,
+    operation: Option<ImageOperationKind>,
+    error: &str,
+) {
+    state.capture.clear_preflight();
+    state.capture.clear_pending_pdf_export();
+    state.show_overlay();
+    state.capture.clear_in_progress();
+    state.capture.clear_exit_on_success();
+
+    let message = match operation {
+        Some(ImageOperationKind::Screenshot) => friendly_capture_error(error),
+        Some(operation) => format!(
+            "{} failed because the capture worker stopped.",
+            operation.saved_log_label()
+        ),
+        None => "Capture services stopped unexpectedly.".to_string(),
+    };
+    warn!("Capture manager failure: {error}");
+    state
+        .input_state
+        .set_ui_toast(UiToastKind::Error, message.clone());
+    notification::send_notification_async(
+        &state.tokio_handle,
+        operation
+            .map(ImageOperationKind::failure_title)
+            .unwrap_or("Capture failed")
+            .to_string(),
+        message,
+        Some("dialog-error".to_string()),
+    );
 }

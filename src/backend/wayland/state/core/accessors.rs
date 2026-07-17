@@ -5,6 +5,22 @@ use std::time::{Duration, Instant};
 
 const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
 
+fn xdg_frozen_fullscreen_timeout(
+    pending_configure: bool,
+    requested_at: Option<Instant>,
+    now: Instant,
+) -> Option<Duration> {
+    if !pending_configure {
+        return None;
+    }
+    Some(
+        requested_at
+            .and_then(|requested_at| requested_at.checked_add(XDG_FROZEN_FULLSCREEN_TIMEOUT))
+            .map(|deadline| deadline.saturating_duration_since(now))
+            .unwrap_or(Duration::ZERO),
+    )
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn current_mouse(&self) -> (i32, i32) {
         (self.data.current_mouse_x, self.data.current_mouse_y)
@@ -230,12 +246,23 @@ impl WaylandState {
         )
     }
 
-    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_timed_out(&self) -> bool {
-        self.xdg_frozen_fullscreen_pending_configure()
-            && self
-                .data
-                .xdg_frozen_fullscreen_requested_at
-                .is_some_and(|requested_at| requested_at.elapsed() >= XDG_FROZEN_FULLSCREEN_TIMEOUT)
+    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_timeout(
+        &self,
+        now: Instant,
+    ) -> Option<Duration> {
+        xdg_frozen_fullscreen_timeout(
+            self.xdg_frozen_fullscreen_pending_configure(),
+            self.data.xdg_frozen_fullscreen_requested_at,
+            now,
+        )
+    }
+
+    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_timed_out(
+        &self,
+        now: Instant,
+    ) -> bool {
+        self.xdg_frozen_fullscreen_timeout(now)
+            .is_some_and(|timeout| timeout.is_zero())
     }
 
     pub(in crate::backend::wayland) fn begin_xdg_frozen_fullscreen(&mut self) -> bool {
@@ -341,5 +368,31 @@ impl WaylandState {
     /// Sets the overlay ready state. Should be true only when surface is configured and has focus.
     pub(in crate::backend::wayland) fn set_overlay_ready(&mut self, value: bool) {
         self.data.overlay_ready = value;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xdg_frozen_fullscreen_deadline_uses_injected_time() {
+        let start = Instant::now();
+        assert_eq!(
+            xdg_frozen_fullscreen_timeout(true, Some(start), start),
+            Some(XDG_FROZEN_FULLSCREEN_TIMEOUT)
+        );
+        assert_eq!(
+            xdg_frozen_fullscreen_timeout(true, Some(start), start + XDG_FROZEN_FULLSCREEN_TIMEOUT,),
+            Some(Duration::ZERO)
+        );
+        assert_eq!(
+            xdg_frozen_fullscreen_timeout(false, Some(start), start),
+            None
+        );
+        assert_eq!(
+            xdg_frozen_fullscreen_timeout(true, None, start),
+            Some(Duration::ZERO)
+        );
     }
 }

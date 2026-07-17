@@ -1,5 +1,5 @@
 use super::*;
-use crate::capture::CaptureRequest;
+use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
 
 mod backdrop;
 mod pdf;
@@ -225,15 +225,8 @@ impl WaylandState {
             fallback_format_override: Some(ImageFormatMetadata::png()),
         };
 
-        if let Err(err) = self.capture.manager_mut().request_image_delivery(request) {
-            log::error!("Failed to request canvas export delivery: {}", err);
-            self.capture.clear_in_progress();
-            self.capture.clear_exit_on_success();
-            self.input_state.set_ui_toast(
-                crate::input::state::UiToastKind::Error,
-                format!("Canvas export failed: {err}"),
-            );
-        }
+        let submission = self.capture.manager_mut().request_image_delivery(request);
+        self.accept_capture_submission(submission, ImageOperationKind::CanvasExport);
     }
 
     fn canvas_export_snapshot(&self) -> CanvasExportSnapshot {
@@ -269,13 +262,16 @@ impl WaylandState {
         &mut self,
         request: CapturePreflightRequest,
     ) {
-        let result = match request {
+        let (operation, result) = match request {
             CapturePreflightRequest::Screenshot(request) => {
                 log::info!("Requesting {:?} capture", request.capture_type);
-                self.capture.manager_mut().request_capture(
-                    request.capture_type,
-                    request.destination,
-                    request.save_config,
+                (
+                    ImageOperationKind::Screenshot,
+                    self.capture.manager_mut().request_capture(
+                        request.capture_type,
+                        request.destination,
+                        request.save_config,
+                    ),
                 )
             }
             CapturePreflightRequest::DesktopBackdrop(request) => {
@@ -283,19 +279,63 @@ impl WaylandState {
                     "Requesting desktop backdrop capture for {:?}",
                     request.operation
                 );
-                self.capture
-                    .manager_mut()
-                    .request_desktop_backdrop_capture(request)
+                (
+                    request.operation,
+                    self.capture
+                        .manager_mut()
+                        .request_desktop_backdrop_capture(request),
+                )
             }
         };
+        self.accept_capture_submission(result, operation);
+    }
 
-        if let Err(e) = result {
-            log::error!("Failed to request capture: {}", e);
-            self.capture.clear_preflight();
-            self.capture.clear_pending_pdf_export();
-            self.show_overlay();
-            self.capture.clear_in_progress();
-            self.capture.clear_exit_on_success();
+    fn accept_capture_submission(
+        &mut self,
+        submission: Result<CaptureRequestId, CaptureSubmitError>,
+        operation: ImageOperationKind,
+    ) -> bool {
+        match submission {
+            Ok(id) if self.capture.record_accepted(id) => true,
+            Ok(id) => {
+                log::error!(
+                    "Capture manager accepted operation {id} without a matching state lifecycle"
+                );
+                self.capture.manager_mut().mark_unhealthy();
+                self.restore_rejected_capture_submission(
+                    operation,
+                    "capture state rejected the accepted operation identity",
+                );
+                false
+            }
+            Err(CaptureSubmitError::Busy { active_id }) => {
+                log::warn!(
+                    "{} submission rejected while capture operation {active_id} is active",
+                    operation.saved_log_label()
+                );
+                self.input_state.set_ui_toast(
+                    crate::input::state::UiToastKind::Warning,
+                    "Another capture operation is still in progress.",
+                );
+                false
+            }
+            Err(error) => {
+                self.restore_rejected_capture_submission(operation, &error.to_string());
+                false
+            }
         }
+    }
+
+    fn restore_rejected_capture_submission(&mut self, operation: ImageOperationKind, error: &str) {
+        log::error!("Failed to submit {}: {error}", operation.saved_log_label());
+        self.capture.clear_preflight();
+        self.capture.clear_pending_pdf_export();
+        self.show_overlay();
+        self.capture.clear_in_progress();
+        self.capture.clear_exit_on_success();
+        self.input_state.set_ui_toast(
+            crate::input::state::UiToastKind::Error,
+            format!("{} failed: {error}", operation.saved_log_label()),
+        );
     }
 }

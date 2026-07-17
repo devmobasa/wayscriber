@@ -6,6 +6,7 @@ mod frozen_geometry;
 mod handlers;
 mod overlay_passthrough;
 mod portal_capture;
+mod portal_task;
 mod session;
 mod state;
 mod surface;

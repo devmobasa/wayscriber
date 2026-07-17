@@ -2,11 +2,15 @@ use anyhow::{Context, Result};
 use log::warn;
 use std::env;
 use std::os::fd::{AsRawFd, RawFd};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wayland_client::{EventQueue, backend::ReadEventsGuard, backend::WaylandError};
 
 use super::super::state::WaylandState;
-use super::runtime_wake::{RuntimeWakeDrain, RuntimeWakeSource};
+#[cfg(test)]
+use super::runtime_wake::timeout_to_poll_ms;
+use super::runtime_wake::{
+    RuntimeWakeSource, TerminalReadinessPolicy, poll_with_retry, validate_poll_readiness,
+};
 use crate::{RESUME_SESSION_ENV, runtime_session_override};
 
 pub(super) fn friendly_capture_error(error: &str) -> String {
@@ -44,12 +48,6 @@ fn is_missing_tool(lower: &str, tool: &str) -> bool {
             || lower.contains("failed to spawn"))
 }
 
-fn timeout_to_poll_ms(timeout: Option<Duration>) -> i32 {
-    timeout
-        .map(|dur| dur.as_millis().min(i32::MAX as u128) as i32)
-        .unwrap_or(-1)
-}
-
 fn normalize_read_result(result: Result<usize, WaylandError>) -> Result<usize, WaylandError> {
     match result {
         Ok(n) => Ok(n),
@@ -67,7 +65,7 @@ struct RuntimePollReadiness {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RuntimeReadOutcome {
     wayland_read: bool,
-    wake_drain: Option<RuntimeWakeDrain>,
+    runtime_wake: bool,
 }
 
 trait PreparedWaylandRead {
@@ -85,33 +83,13 @@ impl PreparedWaylandRead for ReadEventsGuard {
     }
 }
 
-fn validate_poll_readiness(pollfd: &libc::pollfd, label: &str) -> std::io::Result<bool> {
-    let terminal = pollfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL);
-    if terminal != 0 {
-        return Err(std::io::Error::other(format!(
-            "{label} poll descriptor failed with readiness {:#x}",
-            pollfd.revents
-        )));
-    }
-    let unexpected = pollfd.revents & !libc::POLLIN;
-    if unexpected != 0 {
-        return Err(std::io::Error::other(format!(
-            "{label} poll descriptor returned unexpected readiness {:#x}",
-            pollfd.revents
-        )));
-    }
-    Ok(pollfd.revents & libc::POLLIN != 0)
-}
-
 fn poll_runtime_fds_with(
     wayland_fd: RawFd,
     wake_fd: RawFd,
     timeout: Option<Duration>,
     mut poll_once: impl FnMut(&mut [libc::pollfd], i32) -> std::io::Result<i32>,
 ) -> std::io::Result<RuntimePollReadiness> {
-    let deadline = timeout.and_then(|timeout| Instant::now().checked_add(timeout));
-    let mut timeout_ms = timeout_to_poll_ms(timeout);
-    loop {
+    poll_with_retry(timeout, |timeout_ms| {
         let mut pollfds = [
             libc::pollfd {
                 fd: wayland_fd,
@@ -125,34 +103,39 @@ fn poll_runtime_fds_with(
             },
         ];
         match poll_once(&mut pollfds, timeout_ms) {
-            Ok(0) => {
-                return Ok(RuntimePollReadiness {
-                    wayland: false,
-                    wake: false,
-                });
-            }
+            Ok(0) => Ok(None),
             Ok(_) => {
                 let readiness = RuntimePollReadiness {
-                    wayland: validate_poll_readiness(&pollfds[0], "Wayland")?,
-                    wake: validate_poll_readiness(&pollfds[1], "runtime wake")?,
+                    // A Wayland socket can report final buffered protocol data
+                    // together with HUP/ERR. Read and dispatch it first so the
+                    // compositor's actual disconnect error is preserved.
+                    wayland: validate_poll_readiness(
+                        &pollfds[0],
+                        "Wayland",
+                        TerminalReadinessPolicy::ReadBuffered,
+                    )?,
+                    wake: validate_poll_readiness(
+                        &pollfds[1],
+                        "runtime wake",
+                        TerminalReadinessPolicy::Reject,
+                    )?,
                 };
                 if !readiness.wayland && !readiness.wake {
                     return Err(std::io::Error::other(
                         "runtime poll reported readiness without a readable descriptor",
                     ));
                 }
-                return Ok(readiness);
+                Ok(Some(readiness))
             }
-            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {
-                timeout_ms = deadline
-                    .map(|deadline| {
-                        timeout_to_poll_ms(Some(deadline.saturating_duration_since(Instant::now())))
-                    })
-                    .unwrap_or(-1);
-            }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         }
-    }
+    })
+    .map(|readiness| {
+        readiness.unwrap_or(RuntimePollReadiness {
+            wayland: false,
+            wake: false,
+        })
+    })
 }
 
 fn poll_runtime_fds(
@@ -200,18 +183,15 @@ fn read_events_with_runtime_wake(
         drop(guard);
         false
     };
-    let wake_drain = readiness
-        .wake
-        .then(|| {
-            runtime_wake
-                .drain()
-                .context("failed to drain runtime wake descriptor")
-        })
-        .transpose()?;
+    if readiness.wake {
+        runtime_wake
+            .drain()
+            .context("failed to drain runtime wake descriptor")?;
+    }
 
     Ok(RuntimeReadOutcome {
         wayland_read,
-        wake_drain,
+        runtime_wake: readiness.wake,
     })
 }
 
@@ -240,12 +220,7 @@ fn dispatch_runtime_cycle(
 
     ops.flush()?;
     if let Some(outcome) = ops.poll_prepared_read(timeout)? {
-        if outcome.wake_drain.is_some_and(|drain| drain.limit_reached) {
-            log::debug!(
-                "Runtime wake drain reached its bounded read limit; residual readiness will force another outer pass"
-            );
-        }
-        if outcome.wake_drain.is_some() {
+        if outcome.runtime_wake {
             ops.process_runtime_wake()?;
         }
         if outcome.wayland_read {
@@ -357,6 +332,9 @@ mod tests {
     #[test]
     fn timeout_to_poll_ms_supports_none_and_caps_large_values() {
         assert_eq!(timeout_to_poll_ms(None), -1);
+        assert_eq!(timeout_to_poll_ms(Some(Duration::ZERO)), 0);
+        assert_eq!(timeout_to_poll_ms(Some(Duration::from_nanos(1))), 1);
+        assert_eq!(timeout_to_poll_ms(Some(Duration::from_nanos(999_999))), 1);
         assert_eq!(timeout_to_poll_ms(Some(Duration::from_millis(15))), 15);
 
         let huge = Duration::from_millis(i32::MAX as u64 + 1000);
@@ -392,6 +370,67 @@ mod tests {
                 wayland_read.as_raw_fd(),
                 wake.poll_fd().as_raw_fd(),
                 Some(Duration::ZERO),
+            )
+            .unwrap(),
+            RuntimePollReadiness {
+                wayland: false,
+                wake: true,
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_poll_observes_wayland_only_readiness() {
+        let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
+        let wake = RuntimeWakeSource::new().unwrap();
+        wayland_write.write_all(&[1]).unwrap();
+
+        assert_eq!(
+            poll_runtime_fds(
+                wayland_read.as_raw_fd(),
+                wake.poll_fd().as_raw_fd(),
+                Some(Duration::ZERO),
+            )
+            .unwrap(),
+            RuntimePollReadiness {
+                wayland: true,
+                wake: false,
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_poll_preserves_readable_wayland_data_when_peer_hangs_up() {
+        let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
+        let wake = RuntimeWakeSource::new().unwrap();
+        wayland_write.write_all(&[1]).unwrap();
+        drop(wayland_write);
+
+        assert_eq!(
+            poll_runtime_fds(
+                wayland_read.as_raw_fd(),
+                wake.poll_fd().as_raw_fd(),
+                Some(Duration::ZERO),
+            )
+            .unwrap(),
+            RuntimePollReadiness {
+                wayland: true,
+                wake: false,
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_wake_preempts_a_future_deadline() {
+        let (wayland_read, _wayland_write) = UnixStream::pair().unwrap();
+        let wake = RuntimeWakeSource::new().unwrap();
+        wake.handle().wake().unwrap();
+
+        assert_eq!(
+            poll_runtime_fds(
+                wayland_read.as_raw_fd(),
+                wake.poll_fd().as_raw_fd(),
+                Some(Duration::from_secs(30)),
             )
             .unwrap(),
             RuntimePollReadiness {
@@ -476,7 +515,7 @@ mod tests {
         let outcome = read_events_with_runtime_wake(guard, &wake, Some(Duration::ZERO)).unwrap();
 
         assert!(!outcome.wayland_read);
-        assert!(outcome.wake_drain.is_some());
+        assert!(outcome.runtime_wake);
         assert_eq!(reads.load(Ordering::Relaxed), 0);
         assert_eq!(cancellations.load(Ordering::Relaxed), 1);
     }
@@ -492,7 +531,7 @@ mod tests {
         let outcome = read_events_with_runtime_wake(guard, &wake, Some(Duration::ZERO)).unwrap();
 
         assert!(outcome.wayland_read);
-        assert!(outcome.wake_drain.is_some());
+        assert!(outcome.runtime_wake);
         assert_eq!(reads.load(Ordering::Relaxed), 1);
         assert_eq!(cancellations.load(Ordering::Relaxed), 0);
     }
@@ -595,10 +634,7 @@ mod tests {
             [0],
             Some(RuntimeReadOutcome {
                 wayland_read: false,
-                wake_drain: Some(RuntimeWakeDrain {
-                    reads: 1,
-                    limit_reached: false,
-                }),
+                runtime_wake: true,
             }),
         );
 
@@ -621,10 +657,7 @@ mod tests {
             [0, 1],
             Some(RuntimeReadOutcome {
                 wayland_read: true,
-                wake_drain: Some(RuntimeWakeDrain {
-                    reads: 1,
-                    limit_reached: false,
-                }),
+                runtime_wake: true,
             }),
         );
 

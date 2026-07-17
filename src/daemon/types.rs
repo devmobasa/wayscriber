@@ -1,12 +1,63 @@
-#[cfg(feature = "tray")]
+#[cfg(any(feature = "tray", feature = "portal"))]
 use log::warn;
 use std::ffi::OsString;
+use std::sync::Arc;
 #[cfg(feature = "tray")]
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 #[cfg(feature = "tray")]
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+#[cfg(any(feature = "tray", feature = "portal"))]
+use std::sync::atomic::Ordering;
 #[cfg(feature = "tray")]
 use std::time::Instant;
+
+use crate::backend::wayland::RuntimeWakeHandle;
+#[cfg(all(test, any(feature = "tray", feature = "portal")))]
+use crate::backend::wayland::RuntimeWakeSource;
+
+/// A daemon-owned flag whose external producers cannot publish without also
+/// waking the control loop that consumes it.
+#[derive(Clone)]
+pub(super) struct DaemonControlEvent {
+    #[cfg(any(feature = "tray", feature = "portal"))]
+    flag: Arc<AtomicBool>,
+    #[cfg(any(feature = "tray", feature = "portal"))]
+    wake: RuntimeWakeHandle,
+}
+
+impl DaemonControlEvent {
+    pub(super) fn new(flag: Arc<AtomicBool>, wake: RuntimeWakeHandle) -> Self {
+        #[cfg(any(feature = "tray", feature = "portal"))]
+        {
+            Self { flag, wake }
+        }
+        #[cfg(not(any(feature = "tray", feature = "portal")))]
+        {
+            let _ = (flag, wake);
+            Self {}
+        }
+    }
+
+    #[cfg(any(feature = "tray", feature = "portal"))]
+    pub(super) fn raise(&self, source: &str) {
+        self.flag.store(true, Ordering::Release);
+        if let Err(err) = self.wake.wake() {
+            warn!("Failed to wake daemon after {source}: {err}");
+        }
+    }
+
+    #[cfg(feature = "tray")]
+    pub(super) fn is_raised(&self) -> bool {
+        self.flag.load(Ordering::Acquire)
+    }
+
+    #[cfg(all(test, any(feature = "tray", feature = "portal")))]
+    pub(super) fn for_test(flag: Arc<AtomicBool>) -> (Self, RuntimeWakeSource) {
+        let wake = RuntimeWakeSource::new().unwrap();
+        (Self::new(flag, wake.handle()), wake)
+    }
+}
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

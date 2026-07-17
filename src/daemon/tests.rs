@@ -131,10 +131,13 @@ fn menu_labels(tray: &WayscriberTray) -> Vec<String> {
 fn tray_toggle_action_sets_flag() {
     let toggle = Arc::new(AtomicBool::new(false));
     let quit = Arc::new(AtomicBool::new(false));
-    let mut tray = WayscriberTray::new_for_tests(toggle.clone(), quit, false);
+    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let mut tray =
+        WayscriberTray::new_for_tests_with_wake(toggle.clone(), quit, false, wake.handle());
 
     activate_menu_item(&mut tray, "Toggle Overlay");
     assert!(toggle.load(AtomicOrdering::SeqCst));
+    assert!(wake.wait_readable(Some(std::time::Duration::ZERO)).unwrap());
 }
 
 #[cfg(feature = "tray")]
@@ -179,8 +182,11 @@ fn tray_menu_groups_actions_to_fit_short_displays() {
 fn tray_quit_action_sets_quit_flag() {
     let toggle = Arc::new(AtomicBool::new(false));
     let quit = Arc::new(AtomicBool::new(false));
-    let mut tray = WayscriberTray::new_for_tests(toggle, quit.clone(), false);
+    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let mut tray =
+        WayscriberTray::new_for_tests_with_wake(toggle, quit.clone(), false, wake.handle());
 
     activate_menu_item(&mut tray, "Quit");
     assert!(quit.load(AtomicOrdering::SeqCst));
+    assert!(wake.wait_readable(Some(std::time::Duration::ZERO)).unwrap());
 }
