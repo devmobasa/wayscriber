@@ -1,6 +1,7 @@
 mod boards;
 mod draft;
 mod parse;
+mod performance_fields;
 mod presets;
 mod quick_colors;
 mod render_profiles;

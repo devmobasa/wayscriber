@@ -118,17 +118,3 @@ pub(super) fn parse_u64_field<F>(
         Err(err) => errors.push(FormError::new(field, err.to_string())),
     }
 }
-
-pub(super) fn parse_u32_field<F>(
-    value: &str,
-    field: &'static str,
-    errors: &mut Vec<FormError>,
-    apply: F,
-) where
-    F: FnOnce(u32),
-{
-    match value.trim().parse::<u32>() {
-        Ok(parsed) => apply(parsed),
-        Err(err) => errors.push(FormError::new(field, err.to_string())),
-    }
-}

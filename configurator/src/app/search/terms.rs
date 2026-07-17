@@ -153,18 +153,6 @@ pub(super) const HISTORY_CUSTOM_TERMS: &[&str] = &[
     "steps",
     "delay",
 ];
-pub(super) const PERFORMANCE_RENDERING_TERMS: &[&str] = &[
-    "rendering",
-    "buffer",
-    "buffer count",
-    "buffer count 2 4",
-    "vsync",
-    "enable vsync",
-    "fps",
-    "max fps",
-    "max fps vsync off",
-];
-pub(super) const PERFORMANCE_ANIMATION_TERMS: &[&str] = &["animation", "ui animation fps"];
 pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "general ui",
     "preferred output",

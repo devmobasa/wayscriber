@@ -91,11 +91,17 @@ impl ConfiguratorApp {
                 .push(row![add_button].spacing(8));
         }
 
-        if (show_general || show_all) && self.base_config.boards.is_none() {
+        let loaded_legacy_boards = self
+            .base_document
+            .as_ref()
+            .is_some_and(|document| document.config().boards.is_none());
+        if (show_general || show_all) && loaded_legacy_boards {
             column = column.push(
-                text("Legacy [board] settings detected. Saving will write [boards].")
-                    .size(12)
-                    .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+                text(
+                    "Legacy [board] settings detected. Editing board settings will write [boards].",
+                )
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             );
         }
 

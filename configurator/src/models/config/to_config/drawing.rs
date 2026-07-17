@@ -6,6 +6,8 @@ use wayscriber::input::{DragBindableTool, DragTool};
 
 impl ConfigDraft {
     pub(super) fn apply_drawing(&self, config: &mut Config, errors: &mut Vec<FormError>) {
+        let materialize_drag_tools = config.drawing.drag_tools.is_some()
+            || config.drawing.effective_drag_tools() != self.drawing_drag_tools;
         match self.drawing_color.to_color_spec() {
             Ok(color) => config.drawing.default_color = color,
             Err(err) => errors.push(err),
@@ -68,7 +70,7 @@ impl ConfigDraft {
             self.drawing_drag_tools.left.tab_drag_tool,
             DragBindableTool::Ellipse,
         );
-        config.drawing.drag_tools = Some(self.drawing_drag_tools.clone());
+        config.drawing.drag_tools = materialize_drag_tools.then(|| self.drawing_drag_tools.clone());
         parse_field(
             &self.drawing_hit_test_tolerance,
             "drawing.hit_test_tolerance",

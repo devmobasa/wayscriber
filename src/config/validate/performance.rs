@@ -1,26 +1,36 @@
 use super::Config;
+use crate::config::{
+    PERFORMANCE_BUFFER_COUNT_MAX, PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_UI_ANIMATION_FPS_MAX,
+};
 
 impl Config {
     pub(super) fn validate_performance(&mut self) {
-        // Buffer count: 2 - 4
-        if !(2..=4).contains(&self.performance.buffer_count) {
+        if !(PERFORMANCE_BUFFER_COUNT_MIN..=PERFORMANCE_BUFFER_COUNT_MAX)
+            .contains(&self.performance.buffer_count)
+        {
             log::warn!(
-                "Invalid buffer_count {}, clamping to 2-4 range",
-                self.performance.buffer_count
+                "Invalid buffer_count {}, clamping to {}-{} range",
+                self.performance.buffer_count,
+                PERFORMANCE_BUFFER_COUNT_MIN,
+                PERFORMANCE_BUFFER_COUNT_MAX,
             );
-            self.performance.buffer_count = self.performance.buffer_count.clamp(2, 4);
+            self.performance.buffer_count = self
+                .performance
+                .buffer_count
+                .clamp(PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_BUFFER_COUNT_MAX);
         }
 
         // UI animation FPS: allow 0 (unlimited), otherwise clamp to 1 - 240.
-        const MAX_UI_ANIMATION_FPS: u32 = 240;
-        if self.performance.ui_animation_fps > MAX_UI_ANIMATION_FPS {
+        if self.performance.ui_animation_fps > PERFORMANCE_UI_ANIMATION_FPS_MAX {
             log::warn!(
                 "Invalid ui_animation_fps {}, clamping to 0-{} range",
                 self.performance.ui_animation_fps,
-                MAX_UI_ANIMATION_FPS
+                PERFORMANCE_UI_ANIMATION_FPS_MAX
             );
-            self.performance.ui_animation_fps =
-                self.performance.ui_animation_fps.min(MAX_UI_ANIMATION_FPS);
+            self.performance.ui_animation_fps = self
+                .performance
+                .ui_animation_fps
+                .min(PERFORMANCE_UI_ANIMATION_FPS_MAX);
         }
     }
 }

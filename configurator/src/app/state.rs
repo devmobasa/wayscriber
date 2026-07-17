@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::{path::PathBuf, sync::Arc, time::SystemTime};
+use std::{path::PathBuf, sync::Arc};
 
 use iced::Task;
-use wayscriber::config::{Config, PRESET_SLOTS_MAX};
+use wayscriber::config::{Config, ConfigDocument, PRESET_SLOTS_MAX};
 
 use crate::messages::Message;
 use crate::models::{
@@ -19,8 +19,8 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) draft: ConfigDraft,
     pub(crate) baseline: ConfigDraft,
     pub(crate) defaults: ConfigDraft,
-    // Base config loaded from disk to preserve unknown fields when saving.
-    pub(crate) base_config: Arc<Config>,
+    // The source document owns typed config, lossless TOML, and the guarded save revision.
+    pub(crate) base_document: Option<Arc<ConfigDocument>>,
     pub(crate) status: StatusMessage,
     pub(crate) active_tab: TabId,
     pub(crate) active_ui_tab: UiTabId,
@@ -36,8 +36,6 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) is_saving: bool,
     pub(crate) is_dirty: bool,
     pub(crate) defaults_reset_pending: bool,
-    pub(crate) config_path: Option<PathBuf>,
-    pub(crate) config_mtime: Option<SystemTime>,
     pub(crate) last_backup_path: Option<PathBuf>,
     pub(crate) daemon_status: Option<DaemonRuntimeStatus>,
     pub(crate) daemon_shortcut_input: String,
@@ -90,15 +88,13 @@ impl ConfiguratorApp {
         let baseline = defaults.clone();
         let override_mode = defaults.ui_toolbar_layout_mode;
         let boards_len = defaults.boards.items.len();
-        let config_path = Config::get_config_path().ok();
-        let base_config = Arc::new(default_config.clone());
         let desktop = DesktopEnvironment::detect_current();
 
         let mut app = Self {
             draft: baseline.clone(),
             baseline,
             defaults,
-            base_config,
+            base_document: None,
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
@@ -114,8 +110,6 @@ impl ConfiguratorApp {
             is_saving: false,
             is_dirty: false,
             defaults_reset_pending: false,
-            config_path,
-            config_mtime: None,
             last_backup_path: None,
             daemon_status: None,
             daemon_shortcut_input: desktop.default_shortcut_input().to_string(),
@@ -143,20 +137,6 @@ impl ConfiguratorApp {
         (app, command)
     }
 
-    pub(super) fn config_changed_on_disk(&self) -> bool {
-        let Some(last_modified) = self.config_mtime else {
-            return false;
-        };
-        let Some(path) = self.config_path.as_ref() else {
-            return false;
-        };
-
-        match std::fs::metadata(path).and_then(|meta| meta.modified()) {
-            Ok(modified) => modified > last_modified,
-            Err(_) => false,
-        }
-    }
-
     pub(super) fn refresh_dirty_flag(&mut self) {
         self.defaults_reset_pending = false;
         self.is_dirty = self.draft != self.baseline;
@@ -165,16 +145,7 @@ impl ConfiguratorApp {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
-
     use super::*;
-
-    fn temp_config_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "wayscriber-configurator-state-{}-{name}.toml",
-            std::process::id()
-        ))
-    }
 
     #[test]
     fn refresh_dirty_flag_tracks_draft_vs_baseline() {
@@ -193,31 +164,5 @@ mod tests {
 
         assert!(app.search_input_focus_hint);
         assert!(app.startup_search_focus_pending);
-    }
-
-    #[test]
-    fn config_changed_on_disk_detects_newer_file() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
-        let path = temp_config_path("mtime");
-        std::fs::write(&path, "test").expect("write config");
-
-        app.config_path = Some(path.clone());
-        app.config_mtime = Some(SystemTime::UNIX_EPOCH);
-
-        assert!(app.config_changed_on_disk());
-
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn config_changed_on_disk_returns_false_without_path_or_mtime() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
-        app.config_path = None;
-        app.config_mtime = Some(SystemTime::UNIX_EPOCH);
-        assert!(!app.config_changed_on_disk());
-
-        app.config_path = Some(temp_config_path("missing"));
-        app.config_mtime = None;
-        assert!(!app.config_changed_on_disk());
     }
 }

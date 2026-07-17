@@ -5,14 +5,7 @@ pub fn parse_f64(input: &str) -> Result<f64, String> {
 }
 
 pub fn format_float(value: f64) -> String {
-    if value.fract() == 0.0 {
-        format!("{:.0}", value)
-    } else {
-        format!("{:.3}", value)
-            .trim_end_matches('0')
-            .trim_end_matches('.')
-            .to_string()
-    }
+    value.to_string()
 }
 
 #[cfg(test)]
@@ -26,10 +19,13 @@ mod tests {
     }
 
     #[test]
-    fn format_float_trims_trailing_zeroes() {
+    fn format_float_uses_shortest_lossless_representation() {
         assert_eq!(format_float(12.0), "12");
         assert_eq!(format_float(12.340), "12.34");
         assert_eq!(format_float(12.300), "12.3");
-        assert_eq!(format_float(12.3456), "12.346");
+        assert_eq!(format_float(12.3456), "12.3456");
+
+        let precise = 1.234_567_890_123_45;
+        assert_eq!(parse_f64(&format_float(precise)).unwrap(), precise);
     }
 }

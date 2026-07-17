@@ -12,6 +12,8 @@ pub mod keybindings;
 pub mod types;
 
 mod core;
+mod document;
+mod field_metadata;
 mod io;
 mod paths;
 #[cfg(feature = "config-schema")]
@@ -30,7 +32,15 @@ pub use action_meta::{
     action_meta, action_meta_iter, action_short_label,
 };
 pub use core::{CURRENT_CONFIG_REVISION, Config};
+pub use document::{
+    ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
+};
 pub use enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
+pub use field_metadata::{
+    PERFORMANCE_BUFFER_COUNT_MAX, PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_BUFFER_COUNTS,
+    PERFORMANCE_FIELD_METADATA, PERFORMANCE_UI_ANIMATION_FPS_MAX, PerformanceFieldGroup,
+    PerformanceFieldId, PerformanceFieldMetadata, ScalarConstraint, performance_field_metadata,
+};
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};

@@ -9,11 +9,29 @@ wayscriber supports customization through a TOML configuration file located at:
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
 
+When the graphical configurator edits an existing file, it preserves TOML comments, section order,
+and unrecognized settings. Unrecognized paths produce a warning but remain in the file for forward
+compatibility. Known values are still validated and migrations are written under their canonical
+names. The configurator tracks the exact loaded contents rather than relying on modification time;
+if the file is created, deleted, retargeted through a symlink, or changed by another editor, reload
+it before saving. A save does not expand omitted, unchanged defaults; when a setting that was
+omitted is edited, only that changed setting and its required table path are added.
+The first save for a missing file is sparse as well: it writes the migration revision marker and
+only values changed from the built-in defaults.
+
+If the graphical configurator can read the file but cannot parse its TOML or known value types, it
+opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a
+backup of the unreadable source, retains unknown keys that can be separated safely when the TOML
+structure itself was parseable, and replaces the unreadable known configuration. A transient reload
+error leaves the last good document and unsaved draft in place; its revision guard still prevents
+overwriting a changed file.
+
 ## Configuration File Location
 
 The configuration file should be placed at:
 - Linux: `~/.config/wayscriber/config.toml`
-- The directory will be created automatically when you first create the config file
+- The directory will be created automatically when you first create the config file. If the config
+  path is a dangling symlink, missing parent directories for its final target are created as well.
 
 ## Example Configuration
 
@@ -317,7 +335,7 @@ enable_vsync = false
 # 120 keeps pen latency low without uncapped CPU usage; set to 0 only for profiling
 max_fps_no_vsync = 120
 
-# UI animation frame rate (0 = unlimited)
+# UI animation frame rate (0-240; 0 = unlimited)
 # Higher values smooth UI effects at the cost of more redraws
 ui_animation_fps = 30
 ```
@@ -340,7 +358,7 @@ ui_animation_fps = 30
 **UI Animation FPS:**
 - **30** (default): Smooth enough for most effects
 - **0**: Unlimited (renders every frame while animations are active)
-- Higher values improve smoothness at the cost of extra redraws
+- Values through **240** improve smoothness at the cost of extra redraws; larger values are clamped
 
 **Defaults:**
 - Buffer count: 3 (triple buffering)

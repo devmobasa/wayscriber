@@ -1,5 +1,6 @@
 use iced::widget::{column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
+use wayscriber::config::{PerformanceFieldId, performance_field_metadata};
 
 use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
@@ -17,8 +18,24 @@ impl ConfiguratorApp {
         &self,
         search: Option<&TabSearchSummary>,
     ) -> Element<'_, Message> {
+        let buffer_metadata = performance_field_metadata(PerformanceFieldId::BufferCount);
+        let vsync_metadata = performance_field_metadata(PerformanceFieldId::EnableVsync);
+        let max_fps_metadata = performance_field_metadata(PerformanceFieldId::MaxFpsNoVsync);
+        let animation_metadata = performance_field_metadata(PerformanceFieldId::UiAnimationFps);
+        let buffer_counts = buffer_metadata
+            .constraint
+            .unsigned_choices()
+            .expect("buffer count metadata must declare choices");
+        let max_fps_range = max_fps_metadata
+            .constraint
+            .unsigned_range()
+            .expect("max FPS metadata must declare a range");
+        let animation_range = animation_metadata
+            .constraint
+            .unsigned_range()
+            .expect("animation FPS metadata must declare a range");
         let buffer_pick = pick_list(
-            vec![2u32, 3, 4],
+            buffer_counts,
             Some(self.draft.performance_buffer_count),
             Message::BufferCountChanged,
         );
@@ -40,41 +57,48 @@ impl ConfiguratorApp {
             content = content
                 .push(text("Rendering").size(16))
                 .push(labeled_control(
-                    "Buffer count (2-4)",
+                    buffer_metadata.label,
                     buffer_control,
                     self.defaults.performance_buffer_count.to_string(),
                     self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
                 ))
+                .push(text(buffer_metadata.help).size(12))
                 .push(toggle_row(
-                    "Enable VSync",
+                    vsync_metadata.label,
                     self.draft.performance_enable_vsync,
                     self.defaults.performance_enable_vsync,
                     ToggleField::PerformanceVsync,
                 ))
-                .push(text("Synchronizes rendering with display refresh. Prevents tearing but adds slight input latency.").size(12))
+                .push(text(vsync_metadata.help).size(12))
                 .push(labeled_input_with_feedback(
-                    "Max FPS (VSync off)",
+                    max_fps_metadata.label,
                     &self.draft.performance_max_fps_no_vsync,
                     &self.defaults.performance_max_fps_no_vsync,
                     TextField::PerformanceMaxFpsNoVsync,
-                    Some("Default 120; try 144/240 on high-refresh displays; 0 = unlimited"),
-                    validate_u32_range(&self.draft.performance_max_fps_no_vsync, 0, 1000),
-                ))
-                .push(text("Caps frame rate when VSync is disabled. 120 FPS keeps drawing latency low without uncapped CPU/GPU usage; use 0 only for profiling.").size(12));
+                    Some(max_fps_metadata.help),
+                    validate_u32_range(
+                        &self.draft.performance_max_fps_no_vsync,
+                        max_fps_range.0,
+                        max_fps_range.1,
+                    ),
+                ));
         }
 
         if show_animation {
             content = content
                 .push(text("Animations").size(16))
                 .push(labeled_input_with_feedback(
-                    "UI Animation FPS",
+                    animation_metadata.label,
                     &self.draft.performance_ui_animation_fps,
                     &self.defaults.performance_ui_animation_fps,
                     TextField::PerformanceUiAnimationFps,
-                    Some("0 = unlimited, recommended: 30-60"),
-                    validate_u32_range(&self.draft.performance_ui_animation_fps, 0, 1000),
-                ))
-                .push(text("Controls how often UI animations tick (fade effects, toasts, click highlights). Higher values = smoother animations but more CPU usage. Does not affect input responsiveness.").size(12));
+                    Some(animation_metadata.help),
+                    validate_u32_range(
+                        &self.draft.performance_ui_animation_fps,
+                        animation_range.0,
+                        animation_range.1,
+                    ),
+                ));
         }
 
         scrollable(content).id(CONTENT_SCROLL_ID).into()

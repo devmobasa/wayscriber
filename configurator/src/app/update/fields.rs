@@ -1,5 +1,5 @@
 use iced::Task;
-use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{PerformanceFieldId, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::messages::Message;
 use crate::models::{
@@ -380,7 +380,8 @@ impl ConfiguratorApp {
 
     pub(super) fn handle_buffer_count_changed(&mut self, count: u32) -> Task<Message> {
         self.status = StatusMessage::idle();
-        self.draft.performance_buffer_count = count;
+        self.draft
+            .set_performance_choice(PerformanceFieldId::BufferCount, count);
         self.refresh_dirty_flag();
         Task::none()
     }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use wayscriber::config::{Config, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{ConfigDocument, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
@@ -22,13 +22,13 @@ use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeO
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    ConfigLoaded(Result<Arc<Config>, String>),
+    ConfigLoaded(Result<(Arc<ConfigDocument>, Option<String>), String>),
     ReloadRequested,
     ResetToDefaultsRequested,
     ResetToDefaultsConfirmed,
     ResetToDefaultsCanceled,
     SaveRequested,
-    ConfigSaved(Result<(Option<PathBuf>, Arc<Config>), String>),
+    ConfigSaved(Result<(Option<PathBuf>, Arc<ConfigDocument>), String>),
     DaemonStatusLoaded(u64, Result<DaemonRuntimeStatus, String>),
     DaemonShortcutInputChanged(String),
     DaemonActionRequested(DaemonAction),
