@@ -374,11 +374,8 @@ The override selects Rust 1.95 only inside this checkout and leaves your global 
 **Dependencies:**
 
 ```bash
-# Debian/Ubuntu
-sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev
-
-# Ubuntu 25.04+ / Debian 13 (trixie)+ also ship the layer-shell dev package:
-sudo apt-get install libgtk4-layer-shell-dev
+# Debian 13+ / Ubuntu 25.04+ (including Ubuntu 26.04 LTS)
+sudo apt-get install build-essential pkg-config libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev libgtk4-layer-shell-dev
 
 # Fedora
 sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel gtk4-devel gtk4-layer-shell-devel
@@ -513,7 +510,7 @@ on shorter or scaled displays:
 - Open the log folder
 - Open configurator / open config file / quit
 
-Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Noctalia/Quickshell/COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
+Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Omarchy/Quickshell, Noctalia/Quickshell, and COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
 
 **Alternative — compositor autostart instead of systemd:**
 ```conf
