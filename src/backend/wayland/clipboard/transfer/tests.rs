@@ -38,6 +38,92 @@ fn timeout_uses_fresh_fallback_action_instead_of_captured_shapes() {
 }
 
 #[test]
+fn clipboard_terminal_outcomes_keep_their_existing_event_loop_policy() {
+    let warning_cases = [
+        (
+            ClipboardPasteResult::ClipboardEmpty,
+            TransferWarning::ClipboardEmpty,
+        ),
+        (
+            ClipboardPasteResult::NoSupportedMime {
+                offered: vec!["text/plain".to_string()],
+            },
+            TransferWarning::UnsupportedContent,
+        ),
+        (
+            ClipboardPasteResult::DecodeFailed("bad image".to_string()),
+            TransferWarning::DecodeFailed,
+        ),
+        (
+            ClipboardPasteResult::TooLarge { limit: 1024 },
+            TransferWarning::TooLarge { limit: 1024 },
+        ),
+    ];
+    for (result, expected_warning) in warning_cases {
+        let completion = ClipboardPasteCompletion {
+            request: request_with_fallback_generation(Some(7)),
+            result,
+        };
+        let plan = plan_paste_completion(completion, Some(42), None);
+        assert!(matches!(
+            plan.action,
+            PasteAction::ShowWarning {
+                warning,
+                block_feedback: true,
+                ..
+            } if warning == expected_warning
+        ));
+    }
+
+    let failure = plan_paste_completion(
+        ClipboardPasteCompletion {
+            request: request_with_fallback_generation(Some(7)),
+            result: ClipboardPasteResult::ClipboardError("disconnected".to_string()),
+        },
+        Some(42),
+        None,
+    );
+    assert!(matches!(
+        failure.action,
+        PasteAction::TryFreshLocalFallbackOrWarn {
+            missing_warning: TransferWarning::ClipboardError,
+            ..
+        }
+    ));
+
+    let image = plan_paste_completion(
+        ClipboardPasteCompletion {
+            request: request_with_fallback_generation(Some(7)),
+            result: ClipboardPasteResult::Image(crate::draw::EmbeddedImage {
+                mime_type: "image/png".to_string(),
+                width: 1,
+                height: 1,
+                bytes: vec![0, 0, 0, 255],
+            }),
+        },
+        Some(42),
+        None,
+    );
+    assert!(matches!(
+        image.action,
+        PasteAction::ApplyExternalImage { .. }
+    ));
+}
+
+#[test]
+fn stale_domain_request_is_rejected_after_transport_matching() {
+    let completion = ClipboardPasteCompletion {
+        request: request_with_fallback_generation(None),
+        result: ClipboardPasteResult::ClipboardEmpty,
+    };
+    let plan = plan_paste_completion(completion, Some(99), None);
+    assert!(matches!(
+        plan.action,
+        PasteAction::StaleCompletion { request_id: 42 }
+    ));
+}
+
+#[test]
 fn same_instance_nonmatching_generation_does_not_apply_private_selection() {
     let request = request_with_fallback_generation(Some(7));
     let completion = ClipboardPasteCompletion {
