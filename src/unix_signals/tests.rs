@@ -39,6 +39,42 @@ fn setup_failure_restores_partial_installation_and_releases_singleton() {
 }
 
 #[test]
+fn signal_installed_during_listener_setup_is_replayed_after_startup() {
+    let _guard = test_signal_lock();
+    reset_handler_hooks(test_hooks::PAUSE_AFTER_HANDLER_INSTALL);
+    let callbacks = Arc::new(AtomicUsize::new(0));
+    let callback_count = Arc::clone(&callbacks);
+    let (listener_tx, listener_rx) = mpsc::channel();
+    let setup = thread::spawn(move || {
+        listener_tx
+            .send(spawn_listener(
+                &[TEST_SIGNAL],
+                move |_| {
+                    callback_count.fetch_add(1, Ordering::AcqRel);
+                },
+                || {},
+            ))
+            .unwrap();
+    });
+    wait_until(|| test_hooks::HANDLER_PAUSED.load(Ordering::Acquire));
+
+    signal_handler(TEST_SIGNAL);
+
+    test_hooks::RESUME_HANDLER.store(true, Ordering::Release);
+    let mut listener = listener_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("listener setup did not resume")
+        .expect("listener setup failed");
+    setup.join().unwrap();
+    wait_until(|| callbacks.load(Ordering::Acquire) == 1);
+    let delivered = callbacks.load(Ordering::Acquire);
+    listener.stop_and_join().unwrap();
+    reset_handler_hooks(0);
+
+    assert_eq!(delivered, 1, "signal delivered during setup was lost");
+}
+
+#[test]
 fn signal_handler_preserves_errno() {
     let _guard = test_signal_lock();
     let mut listener = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();

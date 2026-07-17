@@ -79,8 +79,8 @@ fn validate_signals(signals: &[libc::c_int]) -> io::Result<()> {
 
 fn reserve_listener_epoch() -> io::Result<u64> {
     loop {
-        let current = HANDLER_GATE_TOKEN.load(Ordering::Acquire);
-        if gate_state(current) != GATE_INACTIVE || ACTIVE_HANDLERS.load(Ordering::Acquire) != 0 {
+        let current = HANDLER_GATE_TOKEN.load(Ordering::SeqCst);
+        if gate_state(current) != GATE_INACTIVE || ACTIVE_HANDLERS.load(Ordering::SeqCst) != 0 {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 "a signal listener is already active",
@@ -94,8 +94,8 @@ fn reserve_listener_epoch() -> io::Result<u64> {
         match HANDLER_GATE_TOKEN.compare_exchange(
             current,
             setting_up,
-            Ordering::AcqRel,
-            Ordering::Acquire,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
         ) {
             Ok(_) => return Ok(epoch),
             Err(_) => continue,
@@ -104,11 +104,11 @@ fn reserve_listener_epoch() -> io::Result<u64> {
 }
 
 fn publish_listener_active(epoch: u64) {
-    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_ACTIVE), Ordering::Release);
+    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_ACTIVE), Ordering::SeqCst);
 }
 
 fn rollback_listener_reservation(epoch: u64) {
-    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_INACTIVE), Ordering::Release);
+    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_INACTIVE), Ordering::SeqCst);
 }
 
 fn begin_listener_teardown(epoch: u64) -> io::Result<()> {
@@ -116,8 +116,8 @@ fn begin_listener_teardown(epoch: u64) -> io::Result<()> {
         .compare_exchange(
             gate_token(epoch, GATE_ACTIVE),
             gate_token(epoch, GATE_STOPPING),
-            Ordering::AcqRel,
-            Ordering::Acquire,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
         )
         .map(|_| ())
         .map_err(|actual| {
@@ -128,11 +128,15 @@ fn begin_listener_teardown(epoch: u64) -> io::Result<()> {
 }
 
 fn finish_listener_teardown(epoch: u64) {
-    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_INACTIVE), Ordering::Release);
+    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_INACTIVE), Ordering::SeqCst);
 }
 
 fn wait_for_admitted_handlers() {
-    while ACTIVE_HANDLERS.load(Ordering::Acquire) != 0 {
+    // This counter and HANDLER_GATE_TOKEN form a Dekker-style admission
+    // handshake. Sequential consistency is required so teardown cannot miss
+    // a handler that is concurrently rechecking the closed gate on weakly
+    // ordered CPUs and then close a descriptor that handler is about to use.
+    while ACTIVE_HANDLERS.load(Ordering::SeqCst) != 0 {
         std::thread::yield_now();
     }
 }
@@ -234,7 +238,7 @@ fn signal_action_flags() -> libc::c_int {
 
 extern "C" fn signal_handler(signal: libc::c_int) {
     let _errno_guard = ErrnoGuard::new();
-    let token = HANDLER_GATE_TOKEN.load(Ordering::Acquire);
+    let token = HANDLER_GATE_TOKEN.load(Ordering::SeqCst);
     if gate_state(token) != GATE_ACTIVE {
         return;
     }
@@ -242,13 +246,13 @@ extern "C" fn signal_handler(signal: libc::c_int) {
     #[cfg(test)]
     test_hooks::pause_if_requested(test_hooks::PAUSE_AFTER_TOKEN_READ);
 
-    ACTIVE_HANDLERS.fetch_add(1, Ordering::AcqRel);
+    ACTIVE_HANDLERS.fetch_add(1, Ordering::SeqCst);
 
     #[cfg(test)]
     test_hooks::pause_if_requested(test_hooks::PAUSE_AFTER_ADMISSION);
 
-    if HANDLER_GATE_TOKEN.load(Ordering::Acquire) != token {
-        ACTIVE_HANDLERS.fetch_sub(1, Ordering::AcqRel);
+    if HANDLER_GATE_TOKEN.load(Ordering::SeqCst) != token {
+        ACTIVE_HANDLERS.fetch_sub(1, Ordering::SeqCst);
         return;
     }
 
@@ -271,7 +275,7 @@ extern "C" fn signal_handler(signal: libc::c_int) {
         }
     }
 
-    ACTIVE_HANDLERS.fetch_sub(1, Ordering::AcqRel);
+    ACTIVE_HANDLERS.fetch_sub(1, Ordering::SeqCst);
 }
 
 struct ErrnoGuard {
@@ -428,6 +432,7 @@ mod test_hooks {
 
     pub(super) const PAUSE_AFTER_TOKEN_READ: u8 = 1;
     pub(super) const PAUSE_AFTER_ADMISSION: u8 = 2;
+    pub(super) const PAUSE_AFTER_HANDLER_INSTALL: u8 = 3;
     pub(super) static PAUSE_STAGE: AtomicU8 = AtomicU8::new(0);
     pub(super) static HANDLER_PAUSED: AtomicBool = AtomicBool::new(false);
     pub(super) static RESUME_HANDLER: AtomicBool = AtomicBool::new(false);
