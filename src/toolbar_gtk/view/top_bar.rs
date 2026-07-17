@@ -178,6 +178,8 @@ pub(in crate::toolbar_gtk) struct TopBar {
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
     /// backend are ignored by comparing against it.
     offset_seq: Rc<Cell<u64>>,
+    capture_suppressed: bool,
+    mapped_before_capture: bool,
 }
 
 impl TopBar {
@@ -222,16 +224,31 @@ impl TopBar {
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
             offset_seq: Rc::new(Cell::new(0)),
+            capture_suppressed: false,
+            mapped_before_capture: false,
         }
     }
 
-    pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
+    pub(in crate::toolbar_gtk) fn apply(
+        &mut self,
+        update: &super::super::GtkToolbarUpdate,
+    ) -> bool {
         let snapshot = &update.snapshot;
-        self.drag_blocked.set(update.modal_engaged);
-        super::set_drag_visual_hidden(
-            &self.window,
-            &self.root,
-            GtkToolbarKind::Top,
+        let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
+        if entering_capture_suppression {
+            self.mapped_before_capture = self.window.is_visible() || self.window.is_mapped();
+        } else if !update.capture_suppressed {
+            self.mapped_before_capture = false;
+        }
+        self.capture_suppressed = update.capture_suppressed;
+        self.drag_blocked
+            .set(update.modal_engaged || update.capture_suppressed);
+        if entering_capture_suppression && let Some(cancel) = self.move_drag_cancel.as_ref() {
+            cancel();
+        }
+        let presentation = super::toolbar_surface_presentation(
+            update.top_visible,
+            update.capture_suppressed,
             super::drag_visual_should_be_hidden(
                 update.drag_preview,
                 GtkToolbarKind::Top,
@@ -239,15 +256,32 @@ impl TopBar {
                 self.offset_seq.get(),
                 update.top_offset_seq,
             ),
+            self.mapped_before_capture,
         );
-        if !update.top_visible {
+        if !presentation.window_visible {
             // Suppress the dismissal echoes a hide-triggered popover close
             // would send, so an open picker survives a hide/show cycle
             // like the built-in bars.
-            self.shapes_expected_open.set(false);
-            self.overflow_expected_open.set(false);
+            if update.capture_suppressed {
+                self.set_popovers_capture_transparent(true);
+            } else {
+                self.hide_popovers_for_window_hide();
+            }
+            super::set_capture_transparent(&self.window, presentation.capture_transparent);
+            super::set_surface_input_enabled(&self.window, false);
             self.window.set_visible(false);
-            return;
+            if let Some(generation) = update.capture_suppression_generation {
+                super::log_capture_surface_state(
+                    generation,
+                    "top",
+                    update.top_visible,
+                    self.mapped_before_capture,
+                    presentation,
+                    &self.window,
+                    &self.root,
+                );
+            }
+            return false;
         }
         self.base_x.set(update.top_base_x);
         self.apply_offsets(update.top_offset, update.top_offset_seq);
@@ -261,8 +295,33 @@ impl TopBar {
         for updater in self.updaters.borrow().iter() {
             updater(snapshot);
         }
-        self.sync_popovers(snapshot, &plan);
+        if update.capture_suppressed {
+            self.set_popovers_capture_transparent(true);
+        } else {
+            self.set_popovers_capture_transparent(false);
+            self.sync_popovers(snapshot, &plan);
+        }
         self.window.set_visible(true);
+        super::set_capture_transparent(&self.window, presentation.capture_transparent);
+        super::set_visual_hidden(
+            &self.window,
+            &self.root,
+            GtkToolbarKind::Top,
+            presentation.visual_hidden,
+        );
+        super::set_surface_input_enabled(&self.window, presentation.input_enabled);
+        if let Some(generation) = update.capture_suppression_generation {
+            super::log_capture_surface_state(
+                generation,
+                "top",
+                update.top_visible,
+                self.mapped_before_capture,
+                presentation,
+                &self.window,
+                &self.root,
+            );
+        }
+        true
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in

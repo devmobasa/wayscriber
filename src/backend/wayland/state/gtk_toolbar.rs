@@ -26,7 +26,9 @@ fn acknowledge_blocked_gtk_drag_feedback(
         GtkToolbarFeedback::SetSideOffset { seq, .. } => {
             *side_seq = (*side_seq).max(*seq);
         }
-        GtkToolbarFeedback::Event { .. } => {}
+        GtkToolbarFeedback::Event { .. }
+        | GtkToolbarFeedback::CaptureSuppressionReady { .. }
+        | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => {}
     }
 }
 
@@ -37,6 +39,8 @@ fn gtk_toolbar_feedback_is_blocked(
     feedback: &GtkToolbarFeedback,
 ) -> bool {
     match feedback {
+        GtkToolbarFeedback::CaptureSuppressionReady { .. }
+        | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => false,
         GtkToolbarFeedback::Event { .. } => modal_engaged,
         GtkToolbarFeedback::SetTopOffset { phase, .. } => {
             let blocked = modal_engaged || *top_drag_blocked;
@@ -165,6 +169,12 @@ impl WaylandState {
                 continue;
             }
             match feedback {
+                GtkToolbarFeedback::CaptureSuppressionReady { generation } => {
+                    self.acknowledge_gtk_capture_suppression(generation);
+                }
+                GtkToolbarFeedback::CaptureSuppressionFailed { generation, error } => {
+                    self.reject_gtk_capture_suppression(generation, &error);
+                }
                 GtkToolbarFeedback::Event {
                     event,
                     rebind_requested,
@@ -210,6 +220,7 @@ impl WaylandState {
         // input. Apply the drained batch before dropping the failed bridge so
         // actions and final drag offsets are not lost during failover.
         if failed {
+            self.cancel_overlay_capture_waiting_for_gtk();
             self.cancel_gtk_toolbar_drag_lifecycle();
             self.gtk_toolbar = None;
         }
@@ -222,14 +233,14 @@ impl WaylandState {
             return;
         }
         let snapshot = self.toolbar_snapshot();
-        // Mirror the built-in suppression behavior: while the overlay is
-        // suppressed (capture, freeze, zoom, external dialog) or in light
-        // passthrough, the bars must unmap so they neither appear in
-        // captures nor swallow clicks.
-        let suppressed = self.toolbar.is_suppressed() || self.overlay_passthrough_requested();
+        // Capture suppression keeps normally visible layer surfaces mapped
+        // but transparent, avoiding compositor-owned close-animation
+        // snapshots. Other suppression and light passthrough still unmap.
+        let capture_suppressed = self.data.overlay_suppression.requires_capture_barrier();
+        let unmap_suppressed = self.overlay_passthrough_requested() && !capture_suppressed;
         let update = GtkToolbarUpdate {
-            top_visible: self.input_state.toolbar_top_visible() && !suppressed,
-            side_visible: self.input_state.toolbar_side_visible() && !suppressed,
+            top_visible: self.input_state.toolbar_top_visible() && !unmap_suppressed,
+            side_visible: self.input_state.toolbar_side_visible() && !unmap_suppressed,
             top_offset: (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
             side_offset: (
                 self.data.toolbar_side_offset_x,
@@ -251,8 +262,22 @@ impl WaylandState {
             ),
             modal_engaged: gtk_toolbar_feedback_blocked(&self.input_state),
             drag_preview: self.data.gtk_drag_preview,
+            capture_suppressed,
+            capture_suppression_generation: self
+                .data
+                .overlay_capture_barrier
+                .gtk_paint_generation(),
             snapshot,
         };
+        if let Some(generation) = update.capture_suppression_generation {
+            log::info!(
+                "capture.preflight id={generation} component=backend phase=gtk-update-queued reason={:?} top_visible={} side_visible={} output={:?}",
+                self.data.overlay_suppression,
+                update.top_visible,
+                update.side_visible,
+                update.output_name
+            );
+        }
         if let Some(bridge) = self.gtk_toolbar.as_mut() {
             bridge.maybe_send(update);
         }
@@ -410,6 +435,20 @@ mod modal_tests {
             &mut top_blocked,
             &mut side_blocked,
             &side,
+        ));
+        assert_eq!((top_blocked, side_blocked), (true, false));
+    }
+
+    #[test]
+    fn capture_suppression_ack_bypasses_modal_feedback_blocking() {
+        let mut top_blocked = true;
+        let mut side_blocked = false;
+
+        assert!(!gtk_toolbar_feedback_is_blocked(
+            true,
+            &mut top_blocked,
+            &mut side_blocked,
+            &GtkToolbarFeedback::CaptureSuppressionReady { generation: 7 },
         ));
         assert_eq!((top_blocked, side_blocked), (true, false));
     }

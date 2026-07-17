@@ -24,6 +24,7 @@ pub struct ZoomState {
     pub(super) portal_target_output_id: Option<u32>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight_pending: bool,
+    pub(super) preflight_use_fallback: bool,
     pub(super) capture_done: bool,
     pub(super) pending_activation: bool,
     pub active: bool,
@@ -64,6 +65,7 @@ impl ZoomState {
             portal_target_output_id: None,
             runtime_wake,
             preflight_pending: false,
+            preflight_use_fallback: false,
             capture_done: false,
             pending_activation: false,
             active: false,
@@ -117,14 +119,19 @@ impl ZoomState {
         self.capture.is_some() || self.portal_in_progress || self.preflight_pending
     }
 
+    #[cfg(test)]
     pub fn preflight_pending(&self) -> bool {
         self.preflight_pending
     }
 
-    pub fn take_preflight_pending(&mut self) -> bool {
-        let pending = self.preflight_pending;
+    pub fn take_preflight_pending(&mut self) -> Option<bool> {
+        if !self.preflight_pending {
+            return None;
+        }
+        let use_fallback = self.preflight_use_fallback;
         self.preflight_pending = false;
-        pending
+        self.preflight_use_fallback = false;
+        Some(use_fallback)
     }
 
     pub fn take_capture_done(&mut self) -> bool {
@@ -158,6 +165,7 @@ impl ZoomState {
             changed = true;
         }
         self.preflight_pending = false;
+        self.preflight_use_fallback = false;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
             task.cancel();
@@ -186,6 +194,7 @@ impl ZoomState {
             capture.frame.destroy();
         }
         self.preflight_pending = false;
+        self.preflight_use_fallback = false;
         self.capture_done = true;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {

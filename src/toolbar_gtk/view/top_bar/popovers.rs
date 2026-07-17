@@ -6,6 +6,62 @@
 use super::*;
 
 impl TopBar {
+    pub(super) fn hide_popovers_for_window_hide(&self) {
+        self.shapes_expected_open.set(false);
+        self.overflow_expected_open.set(false);
+        if let Some(popover) = self.shapes_popover.as_ref()
+            && popover.is_visible()
+        {
+            popover.popdown();
+        }
+        if let Some(popover) = self.overflow_popover.as_ref()
+            && popover.is_visible()
+        {
+            popover.popdown();
+        }
+    }
+
+    /// Popovers are independent native Wayland surfaces, so their parent's
+    /// opacity does not affect them. Keep any open popover mapped and commit
+    /// opacity zero alongside the top toolbar rather than starting a popup
+    /// close animation during capture.
+    pub(super) fn set_popovers_capture_transparent(&self, transparent: bool) {
+        for popover in [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            if transparent && !popover.is_visible() {
+                continue;
+            }
+            super::super::set_capture_transparent(popover, transparent);
+            popover.set_can_target(!transparent);
+            if let Some(surface) = popover.surface() {
+                if transparent {
+                    let empty = gtk4::cairo::Region::create();
+                    surface.set_input_region(Some(&empty));
+                } else {
+                    surface.set_input_region(None);
+                }
+            }
+        }
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_popover_targets(
+        &self,
+    ) -> Vec<(&'static str, gtk4::Widget)> {
+        [
+            ("top-shapes-popover", self.shapes_popover.as_ref()),
+            ("top-overflow-popover", self.overflow_popover.as_ref()),
+        ]
+        .into_iter()
+        .filter_map(|(name, popover)| {
+            let popover = popover?;
+            (popover.is_visible() && popover.is_mapped())
+                .then(|| (name, popover.clone().upcast::<gtk4::Widget>()))
+        })
+        .collect()
+    }
+
     /// Keep the popovers' contents and open state in line with the snapshot.
     /// Open state only changes when the snapshot flag differs from what the
     /// popover shows.

@@ -203,7 +203,9 @@ impl WaylandState {
         } else {
             log::info!("Zoom: using screencopy fast path");
         }
-        self.enter_overlay_suppression(OverlaySuppression::Zoom);
+        if !self.enter_overlay_suppression(OverlaySuppression::Zoom) {
+            anyhow::bail!("Zoom capture requested while another overlay operation is preparing");
+        }
         match self.zoom.start_capture(use_fallback, &self.tokio_handle) {
             Ok(()) => Ok(()),
             Err(err) => {

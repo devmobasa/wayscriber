@@ -329,7 +329,9 @@ impl GtkToolbarFeedback {
         match self {
             Self::SetTopOffset { .. } => Some(GtkToolbarKind::Top),
             Self::SetSideOffset { .. } => Some(GtkToolbarKind::Side),
-            Self::Event { .. } => None,
+            Self::Event { .. }
+            | Self::CaptureSuppressionReady { .. }
+            | Self::CaptureSuppressionFailed { .. } => None,
         }
     }
 }
@@ -539,6 +541,10 @@ mod tests {
         }
     }
 
+    fn capture_suppression_ready(generation: u64) -> GtkToolbarFeedback {
+        GtkToolbarFeedback::CaptureSuppressionReady { generation }
+    }
+
     fn channel() -> (RuntimeWakeSource, BridgeHealth, FeedbackPublisher) {
         let wake = RuntimeWakeSource::new().unwrap();
         let health = BridgeHealth::new(wake.handle());
@@ -655,6 +661,27 @@ mod tests {
         assert_eq!(drained.first(), Some(&start));
         assert_eq!(drained.last(), Some(&end));
         assert!(!drained.contains(&drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 2)));
+        assert!(!health.failed());
+    }
+
+    #[test]
+    fn capture_suppression_ack_reclaims_a_move_and_remains_an_ordered_boundary() {
+        let (_wake, health, publisher) = channel();
+        let start = drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Start, 1);
+        publisher.publish(start.clone()).unwrap();
+        for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
+            publisher
+                .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, seq))
+                .unwrap();
+        }
+
+        let acknowledgement = capture_suppression_ready(42);
+        publisher.publish(acknowledgement.clone()).unwrap();
+
+        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.first(), Some(&start));
+        assert_eq!(drained.last(), Some(&acknowledgement));
         assert!(!health.failed());
     }
 

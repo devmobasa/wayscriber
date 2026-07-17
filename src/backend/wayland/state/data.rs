@@ -2,6 +2,8 @@ use std::time::Instant;
 
 use crate::backend::wayland::toolbar::{ToolbarFocusTarget, hit::HitRegion};
 
+use super::capture::OverlayCaptureBarrier;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveDragKind {
     Top,
@@ -28,6 +30,13 @@ pub enum XdgFrozenFullscreenState {
 }
 
 impl OverlaySuppression {
+    pub(in crate::backend::wayland) fn requires_capture_barrier(self) -> bool {
+        matches!(
+            self,
+            Self::Capture | Self::DesktopBackdrop | Self::Frozen | Self::Zoom
+        )
+    }
+
     pub(in crate::backend::wayland) fn effective_for_board(
         self,
         board_is_transparent: bool,
@@ -132,6 +141,7 @@ pub struct StateData {
     pub(super) xdg_frozen_fullscreen_requested_at: Option<Instant>,
     pub(super) main_surface_uses_overlay_layer: bool,
     pub(super) overlay_suppression: OverlaySuppression,
+    pub(super) overlay_capture_barrier: OverlayCaptureBarrier,
     pub(super) overlay_clickthrough: bool,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
     pub(super) overlay_ready: bool,
@@ -221,6 +231,7 @@ impl StateData {
             xdg_frozen_fullscreen_requested_at: None,
             main_surface_uses_overlay_layer: false,
             overlay_suppression: OverlaySuppression::None,
+            overlay_capture_barrier: OverlayCaptureBarrier::default(),
             overlay_clickthrough: false,
             overlay_ready: false,
             suppress_next_release: false,

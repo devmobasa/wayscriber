@@ -73,7 +73,7 @@ impl SideBar {
                 seq: start_seq.value(),
                 phase: GtkToolbarDragPhase::Start,
             };
-            super::super::set_drag_visual_hidden(
+            super::super::set_visual_hidden(
                 &frame_window,
                 &visual,
                 GtkToolbarKind::Side,
@@ -94,7 +94,7 @@ impl SideBar {
                     start_seq.publish(&start_sequence);
                     start_ready.set(generation);
                 } else {
-                    super::super::set_drag_visual_hidden(
+                    super::super::set_visual_hidden(
                         &start_window,
                         &start_visual,
                         GtkToolbarKind::Side,

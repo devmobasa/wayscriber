@@ -89,11 +89,6 @@ impl CaptureState {
         !matches!(self.preflight, CapturePreflight::None)
     }
 
-    /// Returns true if the next render should request a frame callback.
-    pub fn preflight_needs_frame_callback(&self) -> bool {
-        matches!(self.preflight, CapturePreflight::AwaitingRender)
-    }
-
     /// Mark that the suppression frame has been rendered and committed.
     pub fn mark_preflight_rendered(&mut self) {
         if matches!(self.preflight, CapturePreflight::AwaitingRender) {

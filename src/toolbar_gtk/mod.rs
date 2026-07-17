@@ -83,6 +83,14 @@ pub struct GtkToolbarUpdate {
     /// backend renders this bar as an inline drag preview. This keeps
     /// `GestureDrag` coordinates stable even though the preview moves.
     pub drag_preview: Option<GtkToolbarKind>,
+    /// Capture/freeze/zoom is active. Normally visible GTK layer surfaces stay
+    /// mapped but paint transparently so compositors cannot retain an animated
+    /// snapshot of an unmap transition.
+    pub capture_suppressed: bool,
+    /// Capture-suppression generation acknowledged only after every normally
+    /// mapped GTK toolbar has painted transparently and the GTK Wayland
+    /// connection has completed a compositor roundtrip.
+    pub capture_suppression_generation: Option<u64>,
 }
 
 /// Identifies one of the two GTK toolbar surfaces.
@@ -140,6 +148,14 @@ impl GtkToolbarSurfaceSize {
 #[cfg_attr(not(feature = "toolbar-gtk"), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum GtkToolbarFeedback {
+    /// Every normally mapped toolbar committed an opacity-zero frame and the
+    /// GTK Wayland connection completed a compositor roundtrip for this
+    /// generation.
+    CaptureSuppressionReady { generation: u64 },
+    /// GTK could not prove that every opacity-zero toolbar commit reached the
+    /// compositor. The backend cancels only this capture and keeps the GTK
+    /// frontend available.
+    CaptureSuppressionFailed { generation: u64, error: String },
     /// A toolbar control fired; routed through `handle_toolbar_event`.
     Event {
         event: ToolbarEvent,

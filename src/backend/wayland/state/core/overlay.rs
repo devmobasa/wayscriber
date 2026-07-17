@@ -54,9 +54,18 @@ impl WaylandState {
         reason: OverlaySuppression,
     ) -> bool {
         if self.data.overlay_suppression != OverlaySuppression::None {
+            log::warn!(
+                "capture.preflight component=overlay reason={reason:?} phase=enter-rejected active={:?}",
+                self.data.overlay_suppression
+            );
             return false;
         }
         self.data.overlay_suppression = reason;
+        if reason.requires_capture_barrier() {
+            self.data
+                .overlay_capture_barrier
+                .begin(reason, self.gtk_toolbar.is_some());
+        }
         self.sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::OverlaySuppression);
@@ -70,13 +79,19 @@ impl WaylandState {
         reason: OverlaySuppression,
     ) {
         if self.data.overlay_suppression != reason {
+            log::info!(
+                "capture.preflight component=overlay reason={reason:?} phase=exit-ignored active={:?}",
+                self.data.overlay_suppression
+            );
             return;
         }
+        self.data.overlay_capture_barrier.cancel(reason);
         self.data.overlay_suppression = OverlaySuppression::None;
         self.sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::OverlayRestored);
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
+        log::info!("capture.preflight component=overlay reason={reason:?} phase=restored");
     }
 }

@@ -2,7 +2,10 @@ use super::*;
 use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
 
 mod backdrop;
+mod barrier;
 mod pdf;
+
+pub(super) use barrier::OverlayCaptureBarrier;
 
 impl WaylandState {
     fn should_exit_after_capture(&self, destination: CaptureDestination) -> bool {
@@ -22,6 +25,11 @@ impl WaylandState {
             );
         }
         if self.zoom.take_capture_done() {
+            log::info!(
+                "capture.preflight component=zoom phase=complete restoring_overlay=true active={} image_generation={}",
+                self.zoom.active,
+                self.zoom.image_generation()
+            );
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
             self.finish_pending_eyedropper_capture(
                 crate::input::state::EyedropperCaptureSource::Zoom,

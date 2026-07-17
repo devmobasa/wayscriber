@@ -151,7 +151,7 @@ pub(super) fn cancel_move_drag(
     ));
 
     if action == CancelledDragAction::Reveal {
-        super::set_drag_visual_hidden(window, visual, kind, false);
+        super::set_visual_hidden(window, visual, kind, false);
         return;
     }
 
@@ -175,7 +175,7 @@ pub(super) fn cancel_move_drag(
         },
     };
     if feedback.send(end).is_err() {
-        super::set_drag_visual_hidden(window, visual, kind, false);
+        super::set_visual_hidden(window, visual, kind, false);
     }
 }
 
