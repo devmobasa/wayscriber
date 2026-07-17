@@ -372,7 +372,7 @@ Controls the main system tray icon. Changes take effect after restarting the dae
 icon_style = "auto"
 ```
 
-- `auto` (default) uses a theme-adaptive symbolic icon on supported desktops and colored fallback pixmaps on known-incompatible tray hosts.
+- `auto` (default) uses a theme-adaptive symbolic icon on supported desktops and colored fallback pixmaps on known-incompatible tray hosts, including Omarchy/Quickshell, Noctalia/Quickshell, and COSMIC.
 - `symbolic` always requests the theme-adaptive icon. The tray host chooses its visible color.
 - `colored` always publishes the yellow, scale-aware fallback pixmaps.
 

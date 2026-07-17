@@ -101,14 +101,12 @@ impl WaylandState {
         conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        let Some(bridge) = self.gtk_toolbar.as_ref() else {
-            return;
+        let (pending, failed) = {
+            let Some(bridge) = self.gtk_toolbar.as_ref() else {
+                return;
+            };
+            bridge.drain_feedback()
         };
-        let mut pending = bridge.drain_feedback();
-        let bridge_failed = bridge.failed();
-        if bridge_failed {
-            pending.extend(bridge.drain_feedback());
-        }
         for feedback in pending {
             // GTK uses a separate connection and bypasses the built-in
             // pointer modal gate. A drag first observed under the modal stays
@@ -208,11 +206,10 @@ impl WaylandState {
                 }
             }
         }
-
-        // Feedback was committed before the bridge's wake/failure state. Apply
-        // the drained batch first, then fail over, so a concurrent terminal
-        // transition cannot discard an already-accepted Undo or drag end.
-        if bridge_failed {
+        // Feedback committed before the terminal transition remains accepted
+        // input. Apply the drained batch before dropping the failed bridge so
+        // actions and final drag offsets are not lost during failover.
+        if failed {
             self.cancel_gtk_toolbar_drag_lifecycle();
             self.gtk_toolbar = None;
         }

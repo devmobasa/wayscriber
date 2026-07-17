@@ -187,12 +187,8 @@ mod disabled {
             None
         }
 
-        pub fn failed(&self) -> bool {
-            false
-        }
-
-        pub fn drain_feedback(&self) -> Vec<GtkToolbarFeedback> {
-            Vec::new()
+        pub fn drain_feedback(&self) -> (Vec<GtkToolbarFeedback>, bool) {
+            (Vec::new(), false)
         }
 
         pub fn maybe_send(&mut self, _update: GtkToolbarUpdate) {}

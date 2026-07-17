@@ -6,7 +6,6 @@ use crate::backend::wayland::clipboard::{
     ClipboardPublishCompletion, FailedLocalSelectionProbe, PasteAction, TransferEffect,
     TransferPlan, TransferWarning, transfer,
 };
-use crate::input::InputState;
 use crate::input::state::{ClipboardPasteRequest, UiToastKind};
 use std::time::{Duration, Instant};
 
@@ -22,7 +21,7 @@ impl WaylandState {
             self.start_selection_clipboard_publish(request.generation, request.payload_json);
         }
 
-        if let Some(request) = take_pending_clipboard_paste_request(
+        if let Some(request) = take_pending_clipboard_paste_if_idle(
             &mut self.input_state,
             self.clipboard_paste.is_active(),
         ) {
@@ -481,17 +480,6 @@ impl WaylandState {
     }
 }
 
-fn take_pending_clipboard_paste_request(
-    input_state: &mut InputState,
-    clipboard_read_active: bool,
-) -> Option<ClipboardPasteRequest> {
-    if clipboard_read_active {
-        None
-    } else {
-        input_state.take_pending_clipboard_paste_request()
-    }
-}
-
 fn failed_clipboard_publish_completion(generation: u64) -> ClipboardPublishCompletion {
     ClipboardPublishCompletion {
         generation,
@@ -511,11 +499,19 @@ fn failed_clipboard_paste_completion(
     }
 }
 
+fn take_pending_clipboard_paste_if_idle(
+    input_state: &mut crate::input::InputState,
+    clipboard_paste_active: bool,
+) -> Option<ClipboardPasteRequest> {
+    (!clipboard_paste_active)
+        .then(|| input_state.take_pending_clipboard_paste_request())
+        .flatten()
+}
+
 #[cfg(test)]
 mod transport_tests {
     use super::*;
-    use crate::input::state::PasteAnchor;
-    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::state::{PasteAnchor, test_support::make_test_input_state};
     use crate::util::Rect;
 
     fn request(id: u64) -> ClipboardPasteRequest {
@@ -556,23 +552,21 @@ mod transport_tests {
     }
 
     #[test]
-    fn newer_paste_remains_pending_while_clipboard_read_is_active() {
-        let mut input = make_test_input_state();
-        let first = input.request_clipboard_paste();
-        assert_eq!(
-            take_pending_clipboard_paste_request(&mut input, false),
-            Some(first)
-        );
-        let latest = input.request_clipboard_paste();
+    fn active_paste_transport_defers_the_newest_pending_request() {
+        let mut input_state = make_test_input_state();
+        let superseded = input_state.request_clipboard_paste();
 
-        assert_eq!(
-            take_pending_clipboard_paste_request(&mut input, true),
-            None,
-            "the latest paste must remain queued until the active read completes"
+        assert!(
+            take_pending_clipboard_paste_if_idle(&mut input_state, true).is_none(),
+            "an active transport must not consume a newer paste request"
         );
+
+        let newest = input_state.request_clipboard_paste();
+        assert_ne!(newest.id, superseded.id);
+        assert!(take_pending_clipboard_paste_if_idle(&mut input_state, true).is_none());
         assert_eq!(
-            take_pending_clipboard_paste_request(&mut input, false),
-            Some(latest)
+            take_pending_clipboard_paste_if_idle(&mut input_state, false),
+            Some(newest)
         );
     }
 }

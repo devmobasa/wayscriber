@@ -413,7 +413,10 @@ fn tray_theme_icons_supported(desktop_env: &str, session_env: &str, desktop_sess
 
 #[cfg(feature = "tray")]
 fn tray_theme_icons_blocked_by_desktop(value: &str) -> bool {
-    value.contains("noctalia") || value.contains("quickshell") || value.contains("cosmic")
+    value.contains("noctalia")
+        || value.contains("omarchy")
+        || value.contains("quickshell")
+        || value.contains("cosmic")
 }
 
 #[cfg(feature = "tray")]
@@ -459,6 +462,9 @@ mod tests {
     fn tray_theme_icons_supported_blocks_existing_problem_shells() {
         assert!(!tray_theme_icons_supported("quickshell", "", ""));
         assert!(!tray_theme_icons_supported("", "noctalia", ""));
+        assert!(!tray_theme_icons_supported(
+            "hyprland", "hyprland", "omarchy"
+        ));
     }
 
     #[test]
@@ -476,6 +482,13 @@ mod tests {
             "quickshell",
             "",
             ""
+        ));
+        assert!(!resolve_symbolic_tray_icon(
+            TrayIconStyle::Auto,
+            false,
+            "hyprland",
+            "hyprland",
+            "omarchy"
         ));
     }
 
