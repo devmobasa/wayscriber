@@ -11,6 +11,7 @@ pub(super) fn merge_config_document(
     source: &DocumentMut,
     previous: &Config,
     updated: &Config,
+    known_document: &DocumentMut,
 ) -> Result<DocumentMut> {
     let updated_revision = updated.config_revision;
     let previous = serialize_config_document(previous)?;
@@ -27,6 +28,7 @@ pub(super) fn merge_config_document(
         merged.as_table_mut(),
         Some(previous.as_table()),
         updated.as_table(),
+        Some(known_document.as_table()),
         "",
     );
     if let Some(contents) = empty_source_contents
@@ -70,7 +72,7 @@ pub(super) fn conservative_repair_source_document(
     let updated = serialize_config_document(updated)?;
     let mut repair_source = source.clone();
     canonicalize_aliases(&mut repair_source);
-    for key in known_keys(Some(previous.as_table()), updated.as_table()) {
+    for key in known_keys(Some(previous.as_table()), updated.as_table(), None) {
         repair_source.remove(&key);
     }
     Ok(repair_source)
@@ -81,7 +83,7 @@ fn remove_known_content(
     previous: Option<&dyn TableLike>,
     updated: &dyn TableLike,
 ) {
-    for key in known_keys(previous, updated) {
+    for key in known_keys(previous, updated, None) {
         let previous_item = previous.and_then(|table| table.get(&key));
         let updated_item = updated.get(&key);
         let known_tables = previous_item
@@ -109,13 +111,22 @@ fn remove_known_content(
     }
 }
 
-fn known_keys(previous: Option<&dyn TableLike>, updated: &dyn TableLike) -> Vec<String> {
+fn known_keys(
+    previous: Option<&dyn TableLike>,
+    updated: &dyn TableLike,
+    known: Option<&dyn TableLike>,
+) -> Vec<String> {
     let mut keys = previous
         .into_iter()
         .flat_map(TableLike::iter)
         .map(|(key, _)| key.to_string())
         .collect::<Vec<_>>();
     for (key, _) in updated.iter() {
+        if !keys.iter().any(|known| known == key) {
+            keys.push(key.to_string());
+        }
+    }
+    for (key, _) in known.into_iter().flat_map(TableLike::iter) {
         if !keys.iter().any(|known| known == key) {
             keys.push(key.to_string());
         }
@@ -193,10 +204,12 @@ fn merge_table_like(
     raw: &mut dyn TableLike,
     previous: Option<&dyn TableLike>,
     updated: &dyn TableLike,
+    known: Option<&dyn TableLike>,
     path: &str,
 ) {
-    for key in known_keys(previous, updated) {
+    for key in known_keys(previous, updated, known) {
         let previous_item = previous.and_then(|table| table.get(&key));
+        let known_item = known.and_then(|table| table.get(&key));
         let item_path = if path.is_empty() {
             key.clone()
         } else {
@@ -204,14 +217,20 @@ fn merge_table_like(
         };
         match updated.get(&key) {
             Some(updated_item) => match raw.get_mut(&key) {
-                Some(raw_item) => merge_item(raw_item, previous_item, updated_item, &item_path),
+                Some(raw_item) => merge_item(
+                    raw_item,
+                    previous_item,
+                    updated_item,
+                    known_item,
+                    &item_path,
+                ),
                 None => {
                     if let Some(item) = changed_item(previous_item, updated_item, &item_path) {
                         raw.insert(&key, item);
                     }
                 }
             },
-            None if previous_item.is_some() => {
+            None if previous_item.is_some() || known_item.is_some() => {
                 raw.remove(&key);
             }
             None => {}
@@ -237,7 +256,13 @@ fn changed_item(previous: Option<&Item>, updated: &Item, path: &str) -> Option<I
         .as_table_like_mut()
         .expect("a cloned table-like item remains table-like");
     changed_table.clear();
-    merge_table_like(changed_table, Some(previous_table), updated_table, path);
+    merge_table_like(
+        changed_table,
+        Some(previous_table),
+        updated_table,
+        None,
+        path,
+    );
     (!changed_table.is_empty()).then_some(changed)
 }
 
@@ -267,7 +292,13 @@ fn tables_semantically_equal(left: &dyn TableLike, right: &dyn TableLike) -> boo
         })
 }
 
-fn merge_item(raw: &mut Item, previous: Option<&Item>, updated: &Item, path: &str) {
+fn merge_item(
+    raw: &mut Item,
+    previous: Option<&Item>,
+    updated: &Item,
+    known: Option<&Item>,
+    path: &str,
+) {
     if let (Item::Value(Value::Array(raw)), Item::ArrayOfTables(updated)) = (&mut *raw, updated) {
         let previous = previous
             .and_then(Item::as_array_of_tables)
@@ -286,6 +317,7 @@ fn merge_item(raw: &mut Item, previous: Option<&Item>, updated: &Item, path: &st
             raw_table,
             previous.and_then(Item::as_table_like),
             updated_table,
+            known.and_then(Item::as_table_like),
             path,
         );
         return;
@@ -299,13 +331,25 @@ fn merge_item(raw: &mut Item, previous: Option<&Item>, updated: &Item, path: &st
             path,
         ),
         (Item::Value(raw), Item::Value(updated)) => {
-            merge_value(raw, previous.and_then(Item::as_value), updated, path);
+            merge_value(
+                raw,
+                previous.and_then(Item::as_value),
+                updated,
+                known.and_then(Item::as_value),
+                path,
+            );
         }
         (raw, updated) => replace_item_preserving_decor(raw, updated),
     }
 }
 
-fn merge_value(raw: &mut Value, previous: Option<&Value>, updated: &Value, path: &str) {
+fn merge_value(
+    raw: &mut Value,
+    previous: Option<&Value>,
+    updated: &Value,
+    known: Option<&Value>,
+    path: &str,
+) {
     match (raw, updated) {
         (Value::InlineTable(raw), Value::InlineTable(updated)) => merge_table_like(
             raw,
@@ -313,6 +357,9 @@ fn merge_value(raw: &mut Value, previous: Option<&Value>, updated: &Value, path:
                 .and_then(Value::as_inline_table)
                 .map(|table| table as _),
             updated,
+            known
+                .and_then(Value::as_inline_table)
+                .map(|table| table as _),
             path,
         ),
         (Value::Array(raw), Value::Array(updated)) => {
@@ -329,6 +376,9 @@ fn merge_value(raw: &mut Value, previous: Option<&Value>, updated: &Value, path:
                         raw_value,
                         previous.and_then(|values| values.get(index)),
                         updated_value,
+                        known
+                            .and_then(Value::as_array)
+                            .and_then(|values| values.get(index)),
                         path,
                     );
                 } else {
@@ -356,7 +406,8 @@ fn merge_array_of_tables(
     path: &str,
 ) {
     let raw_tables = raw.clone().into_iter().collect::<Vec<_>>();
-    let group_position = raw_tables.iter().filter_map(Table::position).min();
+    let raw_positions = raw_tables.iter().map(Table::position).collect::<Vec<_>>();
+    let group_position = raw_positions.iter().flatten().copied().min();
     let previous_tables = previous
         .map(|tables| tables.iter().collect::<Vec<_>>())
         .unwrap_or_default();
@@ -379,6 +430,12 @@ fn merge_array_of_tables(
         &updated_table_refs,
         path,
     );
+    let mut last_raw_index = None;
+    let preserve_entry_positions = matches.raw_for_updated.iter().flatten().all(|index| {
+        let preserves_order = last_raw_index.is_none_or(|last| *index > last);
+        last_raw_index = Some(*index);
+        preserves_order
+    });
     let mut available = raw_tables.into_iter().map(Some).collect::<Vec<_>>();
     let mut rebuilt = ArrayOfTables::new();
 
@@ -386,23 +443,72 @@ fn merge_array_of_tables(
         let previous_table = matches.updated_previous[index]
             .and_then(|index| previous_tables.get(index).copied())
             .map(|table| table as _);
-        let mut merged_table = matches.raw_for_updated[index]
+        let raw_index = matches.raw_for_updated[index];
+        let original_table = raw_index
+            .and_then(|index| available.get(index))
+            .and_then(Option::as_ref)
+            .cloned();
+        let mut merged_table = raw_index
             .and_then(|index| available.get_mut(index))
             .and_then(Option::take)
             .unwrap_or_else(|| updated_table.clone());
 
-        merge_table_like(&mut merged_table, previous_table, updated_table, path);
-        set_table_tree_position(&mut merged_table, group_position);
+        merge_table_like(&mut merged_table, previous_table, updated_table, None, path);
+        let position = if preserve_entry_positions {
+            retained_table_position(
+                index,
+                &matches.raw_for_updated,
+                &raw_positions,
+                group_position,
+            )
+        } else {
+            group_position
+        };
+        if !preserve_entry_positions || raw_index.is_none() {
+            set_table_tree_position(&mut merged_table, position);
+        } else if let Some(original_table) = original_table.as_ref() {
+            position_new_table_children(&mut merged_table, original_table);
+        }
         rebuilt.push(merged_table);
     }
     for index in matches.preserved_raw {
         if let Some(mut table) = available.get_mut(index).and_then(Option::take) {
-            set_table_tree_position(&mut table, group_position);
+            let position = preserve_entry_positions
+                .then(|| raw_positions.get(index).copied().flatten())
+                .flatten()
+                .or(group_position);
+            if !preserve_entry_positions {
+                set_table_tree_position(&mut table, position);
+            }
             rebuilt.push(table);
         }
     }
 
     *raw = rebuilt;
+}
+
+fn retained_table_position(
+    updated_index: usize,
+    raw_for_updated: &[Option<usize>],
+    raw_positions: &[Option<isize>],
+    group_position: Option<isize>,
+) -> Option<isize> {
+    raw_for_updated[updated_index]
+        .and_then(|index| raw_positions.get(index).copied().flatten())
+        .or_else(|| {
+            raw_for_updated[..updated_index]
+                .iter()
+                .rev()
+                .flatten()
+                .find_map(|index| raw_positions.get(*index).copied().flatten())
+        })
+        .or_else(|| {
+            raw_for_updated[updated_index + 1..]
+                .iter()
+                .flatten()
+                .find_map(|index| raw_positions.get(*index).copied().flatten())
+        })
+        .or(group_position)
 }
 
 struct TableMergePlan {
@@ -598,7 +704,13 @@ fn merge_inline_array_of_tables(
         let merged_table = merged_value
             .as_inline_table_mut()
             .expect("validated inline-table array contains inline tables");
-        merge_table_like(merged_table, previous_table, updated_tables[index], path);
+        merge_table_like(
+            merged_table,
+            previous_table,
+            updated_tables[index],
+            None,
+            path,
+        );
         rebuilt.push(merged_value);
     }
     for index in matches.preserved_raw {
@@ -636,6 +748,33 @@ fn set_table_tree_position(table: &mut Table, position: Option<isize>) {
             Item::ArrayOfTables(tables) => {
                 for table in tables.iter_mut() {
                     set_table_tree_position(table, position);
+                }
+            }
+            Item::None | Item::Value(_) => {}
+        }
+    }
+}
+
+fn position_new_table_children(table: &mut Table, original: &Table) {
+    let parent_position = table.position();
+    for (key, item) in table.iter_mut() {
+        match item {
+            Item::Table(child) => {
+                if let Some(original_child) = original.get(key.get()).and_then(Item::as_table) {
+                    position_new_table_children(child, original_child);
+                } else {
+                    set_table_tree_position(child, parent_position);
+                }
+            }
+            Item::ArrayOfTables(tables) => {
+                if original
+                    .get(key.get())
+                    .and_then(Item::as_array_of_tables)
+                    .is_none()
+                {
+                    for child in tables.iter_mut() {
+                        set_table_tree_position(child, parent_position);
+                    }
                 }
             }
             Item::None | Item::Value(_) => {}
