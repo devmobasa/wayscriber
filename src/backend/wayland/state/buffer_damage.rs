@@ -19,6 +19,7 @@ use crate::util::Rect;
 
 /// Maximum number of buffer slots to track (prevents unbounded growth).
 const MAX_TRACKED_BUFFERS: usize = 8;
+const MAX_DAMAGE_REGIONS_BEFORE_FULL: usize = 256;
 const DAMAGE_MERGE_MARGIN: i32 = 1;
 const DAMAGE_MERGE_ALIGNMENT_TOLERANCE: i32 = 2;
 
@@ -40,6 +41,7 @@ pub(in crate::backend::wayland) enum FullDamageReason {
     FirstRunOnboarding,
     EmptyDamageFallback,
     DamageRegionsCoverSurface,
+    DamageRegionLimit,
     Unknown,
 }
 
@@ -62,6 +64,7 @@ impl FullDamageReason {
             Self::FirstRunOnboarding => "first_run_onboarding",
             Self::EmptyDamageFallback => "empty_damage_fallback",
             Self::DamageRegionsCoverSurface => "damage_regions_cover_surface",
+            Self::DamageRegionLimit => "damage_region_limit",
             Self::Unknown => "unknown",
         }
     }
@@ -301,6 +304,18 @@ impl BufferDamageTracker {
         }
 
         let regions_before_merge = regions.len();
+        if regions_before_merge > MAX_DAMAGE_REGIONS_BEFORE_FULL
+            && width > 0
+            && height > 0
+            && let Some(full) = Rect::new(0, 0, width, height)
+        {
+            return BufferDamageReport {
+                regions: vec![full],
+                full_reason: Some(FullDamageReason::DamageRegionLimit),
+                regions_before_merge,
+                regions_after_merge: 1,
+            };
+        }
         // Merge overlapping regions to reduce compositor work
         merge_damage_regions(&mut regions);
         let regions_after_merge = regions.len();
@@ -672,6 +687,30 @@ mod tests {
             tracker.take_buffer_damage_report(0x3000, 1000, 1000, TEST_GEN, TEST_SIZE);
         assert_eq!(second_reused.full_reason, None);
         assert_path_damage_stays_split(&second_reused.regions);
+    }
+
+    #[test]
+    fn excessive_sparse_damage_falls_back_to_full_surface() {
+        let mut tracker = BufferDamageTracker::new(3);
+        let _ = tracker.take_buffer_damage_report(0x1000, 4096, 4096, TEST_GEN, TEST_SIZE);
+
+        for index in 0..=MAX_DAMAGE_REGIONS_BEFORE_FULL {
+            let position = (index * 8) as i32;
+            tracker.mark_rect(Rect::new(position, position, 2, 2).unwrap());
+        }
+
+        let report = tracker.take_buffer_damage_report(0x1000, 4096, 4096, TEST_GEN, TEST_SIZE);
+
+        assert_eq!(
+            report.full_reason,
+            Some(FullDamageReason::DamageRegionLimit)
+        );
+        assert_eq!(report.regions, vec![Rect::new(0, 0, 4096, 4096).unwrap()]);
+        assert_eq!(
+            report.regions_before_merge,
+            MAX_DAMAGE_REGIONS_BEFORE_FULL + 1
+        );
+        assert_eq!(report.regions_after_merge, 1);
     }
 
     fn assert_path_damage_stays_split(regions: &[Rect]) {

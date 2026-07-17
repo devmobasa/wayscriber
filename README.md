@@ -374,11 +374,8 @@ The override selects Rust 1.95 only inside this checkout and leaves your global 
 **Dependencies:**
 
 ```bash
-# Debian/Ubuntu
-sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev
-
-# Ubuntu 25.04+ / Debian 13 (trixie)+ also ship the layer-shell dev package:
-sudo apt-get install libgtk4-layer-shell-dev
+# Debian 13+ / Ubuntu 25.04+ (including Ubuntu 26.04 LTS)
+sudo apt-get install build-essential pkg-config libcairo2-dev libwayland-dev libpango1.0-dev libgtk-4-dev libgtk4-layer-shell-dev
 
 # Fedora
 sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel gtk4-devel gtk4-layer-shell-devel
