@@ -5,6 +5,8 @@ use wayland_client::{EventQueue, backend::WaylandError};
 use super::super::super::state::WaylandState;
 use super::super::helpers::dispatch_with_timeout;
 use super::super::runtime_wake::RuntimeWakeSource;
+use super::super::signals::OverlaySignalState;
+use super::super::tray::process_tray_action;
 
 trait PersistenceWakeDrain {
     fn drain_woken_persistence(&mut self) -> Result<(), anyhow::Error>;
@@ -22,6 +24,25 @@ fn route_woken_persistence(state: &mut impl PersistenceWakeDrain) {
     }
 }
 
+fn route_woken_sources(
+    state: &mut WaylandState,
+    signals: &mut OverlaySignalState,
+) -> Result<(), anyhow::Error> {
+    route_woken_persistence(state);
+
+    if signals.exit_requested() {
+        state.input_state.should_exit = true;
+    }
+    let _signal_hint = signals.take_tray_action_requested();
+    if process_tray_action(state) {
+        state.sync_overlay_interactivity();
+    }
+    if let Some(failure) = signals.failure() {
+        return Err(anyhow::anyhow!("overlay signal listener failed: {failure}"));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CaptureReadOutcome {
     Readable,
@@ -29,6 +50,7 @@ enum CaptureReadOutcome {
 }
 
 trait CaptureDispatchOps {
+    fn process_runtime_wake(&mut self) -> Result<(), anyhow::Error>;
     fn dispatch_pending(&mut self) -> Result<(), anyhow::Error>;
     fn flush(&mut self) -> Result<(), anyhow::Error>;
     fn prepare_read(&mut self) -> Result<Option<CaptureReadOutcome>, anyhow::Error>;
@@ -37,9 +59,22 @@ trait CaptureDispatchOps {
 struct RealCaptureDispatchOps<'a> {
     event_queue: &'a mut EventQueue<WaylandState>,
     state: &'a mut WaylandState,
+    runtime_wake: &'a RuntimeWakeSource,
+    signals: &'a mut OverlaySignalState,
 }
 
 impl CaptureDispatchOps for RealCaptureDispatchOps<'_> {
+    fn process_runtime_wake(&mut self) -> Result<(), anyhow::Error> {
+        let drain = self
+            .runtime_wake
+            .drain()
+            .map_err(|err| anyhow::anyhow!("failed to drain runtime wake descriptor: {err}"))?;
+        if drain.reads > 0 {
+            route_woken_sources(self.state, self.signals)?;
+        }
+        Ok(())
+    }
+
     fn dispatch_pending(&mut self) -> Result<(), anyhow::Error> {
         self.event_queue
             .dispatch_pending(self.state)
@@ -69,6 +104,7 @@ impl CaptureDispatchOps for RealCaptureDispatchOps<'_> {
 }
 
 fn dispatch_capture_active(ops: &mut impl CaptureDispatchOps) -> Result<(), anyhow::Error> {
+    ops.process_runtime_wake()?;
     ops.dispatch_pending()?;
     ops.flush()?;
 
@@ -83,18 +119,24 @@ pub(super) fn dispatch_events(
     event_queue: &mut EventQueue<WaylandState>,
     state: &mut WaylandState,
     runtime_wake: &RuntimeWakeSource,
+    signals: &mut OverlaySignalState,
     capture_active: bool,
     animation_timeout: Option<Duration>,
 ) -> Result<(), anyhow::Error> {
     if capture_active {
-        let mut ops = RealCaptureDispatchOps { event_queue, state };
+        let mut ops = RealCaptureDispatchOps {
+            event_queue,
+            state,
+            runtime_wake,
+            signals,
+        };
         dispatch_capture_active(&mut ops)
     } else {
         dispatch_with_timeout(
             event_queue,
             state,
             runtime_wake,
-            route_woken_persistence,
+            |state| route_woken_sources(state, signals),
             animation_timeout,
         )
         .map_err(|e| anyhow::anyhow!("Wayland event queue error: {}", e))
@@ -114,6 +156,7 @@ mod tests {
     use crate::session::SessionOptions;
 
     struct FakeCaptureDispatchOps {
+        runtime_wake_calls: usize,
         dispatch_calls: usize,
         flush_calls: usize,
         prepare_calls: usize,
@@ -125,6 +168,7 @@ mod tests {
     impl FakeCaptureDispatchOps {
         fn new(prepare_result: Result<Option<CaptureReadOutcome>, anyhow::Error>) -> Self {
             Self {
+                runtime_wake_calls: 0,
                 dispatch_calls: 0,
                 flush_calls: 0,
                 prepare_calls: 0,
@@ -136,6 +180,11 @@ mod tests {
     }
 
     impl CaptureDispatchOps for FakeCaptureDispatchOps {
+        fn process_runtime_wake(&mut self) -> Result<(), anyhow::Error> {
+            self.runtime_wake_calls += 1;
+            Ok(())
+        }
+
         fn dispatch_pending(&mut self) -> Result<(), anyhow::Error> {
             self.dispatch_calls += 1;
             if self.dispatch_error_on_call == Some(self.dispatch_calls) {
@@ -169,6 +218,15 @@ mod tests {
         assert_eq!(ops.dispatch_calls, 2);
         assert_eq!(ops.flush_calls, 1);
         assert_eq!(ops.prepare_calls, 1);
+    }
+
+    #[test]
+    fn capture_dispatch_processes_runtime_wake() {
+        let mut ops = FakeCaptureDispatchOps::new(Ok(None));
+
+        dispatch_capture_active(&mut ops).unwrap();
+
+        assert_eq!(ops.runtime_wake_calls, 1);
     }
 
     #[test]

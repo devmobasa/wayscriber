@@ -2,26 +2,26 @@ use std::io;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::sync::Arc;
 
-pub(in crate::backend::wayland) const MAX_WAKE_DRAIN_READS: usize = 8;
+pub(crate) const MAX_WAKE_DRAIN_READS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::backend::wayland) struct RuntimeWakeDrain {
-    pub(in crate::backend::wayland) reads: usize,
-    pub(in crate::backend::wayland) limit_reached: bool,
+pub(crate) struct RuntimeWakeDrain {
+    pub(crate) reads: usize,
+    pub(crate) limit_reached: bool,
 }
 
 #[derive(Debug)]
-pub(in crate::backend::wayland) struct RuntimeWakeSource {
+pub(crate) struct RuntimeWakeSource {
     fd: Arc<OwnedFd>,
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::backend::wayland) struct RuntimeWakeHandle {
+pub(crate) struct RuntimeWakeHandle {
     fd: Arc<OwnedFd>,
 }
 
 impl RuntimeWakeSource {
-    pub(in crate::backend::wayland) fn new() -> io::Result<Self> {
+    pub(crate) fn new() -> io::Result<Self> {
         // SAFETY: eventfd returns a new owned descriptor on success. EFD_NONBLOCK
         // keeps both producer writes and consumer drains bounded, and EFD_CLOEXEC
         // prevents subprocesses from extending the runtime descriptor lifetime.
@@ -34,17 +34,17 @@ impl RuntimeWakeSource {
         Ok(Self { fd: Arc::new(fd) })
     }
 
-    pub(in crate::backend::wayland) fn poll_fd(&self) -> BorrowedFd<'_> {
+    pub(crate) fn poll_fd(&self) -> BorrowedFd<'_> {
         self.fd.as_fd()
     }
 
-    pub(in crate::backend::wayland) fn handle(&self) -> RuntimeWakeHandle {
+    pub(crate) fn handle(&self) -> RuntimeWakeHandle {
         RuntimeWakeHandle {
             fd: Arc::clone(&self.fd),
         }
     }
 
-    pub(in crate::backend::wayland) fn drain(&self) -> io::Result<RuntimeWakeDrain> {
+    pub(crate) fn drain(&self) -> io::Result<RuntimeWakeDrain> {
         self.drain_with_limit(MAX_WAKE_DRAIN_READS)
     }
 
@@ -92,7 +92,7 @@ impl RuntimeWakeSource {
 }
 
 impl RuntimeWakeHandle {
-    pub(in crate::backend::wayland) fn wake(&self) -> io::Result<()> {
+    pub(crate) fn wake(&self) -> io::Result<()> {
         let value = 1_u64;
         loop {
             // SAFETY: value points to a readable u64 and the shared eventfd remains

@@ -25,5 +25,6 @@ pub(crate) use toolbar::view::top::{TopStripPlan, plan_top_strip};
 mod zoom;
 
 pub use backend::WaylandBackend;
+pub(crate) use backend::runtime_wake::RuntimeWakeSource;
 #[cfg(tablet)]
 pub use tablet_types::TabletToolType;

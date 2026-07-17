@@ -1,6 +1,54 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
+#[cfg(unix)]
+#[test]
+fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
+    let _signal_guard = crate::unix_signals::test_signal_lock();
+    let _env_guard = crate::test_env::lock();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    // SAFETY: this test holds the process environment mutex.
+    unsafe {
+        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+    }
+
+    let wake = RuntimeWakeSource::new().unwrap();
+    let wake_handle = wake.handle();
+    let listener = crate::unix_signals::spawn_listener(
+        &[libc::SIGWINCH],
+        |_| {},
+        move || wake_handle.wake().unwrap(),
+    )
+    .unwrap();
+    listener.inject_read_error(libc::EIO);
+    wait_for_daemon_lifecycle(&wake).unwrap();
+
+    let mut daemon = Daemon::new(None, false, None, None);
+    daemon.signal_listener = Some(listener);
+    crate::daemon::write_daemon_pid_file(std::process::id(), &daemon.instance_token).unwrap();
+    assert!(crate::paths::daemon_pid_file().exists());
+
+    let err = daemon
+        .run_control_loop_and_invalidate_on_failure(&wake)
+        .unwrap_err();
+    assert!(err.to_string().contains("daemon signal listener failed"));
+    assert!(!crate::paths::daemon_pid_file().exists());
+
+    let cleanup_err = daemon.shutdown_after_run().unwrap_err();
+    assert!(cleanup_err.to_string().contains("failed before teardown"));
+    assert!(daemon.signal_listener.is_none());
+    assert!(daemon.should_quit.load(Ordering::Acquire));
+
+    // SAFETY: this test still holds the process environment mutex.
+    unsafe {
+        match previous_runtime_dir {
+            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+        }
+    }
+}
+
 #[test]
 fn light_draw_off_request_does_not_show_hidden_overlay() {
     let called = Arc::new(AtomicUsize::new(0));

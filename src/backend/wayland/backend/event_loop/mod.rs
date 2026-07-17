@@ -1,20 +1,17 @@
 use crate::notification;
 use log::{info, warn};
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use wayland_client::{Connection, EventQueue};
 
 use super::super::state::WaylandState;
 use super::runtime_wake::RuntimeWakeSource;
-use super::signals::setup_signal_handlers;
+use super::signals::{OverlaySignalState, setup_signal_handlers};
 use super::tray::process_tray_action;
 
 mod capture;
 mod dispatch;
 mod render;
 pub(in crate::backend::wayland) mod session_save;
-
-const TRAY_ACTION_POLL_TIMEOUT: Duration = Duration::from_millis(50);
 
 pub(super) struct EventLoopOutcome {
     pub(super) loop_error: Option<anyhow::Error>,
@@ -36,8 +33,27 @@ pub(super) fn run_event_loop(
     state: &mut WaylandState,
     runtime_wake: &RuntimeWakeSource,
 ) -> EventLoopOutcome {
-    // Gracefully exit the overlay when external signals request termination.
-    let (exit_flag, tray_action_flag) = setup_signal_handlers();
+    let mut loop_error: Option<anyhow::Error> = None;
+    // Install signal authority before the first durable tray-action scan. An
+    // action published before installation is found here; later publications
+    // signal the installed listener and wake the shared runtime descriptor.
+    let mut signals = match install_then_scan(
+        || setup_signal_handlers(runtime_wake.handle()),
+        || {
+            if process_tray_action(state) {
+                state.sync_overlay_interactivity();
+            }
+        },
+    ) {
+        Ok(signals) => Some(signals),
+        Err(err) => {
+            warn!("Failed to register overlay signal handlers: {err}");
+            loop_error = Some(anyhow::anyhow!(
+                "failed to register overlay signal handlers: {err}"
+            ));
+            None
+        }
+    };
 
     // Track consecutive render failures for error recovery.
     let mut consecutive_render_failures = 0u32;
@@ -46,13 +62,16 @@ pub(super) fn run_event_loop(
     let mut last_render_time: Option<Instant> = None;
 
     // Main event loop.
-    let mut loop_error: Option<anyhow::Error> = None;
-    loop {
-        if exit_flag
-            .as_ref()
-            .map(|flag| flag.load(Ordering::Acquire))
-            .unwrap_or(false)
-        {
+    while let Some(signal_state) = signals.as_mut() {
+        if let Some(failure) = terminal_signal_failure(signal_state, || {
+            if process_tray_action(state) {
+                state.sync_overlay_interactivity();
+            }
+        }) {
+            loop_error = Some(failure);
+            break;
+        }
+        if signal_state.exit_requested() {
             state.input_state.should_exit = true;
         }
 
@@ -63,15 +82,6 @@ pub(super) fn run_event_loop(
         }
 
         capture::poll_portal_captures(state);
-
-        if tray_action_flag
-            .as_ref()
-            .map(|flag| flag.swap(false, Ordering::AcqRel))
-            .unwrap_or(false)
-            && process_tray_action(state)
-        {
-            state.sync_overlay_interactivity();
-        }
 
         let capture_active = state.capture.is_in_progress()
             || state.frozen.is_in_progress()
@@ -127,18 +137,19 @@ pub(super) fn run_event_loop(
                 ),
             )
         };
-        let timeout = min_timeout(
-            timeout,
-            tray_action_flag.as_ref().map(|_| TRAY_ACTION_POLL_TIMEOUT),
-        );
         // GTK toolbar events arrive on a channel that cannot wake the
         // Wayland poll, so keep the wait bounded while that frontend runs.
         let timeout = min_timeout(timeout, state.gtk_toolbar_wake_timeout());
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
-        if let Err(e) =
-            dispatch::dispatch_events(event_queue, state, runtime_wake, capture_active, timeout)
-        {
+        if let Err(e) = dispatch::dispatch_events(
+            event_queue,
+            state,
+            runtime_wake,
+            signal_state,
+            capture_active,
+            timeout,
+        ) {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
             break;
@@ -148,12 +159,6 @@ pub(super) fn run_event_loop(
             state.reconcile_live_source_interaction_if_idle(
                 "post-dispatch interaction reconciliation",
             );
-        }
-
-        // The timeout above is also a fallback for action signals that arrive before
-        // the overlay has installed its signal handler or do not wake the Wayland poll.
-        if process_tray_action(state) {
-            state.sync_overlay_interactivity();
         }
 
         state.process_gtk_toolbar(conn, qh);
@@ -253,12 +258,59 @@ pub(super) fn run_event_loop(
     state.flush_perf_summaries(Instant::now());
     info!("Wayland backend exiting");
 
-    if let Err(err) = session_save::persist_session(state) {
-        warn!("Failed to save session state: {}", err);
-        session_save::notify_session_failure(state, &err);
-    }
+    finalize_event_loop(
+        &mut loop_error,
+        || {
+            if let Err(err) = session_save::persist_session(state) {
+                warn!("Failed to save session state: {}", err);
+                session_save::notify_session_failure(state, &err);
+            }
+        },
+        || match signals.as_mut() {
+            Some(signal_state) => signal_state.stop_and_join(),
+            None => Ok(()),
+        },
+    );
 
     EventLoopOutcome { loop_error }
+}
+
+fn install_then_scan<T>(
+    install: impl FnOnce() -> std::io::Result<T>,
+    scan: impl FnOnce(),
+) -> std::io::Result<T> {
+    let installed = install()?;
+    scan();
+    Ok(installed)
+}
+
+fn terminal_signal_failure(
+    signals: &OverlaySignalState,
+    preserve_pending_actions: impl FnOnce(),
+) -> Option<anyhow::Error> {
+    signals.failure().map(|failure| {
+        // Durable actions remain authoritative even if their notification
+        // listener has become terminal.
+        preserve_pending_actions();
+        anyhow::anyhow!("overlay signal listener failed: {failure}")
+    })
+}
+
+fn finalize_event_loop(
+    loop_error: &mut Option<anyhow::Error>,
+    persist_final_session: impl FnOnce(),
+    stop_signal_listener: impl FnOnce() -> std::io::Result<()>,
+) {
+    persist_final_session();
+    if let Err(err) = stop_signal_listener() {
+        if loop_error.is_none() {
+            *loop_error = Some(anyhow::anyhow!(
+                "overlay signal listener teardown failed: {err}"
+            ));
+        } else {
+            warn!("Overlay signal listener teardown failed: {err}");
+        }
+    }
 }
 
 fn should_defer_xdg_unfocused_exit(
@@ -272,7 +324,9 @@ fn should_defer_xdg_unfocused_exit(
 
 #[cfg(test)]
 mod tests {
-    use super::should_defer_xdg_unfocused_exit;
+    use std::cell::RefCell;
+
+    use super::{finalize_event_loop, install_then_scan, should_defer_xdg_unfocused_exit};
 
     #[test]
     fn defers_exit_only_for_unfocused_xdg_stay_without_explicit_close() {
@@ -281,5 +335,39 @@ mod tests {
         assert!(!should_defer_xdg_unfocused_exit(true, false, false, false));
         assert!(!should_defer_xdg_unfocused_exit(false, true, false, false));
         assert!(!should_defer_xdg_unfocused_exit(true, true, false, true));
+    }
+
+    #[test]
+    fn listener_is_installed_before_the_startup_action_scan() {
+        let calls = RefCell::new(Vec::new());
+        let installed = install_then_scan(
+            || {
+                calls.borrow_mut().push("install");
+                Ok(7)
+            },
+            || calls.borrow_mut().push("scan"),
+        )
+        .unwrap();
+
+        assert_eq!(installed, 7);
+        assert_eq!(calls.into_inner(), ["install", "scan"]);
+    }
+
+    #[test]
+    fn final_save_precedes_owned_listener_teardown_after_failure() {
+        let calls = RefCell::new(Vec::new());
+        let mut loop_error = Some(anyhow::anyhow!("listener failed"));
+
+        finalize_event_loop(
+            &mut loop_error,
+            || calls.borrow_mut().push("final-save"),
+            || {
+                calls.borrow_mut().push("listener-stop");
+                Ok(())
+            },
+        );
+
+        assert_eq!(calls.into_inner(), ["final-save", "listener-stop"]);
+        assert_eq!(loop_error.unwrap().to_string(), "listener failed");
     }
 }
