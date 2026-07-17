@@ -2,8 +2,6 @@
 //! feedback draining, and state pushes. See `crate::toolbar_gtk` for the
 //! threading model.
 
-use std::time::Duration;
-
 use wayland_client::{Connection, QueueHandle};
 
 use super::WaylandState;
@@ -58,11 +56,6 @@ fn gtk_toolbar_feedback_is_blocked(
 }
 
 impl WaylandState {
-    /// Bounds the main poll while the GTK thread can produce feedback,
-    /// since nothing it sends wakes the Wayland fd.
-    const GTK_TOOLBAR_WAKE_INTERVAL: Duration = Duration::from_millis(25);
-    const GTK_TOOLBAR_DRAG_WAKE_INTERVAL: Duration = Duration::from_millis(8);
-
     /// True while the GTK frontend owns the toolbars (built-in bars stay
     /// unmapped).
     pub(in crate::backend::wayland) fn gtk_toolbars_active(&self) -> bool {
@@ -70,7 +63,10 @@ impl WaylandState {
     }
 
     /// Spawns the GTK toolbar thread when the resolved frontend is GTK.
-    pub(in crate::backend::wayland) fn spawn_gtk_toolbar_if_selected(&mut self) {
+    pub(in crate::backend::wayland) fn spawn_gtk_toolbar_if_selected(
+        &mut self,
+        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+    ) {
         let request = requested_backend(&self.config);
         let preconditions = GtkPreconditions {
             feature_compiled: cfg!(feature = "toolbar-gtk"),
@@ -80,7 +76,7 @@ impl WaylandState {
         };
         match resolve_frontend(request, preconditions) {
             ToolbarFrontend::Gtk => {
-                self.gtk_toolbar = GtkToolbarBridge::spawn();
+                self.gtk_toolbar = GtkToolbarBridge::spawn(runtime_wake);
                 if self.gtk_toolbar.is_some() {
                     log::info!("GTK toolbars enabled; built-in toolbar surfaces stay unmapped");
                 } else {
@@ -98,18 +94,6 @@ impl WaylandState {
         }
     }
 
-    /// Wake interval for the event-loop timeout chain; `None` when the GTK
-    /// frontend is inactive.
-    pub(in crate::backend::wayland) fn gtk_toolbar_wake_timeout(&self) -> Option<Duration> {
-        self.gtk_toolbar.as_ref().map(|_| {
-            if self.data.gtk_drag_preview.is_some() {
-                Self::GTK_TOOLBAR_DRAG_WAKE_INTERVAL
-            } else {
-                Self::GTK_TOOLBAR_WAKE_INTERVAL
-            }
-        })
-    }
-
     /// Drains pending GTK toolbar feedback into the shared toolbar-event
     /// path, and falls back to the built-in bars if the GTK thread died.
     pub(in crate::backend::wayland) fn process_gtk_toolbar(
@@ -117,23 +101,12 @@ impl WaylandState {
         conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        if self
-            .gtk_toolbar
-            .as_ref()
-            .is_some_and(GtkToolbarBridge::failed)
-        {
-            log::warn!("GTK toolbar thread failed; falling back to built-in toolbars");
-            self.cancel_gtk_toolbar_drag_lifecycle();
-            self.gtk_toolbar = None;
-            return;
-        }
-        let Some(bridge) = self.gtk_toolbar.as_ref() else {
-            return;
+        let (pending, failed) = {
+            let Some(bridge) = self.gtk_toolbar.as_ref() else {
+                return;
+            };
+            bridge.drain_feedback()
         };
-        let mut pending = Vec::new();
-        while let Some(feedback) = bridge.try_recv_feedback() {
-            pending.push(feedback);
-        }
         for feedback in pending {
             // GTK uses a separate connection and bypasses the built-in
             // pointer modal gate. A drag first observed under the modal stays
@@ -232,6 +205,13 @@ impl WaylandState {
                     self.apply_gtk_side_offset(x, y, surface_size, phase);
                 }
             }
+        }
+        // Feedback committed before the terminal transition remains accepted
+        // input. Apply the drained batch before dropping the failed bridge so
+        // actions and final drag offsets are not lost during failover.
+        if failed {
+            self.cancel_gtk_toolbar_drag_lifecycle();
+            self.gtk_toolbar = None;
         }
     }
 

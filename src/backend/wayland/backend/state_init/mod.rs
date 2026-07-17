@@ -147,7 +147,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     // Decide the toolbar frontend before the first visibility sync so the
     // built-in surfaces are never created just to be torn down when the
     // GTK bars take over.
-    state.spawn_gtk_toolbar_if_selected();
+    state.spawn_gtk_toolbar_if_selected(runtime_wake.handle());
     // Ensure pinned toolbars are created immediately if visible on startup.
     state.sync_toolbar_visibility(&setup.qh);
     Ok(BackendRuntime {

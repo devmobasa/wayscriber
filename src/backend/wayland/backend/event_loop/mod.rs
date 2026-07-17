@@ -137,9 +137,6 @@ pub(super) fn run_event_loop(
                 ),
             )
         };
-        // GTK toolbar events arrive on a channel that cannot wake the
-        // Wayland poll, so keep the wait bounded while that frontend runs.
-        let timeout = min_timeout(timeout, state.gtk_toolbar_wake_timeout());
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         if let Err(e) = dispatch::dispatch_events(
