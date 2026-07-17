@@ -2,9 +2,6 @@ use super::*;
 use crate::paths::daemon_pid_file;
 use std::env;
 use std::fs;
-use std::sync::Mutex;
-
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
 fn empty_toggle_request_reports_empty() {
@@ -202,9 +199,7 @@ fn daemon_toggle_response_parse_error_marks_existing_request_canceled() {
 
 #[test]
 fn daemon_pid_file_round_trips_runtime_info() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -226,9 +221,7 @@ fn daemon_pid_file_round_trips_runtime_info() {
 
 #[test]
 fn stale_cleanup_removes_matching_runtime_while_lock_is_free() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -262,9 +255,7 @@ fn stale_cleanup_removes_matching_runtime_while_lock_is_free() {
 
 #[test]
 fn stale_cleanup_preserves_mismatched_runtime() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -301,9 +292,7 @@ fn stale_cleanup_preserves_mismatched_runtime() {
 
 #[test]
 fn take_daemon_toggle_request_round_trips_payload() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -350,9 +339,7 @@ fn take_daemon_toggle_request_round_trips_payload() {
 
 #[test]
 fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -393,9 +380,7 @@ fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files(
 
 #[test]
 fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -436,9 +421,7 @@ fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
 
 #[test]
 fn take_daemon_toggle_request_ignores_mismatched_token() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -469,9 +452,7 @@ fn take_daemon_toggle_request_ignores_mismatched_token() {
 
 #[test]
 fn take_daemon_toggle_request_ignores_stale_payload() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
@@ -503,9 +484,7 @@ fn take_daemon_toggle_request_ignores_stale_payload() {
 
 #[test]
 fn take_daemon_toggle_request_ignores_canceled_payload_but_marks_typed_signal() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     unsafe {
