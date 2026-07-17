@@ -11,11 +11,9 @@ use log::{error, info, warn};
 #[cfg(feature = "tray")]
 use std::env;
 #[cfg(feature = "tray")]
+use std::ffi::{OsStr, OsString};
+#[cfg(feature = "tray")]
 use std::fs;
-#[cfg(feature = "tray")]
-use std::io::ErrorKind;
-#[cfg(feature = "tray")]
-use std::process::{Command, Stdio};
 #[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
 
@@ -27,15 +25,47 @@ use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
 use crate::tray_action::TrayAction;
 
 #[cfg(feature = "tray")]
+fn spawn_detached(
+    kind: crate::process_broker::HelperKind,
+    program: &OsStr,
+    arguments: &[OsString],
+) -> anyhow::Result<crate::process_broker::BrokerChild> {
+    crate::process_broker::current()?.spawn(
+        kind,
+        crate::process_broker::HelperLifetime::DetachedAfterExec,
+        program,
+        arguments,
+        Vec::new(),
+    )
+}
+
+#[cfg(feature = "tray")]
+fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
+    if cfg!(target_os = "macos") {
+        ("open".into(), vec![path.as_os_str().into()])
+    } else if cfg!(target_os = "windows") {
+        (
+            "cmd".into(),
+            vec![
+                "/C".into(),
+                "start".into(),
+                "".into(),
+                path.as_os_str().into(),
+            ],
+        )
+    } else {
+        ("xdg-open".into(), vec![path.as_os_str().into()])
+    }
+}
+
+#[cfg(feature = "tray")]
 impl WayscriberTray {
     pub(super) fn launch_configurator(&self) {
-        let mut command = Command::new(&self.configurator_binary);
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-
-        match command.spawn() {
+        match spawn_detached(
+            crate::process_broker::HelperKind::Configurator,
+            OsStr::new(&self.configurator_binary),
+            &[],
+        ) {
             Ok(child) => {
                 info!(
                     "Launched wayscriber-configurator (binary: {}, pid: {})",
@@ -44,29 +74,18 @@ impl WayscriberTray {
                 );
             }
             Err(err) => {
-                let not_found = err.kind() == ErrorKind::NotFound;
-                let opened_config = if not_found {
-                    error!(
-                        "Configurator not found (looked for '{}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set {CONFIGURATOR_ENV} to its path.",
-                        self.configurator_binary
-                    );
-                    self.open_config_file()
-                } else {
-                    error!(
-                        "Failed to launch wayscriber-configurator using '{}': {}",
-                        self.configurator_binary, err
-                    );
-                    error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
-                    false
-                };
+                error!(
+                    "Failed to launch wayscriber-configurator using '{}': {err:#}",
+                    self.configurator_binary
+                );
+                error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
+                let opened_config = self.open_config_file();
                 #[cfg(feature = "dbus")]
                 {
                     let body = if opened_config {
                         "Configurator not found; opened config.toml with the default application."
-                    } else if not_found {
-                        "Configurator not found, and config.toml could not be opened."
                     } else {
-                        "Failed to launch configurator; see logs for details."
+                        "Configurator not found, and config.toml could not be opened."
                     };
                     match tokio::runtime::Handle::try_current() {
                         Ok(handle) => crate::notification::send_notification_async(
@@ -102,14 +121,11 @@ impl WayscriberTray {
             }
         };
 
-        let mut command = Command::new(exe);
-        command
-            .arg("--about")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-
-        match command.spawn() {
+        match spawn_detached(
+            crate::process_broker::HelperKind::About,
+            exe.as_os_str(),
+            &["--about".into()],
+        ) {
             Ok(child) => {
                 info!("Launched About window (pid {})", child.id());
             }
@@ -121,39 +137,19 @@ impl WayscriberTray {
 
     pub(super) fn dispatch_overlay_action(&self, action: TrayAction) {
         let action_str = action.as_str();
-        if let Err(err) = crate::tray_action::queue_action(action) {
+        if self.action_intents.push(action).is_err() {
             warn!(
-                "Failed to queue tray action {} for overlay dispatch: {}",
-                action_str, err
+                "Failed to queue tray action {}: daemon intent queue is full",
+                action_str
             );
             return;
         }
 
-        let pid = self.overlay_pid.load(Ordering::Acquire);
-
-        #[cfg(unix)]
-        {
-            if pid != 0 {
-                if unsafe { libc::kill(pid as i32, libc::SIGUSR2) } != 0 {
-                    warn!(
-                        "Failed to signal overlay process {} for tray action {}: {}",
-                        pid,
-                        action_str,
-                        std::io::Error::last_os_error()
-                    );
-                }
-            } else {
-                // Overlay not running; request it to show so the action can run on startup.
-                self.toggle_flag.store(true, Ordering::Release);
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            if pid == 0 {
-                self.toggle_flag.store(true, Ordering::Release);
-            } else {
-                warn!("Tray overlay actions are only supported on Unix platforms");
-            }
+        // Tray producers carry only an action intent. The daemon controller
+        // resolves the current child generation and owns any signal decision.
+        self.toggle_flag.store(true, Ordering::Release);
+        if let Err(error) = self.daemon_wake.wake() {
+            warn!("Failed to wake daemon for tray action: {error}");
         }
     }
 
@@ -188,13 +184,11 @@ impl WayscriberTray {
             return;
         }
 
-        let mut command = Command::new("xdg-open");
-        command.arg(&dir);
-        command.stdin(Stdio::null());
-        command.stdout(Stdio::null());
-        command.stderr(Stdio::null());
-
-        match command.spawn() {
+        match spawn_detached(
+            crate::process_broker::HelperKind::DesktopOpen,
+            OsStr::new("xdg-open"),
+            &[dir.as_os_str().into()],
+        ) {
             Ok(child) => info!("Opened log directory via xdg-open (pid {})", child.id()),
             Err(err) => warn!("Failed to open log directory {}: {}", dir.display(), err),
         }
@@ -209,22 +203,12 @@ impl WayscriberTray {
             }
         };
 
-        let opener = if cfg!(target_os = "macos") {
-            "open"
-        } else if cfg!(target_os = "windows") {
-            "cmd"
-        } else {
-            "xdg-open"
-        };
-
-        let mut cmd = Command::new(opener);
-        if cfg!(target_os = "windows") {
-            cmd.args(["/C", "start", ""]).arg(&path);
-        } else {
-            cmd.arg(&path);
-        }
-
-        match cmd.spawn() {
+        let (opener, arguments) = opener_arguments(&path);
+        match spawn_detached(
+            crate::process_broker::HelperKind::DesktopOpen,
+            &opener,
+            &arguments,
+        ) {
             Ok(child) => {
                 info!(
                     "Opened config file at {} (pid {})",

@@ -3,6 +3,7 @@ use super::*;
 
 mod drag;
 mod events;
+pub(in crate::backend::wayland::state) use events::SessionFileDialogController;
 mod geometry;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use geometry::clamp_floating_axis_offset;

@@ -8,13 +8,15 @@ mod shortcut_hint_io;
 pub(crate) use runtime::start_system_tray;
 
 #[cfg(feature = "tray")]
+use super::types::OverlayActionIntents;
+#[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
 #[cfg(feature = "tray")]
 use crate::config::TrayIconStyle;
 #[cfg(feature = "tray")]
 use std::sync::Arc;
 #[cfg(feature = "tray")]
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::AtomicBool;
 
 #[cfg(feature = "tray")]
 pub(crate) struct WayscriberTray {
@@ -23,46 +25,31 @@ pub(crate) struct WayscriberTray {
     configurator_binary: String,
     session_resume_enabled: bool,
     icon_style: TrayIconStyle,
-    overlay_pid: Arc<AtomicU32>,
+    overlay_active: Arc<AtomicBool>,
+    action_intents: Arc<OverlayActionIntents>,
     tray_status: Arc<TrayStatusShared>,
+    daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
 }
 
 #[cfg(feature = "tray")]
 impl WayscriberTray {
-    fn new(
-        toggle_flag: Arc<AtomicBool>,
-        quit_flag: Arc<AtomicBool>,
-        configurator_binary: String,
-        session_resume_enabled: bool,
-        icon_style: TrayIconStyle,
-        overlay_pid: Arc<AtomicU32>,
-        tray_status: Arc<TrayStatusShared>,
-    ) -> Self {
-        Self {
-            toggle_flag,
-            quit_flag,
-            configurator_binary,
-            session_resume_enabled,
-            icon_style,
-            overlay_pid,
-            tray_status,
-        }
-    }
-
     #[cfg(test)]
     pub(crate) fn new_for_tests(
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
         session_resume_enabled: bool,
     ) -> Self {
-        Self::new(
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        Self {
             toggle_flag,
             quit_flag,
-            "true".into(),
+            configurator_binary: "true".into(),
             session_resume_enabled,
-            TrayIconStyle::Auto,
-            Arc::new(AtomicU32::new(0)),
-            Arc::new(TrayStatusShared::new()),
-        )
+            icon_style: TrayIconStyle::Auto,
+            overlay_active: Arc::new(AtomicBool::new(false)),
+            action_intents: Arc::new(OverlayActionIntents::default()),
+            tray_status: Arc::new(TrayStatusShared::new()),
+            daemon_wake: wake.handle(),
+        }
     }
 }

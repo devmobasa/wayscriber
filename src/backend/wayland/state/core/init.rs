@@ -121,7 +121,7 @@ impl WaylandState {
             ui_animation_interval,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new_with_runtime_wake(screencopy_manager, runtime_wake.clone()),
-            zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake),
+            zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake.clone()),
             perf: perf::PerfMetrics::from_env(),
             exit_after_capture_mode,
             themed_pointer: None,
@@ -178,6 +178,9 @@ impl WaylandState {
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             persistence,
+            session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),
+            durable_action_finish: None,
+            durable_action_retry_at: None,
             tokio_handle,
         }
     }

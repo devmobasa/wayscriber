@@ -1,6 +1,5 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{info, warn};
-use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -9,33 +8,20 @@ use super::super::types::OverlayState;
 
 impl Daemon {
     pub(super) fn terminate_overlay_process(&mut self) -> Result<()> {
-        if let Some(mut child) = self.overlay_child.take() {
+        if let Some(pid) = self.overlay_child.display_pid() {
             let stop_started = Instant::now();
             let timeout = Duration::from_secs(2);
             info!(
                 "Stopping overlay process (pid {}, graceful_timeout={:?})",
-                child.id(),
-                timeout
+                pid, timeout
             );
-            #[cfg(unix)]
-            {
-                if unsafe { libc::kill(child.id() as i32, libc::SIGTERM) } != 0 {
-                    warn!(
-                        "Failed to signal overlay process: {}",
-                        std::io::Error::last_os_error()
-                    );
-                }
-            }
-            #[cfg(not(unix))]
-            {
-                if let Err(err) = child.kill() {
-                    warn!("Failed to signal overlay process: {}", err);
-                }
+            if let Err(err) = self.overlay_child.begin_stop() {
+                warn!("Failed to signal overlay process: {err:#}");
             }
 
-            let deadline = Instant::now() + timeout;
+            let deadline = super::super::protocol_v2::BootClock::now()?.checked_add(timeout)?;
             loop {
-                match child.try_wait() {
+                match self.overlay_child.try_wait() {
                     Ok(Some(status)) => {
                         info!(
                             "Overlay process exited with status {:?} after {:?}",
@@ -45,38 +31,40 @@ impl Daemon {
                         break;
                     }
                     Ok(None) => {
-                        if Instant::now() >= deadline {
+                        if super::super::protocol_v2::BootClock::now()? >= deadline {
                             warn!(
                                 "Overlay process did not exit after {:?}, sending SIGKILL",
                                 stop_started.elapsed()
                             );
-                            let _ = child.kill();
-                            match child.wait() {
-                                Ok(status) => warn!(
-                                    "Overlay process killed with status {:?} after {:?}",
-                                    status,
-                                    stop_started.elapsed()
-                                ),
-                                Err(err) => warn!(
-                                    "Failed to wait for killed overlay process after {:?}: {}",
-                                    stop_started.elapsed(),
-                                    err
-                                ),
-                            }
+                            let status = self
+                                .overlay_child
+                                .force_kill_and_wait()
+                                .context("lost broker ownership while forcing overlay shutdown")?;
+                            warn!(
+                                "Overlay process killed with status {:?} after {:?}",
+                                status,
+                                stop_started.elapsed()
+                            );
                             break;
                         }
                         thread::sleep(Duration::from_millis(50));
                     }
                     Err(err) => {
-                        warn!("Failed to query overlay process status: {}", err);
-                        let _ = child.kill();
-                        let _ = child.wait();
-                        break;
+                        let forced = self.overlay_child.force_kill_and_wait();
+                        return match forced {
+                            Ok(_) => Err(err).context(
+                                "broker ownership failed while querying overlay; child was forced down",
+                            ),
+                            Err(force_error) => Err(anyhow::anyhow!(
+                                "broker ownership failed while querying overlay: {err:#}; forced termination also failed: {force_error:#}"
+                            )),
+                        };
                     }
                 }
             }
         }
-        self.overlay_pid.store(0, Ordering::Release);
+        self.overlay_active
+            .store(false, std::sync::atomic::Ordering::Release);
         self.active_named_session_file = None;
         Ok(())
     }
@@ -86,19 +74,17 @@ impl Daemon {
             return Ok(());
         }
 
-        if let Some(child) = self.overlay_child.as_mut() {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    info!("Overlay process exited with status {:?}", status);
-                    self.overlay_child = None;
-                    self.overlay_state = OverlayState::Hidden;
-                    self.overlay_pid.store(0, Ordering::Release);
-                    self.active_named_session_file = None;
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    warn!("Failed to poll overlay process status: {}", err);
-                }
+        match self.overlay_child.try_wait() {
+            Ok(Some(status)) => {
+                info!("Overlay process exited with status {:?}", status);
+                self.overlay_state = OverlayState::Hidden;
+                self.overlay_active
+                    .store(false, std::sync::atomic::Ordering::Release);
+                self.active_named_session_file = None;
+            }
+            Ok(None) => {}
+            Err(err) => {
+                return Err(err).context("lost broker ownership of overlay child");
             }
         }
         Ok(())

@@ -275,6 +275,9 @@ pub(super) struct WaylandState {
     // Session persistence
     pub(super) session: SessionState,
     pub(super) persistence: crate::backend::wayland::session::PersistenceController,
+    session_dialog: self::toolbar::SessionFileDialogController,
+    pub(super) durable_action_finish: Option<crate::daemon::protocol_v2::ClaimedAction>,
+    pub(super) durable_action_retry_at: Option<Instant>,
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,

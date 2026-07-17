@@ -15,7 +15,6 @@ use session::run_session_cli_commands;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use usage::{log_overlay_controls, print_usage};
 
 fn acquire_overlay_lock() -> anyhow::Result<Option<File>> {
@@ -50,13 +49,13 @@ fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
     }
     let exe = std::env::current_exe()?;
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
-    let mut cmd = Command::new(exe);
-    cmd.args(args)
-        .env(DETACHED_ENV, "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    cmd.spawn()?;
+    crate::process_broker::current()?.spawn(
+        crate::process_broker::HelperKind::InitialDetach,
+        crate::process_broker::HelperLifetime::DetachedAfterExec,
+        exe.as_os_str(),
+        args,
+        vec![(DETACHED_ENV.into(), Some("1".into()))],
+    )?;
     Ok(true)
 }
 
@@ -128,6 +127,13 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         );
         return Ok(());
     }
+
+    // Daemon and active runs create their process broker before acquiring any
+    // daemon/overlay singleton lock. The guard spans the complete runtime.
+    let _process_broker = (cli.daemon || cli.active || cli.freeze)
+        .then(crate::process_broker::start_for_runtime)
+        .transpose()?;
+    crate::daemon::protocol_v2::start_daemon_watchdog_from_environment()?;
 
     #[cfg(unix)]
     if std::env::var_os(DETACHED_ENV).is_some() {
@@ -211,6 +217,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             Some(lock) => lock,
             None => return Ok(()),
         };
+        crate::daemon::protocol_v2::publish_ready_from_environment()
+            .context("failed to publish daemon overlay readiness")?;
         // One-shot mode: show overlay immediately and exit when done
         log_overlay_controls(cli.freeze);
 

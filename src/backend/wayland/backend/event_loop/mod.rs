@@ -6,7 +6,7 @@ use wayland_client::{Connection, EventQueue};
 use super::super::state::WaylandState;
 use super::runtime_wake::RuntimeWakeSource;
 use super::signals::{OverlaySignalState, setup_signal_handlers};
-use super::tray::process_tray_action;
+use super::tray::{durable_action_retry_due, durable_action_retry_timeout, process_tray_action};
 
 mod capture;
 mod dispatch;
@@ -38,7 +38,16 @@ pub(super) fn run_event_loop(
     // action published before installation is found here; later publications
     // signal the installed listener and wake the shared runtime descriptor.
     let mut signals = match install_then_scan(
-        || setup_signal_handlers(runtime_wake.handle()),
+        || {
+            let signals = setup_signal_handlers(runtime_wake.handle())?;
+            if let Err(error) = crate::daemon::protocol_v2::publish_signal_ready_from_environment()
+            {
+                return Err(std::io::Error::other(format!(
+                    "failed to publish overlay signal readiness: {error:#}"
+                )));
+            }
+            Ok(signals)
+        },
         || {
             if process_tray_action(state) {
                 state.sync_overlay_interactivity();
@@ -63,6 +72,9 @@ pub(super) fn run_event_loop(
 
     // Main event loop.
     while let Some(signal_state) = signals.as_mut() {
+        if durable_action_retry_due(state, Instant::now()) && process_tray_action(state) {
+            state.sync_overlay_interactivity();
+        }
         if let Some(failure) = terminal_signal_failure(signal_state, || {
             if process_tray_action(state) {
                 state.sync_overlay_interactivity();
@@ -105,6 +117,7 @@ pub(super) fn run_event_loop(
         let focus_exit_timeout = state.focus_exit_timeout(now);
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
         let capture_timeout = capture::capture_timeout(state, now);
+        let durable_action_timeout = durable_action_retry_timeout(state, now);
         let timeout = if should_block {
             min_timeout(autosave_timeout, focus_exit_timeout)
         } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -130,6 +143,7 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
+        let timeout = min_timeout(timeout, durable_action_timeout);
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {

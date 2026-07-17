@@ -176,6 +176,28 @@ pub(crate) fn generate_daemon_instance_token() -> String {
 }
 
 pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Result<()> {
+    match crate::daemon::protocol_v2::read_runtime_record(&crate::paths::daemon_pid_file())? {
+        crate::daemon::protocol_v2::ClassifiedRuntimeRecord::V2(runtime) => {
+            let command = crate::daemon::protocol_v2::ClientCommand::publish(
+                &crate::daemon::protocol_v2::DaemonRequestV2::from(request),
+                &runtime.v2_instance_token,
+            )?;
+            return match command.wait()? {
+                crate::daemon::protocol_v2::TerminalCommandResult::Succeeded => Ok(()),
+                crate::daemon::protocol_v2::TerminalCommandResult::Canceled => {
+                    Err(anyhow!("daemon command was canceled before any effect"))
+                }
+                crate::daemon::protocol_v2::TerminalCommandResult::FailedNoEffect(reason) => {
+                    Err(anyhow!(reason))
+                }
+                crate::daemon::protocol_v2::TerminalCommandResult::CommittedIndeterminate(
+                    reason,
+                ) => Err(anyhow!("daemon command outcome is indeterminate: {reason}")),
+            };
+        }
+        crate::daemon::protocol_v2::ClassifiedRuntimeRecord::LegacyV1 { .. } => {}
+    }
+
     let runtime = read_daemon_runtime_info()?;
     let mut command = None;
 

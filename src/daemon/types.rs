@@ -1,7 +1,8 @@
+use crate::tray_action::TrayAction;
 #[cfg(feature = "tray")]
 use log::warn;
+use std::collections::VecDeque;
 use std::ffi::OsString;
-#[cfg(feature = "tray")]
 use std::sync::Mutex;
 #[cfg(feature = "tray")]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -117,3 +118,34 @@ impl std::error::Error for AlreadyRunningError {}
 
 /// Daemon state manager
 pub type BackendRunner = dyn Fn(Option<String>) -> anyhow::Result<()> + Send + Sync;
+
+#[cfg(feature = "tray")]
+const MAX_OVERLAY_ACTION_INTENTS: usize = 64;
+
+#[derive(Debug, Default)]
+pub(crate) struct OverlayActionIntents {
+    queue: Mutex<VecDeque<TrayAction>>,
+}
+
+impl OverlayActionIntents {
+    #[cfg(feature = "tray")]
+    pub(crate) fn push(&self, action: TrayAction) -> Result<(), TrayAction> {
+        let mut queue = self
+            .queue
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if queue.len() >= MAX_OVERLAY_ACTION_INTENTS {
+            return Err(action);
+        }
+        queue.push_back(action);
+        Ok(())
+    }
+
+    pub(crate) fn drain(&self) -> Vec<TrayAction> {
+        let mut queue = self
+            .queue
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        queue.drain(..).collect()
+    }
+}

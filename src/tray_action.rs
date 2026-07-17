@@ -184,9 +184,6 @@ mod tests {
     use super::{TrayAction, queue_action, take_pending_actions};
     use crate::env_vars::XDG_RUNTIME_DIR_ENV;
     use std::env;
-    use std::sync::Mutex;
-
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn tray_action_round_trip() {
@@ -212,9 +209,7 @@ mod tests {
 
     #[test]
     fn queued_tray_actions_round_trip_in_order() {
-        let _guard = ENV_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = crate::test_env::lock();
         let tmp = crate::test_temp::tempdir().unwrap();
         let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
         unsafe {

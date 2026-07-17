@@ -2,9 +2,8 @@ use anyhow::{Result, anyhow};
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::env;
-use std::ffi::{OsStr, OsString};
-use std::process::{Command, Stdio};
-use std::sync::atomic::Ordering;
+use std::ffi::OsString;
+use std::os::fd::AsRawFd;
 use std::time::{Duration, Instant};
 
 use crate::env_vars::{DESKTOP_STARTUP_ID_ENV, NO_DETACH_ENV, PATH_ENV, XDG_ACTIVATION_TOKEN_ENV};
@@ -16,6 +15,12 @@ use super::super::types::{OverlaySpawnCandidate, OverlayState};
 
 const OVERLAY_SPAWN_BACKOFF_BASE: Duration = Duration::from_secs(1);
 const OVERLAY_SPAWN_BACKOFF_MAX: Duration = Duration::from_secs(30);
+
+#[derive(Debug, PartialEq, Eq)]
+struct OverlayLaunch {
+    arguments: Vec<OsString>,
+    environment: Vec<(OsString, Option<OsString>)>,
+}
 
 impl Daemon {
     fn overlay_spawn_backoff_duration(&self) -> Duration {
@@ -126,51 +131,62 @@ impl Daemon {
         }
     }
 
-    fn build_overlay_command(&self, program: &OsStr) -> Command {
-        let mut command = Command::new(program);
-        command.arg("--active");
+    fn build_overlay_launch(&self) -> OverlayLaunch {
+        let mut arguments = vec![OsString::from("--active")];
         let request = self.pending_toggle_request.as_ref();
         if request.is_some_and(|request| request.freeze) || self.freeze_on_show {
-            command.arg("--freeze");
+            arguments.push("--freeze".into());
         }
         if request.is_some_and(|request| request.exit_after_capture) {
-            command.arg("--exit-after-capture");
+            arguments.push("--exit-after-capture".into());
         } else if request.is_some_and(|request| request.no_exit_after_capture) {
-            command.arg("--no-exit-after-capture");
+            arguments.push("--no-exit-after-capture".into());
         }
         // Overlay children launched by daemon are already backgrounded and tracked.
         // Prevent `--active` from spawning another detached grandchild process.
-        command.env(NO_DETACH_ENV, "1");
+        let mut environment = vec![(OsString::from(NO_DETACH_ENV), Some("1".into()))];
+        if let Some(generation) = self.overlay_child.generation() {
+            environment.push((
+                crate::env_vars::OVERLAY_CHILD_GENERATION_ENV.into(),
+                Some(generation.into()),
+            ));
+        }
         if let Some(token) = self.pending_activation_token.as_deref() {
-            command.env(XDG_ACTIVATION_TOKEN_ENV, token);
-            command.env(DESKTOP_STARTUP_ID_ENV, token);
+            environment.push((XDG_ACTIVATION_TOKEN_ENV.into(), Some(token.into())));
+            environment.push((DESKTOP_STARTUP_ID_ENV.into(), Some(token.into())));
         } else {
-            command.env_remove(XDG_ACTIVATION_TOKEN_ENV);
-            command.env_remove(DESKTOP_STARTUP_ID_ENV);
+            environment.push((XDG_ACTIVATION_TOKEN_ENV.into(), None));
+            environment.push((DESKTOP_STARTUP_ID_ENV.into(), None));
         }
         if let Some(request_override) =
             request.and_then(|request| request.session_resume_override())
         {
             match request_override {
-                true => command.env(crate::RESUME_SESSION_ENV, "on"),
-                false => command.env(crate::RESUME_SESSION_ENV, "off"),
-            };
+                true => environment.push((crate::RESUME_SESSION_ENV.into(), Some("on".into()))),
+                false => environment.push((crate::RESUME_SESSION_ENV.into(), Some("off".into()))),
+            }
         } else {
-            self.apply_session_override_env(&mut command);
+            environment.push((
+                crate::RESUME_SESSION_ENV.into(),
+                self.session_resume_override()
+                    .map(|enabled| if enabled { "on".into() } else { "off".into() }),
+            ));
         }
         if let Some(mode) = request
             .and_then(|request| request.mode.as_ref())
             .or(self.initial_mode.as_ref())
         {
-            command.arg("--mode").arg(mode);
+            arguments.push("--mode".into());
+            arguments.push(mode.into());
         }
         if let Some(path) = self.effective_named_session_file() {
-            command.arg("--session-file").arg(path);
+            arguments.push("--session-file".into());
+            arguments.push(path.into_os_string());
         }
-        command.stdin(Stdio::null());
-        command.stdout(Stdio::null());
-        command.stderr(Stdio::null());
-        command
+        OverlayLaunch {
+            arguments,
+            environment,
+        }
     }
 
     pub(super) fn spawn_overlay_process(&mut self) -> Result<()> {
@@ -182,18 +198,34 @@ impl Daemon {
         let mut failures = Vec::new();
 
         for candidate in candidates {
+            self.overlay_child.reserve()?;
             let had_activation_token = self.pending_activation_token.is_some();
             debug!(
                 "Attempting overlay spawn via {} ({})",
                 candidate.source,
                 candidate.program.to_string_lossy()
             );
-            let mut command = self.build_overlay_command(&candidate.program);
-            match command.spawn() {
-                Ok(child) => {
-                    let pid = child.id();
-                    self.overlay_pid.store(pid, Ordering::Release);
-                    self.overlay_child = Some(child);
+            let launch = self.build_overlay_launch();
+            let attempt = (|| -> Result<u32> {
+                let daemon_watchdog = super::super::protocol_v2::open_daemon_watchdog()?;
+                let child = crate::process_broker::current()?.spawn_with_watchdog(
+                    crate::process_broker::HelperKind::Overlay,
+                    crate::process_broker::HelperLifetime::OwnedChild,
+                    &candidate.program,
+                    &launch.arguments,
+                    launch.environment,
+                    daemon_watchdog.as_raw_fd(),
+                )?;
+                let pid = child.id();
+                self.overlay_child.start(child)?;
+                self.overlay_child
+                    .wait_until_ready(Duration::from_secs(5), &self.instance_token)?;
+                Ok(pid)
+            })();
+            match attempt {
+                Ok(pid) => {
+                    self.overlay_active
+                        .store(true, std::sync::atomic::Ordering::Release);
                     self.overlay_state = OverlayState::Visible;
                     self.active_named_session_file = self.effective_named_session_file();
                     self.pending_activation_token = None;
@@ -203,18 +235,19 @@ impl Daemon {
                     );
                     return Ok(());
                 }
-                Err(err) => {
+                Err(error) => {
+                    self.overlay_child.abort_reservation();
                     failures.push(format!(
-                        "{} ({}) -> {}",
+                        "{} ({}) -> {error:#}",
                         candidate.source,
                         candidate.program.to_string_lossy(),
-                        err
                     ));
                 }
             }
         }
 
         self.pending_activation_token = None;
+        self.overlay_child.abort_reservation();
         warn!("Overlay spawn attempts failed: {}", failures.join("; "));
         Err(anyhow!(
             "Unable to launch overlay process (tried current_exe/argv0/{PATH_ENV})"
@@ -226,9 +259,10 @@ impl Daemon {
 mod tests {
     use super::*;
 
-    fn command_args(command: &Command) -> Vec<String> {
-        command
-            .get_args()
+    fn launch_args(launch: &OverlayLaunch) -> Vec<String> {
+        launch
+            .arguments
+            .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect()
     }
@@ -281,10 +315,10 @@ mod tests {
         let mut daemon = Daemon::new(Some("whiteboard".into()), false, None, None);
         daemon.set_freeze_on_show(true);
 
-        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+        let launch = daemon.build_overlay_launch();
 
         assert_eq!(
-            command_args(&command),
+            launch_args(&launch),
             vec!["--active", "--freeze", "--mode", "whiteboard"]
         );
     }
@@ -299,10 +333,10 @@ mod tests {
             ..Default::default()
         });
 
-        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+        let launch = daemon.build_overlay_launch();
 
         assert_eq!(
-            command_args(&command),
+            launch_args(&launch),
             vec![
                 "--active",
                 "--freeze",
@@ -322,10 +356,10 @@ mod tests {
             Some(std::path::PathBuf::from("/tmp/lecture.wayscriber-session")),
         );
 
-        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+        let launch = daemon.build_overlay_launch();
 
         assert_eq!(
-            command_args(&command),
+            launch_args(&launch),
             vec![
                 "--active",
                 "--mode",
@@ -351,10 +385,10 @@ mod tests {
             ..Default::default()
         });
 
-        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+        let launch = daemon.build_overlay_launch();
 
         assert_eq!(
-            command_args(&command),
+            launch_args(&launch),
             vec![
                 "--active",
                 "--mode",
@@ -369,10 +403,10 @@ mod tests {
     fn build_overlay_command_omits_freeze_by_default() {
         let daemon = Daemon::new(Some("whiteboard".into()), false, None, None);
 
-        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+        let launch = daemon.build_overlay_launch();
 
         assert_eq!(
-            command_args(&command),
+            launch_args(&launch),
             vec!["--active", "--mode", "whiteboard"]
         );
     }

@@ -58,6 +58,7 @@ pub(super) fn start_global_shortcuts_listener(
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
     activation_token_slot: Arc<Mutex<Option<String>>>,
+    daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
 ) -> Option<JoinHandle<()>> {
     #[cfg(feature = "portal")]
     {
@@ -90,6 +91,7 @@ pub(super) fn start_global_shortcuts_listener(
                     activation_token_slot,
                     preferred_trigger,
                     portal_app_id,
+                    daemon_wake,
                 )
                 .await
                 {
@@ -107,7 +109,7 @@ pub(super) fn start_global_shortcuts_listener(
     }
     #[cfg(not(feature = "portal"))]
     {
-        let _ = (toggle_flag, quit_flag, activation_token_slot);
+        let _ = (toggle_flag, quit_flag, activation_token_slot, daemon_wake);
         None
     }
 }
@@ -185,6 +187,7 @@ async fn run_listener(
     activation_token_slot: Arc<Mutex<Option<String>>>,
     preferred_trigger: String,
     portal_app_id: String,
+    daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
 ) -> Result<()> {
     let connection = Connection::session()
         .await
@@ -258,6 +261,9 @@ async fn run_listener(
                     );
                 }
                 toggle_flag.store(true, Ordering::Release);
+                daemon_wake
+                    .wake()
+                    .context("failed to wake daemon for global shortcut")?;
             }
             _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
                 if quit_flag.load(Ordering::Acquire) {

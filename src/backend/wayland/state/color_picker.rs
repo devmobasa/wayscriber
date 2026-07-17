@@ -3,8 +3,7 @@
 use super::WaylandState;
 use crate::input::state::UiToastKind;
 use crate::input::state::{color_to_hex, parse_hex_color};
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::ffi::OsStr;
 use std::time::Duration;
 
 impl WaylandState {
@@ -88,93 +87,46 @@ enum ClipboardTextError {
 }
 
 fn copy_hex_via_command(hex: &str) -> Result<(), String> {
-    let mut child = Command::new("wl-copy")
-        .arg("--type")
-        .arg("text/plain;charset=utf-8")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn wl-copy: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        if let Err(err) = stdin.write_all(hex.as_bytes()) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!("Failed to write to wl-copy stdin: {}", err));
-        }
-    } else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err("wl-copy stdin unavailable".to_string());
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.publish(
+                crate::process_broker::HelperKind::WlCopy,
+                OsStr::new("wl-copy"),
+                [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
+                hex.as_bytes().to_vec(),
+                Duration::from_secs(5),
+            )
+        })
+        .map_err(|error| format!("Failed to run wl-copy: {error:#}"))?;
+    if output.timed_out {
+        return Err("wl-copy timed out".to_string());
     }
-
-    match child.try_wait() {
-        Ok(Some(status)) => {
-            if !status.success() {
-                let stderr = child
-                    .stderr
-                    .take()
-                    .and_then(|mut err| {
-                        let mut buf = Vec::new();
-                        let _ = err.read_to_end(&mut buf);
-                        if buf.is_empty() {
-                            None
-                        } else {
-                            Some(String::from_utf8_lossy(&buf).trim().to_string())
-                        }
-                    })
-                    .unwrap_or_default();
-                if stderr.is_empty() {
-                    return Err("wl-copy exited unsuccessfully".to_string());
-                }
-                return Err(format!("wl-copy exited unsuccessfully: {}", stderr));
-            }
-            Ok(())
-        }
-        Ok(None) => {
-            std::thread::spawn(move || match child.wait() {
-                Ok(status) => {
-                    if !status.success() {
-                        let stderr = child
-                            .stderr
-                            .take()
-                            .and_then(|mut err| {
-                                let mut buf = Vec::new();
-                                let _ = err.read_to_end(&mut buf);
-                                if buf.is_empty() {
-                                    None
-                                } else {
-                                    Some(String::from_utf8_lossy(&buf).trim().to_string())
-                                }
-                            })
-                            .unwrap_or_default();
-                        if stderr.is_empty() {
-                            log::warn!("wl-copy exited unsuccessfully");
-                        } else {
-                            log::warn!("wl-copy failed: {}", stderr);
-                        }
-                    }
-                }
-                Err(err) => {
-                    log::warn!("Failed to wait for wl-copy: {}", err);
-                }
-            });
-            Ok(())
-        }
-        Err(err) => Err(format!("Failed to poll wl-copy status: {}", err)),
+    if output.status != 0 {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return if stderr.is_empty() {
+            Err("wl-copy exited unsuccessfully".to_string())
+        } else {
+            Err(format!("wl-copy exited unsuccessfully: {stderr}"))
+        };
     }
+    Ok(())
 }
 
 fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
-    let output = Command::new("wl-paste")
-        .arg("--no-newline")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|err| ClipboardTextError::Other(format!("Failed to spawn wl-paste: {}", err)))?;
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.run(
+                crate::process_broker::HelperKind::WlPaste,
+                OsStr::new("wl-paste"),
+                [OsStr::new("--no-newline")],
+                Vec::new(),
+                Duration::from_secs(5),
+                1024 * 1024,
+            )
+        })
+        .map_err(|err| ClipboardTextError::Other(format!("Failed to run wl-paste: {err:#}")))?;
 
-    if output.status.success() {
+    if !output.timed_out && output.status == 0 {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();

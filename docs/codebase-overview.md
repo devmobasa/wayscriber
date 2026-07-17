@@ -29,17 +29,24 @@ This document explains how the application boots, how user input travels through
 **Modules:** `src/daemon/` (control, core, overlay, tray, shortcuts, and setup), plus the public
 backend entry in `src/backend/mod.rs`.
 
-1. `Daemon::run` acquires the single-instance runtime lock, installs the owned Unix signal
-   listener, creates its wake descriptor, and publishes pid plus instance-token readiness only
-   after signal handling is active.
+1. The app creates the authenticated process broker before any singleton lock. `Daemon::run` then
+   acquires the daemon lock, installs the owned Unix signal listener and queue watcher, and
+   publishes the strict v2 runtime identity only after every discovery source is active.
 2. It optionally starts the status tray and portal global-shortcut listener.
-3. Typed `--daemon-toggle` requests are written to the daemon command queue, wake the control loop
-   through SIGUSR1, and wait for a request-specific response. A raw SIGUSR1 remains a legacy
-   argument-free toggle.
-4. The control loop drains published commands, starts/stops or forwards actions to the overlay
-   child, and reaps child state before handling the next transition.
-5. Shutdown invalidates readiness, terminates owned helpers/overlay work, and joins listener and
-   tray threads.
+3. Typed `--daemon-toggle` requests publish canonical, generation-bound controls and atomically
+   rename an ordered queue reference. The watched queue wakes directly; typed discovery never uses
+   a signal. Raw `SIGUSR1` remains only as a legacy argument-free visibility intent.
+4. The control loop linearizes cancellation and effect commit under the durable decision lock.
+   Overlay actions use the shared ordered journal, and the event-loop thread remains the sole
+   action applier.
+5. Overlay candidates and runtime helpers are created only by the pre-lock process broker. The
+   daemon owns generation/pidfd decisions while the broker owns wait/reap; overlay readiness is
+   accepted only after the child wins its lock and publishes matching process identity.
+6. Queue renames, producer eventfds, signals, and child pidfds drive the loop without a lifecycle
+   polling tick. Shutdown invalidates readiness, terminates owned work, and joins listeners.
+
+The complete route, recovery, process-site, compatibility, and rollback contracts are documented
+in [Daemon Protocol v2 and Process Ownership](daemon-protocol-v2.md).
 
 Daemon mode therefore provides a persistent background service that reacts to user keybinds (preferably configured to run `wayscriber --daemon-toggle`, which forwards to the daemon) or to tray actions.
 
@@ -230,6 +237,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/lib.rs` | Canonical module graph, CLI/error entry facade, and reusable public exports. |
 | `src/domain/` | Stable action, tool, color, and board values with no upward runtime dependencies. |
 | `src/daemon/` | Background daemon control queue, lifecycle, overlay child, shortcuts, and tray. |
+| `src/process_broker/` | Pre-lock, bounded runtime helper creation and broker-only child reaping. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
 | `src/input/` | Event/state machine, tools, board/page ownership, selection, and action routing. |
 | `src/draw/` | Vector drawing primitives, frames/pages, history, fonts, and rendering helpers. |

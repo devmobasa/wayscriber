@@ -1,6 +1,31 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
+#[test]
+fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
+    let wake = RuntimeWakeSource::new().unwrap();
+    let deadline = BootDeadlineSource::new().unwrap();
+    deadline
+        .arm(
+            super::super::protocol_v2::BootClock::now()
+                .unwrap()
+                .checked_add(Duration::from_millis(5))
+                .unwrap(),
+        )
+        .unwrap();
+    let readiness =
+        wait_for_daemon_lifecycle(&wake, None, Some(&deadline), &OverlayChildOwner::default())
+            .unwrap();
+    assert_eq!(
+        readiness,
+        DaemonLifecycleReadiness {
+            command_queue: false,
+            deadline: true,
+        }
+    );
+    assert!(deadline.drain().unwrap());
+}
+
 #[cfg(unix)]
 #[test]
 fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
@@ -22,9 +47,10 @@ fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
     )
     .unwrap();
     listener.inject_read_error(libc::EIO);
-    wait_for_daemon_lifecycle(&wake).unwrap();
+    wait_for_daemon_lifecycle(&wake, None, None, &OverlayChildOwner::default()).unwrap();
 
     let mut daemon = Daemon::new(None, false, None, None);
+    daemon.protocol_mode = DaemonControlProtocolMode::rollback_compatibility();
     daemon.signal_listener = Some(listener);
     crate::daemon::write_daemon_pid_file(std::process::id(), &daemon.instance_token).unwrap();
     assert!(crate::paths::daemon_pid_file().exists());
@@ -216,10 +242,17 @@ fn typed_visibility_toggle_request_is_not_debounced() {
 #[cfg(unix)]
 #[test]
 fn duplicate_plain_toggle_after_slow_hide_is_debounced() {
+    let broker = crate::process_broker::start_for_runtime().unwrap();
     let mut daemon = Daemon::new(None, false, None, None);
-    let child = std::process::Command::new("sleep")
-        .arg("10")
-        .spawn()
+    let child = broker
+        .broker()
+        .spawn(
+            crate::process_broker::HelperKind::TestSleep,
+            crate::process_broker::HelperLifetime::OwnedChild,
+            std::ffi::OsStr::new("sleep"),
+            [std::ffi::OsStr::new("10")],
+            Vec::new(),
+        )
         .expect("spawn slow-terminating test process");
     let child_pid = child.id();
     assert_eq!(unsafe { libc::kill(child_pid as i32, libc::SIGSTOP) }, 0);
@@ -240,10 +273,13 @@ fn duplicate_plain_toggle_after_slow_hide_is_debounced() {
         thread::sleep(Duration::from_millis(10));
     }
     assert!(stopped, "test child should stop before hide starts");
+    daemon.overlay_child.reserve().unwrap();
+    daemon.overlay_child.start(child).unwrap();
+    daemon.overlay_child.mark_committing().unwrap();
+    daemon.overlay_child.mark_ready().unwrap();
     daemon
-        .overlay_pid
-        .store(child.id(), std::sync::atomic::Ordering::Release);
-    daemon.overlay_child = Some(child);
+        .overlay_active
+        .store(true, std::sync::atomic::Ordering::Release);
     daemon.overlay_state = OverlayState::Visible;
 
     let hide_started = Instant::now();
@@ -292,4 +328,72 @@ fn plain_toggle_after_debounce_window_is_processed() {
 
     assert_eq!(called.load(AtomicOrdering::SeqCst), 2);
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
+}
+
+#[test]
+fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
+    let _env_guard = crate::test_env::lock();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    // SAFETY: this test holds the process environment mutex.
+    unsafe {
+        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+    }
+
+    let token = ProtocolToken::generate().unwrap();
+    let token_text = token.to_string();
+    let owner = CommandOwner::open(&token_text).unwrap();
+    let queue_path = owner.queue_path();
+    let action_journal = ActionJournal::open().unwrap();
+    let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
+    super::super::protocol_v2::write_runtime_record_v2(&crate::paths::daemon_pid_file(), &runtime)
+        .unwrap();
+
+    let observed_modes = Arc::new(Mutex::new(Vec::new()));
+    let runner_modes = Arc::clone(&observed_modes);
+    let runner: Arc<BackendRunner> = Arc::new(move |mode| {
+        runner_modes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(mode);
+        Ok(())
+    });
+    let mut daemon = Daemon::with_backend_runner(None, runner);
+    daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
+    daemon.instance_token = token_text;
+    daemon.v2_command_owner = Some(owner);
+    daemon.v2_action_journal = Some(action_journal);
+
+    std::thread::scope(|scope| {
+        let caller = scope.spawn(|| {
+            crate::daemon::send_daemon_toggle_request(&DaemonToggleRequest {
+                mode: Some("whiteboard".into()),
+                ..Default::default()
+            })
+        });
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while std::fs::read_dir(&queue_path).unwrap().next().is_none() {
+            assert!(Instant::now() < deadline, "v2 caller did not publish");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        daemon.process_v2_commands().unwrap();
+        caller.join().unwrap().unwrap();
+    });
+
+    assert_eq!(
+        observed_modes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_slice(),
+        &[Some("whiteboard".into())]
+    );
+    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+
+    // SAFETY: this test still holds the process environment mutex.
+    unsafe {
+        match previous_runtime_dir {
+            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+        }
+    }
 }

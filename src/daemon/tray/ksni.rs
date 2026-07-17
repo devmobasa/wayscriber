@@ -55,7 +55,7 @@ impl ksni::Tray for WayscriberTray {
 
     fn tool_tip(&self) -> ksni::ToolTip {
         let status = self.tray_status.snapshot();
-        let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
+        let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let TrayStatus {
             overlay_error,
             watcher_offline,
@@ -112,7 +112,7 @@ impl ksni::Tray for WayscriberTray {
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
         let use_theme_icons = menu_theme_icons_enabled();
-        let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
+        let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let toggle_label = toggle_overlay_menu_label();
 
         vec![
@@ -131,6 +131,9 @@ impl ksni::Tray for WayscriberTray {
                 icon_name: menu_icon_name("tool-pointer", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
                     this.toggle_flag.store(true, Ordering::Release);
+                    if let Err(error) = this.daemon_wake.wake() {
+                        log::warn!("Failed to wake daemon for tray toggle: {error}");
+                    }
                 }),
                 ..Default::default()
             }
@@ -307,6 +310,9 @@ impl ksni::Tray for WayscriberTray {
                 icon_name: menu_icon_name("window-close", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
                     this.quit_flag.store(true, Ordering::Release);
+                    if let Err(error) = this.daemon_wake.wake() {
+                        log::warn!("Failed to wake daemon for tray shutdown: {error}");
+                    }
                 }),
                 ..Default::default()
             }
