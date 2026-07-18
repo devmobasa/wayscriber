@@ -27,6 +27,14 @@ impl WaylandState {
         self.overlay_suppressed() || self.input_state.light_mode_passthrough()
     }
 
+    pub(in crate::backend::wayland) fn overlay_keyboard_passthrough_requested(&self) -> bool {
+        overlay_keyboard_passthrough_requested_for(
+            self.data.overlay_suppression,
+            self.data.overlay_suppression_keyboard_policy,
+            self.input_state.light_mode_passthrough(),
+        )
+    }
+
     fn set_overlay_clickthrough(&mut self, clickthrough: bool) {
         if self.data.overlay_clickthrough == clickthrough {
             return;
@@ -53,6 +61,17 @@ impl WaylandState {
         &mut self,
         reason: OverlaySuppression,
     ) -> bool {
+        self.enter_overlay_suppression_with_keyboard_policy(
+            reason,
+            OverlaySuppressionKeyboardPolicy::Release,
+        )
+    }
+
+    pub(in crate::backend::wayland) fn enter_overlay_suppression_with_keyboard_policy(
+        &mut self,
+        reason: OverlaySuppression,
+        keyboard_policy: OverlaySuppressionKeyboardPolicy,
+    ) -> bool {
         if self.data.overlay_suppression != OverlaySuppression::None {
             log::warn!(
                 "capture.preflight component=overlay reason={reason:?} phase=enter-rejected active={:?}",
@@ -61,6 +80,7 @@ impl WaylandState {
             return false;
         }
         self.data.overlay_suppression = reason;
+        self.data.overlay_suppression_keyboard_policy = keyboard_policy;
         if reason.requires_capture_barrier() {
             self.data
                 .overlay_capture_barrier
@@ -87,11 +107,46 @@ impl WaylandState {
         }
         self.data.overlay_capture_barrier.cancel(reason);
         self.data.overlay_suppression = OverlaySuppression::None;
+        self.data.overlay_suppression_keyboard_policy = OverlaySuppressionKeyboardPolicy::Release;
         self.sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::OverlayRestored);
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
         log::info!("capture.preflight component=overlay reason={reason:?} phase=restored");
+    }
+}
+
+fn overlay_keyboard_passthrough_requested_for(
+    suppression: OverlaySuppression,
+    keyboard_policy: OverlaySuppressionKeyboardPolicy,
+    light_mode_passthrough: bool,
+) -> bool {
+    light_mode_passthrough
+        || (suppression != OverlaySuppression::None
+            && keyboard_policy == OverlaySuppressionKeyboardPolicy::Release)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fast_zoom_suppression_can_retain_keyboard_focus() {
+        assert!(!overlay_keyboard_passthrough_requested_for(
+            OverlaySuppression::Zoom,
+            OverlaySuppressionKeyboardPolicy::Retain,
+            false,
+        ));
+        assert!(overlay_keyboard_passthrough_requested_for(
+            OverlaySuppression::Zoom,
+            OverlaySuppressionKeyboardPolicy::Release,
+            false,
+        ));
+        assert!(overlay_keyboard_passthrough_requested_for(
+            OverlaySuppression::None,
+            OverlaySuppressionKeyboardPolicy::Retain,
+            true,
+        ));
     }
 }

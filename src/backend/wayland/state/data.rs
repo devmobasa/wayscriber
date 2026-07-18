@@ -22,6 +22,13 @@ pub enum OverlaySuppression {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OverlaySuppressionKeyboardPolicy {
+    #[default]
+    Release,
+    Retain,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum XdgFrozenFullscreenState {
     #[default]
     Inactive,
@@ -141,6 +148,7 @@ pub struct StateData {
     pub(super) xdg_frozen_fullscreen_requested_at: Option<Instant>,
     pub(super) main_surface_uses_overlay_layer: bool,
     pub(super) overlay_suppression: OverlaySuppression,
+    pub(super) overlay_suppression_keyboard_policy: OverlaySuppressionKeyboardPolicy,
     pub(super) overlay_capture_barrier: OverlayCaptureBarrier,
     pub(super) overlay_clickthrough: bool,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
@@ -231,6 +239,7 @@ impl StateData {
             xdg_frozen_fullscreen_requested_at: None,
             main_surface_uses_overlay_layer: false,
             overlay_suppression: OverlaySuppression::None,
+            overlay_suppression_keyboard_policy: OverlaySuppressionKeyboardPolicy::Release,
             overlay_capture_barrier: OverlayCaptureBarrier::default(),
             overlay_clickthrough: false,
             overlay_ready: false,
