@@ -52,29 +52,26 @@ impl InputState {
                 self.reset_modifiers();
                 true
             }
+            // Zoom stays within the focused overlay. Preserve physically held modifiers so
+            // consecutive zoom shortcuts work until their real release events arrive.
             Action::ZoomIn => {
                 self.request_zoom_action(ZoomAction::In);
-                self.reset_modifiers();
                 true
             }
             Action::ZoomOut => {
                 self.request_zoom_action(ZoomAction::Out);
-                self.reset_modifiers();
                 true
             }
             Action::ResetZoom => {
                 self.request_zoom_action(ZoomAction::Reset);
-                self.reset_modifiers();
                 true
             }
             Action::ToggleZoomLock => {
                 self.request_zoom_action(ZoomAction::ToggleLock);
-                self.reset_modifiers();
                 true
             }
             Action::RefreshZoomCapture => {
                 self.request_zoom_action(ZoomAction::RefreshCapture);
-                self.reset_modifiers();
                 true
             }
             Action::FocusNextOutput => {

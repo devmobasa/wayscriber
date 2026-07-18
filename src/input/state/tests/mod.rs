@@ -32,3 +32,4 @@ mod text_edit;
 mod text_input;
 mod tool_controls;
 mod transform;
+mod zoom_actions;
