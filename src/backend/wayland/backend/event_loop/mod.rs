@@ -13,6 +13,12 @@ mod dispatch;
 mod render;
 pub(in crate::backend::wayland) mod session_save;
 
+fn process_tray_actions_and_sync(state: &mut WaylandState) {
+    if process_tray_action(state) {
+        state.sync_overlay_interactivity();
+    }
+}
+
 pub(super) struct EventLoopOutcome {
     pub(super) loop_error: Option<anyhow::Error>,
 }
@@ -48,11 +54,7 @@ pub(super) fn run_event_loop(
             }
             Ok(signals)
         },
-        || {
-            if process_tray_action(state) {
-                state.sync_overlay_interactivity();
-            }
-        },
+        || process_tray_actions_and_sync(state),
     ) {
         Ok(signals) => Some(signals),
         Err(err) => {
@@ -63,7 +65,6 @@ pub(super) fn run_event_loop(
             None
         }
     };
-
     // Track consecutive render failures for error recovery.
     let mut consecutive_render_failures = 0u32;
 
@@ -72,14 +73,12 @@ pub(super) fn run_event_loop(
 
     // Main event loop.
     while let Some(signal_state) = signals.as_mut() {
-        if durable_action_retry_due(state, Instant::now()) && process_tray_action(state) {
-            state.sync_overlay_interactivity();
+        if durable_action_retry_due(state, Instant::now()) {
+            process_tray_actions_and_sync(state);
         }
-        if let Some(failure) = terminal_signal_failure(signal_state, || {
-            if process_tray_action(state) {
-                state.sync_overlay_interactivity();
-            }
-        }) {
+        if let Some(failure) =
+            terminal_signal_failure(signal_state, || process_tray_actions_and_sync(state))
+        {
             loop_error = Some(failure);
             break;
         }
@@ -328,7 +327,7 @@ mod tests {
     };
 
     #[test]
-    fn runtime_deadlines_merge_without_a_fallback_tick() {
+    fn runtime_deadlines_choose_the_earliest_deadline() {
         assert_eq!(
             min_timeout(
                 Some(Duration::from_secs(10)),

@@ -1,11 +1,17 @@
 #[cfg(feature = "tray")]
+use super::WayscriberTray;
+#[cfg(feature = "tray")]
 use crate::config::Config;
+#[cfg(feature = "tray")]
+use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
 #[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
 #[cfg(feature = "tray")]
 use crate::paths::log_dir;
 #[cfg(feature = "tray")]
 use crate::session::{clear_session, options_from_config};
+#[cfg(feature = "tray")]
+use crate::tray_action::TrayAction;
 #[cfg(feature = "tray")]
 use log::{error, info, warn};
 #[cfg(feature = "tray")]
@@ -14,15 +20,6 @@ use std::env;
 use std::ffi::{OsStr, OsString};
 #[cfg(feature = "tray")]
 use std::fs;
-#[cfg(feature = "tray")]
-use std::sync::atomic::Ordering;
-
-#[cfg(feature = "tray")]
-use super::WayscriberTray;
-#[cfg(feature = "tray")]
-use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
-#[cfg(feature = "tray")]
-use crate::tray_action::TrayAction;
 
 #[cfg(feature = "tray")]
 fn spawn_detached(
@@ -137,19 +134,19 @@ impl WayscriberTray {
 
     pub(super) fn dispatch_overlay_action(&self, action: TrayAction) {
         let action_str = action.as_str();
-        if self.action_intents.push(action).is_err() {
-            warn!(
-                "Failed to queue tray action {}: daemon intent queue is full",
-                action_str
-            );
-            return;
-        }
-
         // Tray producers carry only an action intent. The daemon controller
         // resolves the current child generation and owns any signal decision.
-        self.toggle_flag.store(true, Ordering::Release);
-        if let Err(error) = self.daemon_wake.wake() {
-            warn!("Failed to wake daemon for tray action: {error}");
+        match self.control.action.publish(action) {
+            Ok(()) => {}
+            Err(super::super::types::OverlayActionPublishError::QueueFull) => {
+                warn!(
+                    "Failed to queue tray action {}: daemon intent queue is full",
+                    action_str
+                );
+            }
+            Err(super::super::types::OverlayActionPublishError::Wake(error)) => {
+                warn!("Queued tray action {action_str}, but failed to wake daemon: {error}");
+            }
         }
     }
 

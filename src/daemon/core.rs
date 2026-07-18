@@ -6,10 +6,7 @@ use std::io::ErrorKind;
 use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-#[cfg(test)]
-use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -29,7 +26,7 @@ use super::control::DaemonToggleRequest;
 use super::control::read_daemon_toggle_response;
 #[cfg(test)]
 use super::control::{DaemonToggleCommand, DaemonToggleCommands};
-use super::global_shortcuts::start_global_shortcuts_listener;
+use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_listener};
 use super::protocol_v2::DaemonControlProtocolMode;
 use super::protocol_v2::OverlayChildOwner;
 use super::protocol_v2::{
@@ -39,20 +36,32 @@ use super::protocol_v2::{
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
-use super::types::{AlreadyRunningError, BackendRunner, OverlayActionIntents, OverlayState};
+use super::types::{
+    AlreadyRunningError, BackendRunner, DaemonControlEvent, OverlayActionIntents, OverlayState,
+    VisibilityIntents,
+};
 
 // Some desktop custom shortcut runners, observed on KDE, can launch the same
 // plain `--daemon-toggle` command twice about 400-600ms apart from one key press.
 // Suppress only duplicate plain toggles after a successful toggle completes, so
 // typed requests still run.
 const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
+#[cfg(unix)]
+const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 mod toggles;
+
+fn finish_action_batch(failures: Vec<String>) -> Result<()> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(failures.join("; ")))
+    }
+}
 
 pub struct Daemon {
     pub(super) overlay_state: OverlayState,
     pub(super) should_quit: Arc<AtomicBool>,
-    pub(super) toggle_requested: Arc<AtomicBool>,
-    pub(super) signal_toggle_requested: Arc<AtomicBool>,
+    pub(super) visibility_intents: Arc<VisibilityIntents>,
     pub(super) initial_mode: Option<String>,
     pub(super) initial_named_session_file: Option<PathBuf>,
     pub(super) active_named_session_file: Option<PathBuf>,
@@ -61,13 +70,12 @@ pub struct Daemon {
     pub(super) tray_enabled: bool,
     pub(super) backend_runner: Option<Arc<BackendRunner>>,
     pub(super) tray_thread: Option<JoinHandle<()>>,
-    pub(super) global_shortcuts_thread: Option<JoinHandle<()>>,
+    pub(super) global_shortcuts_listener: Option<GlobalShortcutsListener>,
     pub(super) overlay_child: OverlayChildOwner,
     pub(super) overlay_active: Arc<AtomicBool>,
     pub(super) overlay_action_intents: Arc<OverlayActionIntents>,
     pub(super) pending_activation_token: Option<String>,
     pub(super) pending_toggle_request: Option<DaemonToggleRequest>,
-    pub(super) portal_activation_token_slot: Arc<Mutex<Option<String>>>,
     pub(super) session_resume_override: Arc<AtomicU8>,
     pub(super) lock_file: Option<std::fs::File>,
     pub(super) overlay_spawn_failures: u32,
@@ -98,8 +106,7 @@ impl Daemon {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
-            toggle_requested: Arc::new(AtomicBool::new(false)),
-            signal_toggle_requested: Arc::new(AtomicBool::new(false)),
+            visibility_intents: Arc::new(VisibilityIntents::default()),
             initial_mode,
             initial_named_session_file,
             active_named_session_file: None,
@@ -108,13 +115,12 @@ impl Daemon {
             tray_enabled,
             backend_runner: None,
             tray_thread: None,
-            global_shortcuts_thread: None,
+            global_shortcuts_listener: None,
             overlay_child: OverlayChildOwner::default(),
             overlay_active: Arc::new(AtomicBool::new(false)),
             overlay_action_intents: Arc::new(OverlayActionIntents::default()),
             pending_activation_token: None,
             pending_toggle_request: None,
-            portal_activation_token_slot: Arc::new(Mutex::new(None)),
             session_resume_override: override_state,
             lock_file: None,
             overlay_spawn_failures: 0,
@@ -142,8 +148,7 @@ impl Daemon {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
-            toggle_requested: Arc::new(AtomicBool::new(false)),
-            signal_toggle_requested: Arc::new(AtomicBool::new(false)),
+            visibility_intents: Arc::new(VisibilityIntents::default()),
             initial_mode,
             initial_named_session_file: None,
             active_named_session_file: None,
@@ -152,13 +157,12 @@ impl Daemon {
             tray_enabled: true,
             backend_runner: Some(backend_runner),
             tray_thread: None,
-            global_shortcuts_thread: None,
+            global_shortcuts_listener: None,
             overlay_child: OverlayChildOwner::default(),
             overlay_active: Arc::new(AtomicBool::new(false)),
             overlay_action_intents: Arc::new(OverlayActionIntents::default()),
             pending_activation_token: None,
             pending_toggle_request: None,
-            portal_activation_token_slot: Arc::new(Mutex::new(None)),
             session_resume_override: override_state,
             lock_file: None,
             overlay_spawn_failures: 0,
@@ -247,31 +251,34 @@ impl Daemon {
             );
         }
 
-        #[cfg(unix)]
-        const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
-
-        let toggle_flag = self.toggle_requested.clone();
-        let signal_toggle_flag = self.signal_toggle_requested.clone();
-        let quit_flag = self.should_quit.clone();
-
         let daemon_wake =
             RuntimeWakeSource::new().context("Failed to create daemon control wake descriptor")?;
+        let visibility = self.visibility_intents.publisher(daemon_wake.handle());
+        let action = self.overlay_action_intents.publisher(daemon_wake.handle());
+        let quit_event = DaemonControlEvent::new(self.should_quit.clone(), daemon_wake.handle());
 
         #[cfg(unix)]
         {
             let listener_wake = daemon_wake.handle();
+            let signal_visibility = visibility.clone();
+            let signal_quit = quit_event.clone();
             self.signal_listener = Some(
                 crate::unix_signals::spawn_listener(
                     &DAEMON_SIGNALS,
                     move |sig| {
-                        if quit_flag.load(Ordering::Acquire) {
+                        if signal_quit.is_raised() {
                             return;
                         }
                         match sig {
                             libc::SIGUSR1 => {
                                 info!("Received SIGUSR1 - toggling overlay");
-                                signal_toggle_flag.store(true, Ordering::Release);
-                                toggle_flag.store(true, Ordering::Release);
+                                if let Err(error) = signal_visibility.publish(
+                                    None,
+                                    true,
+                                    "SIGUSR1 visibility publication",
+                                ) {
+                                    warn!("Failed to wake daemon after SIGUSR1: {error}");
+                                }
                             }
                             libc::SIGTERM | libc::SIGINT => {
                                 info!(
@@ -282,7 +289,9 @@ impl Daemon {
                                         "SIGINT"
                                     }
                                 );
-                                quit_flag.store(true, Ordering::Release);
+                                if let Err(error) = signal_quit.raise("daemon shutdown signal") {
+                                    warn!("Failed to wake daemon after shutdown signal: {error}");
+                                }
                             }
                             _ => warn!("Received unexpected signal: {sig}"),
                         }
@@ -347,21 +356,17 @@ impl Daemon {
 
         // Start system tray (optional)
         if self.tray_enabled {
-            let tray_toggle = self.toggle_requested.clone();
-            let tray_quit = self.should_quit.clone();
             let tray_overlay_active = self.overlay_active.clone();
-            let tray_action_intents = self.overlay_action_intents.clone();
             #[cfg(feature = "tray")]
             let tray_status = self.tray_status.clone();
             #[cfg(not(feature = "tray"))]
             let tray_status = ();
             match start_system_tray(
-                tray_toggle,
-                tray_quit,
+                visibility.clone(),
+                action,
+                quit_event.clone(),
                 tray_overlay_active,
-                tray_action_intents,
                 tray_status,
-                daemon_wake.handle(),
             ) {
                 Ok(tray_handle) => {
                     self.tray_thread = Some(tray_handle);
@@ -379,13 +384,9 @@ impl Daemon {
 
         match current_shortcut_runtime_backend() {
             ShortcutRuntimeBackend::PortalGlobalShortcuts => {
-                self.global_shortcuts_thread = start_global_shortcuts_listener(
-                    self.toggle_requested.clone(),
-                    self.should_quit.clone(),
-                    self.portal_activation_token_slot.clone(),
-                    daemon_wake.handle(),
-                );
-                if self.global_shortcuts_thread.is_some() {
+                self.global_shortcuts_listener =
+                    start_global_shortcuts_listener(visibility, self.should_quit.clone());
+                if self.global_shortcuts_listener.is_some() {
                     info!("Global shortcuts portal listener started");
                 }
             }
@@ -435,34 +436,35 @@ impl Daemon {
                 break;
             }
 
-            // Check for toggle request
-            // Use Acquire ordering to ensure we see all memory operations
-            // that happened before the flag was set
-            if self.toggle_requested.swap(false, Ordering::Acquire) {
-                let signal_toggle_requested =
-                    self.signal_toggle_requested.swap(false, Ordering::Acquire);
-                let pending_token = self
-                    .portal_activation_token_slot
-                    .lock()
-                    .unwrap_or_else(|poisoned| {
-                        warn!("portal activation token mutex poisoned; recovering");
-                        poisoned.into_inner()
-                    })
-                    .take();
-                let action_intents = self.overlay_action_intents.drain();
-                let result = if !action_intents.is_empty() {
-                    self.process_overlay_action_intents(action_intents)
-                } else if self.protocol_mode == DaemonControlProtocolMode::LegacyV1 {
-                    self.process_pending_toggles(pending_token, signal_toggle_requested)
+            // Action readiness and its FIFO batch are claimed under one mutex.
+            // Visibility and its metadata are claimed separately immediately
+            // afterward. A non-empty action batch intentionally absorbs that
+            // coalesced visibility snapshot for compatibility with the existing
+            // tray behavior.
+            let action_intents = self.overlay_action_intents.claim_batch();
+            let visibility = self.visibility_intents.claim();
+            if !action_intents.is_empty() {
+                let action_count = action_intents.len();
+                let result = self.process_overlay_action_intents(action_intents);
+                self.overlay_action_intents.finish_batch(action_count);
+                if let Err(error) = result {
+                    warn!("Overlay action batch failed: {error:#}");
+                }
+            } else if let Some(visibility) = visibility {
+                let result = if self.protocol_mode == DaemonControlProtocolMode::LegacyV1 {
+                    self.process_pending_toggles(
+                        visibility.activation_token,
+                        visibility.signal_requested,
+                    )
                 } else {
                     // In v2, raw SIGUSR1 and process-local shortcut/tray wakes
                     // are visibility-only. Typed queue discovery is exclusively
                     // driven by the watched v2 queue.
-                    self.process_single_toggle(None, pending_token, false)
+                    self.process_single_toggle(None, visibility.activation_token, false)
                         .map(drop)
                 };
-                if let Err(err) = result {
-                    warn!("Toggle overlay failed: {}", err);
+                if let Err(error) = result {
+                    warn!("Toggle overlay failed: {error}");
                 }
             }
 
@@ -522,46 +524,83 @@ impl Daemon {
         &mut self,
         actions: Vec<crate::tray_action::TrayAction>,
     ) -> Result<()> {
-        for action in actions {
-            if self.protocol_mode == DaemonControlProtocolMode::LegacyV1 {
-                self.process_single_toggle(
+        let mut failures = Vec::new();
+        if self.protocol_mode == DaemonControlProtocolMode::LegacyV1 {
+            for action in actions {
+                if let Err(error) = self.process_single_toggle(
                     Some(DaemonToggleRequest {
                         overlay_action: Some(action),
                         ..Default::default()
                     }),
                     None,
                     false,
-                )?;
+                ) {
+                    failures.push(format!("{}: {error:#}", action.as_str()));
+                }
+            }
+            return finish_action_batch(failures);
+        }
+
+        let journal = self
+            .v2_action_journal
+            .as_ref()
+            .context("v2 action journal is not installed")?
+            .clone();
+        let mut admitted = Vec::with_capacity(actions.len());
+        let mut will_be_visible = self.overlay_state == OverlayState::Visible;
+        for action in actions {
+            if !will_be_visible && matches!(action, crate::tray_action::TrayAction::LightDrawOff) {
                 continue;
             }
-            if self.overlay_state == OverlayState::Hidden
-                && matches!(action, crate::tray_action::TrayAction::LightDrawOff)
-            {
-                continue;
-            }
-            let journal = self
-                .v2_action_journal
-                .as_ref()
-                .context("v2 action journal is not installed")?
-                .clone();
-            let prepared = journal.publish_anonymous(&self.instance_token, action)?;
-            if self.overlay_state == OverlayState::Hidden {
-                if let Err(error) = self.show_overlay() {
-                    journal.abandon(&prepared, &format!("overlay launch failed: {error:#}"))?;
-                    return Err(error);
+            match journal.publish_anonymous(&self.instance_token, action) {
+                Ok(prepared) => {
+                    admitted.push((action, prepared));
+                    will_be_visible = true;
                 }
-                if let Err(error) = self.signal_overlay_action_ready(action) {
-                    journal.abandon(&prepared, &format!("overlay wake failed: {error:#}"))?;
-                    return Err(error);
-                }
-            } else {
-                if let Err(error) = self.signal_overlay_action_ready(action) {
-                    journal.abandon(&prepared, &format!("overlay wake failed: {error:#}"))?;
-                    return Err(error);
+                Err(error) => {
+                    failures.push(format!(
+                        "failed to admit anonymous action {}: {error:#}",
+                        action.as_str()
+                    ));
                 }
             }
         }
-        Ok(())
+
+        // Every admitted entry receives an explicit delivery or abandonment
+        // disposition. Admission is completed for the batch before side effects
+        // begin, so an early runtime failure cannot silently lose the tail.
+        for (action, prepared) in admitted {
+            if self.overlay_state == OverlayState::Hidden
+                && matches!(action, crate::tray_action::TrayAction::LightDrawOff)
+            {
+                let reason = "overlay remained hidden before LightDrawOff delivery";
+                if let Err(error) = journal.abandon(&prepared, reason) {
+                    failures.push(format!(
+                        "failed to abandon anonymous action {}: {error:#}",
+                        action.as_str()
+                    ));
+                }
+                continue;
+            }
+
+            let delivery = if self.overlay_state == OverlayState::Hidden {
+                self.show_overlay()
+                    .and_then(|()| self.signal_overlay_action_ready(action))
+            } else {
+                self.signal_overlay_action_ready(action)
+            };
+            if let Err(error) = delivery {
+                let reason = format!("overlay action delivery failed: {error:#}");
+                if let Err(abandon_error) = journal.abandon(&prepared, &reason) {
+                    failures.push(format!(
+                        "failed to abandon anonymous action {} after delivery failure: {abandon_error:#}",
+                        action.as_str()
+                    ));
+                }
+                failures.push(format!("{}: {reason}", action.as_str()));
+            }
+        }
+        finish_action_batch(failures)
     }
 
     fn process_v2_commands(&mut self) -> Result<()> {
@@ -684,14 +723,17 @@ impl Daemon {
             warn!("Failed to hide overlay during shutdown: {}", err);
         }
         self.should_quit.store(true, Ordering::Release);
+        if let Some(listener) = self.global_shortcuts_listener.as_mut() {
+            listener.request_shutdown();
+        }
         if let Some(handle) = self.tray_thread.take() {
             match handle.join() {
                 Ok(()) => info!("System tray thread joined"),
                 Err(err) => warn!("System tray thread panicked: {:?}", err),
             }
         }
-        if let Some(handle) = self.global_shortcuts_thread.take() {
-            match handle.join() {
+        if let Some(listener) = self.global_shortcuts_listener.take() {
+            match listener.join() {
                 Ok(()) => info!("Global shortcuts listener thread joined"),
                 Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
             }

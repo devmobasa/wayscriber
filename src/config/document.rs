@@ -12,7 +12,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, TableLike};
 
 use merge::{
     conservative_repair_source_document, merge_config_document, repair_source_document,
@@ -152,6 +152,7 @@ impl SourceRevision {
 pub struct ConfigDocument {
     config: Config,
     document: DocumentMut,
+    known_document: DocumentMut,
     source_path: PathBuf,
     source: ConfigSource,
     revision: SourceRevision,
@@ -190,10 +191,13 @@ impl ConfigDocument {
                     .and_then(|bytes| std::str::from_utf8(bytes).ok())
                     .and_then(|input| input.parse::<DocumentMut>().ok())
                     .unwrap_or_default();
+                let config = Config::default();
+                let known_document = serialize_config_document(&config)?;
                 Ok((
                     Self {
-                        config: Config::default(),
+                        config,
                         document,
+                        known_document,
                         source_path,
                         source: ConfigSource::Primary,
                         revision,
@@ -216,25 +220,28 @@ impl ConfigDocument {
                 let document = input.parse::<DocumentMut>().with_context(|| {
                     format!("Failed to parse config from {}", source_path.display())
                 })?;
-                let (config, diagnostics) = parse_typed_config(input).with_context(|| {
+                let parsed = parse_typed_config(input).with_context(|| {
                     format!("Failed to parse config from {}", source_path.display())
                 })?;
                 Ok(Self {
-                    config,
+                    config: parsed.config,
                     document,
+                    known_document: parsed.known_document,
                     source_path,
                     source: ConfigSource::Primary,
                     revision,
-                    diagnostics,
+                    diagnostics: parsed.diagnostics,
                     repair_mode: false,
                 })
             }
             None => {
                 let config = Config::default();
                 let document = DocumentMut::new();
+                let known_document = serialize_config_document(&config)?;
                 Ok(Self {
                     config,
                     document,
+                    known_document,
                     source_path,
                     source: ConfigSource::Default,
                     revision,
@@ -268,15 +275,21 @@ impl ConfigDocument {
             .then(|| repair_source_document(&self.document, &self.config, &config))
             .transpose()?;
         let source = repair_source.as_ref().unwrap_or(&self.document);
-        let mut merged = merge_config_document(source, &self.config, &config)?;
+        let mut merged =
+            merge_config_document(source, &self.config, &config, &self.known_document)?;
         let mut output = merged.to_string();
         let parsed = parse_typed_config(&output);
-        let (saved_config, diagnostics) = match parsed {
+        let parsed = match parsed {
             Ok(parsed) => parsed,
             Err(_) if self.repair_mode => {
                 let conservative =
                     conservative_repair_source_document(&self.document, &self.config, &config)?;
-                merged = merge_config_document(&conservative, &self.config, &config)?;
+                merged = merge_config_document(
+                    &conservative,
+                    &self.config,
+                    &config,
+                    &self.known_document,
+                )?;
                 output = merged.to_string();
                 parse_typed_config(&output)
                     .context("Repaired config failed its validation parse before save")?
@@ -299,12 +312,13 @@ impl ConfigDocument {
 
         Ok(ConfigDocumentSaveOutcome {
             document: Self {
-                config: saved_config,
+                config: parsed.config,
                 document: merged,
+                known_document: parsed.known_document,
                 source_path: self.source_path.clone(),
                 source: ConfigSource::Primary,
                 revision,
-                diagnostics,
+                diagnostics: parsed.diagnostics,
                 repair_mode: false,
             },
             backup_path,
@@ -343,9 +357,20 @@ impl ConfigDocumentSaveOutcome {
     }
 }
 
-fn parse_typed_config(input: &str) -> Result<(Config, Vec<ConfigDiagnostic>)> {
-    let deserializer = toml::Deserializer::parse(input).context("Failed to parse TOML")?;
+struct ParsedConfig {
+    config: Config,
+    known_document: DocumentMut,
+    diagnostics: Vec<ConfigDiagnostic>,
+}
+
+fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
     let mut ignored = BTreeSet::new();
+    let mut editor_input = input
+        .parse::<DocumentMut>()
+        .context("Failed to parse TOML")?;
+    strip_unknown_strict_export_fields(&mut editor_input, &mut ignored);
+    let editor_input = editor_input.to_string();
+    let deserializer = toml::Deserializer::parse(&editor_input).context("Failed to parse TOML")?;
     let mut config: Config = serde_ignored::deserialize(deserializer, |path| {
         let path = path.to_string();
         if !is_known_feature_gated_path(&path) {
@@ -353,6 +378,7 @@ fn parse_typed_config(input: &str) -> Result<(Config, Vec<ConfigDiagnostic>)> {
         }
     })
     .map_err(|error| anyhow!(error))?;
+    let known_document = serialize_config_document(&config)?;
     config.validate_and_clamp();
     collect_flattened_unknown_paths(input, &config, &mut ignored)?;
     let diagnostics = ignored
@@ -362,7 +388,83 @@ fn parse_typed_config(input: &str) -> Result<(Config, Vec<ConfigDiagnostic>)> {
             path,
         })
         .collect();
-    Ok((config, diagnostics))
+    Ok(ParsedConfig {
+        config,
+        known_document,
+        diagnostics,
+    })
+}
+
+fn strip_unknown_strict_export_fields(document: &mut DocumentMut, ignored: &mut BTreeSet<String>) {
+    strip_unknown_fields_at_path(document, &["export"], &["pdf"], ignored);
+    strip_unknown_fields_at_path(
+        document,
+        &["export", "pdf"],
+        &[
+            "filename_template",
+            "all_boards_filename_template",
+            "page_size",
+            "orientation",
+            "fit",
+            "transparent_background",
+            "custom_width",
+            "custom_height",
+            "content_source_padding",
+            "labels",
+        ],
+        ignored,
+    );
+    strip_unknown_fields_at_path(
+        document,
+        &["export", "pdf", "labels"],
+        &[
+            "enabled",
+            "position",
+            "content",
+            "template",
+            "font_family",
+            "font_size",
+            "margin",
+            "padding_x",
+            "padding_y",
+            "text_color",
+            "background_enabled",
+            "background_color",
+        ],
+        ignored,
+    );
+}
+
+fn strip_unknown_fields_at_path(
+    document: &mut DocumentMut,
+    path: &[&str],
+    known_fields: &[&str],
+    ignored: &mut BTreeSet<String>,
+) {
+    let Some(table) = table_like_at_path_mut(document.as_table_mut(), path) else {
+        return;
+    };
+    let unknown = table
+        .iter()
+        .map(|(key, _)| key.to_string())
+        .filter(|key| !known_fields.contains(&key.as_str()))
+        .collect::<Vec<_>>();
+    let prefix = path.join(".");
+    for key in unknown {
+        table.remove(&key);
+        ignored.insert(format!("{prefix}.{key}"));
+    }
+}
+
+fn table_like_at_path_mut<'a>(
+    table: &'a mut dyn TableLike,
+    path: &[&str],
+) -> Option<&'a mut dyn TableLike> {
+    let Some((head, tail)) = path.split_first() else {
+        return Some(table);
+    };
+    let child = table.get_mut(head)?.as_table_like_mut()?;
+    table_like_at_path_mut(child, tail)
 }
 
 fn collect_flattened_unknown_paths(

@@ -1,14 +1,7 @@
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::sync::Arc;
-
-pub(crate) const MAX_WAKE_DRAIN_READS: usize = 8;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RuntimeWakeDrain {
-    pub(crate) reads: usize,
-    pub(crate) limit_reached: bool,
-}
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 pub(crate) struct RuntimeWakeSource {
@@ -18,6 +11,60 @@ pub(crate) struct RuntimeWakeSource {
 #[derive(Clone, Debug)]
 pub(crate) struct RuntimeWakeHandle {
     fd: Arc<OwnedFd>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TerminalReadinessPolicy {
+    Reject,
+    ReadBuffered,
+}
+
+pub(super) fn validate_poll_readiness(
+    pollfd: &libc::pollfd,
+    label: &str,
+    terminal_policy: TerminalReadinessPolicy,
+) -> io::Result<bool> {
+    let readable = pollfd.revents & libc::POLLIN != 0;
+    if pollfd.revents & libc::POLLNVAL != 0 {
+        return Err(io::Error::other(format!(
+            "{label} poll descriptor failed with readiness {:#x}",
+            pollfd.revents
+        )));
+    }
+    let terminal = pollfd.revents & (libc::POLLERR | libc::POLLHUP);
+    if terminal != 0 && !(terminal_policy == TerminalReadinessPolicy::ReadBuffered && readable) {
+        return Err(io::Error::other(format!(
+            "{label} poll descriptor failed with readiness {:#x}",
+            pollfd.revents
+        )));
+    }
+    if pollfd.revents != 0 && !readable {
+        return Err(io::Error::other(format!(
+            "{label} poll descriptor returned unexpected readiness {:#x}",
+            pollfd.revents
+        )));
+    }
+    Ok(readable)
+}
+
+pub(super) fn poll_with_retry<T>(
+    timeout: Option<Duration>,
+    mut attempt: impl FnMut(i32) -> io::Result<Option<T>>,
+) -> io::Result<Option<T>> {
+    let deadline = timeout.and_then(|timeout| Instant::now().checked_add(timeout));
+    let mut timeout_ms = timeout_to_poll_ms(timeout);
+    loop {
+        match attempt(timeout_ms) {
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {
+                timeout_ms = deadline
+                    .map(|deadline| {
+                        timeout_to_poll_ms(Some(deadline.saturating_duration_since(Instant::now())))
+                    })
+                    .unwrap_or(-1);
+            }
+            result => return result,
+        }
+    }
 }
 
 impl RuntimeWakeSource {
@@ -44,13 +91,11 @@ impl RuntimeWakeSource {
         }
     }
 
-    pub(crate) fn drain(&self) -> io::Result<RuntimeWakeDrain> {
-        self.drain_with_limit(MAX_WAKE_DRAIN_READS)
-    }
-
-    fn drain_with_limit(&self, max_reads: usize) -> io::Result<RuntimeWakeDrain> {
-        let mut reads = 0;
-        while reads < max_reads {
+    /// Drains the non-semaphore eventfd with at most one successful read.
+    /// One eventfd read consumes the entire accumulated counter, so a second
+    /// successful-path read would only issue a guaranteed-EAGAIN syscall.
+    pub(crate) fn drain(&self) -> io::Result<bool> {
+        loop {
             let mut value = 0_u64;
             // SAFETY: value points to a writable u64 and the owned eventfd remains
             // valid for the duration of this read.
@@ -62,19 +107,13 @@ impl RuntimeWakeSource {
                 )
             };
             if result == size_of::<u64>() as isize {
-                reads += 1;
-                continue;
+                return Ok(true);
             }
             if result < 0 {
                 let err = io::Error::last_os_error();
                 match err.kind() {
                     io::ErrorKind::Interrupted => continue,
-                    io::ErrorKind::WouldBlock => {
-                        return Ok(RuntimeWakeDrain {
-                            reads,
-                            limit_reached: false,
-                        });
-                    }
+                    io::ErrorKind::WouldBlock => return Ok(false),
                     _ => return Err(err),
                 }
             }
@@ -83,12 +122,53 @@ impl RuntimeWakeSource {
                 format!("runtime wake eventfd returned a short read ({result} bytes)"),
             ));
         }
-
-        Ok(RuntimeWakeDrain {
-            reads,
-            limit_reached: true,
-        })
     }
+
+    /// Waits for and drains this eventfd. `None` blocks until a producer wake.
+    #[cfg(test)]
+    pub(crate) fn wait_readable(&self, timeout: Option<Duration>) -> io::Result<bool> {
+        let readable = poll_with_retry(timeout, |timeout_ms| {
+            let mut pollfd = libc::pollfd {
+                fd: self.fd.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // SAFETY: pollfd is valid and the Arc-owned descriptor remains open
+            // throughout this bounded or producer-woken wait.
+            let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+            if ready == 0 {
+                return Ok(None);
+            }
+            if ready < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if !validate_poll_readiness(&pollfd, "runtime wake", TerminalReadinessPolicy::Reject)? {
+                return Err(io::Error::other(format!(
+                    "runtime wake poll reported readiness without a readable descriptor ({:#x})",
+                    pollfd.revents
+                )));
+            }
+            Ok(Some(()))
+        })?;
+        if readable.is_some() {
+            self.drain()
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+pub(super) fn timeout_to_poll_ms(timeout: Option<Duration>) -> i32 {
+    timeout
+        .map(|duration| {
+            // poll(2) accepts integer milliseconds. Round positive fractions
+            // up so an unexpired deadline never becomes a zero-timeout spin.
+            duration
+                .as_nanos()
+                .div_ceil(1_000_000)
+                .min(i32::MAX as u128) as i32
+        })
+        .unwrap_or(-1)
 }
 
 impl RuntimeWakeHandle {
@@ -173,13 +253,7 @@ mod tests {
         source.handle().wake().unwrap();
 
         assert!(poll_readable(&source, 0));
-        assert_eq!(
-            source.drain().unwrap(),
-            RuntimeWakeDrain {
-                reads: 1,
-                limit_reached: false,
-            }
-        );
+        assert!(source.drain().unwrap());
         assert!(!poll_readable(&source, 0));
     }
 
@@ -193,7 +267,7 @@ mod tests {
             // thread's id, used only to observe its scheduler state in this test.
             let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
             poll_entry_tx.send(tid).unwrap();
-            assert!(poll_readable(&source, 1_000));
+            assert!(source.wait_readable(Some(Duration::from_secs(1))).unwrap());
         });
 
         let poller_tid = poll_entry_rx.recv().unwrap();
@@ -210,7 +284,7 @@ mod tests {
             handle.wake().unwrap();
         }
 
-        assert_eq!(source.drain().unwrap().reads, 1);
+        assert!(source.drain().unwrap());
         assert!(!poll_readable(&source, 0));
     }
 
@@ -224,30 +298,36 @@ mod tests {
     }
 
     #[test]
-    fn empty_drain_is_bounded_and_reports_no_residual_work() {
+    fn empty_drain_reports_no_consumed_wake() {
         let source = RuntimeWakeSource::new().unwrap();
-        assert_eq!(
-            source.drain().unwrap(),
-            RuntimeWakeDrain {
-                reads: 0,
-                limit_reached: false,
-            }
-        );
+        assert!(!source.drain().unwrap());
     }
 
     #[test]
-    fn bounded_drain_leaves_residual_readiness_for_the_next_pass() {
+    fn wait_readable_times_out_without_a_wake() {
         let source = RuntimeWakeSource::new().unwrap();
-        source.handle().wake().unwrap();
+        assert!(!source.wait_readable(Some(Duration::ZERO)).unwrap());
+    }
 
-        assert_eq!(
-            source.drain_with_limit(0).unwrap(),
-            RuntimeWakeDrain {
-                reads: 0,
-                limit_reached: true,
-            }
+    #[test]
+    fn terminal_readiness_policy_distinguishes_streams_from_wake_descriptors() {
+        let pollfd = libc::pollfd {
+            fd: 7,
+            events: libc::POLLIN,
+            revents: libc::POLLIN | libc::POLLHUP,
+        };
+
+        assert!(
+            validate_poll_readiness(
+                &pollfd,
+                "buffered stream",
+                TerminalReadinessPolicy::ReadBuffered,
+            )
+            .unwrap()
         );
-        assert!(poll_readable(&source, 0));
-        assert_eq!(source.drain().unwrap().reads, 1);
+        assert!(
+            validate_poll_readiness(&pollfd, "runtime wake", TerminalReadinessPolicy::Reject,)
+                .is_err()
+        );
     }
 }

@@ -510,7 +510,7 @@ on shorter or scaled displays:
 - Open the log folder
 - Open configurator / open config file / quit
 
-Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Noctalia/Quickshell/COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
+Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Omarchy/Quickshell, Noctalia/Quickshell, and COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
 
 **Alternative — compositor autostart instead of systemd:**
 ```conf

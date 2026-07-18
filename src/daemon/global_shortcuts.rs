@@ -1,6 +1,10 @@
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+
+#[cfg(all(test, feature = "portal"))]
+use super::types::DaemonControlEvent;
+use super::types::VisibilityPublisher;
 
 #[cfg(feature = "portal")]
 use crate::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
@@ -30,8 +34,6 @@ const TOGGLE_SHORTCUT_ID: &str = "toggle-overlay";
 #[cfg(feature = "portal")]
 const TOGGLE_SHORTCUT_DESCRIPTION: &str = "Toggle Wayscriber overlay";
 #[cfg(feature = "portal")]
-const PORTAL_REQUEST_POLL_INTERVAL_MS: u64 = 100;
-#[cfg(feature = "portal")]
 const PORTAL_KEY_ACTIVATION_TOKEN: &str = "activation_token";
 #[cfg(feature = "portal")]
 const PORTAL_KEY_ACTIVATION_TOKEN_KEBAB: &str = "activation-token";
@@ -54,15 +56,32 @@ const PORTAL_KEY_SESSION_HANDLE_TOKEN: &str = "session_handle_token";
 #[cfg(feature = "portal")]
 const PORTAL_KEY_STARTUP_ID: &str = "startup_id";
 
+pub(super) struct GlobalShortcutsListener {
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    thread: JoinHandle<()>,
+}
+
+impl GlobalShortcutsListener {
+    pub(super) fn request_shutdown(&mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+    }
+
+    pub(super) fn join(mut self) -> std::thread::Result<()> {
+        self.request_shutdown();
+        self.thread.join()
+    }
+}
+
 pub(super) fn start_global_shortcuts_listener(
-    toggle_flag: Arc<AtomicBool>,
+    visibility: VisibilityPublisher,
     quit_flag: Arc<AtomicBool>,
-    activation_token_slot: Arc<Mutex<Option<String>>>,
-    daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
-) -> Option<JoinHandle<()>> {
+) -> Option<GlobalShortcutsListener> {
     #[cfg(feature = "portal")]
     {
         let listener_quit_flag = quit_flag.clone();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let preferred_trigger = std::env::var(PORTAL_SHORTCUT_ENV)
             .ok()
             .filter(|value| !value.trim().is_empty())
@@ -72,7 +91,7 @@ pub(super) fn start_global_shortcuts_listener(
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| DEFAULT_PORTAL_APP_ID.to_string());
 
-        Some(std::thread::spawn(move || {
+        let thread = std::thread::spawn(move || {
             let runtime = match tokio::runtime::Runtime::new() {
                 Ok(runtime) => runtime,
                 Err(err) => {
@@ -85,15 +104,8 @@ pub(super) fn start_global_shortcuts_listener(
             };
 
             runtime.block_on(async move {
-                if let Err(err) = run_listener(
-                    toggle_flag,
-                    quit_flag,
-                    activation_token_slot,
-                    preferred_trigger,
-                    portal_app_id,
-                    daemon_wake,
-                )
-                .await
+                if let Err(err) =
+                    run_listener(visibility, preferred_trigger, portal_app_id, shutdown_rx).await
                 {
                     if listener_quit_flag.load(Ordering::Acquire) {
                         info!(
@@ -105,11 +117,15 @@ pub(super) fn start_global_shortcuts_listener(
                     }
                 }
             });
-        }))
+        });
+        Some(GlobalShortcutsListener {
+            shutdown: Some(shutdown_tx),
+            thread,
+        })
     }
     #[cfg(not(feature = "portal"))]
     {
-        let _ = (toggle_flag, quit_flag, activation_token_slot, daemon_wake);
+        let _ = (visibility, quit_flag);
         None
     }
 }
@@ -172,22 +188,11 @@ trait Request {
 }
 
 #[cfg(feature = "portal")]
-#[proxy(
-    interface = "org.freedesktop.portal.Session",
-    default_service = "org.freedesktop.portal.Desktop"
-)]
-trait Session {
-    async fn close(&self) -> zbus::Result<()>;
-}
-
-#[cfg(feature = "portal")]
 async fn run_listener(
-    toggle_flag: Arc<AtomicBool>,
-    quit_flag: Arc<AtomicBool>,
-    activation_token_slot: Arc<Mutex<Option<String>>>,
+    visibility: VisibilityPublisher,
     preferred_trigger: String,
     portal_app_id: String,
-    daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
+    mut shutdown: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<()> {
     let connection = Connection::session()
         .await
@@ -215,14 +220,13 @@ async fn run_listener(
     }
 
     let session_handle =
-        create_global_shortcuts_session(&connection, &proxy, &portal_app_id, quit_flag.as_ref())
-            .await?;
+        create_global_shortcuts_session(&connection, &proxy, &portal_app_id, &mut shutdown).await?;
     bind_toggle_shortcut(
         &connection,
         &proxy,
         &session_handle,
         &preferred_trigger,
-        quit_flag.as_ref(),
+        &mut shutdown,
     )
     .await?;
 
@@ -248,10 +252,8 @@ async fn run_listener(
                 }
 
                 let activation_token = extract_activation_token(&args.options);
-                if let Some(token) = activation_token {
+                if activation_token.is_some() {
                     info!("Global shortcut activated; activation_token received");
-                    let mut slot = lock_token_slot(&activation_token_slot);
-                    *slot = Some(token);
                 } else {
                     let option_keys: Vec<&str> =
                         args.options.keys().map(|key| key.as_str()).collect();
@@ -260,29 +262,54 @@ async fn run_listener(
                         option_keys
                     );
                 }
-                toggle_flag.store(true, Ordering::Release);
-                daemon_wake
-                    .wake()
+                visibility
+                    .publish(activation_token, false, "global shortcut activation")
                     .context("failed to wake daemon for global shortcut")?;
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                if quit_flag.load(Ordering::Acquire) {
-                    break;
-                }
+            _ = &mut shutdown => {
+                debug!("Global shortcuts listener received shutdown");
+                return Ok(());
             }
         }
     }
+}
 
-    if quit_flag.load(Ordering::Acquire) {
-        debug!("Skipping GlobalShortcuts session close during shutdown");
-        return Ok(());
+#[cfg(all(test, feature = "portal"))]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn global_shortcut_publication_wakes_daemon_owner() {
+        let toggle = Arc::new(AtomicBool::new(false));
+        let (event, wake) = DaemonControlEvent::for_test(Arc::clone(&toggle));
+
+        event.raise("global shortcut test").unwrap();
+
+        assert!(toggle.load(Ordering::Acquire));
+        assert!(wake.wait_readable(Some(Duration::ZERO)).unwrap());
     }
 
-    if let Err(err) = close_global_shortcuts_session(&connection, &session_handle).await {
-        warn!("Failed to close GlobalShortcuts session cleanly: {}", err);
-    }
+    #[test]
+    fn shutdown_handle_unblocks_listener_without_a_timer() {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async move {
+                let _ = shutdown_rx.await;
+                observed_tx.send(()).unwrap();
+            });
+        });
+        let mut listener = GlobalShortcutsListener {
+            shutdown: Some(shutdown_tx),
+            thread,
+        };
 
-    Ok(())
+        listener.request_shutdown();
+        observed_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        listener.join().unwrap();
+    }
 }
 
 #[cfg(feature = "portal")]
@@ -303,7 +330,7 @@ async fn create_global_shortcuts_session(
     connection: &Connection,
     proxy: &GlobalShortcutsProxy<'_>,
     portal_app_id: &str,
-    quit_flag: &AtomicBool,
+    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
 ) -> Result<OwnedObjectPath> {
     let mut options: HashMap<String, Value<'static>> = HashMap::new();
     options.insert(
@@ -324,8 +351,7 @@ async fn create_global_shortcuts_session(
         .await
         .context("GlobalShortcuts.CreateSession call failed")?;
 
-    let (response, results) =
-        wait_for_request_response(connection, request_path, quit_flag).await?;
+    let (response, results) = wait_for_request_response(connection, request_path, shutdown).await?;
     if response != 0 {
         return Err(anyhow!(
             "GlobalShortcuts.CreateSession denied by portal (response code {})",
@@ -346,7 +372,7 @@ async fn bind_toggle_shortcut(
     proxy: &GlobalShortcutsProxy<'_>,
     session_handle: &OwnedObjectPath,
     preferred_trigger: &str,
-    quit_flag: &AtomicBool,
+    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
 ) -> Result<()> {
     let mut shortcut_options: HashMap<String, Value<'static>> = HashMap::new();
     shortcut_options.insert(
@@ -374,7 +400,7 @@ async fn bind_toggle_shortcut(
         .await
         .context("GlobalShortcuts.BindShortcuts call failed")?;
 
-    let (response, _) = wait_for_request_response(connection, request_path, quit_flag).await?;
+    let (response, _) = wait_for_request_response(connection, request_path, shutdown).await?;
     if response != 0 {
         return Err(anyhow!(
             "GlobalShortcuts.BindShortcuts denied by portal (response code {})",
@@ -389,7 +415,7 @@ async fn bind_toggle_shortcut(
 async fn wait_for_request_response(
     connection: &Connection,
     request_path: OwnedObjectPath,
-    quit_flag: &AtomicBool,
+    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(u32, HashMap<String, OwnedValue>)> {
     let request_proxy = RequestProxy::builder(connection)
         .path(request_path)
@@ -402,42 +428,21 @@ async fn wait_for_request_response(
         .receive_response()
         .await
         .context("failed to subscribe to Request.Response")?;
-    loop {
-        tokio::select! {
-            maybe_signal = crate::zbus_stream::next(&mut response_stream) => {
-                let response_signal = maybe_signal
-                    .ok_or_else(|| anyhow!("portal request completed without Response signal"))?;
-                let args = response_signal
-                    .args()
-                    .context("failed to parse Request.Response signal arguments")?;
-                return Ok((args.response, args.results.clone()));
-            }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(PORTAL_REQUEST_POLL_INTERVAL_MS)) => {
-                if quit_flag.load(Ordering::Acquire) {
-                    return Err(anyhow!(
-                        "shutdown requested while waiting for portal Request.Response"
-                    ));
-                }
-            }
+    tokio::select! {
+        maybe_signal = crate::zbus_stream::next(&mut response_stream) => {
+            let response_signal = maybe_signal
+                .ok_or_else(|| anyhow!("portal request completed without Response signal"))?;
+            let args = response_signal
+                .args()
+                .context("failed to parse Request.Response signal arguments")?;
+            Ok((args.response, args.results.clone()))
+        }
+        _ = &mut *shutdown => {
+            Err(anyhow!(
+                "shutdown requested while waiting for portal Request.Response"
+            ))
         }
     }
-}
-
-#[cfg(feature = "portal")]
-async fn close_global_shortcuts_session(
-    connection: &Connection,
-    session_handle: &OwnedObjectPath,
-) -> Result<()> {
-    let proxy = SessionProxy::builder(connection)
-        .path(session_handle.clone())
-        .context("invalid GlobalShortcuts session path")?
-        .build()
-        .await
-        .context("failed to build Session proxy")?;
-    proxy
-        .close()
-        .await
-        .context("GlobalShortcuts session close failed")
 }
 
 #[cfg(feature = "portal")]
@@ -486,12 +491,4 @@ fn make_handle_token(prefix: &str) -> String {
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
     format!("{}_{}_{}", prefix, std::process::id(), nanos)
-}
-
-#[cfg(feature = "portal")]
-fn lock_token_slot(slot: &Arc<Mutex<Option<String>>>) -> std::sync::MutexGuard<'_, Option<String>> {
-    slot.lock().unwrap_or_else(|poisoned| {
-        warn!("portal activation token slot mutex poisoned; recovering");
-        poisoned.into_inner()
-    })
 }

@@ -130,10 +130,7 @@ impl ksni::Tray for WayscriberTray {
                 label: toggle_label,
                 icon_name: menu_icon_name("tool-pointer", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
-                    this.toggle_flag.store(true, Ordering::Release);
-                    if let Err(error) = this.daemon_wake.wake() {
-                        log::warn!("Failed to wake daemon for tray toggle: {error}");
-                    }
+                    this.request_toggle();
                 }),
                 ..Default::default()
             }
@@ -309,10 +306,7 @@ impl ksni::Tray for WayscriberTray {
                 label: "Quit".to_string(),
                 icon_name: menu_icon_name("window-close", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
-                    this.quit_flag.store(true, Ordering::Release);
-                    if let Err(error) = this.daemon_wake.wake() {
-                        log::warn!("Failed to wake daemon for tray shutdown: {error}");
-                    }
+                    this.request_quit();
                 }),
                 ..Default::default()
             }
@@ -419,7 +413,10 @@ fn tray_theme_icons_supported(desktop_env: &str, session_env: &str, desktop_sess
 
 #[cfg(feature = "tray")]
 fn tray_theme_icons_blocked_by_desktop(value: &str) -> bool {
-    value.contains("noctalia") || value.contains("quickshell") || value.contains("cosmic")
+    value.contains("noctalia")
+        || value.contains("omarchy")
+        || value.contains("quickshell")
+        || value.contains("cosmic")
 }
 
 #[cfg(feature = "tray")]
@@ -465,6 +462,9 @@ mod tests {
     fn tray_theme_icons_supported_blocks_existing_problem_shells() {
         assert!(!tray_theme_icons_supported("quickshell", "", ""));
         assert!(!tray_theme_icons_supported("", "noctalia", ""));
+        assert!(!tray_theme_icons_supported(
+            "hyprland", "hyprland", "omarchy"
+        ));
     }
 
     #[test]
@@ -482,6 +482,13 @@ mod tests {
             "quickshell",
             "",
             ""
+        ));
+        assert!(!resolve_symbolic_tray_icon(
+            TrayIconStyle::Auto,
+            false,
+            "hyprland",
+            "hyprland",
+            "omarchy"
         ));
     }
 

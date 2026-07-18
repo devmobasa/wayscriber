@@ -21,7 +21,10 @@ impl WaylandState {
             self.start_selection_clipboard_publish(request.generation, request.payload_json);
         }
 
-        if let Some(request) = self.input_state.take_pending_clipboard_paste_request() {
+        if let Some(request) = take_pending_clipboard_paste_if_idle(
+            &mut self.input_state,
+            self.clipboard_paste.is_active(),
+        ) {
             self.start_clipboard_paste(request);
         }
     }
@@ -496,10 +499,19 @@ fn failed_clipboard_paste_completion(
     }
 }
 
+fn take_pending_clipboard_paste_if_idle(
+    input_state: &mut crate::input::InputState,
+    clipboard_paste_active: bool,
+) -> Option<ClipboardPasteRequest> {
+    (!clipboard_paste_active)
+        .then(|| input_state.take_pending_clipboard_paste_request())
+        .flatten()
+}
+
 #[cfg(test)]
 mod transport_tests {
     use super::*;
-    use crate::input::state::PasteAnchor;
+    use crate::input::state::{PasteAnchor, test_support::make_test_input_state};
     use crate::util::Rect;
 
     fn request(id: u64) -> ClipboardPasteRequest {
@@ -537,5 +549,24 @@ mod transport_tests {
             completion.result,
             ClipboardPasteResult::ClipboardError(ref reason) if reason == "disconnected"
         ));
+    }
+
+    #[test]
+    fn active_paste_transport_defers_the_newest_pending_request() {
+        let mut input_state = make_test_input_state();
+        let superseded = input_state.request_clipboard_paste();
+
+        assert!(
+            take_pending_clipboard_paste_if_idle(&mut input_state, true).is_none(),
+            "an active transport must not consume a newer paste request"
+        );
+
+        let newest = input_state.request_clipboard_paste();
+        assert_ne!(newest.id, superseded.id);
+        assert!(take_pending_clipboard_paste_if_idle(&mut input_state, true).is_none());
+        assert_eq!(
+            take_pending_clipboard_paste_if_idle(&mut input_state, false),
+            Some(newest)
+        );
     }
 }

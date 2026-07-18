@@ -1,5 +1,7 @@
 use super::*;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+use std::thread;
 
 #[test]
 fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {

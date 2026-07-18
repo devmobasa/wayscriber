@@ -9,8 +9,6 @@ use log::{debug, warn};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 #[cfg(feature = "tray")]
-use std::sync::atomic::Ordering;
-#[cfg(feature = "tray")]
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
@@ -20,11 +18,10 @@ use std::time::Duration;
 use zbus::{Connection, Proxy};
 
 #[cfg(feature = "tray")]
-use super::super::types::OverlayActionIntents;
-#[cfg(feature = "tray")]
 use super::super::types::TrayStatusShared;
+use super::super::types::{DaemonControlEvent, OverlayActionPublisher, VisibilityPublisher};
 #[cfg(feature = "tray")]
-use super::WayscriberTray;
+use super::{TrayControl, WayscriberTray};
 #[cfg(feature = "tray")]
 use crate::config::{Config, TrayIconStyle};
 #[cfg(feature = "tray")]
@@ -93,29 +90,29 @@ pub(super) fn update_session_resume_in_config(target_enabled: bool, fallback: bo
 /// System tray implementation
 #[cfg(feature = "tray")]
 pub(crate) fn start_system_tray(
-    toggle_flag: Arc<AtomicBool>,
-    quit_flag: Arc<AtomicBool>,
+    visibility: VisibilityPublisher,
+    action: OverlayActionPublisher,
+    quit: DaemonControlEvent,
     overlay_active: Arc<AtomicBool>,
-    action_intents: Arc<OverlayActionIntents>,
     tray_status: Arc<TrayStatusShared>,
-    daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
 ) -> Result<JoinHandle<()>> {
     let configurator_binary =
         std::env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
     let (session_resume_enabled, icon_style) = load_tray_settings_from_config();
 
-    let tray_quit_flag = quit_flag.clone();
-    let tray = WayscriberTray {
-        toggle_flag,
-        quit_flag: tray_quit_flag.clone(),
+    let tray_quit = quit.clone();
+    let tray = WayscriberTray::new(
+        TrayControl {
+            visibility,
+            action,
+            quit: quit.clone(),
+        },
         configurator_binary,
         session_resume_enabled,
         icon_style,
         overlay_active,
-        action_intents,
-        tray_status: tray_status.clone(),
-        daemon_wake: daemon_wake.clone(),
-    };
+        tray_status.clone(),
+    );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
 
     info!("Creating tray service...");
@@ -156,7 +153,7 @@ pub(crate) fn start_system_tray(
                             }
                             last_revision = revision;
                         }
-                        if tray_quit_flag.load(Ordering::Acquire) {
+                        if tray_quit.is_raised() {
                             info!("Quit signal received - shutting down system tray");
                             let _ = handle.shutdown().await;
                             break;
@@ -182,8 +179,9 @@ pub(crate) fn start_system_tray(
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
             warn!("Timed out waiting for system tray to start");
-            quit_flag.store(true, Ordering::Release);
-            let _ = daemon_wake.wake();
+            if let Err(error) = quit.raise("tray startup timeout") {
+                warn!("Failed to wake daemon after tray startup timeout: {error}");
+            }
             let _ = tray_thread.join();
             Err(anyhow!("Timed out waiting for system tray to start"))
         }
@@ -198,12 +196,11 @@ pub(crate) fn start_system_tray(
 
 #[cfg(not(feature = "tray"))]
 pub(crate) fn start_system_tray(
-    _toggle_flag: Arc<AtomicBool>,
-    _quit_flag: Arc<AtomicBool>,
+    _visibility: VisibilityPublisher,
+    _action: OverlayActionPublisher,
+    _quit: DaemonControlEvent,
     _overlay_active: Arc<AtomicBool>,
-    _action_intents: Arc<super::super::types::OverlayActionIntents>,
     _tray_status: (),
-    _daemon_wake: crate::backend::wayland::RuntimeWakeHandle,
 ) -> Result<JoinHandle<()>> {
     info!("Tray feature disabled; skipping system tray startup");
     Ok(thread::spawn(|| ()))
