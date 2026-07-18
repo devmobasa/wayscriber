@@ -11,7 +11,10 @@ use super::execution::{
     ProcessGroupChild, kill_child_process_group, publish_bounded, run_bounded, status_code,
     supports_retained_publication, terminate_owned_children,
 };
-use super::transport::{decode_blob, encode_blob, recv_packet, send_packet, shutdown_requested};
+use super::transport::{
+    decode_blob, encode_blob, recv_packet, send_packet, shutdown_requested,
+    take_graceful_shutdown_signal,
+};
 use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
     BlobWire, BrokerOperation, BrokerOutcome, BrokerRequest, BrokerResponse, BrokerWireResponse,
@@ -82,6 +85,7 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
     let mut ownership = BrokerOwnership::default();
     loop {
         if wait_for_request(socket, shutdown_fd)? == BrokerWake::Shutdown {
+            ownership.release_retained_publication();
             return Ok(());
         }
         let (packet, descriptors) = recv_packet(socket)?;
@@ -132,7 +136,8 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
             .map(AsRawFd::as_raw_fd)
             .collect::<Vec<_>>();
         send_packet(socket, &bytes, &response_descriptors)?;
-        if shutdown_requested(shutdown_fd)? {
+        if take_graceful_shutdown_signal(shutdown_fd)? {
+            ownership.release_retained_publication();
             return Ok(());
         }
     }
@@ -167,14 +172,15 @@ fn wait_for_request(socket: RawFd, shutdown_fd: RawFd) -> io::Result<BrokerWake>
             }
             return Err(error);
         }
-        if descriptors[1].revents & (libc::POLLIN | libc::POLLHUP | libc::POLLERR) != 0 {
+        if descriptors[1].revents & libc::POLLIN != 0 && take_graceful_shutdown_signal(shutdown_fd)?
+        {
             return Ok(BrokerWake::Shutdown);
         }
         if descriptors[0].revents & libc::POLLIN != 0 {
             return Ok(BrokerWake::Request);
         }
         if descriptors[0].revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0
-            || descriptors[1].revents & libc::POLLNVAL != 0
+            || descriptors[1].revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0
         {
             return Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
@@ -201,6 +207,17 @@ impl BrokerOwnership {
         if let Some(mut previous) = self.retained_publication.replace(child) {
             kill_child_process_group(&mut previous);
             let _ = previous.wait();
+        }
+    }
+
+    /// Hands a successful clipboard provider over to Wayland selection lifetime.
+    ///
+    /// The retained leader is already terminal, so reaping it cannot block. Its
+    /// background provider remains in the process group until the compositor
+    /// cancels or replaces the selection.
+    fn release_retained_publication(&mut self) {
+        if let Some(mut publication) = self.retained_publication.take() {
+            let _ = publication.wait();
         }
     }
 }
@@ -505,4 +522,144 @@ fn canonical_lower_hex(value: &str, length: usize) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::fd::FromRawFd;
+
+    fn test_socket_pair() -> (OwnedFd, OwnedFd) {
+        let mut sockets = [0; 2];
+        // SAFETY: sockets has room for both returned descriptors.
+        assert_eq!(
+            unsafe {
+                libc::socketpair(
+                    libc::AF_UNIX,
+                    libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC,
+                    0,
+                    sockets.as_mut_ptr(),
+                )
+            },
+            0
+        );
+        // SAFETY: socketpair returned two fresh owned descriptors.
+        unsafe {
+            (
+                OwnedFd::from_raw_fd(sockets[0]),
+                OwnedFd::from_raw_fd(sockets[1]),
+            )
+        }
+    }
+
+    #[test]
+    fn shutdown_channel_hangup_is_not_a_graceful_shutdown() {
+        let (_control_writer, control_reader) = test_socket_pair();
+        let (shutdown_writer, shutdown_reader) = test_socket_pair();
+        drop(shutdown_writer);
+
+        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        {
+            Ok(_) => panic!("hangup must unwind through destructive broker cleanup"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+    }
+
+    #[test]
+    fn graceful_shutdown_packet_is_accepted_before_peer_hangup() {
+        let (_control_writer, control_reader) = test_socket_pair();
+        let (shutdown_writer, shutdown_reader) = test_socket_pair();
+        let signal = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE];
+        // SAFETY: both the descriptor and one-byte buffer are valid.
+        assert_eq!(
+            unsafe {
+                libc::send(
+                    shutdown_writer.as_raw_fd(),
+                    signal.as_ptr().cast(),
+                    signal.len(),
+                    libc::MSG_NOSIGNAL,
+                )
+            },
+            1
+        );
+        drop(shutdown_writer);
+
+        assert!(matches!(
+            wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd()),
+            Ok(BrokerWake::Shutdown)
+        ));
+    }
+
+    #[test]
+    fn malformed_shutdown_packet_is_not_a_graceful_shutdown() {
+        let (_control_writer, control_reader) = test_socket_pair();
+        let (shutdown_writer, shutdown_reader) = test_socket_pair();
+        let invalid = [2_u8];
+        // SAFETY: both the descriptor and one-byte buffer are valid.
+        assert_eq!(
+            unsafe {
+                libc::send(
+                    shutdown_writer.as_raw_fd(),
+                    invalid.as_ptr().cast(),
+                    invalid.len(),
+                    libc::MSG_NOSIGNAL,
+                )
+            },
+            1
+        );
+
+        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        {
+            Ok(_) => panic!("invalid packet must not authorize ownership release"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn oversized_shutdown_packet_is_not_a_graceful_shutdown() {
+        let (_control_writer, control_reader) = test_socket_pair();
+        let (shutdown_writer, shutdown_reader) = test_socket_pair();
+        let invalid = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE; 2];
+        // SAFETY: both the descriptor and two-byte buffer are valid.
+        assert_eq!(
+            unsafe {
+                libc::send(
+                    shutdown_writer.as_raw_fd(),
+                    invalid.as_ptr().cast(),
+                    invalid.len(),
+                    libc::MSG_NOSIGNAL,
+                )
+            },
+            2
+        );
+
+        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        {
+            Ok(_) => panic!("oversized packet must not authorize ownership release"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn abnormal_ownership_drop_kills_a_retained_provider() {
+        let mut command = std::process::Command::new("sleep");
+        command.arg("30").process_group(0);
+        let child = command.spawn().unwrap();
+        let pid = i32::try_from(child.id()).unwrap();
+        let ownership = BrokerOwnership {
+            children: BTreeMap::new(),
+            retained_publication: Some(child),
+        };
+
+        drop(ownership);
+
+        // SAFETY: signal zero only probes the test-owned provider after teardown.
+        assert_ne!(unsafe { libc::kill(pid, 0) }, 0);
+    }
 }

@@ -8,7 +8,9 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 
 use super::execution::supports_retained_publication;
-use super::transport::{decode_blob, encode_blob, recv_packet, send_packet, set_socket_timeout};
+use super::transport::{
+    GRACEFUL_SHUTDOWN_BYTE, decode_blob, encode_blob, recv_packet, send_packet, set_socket_timeout,
+};
 use super::wire::{
     BlobWire, BrokerOperation, BrokerOutcome, BrokerOutput, BrokerRequest, BrokerResponse,
     HelperKind, HelperLifetime, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, MAX_PACKET_BYTES, OsWire,
@@ -114,7 +116,7 @@ impl Drop for ProcessBrokerGuard {
 }
 
 fn signal_shutdown(descriptor: RawFd) -> std::io::Result<()> {
-    let byte = [1_u8];
+    let byte = [GRACEFUL_SHUTDOWN_BYTE];
     loop {
         // SAFETY: descriptor is the broker shutdown socket and byte is readable.
         let written = unsafe {

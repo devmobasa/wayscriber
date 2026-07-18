@@ -43,8 +43,12 @@ group leaves the broker alive long enough to perform that cleanup. Complete help
 exceeds its declared cap fails the operation; the explicit `wl-paste` prefix mode instead returns a
 bounded sample and stops its helper as soon as the requested prefix is complete. Screenshot helpers
 use a larger but still bounded 256 MiB cap so large valid compositor captures are not returned as
-truncated PNG data. Retained `wl-copy` publication uses that same cap, and both its input writer and
-retained provider group are cancelled when broker shutdown begins.
+truncated PNG data. Retained `wl-copy` publication uses that same cap. Failed, stalled, or
+shutdown-interrupted publication groups are cancelled, while the latest successful provider is
+tracked for replacement during the runtime. Normal broker shutdown reaps its already-terminal
+leader without signaling the background provider group, allowing the Wayland selection to outlive
+an auto-exiting overlay. Only receipt of the exact graceful-shutdown packet authorizes that handoff;
+channel hangup, channel error, and abnormal broker teardown still kill a retained provider group.
 
 Overlay startup uses a CSPRNG generation passed only to the candidate. After the candidate wins the
 overlay singleton lock it publishes a private readiness record containing its generation, PID, and

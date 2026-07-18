@@ -5,6 +5,28 @@ use std::time::{Duration, Instant};
 
 use super::*;
 
+fn release_test_provider(
+    release_path: &std::path::Path,
+    proof_path: &std::path::Path,
+    provider_pid: i32,
+) {
+    std::fs::write(release_path, b"release").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        if std::fs::read(proof_path).is_ok_and(|bytes| bytes == b"survived") {
+            return;
+        }
+        if Instant::now() >= deadline {
+            // SAFETY: cleanup keeps a failing regression test from leaking its provider.
+            unsafe {
+                libc::kill(provider_pid, libc::SIGKILL);
+            }
+            panic!("successful provider could not act after normal broker shutdown");
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 #[test]
 fn configurator_manifest_preserves_arbitrary_explicit_override_name() {
     let _guard = crate::test_env::lock();
@@ -315,7 +337,48 @@ fn operation_bound_run_terminates_descendants_that_retain_pipes() {
 }
 
 #[test]
-fn retained_publication_preserves_successful_provider_descendant() {
+fn normal_broker_shutdown_releases_successful_provider_descendant() {
+    let guard = start_for_runtime().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let release_path = temp.path().join("release-provider");
+    let proof_path = temp.path().join("provider-survived");
+    let pid_path = temp.path().join("provider.pid");
+    let output = guard
+        .broker()
+        .publish(
+            HelperKind::TestShell,
+            OsStr::new("sh"),
+            [
+                OsStr::new("-c"),
+                OsStr::new(
+                    "(while [ ! -e \"$1\" ]; do sleep 0.01; done; printf survived > \"$2\") & echo $! > \"$3\"",
+                ),
+                OsStr::new("sh"),
+                release_path.as_os_str(),
+                proof_path.as_os_str(),
+                pid_path.as_os_str(),
+            ],
+            Vec::new(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+    assert_eq!(output.status, 0);
+    assert!(!output.timed_out);
+    let provider_pid = std::fs::read_to_string(pid_path)
+        .unwrap()
+        .trim()
+        .parse::<i32>()
+        .unwrap();
+    // SAFETY: signal zero only checks the test-owned provider.
+    assert_eq!(unsafe { libc::kill(provider_pid, 0) }, 0);
+
+    drop(guard);
+
+    release_test_provider(&release_path, &proof_path, provider_pid);
+}
+
+#[test]
+fn shutdown_channel_peer_loss_kills_retained_provider() {
     let guard = start_for_runtime().unwrap();
     let temp = crate::test_temp::tempdir().unwrap();
     let pid_path = temp.path().join("provider.pid");
@@ -335,7 +398,6 @@ fn retained_publication_preserves_successful_provider_descendant() {
         )
         .unwrap();
     assert_eq!(output.status, 0);
-    assert!(!output.timed_out);
     let provider_pid = std::fs::read_to_string(pid_path)
         .unwrap()
         .trim()
@@ -344,6 +406,12 @@ fn retained_publication_preserves_successful_provider_descendant() {
     // SAFETY: signal zero only checks the test-owned provider.
     assert_eq!(unsafe { libc::kill(provider_pid, 0) }, 0);
 
+    // Simulate abrupt parent loss without writing the graceful-shutdown packet.
+    // SAFETY: the descriptor belongs to this test's live broker guard.
+    assert_eq!(
+        unsafe { libc::shutdown(guard.broker().inner.shutdown.as_raw_fd(), libc::SHUT_RDWR) },
+        0
+    );
     drop(guard);
 
     let deadline = Instant::now() + Duration::from_secs(1);
@@ -353,11 +421,11 @@ fn retained_publication_preserves_successful_provider_descendant() {
             break;
         }
         if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its helper.
+            // SAFETY: cleanup keeps a failing regression test from leaking its provider.
             unsafe {
                 libc::kill(provider_pid, libc::SIGKILL);
             }
-            panic!("successful publication provider survived broker shutdown");
+            panic!("provider survived abnormal broker channel loss");
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -369,25 +437,44 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
     let temp = crate::test_temp::tempdir().unwrap();
     let first_pid_path = temp.path().join("first-provider.pid");
     let second_pid_path = temp.path().join("second-provider.pid");
-
-    for pid_path in [&first_pid_path, &second_pid_path] {
-        let output = guard
-            .broker()
-            .publish(
-                HelperKind::TestShell,
+    let second_release_path = temp.path().join("release-second-provider");
+    let second_proof_path = temp.path().join("second-provider-survived");
+    let first = guard
+        .broker()
+        .publish(
+            HelperKind::TestShell,
+            OsStr::new("sh"),
+            [
+                OsStr::new("-c"),
+                OsStr::new("sleep 30 & echo $! > \"$1\""),
                 OsStr::new("sh"),
-                [
-                    OsStr::new("-c"),
-                    OsStr::new("sleep 30 & echo $! > \"$1\""),
-                    OsStr::new("sh"),
-                    pid_path.as_os_str(),
-                ],
-                Vec::new(),
-                Duration::from_secs(2),
-            )
-            .unwrap();
-        assert_eq!(output.status, 0);
-    }
+                first_pid_path.as_os_str(),
+            ],
+            Vec::new(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+    assert_eq!(first.status, 0);
+    let second = guard
+        .broker()
+        .publish(
+            HelperKind::TestShell,
+            OsStr::new("sh"),
+            [
+                OsStr::new("-c"),
+                OsStr::new(
+                    "(while [ ! -e \"$1\" ]; do sleep 0.01; done; printf survived > \"$2\") & echo $! > \"$3\"",
+                ),
+                OsStr::new("sh"),
+                second_release_path.as_os_str(),
+                second_proof_path.as_os_str(),
+                second_pid_path.as_os_str(),
+            ],
+            Vec::new(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+    assert_eq!(second.status, 0);
 
     let first_pid = std::fs::read_to_string(first_pid_path)
         .unwrap()
@@ -419,22 +506,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
     assert_eq!(unsafe { libc::kill(second_pid, 0) }, 0);
 
     drop(guard);
-
-    let deadline = Instant::now() + Duration::from_secs(1);
-    loop {
-        // SAFETY: signal zero only probes the recorded test provider PID.
-        if unsafe { libc::kill(second_pid, 0) } != 0 {
-            break;
-        }
-        if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its helper.
-            unsafe {
-                libc::kill(second_pid, libc::SIGKILL);
-            }
-            panic!("current publication provider survived broker shutdown");
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    release_test_provider(&second_release_path, &second_proof_path, second_pid);
 }
 
 #[test]
@@ -443,6 +515,8 @@ fn failed_publication_replacement_preserves_the_current_provider() {
     let temp = crate::test_temp::tempdir().unwrap();
     let current_pid_path = temp.path().join("current-provider.pid");
     let failed_pid_path = temp.path().join("failed-provider.pid");
+    let current_release_path = temp.path().join("release-current-provider");
+    let current_proof_path = temp.path().join("current-provider-survived");
     let current = guard
         .broker()
         .publish(
@@ -450,8 +524,12 @@ fn failed_publication_replacement_preserves_the_current_provider() {
             OsStr::new("sh"),
             [
                 OsStr::new("-c"),
-                OsStr::new("sleep 30 & echo $! > \"$1\""),
+                OsStr::new(
+                    "(while [ ! -e \"$1\" ]; do sleep 0.01; done; printf survived > \"$2\") & echo $! > \"$3\"",
+                ),
                 OsStr::new("sh"),
+                current_release_path.as_os_str(),
+                current_proof_path.as_os_str(),
                 current_pid_path.as_os_str(),
             ],
             Vec::new(),
@@ -507,22 +585,7 @@ fn failed_publication_replacement_preserves_the_current_provider() {
     }
 
     drop(guard);
-
-    let deadline = Instant::now() + Duration::from_secs(1);
-    loop {
-        // SAFETY: signal zero only probes the current test provider PID.
-        if unsafe { libc::kill(current_pid, 0) } != 0 {
-            break;
-        }
-        if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its helper.
-            unsafe {
-                libc::kill(current_pid, libc::SIGKILL);
-            }
-            panic!("current provider survived broker shutdown");
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    release_test_provider(&current_release_path, &current_proof_path, current_pid);
 }
 
 #[test]
@@ -593,7 +656,35 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
     let guard = start_for_runtime().unwrap();
     let broker = guard.broker().clone();
     let temp = crate::test_temp::tempdir().unwrap();
+    let current_pid_path = temp.path().join("current-provider.pid");
+    let current_release_path = temp.path().join("release-current-provider");
+    let current_proof_path = temp.path().join("current-provider-survived");
     let pid_path = temp.path().join("provider.pid");
+    let current = guard
+        .broker()
+        .publish(
+            HelperKind::TestShell,
+            OsStr::new("sh"),
+            [
+                OsStr::new("-c"),
+                OsStr::new(
+                    "(while [ ! -e \"$1\" ]; do sleep 0.01; done; printf survived > \"$2\") & echo $! > \"$3\"",
+                ),
+                OsStr::new("sh"),
+                current_release_path.as_os_str(),
+                current_proof_path.as_os_str(),
+                current_pid_path.as_os_str(),
+            ],
+            Vec::new(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+    assert_eq!(current.status, 0);
+    let current_pid = std::fs::read_to_string(current_pid_path)
+        .unwrap()
+        .trim()
+        .parse::<i32>()
+        .unwrap();
     let publication = std::thread::spawn({
         let pid_path = pid_path.clone();
         move || {
@@ -632,6 +723,7 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
         "broker shutdown waited for the publication deadline"
     );
     assert!(publication.join().unwrap().is_err());
+    release_test_provider(&current_release_path, &current_proof_path, current_pid);
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
         // SAFETY: signal zero only probes the recorded test child PID.

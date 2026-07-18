@@ -10,6 +10,8 @@ use super::wire::{
     REQUIRED_MEMFD_SEALS,
 };
 
+pub(super) const GRACEFUL_SHUTDOWN_BYTE: u8 = 1;
+
 pub(super) fn set_socket_timeout(fd: RawFd, timeout: Duration) -> io::Result<()> {
     let timeout = timeout.max(Duration::from_millis(1));
     let value = libc::timeval {
@@ -53,6 +55,78 @@ pub(super) fn shutdown_requested(descriptor: RawFd) -> io::Result<bool> {
         ));
     }
     Ok(pollfd.revents & (libc::POLLIN | libc::POLLHUP | libc::POLLERR) != 0)
+}
+
+pub(super) fn take_graceful_shutdown_signal(descriptor: RawFd) -> io::Result<bool> {
+    let mut pollfd = libc::pollfd {
+        fd: descriptor,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    loop {
+        // SAFETY: pollfd points to one initialized entry.
+        let result = unsafe { libc::poll(&mut pollfd, 1, 0) };
+        if result < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error);
+        }
+        if result == 0 {
+            return Ok(false);
+        }
+        if pollfd.revents & libc::POLLNVAL != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "broker shutdown channel became invalid",
+            ));
+        }
+        if pollfd.revents & libc::POLLIN != 0 {
+            return receive_graceful_shutdown_signal(descriptor);
+        }
+        if pollfd.revents & (libc::POLLHUP | libc::POLLERR) != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "broker shutdown channel closed without a graceful signal",
+            ));
+        }
+        return Ok(false);
+    }
+}
+
+fn receive_graceful_shutdown_signal(descriptor: RawFd) -> io::Result<bool> {
+    let mut byte = 0_u8;
+    loop {
+        // MSG_TRUNC makes an oversized SOCK_SEQPACKET message report its full length.
+        // SAFETY: byte is a valid one-byte destination for this live broker socket.
+        let received = unsafe {
+            libc::recv(
+                descriptor,
+                (&mut byte as *mut u8).cast(),
+                1,
+                libc::MSG_DONTWAIT | libc::MSG_TRUNC,
+            )
+        };
+        if received < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error);
+        }
+        if received == 1 && byte == GRACEFUL_SHUTDOWN_BYTE {
+            return Ok(true);
+        }
+        return Err(io::Error::new(
+            if received == 0 {
+                io::ErrorKind::BrokenPipe
+            } else {
+                io::ErrorKind::InvalidData
+            },
+            "broker shutdown channel did not contain the graceful signal",
+        ));
+    }
 }
 
 pub(super) fn encode_blob(bytes: Vec<u8>, cap: usize) -> Result<(BlobWire, Option<OwnedFd>)> {
