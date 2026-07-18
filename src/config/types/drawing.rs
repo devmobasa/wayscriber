@@ -705,6 +705,11 @@ fn default_color() -> ColorSpec {
     ColorSpec::Name("red".to_string())
 }
 
+/// Tuned default palette for the R/G/B/Y/O/P/W/K shortcut slots. Named colors
+/// are used deliberately so the slots resolve through the shared tuned palette
+/// constants in `domain::color` and bit-match `default_color = "red"` as well
+/// as the board auto-adjust pen colors (swatch selection relies on exact color
+/// equality).
 fn default_shortcut_quick_color_entries() -> Vec<QuickColorConfig> {
     [
         ("Red", "red"),

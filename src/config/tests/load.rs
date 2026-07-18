@@ -192,15 +192,15 @@ fn drawing_quick_colors_missing_shortcut_slots_backfill_defaults() {
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorRed),
-        Some(crate::draw::color::BLUE)
+        Some(tuned_default("#3584E4"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorGreen),
-        Some(crate::draw::color::GREEN)
+        Some(tuned_default("#2EC27E"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorBlack),
-        Some(crate::draw::color::BLACK)
+        Some(tuned_default("#241F31"))
     );
 }
 
@@ -323,35 +323,35 @@ fn drawing_quick_color_actions_stay_limited_to_first_eight_slots() {
 
     assert_eq!(
         palette.color_for_action(Action::SetColorRed),
-        Some(crate::draw::color::RED)
+        Some(tuned_default("#F5333F"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorGreen),
-        Some(crate::draw::color::GREEN)
+        Some(tuned_default("#2EC27E"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorBlue),
-        Some(crate::draw::color::BLUE)
+        Some(tuned_default("#3584E4"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorYellow),
-        Some(crate::draw::color::YELLOW)
+        Some(tuned_default("#F6D32D"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorOrange),
-        Some(crate::draw::color::ORANGE)
+        Some(tuned_default("#FF7800"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorPink),
-        Some(crate::draw::color::PINK)
+        Some(tuned_default("#C061CB"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorWhite),
-        Some(crate::draw::color::WHITE)
+        Some(tuned_default("#FFFFFF"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorBlack),
-        Some(crate::draw::color::BLACK)
+        Some(tuned_default("#241F31"))
     );
     assert_eq!(QuickColorPalette::action_for_index(8), None);
     assert_eq!(QuickColorPalette::action_for_index(9), None);
@@ -393,8 +393,33 @@ fn drawing_quick_colors_invalid_hash_hex_warns_and_falls_back_red() {
     .expect("invalid hash-looking hex strings keep load compatibility");
 
     let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
-    assert_eq!(palette.color_for_index(0), Some(crate::draw::color::RED));
-    assert_eq!(palette.color_for_index(1), Some(crate::draw::color::RED));
+    assert_eq!(palette.color_for_index(0), Some(tuned_default("#F5333F")));
+    assert_eq!(palette.color_for_index(1), Some(tuned_default("#F5333F")));
+}
+
+#[test]
+fn named_colors_bit_match_default_quick_color_slots() {
+    let palette = QuickColorPalette::default();
+
+    for (index, name) in [
+        "red", "green", "blue", "yellow", "orange", "pink", "white", "black",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            Some(ColorSpec::Name(name.to_string()).to_color()),
+            palette.color_for_index(index),
+            "named '{name}' must bit-match default quick color slot {index}"
+        );
+    }
+
+    // The startup pen color is `default_color = "red"`; it must bit-match
+    // slot 0 so the swatch selection ring is shown on default configs.
+    assert_eq!(
+        Some(DrawingConfig::default().default_color.to_color()),
+        palette.color_for_index(0)
+    );
 }
 
 #[test]
@@ -413,6 +438,12 @@ fn pdf_transparent_background_defaults_to_none() {
         Config::default().export.pdf.transparent_background,
         PdfTransparentBackground::None
     );
+}
+
+/// Resolves one of the tuned built-in palette hex values exactly like
+/// `ColorSpec::to_color`, so assertions can compare with `==`.
+fn tuned_default(hex: &str) -> crate::draw::Color {
+    crate::util::parse_config_hex_color(hex).expect("tuned default hex is valid")
 }
 
 fn color_approx_eq(a: &crate::draw::Color, b: &crate::draw::Color) -> bool {

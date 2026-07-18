@@ -47,6 +47,7 @@ Controls the default appearance of annotations.
 [drawing]
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
 # Or #RRGGBB hex: "#FFB3BA"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
@@ -99,38 +100,40 @@ tab_drag_tool = "ellipse"
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
 # to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays.
+# arrays. The hex values below are the tuned built-in defaults; named colors
+# ("red", "green", ...) resolve to these same tuned values, so named entries,
+# the default pen color, and board auto-adjust pens all match these swatches.
 [[drawing.quick_colors]]
 label = "Red"
-color = "red"
+color = "#F5333F"
 
 [[drawing.quick_colors]]
 label = "Green"
-color = "green"
+color = "#2EC27E"
 
 [[drawing.quick_colors]]
 label = "Blue"
-color = "blue"
+color = "#3584E4"
 
 [[drawing.quick_colors]]
 label = "Yellow"
-color = "yellow"
+color = "#F6D32D"
 
 [[drawing.quick_colors]]
 label = "Orange"
-color = "orange"
+color = "#FF7800"
 
 [[drawing.quick_colors]]
 label = "Pink"
-color = "pink"
+color = "#C061CB"
 
 [[drawing.quick_colors]]
 label = "White"
-color = "white"
+color = "#FFFFFF"
 
 [[drawing.quick_colors]]
 label = "Black"
-color = "black"
+color = "#241F31"
 
 [[drawing.quick_colors]]
 label = "Cyan"
@@ -165,13 +168,14 @@ drag_tool = "default"
 ```
 
 **Color Options:**
-- **Named colors**: `"red"`, `"green"`, `"blue"`, `"yellow"`, `"orange"`, `"pink"`, `"white"`, `"black"`
+- **Named colors**: `"red"` (`#F5333F`), `"green"` (`#2EC27E`), `"blue"` (`#3584E4`), `"yellow"` (`#F6D32D`), `"orange"` (`#FF7800`), `"pink"` (`#C061CB`), `"white"` (`#FFFFFF`), `"black"` (`#241F31`) — named colors resolve to the tuned quick color palette
 - **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
 
 **Quick Colors:**
 - `[[drawing.quick_colors]]` entries define an ordered palette.
 - The first eight entries are selected by <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; missing first-eight entries fall back to built-in defaults.
+- The built-in defaults use the tuned hex palette shown above (`#F5333F`, `#2EC27E`, `#3584E4`, `#F6D32D`, `#FF7800`, `#C061CB`, `#FFFFFF`, `#241F31`). Named colors resolve to the same tuned values, so `default_color = "red"`, named quick color entries, and board auto-adjust pen colors all select the matching swatch.
 - The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors, while the radial menu keeps the original first-eight color ring.
 - Extra entries have no quick-color action binding; explicit extra entries appear in toolbar and radial palette UIs, capped to the first 24 colors.
 - Help overlay badges are shown for the first eight shortcut-backed entries only.
@@ -795,7 +799,8 @@ persist = true
 id = "whiteboard"
 name = "Whiteboard"
 background = { rgb = [0.992, 0.992, 0.992] }
-default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+# Tuned black #241F31; the built-in default bit-matches the "black" quick color
+default_pen_color = { rgb = [0.141, 0.122, 0.192] }
 auto_adjust_pen = true
 
 [[boards.items]]

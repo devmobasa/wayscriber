@@ -504,23 +504,19 @@ mod tests {
 
         let _ = app.handle_text_changed(TextField::QuickColorLabel(0), "RedNew".to_string());
 
+        // The built-in defaults are named colors resolving to the tuned
+        // palette, so the slots stay on their named values after a label edit.
+        assert_eq!(app.draft.drawing_quick_colors.entries[0].color.name, "red");
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[1].color.name,
+            "green"
+        );
+        assert_eq!(app.draft.drawing_quick_colors.entries[2].color.name, "blue");
         assert_eq!(
             app.draft.drawing_quick_colors.entries[0]
                 .color
                 .selected_named,
             NamedColorOption::Red
-        );
-        assert_eq!(
-            app.draft.drawing_quick_colors.entries[1]
-                .color
-                .selected_named,
-            NamedColorOption::Green
-        );
-        assert_eq!(
-            app.draft.drawing_quick_colors.entries[2]
-                .color
-                .selected_named,
-            NamedColorOption::Blue
         );
     }
 }

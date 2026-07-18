@@ -97,8 +97,8 @@ pub const TEXT_DESCRIPTION: (f64, f64, f64, f64) = (0.65, 0.68, 0.73, 0.85);
 /// Hover state background (mouse hover)
 pub const BG_HOVER: (f64, f64, f64, f64) = (0.25, 0.32, 0.45, 0.9);
 
-/// Keyboard focus border color
-pub const BORDER_FOCUS: (f64, f64, f64, f64) = (0.40, 0.60, 0.95, 0.9);
+/// Keyboard focus border color (lighter tint of the accent)
+pub const BORDER_FOCUS: (f64, f64, f64, f64) = (0.41, 0.72, 1.0, 0.9);
 
 /// Selection/highlight background
 pub const BG_SELECTION: (f64, f64, f64, f64) = (0.22, 0.28, 0.38, 0.9);
@@ -106,11 +106,14 @@ pub const BG_SELECTION: (f64, f64, f64, f64) = (0.22, 0.28, 0.38, 0.9);
 /// Active/selected item indicator
 pub const BG_SELECTED_INDICATOR: (f64, f64, f64, f64) = (0.33, 0.42, 0.58, 0.9);
 
-/// Accent color for highlights and active elements
-pub const ACCENT_PRIMARY: (f64, f64, f64, f64) = (0.30, 0.50, 0.80, 0.9);
+/// Accent color for highlights and active elements: #3584E4
+pub const ACCENT_PRIMARY: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.9);
 
-/// Command palette/input selection highlight
-pub const BG_INPUT_SELECTION: (f64, f64, f64, f64) = (0.30, 0.50, 0.80, 0.4);
+/// Lighter tint of the accent (hover feedback, bright borders)
+pub const ACCENT_BRIGHT: (f64, f64, f64, f64) = (0.41, 0.72, 1.0, 0.95);
+
+/// Command palette/input selection highlight (accent at reduced alpha)
+pub const BG_INPUT_SELECTION: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.4);
 
 // ============================================================================
 // INPUT ELEMENTS - Text inputs, search boxes
@@ -119,11 +122,11 @@ pub const BG_INPUT_SELECTION: (f64, f64, f64, f64) = (0.30, 0.50, 0.80, 0.4);
 /// Input field background
 pub const INPUT_BG: (f64, f64, f64, f64) = (0.10, 0.10, 0.12, 1.0);
 
-/// Input field border (focused)
-pub const INPUT_BORDER_FOCUSED: (f64, f64, f64, f64) = (0.30, 0.50, 0.80, 0.6);
+/// Input field border (focused): accent at reduced alpha
+pub const INPUT_BORDER_FOCUSED: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.6);
 
-/// Caret/cursor color
-pub const INPUT_CARET: (f64, f64, f64, f64) = (0.98, 0.92, 0.55, 1.0);
+/// Caret/cursor color (accent-bright, fully opaque for visibility)
+pub const INPUT_CARET: (f64, f64, f64, f64) = (0.41, 0.72, 1.0, 1.0);
 
 // ============================================================================
 // DIVIDERS AND SEPARATORS
@@ -171,18 +174,15 @@ pub const BLOCKED_FLASH: (f64, f64, f64) = (0.90, 0.20, 0.20);
 /// Progress bar track/background
 pub const PROGRESS_TRACK: (f64, f64, f64, f64) = (0.30, 0.30, 0.35, 1.0);
 
-/// Progress bar fill
-pub const PROGRESS_FILL: (f64, f64, f64, f64) = (0.40, 0.60, 1.0, 1.0);
+/// Progress bar fill (the accent)
+pub const PROGRESS_FILL: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 1.0);
 
 // ============================================================================
 // SPECIAL ELEMENT COLORS
 // ============================================================================
 
-/// Active board indicator (gold)
-pub const INDICATOR_ACTIVE_BOARD: (f64, f64, f64, f64) = (0.90, 0.83, 0.32, 0.95);
-
-/// Pin icon active (gold)
-pub const ICON_PIN_ACTIVE: (f64, f64, f64, f64) = (0.96, 0.82, 0.28, 0.95);
+/// Pin icon active (the accent - unified with other active states)
+pub const ICON_PIN_ACTIVE: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.95);
 
 /// Pin icon inactive
 pub const ICON_PIN_INACTIVE: (f64, f64, f64, f64) = (0.60, 0.65, 0.72, 0.5);

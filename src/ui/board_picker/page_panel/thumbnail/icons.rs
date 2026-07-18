@@ -47,7 +47,7 @@ pub(super) fn draw_duplicate_icon(ctx: &cairo::Context, x: f64, y: f64, size: f6
     let radius = size * 0.5;
 
     ctx.arc(x, y, radius, 0.0, PI * 2.0);
-    ctx.set_source_rgba(0.2, 0.6, 1.0, alpha);
+    ctx.set_source_rgba(0.2078, 0.5176, 0.8941, alpha);
     let _ = ctx.fill();
     ctx.set_source_rgba(1.0, 1.0, 1.0, alpha * 0.6);
     ctx.set_line_width(1.0);

@@ -375,27 +375,24 @@ impl SwatchButton {
         let draw_selected = selected_cell.clone();
         area.set_draw_func(move |_, ctx, width, height| {
             let size = width.min(height) as f64;
-            let center = size / 2.0;
             let (r, g, b, a) = draw_color.get();
-            // Fill circle with a subtle outline; selected swatches get the
-            // white ring the built-in bars use.
-            ctx.arc(
-                center,
-                center,
-                center - 2.0,
-                0.0,
-                std::f64::consts::PI * 2.0,
-            );
+            // Rounded square with a subtle inner hairline, matching the
+            // built-in bars. The fill is inset so the selected accent ring
+            // (2px stroke, ~2px gap) fits inside the drawing area.
             ctx.set_source_rgba(r, g, b, a);
-            let _ = ctx.fill_preserve();
-            if draw_selected.get() {
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                ctx.set_line_width(2.0);
-            } else {
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.25);
-                ctx.set_line_width(1.0);
-            }
+            rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+            let _ = ctx.fill();
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.16);
+            ctx.set_line_width(1.0);
+            rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
             let _ = ctx.stroke();
+            if draw_selected.get() {
+                let (ar, ag, ab, aa) = super::css::ACCENT;
+                ctx.set_source_rgba(ar, ag, ab, aa);
+                ctx.set_line_width(2.0);
+                rounded_rect_path(ctx, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
+                let _ = ctx.stroke();
+            }
         });
         button.set_child(Some(&area));
         Self {
@@ -471,18 +468,21 @@ impl SliderRow {
             let t = ((draw_state.value.get() - draw_state.min) / (draw_state.max - draw_state.min))
                 .clamp(0.0, 1.0);
             // Track
+            let (tr, tg, tb, ta) = super::css::TRACK_BACKGROUND;
             rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
-            ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+            ctx.set_source_rgba(tr, tg, tb, ta);
             let _ = ctx.fill();
-            // Filled portion
+            // Filled portion (accent at reduced alpha)
+            let (ar, ag, ab, _) = super::css::ACCENT;
             rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
-            ctx.set_source_rgba(0.3, 0.55, 1.0, 0.55);
+            ctx.set_source_rgba(ar, ag, ab, 0.55);
             let _ = ctx.fill();
             // Knob
+            let (kr, kg, kb, ka) = super::css::TRACK_KNOB;
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = knob_r + t * (w - knob_r * 2.0);
             ctx.arc(knob_x, h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            ctx.set_source_rgba(0.3, 0.55, 1.0, 0.9);
+            ctx.set_source_rgba(kr, kg, kb, ka);
             let _ = ctx.fill();
         });
 

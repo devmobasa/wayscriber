@@ -10,9 +10,12 @@ pub enum ConfigHexColorError {
 /// Maps color name strings to Color values.
 ///
 /// Used by the configuration system to parse color names from the config file.
+/// Names resolve to the shared tuned palette constants in `domain::color`, so
+/// named colors bit-match the built-in quick color slot defaults.
 ///
 /// # Supported Names (case-insensitive)
-/// - "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+/// - "red" `#F5333F`, "green" `#2EC27E`, "blue" `#3584E4`, "yellow" `#F6D32D`,
+///   "orange" `#FF7800`, "pink" `#C061CB`, "white" `#FFFFFF`, "black" `#241F31`
 ///
 /// # Arguments
 /// * `name` - Color name string
@@ -22,14 +25,14 @@ pub enum ConfigHexColorError {
 /// - `None` if the name is not recognized
 pub fn name_to_color(name: &str) -> Option<Color> {
     match name.to_lowercase().as_str() {
-        "red" => Some(RED),
-        "green" => Some(GREEN),
-        "blue" => Some(BLUE),
-        "yellow" => Some(YELLOW),
-        "orange" => Some(ORANGE),
-        "pink" => Some(PINK),
-        "white" => Some(WHITE),
-        "black" => Some(BLACK),
+        "red" => Some(PALETTE_RED),
+        "green" => Some(PALETTE_GREEN),
+        "blue" => Some(PALETTE_BLUE),
+        "yellow" => Some(PALETTE_YELLOW),
+        "orange" => Some(PALETTE_ORANGE),
+        "pink" => Some(PALETTE_PINK),
+        "white" => Some(PALETTE_WHITE),
+        "black" => Some(PALETTE_BLACK),
         _ => None,
     }
 }
@@ -72,7 +75,27 @@ pub fn parse_config_hex_color(value: &str) -> Result<Color, ConfigHexColorError>
 /// A static string with the color name, or "Custom" if the color doesn't
 /// match any predefined color.
 pub fn color_to_name(color: &Color) -> &'static str {
-    // Match colors approximately with 0.1 tolerance
+    // Match the tuned palette first so named colors and quick color defaults
+    // report their names instead of "Custom".
+    const TUNED_NAMES: [(Color, &str); 7] = [
+        (PALETTE_RED, "Red"),
+        (PALETTE_GREEN, "Green"),
+        (PALETTE_BLUE, "Blue"),
+        (PALETTE_YELLOW, "Yellow"),
+        (PALETTE_ORANGE, "Orange"),
+        (PALETTE_PINK, "Pink"),
+        (PALETTE_BLACK, "Black"),
+    ];
+    for (tuned, name) in TUNED_NAMES {
+        if (color.r - tuned.r).abs() < 0.01
+            && (color.g - tuned.g).abs() < 0.01
+            && (color.b - tuned.b).abs() < 0.01
+        {
+            return name;
+        }
+    }
+
+    // Match legacy pure colors approximately with 0.1 tolerance
     if color.r > 0.9 && color.g < 0.1 && color.b < 0.1 {
         "Red"
     } else if color.r < 0.1 && color.g > 0.9 && color.b < 0.1 {
@@ -100,8 +123,36 @@ mod tests {
 
     #[test]
     fn name_to_color_is_case_insensitive() {
-        assert_eq!(name_to_color("Orange"), Some(ORANGE));
-        assert_eq!(name_to_color("WHITE"), Some(WHITE));
+        assert_eq!(name_to_color("Orange"), Some(PALETTE_ORANGE));
+        assert_eq!(name_to_color("WHITE"), Some(PALETTE_WHITE));
+    }
+
+    #[test]
+    fn named_colors_bit_match_tuned_palette_hex_values() {
+        for (name, hex) in [
+            ("red", "#F5333F"),
+            ("green", "#2EC27E"),
+            ("blue", "#3584E4"),
+            ("yellow", "#F6D32D"),
+            ("orange", "#FF7800"),
+            ("pink", "#C061CB"),
+            ("white", "#FFFFFF"),
+            ("black", "#241F31"),
+        ] {
+            assert_eq!(
+                name_to_color(name),
+                Some(parse_config_hex_color(hex).expect("tuned palette hex is valid")),
+                "named '{name}' must bit-match hex {hex}"
+            );
+        }
+    }
+
+    #[test]
+    fn color_to_name_recognizes_tuned_palette_colors() {
+        assert_eq!(color_to_name(&PALETTE_RED), "Red");
+        assert_eq!(color_to_name(&PALETTE_ORANGE), "Orange");
+        assert_eq!(color_to_name(&PALETTE_BLACK), "Black");
+        assert_eq!(color_to_name(&PALETTE_WHITE), "White");
     }
 
     #[test]

@@ -1,128 +1,82 @@
-use super::super::primitives::draw_rounded_rect;
-use crate::ui_text::{UiTextStyle, text_layout};
+use super::super::primitives::{BADGE_PADDING, BADGE_STACK_GAP, BadgeAlign, draw_badge};
+
+/// Vertical inset of the floating page badge from the screen edge.
+const PAGE_BADGE_EDGE_PADDING: f64 = 4.0;
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
-    let label = "FROZEN";
-    let padding = 12.0;
-    let radius = 8.0;
-    let font_size = 16.0;
-    let layout = text_layout(
+    draw_badge(
         ctx,
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size: font_size,
-        },
-        label,
+        screen_width as f64 - BADGE_PADDING,
+        BADGE_PADDING,
+        BadgeAlign::Right,
+        "FROZEN",
+        16.0,
         None,
+        // Warning tint
+        [0.82, 0.22, 0.2, 0.9],
     );
-    let extents = layout.ink_extents();
-
-    let width = extents.width() + padding * 1.4;
-    let height = extents.height() + padding;
-
-    let x = screen_width as f64 - width - padding;
-    let y = padding + height;
-
-    // Background with warning tint
-    ctx.set_source_rgba(0.82, 0.22, 0.2, 0.9);
-    draw_rounded_rect(ctx, x, y - height, width, height, radius);
-    let _ = ctx.fill();
-
-    // Text
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
 /// Render a small badge indicating zoom mode (visible even when status bar is hidden).
+///
+/// Returns the vertical space consumed (badge height plus stacking gap) so
+/// callers can position the next stacked badge below it.
 pub fn render_zoom_badge(
     ctx: &cairo::Context,
     screen_width: u32,
     _screen_height: u32,
     zoom_scale: f64,
     locked: bool,
-) {
+) -> f64 {
     let zoom_pct = (zoom_scale * 100.0).round() as i32;
     let label = if locked {
         format!("ZOOM {}% LOCKED", zoom_pct)
     } else {
         format!("ZOOM {}%", zoom_pct)
     };
-    let padding = 12.0;
-    let radius = 8.0;
-    let font_size = 15.0;
-    let layout = text_layout(
+    let height = draw_badge(
         ctx,
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size: font_size,
-        },
+        screen_width as f64 - BADGE_PADDING,
+        BADGE_PADDING,
+        BadgeAlign::Right,
         &label,
+        15.0,
         None,
+        // Teal tint
+        [0.2, 0.52, 0.7, 0.9],
     );
-    let extents = layout.ink_extents();
-
-    let width = extents.width() + padding * 1.4;
-    let height = extents.height() + padding;
-
-    let x = screen_width as f64 - width - padding;
-    let y = padding + height;
-
-    // Background with teal tint
-    ctx.set_source_rgba(0.2, 0.52, 0.7, 0.9);
-    draw_rounded_rect(ctx, x, y - height, width, height, radius);
-    let _ = ctx.fill();
-
-    // Text
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
+    height + BADGE_STACK_GAP
 }
 
 /// Render a small badge indicating canvas pan is available on the active solid board.
+///
+/// Returns the vertical space consumed (badge height plus stacking gap) so
+/// callers can position the next stacked badge below it.
 pub fn render_pan_badge(
     ctx: &cairo::Context,
     screen_width: u32,
     _screen_height: u32,
     panned: bool,
     offset_y: f64,
-) {
+) -> f64 {
     let label = if panned {
         "PANNED SPACE+DRAG"
     } else {
         "PAN SPACE+DRAG"
     };
-    let padding = 12.0;
-    let radius = 8.0;
-    let font_size = 14.0;
-    let layout = text_layout(
+    let height = draw_badge(
         ctx,
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size: font_size,
-        },
+        screen_width as f64 - BADGE_PADDING,
+        BADGE_PADDING + offset_y,
+        BadgeAlign::Right,
         label,
+        14.0,
         None,
+        // Olive tint
+        [0.33, 0.44, 0.24, 0.92],
     );
-    let extents = layout.ink_extents();
-
-    let width = extents.width() + padding * 1.4;
-    let height = extents.height() + padding;
-
-    let x = screen_width as f64 - width - padding;
-    let y = padding + offset_y + height;
-
-    ctx.set_source_rgba(0.33, 0.44, 0.24, 0.92);
-    draw_rounded_rect(ctx, x, y - height, width, height, radius);
-    let _ = ctx.fill();
-
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
+    height + BADGE_STACK_GAP
 }
 
 /// Render a small badge indicating text edit mode is active.
@@ -132,67 +86,16 @@ pub fn render_editing_badge(
     _screen_height: u32,
     offset_y: f64,
 ) {
-    let label = "EDITING";
-    let hint = "Return=save  Esc=cancel";
-    let padding = 12.0;
-    let radius = 8.0;
-    let font_size = 15.0;
-    let hint_font_size = 11.0;
-
-    // Measure label
-    let label_layout = text_layout(
+    draw_badge(
         ctx,
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size: font_size,
-        },
-        label,
-        None,
-    );
-    let label_extents = label_layout.ink_extents();
-
-    // Measure hint
-    let hint_layout = text_layout(
-        ctx,
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Normal,
-            size: hint_font_size,
-        },
-        hint,
-        None,
-    );
-    let hint_extents = hint_layout.ink_extents();
-
-    let content_width = label_extents.width().max(hint_extents.width());
-    let width = content_width + padding * 1.6;
-    let height = label_extents.height() + hint_extents.height() + padding * 1.2;
-
-    let x = screen_width as f64 - width - padding;
-    let y = padding + offset_y;
-
-    // Background with teal accent
-    ctx.set_source_rgba(0.2, 0.55, 0.65, 0.9);
-    draw_rounded_rect(ctx, x, y, width, height, radius);
-    let _ = ctx.fill();
-
-    // Label text
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    label_layout.show_at_baseline(
-        ctx,
-        x + (padding * 0.8),
-        y + label_extents.height() + padding * 0.3,
-    );
-
-    // Hint text (dimmer)
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
-    hint_layout.show_at_baseline(
-        ctx,
-        x + (padding * 0.8),
-        y + label_extents.height() + hint_extents.height() + padding * 0.6,
+        screen_width as f64 - BADGE_PADDING,
+        BADGE_PADDING + offset_y,
+        BadgeAlign::Right,
+        "EDITING",
+        15.0,
+        Some(("Return=save  Esc=cancel", 11.0)),
+        // Teal accent
+        [0.2, 0.55, 0.65, 0.9],
     );
 }
 
@@ -236,35 +139,15 @@ pub fn render_page_badge(
         (None, Some(page)) => page,
         (None, None) => return,
     };
-    let padding = 12.0;
-    let edge_padding = 4.0;
-    let radius = 8.0;
-    let font_size = 15.0;
-    let layout = text_layout(
+    draw_badge(
         ctx,
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size: font_size,
-        },
+        BADGE_PADDING,
+        PAGE_BADGE_EDGE_PADDING,
+        BadgeAlign::Left,
         &label,
+        15.0,
         None,
+        // Neutral cool tone
+        [0.2, 0.32, 0.45, 0.92],
     );
-    let extents = layout.ink_extents();
-
-    let width = extents.width() + padding * 1.4;
-    let height = extents.height() + padding;
-
-    let x = padding;
-    let y = edge_padding + height;
-
-    // Background with a neutral cool tone.
-    ctx.set_source_rgba(0.2, 0.32, 0.45, 0.92);
-    draw_rounded_rect(ctx, x, y - height, width, height, radius);
-    let _ = ctx.fill();
-
-    // Text
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.5));
 }

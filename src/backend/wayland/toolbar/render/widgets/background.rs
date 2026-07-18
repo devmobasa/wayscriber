@@ -11,6 +11,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_panel_background(
     set_color(ctx, COLOR_PANEL_BACKGROUND);
     draw_round_rect(ctx, 0.0, 0.0, width, height, RADIUS_PANEL);
     let _ = ctx.fill();
+
+    // 1px hairline border, matching the GTK panel's
+    // `border: 1px solid rgba(255, 255, 255, 0.10)`.
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.10);
+    ctx.set_line_width(1.0);
+    draw_round_rect(ctx, 0.5, 0.5, width - 1.0, height - 1.0, RADIUS_PANEL - 0.5);
+    let _ = ctx.stroke();
 }
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_group_card(
@@ -38,9 +45,14 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_popover_panel(
     caret_x: f64,
     caret_up: bool,
 ) {
-    // Soft drop shadow so the panel reads as floating over the bar.
+    // Soft drop shadow so the panel reads as floating over the bar. Two
+    // layers approximate the GTK popover's `0 2px 12px rgba(0, 0, 0, 0.35)`
+    // box-shadow: a wide faint halo plus a tight core at the same offset.
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.18);
+    draw_round_rect(ctx, x - 3.0, y - 1.0, w + 6.0, h + 6.0, RADIUS_PANEL + 3.0);
+    let _ = ctx.fill();
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
-    draw_round_rect(ctx, x + 1.5, y + 2.0, w, h, RADIUS_PANEL);
+    draw_round_rect(ctx, x, y + 2.0, w, h, RADIUS_PANEL);
     let _ = ctx.fill();
 
     set_color(ctx, COLOR_PANEL_BACKGROUND);
@@ -62,7 +74,8 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_popover_panel(
     ctx.close_path();
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.18);
+    // Hairline border at the same alpha as the GTK popover contents border.
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.10);
     ctx.set_line_width(1.0);
     draw_round_rect(ctx, x + 0.5, y + 0.5, w - 1.0, h - 1.0, RADIUS_PANEL);
     let _ = ctx.stroke();

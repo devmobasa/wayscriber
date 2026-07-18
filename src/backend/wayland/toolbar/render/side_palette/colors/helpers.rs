@@ -136,14 +136,9 @@ pub(super) fn draw_preview_swatch_and_icon(
     );
     let _ = ctx.stroke();
 
-    draw_swatch(
-        ctx,
-        x,
-        preview_row_y,
-        preview_size,
-        snapshot.color,
-        preview_hover,
-    );
+    // Not a selection: hover feedback comes from the highlight drawn above,
+    // so the accent "active" ring never appears on the preview swatch.
+    draw_swatch(ctx, x, preview_row_y, preview_size, snapshot.color, false);
 
     let icon_size = ToolbarLayoutSpec::SIDE_COLOR_EXPAND_ICON_SIZE;
     let icon_x = x + preview_size - icon_size - 2.0;

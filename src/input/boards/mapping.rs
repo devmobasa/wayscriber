@@ -5,6 +5,7 @@ use super::{
 };
 use crate::config::{BoardBackgroundConfig, BoardItemConfig, BoardsConfig};
 use crate::domain::Color;
+use crate::domain::color::PALETTE_BLACK;
 
 impl BoardSpec {
     pub fn from_config(item: &BoardItemConfig) -> Self {
@@ -142,12 +143,7 @@ fn pick_template(boards: &[BoardState]) -> BoardSpec {
                 b: 0.992,
                 a: 1.0,
             }),
-            default_pen_color: Some(Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            }),
+            default_pen_color: Some(PALETTE_BLACK),
             auto_adjust_pen: true,
             persist: true,
             pinned: false,

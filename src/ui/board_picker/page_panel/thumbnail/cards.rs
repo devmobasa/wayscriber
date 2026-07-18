@@ -1,7 +1,6 @@
 use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::ui::constants::{
-    self, BG_SELECTION, BORDER_BOARD_PICKER, BORDER_FOCUS, INDICATOR_ACTIVE_BOARD,
-    PANEL_BG_BOARD_PICKER,
+    self, ACCENT_PRIMARY, BG_SELECTION, BORDER_BOARD_PICKER, BORDER_FOCUS, PANEL_BG_BOARD_PICKER,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 
@@ -59,7 +58,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     });
 
     if is_active {
-        constants::set_color(ctx, INDICATOR_ACTIVE_BOARD);
+        constants::set_color(ctx, ACCENT_PRIMARY);
         ctx.set_line_width(2.0);
         draw_rounded_rect(
             ctx,
@@ -73,7 +72,9 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     }
 
     if is_search_match {
-        ctx.set_source_rgba(1.0, 0.84, 0.28, 0.82);
+        // Lighter tint of the accent so a search hit stays distinguishable
+        // from the active-page ring while staying in the accent family.
+        ctx.set_source_rgba(0.41, 0.72, 1.0, 0.82);
         ctx.set_line_width(1.25);
         draw_rounded_rect(
             ctx,

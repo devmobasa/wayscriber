@@ -701,7 +701,8 @@ persist = true
 id = "whiteboard"
 name = "Whiteboard"
 background = { rgb = [0.992, 0.992, 0.992] }
-default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+# Tuned black #241F31; the built-in default bit-matches the "black" quick color
+default_pen_color = { rgb = [0.141, 0.122, 0.192] }
 auto_adjust_pen = true
 
 [[boards.items]]
@@ -846,6 +847,7 @@ backup_retention = 1
 [drawing]
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
 # Or #RRGGBB hex: "#FFB3BA"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
@@ -953,38 +955,40 @@ text_background_enabled = false
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
 # to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays.
+# arrays. The hex values below are the tuned built-in defaults; named colors
+# ("red", "green", ...) resolve to these same tuned values, so named entries,
+# the default pen color, and board auto-adjust pens all match these swatches.
 [[drawing.quick_colors]]
 label = "Red"
-color = "red"
+color = "#F5333F"
 
 [[drawing.quick_colors]]
 label = "Green"
-color = "green"
+color = "#2EC27E"
 
 [[drawing.quick_colors]]
 label = "Blue"
-color = "blue"
+color = "#3584E4"
 
 [[drawing.quick_colors]]
 label = "Yellow"
-color = "yellow"
+color = "#F6D32D"
 
 [[drawing.quick_colors]]
 label = "Orange"
-color = "orange"
+color = "#FF7800"
 
 [[drawing.quick_colors]]
 label = "Pink"
-color = "pink"
+color = "#C061CB"
 
 [[drawing.quick_colors]]
 label = "White"
-color = "white"
+color = "#FFFFFF"
 
 [[drawing.quick_colors]]
 label = "Black"
-color = "black"
+color = "#241F31"
 
 [[drawing.quick_colors]]
 label = "Cyan"

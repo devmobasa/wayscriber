@@ -3,8 +3,8 @@ use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 
 use super::constants::{
-    self, BG_SELECTED_INDICATOR, BG_SELECTION, DIVIDER_LIGHT, ICON_PIN_ACTIVE, ICON_PIN_INACTIVE,
-    INDICATOR_ACTIVE_BOARD, INPUT_CARET, TEXT_ACTIVE, TEXT_HINT, TEXT_SECONDARY,
+    self, ACCENT_PRIMARY, BG_SELECTED_INDICATOR, BG_SELECTION, DIVIDER_LIGHT, ICON_PIN_ACTIVE,
+    ICON_PIN_INACTIVE, INPUT_CARET, TEXT_ACTIVE, TEXT_HINT, TEXT_SECONDARY,
 };
 use super::helpers::{board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon};
 
@@ -172,7 +172,7 @@ pub(super) fn render_board_rows(
                 }
             }
             if is_active_board {
-                constants::set_color(ctx, INDICATOR_ACTIVE_BOARD);
+                constants::set_color(ctx, ACCENT_PRIMARY);
                 draw_rounded_rect(
                     ctx,
                     swatch_x - 2.0,

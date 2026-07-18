@@ -34,13 +34,16 @@ impl RenderPalette {
             bg_a,
         ];
 
-        // Warmer, softer accent gold
-        let accent = [0.91, 0.73, 0.42, 1.0];
+        // The one accent: #3584E4, shared with the toolbars and overlays
+        let accent = [0.2078, 0.5176, 0.8941, 1.0];
+        // Lighter tint of the accent for elements that sit on top of it or
+        // need to read against the accent-highlighted rows
+        let accent_bright = [0.41, 0.72, 1.0, 1.0];
         let accent_muted = [accent[0], accent[1], accent[2], 0.85];
         let highlight = [accent[0], accent[1], accent[2], 0.22];
         let heading_icon = [accent[0], accent[1], accent[2], 0.9];
-        let nav_key = [0.58, 0.82, 0.88, 1.0];
-        let search = [0.92, 0.58, 0.28, 1.0];
+        let nav_key = accent_bright;
+        let search = accent_bright;
         let subtitle = [0.58, 0.62, 0.72, 1.0];
         let section_card_bg = [1.0, 1.0, 1.0, 0.04];
         let section_card_border = [1.0, 1.0, 1.0, 0.08];

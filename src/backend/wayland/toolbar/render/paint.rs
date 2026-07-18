@@ -11,7 +11,8 @@ use crate::backend::wayland::toolbar::view::{
 use crate::ui_text::UiTextStyle;
 
 use super::widgets::constants::{
-    COLOR_ICON_DEFAULT, COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, set_color,
+    COLOR_ACCENT, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT, COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT,
+    set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
@@ -91,15 +92,21 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
         draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
         let _ = ctx.stroke();
     }
+    // Swatch key letters ("Above") read as 9px captions in the secondary
+    // text color; corner badges keep the boxed 8px icon-color treatment.
+    let (font_size, label_color) = match badge.placement {
+        ShortcutBadgePlacement::Corner => (8.0, COLOR_ICON_DEFAULT),
+        ShortcutBadgePlacement::Above => (9.0, COLOR_LABEL_HINT),
+    };
     draw_label_center_color(
         ctx,
-        label_style(8.0, true),
+        label_style(font_size, true),
         badge_x,
         badge_y,
         badge_w,
         badge_h,
         &badge.label,
-        COLOR_ICON_DEFAULT,
+        label_color,
     );
 }
 
@@ -216,13 +223,25 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         }
         WidgetKind::HitArea => {}
         WidgetKind::Swatch { color, selected } => {
+            // Rounded square inset one pixel so the accent selection ring
+            // (2px stroke, ~2px gap) stays clear of the neighbouring swatch.
             ctx.set_source_rgba(color.0, color.1, color.2, color.3);
-            draw_round_rect(ctx, x, y, w, h, 4.0);
+            draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0);
             let _ = ctx.fill();
-            if *selected || is_hover {
-                ctx.set_source_rgba(1.0, 1.0, 1.0, if *selected { 0.95 } else { 0.5 });
+            // Subtle inner hairline keeps dark fills defined against the bar.
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.16);
+            ctx.set_line_width(1.0);
+            draw_round_rect(ctx, x + 1.5, y + 1.5, w - 3.0, h - 3.0, 4.5);
+            let _ = ctx.stroke();
+            if *selected {
+                set_color(ctx, COLOR_ACCENT);
                 ctx.set_line_width(2.0);
-                draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, 5.0);
+                draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
+                let _ = ctx.stroke();
+            } else if is_hover {
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+                ctx.set_line_width(1.5);
+                draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
                 let _ = ctx.stroke();
             }
         }

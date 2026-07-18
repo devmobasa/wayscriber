@@ -617,8 +617,9 @@ fn swatch_row(
 }
 
 /// Rounded-square quick-color swatch mirroring the built-in `draw_swatch`:
-/// fill, a gray outline for low-luminance colors, and the white selection
-/// ring (drawn inset because the built-in paints it outside the bounds).
+/// fill with a subtle inner hairline (boosted for low-luminance colors) and
+/// the 2px accent selection ring with a ~2px gap (drawn inset because the
+/// built-in paints it outside the bounds).
 fn rect_swatch(
     ctx: &SectionCtx,
     color: Color,
@@ -637,21 +638,24 @@ fn rect_swatch(
     area.set_draw_func(move |_, cr, width, height| {
         let size = f64::from(width.min(height));
         cr.set_source_rgba(color.r, color.g, color.b, 1.0);
-        rounded_rect_path(cr, 3.0, 3.0, size - 6.0, size - 6.0, 4.0);
+        rounded_rect_path(cr, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
         let _ = cr.fill();
 
         let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
         if luminance < 0.3 {
             cr.set_source_rgba(0.5, 0.5, 0.5, 0.8);
-            cr.set_line_width(1.5);
-            rounded_rect_path(cr, 3.0, 3.0, size - 6.0, size - 6.0, 4.0);
-            let _ = cr.stroke();
+        } else {
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.16);
         }
+        cr.set_line_width(1.0);
+        rounded_rect_path(cr, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
+        let _ = cr.stroke();
 
         if draw_selected.get() {
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+            let (ar, ag, ab, aa) = super::super::super::css::ACCENT;
+            cr.set_source_rgba(ar, ag, ab, aa);
             cr.set_line_width(2.0);
-            rounded_rect_path(cr, 1.0, 1.0, size - 2.0, size - 2.0, 5.0);
+            rounded_rect_path(cr, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
             let _ = cr.stroke();
         }
     });

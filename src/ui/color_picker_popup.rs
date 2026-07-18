@@ -9,8 +9,9 @@ use crate::input::state::COLOR_PICKER_PREVIEW_SIZE;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 
 use super::constants::{
-    self, BORDER_MODAL, INPUT_BG, INPUT_BORDER_FOCUSED, INPUT_CARET, OVERLAY_DIM_MEDIUM,
-    PANEL_BG_MODAL, RADIUS_MD, RADIUS_PANEL, TEXT_PRIMARY,
+    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, BORDER_MODAL, INPUT_BG,
+    INPUT_BORDER_FOCUSED, INPUT_CARET, OVERLAY_DIM_MEDIUM, PANEL_BG_MODAL, RADIUS_MD, RADIUS_PANEL,
+    TEXT_PRIMARY,
 };
 
 /// Render the color picker popup.
@@ -124,7 +125,7 @@ pub fn render_color_picker_popup(
         RADIUS_MD,
     );
     if eyedropper_hover {
-        ctx.set_source_rgba(0.25, 0.55, 0.85, 0.8);
+        constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.8));
     } else {
         ctx.set_source_rgba(0.18, 0.2, 0.24, 0.95);
     }
@@ -301,10 +302,10 @@ fn draw_hex_input(
     selected: bool,
     valid: bool,
 ) {
-    // Outer glow when focused - red if invalid, blue if valid
+    // Outer glow when focused - red if invalid, accent if valid
     if focused {
         if valid {
-            ctx.set_source_rgba(0.3, 0.5, 0.9, 0.2);
+            constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.2));
         } else {
             ctx.set_source_rgba(0.9, 0.3, 0.3, 0.25);
         }
@@ -348,7 +349,7 @@ fn draw_hex_input(
 
     // Draw selection highlight when selected (full text selected)
     if selected {
-        ctx.set_source_rgba(0.3, 0.5, 0.9, 0.4);
+        constants::set_color(ctx, BG_INPUT_SELECTION);
         draw_rounded_rect(
             ctx,
             text_x - 2.0,
@@ -390,7 +391,7 @@ fn draw_button(
     // Hover glow effect
     if hover {
         let glow_color = if primary {
-            (0.3, 0.5, 0.9, 0.25)
+            constants::with_alpha(ACCENT_PRIMARY, 0.25)
         } else {
             (1.0, 1.0, 1.0, 0.1)
         };
@@ -402,9 +403,11 @@ fn draw_button(
     // Background - brighter on hover
     if primary {
         if hover {
-            ctx.set_source_rgba(0.30, 0.50, 0.80, 0.98);
+            // Accent nudged towards accent-bright so hover reads brighter
+            let fill = constants::lerp_color(ACCENT_PRIMARY, ACCENT_BRIGHT, 0.25);
+            constants::set_color(ctx, constants::with_alpha(fill, 0.98));
         } else {
-            ctx.set_source_rgba(0.25, 0.45, 0.75, 0.95);
+            constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.95));
         }
     } else if hover {
         ctx.set_source_rgba(0.30, 0.30, 0.38, 0.98);
@@ -417,9 +420,9 @@ fn draw_button(
     // Border - stronger on hover
     if primary {
         if hover {
-            ctx.set_source_rgba(0.45, 0.65, 0.95, 0.95);
+            constants::set_color(ctx, ACCENT_BRIGHT);
         } else {
-            ctx.set_source_rgba(0.35, 0.55, 0.85, 0.9);
+            constants::set_color(ctx, constants::with_alpha(ACCENT_BRIGHT, 0.9));
         }
     } else if hover {
         ctx.set_source_rgba(0.5, 0.5, 0.55, 0.9);

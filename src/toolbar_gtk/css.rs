@@ -16,17 +16,20 @@ fn rgba(color: (f64, f64, f64, f64)) -> String {
 }
 
 // Mirrors of render/widgets/constants.rs tokens.
-const ACCENT: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 1.0);
-const ACCENT_GLOW: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 0.25);
-const ACCENT_BRIGHT: (f64, f64, f64, f64) = (0.5, 0.75, 1.0, 0.95);
+pub(super) const ACCENT: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 1.0);
+const ACCENT_GLOW: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.25);
+const ACCENT_BRIGHT: (f64, f64, f64, f64) = (0.41, 0.72, 1.0, 0.95);
 const TEXT_PRIMARY: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.95);
 const TEXT_DISABLED: (f64, f64, f64, f64) = (0.62, 0.62, 0.68, 0.45);
 const ICON_DEFAULT: (f64, f64, f64, f64) = (0.95, 0.95, 0.95, 0.9);
 const BUTTON_HOVER: (f64, f64, f64, f64) = (0.35, 0.35, 0.45, 0.85);
 const BUTTON_DEFAULT: (f64, f64, f64, f64) = (0.2, 0.22, 0.26, 0.75);
 const BUTTON_DISABLED: (f64, f64, f64, f64) = (0.2, 0.22, 0.26, 0.35);
-const BUTTON_DESTRUCTIVE: (f64, f64, f64, f64) = (0.34, 0.2, 0.2, 0.8);
-const BUTTON_DESTRUCTIVE_HOVER: (f64, f64, f64, f64) = (0.52, 0.24, 0.22, 0.9);
+const BUTTON_DESTRUCTIVE_HOVER: (f64, f64, f64, f64) = (0.9608, 0.2, 0.2471, 0.55);
+const BUTTON_DESTRUCTIVE_ACTIVE: (f64, f64, f64, f64) = (0.9608, 0.2, 0.2471, 0.78);
+const SEGMENT_ACTIVE: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.55);
+pub(super) const TRACK_BACKGROUND: (f64, f64, f64, f64) = (0.5, 0.5, 0.6, 0.6);
+pub(super) const TRACK_KNOB: (f64, f64, f64, f64) = (0.2078, 0.5176, 0.8941, 0.9);
 const CHECKBOX_DEFAULT: (f64, f64, f64, f64) = (0.22, 0.24, 0.28, 0.75);
 const CHECKBOX_HOVER: (f64, f64, f64, f64) = (0.32, 0.34, 0.4, 0.9);
 const CHECKBOX_CHECKED: (f64, f64, f64, f64) = (0.25, 0.5, 0.35, 0.9);
@@ -98,12 +101,14 @@ window.wayscriber-toolbar {{
     box-shadow: 0 0 0 2px {accent_glow},
         inset 0 -2px 0 0 {accent_bright};
 }}
-.wayscriber-toolbar button.destructive {{
-    background-color: {button_destructive};
-    color: {text_primary};
-}}
+/* Destructive buttons are normal flat buttons at rest; the red fill
+   appears only on hover/press. */
 .wayscriber-toolbar button.destructive:hover {{
     background-color: {button_destructive_hover};
+    color: #ffffff;
+}}
+.wayscriber-toolbar button.destructive:active {{
+    background-color: {button_destructive_active};
     color: #ffffff;
 }}
 .wayscriber-toolbar button:disabled {{
@@ -199,10 +204,14 @@ window.wayscriber-toolbar {{
     font-size: {font_badge}px;
     font-weight: 700;
 }}
+/* Swatch key letters read as small captions in the secondary text color
+   (mirrors COLOR_LABEL_HINT), one step larger than boxed corner badges. */
 .wayscriber-toolbar label.shortcut-badge.above-swatch {{
     background-color: transparent;
     border-color: transparent;
     padding: 0;
+    color: rgba(179, 179, 191, 0.80);
+    font-size: {font_swatch_key}px;
 }}
 
 /* ===== Popovers ======================================================== */
@@ -214,7 +223,7 @@ window.wayscriber-toolbar {{
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: {radius_panel}px;
     padding: {pad_popover}px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.50);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }}
 /* A popover is its own native surface. Its contents and arrow CSS nodes paint
    outside the application-provided child, so capture suppression must clear
@@ -230,7 +239,7 @@ window.wayscriber-toolbar {{
 .wayscriber-toolbar popover.{capture_transparent_class} > contents {{
     background: transparent;
     border-color: transparent;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0);
     outline-color: transparent;
 }}
 
@@ -265,7 +274,7 @@ window.wayscriber-toolbar {{
     padding: 2px 0;
 }}
 .wayscriber-toolbar button.tab.active {{
-    background-color: rgba(61, 92, 148, 1.0);
+    background-color: {segment_active};
     box-shadow: none;
 }}
 .wayscriber-toolbar button.board-chip {{
@@ -329,8 +338,9 @@ tooltip.{capture_transparent_class} {{
         button_default = rgba(BUTTON_DEFAULT),
         button_hover = rgba(BUTTON_HOVER),
         button_disabled = rgba(BUTTON_DISABLED),
-        button_destructive = rgba(BUTTON_DESTRUCTIVE),
         button_destructive_hover = rgba(BUTTON_DESTRUCTIVE_HOVER),
+        button_destructive_active = rgba(BUTTON_DESTRUCTIVE_ACTIVE),
+        segment_active = rgba(SEGMENT_ACTIVE),
         checkbox_default = rgba(CHECKBOX_DEFAULT),
         checkbox_hover = rgba(CHECKBOX_HOVER),
         checkbox_checked = rgba(CHECKBOX_CHECKED),
@@ -353,6 +363,7 @@ tooltip.{capture_transparent_class} {{
         check_size = px(14.0),
         font_label = px(13.0),
         font_badge = px(8.0),
+        font_swatch_key = px(9.0),
         font_small = px(10.0),
         font_tooltip = px(12.0),
     )

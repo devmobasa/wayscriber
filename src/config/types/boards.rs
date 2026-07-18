@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::domain::color::PALETTE_BLACK;
+
 use super::board::BoardConfig;
 
 /// Configurable multi-board settings.
@@ -231,7 +233,11 @@ fn default_board_items() -> Vec<BoardItemConfig> {
             id: "whiteboard".to_string(),
             name: "Whiteboard".to_string(),
             background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([0.992, 0.992, 0.992])),
-            default_pen_color: Some(BoardColorConfig::Rgb([0.0, 0.0, 0.0])),
+            default_pen_color: Some(BoardColorConfig::Rgb([
+                PALETTE_BLACK.r,
+                PALETTE_BLACK.g,
+                PALETTE_BLACK.b,
+            ])),
             auto_adjust_pen: true,
             persist: true,
             pinned: false,

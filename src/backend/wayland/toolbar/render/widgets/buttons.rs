@@ -1,10 +1,10 @@
 use super::constants::{
     COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
-    COLOR_BUTTON_DESTRUCTIVE, COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED,
-    COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE,
-    COLOR_PIN_DEFAULT, COLOR_PIN_HOVER, COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG,
-    COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER, COLOR_SEGMENT_TEXT_ACTIVE,
-    COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, RADIUS_LG, RADIUS_STD, set_color,
+    COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
+    COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
+    COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
+    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, RADIUS_LG,
+    RADIUS_STD, set_color,
 };
 use super::draw_round_rect;
 use crate::ui_text::{UiTextStyle, text_layout};
@@ -231,7 +231,8 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_focus_ring(
 }
 
 /// Draw a button for destructive actions (e.g., Clear, board/page Delete):
-/// red-tinted body plus a red accent line so it never reads like navigation.
+/// a normal flat button at rest, with the destructive red fill appearing
+/// only on hover so the bar never carries a persistent red tile.
 pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     ctx: &cairo::Context,
     x: f64,
@@ -240,29 +241,18 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     h: f64,
     hover: bool,
 ) {
-    // Add warning-tinted glow on hover
-    if hover {
-        ctx.set_source_rgba(0.9, 0.4, 0.3, 0.15);
-        draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
-        let _ = ctx.fill();
+    if !hover {
+        draw_button(ctx, x, y, w, h, false, false);
+        return;
     }
 
-    let color = if hover {
-        COLOR_BUTTON_DESTRUCTIVE_HOVER
-    } else {
-        COLOR_BUTTON_DESTRUCTIVE
-    };
-    set_color(ctx, color);
-    draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
+    // Warning-tinted glow behind the hovered tile
+    ctx.set_source_rgba(0.9608, 0.2, 0.2471, 0.15);
+    draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
     let _ = ctx.fill();
 
-    // Red accent line at top edge
-    ctx.set_source_rgba(0.85, 0.35, 0.3, if hover { 0.9 } else { 0.7 });
-    let accent_w = w * 0.6;
-    let accent_h = 2.0;
-    let accent_x = x + (w - accent_w) / 2.0;
-    let accent_y = y + 2.0;
-    draw_round_rect(ctx, accent_x, accent_y, accent_w, accent_h, 1.0);
+    set_color(ctx, COLOR_BUTTON_DESTRUCTIVE_HOVER);
+    draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
     let _ = ctx.fill();
 }
 

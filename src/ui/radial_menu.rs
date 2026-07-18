@@ -6,6 +6,40 @@ use crate::input::state::{
     RADIAL_TOOL_LABELS, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState,
     RadialSegmentId, sub_ring_child_count, sub_ring_child_label,
 };
+use crate::ui_text::{UiTextStyle, text_layout};
+
+use super::constants::{
+    self, ACCENT_PRIMARY, BG_HOVER, BG_SELECTION, BORDER_FOCUS, DIVIDER_LIGHT, OVERLAY_DIM_LIGHT,
+    PANEL_BG_CONTEXT_MENU, PROGRESS_FILL, PROGRESS_TRACK, TEXT_HINT, TEXT_SECONDARY, TEXT_WHITE,
+};
+
+// ── File-local style values without a matching token in ui/constants.rs ──
+
+/// Rest background of tool ring wedges.
+const TOOL_WEDGE_BG: (f64, f64, f64, f64) = (0.12, 0.15, 0.22, 0.88);
+/// Rest background of sub-ring wedges (slightly lighter than the tool ring).
+const SUB_WEDGE_BG: (f64, f64, f64, f64) = (0.15, 0.18, 0.25, 0.90);
+/// Hover brighten overlay on color ring swatches.
+const COLOR_HOVER_OVERLAY: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.35);
+/// Border of the active color swatch.
+const COLOR_ACTIVE_BORDER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.9);
+/// Border of inactive color swatches.
+const COLOR_SWATCH_BORDER: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.4);
+
+/// Separation between adjacent wedges, in pixels of arc length.
+const WEDGE_GAP_PX: f64 = 2.0;
+/// Tool ring wedge label font size.
+const TOOL_LABEL_SIZE: f64 = 12.0;
+/// Sub-ring wedge label font size.
+const SUB_LABEL_SIZE: f64 = 11.0;
+/// Center-well label font size.
+const CENTER_LABEL_SIZE: f64 = 10.0;
+/// Shortcut hint font size under tool wedge labels.
+const HINT_LABEL_SIZE: f64 = 9.0;
+/// Vertical lift of the wedge label when a shortcut hint is shown below it.
+const HINT_LABEL_LIFT: f64 = 6.0;
+/// Vertical drop of the shortcut hint below the wedge midpoint.
+const HINT_LABEL_DROP: f64 = 8.0;
 
 /// Render the radial menu overlay.
 pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
@@ -26,7 +60,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let _ = ctx.save();
 
     // Semi-transparent backdrop
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.25);
+    ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_LIGHT);
     ctx.rectangle(0.0, 0.0, width as f64, height as f64);
     let _ = ctx.fill();
 
@@ -47,6 +81,11 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let active_color = input_state.color_for_tool(active_tool);
 
     // ── Color ring (outermost) ──
+    let color_gap = if color_count > 1 {
+        gap_half_angle((layout.color_inner + layout.color_outer) / 2.0)
+    } else {
+        0.0
+    };
     for (i, entry) in input_state
         .quick_colors
         .radial_rendered_entries()
@@ -67,23 +106,23 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
             cy,
             layout.color_inner,
             layout.color_outer,
-            start,
-            end,
+            start + color_gap,
+            end - color_gap,
         );
         ctx.set_source_rgba(c.r, c.g, c.b, c.a);
         let _ = ctx.fill_preserve();
 
         if is_hovered {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+            constants::set_color(ctx, COLOR_HOVER_OVERLAY);
             let _ = ctx.fill_preserve();
         }
 
         // Border
         if is_active {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+            constants::set_color(ctx, COLOR_ACTIVE_BORDER);
             ctx.set_line_width(2.5);
         } else {
-            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
+            constants::set_color(ctx, COLOR_SWATCH_BORDER);
             ctx.set_line_width(1.0);
         }
         let _ = ctx.stroke();
@@ -95,24 +134,33 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
         if child_count > 0 {
             let parent_start = offset + parent_idx as f64 * seg_angle;
             let child_angle = seg_angle / child_count as f64;
+            let sub_gap = gap_half_angle((layout.sub_inner + layout.sub_outer) / 2.0);
 
             for ci in 0..child_count {
                 let start = parent_start + ci as f64 * child_angle;
                 let end = start + child_angle;
                 let is_hovered = hover == Some(RadialSegmentId::SubTool(parent_idx, ci as u8));
 
-                draw_annular_sector(ctx, cx, cy, layout.sub_inner, layout.sub_outer, start, end);
+                draw_annular_sector(
+                    ctx,
+                    cx,
+                    cy,
+                    layout.sub_inner,
+                    layout.sub_outer,
+                    start + sub_gap,
+                    end - sub_gap,
+                );
 
                 // Background
                 if is_hovered {
-                    ctx.set_source_rgba(0.30, 0.50, 0.80, 0.85);
+                    constants::set_color(ctx, ACCENT_PRIMARY);
                 } else {
-                    ctx.set_source_rgba(0.15, 0.18, 0.25, 0.90);
+                    constants::set_color(ctx, SUB_WEDGE_BG);
                 }
                 let _ = ctx.fill_preserve();
 
                 // Border
-                ctx.set_source_rgba(0.35, 0.40, 0.50, 0.7);
+                constants::set_color(ctx, DIVIDER_LIGHT);
                 ctx.set_line_width(1.0);
                 let _ = ctx.stroke();
 
@@ -122,12 +170,18 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
                 let lx = cx + mid_r * mid_angle.cos();
                 let ly = cy + mid_r * mid_angle.sin();
                 let label = sub_ring_child_label(parent_idx, ci as u8);
-                draw_centered_label(ctx, lx, ly, label, 10.0, is_hovered);
+                let color = if is_hovered {
+                    TEXT_WHITE
+                } else {
+                    TEXT_SECONDARY
+                };
+                draw_centered_label(ctx, lx, ly, label, SUB_LABEL_SIZE, color);
             }
         }
     }
 
     // ── Tool ring ──
+    let tool_gap = gap_half_angle((layout.tool_inner + layout.tool_outer) / 2.0);
     for (i, label) in RADIAL_TOOL_LABELS.iter().enumerate() {
         let start = offset + i as f64 * seg_angle;
         let end = start + seg_angle;
@@ -141,36 +195,61 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
             cy,
             layout.tool_inner,
             layout.tool_outer,
-            start,
-            end,
+            start + tool_gap,
+            end - tool_gap,
         );
 
         // Background
         if is_hovered {
-            ctx.set_source_rgba(0.30, 0.50, 0.80, 0.85);
+            constants::set_color(ctx, ACCENT_PRIMARY);
         } else if is_active {
-            ctx.set_source_rgba(0.22, 0.35, 0.55, 0.85);
+            constants::set_color(ctx, BG_SELECTION);
         } else {
-            ctx.set_source_rgba(0.12, 0.15, 0.22, 0.88);
+            constants::set_color(ctx, TOOL_WEDGE_BG);
         }
         let _ = ctx.fill_preserve();
 
         // Border
         if is_active {
-            ctx.set_source_rgba(0.45, 0.65, 0.95, 0.85);
+            constants::set_color(ctx, BORDER_FOCUS);
             ctx.set_line_width(2.0);
         } else {
-            ctx.set_source_rgba(0.30, 0.35, 0.45, 0.7);
+            constants::set_color(ctx, DIVIDER_LIGHT);
             ctx.set_line_width(1.0);
         }
         let _ = ctx.stroke();
 
-        // Label
+        // Label, with the primary bound shortcut as a dimmed hint below it
         let mid_angle = start + seg_angle / 2.0;
         let mid_r = (layout.tool_inner + layout.tool_outer) / 2.0;
         let lx = cx + mid_r * mid_angle.cos();
         let ly = cy + mid_r * mid_angle.sin();
-        draw_centered_label(ctx, lx, ly, label, 11.0, is_hovered);
+        let label_color = if is_hovered {
+            TEXT_WHITE
+        } else {
+            TEXT_SECONDARY
+        };
+        match tool_segment_hint(input_state, segment_idx) {
+            Some(hint) => {
+                draw_centered_label(
+                    ctx,
+                    lx,
+                    ly - HINT_LABEL_LIFT,
+                    label,
+                    TOOL_LABEL_SIZE,
+                    label_color,
+                );
+                draw_centered_label(
+                    ctx,
+                    lx,
+                    ly + HINT_LABEL_DROP,
+                    &hint,
+                    HINT_LABEL_SIZE,
+                    TEXT_HINT,
+                );
+            }
+            None => draw_centered_label(ctx, lx, ly, label, TOOL_LABEL_SIZE, label_color),
+        }
     }
 
     // ── Center circle ──
@@ -178,9 +257,9 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     ctx.new_path();
     ctx.arc(cx, cy, layout.center_radius, 0.0, 2.0 * PI);
     if is_center_hovered {
-        ctx.set_source_rgba(0.25, 0.30, 0.40, 0.95);
+        constants::set_color(ctx, BG_HOVER);
     } else {
-        ctx.set_source_rgba(0.10, 0.13, 0.18, 0.95);
+        constants::set_color(ctx, PANEL_BG_CONTEXT_MENU);
     }
     let _ = ctx.fill_preserve();
 
@@ -191,12 +270,26 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
 
     // Current tool label in center
     let tool_label = active_tool_short_label(active_tool, input_state);
-    draw_centered_label(ctx, cx, cy - 2.0, tool_label, 10.0, false);
+    draw_centered_label(
+        ctx,
+        cx,
+        cy - 2.0,
+        tool_label,
+        CENTER_LABEL_SIZE,
+        TEXT_SECONDARY,
+    );
 
     // Thickness gauge (small arc near bottom of center)
     draw_thickness_gauge(ctx, &layout, input_state);
 
     let _ = ctx.restore();
+}
+
+/// Angular inset that yields half of [`WEDGE_GAP_PX`] of arc length at the
+/// given radius, so adjacent wedges are separated by a full gap. Render-only:
+/// hit-testing in the input layer still assigns the full segment angle.
+fn gap_half_angle(radius: f64) -> f64 {
+    (WEDGE_GAP_PX / 2.0) / radius.max(1.0)
 }
 
 /// Draw an annular (ring) sector path.
@@ -222,23 +315,37 @@ fn draw_centered_label(
     y: f64,
     text: &str,
     size: f64,
-    highlighted: bool,
+    color: (f64, f64, f64, f64),
 ) {
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(size);
-    let Ok(extents) = ctx.text_extents(text) else {
-        return;
+    let style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size,
     };
+    let layout = text_layout(ctx, style, text, None);
+    let extents = layout.ink_extents();
     let tx = x - extents.width() / 2.0 - extents.x_bearing();
     let ty = y - extents.height() / 2.0 - extents.y_bearing();
+    constants::set_color(ctx, color);
+    layout.show_at_baseline(ctx, tx, ty);
+}
 
-    if highlighted {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    } else {
-        ctx.set_source_rgba(0.85, 0.88, 0.93, 0.95);
-    }
-    ctx.move_to(tx, ty);
-    let _ = ctx.show_text(text);
+/// Primary bound shortcut for the tool a primary-ring wedge selects, mirroring
+/// `dispatch_tool_segment` in the input layer. Parent wedges (Shapes, Text,
+/// Actions) expand a sub-ring instead of triggering an action, so they show no
+/// hint; so do wedges whose action has no binding.
+fn tool_segment_hint(input_state: &InputState, idx: u8) -> Option<String> {
+    let tool = match idx {
+        0 => Tool::Pen,
+        1 => Tool::Marker,
+        2 => Tool::Line,
+        3 => Tool::Arrow,
+        6 => Tool::Eraser,
+        7 => Tool::Select,
+        _ => return None,
+    };
+    input_state.action_binding_primary_label(tool.action()?)
 }
 
 /// Draw a small thickness gauge arc near the center bottom.
@@ -257,7 +364,7 @@ fn draw_thickness_gauge(ctx: &cairo::Context, layout: &RadialMenuLayout, input_s
 
     // Track
     ctx.new_path();
-    ctx.set_source_rgba(0.4, 0.4, 0.45, 0.5);
+    constants::set_color(ctx, constants::with_alpha(PROGRESS_TRACK, 0.5));
     ctx.set_line_width(2.0);
     ctx.arc(
         layout.center_x,
@@ -271,7 +378,7 @@ fn draw_thickness_gauge(ctx: &cairo::Context, layout: &RadialMenuLayout, input_s
     // Fill
     if frac > 0.01 {
         ctx.new_path();
-        ctx.set_source_rgba(0.45, 0.70, 1.0, 0.8);
+        constants::set_color(ctx, constants::with_alpha(PROGRESS_FILL, 0.8));
         ctx.set_line_width(2.5);
         ctx.arc(
             layout.center_x,
