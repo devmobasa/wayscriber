@@ -57,7 +57,6 @@ png = "0.18"
 # GTK4 toolbar frontend (layer-shell compositors)
 gtk4 = { version = "0.11", optional = true, features = ["v4_12"] }
 gtk4-layer-shell = { version = "0.8", optional = true }
-async-channel = { version = "2", optional = true }
 
 [build-dependencies]
 
@@ -71,7 +70,7 @@ tray = ["dbus", "ksni"]
 config-schema = ["dep:schemars"]
 # GTK4-rendered toolbars on layer-shell compositors; the built-in Cairo
 # toolbars remain compiled in as the fallback for everything else.
-toolbar-gtk = ["dep:gtk4", "dep:gtk4-layer-shell", "dep:async-channel"]
+toolbar-gtk = ["dep:gtk4", "dep:gtk4-layer-shell"]
 default = ["tablet-input", "portal", "tray", "toolbar-gtk"]
 
 [[bin]]
