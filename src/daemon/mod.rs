@@ -5,6 +5,7 @@ mod core;
 mod global_shortcuts;
 mod icons;
 mod overlay;
+pub(crate) mod protocol_v2;
 pub(crate) mod setup;
 mod tray;
 mod types;
@@ -18,4 +19,5 @@ pub(crate) use control::{
     take_daemon_toggle_requests, write_daemon_pid_file,
 };
 pub use core::Daemon;
+pub(crate) use protocol_v2::try_claim_overlay_action;
 pub use types::AlreadyRunningError;

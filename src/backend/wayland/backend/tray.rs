@@ -1,13 +1,93 @@
 use super::super::state::WaylandState;
 use crate::config::Action;
+use crate::daemon::protocol_v2::{ActionClaimOutcome, ActionFinishOutcome};
 use crate::tray_action::TrayAction;
+use std::time::{Duration, Instant};
+
+const DURABLE_ACTION_RETRY_DELAY: Duration = Duration::from_millis(10);
+const MAX_DURABLE_ACTIONS_PER_DRAIN: usize = 64;
+
+pub(super) fn durable_action_retry_due(state: &WaylandState, now: Instant) -> bool {
+    state
+        .durable_action_retry_at
+        .is_some_and(|deadline| now >= deadline)
+}
+
+pub(super) fn durable_action_retry_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
+    state
+        .durable_action_retry_at
+        .map(|deadline| deadline.saturating_duration_since(now))
+}
+
+fn defer_durable_action(
+    state: &mut WaylandState,
+    action: Option<crate::daemon::protocol_v2::ClaimedAction>,
+) {
+    state.durable_action_finish = action;
+    state.durable_action_retry_at = Some(Instant::now() + DURABLE_ACTION_RETRY_DELAY);
+}
 
 pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
     let actions = crate::tray_action::take_pending_actions();
-    let processed = !actions.is_empty();
+    let mut processed = !actions.is_empty();
     for action in actions {
         apply_tray_action(state, action);
     }
+
+    let now = Instant::now();
+    if state
+        .durable_action_retry_at
+        .is_some_and(|deadline| now < deadline)
+    {
+        return processed;
+    }
+    state.durable_action_retry_at = None;
+
+    if let Some(action) = state.durable_action_finish.take() {
+        match action.try_finish(true, None) {
+            Ok(ActionFinishOutcome::Complete) => {}
+            Ok(ActionFinishOutcome::Deferred(action)) => {
+                defer_durable_action(state, Some(action));
+                return processed;
+            }
+            Err(error) => {
+                log::error!("Failed to finish durable daemon action: {error:#}");
+                defer_durable_action(state, None);
+                return processed;
+            }
+        }
+    }
+
+    for _ in 0..MAX_DURABLE_ACTIONS_PER_DRAIN {
+        match crate::daemon::try_claim_overlay_action() {
+            Ok(ActionClaimOutcome::Claimed(action)) => {
+                apply_tray_action(state, action.action());
+                processed = true;
+                match action.try_finish(true, None) {
+                    Ok(ActionFinishOutcome::Complete) => {}
+                    Ok(ActionFinishOutcome::Deferred(action)) => {
+                        defer_durable_action(state, Some(action));
+                        return processed;
+                    }
+                    Err(error) => {
+                        log::error!("Failed to finish durable daemon action: {error:#}");
+                        defer_durable_action(state, None);
+                        return processed;
+                    }
+                }
+            }
+            Ok(ActionClaimOutcome::Idle) => return processed,
+            Ok(ActionClaimOutcome::Deferred) => {
+                defer_durable_action(state, None);
+                return processed;
+            }
+            Err(error) => {
+                log::error!("Failed to claim durable daemon action: {error:#}");
+                return processed;
+            }
+        }
+    }
+    defer_durable_action(state, None);
     processed
 }
 

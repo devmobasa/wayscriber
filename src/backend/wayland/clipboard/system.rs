@@ -6,10 +6,9 @@ use crate::input::state::ClipboardFingerprint;
 use command::{ClipboardCommandRunner, WlClipboardCommandRunner};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::io::{Read, Write};
-use std::process::Child;
+use std::io::Read;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod command;
 
@@ -21,67 +20,42 @@ fn publish_selection_with_runner(
     payload_json: &str,
     runner: &impl ClipboardCommandRunner,
 ) -> Result<(), String> {
-    let mut child = runner
-        .spawn_copy_selection()
-        .map_err(|err| format!("failed to spawn wl-copy: {}", err))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        if let Err(err) = stdin.write_all(payload_json.as_bytes()) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!("failed to write to wl-copy stdin: {}", err));
-        }
-    } else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err("wl-copy stdin unavailable".to_string());
+    let output = runner
+        .copy_selection(payload_json.as_bytes(), CLIPBOARD_PUBLISH_COMMAND_TIMEOUT)
+        .map_err(|err| format!("failed to run wl-copy: {err:#}"))?;
+    if output.timed_out {
+        return Err("wl-copy did not finish publishing before timeout".to_string());
     }
-
-    wait_for_wl_copy_publish(child, CLIPBOARD_PUBLISH_COMMAND_TIMEOUT)
-}
-
-fn wait_for_wl_copy_publish(mut child: Child, timeout: Duration) -> Result<(), String> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => return Ok(()),
-            Ok(Some(status)) => {
-                let stderr = read_child_stderr(&mut child).unwrap_or_default();
-                if stderr.is_empty() {
-                    return Err(format!("wl-copy exited unsuccessfully: {}", status));
-                }
-                return Err(format!(
-                    "wl-copy exited unsuccessfully: {} ({})",
-                    status, stderr
-                ));
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let stderr = read_child_stderr(&mut child).unwrap_or_default();
-                if stderr.is_empty() {
-                    return Err("wl-copy did not finish publishing before timeout".to_string());
-                }
-                return Err(format!(
-                    "wl-copy did not finish publishing before timeout: {}",
-                    stderr
-                ));
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
-            Err(err) => return Err(format!("failed to poll wl-copy status: {}", err)),
-        }
+    if output.status != 0 {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(if stderr.is_empty() {
+            format!("wl-copy exited unsuccessfully: {}", output.status)
+        } else {
+            format!(
+                "wl-copy exited unsuccessfully: {} ({stderr})",
+                output.status
+            )
+        });
     }
+    Ok(())
 }
 
 pub(in crate::backend::wayland) fn clipboard_fingerprint() -> Option<ClipboardFingerprint> {
-    let offered = list_mime_types().ok()?;
+    clipboard_fingerprint_with_runner(&WlClipboardCommandRunner)
+}
+
+fn clipboard_fingerprint_with_runner(
+    runner: &impl ClipboardCommandRunner,
+) -> Option<ClipboardFingerprint> {
+    let offered = list_mime_types_with_runner(runner).ok()?;
     let selected_mime_type =
         image::choose_supported_mime(&offered).or_else(|| offered.first().cloned());
     let content_sample = selected_mime_type.as_ref().and_then(|mime| {
-        read_clipboard_mime_prefix(
+        read_clipboard_mime_prefix_with_runner(
             mime,
             CLIPBOARD_FINGERPRINT_BYTES,
             CLIPBOARD_FINGERPRINT_TIMEOUT,
+            runner,
         )
         .ok()
     });
@@ -112,7 +86,7 @@ fn list_mime_types_with_runner(
         ClipboardReadError::Unavailable(format!("Failed to spawn wl-paste: {}", err))
     })?;
 
-    if output.status.success() {
+    if !output.timed_out && output.status == 0 {
         let text = String::from_utf8_lossy(&output.stdout);
         Ok(text
             .lines()
@@ -147,68 +121,24 @@ pub(super) fn read_clipboard_mime(
     read_clipboard_mime_with_runner(mime_type, limit, timeout, &WlClipboardCommandRunner)
 }
 
-fn read_clipboard_mime_prefix(
-    mime_type: &str,
-    limit: usize,
-    timeout: Duration,
-) -> Result<ClipboardPrefixRead, ClipboardReadError> {
-    read_clipboard_mime_prefix_with_runner(mime_type, limit, timeout, &WlClipboardCommandRunner)
-}
-
 fn read_clipboard_mime_with_runner(
     mime_type: &str,
     limit: usize,
     timeout: Duration,
     runner: &impl ClipboardCommandRunner,
 ) -> Result<Vec<u8>, ClipboardReadError> {
-    let mut child = runner.spawn_paste_mime(mime_type).map_err(|err| {
-        ClipboardReadError::Unavailable(format!("Failed to spawn wl-paste: {}", err))
-    })?;
-
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| ClipboardReadError::Other("wl-paste stdout unavailable".to_string()))?;
-    let result = read_pipe_with_timeout(stdout, limit, timeout);
-    match result {
-        Err(ClipboardReadError::TimedOut) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(ClipboardReadError::TimedOut)
-        }
-        Err(ClipboardReadError::TooLarge { limit }) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(ClipboardReadError::TooLarge { limit })
-        }
-        Err(err) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(err)
-        }
-        Ok(bytes) => {
-            let status = child.wait().map_err(|err| {
-                ClipboardReadError::Other(format!("Failed to wait for wl-paste: {}", err))
-            })?;
-            if status.success() {
-                Ok(bytes)
-            } else {
-                let stderr = read_child_stderr(&mut child).unwrap_or_default();
-                if stderr.to_ascii_lowercase().contains("nothing is copied") {
-                    Err(ClipboardReadError::Empty)
-                } else if stderr.is_empty() {
-                    Err(ClipboardReadError::Other(
-                        "wl-paste exited unsuccessfully".to_string(),
-                    ))
-                } else {
-                    Err(ClipboardReadError::Other(format!(
-                        "wl-paste exited unsuccessfully: {}",
-                        stderr
-                    )))
-                }
-            }
-        }
+    let output = runner
+        .paste_mime(mime_type, timeout, limit.saturating_add(1))
+        .map_err(|err| {
+            ClipboardReadError::Unavailable(format!("Failed to run wl-paste: {err:#}"))
+        })?;
+    if output.timed_out {
+        return Err(ClipboardReadError::TimedOut);
     }
+    if output.stdout_limit_reached || output.stdout.len() > limit {
+        return Err(ClipboardReadError::TooLarge { limit });
+    }
+    clipboard_output(output).map(|output| output.stdout)
 }
 
 fn read_clipboard_mime_prefix_with_runner(
@@ -217,53 +147,47 @@ fn read_clipboard_mime_prefix_with_runner(
     timeout: Duration,
     runner: &impl ClipboardCommandRunner,
 ) -> Result<ClipboardPrefixRead, ClipboardReadError> {
-    let mut child = runner.spawn_paste_mime(mime_type).map_err(|err| {
-        ClipboardReadError::Unavailable(format!("Failed to spawn wl-paste: {}", err))
-    })?;
+    let output = runner
+        .paste_mime(mime_type, timeout, limit.saturating_add(1))
+        .map_err(|err| {
+            ClipboardReadError::Unavailable(format!("Failed to run wl-paste: {err:#}"))
+        })?;
+    if output.timed_out {
+        return Err(ClipboardReadError::TimedOut);
+    }
+    let truncated = output.stdout_limit_reached || output.stdout.len() > limit;
+    if truncated {
+        return Ok(ClipboardPrefixRead {
+            bytes: output.stdout.into_iter().take(limit).collect(),
+            truncated: true,
+        });
+    }
+    let output = clipboard_output(output)?;
+    Ok(ClipboardPrefixRead {
+        bytes: output.stdout,
+        truncated: false,
+    })
+}
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| ClipboardReadError::Other("wl-paste stdout unavailable".to_string()))?;
-    let result = read_pipe_prefix_with_timeout(stdout, limit, timeout);
-    match result {
-        Err(ClipboardReadError::TimedOut) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(ClipboardReadError::TimedOut)
-        }
-        Err(err) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(err)
-        }
-        Ok(sample) if sample.truncated => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Ok(sample)
-        }
-        Ok(sample) => {
-            let status = child.wait().map_err(|err| {
-                ClipboardReadError::Other(format!("Failed to wait for wl-paste: {}", err))
-            })?;
-            if status.success() {
-                Ok(sample)
-            } else {
-                let stderr = read_child_stderr(&mut child).unwrap_or_default();
-                if stderr.to_ascii_lowercase().contains("nothing is copied") {
-                    Err(ClipboardReadError::Empty)
-                } else if stderr.is_empty() {
-                    Err(ClipboardReadError::Other(
-                        "wl-paste exited unsuccessfully".to_string(),
-                    ))
-                } else {
-                    Err(ClipboardReadError::Other(format!(
-                        "wl-paste exited unsuccessfully: {}",
-                        stderr
-                    )))
-                }
-            }
-        }
+fn clipboard_output(
+    output: crate::process_broker::BrokerOutput,
+) -> Result<crate::process_broker::BrokerOutput, ClipboardReadError> {
+    if output.status == 0 {
+        return Ok(output);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    if stderr.to_ascii_lowercase().contains("nothing is copied")
+        || stderr.to_ascii_lowercase().contains("clipboard is empty")
+    {
+        Err(ClipboardReadError::Empty)
+    } else if stderr.is_empty() {
+        Err(ClipboardReadError::Other(
+            "wl-paste exited unsuccessfully".to_string(),
+        ))
+    } else {
+        Err(ClipboardReadError::Other(format!(
+            "wl-paste exited unsuccessfully: {stderr}"
+        )))
     }
 }
 
@@ -278,22 +202,6 @@ where
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let _ = tx.send(read_limited(reader, limit));
-    });
-    rx.recv_timeout(timeout)
-        .map_err(|_| ClipboardReadError::TimedOut)?
-}
-
-fn read_pipe_prefix_with_timeout<R>(
-    reader: R,
-    limit: usize,
-    timeout: Duration,
-) -> Result<ClipboardPrefixRead, ClipboardReadError>
-where
-    R: Read + Send + 'static,
-{
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(read_prefix(reader, limit));
     });
     rx.recv_timeout(timeout)
         .map_err(|_| ClipboardReadError::TimedOut)?
@@ -317,6 +225,7 @@ fn read_limited<R: Read>(mut reader: R, limit: usize) -> Result<Vec<u8>, Clipboa
     Ok(data)
 }
 
+#[cfg(test)]
 fn read_prefix<R: Read>(
     mut reader: R,
     limit: usize,
@@ -351,15 +260,6 @@ fn read_prefix<R: Read>(
     Ok(ClipboardPrefixRead {
         bytes: data,
         truncated: false,
-    })
-}
-
-fn read_child_stderr(child: &mut std::process::Child) -> Option<String> {
-    child.stderr.take().and_then(|mut stderr| {
-        let mut bytes = Vec::new();
-        let _ = stderr.read_to_end(&mut bytes);
-        let text = String::from_utf8_lossy(&bytes).trim().to_string();
-        (!text.is_empty()).then_some(text)
     })
 }
 

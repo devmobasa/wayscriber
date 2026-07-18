@@ -10,6 +10,7 @@ use crate::{
 use wayland_client::{Connection, QueueHandle};
 
 mod session;
+pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
 use session::populate_session_snapshot;
 

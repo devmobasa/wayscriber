@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use tokio::sync::watch;
 
 use crate::backend::wayland::RuntimeWakeHandle;
 
@@ -351,30 +352,52 @@ fn oldest_move_in_current_segment(
         .find_map(|(index, feedback)| (feedback.move_kind() == Some(kind)).then_some(index))
 }
 
-struct LatestValueSender<T> {
-    sender: async_channel::Sender<T>,
-    last_sent: Option<T>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LatestValueSendError {
+    Closed,
 }
 
-impl<T: Clone + PartialEq> LatestValueSender<T> {
-    fn new(sender: async_channel::Sender<T>) -> Self {
-        Self {
-            sender,
-            last_sent: None,
-        }
-    }
+struct LatestValueSender<T> {
+    sender: Option<watch::Sender<Option<T>>>,
+}
 
-    fn publish(&mut self, value: T) -> Result<bool, async_channel::SendError<T>> {
-        if self.last_sent.as_ref() == Some(&value) {
+pub(super) struct LatestValueReceiver<T> {
+    receiver: watch::Receiver<Option<T>>,
+}
+
+fn latest_value_channel<T>() -> (LatestValueSender<T>, LatestValueReceiver<T>) {
+    let (sender, receiver) = watch::channel(None);
+    (
+        LatestValueSender {
+            sender: Some(sender),
+        },
+        LatestValueReceiver { receiver },
+    )
+}
+
+impl<T: PartialEq> LatestValueSender<T> {
+    fn publish(&mut self, value: T) -> Result<bool, LatestValueSendError> {
+        let Some(sender) = self.sender.as_ref() else {
+            return Err(LatestValueSendError::Closed);
+        };
+        if sender.borrow().as_ref() == Some(&value) {
             return Ok(false);
         }
-        self.sender.force_send(value.clone())?;
-        self.last_sent = Some(value);
+        sender
+            .send(Some(value))
+            .map_err(|_| LatestValueSendError::Closed)?;
         Ok(true)
     }
 
-    fn close(&self) {
-        self.sender.close();
+    fn close(&mut self) {
+        self.sender.take();
+    }
+}
+
+impl<T: Clone> LatestValueReceiver<T> {
+    pub(super) async fn recv(&mut self) -> Option<T> {
+        self.receiver.changed().await.ok()?;
+        self.receiver.borrow_and_update().clone()
     }
 }
 
@@ -430,7 +453,7 @@ impl GtkToolbarBridge {
     /// Spawns the GTK thread. Returns `None` only when the OS thread cannot be
     /// created; GTK-level failures are published asynchronously and wake the runtime.
     pub fn spawn(runtime_wake: RuntimeWakeHandle) -> Option<Self> {
-        let (update_tx, update_rx) = async_channel::bounded(1);
+        let (updates, update_rx) = latest_value_channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
         let health = BridgeHealth::new(runtime_wake);
         let feedback = FeedbackPublisher::new(health.clone());
@@ -444,7 +467,7 @@ impl GtkToolbarBridge {
             });
         match spawned {
             Ok(thread) => Some(Self {
-                updates: LatestValueSender::new(update_tx),
+                updates,
                 feedback,
                 health,
                 thread: Some(thread),
@@ -503,6 +526,7 @@ impl Drop for GtkToolbarBridge {
 
 #[cfg(test)]
 mod tests {
+    use glib::MainContext;
     use std::os::fd::AsRawFd;
     use std::sync::mpsc;
 
@@ -584,15 +608,37 @@ mod tests {
     }
 
     #[test]
-    fn latest_value_replaces_unread_state_and_sender_drop_is_observable() {
-        let (tx, rx) = async_channel::bounded(1);
-        let mut latest = LatestValueSender::new(tx);
+    fn latest_value_receiver_runs_on_glib_and_observes_close_after_final_value() {
+        let (mut latest, mut receiver) = latest_value_channel();
         assert_eq!(latest.publish(1), Ok(true));
         assert_eq!(latest.publish(2), Ok(true));
-        assert_eq!(latest.publish(2), Ok(false));
-        assert_eq!(rx.recv_blocking(), Ok(2));
-        drop(latest);
-        assert!(rx.recv_blocking().is_err());
+        latest.close();
+
+        let context = MainContext::new();
+        let (value, closed) =
+            context.block_on(async move { (receiver.recv().await, receiver.recv().await) });
+        assert_eq!(value, Some(2));
+        assert_eq!(closed, None);
+    }
+
+    #[test]
+    fn duplicate_latest_value_does_not_publish_another_change() {
+        let (mut latest, mut receiver) = latest_value_channel();
+        assert_eq!(latest.publish(7), Ok(true));
+
+        let context = MainContext::new();
+        assert_eq!(context.block_on(receiver.recv()), Some(7));
+        assert_eq!(latest.publish(7), Ok(false));
+        latest.close();
+        assert_eq!(context.block_on(receiver.recv()), None);
+    }
+
+    #[test]
+    fn latest_value_publish_rejects_a_disconnected_receiver() {
+        let (mut latest, receiver) = latest_value_channel();
+        drop(receiver);
+
+        assert_eq!(latest.publish(1), Err(LatestValueSendError::Closed));
     }
 
     #[test]

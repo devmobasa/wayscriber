@@ -1,10 +1,10 @@
 //! Clipboard helpers for color hex values.
 
-use super::WaylandState;
+use super::{ClipboardOperationController, WaylandState};
+use crate::backend::wayland::clipboard::ClipboardPoll;
 use crate::input::state::UiToastKind;
 use crate::input::state::{color_to_hex, parse_hex_color};
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::ffi::OsStr;
 use std::time::Duration;
 
 impl WaylandState {
@@ -17,24 +17,63 @@ impl WaylandState {
         log::info!("Hex copy requested: {}", hex);
         self.suppress_focus_exit_for(Duration::from_millis(1500));
 
-        let copied = match std::panic::catch_unwind(|| match copy_hex_via_command(&hex) {
-            Ok(()) => true,
-            Err(err) => {
-                log::warn!("wl-copy failed for hex copy: {}", err);
-                false
-            }
-        }) {
-            Ok(result) => result,
-            Err(_) => {
-                log::error!("Hex copy panicked");
-                false
-            }
-        };
-
-        if copied {
+        if let Err(err) = queue_latest_hex_copy(
+            &mut self.clipboard_hex_copy,
+            &mut self.pending_hex_copy,
+            hex,
+            copy_hex_via_command,
+        ) {
+            log::warn!("Failed to start hex clipboard copy: {err}");
             self.input_state
-                .set_ui_toast(UiToastKind::Info, format!("Copied {}", hex));
-        } else {
+                .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+        }
+    }
+
+    pub(in crate::backend::wayland) fn poll_hex_copy_completion(&mut self) {
+        match self.clipboard_hex_copy.poll() {
+            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
+            ClipboardPoll::Ready {
+                context: hex,
+                outcome: Ok(()),
+                ..
+            } => {
+                self.input_state
+                    .set_ui_toast(UiToastKind::Info, format!("Copied {hex}"));
+            }
+            ClipboardPoll::Ready {
+                context: hex,
+                outcome: Err(err),
+                ..
+            } => {
+                log::warn!("wl-copy failed for hex copy {hex}: {err}");
+                self.input_state
+                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+            }
+            ClipboardPoll::ProducerFailed {
+                context: hex,
+                reason,
+                ..
+            } => {
+                log::error!("Hex copy producer failed for {hex}: {reason}");
+                self.input_state
+                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+            }
+            ClipboardPoll::Disconnected { context: hex, .. } => {
+                log::error!("Hex copy producer disconnected for {hex}");
+                self.input_state
+                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+            }
+        }
+        self.start_pending_hex_copy_if_idle();
+    }
+
+    fn start_pending_hex_copy_if_idle(&mut self) {
+        if let Err(err) = submit_pending_hex_copy_if_idle(
+            &mut self.clipboard_hex_copy,
+            &mut self.pending_hex_copy,
+            copy_hex_via_command,
+        ) {
+            log::warn!("Failed to start pending hex clipboard copy: {err}");
             self.input_state
                 .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
         }
@@ -82,99 +121,88 @@ impl WaylandState {
     }
 }
 
+fn start_hex_copy(
+    controller: &mut ClipboardOperationController<String, Result<(), String>>,
+    hex: String,
+    operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    let worker_hex = hex.clone();
+    controller
+        .try_submit(hex, "wayscriber-hex-copy", move || operation(&worker_hex))
+        .map(drop)
+        .map_err(|failure| failure.into_parts().0.to_string())
+}
+
+fn queue_latest_hex_copy(
+    controller: &mut ClipboardOperationController<String, Result<(), String>>,
+    pending: &mut Option<String>,
+    hex: String,
+    operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    *pending = Some(hex);
+    submit_pending_hex_copy_if_idle(controller, pending, operation)
+}
+
+fn submit_pending_hex_copy_if_idle(
+    controller: &mut ClipboardOperationController<String, Result<(), String>>,
+    pending: &mut Option<String>,
+    operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    if controller.is_active() {
+        return Ok(());
+    }
+    let Some(hex) = pending.take() else {
+        return Ok(());
+    };
+    start_hex_copy(controller, hex, operation)
+}
+
 enum ClipboardTextError {
     Empty,
     Other(String),
 }
 
 fn copy_hex_via_command(hex: &str) -> Result<(), String> {
-    let mut child = Command::new("wl-copy")
-        .arg("--type")
-        .arg("text/plain;charset=utf-8")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn wl-copy: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        if let Err(err) = stdin.write_all(hex.as_bytes()) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!("Failed to write to wl-copy stdin: {}", err));
-        }
-    } else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err("wl-copy stdin unavailable".to_string());
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.publish(
+                crate::process_broker::HelperKind::WlCopy,
+                OsStr::new("wl-copy"),
+                [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
+                hex.as_bytes().to_vec(),
+                Duration::from_secs(5),
+            )
+        })
+        .map_err(|error| format!("Failed to run wl-copy: {error:#}"))?;
+    if output.timed_out {
+        return Err("wl-copy timed out".to_string());
     }
-
-    match child.try_wait() {
-        Ok(Some(status)) => {
-            if !status.success() {
-                let stderr = child
-                    .stderr
-                    .take()
-                    .and_then(|mut err| {
-                        let mut buf = Vec::new();
-                        let _ = err.read_to_end(&mut buf);
-                        if buf.is_empty() {
-                            None
-                        } else {
-                            Some(String::from_utf8_lossy(&buf).trim().to_string())
-                        }
-                    })
-                    .unwrap_or_default();
-                if stderr.is_empty() {
-                    return Err("wl-copy exited unsuccessfully".to_string());
-                }
-                return Err(format!("wl-copy exited unsuccessfully: {}", stderr));
-            }
-            Ok(())
-        }
-        Ok(None) => {
-            std::thread::spawn(move || match child.wait() {
-                Ok(status) => {
-                    if !status.success() {
-                        let stderr = child
-                            .stderr
-                            .take()
-                            .and_then(|mut err| {
-                                let mut buf = Vec::new();
-                                let _ = err.read_to_end(&mut buf);
-                                if buf.is_empty() {
-                                    None
-                                } else {
-                                    Some(String::from_utf8_lossy(&buf).trim().to_string())
-                                }
-                            })
-                            .unwrap_or_default();
-                        if stderr.is_empty() {
-                            log::warn!("wl-copy exited unsuccessfully");
-                        } else {
-                            log::warn!("wl-copy failed: {}", stderr);
-                        }
-                    }
-                }
-                Err(err) => {
-                    log::warn!("Failed to wait for wl-copy: {}", err);
-                }
-            });
-            Ok(())
-        }
-        Err(err) => Err(format!("Failed to poll wl-copy status: {}", err)),
+    if output.status != 0 {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return if stderr.is_empty() {
+            Err("wl-copy exited unsuccessfully".to_string())
+        } else {
+            Err(format!("wl-copy exited unsuccessfully: {stderr}"))
+        };
     }
+    Ok(())
 }
 
 fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
-    let output = Command::new("wl-paste")
-        .arg("--no-newline")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|err| ClipboardTextError::Other(format!("Failed to spawn wl-paste: {}", err)))?;
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.run(
+                crate::process_broker::HelperKind::WlPaste,
+                OsStr::new("wl-paste"),
+                [OsStr::new("--no-newline")],
+                Vec::new(),
+                Duration::from_secs(5),
+                1024 * 1024,
+            )
+        })
+        .map_err(|err| ClipboardTextError::Other(format!("Failed to run wl-paste: {err:#}")))?;
 
-    if output.status.success() {
+    if !output.timed_out && output.status == 0 {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -192,5 +220,135 @@ fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
                 stderr
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::backend::wayland::RuntimeWakeSource;
+    use crate::backend::wayland::clipboard::ClipboardOperationIdSource;
+
+    #[test]
+    fn hex_copy_submission_stays_off_the_event_thread_until_completion() {
+        let wake = RuntimeWakeSource::new().unwrap();
+        let mut controller =
+            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+
+        start_hex_copy(&mut controller, "#123456".to_string(), move |hex| {
+            assert_eq!(hex, "#123456");
+            started_tx.send(()).unwrap();
+            release_rx
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        })
+        .unwrap();
+
+        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
+        release_tx.send(()).unwrap();
+        assert!(
+            wake.wait_readable(Some(Duration::from_secs(1))).unwrap(),
+            "hex copy completion did not wake the event loop"
+        );
+        assert!(matches!(
+            controller.poll(),
+            ClipboardPoll::Ready {
+                context,
+                outcome: Ok(()),
+                ..
+            } if context == "#123456"
+        ));
+    }
+
+    #[test]
+    fn active_hex_copy_retains_only_the_newest_pending_request() {
+        let wake = RuntimeWakeSource::new().unwrap();
+        let mut controller =
+            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let mut pending = None;
+        let (first_started_tx, first_started_rx) = mpsc::channel();
+        let (first_release_tx, first_release_rx) = mpsc::channel();
+
+        queue_latest_hex_copy(
+            &mut controller,
+            &mut pending,
+            "#111111".to_string(),
+            move |hex| {
+                assert_eq!(hex, "#111111");
+                first_started_tx.send(()).unwrap();
+                first_release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                Ok(())
+            },
+        )
+        .unwrap();
+        first_started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+
+        queue_latest_hex_copy(
+            &mut controller,
+            &mut pending,
+            "#222222".to_string(),
+            |_| -> Result<(), String> { panic!("busy submission must not run") },
+        )
+        .unwrap();
+        queue_latest_hex_copy(
+            &mut controller,
+            &mut pending,
+            "#333333".to_string(),
+            |_| -> Result<(), String> { panic!("busy submission must not run") },
+        )
+        .unwrap();
+        assert_eq!(pending.as_deref(), Some("#333333"));
+        assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
+
+        first_release_tx.send(()).unwrap();
+        assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
+        assert!(matches!(
+            controller.poll(),
+            ClipboardPoll::Ready {
+                context,
+                outcome: Ok(()),
+                ..
+            } if context == "#111111"
+        ));
+
+        let (newest_started_tx, newest_started_rx) = mpsc::channel();
+        let (newest_release_tx, newest_release_rx) = mpsc::channel();
+        submit_pending_hex_copy_if_idle(&mut controller, &mut pending, move |hex| {
+            newest_started_tx.send(hex.to_string()).unwrap();
+            newest_release_rx
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(pending, None);
+        assert_eq!(
+            newest_started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap(),
+            "#333333"
+        );
+
+        newest_release_tx.send(()).unwrap();
+        assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
+        assert!(matches!(
+            controller.poll(),
+            ClipboardPoll::Ready {
+                context,
+                outcome: Ok(()),
+                ..
+            } if context == "#333333"
+        ));
     }
 }

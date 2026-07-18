@@ -1,7 +1,8 @@
 //! Clipboard integration for copying screenshots.
 
 use super::types::CaptureError;
-use std::process::{Command, Stdio};
+use std::ffi::OsStr;
+use std::time::Duration;
 
 /// Copy image data to the Wayland clipboard.
 ///
@@ -32,61 +33,35 @@ where
 
 /// Copy to clipboard by shelling out to wl-copy command.
 fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
-    use std::io::Write;
-
-    let mut child = Command::new("wl-copy")
-        .arg("--type")
-        .arg("image/png")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.publish(
+                crate::process_broker::HelperKind::WlCopy,
+                OsStr::new("wl-copy"),
+                [OsStr::new("--type"), OsStr::new("image/png")],
+                image_data.to_vec(),
+                Duration::from_secs(10),
+            )
+        })
         .map_err(|e| {
             CaptureError::ClipboardError(format!(
-                "Failed to spawn wl-copy (is it installed?): {}",
+                "Failed to run wl-copy through the process broker: {}",
                 e
             ))
         })?;
-
-    // Write image data to stdin
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(image_data).map_err(|e| {
-            CaptureError::ClipboardError(format!("Failed to write to wl-copy stdin: {}", e))
-        })?;
+    if output.timed_out {
+        return Err(CaptureError::ClipboardError(
+            "wl-copy timed out".to_string(),
+        ));
     }
-
-    match child.try_wait() {
-        Ok(Some(status)) => {
-            if !status.success() {
-                return Err(CaptureError::ClipboardError(
-                    "wl-copy exited unsuccessfully".to_string(),
-                ));
-            }
-            log::debug!("wl-copy command completed successfully");
-            Ok(())
-        }
-        Ok(None) => {
-            // Wait in the background so we don't block the capture pipeline.
-            std::thread::spawn(move || match child.wait_with_output() {
-                Ok(output) => {
-                    if !output.status.success() {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        log::warn!("wl-copy failed: {}", stderr.trim());
-                    } else {
-                        log::debug!("wl-copy command completed successfully");
-                    }
-                }
-                Err(err) => {
-                    log::warn!("Failed to wait for wl-copy: {}", err);
-                }
-            });
-            Ok(())
-        }
-        Err(err) => Err(CaptureError::ClipboardError(format!(
-            "Failed to poll wl-copy status: {}",
-            err
-        ))),
+    if output.status != 0 {
+        return Err(CaptureError::ClipboardError(format!(
+            "wl-copy exited unsuccessfully: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
     }
+    log::debug!("wl-copy command completed successfully");
+    Ok(())
 }
 
 /// Check if clipboard functionality is available.
@@ -94,12 +69,18 @@ fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
 /// Tests if wl-copy command exists as a basic availability check.
 #[allow(dead_code)] // Will be used in Phase 2 for capability checks
 pub fn is_clipboard_available() -> bool {
-    Command::new("wl-copy")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
+    crate::process_broker::current()
+        .and_then(|broker| {
+            broker.run(
+                crate::process_broker::HelperKind::WlCopy,
+                OsStr::new("wl-copy"),
+                [OsStr::new("--version")],
+                Vec::new(),
+                Duration::from_secs(2),
+                4096,
+            )
+        })
+        .is_ok_and(|output| !output.timed_out && output.status == 0)
 }
 
 #[cfg(test)]

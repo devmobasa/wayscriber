@@ -6,44 +6,12 @@ use wayland_client::{Connection, EventQueue};
 use super::super::state::WaylandState;
 use super::runtime_wake::RuntimeWakeSource;
 use super::signals::{OverlaySignalState, setup_signal_handlers};
-use super::tray::process_tray_action;
+use super::tray::{durable_action_retry_due, durable_action_retry_timeout, process_tray_action};
 
 mod capture;
 mod dispatch;
 mod render;
 pub(in crate::backend::wayland) mod session_save;
-
-const TRAY_ACTION_STARTUP_GRACE: Duration = Duration::from_millis(50);
-
-/// One-shot recovery scan for action publication racing overlay startup.
-/// Runtime SIGUSR2 delivery is wake-driven; this deadline never rearms.
-struct TrayActionStartupFallback {
-    startup_deadline: Option<Instant>,
-}
-
-impl TrayActionStartupFallback {
-    fn new(now: Instant) -> Self {
-        Self {
-            startup_deadline: Some(now.checked_add(TRAY_ACTION_STARTUP_GRACE).unwrap_or(now)),
-        }
-    }
-
-    fn timeout(&self, now: Instant) -> Option<Duration> {
-        self.startup_deadline
-            .map(|deadline| deadline.saturating_duration_since(now))
-    }
-
-    fn take_due(&mut self, now: Instant) -> bool {
-        let Some(deadline) = self.startup_deadline else {
-            return false;
-        };
-        if now < deadline {
-            return false;
-        }
-        self.startup_deadline = None;
-        true
-    }
-}
 
 fn process_tray_actions_and_sync(state: &mut WaylandState) {
     if process_tray_action(state) {
@@ -76,7 +44,16 @@ pub(super) fn run_event_loop(
     // action published before installation is found here; later publications
     // signal the installed listener and wake the shared runtime descriptor.
     let mut signals = match install_then_scan(
-        || setup_signal_handlers(runtime_wake.handle()),
+        || {
+            let signals = setup_signal_handlers(runtime_wake.handle())?;
+            if let Err(error) = crate::daemon::protocol_v2::publish_signal_ready_from_environment()
+            {
+                return Err(std::io::Error::other(format!(
+                    "failed to publish overlay signal readiness: {error:#}"
+                )));
+            }
+            Ok(signals)
+        },
         || process_tray_actions_and_sync(state),
     ) {
         Ok(signals) => Some(signals),
@@ -88,8 +65,6 @@ pub(super) fn run_event_loop(
             None
         }
     };
-    let mut tray_action_fallback = TrayActionStartupFallback::new(Instant::now());
-
     // Track consecutive render failures for error recovery.
     let mut consecutive_render_failures = 0u32;
 
@@ -98,6 +73,9 @@ pub(super) fn run_event_loop(
 
     // Main event loop.
     while let Some(signal_state) = signals.as_mut() {
+        if durable_action_retry_due(state, Instant::now()) {
+            process_tray_actions_and_sync(state);
+        }
         if let Some(failure) =
             terminal_signal_failure(signal_state, || process_tray_actions_and_sync(state))
         {
@@ -138,6 +116,7 @@ pub(super) fn run_event_loop(
         let focus_exit_timeout = state.focus_exit_timeout(now);
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
         let capture_timeout = capture::capture_timeout(state, now);
+        let durable_action_timeout = durable_action_retry_timeout(state, now);
         let timeout = if should_block {
             min_timeout(autosave_timeout, focus_exit_timeout)
         } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -163,7 +142,7 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
-        let timeout = min_timeout(timeout, tray_action_fallback.timeout(Instant::now()));
+        let timeout = min_timeout(timeout, durable_action_timeout);
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -176,13 +155,6 @@ pub(super) fn run_event_loop(
             state.reconcile_live_source_interaction_if_idle(
                 "post-dispatch interaction reconciliation",
             );
-        }
-
-        // Cover only the bounded startup publication window. Once this one-shot
-        // scan runs, SIGUSR2 plus the durable queue own subsequent delivery and
-        // the idle overlay can block without a periodic filesystem heartbeat.
-        if tray_action_fallback.take_due(Instant::now()) {
-            process_tray_actions_and_sync(state);
         }
 
         state.process_gtk_toolbar(conn, qh);
@@ -351,8 +323,7 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        TRAY_ACTION_STARTUP_GRACE, TrayActionStartupFallback, finalize_event_loop,
-        install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
+        finalize_event_loop, install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
     };
 
     #[test]
@@ -369,22 +340,6 @@ mod tests {
             Some(Duration::from_millis(1500))
         );
         assert_eq!(min_timeout(None, None), None);
-    }
-
-    #[test]
-    fn tray_action_fallback_scans_only_when_its_deadline_is_due() {
-        let started = std::time::Instant::now();
-        let mut fallback = TrayActionStartupFallback::new(started);
-
-        assert_eq!(fallback.timeout(started), Some(TRAY_ACTION_STARTUP_GRACE));
-        assert!(!fallback.take_due(started));
-        assert!(fallback.take_due(started + TRAY_ACTION_STARTUP_GRACE));
-        assert!(!fallback.take_due(started + TRAY_ACTION_STARTUP_GRACE));
-        assert_eq!(
-            fallback.timeout(started + TRAY_ACTION_STARTUP_GRACE),
-            None,
-            "the startup recovery deadline must become quiescent after one scan"
-        );
     }
 
     #[test]

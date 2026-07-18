@@ -1,61 +1,142 @@
-#[cfg(any(feature = "tray", feature = "portal"))]
-use log::warn;
-use std::ffi::OsString;
-use std::sync::Arc;
+use crate::tray_action::TrayAction;
 #[cfg(feature = "tray")]
+use log::warn;
+use std::collections::VecDeque;
+use std::ffi::OsString;
+use std::io;
+use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
 #[cfg(feature = "tray")]
 use std::sync::atomic::AtomicU64;
-#[cfg(any(feature = "tray", feature = "portal"))]
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "tray")]
 use std::time::Instant;
 
 use crate::backend::wayland::RuntimeWakeHandle;
-#[cfg(all(test, any(feature = "tray", feature = "portal")))]
+#[cfg(test)]
 use crate::backend::wayland::RuntimeWakeSource;
+
+trait ControlWake: Send + Sync {
+    fn wake(&self) -> io::Result<()>;
+}
+
+impl ControlWake for RuntimeWakeHandle {
+    fn wake(&self) -> io::Result<()> {
+        RuntimeWakeHandle::wake(self)
+    }
+}
 
 /// A daemon-owned flag whose external producers cannot publish without also
 /// waking the control loop that consumes it.
 #[derive(Clone)]
 pub(super) struct DaemonControlEvent {
-    #[cfg(any(feature = "tray", feature = "portal"))]
     flag: Arc<AtomicBool>,
-    #[cfg(any(feature = "tray", feature = "portal"))]
-    wake: RuntimeWakeHandle,
+    wake: Arc<dyn ControlWake>,
 }
 
 impl DaemonControlEvent {
     pub(super) fn new(flag: Arc<AtomicBool>, wake: RuntimeWakeHandle) -> Self {
-        #[cfg(any(feature = "tray", feature = "portal"))]
-        {
-            Self { flag, wake }
-        }
-        #[cfg(not(any(feature = "tray", feature = "portal")))]
-        {
-            let _ = (flag, wake);
-            Self {}
+        Self {
+            flag,
+            wake: Arc::new(wake),
         }
     }
 
-    #[cfg(any(feature = "tray", feature = "portal"))]
-    pub(super) fn raise(&self, source: &str) {
+    #[cfg(test)]
+    fn with_wake(flag: Arc<AtomicBool>, wake: Arc<dyn ControlWake>) -> Self {
+        Self { flag, wake }
+    }
+
+    pub(super) fn raise(&self, source: &str) -> io::Result<()> {
         self.flag.store(true, Ordering::Release);
-        if let Err(err) = self.wake.wake() {
-            warn!("Failed to wake daemon after {source}: {err}");
-        }
+        self.wake
+            .wake()
+            .map_err(|error| io::Error::new(error.kind(), format!("{source}: {error}")))
     }
 
-    #[cfg(feature = "tray")]
     pub(super) fn is_raised(&self) -> bool {
         self.flag.load(Ordering::Acquire)
     }
 
-    #[cfg(all(test, any(feature = "tray", feature = "portal")))]
+    #[cfg(test)]
     pub(super) fn for_test(flag: Arc<AtomicBool>) -> (Self, RuntimeWakeSource) {
         let wake = RuntimeWakeSource::new().unwrap();
         (Self::new(flag, wake.handle()), wake)
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) struct VisibilityIntent {
+    pub(super) activation_token: Option<String>,
+    pub(super) signal_requested: bool,
+}
+
+#[derive(Debug, Default)]
+struct VisibilityIntentState {
+    activation_token: Option<String>,
+    signal_requested: bool,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct VisibilityIntents {
+    state: Mutex<VisibilityIntentState>,
+    ready: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+pub(super) struct VisibilityPublisher {
+    intents: Arc<VisibilityIntents>,
+    event: DaemonControlEvent,
+}
+
+impl VisibilityIntents {
+    #[cfg(test)]
+    pub(super) fn with_ready(ready: Arc<AtomicBool>) -> Self {
+        Self {
+            state: Mutex::new(VisibilityIntentState::default()),
+            ready,
+        }
+    }
+
+    pub(super) fn publisher(self: &Arc<Self>, wake: RuntimeWakeHandle) -> VisibilityPublisher {
+        VisibilityPublisher {
+            intents: Arc::clone(self),
+            event: DaemonControlEvent::new(Arc::clone(&self.ready), wake),
+        }
+    }
+
+    pub(super) fn claim(&self) -> Option<VisibilityIntent> {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !self.ready.swap(false, Ordering::Acquire) {
+            return None;
+        }
+        Some(VisibilityIntent {
+            activation_token: state.activation_token.take(),
+            signal_requested: std::mem::take(&mut state.signal_requested),
+        })
+    }
+}
+
+impl VisibilityPublisher {
+    pub(super) fn publish(
+        &self,
+        activation_token: Option<String>,
+        signal_requested: bool,
+        source: &str,
+    ) -> io::Result<()> {
+        let mut state = self
+            .intents
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if activation_token.is_some() {
+            state.activation_token = activation_token;
+        }
+        state.signal_requested |= signal_requested;
+        self.event.raise(source)
     }
 }
 
@@ -168,3 +249,232 @@ impl std::error::Error for AlreadyRunningError {}
 
 /// Daemon state manager
 pub type BackendRunner = dyn Fn(Option<String>) -> anyhow::Result<()> + Send + Sync;
+
+const MAX_OVERLAY_ACTION_INTENTS: usize = 64;
+
+#[derive(Debug, Default)]
+struct OverlayActionIntentState {
+    queue: VecDeque<TrayAction>,
+    in_flight: usize,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct OverlayActionIntents {
+    state: Mutex<OverlayActionIntentState>,
+    ready: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+pub(super) struct OverlayActionPublisher {
+    intents: Arc<OverlayActionIntents>,
+    event: DaemonControlEvent,
+}
+
+#[derive(Debug)]
+pub(super) enum OverlayActionPublishError {
+    QueueFull,
+    Wake(io::Error),
+}
+
+impl OverlayActionIntents {
+    pub(super) fn publisher(self: &Arc<Self>, wake: RuntimeWakeHandle) -> OverlayActionPublisher {
+        OverlayActionPublisher {
+            intents: Arc::clone(self),
+            event: DaemonControlEvent::new(Arc::clone(&self.ready), wake),
+        }
+    }
+
+    pub(crate) fn claim_batch(&self) -> Vec<TrayAction> {
+        self.claim_batch_with_hook(|| {})
+    }
+
+    fn claim_batch_with_hook(&self, after_claim: impl FnOnce()) -> Vec<TrayAction> {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !self.ready.swap(false, Ordering::Acquire) {
+            return Vec::new();
+        }
+        after_claim();
+        let batch: Vec<_> = state.queue.drain(..).collect();
+        state.in_flight += batch.len();
+        batch
+    }
+
+    pub(crate) fn finish_batch(&self, completed: usize) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert!(
+            completed <= state.in_flight,
+            "completed action count exceeds in-flight ownership"
+        );
+        state.in_flight -= completed;
+    }
+
+    pub(crate) fn is_ready(&self) -> bool {
+        self.ready.load(Ordering::Acquire)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_counts(&self) -> (usize, usize) {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        (state.queue.len(), state.in_flight)
+    }
+}
+
+impl OverlayActionPublisher {
+    pub(super) fn publish(&self, action: TrayAction) -> Result<(), OverlayActionPublishError> {
+        let mut state = self
+            .intents
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if state.queue.len() + state.in_flight >= MAX_OVERLAY_ACTION_INTENTS {
+            return Err(OverlayActionPublishError::QueueFull);
+        }
+        state.queue.push_back(action);
+        self.event
+            .raise("tray action")
+            .map_err(OverlayActionPublishError::Wake)
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    use std::sync::Barrier;
+    use std::sync::atomic::AtomicUsize;
+
+    #[derive(Default)]
+    struct CountingWake {
+        calls: AtomicUsize,
+        fail: AtomicBool,
+    }
+
+    impl ControlWake for CountingWake {
+        fn wake(&self) -> io::Result<()> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            if self.fail.load(Ordering::Relaxed) {
+                Err(io::Error::other("injected wake failure"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    fn action_publisher(
+        intents: &Arc<OverlayActionIntents>,
+        wake: Arc<CountingWake>,
+    ) -> OverlayActionPublisher {
+        OverlayActionPublisher {
+            intents: Arc::clone(intents),
+            event: DaemonControlEvent::with_wake(Arc::clone(&intents.ready), wake),
+        }
+    }
+
+    #[test]
+    fn action_published_after_batch_claim_remains_pending() {
+        let intents = Arc::new(OverlayActionIntents::default());
+        let wake = Arc::new(CountingWake::default());
+        let publisher = action_publisher(&intents, wake);
+        publisher.publish(TrayAction::ToggleFreeze).unwrap();
+
+        let claim_barrier = Arc::new(Barrier::new(2));
+        let release_barrier = Arc::new(Barrier::new(2));
+        let claimant_intents = Arc::clone(&intents);
+        let claimant_claim = Arc::clone(&claim_barrier);
+        let claimant_release = Arc::clone(&release_barrier);
+        let claimant = std::thread::spawn(move || {
+            claimant_intents.claim_batch_with_hook(|| {
+                claimant_claim.wait();
+                claimant_release.wait();
+            })
+        });
+
+        claim_barrier.wait();
+        let late_publisher = publisher.clone();
+        let late = std::thread::spawn(move || {
+            late_publisher.publish(TrayAction::ToggleHelp).unwrap();
+        });
+        release_barrier.wait();
+
+        let first = claimant.join().unwrap();
+        late.join().unwrap();
+        assert_eq!(first, [TrayAction::ToggleFreeze]);
+        intents.finish_batch(first.len());
+
+        let second = intents.claim_batch();
+        assert_eq!(second, [TrayAction::ToggleHelp]);
+        intents.finish_batch(second.len());
+    }
+
+    #[test]
+    fn queue_full_rejection_does_not_publish_another_wake() {
+        let intents = Arc::new(OverlayActionIntents::default());
+        let wake = Arc::new(CountingWake::default());
+        let publisher = action_publisher(&intents, Arc::clone(&wake));
+        for _ in 0..MAX_OVERLAY_ACTION_INTENTS {
+            publisher.publish(TrayAction::ToggleHelp).unwrap();
+        }
+        let wake_count = wake.calls.load(Ordering::Relaxed);
+
+        assert!(matches!(
+            publisher.publish(TrayAction::ToggleFreeze),
+            Err(OverlayActionPublishError::QueueFull)
+        ));
+        assert_eq!(wake.calls.load(Ordering::Relaxed), wake_count);
+        assert!(intents.ready.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn wake_failure_keeps_action_and_readiness_pending() {
+        let intents = Arc::new(OverlayActionIntents::default());
+        let wake = Arc::new(CountingWake::default());
+        wake.fail.store(true, Ordering::Relaxed);
+        let publisher = action_publisher(&intents, wake);
+
+        assert!(matches!(
+            publisher.publish(TrayAction::ToggleFreeze),
+            Err(OverlayActionPublishError::Wake(_))
+        ));
+        assert!(intents.ready.load(Ordering::Acquire));
+        assert_eq!(intents.pending_counts(), (1, 0));
+
+        let batch = intents.claim_batch();
+        assert_eq!(batch, [TrayAction::ToggleFreeze]);
+        intents.finish_batch(batch.len());
+    }
+
+    #[test]
+    fn visibility_metadata_merges_and_claims_as_one_snapshot() {
+        let intents = Arc::new(VisibilityIntents::default());
+        let wake = Arc::new(CountingWake::default());
+        let publisher = VisibilityPublisher {
+            intents: Arc::clone(&intents),
+            event: DaemonControlEvent::with_wake(Arc::clone(&intents.ready), wake),
+        };
+
+        publisher
+            .publish(Some("first".into()), false, "first publication")
+            .unwrap();
+        publisher.publish(None, true, "signal publication").unwrap();
+        publisher
+            .publish(Some("latest".into()), false, "replacement publication")
+            .unwrap();
+
+        assert_eq!(
+            intents.claim(),
+            Some(VisibilityIntent {
+                activation_token: Some("latest".into()),
+                signal_requested: true,
+            })
+        );
+        assert_eq!(intents.claim(), None);
+    }
+}

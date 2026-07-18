@@ -9,7 +9,9 @@ use crate::shortcut_hint::{
 #[cfg(feature = "tray")]
 use std::env;
 #[cfg(feature = "tray")]
-use std::process::Command;
+use std::ffi::OsStr;
+#[cfg(feature = "tray")]
+use std::time::Duration;
 
 #[cfg(feature = "tray")]
 pub(super) fn configured_toggle_shortcut_hint() -> Option<String> {
@@ -52,11 +54,19 @@ fn read_gnome_shortcut_outputs() -> Option<(String, String)> {
 
 #[cfg(feature = "tray")]
 fn read_gsettings_value(schema: &str, key: &str) -> Option<String> {
-    let output = Command::new("gsettings")
-        .args(["get", schema, key])
-        .output()
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.run(
+                crate::process_broker::HelperKind::Gsettings,
+                OsStr::new("gsettings"),
+                [OsStr::new("get"), OsStr::new(schema), OsStr::new(key)],
+                Vec::new(),
+                Duration::from_secs(3),
+                64 * 1024,
+            )
+        })
         .ok()?;
-    if !output.status.success() {
+    if output.timed_out || output.status != 0 {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).to_string())

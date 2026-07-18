@@ -1,39 +1,56 @@
 use super::super::WAYSCRIBER_SELECTION_MIME;
-use std::process::{Child, Command, Output, Stdio};
+use crate::process_broker::{BrokerOutput, HelperKind};
+use std::ffi::OsStr;
+use std::time::Duration;
 
 pub(super) trait ClipboardCommandRunner {
-    fn list_types(&self) -> std::io::Result<Output>;
-    fn spawn_paste_mime(&self, mime_type: &str) -> std::io::Result<Child>;
-    fn spawn_copy_selection(&self) -> std::io::Result<Child>;
+    fn list_types(&self) -> anyhow::Result<BrokerOutput>;
+    fn paste_mime(
+        &self,
+        mime_type: &str,
+        timeout: Duration,
+        output_cap: usize,
+    ) -> anyhow::Result<BrokerOutput>;
+    fn copy_selection(&self, payload: &[u8], timeout: Duration) -> anyhow::Result<BrokerOutput>;
 }
 
 pub(super) struct WlClipboardCommandRunner;
 
 impl ClipboardCommandRunner for WlClipboardCommandRunner {
-    fn list_types(&self) -> std::io::Result<Output> {
-        Command::new("wl-paste")
-            .arg("--list-types")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
+    fn list_types(&self) -> anyhow::Result<BrokerOutput> {
+        crate::process_broker::current()?.run(
+            HelperKind::WlPaste,
+            OsStr::new("wl-paste"),
+            [OsStr::new("--list-types")],
+            Vec::new(),
+            Duration::from_secs(5),
+            64 * 1024,
+        )
     }
 
-    fn spawn_paste_mime(&self, mime_type: &str) -> std::io::Result<Child> {
-        Command::new("wl-paste")
-            .arg("--type")
-            .arg(mime_type)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+    fn paste_mime(
+        &self,
+        mime_type: &str,
+        timeout: Duration,
+        output_cap: usize,
+    ) -> anyhow::Result<BrokerOutput> {
+        crate::process_broker::current()?.run_prefix(
+            HelperKind::WlPaste,
+            OsStr::new("wl-paste"),
+            [OsStr::new("--type"), OsStr::new(mime_type)],
+            Vec::new(),
+            timeout,
+            output_cap,
+        )
     }
 
-    fn spawn_copy_selection(&self) -> std::io::Result<Child> {
-        Command::new("wl-copy")
-            .arg("--type")
-            .arg(WAYSCRIBER_SELECTION_MIME)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
+    fn copy_selection(&self, payload: &[u8], timeout: Duration) -> anyhow::Result<BrokerOutput> {
+        crate::process_broker::current()?.publish(
+            HelperKind::WlCopy,
+            OsStr::new("wl-copy"),
+            [OsStr::new("--type"), OsStr::new(WAYSCRIBER_SELECTION_MIME)],
+            payload.to_vec(),
+            timeout,
+        )
     }
 }

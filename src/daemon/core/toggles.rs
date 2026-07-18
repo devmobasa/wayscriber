@@ -8,7 +8,6 @@ use crate::tray_action::TrayAction;
 use anyhow::{Context, Result};
 use log::{info, warn};
 use std::path::Path;
-use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 impl Daemon {
@@ -134,19 +133,13 @@ impl Daemon {
     ) -> Result<()> {
         let action_path = crate::tray_action::queue_action(action)?;
 
-        let pid = self.overlay_pid.load(Ordering::Acquire);
-        if signal_visible_overlay && self.overlay_state == OverlayState::Visible && pid != 0 {
+        if signal_visible_overlay && self.overlay_state == OverlayState::Visible {
             #[cfg(unix)]
             {
-                let pid = i32::try_from(pid).context("overlay pid does not fit into i32")?;
-                // SAFETY: `pid` has been checked to fit the Unix pid range and
-                // `SIGUSR2` is a valid signal constant.
-                if unsafe { libc::kill(pid, libc::SIGUSR2) } != 0 {
+                if let Err(error) = self.overlay_child.signal(libc::SIGUSR2) {
                     warn!(
-                        "Failed to signal overlay process {} for action {}: {}",
-                        pid,
+                        "Failed to signal overlay process for action {}: {error:#}",
                         action.as_str(),
-                        std::io::Error::last_os_error()
                     );
                 }
             }
@@ -162,6 +155,18 @@ impl Daemon {
         );
 
         Ok(())
+    }
+
+    pub(super) fn signal_overlay_action_ready(&self, action: TrayAction) -> Result<()> {
+        if self.overlay_state != OverlayState::Visible {
+            return Ok(());
+        }
+        self.overlay_child.signal(libc::SIGUSR2).with_context(|| {
+            format!(
+                "failed to notify overlay about committed v2 action {}",
+                action.as_str()
+            )
+        })
     }
 
     pub(super) fn process_pending_toggles(

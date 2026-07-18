@@ -8,19 +8,22 @@ mod shortcut_hint_io;
 pub(crate) use runtime::start_system_tray;
 
 #[cfg(feature = "tray")]
-use super::types::{DaemonControlEvent, TrayStatusShared};
+use super::types::{
+    DaemonControlEvent, OverlayActionPublisher, TrayStatusShared, VisibilityPublisher,
+};
+#[cfg(all(test, feature = "tray"))]
+use super::types::{OverlayActionIntents, VisibilityIntents};
 #[cfg(feature = "tray")]
 use crate::config::TrayIconStyle;
 #[cfg(feature = "tray")]
 use std::sync::Arc;
-#[cfg(all(test, feature = "tray"))]
-use std::sync::atomic::AtomicBool;
 #[cfg(feature = "tray")]
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicBool;
 
 #[cfg(feature = "tray")]
 struct TrayControl {
-    toggle: DaemonControlEvent,
+    visibility: VisibilityPublisher,
+    action: OverlayActionPublisher,
     quit: DaemonControlEvent,
 }
 
@@ -30,7 +33,7 @@ pub(crate) struct WayscriberTray {
     configurator_binary: String,
     session_resume_enabled: bool,
     icon_style: TrayIconStyle,
-    overlay_pid: Arc<AtomicU32>,
+    overlay_active: Arc<AtomicBool>,
     tray_status: Arc<TrayStatusShared>,
 }
 
@@ -41,7 +44,7 @@ impl WayscriberTray {
         configurator_binary: String,
         session_resume_enabled: bool,
         icon_style: TrayIconStyle,
-        overlay_pid: Arc<AtomicU32>,
+        overlay_active: Arc<AtomicBool>,
         tray_status: Arc<TrayStatusShared>,
     ) -> Self {
         Self {
@@ -49,19 +52,22 @@ impl WayscriberTray {
             configurator_binary,
             session_resume_enabled,
             icon_style,
-            overlay_pid,
+            overlay_active,
             tray_status,
         }
     }
 
     fn request_toggle(&self) {
-        self.control.toggle.raise("tray toggle");
+        if let Err(error) = self.control.visibility.publish(None, false, "tray toggle") {
+            log::warn!("Failed to wake daemon for tray toggle: {error}");
+        }
     }
 
     fn request_quit(&self) {
-        self.control.quit.raise("tray quit");
+        if let Err(error) = self.control.quit.raise("tray quit") {
+            log::warn!("Failed to wake daemon for tray shutdown: {error}");
+        }
     }
-
     #[cfg(test)]
     pub(crate) fn new_for_tests(
         toggle_flag: Arc<AtomicBool>,
@@ -84,15 +90,18 @@ impl WayscriberTray {
         session_resume_enabled: bool,
         control_wake: crate::backend::wayland::RuntimeWakeHandle,
     ) -> Self {
+        let visibility_intents = Arc::new(VisibilityIntents::with_ready(toggle_flag));
+        let action_intents = Arc::new(OverlayActionIntents::default());
         Self::new(
             TrayControl {
-                toggle: DaemonControlEvent::new(toggle_flag, control_wake.clone()),
+                visibility: visibility_intents.publisher(control_wake.clone()),
+                action: action_intents.publisher(control_wake.clone()),
                 quit: DaemonControlEvent::new(quit_flag, control_wake),
             },
             "true".into(),
             session_resume_enabled,
             TrayIconStyle::Auto,
-            Arc::new(AtomicU32::new(0)),
+            Arc::new(AtomicBool::new(false)),
             Arc::new(TrayStatusShared::new()),
         )
     }

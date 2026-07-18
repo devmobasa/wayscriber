@@ -92,7 +92,11 @@ impl WaylandState {
             clipboard_operation_ids.clone(),
             runtime_wake.clone(),
         );
-        let clipboard_paste =
+        let clipboard_paste = ClipboardOperationController::new(
+            clipboard_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
+        let clipboard_hex_copy =
             ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
 
         Self {
@@ -115,13 +119,15 @@ impl WaylandState {
             input_state,
             clipboard_publish,
             clipboard_paste,
+            clipboard_hex_copy,
+            pending_hex_copy: None,
             gtk_toolbar: None,
             onboarding,
             ui_animation_next_tick: None,
             ui_animation_interval,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new_with_runtime_wake(screencopy_manager, runtime_wake.clone()),
-            zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake),
+            zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake.clone()),
             perf: perf::PerfMetrics::from_env(),
             exit_after_capture_mode,
             themed_pointer: None,
@@ -178,6 +184,9 @@ impl WaylandState {
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             persistence,
+            session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),
+            durable_action_finish: None,
+            durable_action_retry_at: None,
             tokio_handle,
         }
     }

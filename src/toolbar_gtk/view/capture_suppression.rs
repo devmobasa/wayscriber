@@ -497,6 +497,8 @@ fn reject_withdrawn_target(
 
 #[cfg(test)]
 mod tests {
+    mod process;
+
     use super::*;
 
     #[test]
@@ -525,14 +527,7 @@ mod tests {
         const TEST_NAME: &str = "toolbar_gtk::view::capture_suppression::tests::capture_aware_gtk_popups_use_transparent_proof_surfaces";
 
         if std::env::var_os(CHILD_ENV).is_none() {
-            let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
-                .arg(TEST_NAME)
-                .arg("--exact")
-                .arg("--test-threads=1")
-                .env(CHILD_ENV, "1")
-                .env("G_DEBUG", "fatal-criticals")
-                .status()
-                .expect("run isolated GTK popup capture test");
+            let status = process::run_isolated_gtk_test(CHILD_ENV, TEST_NAME);
             assert!(status.success(), "isolated GTK popup capture test failed");
             return;
         }

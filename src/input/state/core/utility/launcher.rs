@@ -1,20 +1,50 @@
 use super::super::base::{InputState, UiToastKind};
 use crate::config::Config;
 use crate::env_vars::CONFIGURATOR_ENV;
-use std::io::ErrorKind;
-use std::process::{Command, Stdio};
+use std::ffi::{OsStr, OsString};
+
+fn spawn_detached(
+    kind: crate::process_broker::HelperKind,
+    program: &OsStr,
+    arguments: &[OsString],
+) -> anyhow::Result<crate::process_broker::BrokerChild> {
+    crate::process_broker::current()?.spawn(
+        kind,
+        crate::process_broker::HelperLifetime::DetachedAfterExec,
+        program,
+        arguments,
+        Vec::new(),
+    )
+}
+
+fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
+    if cfg!(target_os = "macos") {
+        ("open".into(), vec![path.as_os_str().into()])
+    } else if cfg!(target_os = "windows") {
+        (
+            "cmd".into(),
+            vec![
+                "/C".into(),
+                "start".into(),
+                "".into(),
+                path.as_os_str().into(),
+            ],
+        )
+    } else {
+        ("xdg-open".into(), vec![path.as_os_str().into()])
+    }
+}
 
 impl InputState {
     pub(crate) fn launch_configurator(&mut self) {
         let binary = std::env::var(CONFIGURATOR_ENV)
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
-        match Command::new(&binary)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
+        match spawn_detached(
+            crate::process_broker::HelperKind::Configurator,
+            OsStr::new(&binary),
+            &[],
+        ) {
             Ok(child) => {
                 log::info!(
                     "Launched wayscriber-configurator (binary: {binary}, pid: {})",
@@ -23,25 +53,13 @@ impl InputState {
                 self.should_exit = true;
             }
             Err(err) => {
-                if err.kind() == ErrorKind::NotFound {
-                    log::error!(
-                        "Configurator not found (looked for '{binary}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set {CONFIGURATOR_ENV} to its path."
+                log::error!("Failed to launch wayscriber-configurator using '{binary}': {err:#}");
+                log::error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
+                if self.open_config_file_default() {
+                    log::info!(
+                        "Opened config file with default application because wayscriber-configurator was unavailable"
                     );
-                    if self.open_config_file_default() {
-                        log::info!(
-                            "Opened config file with default application because wayscriber-configurator was unavailable"
-                        );
-                    } else {
-                        self.set_ui_toast(
-                            UiToastKind::Warning,
-                            format!("Configurator not found: {binary}"),
-                        );
-                    }
                 } else {
-                    log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
-                    log::error!(
-                        "Set {CONFIGURATOR_ENV} to override the executable path if needed."
-                    );
                     self.set_ui_toast(
                         UiToastKind::Error,
                         "Failed to launch configurator (see logs).",
@@ -67,22 +85,12 @@ impl InputState {
             return;
         };
 
-        let opener = if cfg!(target_os = "macos") {
-            "open"
-        } else if cfg!(target_os = "windows") {
-            "cmd"
-        } else {
-            "xdg-open"
-        };
-
-        let mut cmd = Command::new(opener);
-        if cfg!(target_os = "windows") {
-            cmd.args(["/C", "start", ""]).arg(&folder);
-        } else {
-            cmd.arg(&folder);
-        }
-
-        match cmd.spawn() {
+        let (opener, arguments) = opener_arguments(&folder);
+        match spawn_detached(
+            crate::process_broker::HelperKind::DesktopOpen,
+            &opener,
+            &arguments,
+        ) {
             Ok(child) => {
                 log::info!(
                     "Opened capture folder at {} (pid {})",
@@ -113,22 +121,12 @@ impl InputState {
             }
         };
 
-        let opener = if cfg!(target_os = "macos") {
-            "open"
-        } else if cfg!(target_os = "windows") {
-            "cmd"
-        } else {
-            "xdg-open"
-        };
-
-        let mut cmd = Command::new(opener);
-        if cfg!(target_os = "windows") {
-            cmd.args(["/C", "start", ""]).arg(&path);
-        } else {
-            cmd.arg(&path);
-        }
-
-        match cmd.spawn() {
+        let (opener, arguments) = opener_arguments(&path);
+        match spawn_detached(
+            crate::process_broker::HelperKind::DesktopOpen,
+            &opener,
+            &arguments,
+        ) {
             Ok(child) => {
                 log::info!(
                     "Opened config file at {} (pid {})",
