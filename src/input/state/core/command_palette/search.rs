@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use super::{CommandEntry, command_palette_entries};
 use crate::config::action_meta::ActionCategory;
-use crate::config::keybindings::Action;
+use crate::domain::Action;
 
 const COMMAND_PALETTE_RECENT_LIMIT: usize = 10;
 

@@ -6,7 +6,8 @@ use super::{
     CommandPaletteCursorHint,
     layout::{CommandPaletteGeometry, CommandPaletteRowAction},
 };
-use crate::config::{Action, KeyBinding, KeybindingsConfig, action_label};
+use crate::config::{KeyBinding, KeybindingsConfig, action_label};
+use crate::domain::Action;
 use crate::input::events::Key;
 use crate::input::state::actions::key_press::bindings::key_to_action_label;
 use std::time::{Duration, Instant};

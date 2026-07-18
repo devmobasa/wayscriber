@@ -4,7 +4,7 @@ use super::{
     runtime_contrast_pen_color,
 };
 use crate::config::{BoardBackgroundConfig, BoardItemConfig, BoardsConfig};
-use crate::draw::Color;
+use crate::domain::Color;
 
 impl BoardSpec {
     pub fn from_config(item: &BoardItemConfig) -> Self {

@@ -1,6 +1,6 @@
 use cairo::Context as CairoContext;
 
-use crate::config::Action;
+use crate::domain::Action;
 
 use super::super::super::super::base::InputState;
 use super::super::super::BoardPickerEditMode;

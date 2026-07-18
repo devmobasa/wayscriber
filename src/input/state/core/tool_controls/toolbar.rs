@@ -1,5 +1,6 @@
 use super::super::base::InputState;
-use crate::config::{Action, ToolbarItemId, ToolbarItemOrderGroup};
+use crate::config::{ToolbarItemId, ToolbarItemOrderGroup};
+use crate::domain::Action;
 
 impl InputState {
     /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.

@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
-use crate::config::Action;
+use crate::domain::Action;
 
 impl InputState {
     pub(super) fn page_context_menu_entries(&self) -> Vec<ContextMenuEntry> {

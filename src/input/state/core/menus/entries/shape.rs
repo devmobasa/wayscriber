@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
-use crate::config::Action;
+use crate::domain::Action;
 use crate::draw::{Shape, ShapeId};
 
 impl InputState {

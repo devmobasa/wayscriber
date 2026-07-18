@@ -3,7 +3,7 @@ use super::super::outcome::{
     ActiveInteractionKind, CancelTarget, ConsumedBy, InteractionSideEffect, KeyboardSideEffect,
     NoRouteReason, RoutingOutcome,
 };
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::events::Key;
 use crate::input::state::actions::key_press::bindings::{
     fallback_unshifted_label, key_to_action_label,

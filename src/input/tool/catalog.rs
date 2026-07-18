@@ -1,7 +1,7 @@
-use crate::config::Action;
+use crate::domain::Action;
 use crate::draw::shape::PolygonTemplate;
 
-use super::{DragTool, Tool, ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};
+use super::{Tool, ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};
 
 /// Static catalog facts for one built-in drawing tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,7 +10,6 @@ pub(crate) struct ToolDescriptor {
     pub(crate) short_label: &'static str,
     pub(crate) display_label: &'static str,
     pub(crate) action: Option<Action>,
-    pub(crate) drag_tool: Option<DragTool>,
     pub(crate) profile: ToolProfile,
     pub(crate) press: ToolPressBehavior,
     pub(crate) motion: ToolMotionBehavior,
@@ -88,7 +87,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Select",
         display_label: "Selection Tool",
         action: Some(Action::SelectSelectionTool),
-        drag_tool: Some(DragTool::Select),
         profile: profile(
             ToolSettingsSlot::Pen,
             ToolSizeSource::DrawingThickness,
@@ -105,7 +103,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Pen",
         display_label: "Pen Tool",
         action: Some(Action::SelectPenTool),
-        drag_tool: Some(DragTool::Pen),
         profile: profile(
             ToolSettingsSlot::Pen,
             ToolSizeSource::DrawingThickness,
@@ -129,7 +126,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Line",
         display_label: "Line Tool",
         action: Some(Action::SelectLineTool),
-        drag_tool: Some(DragTool::Line),
         profile: profile(
             ToolSettingsSlot::Line,
             ToolSizeSource::DrawingThickness,
@@ -148,7 +144,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Rect",
         display_label: "Rectangle Tool",
         action: Some(Action::SelectRectTool),
-        drag_tool: Some(DragTool::Rect),
         profile: profile(
             ToolSettingsSlot::Rect,
             ToolSizeSource::DrawingThickness,
@@ -167,7 +162,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Circle",
         display_label: "Ellipse Tool",
         action: Some(Action::SelectEllipseTool),
-        drag_tool: Some(DragTool::Ellipse),
         profile: profile(
             ToolSettingsSlot::Ellipse,
             ToolSizeSource::DrawingThickness,
@@ -186,7 +180,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Triangle",
         display_label: "Triangle Tool",
         action: Some(Action::SelectTriangleTool),
-        drag_tool: Some(DragTool::Triangle),
         profile: profile(
             ToolSettingsSlot::Rect,
             ToolSizeSource::DrawingThickness,
@@ -205,7 +198,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Para",
         display_label: "Parallelogram Tool",
         action: Some(Action::SelectParallelogramTool),
-        drag_tool: Some(DragTool::Parallelogram),
         profile: profile(
             ToolSettingsSlot::Rect,
             ToolSizeSource::DrawingThickness,
@@ -224,7 +216,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Rhombus",
         display_label: "Rhombus Tool",
         action: Some(Action::SelectRhombusTool),
-        drag_tool: Some(DragTool::Rhombus),
         profile: profile(
             ToolSettingsSlot::Rect,
             ToolSizeSource::DrawingThickness,
@@ -243,7 +234,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Polygon",
         display_label: "Regular Polygon Tool",
         action: Some(Action::SelectRegularPolygonTool),
-        drag_tool: Some(DragTool::RegularPolygon),
         profile: profile(
             ToolSettingsSlot::Rect,
             ToolSizeSource::DrawingThickness,
@@ -262,7 +252,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Freeform",
         display_label: "Freeform Polygon Tool",
         action: Some(Action::SelectFreeformPolygonTool),
-        drag_tool: None,
         profile: profile(
             ToolSettingsSlot::Rect,
             ToolSizeSource::DrawingThickness,
@@ -279,7 +268,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Arrow",
         display_label: "Arrow Tool",
         action: Some(Action::SelectArrowTool),
-        drag_tool: Some(DragTool::Arrow),
         profile: profile(
             ToolSettingsSlot::Arrow,
             ToolSizeSource::DrawingThickness,
@@ -298,7 +286,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Blur",
         display_label: "Blur Tool",
         action: Some(Action::SelectBlurTool),
-        drag_tool: Some(DragTool::Blur),
         profile: profile(
             ToolSettingsSlot::Blur,
             ToolSizeSource::DrawingThickness,
@@ -317,7 +304,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Marker",
         display_label: "Marker Tool",
         action: Some(Action::SelectMarkerTool),
-        drag_tool: Some(DragTool::Marker),
         profile: profile(
             ToolSettingsSlot::Marker,
             ToolSizeSource::DrawingThickness,
@@ -341,7 +327,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Highlight",
         display_label: "Highlight Tool",
         action: Some(Action::SelectHighlightTool),
-        drag_tool: Some(DragTool::Highlight),
         profile: profile(
             ToolSettingsSlot::Pen,
             ToolSizeSource::DrawingThickness,
@@ -358,7 +343,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Steps",
         display_label: "Step Marker Tool",
         action: Some(Action::SelectStepMarkerTool),
-        drag_tool: Some(DragTool::StepMarker),
         profile: profile(
             ToolSettingsSlot::StepMarker,
             ToolSizeSource::DrawingThickness,
@@ -377,7 +361,6 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         short_label: "Eraser",
         display_label: "Eraser Tool",
         action: Some(Action::SelectEraserTool),
-        drag_tool: Some(DragTool::Eraser),
         profile: profile(
             ToolSettingsSlot::Pen,
             ToolSizeSource::EraserSize,
@@ -442,10 +425,6 @@ impl Tool {
 
     pub(crate) fn action(self) -> Option<Action> {
         self.descriptor().action
-    }
-
-    pub(crate) fn drag_tool(self) -> Option<DragTool> {
-        self.descriptor().drag_tool
     }
 
     pub(crate) fn from_select_action(action: Action) -> Option<Self> {

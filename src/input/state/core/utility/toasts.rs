@@ -6,7 +6,7 @@ use crate::capture::{
     ImageOperationKind,
     file::{FileSaveConfig, save_screenshot},
 };
-use crate::config::keybindings::Action;
+use crate::domain::Action;
 use std::path::Path;
 use std::time::{Duration, Instant};
 

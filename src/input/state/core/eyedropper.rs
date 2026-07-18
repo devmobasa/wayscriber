@@ -1,5 +1,5 @@
 use super::{InputState, UiToastKind};
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::Key;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

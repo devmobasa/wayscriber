@@ -1,7 +1,7 @@
 use super::super::super::base::{
     InputState, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS, PendingPageDelete, UiToastKind,
 };
-use crate::config::Action;
+use crate::domain::Action;
 use crate::draw::PageDeleteOutcome as CanvasPageDeleteOutcome;
 use crate::input::boards::{
     PageDeleteBoardTarget, PageDeleteOutcome, PageDeleteRequest, PageDeleteTarget,
