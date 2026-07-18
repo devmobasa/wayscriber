@@ -1,3 +1,4 @@
+mod blocking_jobs;
 mod daemon_setup;
 mod entry;
 mod io;

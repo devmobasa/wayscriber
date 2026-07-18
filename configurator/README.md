@@ -20,6 +20,11 @@ configurator binary.
 
 The window loads the current config, lets you tweak values across the tabbed sections, and writes changes back through the guarded `ConfigDocument` save interface.
 
+Config, daemon-setup, and saved-session filesystem/process operations run through a bounded Tokio
+blocking-job adapter. Two jobs may run concurrently; existing request ordering and busy-state gates
+still serialize user mutations. Once started, a durable blocking operation is allowed to finish even
+if its UI task is no longer observed.
+
 ### Handy actions
 
 - **Reload** – re-read `config.toml` from disk and refresh the guarded source revision. A transient load error leaves the last good document and current draft in place.
