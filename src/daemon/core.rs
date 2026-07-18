@@ -17,7 +17,6 @@ use crate::session::try_lock_exclusive;
 #[cfg(test)]
 use crate::session_override::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
-#[cfg(test)]
 use crate::tray_action::TrayAction;
 use crate::{decode_session_override, encode_session_override};
 
@@ -30,8 +29,8 @@ use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_li
 use super::protocol_v2::DaemonControlProtocolMode;
 use super::protocol_v2::OverlayChildOwner;
 use super::protocol_v2::{
-    ActionJournal, BootDeadlineSource, CommandOwner, CommandQueueWatcher, DaemonRuntimeRecordV2,
-    EffectKind, FinalEffect, ProtocolToken,
+    ActionJournal, BootClock, BootDeadline, BootDeadlineSource, CommandOwner, CommandQueueWatcher,
+    DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
 };
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
@@ -46,6 +45,9 @@ use super::types::{
 // Suppress only duplicate plain toggles after a successful toggle completes, so
 // typed requests still run.
 const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
+// This bounds retries after journal I/O admission failures. It is unrelated to
+// the removed tray startup-discovery fallback; retries use the existing v2 timerfd.
+const ACTION_ADMISSION_RETRY_DELAY: Duration = Duration::from_millis(50);
 #[cfg(unix)]
 const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 mod toggles;
@@ -87,6 +89,8 @@ pub struct Daemon {
     v2_command_watcher: Option<CommandQueueWatcher>,
     v2_deadline_source: Option<BootDeadlineSource>,
     v2_action_journal: Option<ActionJournal>,
+    pending_action_admission_retry: Vec<TrayAction>,
+    action_admission_retry_at: Option<BootDeadline>,
     #[cfg(unix)]
     signal_listener: Option<crate::unix_signals::SignalListener>,
     #[cfg(feature = "tray")]
@@ -132,6 +136,8 @@ impl Daemon {
             v2_command_watcher: None,
             v2_deadline_source: None,
             v2_action_journal: None,
+            pending_action_admission_retry: Vec::new(),
+            action_admission_retry_at: None,
             #[cfg(unix)]
             signal_listener: None,
             #[cfg(feature = "tray")]
@@ -174,6 +180,8 @@ impl Daemon {
             v2_command_watcher: None,
             v2_deadline_source: None,
             v2_action_journal: None,
+            pending_action_admission_retry: Vec::new(),
+            action_admission_retry_at: None,
             #[cfg(unix)]
             signal_listener: None,
             #[cfg(feature = "tray")]
@@ -441,14 +449,18 @@ impl Daemon {
             // afterward. A non-empty action batch intentionally absorbs that
             // coalesced visibility snapshot for compatibility with the existing
             // tray behavior.
-            let action_intents = self.overlay_action_intents.claim_batch();
+            let (action_intents, claimed_admission_retry) = self.claim_overlay_action_batch()?;
             let visibility = self.visibility_intents.claim();
             if !action_intents.is_empty() {
-                let action_count = action_intents.len();
                 let result = self.process_overlay_action_intents(action_intents);
-                self.overlay_action_intents.finish_batch(action_count);
                 if let Err(error) = result {
                     warn!("Overlay action batch failed: {error:#}");
+                }
+                if claimed_admission_retry
+                    && self.pending_action_admission_retry.is_empty()
+                    && self.overlay_action_intents.is_ready()
+                {
+                    continue;
                 }
             } else if let Some(visibility) = visibility {
                 let result = if self.protocol_mode == DaemonControlProtocolMode::LegacyV1 {
@@ -468,7 +480,7 @@ impl Daemon {
                 }
             }
 
-            self.arm_v2_maintenance_deadline()?;
+            self.arm_v2_lifecycle_deadline()?;
             let readiness = wait_for_daemon_lifecycle(
                 daemon_wake,
                 self.v2_command_watcher.as_ref(),
@@ -503,27 +515,44 @@ impl Daemon {
         Ok(())
     }
 
-    fn arm_v2_maintenance_deadline(&self) -> Result<()> {
-        let (Some(owner), Some(source)) = (
-            self.v2_command_owner.as_ref(),
-            self.v2_deadline_source.as_ref(),
-        ) else {
+    fn arm_v2_lifecycle_deadline(&self) -> Result<()> {
+        let Some(source) = self.v2_deadline_source.as_ref() else {
             return Ok(());
         };
-        match owner.next_maintenance_deadline()? {
+        let mut next = self.action_admission_retry_at;
+        if let Some(owner) = self.v2_command_owner.as_ref()
+            && let Some(command_deadline) = owner.next_maintenance_deadline()?
+        {
+            next = Some(next.map_or(command_deadline, |current| current.min(command_deadline)));
+        }
+        match next {
             Some(deadline) => source
                 .arm(deadline)
-                .context("failed to arm daemon v2 maintenance deadline"),
+                .context("failed to arm daemon v2 lifecycle deadline"),
             None => source
                 .disarm()
-                .context("failed to disarm daemon v2 maintenance deadline"),
+                .context("failed to disarm daemon v2 lifecycle deadline"),
         }
     }
 
-    fn process_overlay_action_intents(
-        &mut self,
-        actions: Vec<crate::tray_action::TrayAction>,
-    ) -> Result<()> {
+    fn claim_overlay_action_batch(&mut self) -> Result<(Vec<TrayAction>, bool)> {
+        if self.pending_action_admission_retry.is_empty() {
+            return Ok((self.overlay_action_intents.claim_batch(), false));
+        }
+        if let Some(retry_at) = self.action_admission_retry_at
+            && BootClock::now()? < retry_at
+        {
+            return Ok((Vec::new(), false));
+        }
+        self.action_admission_retry_at = None;
+        Ok((
+            std::mem::take(&mut self.pending_action_admission_retry),
+            true,
+        ))
+    }
+
+    fn process_overlay_action_intents(&mut self, actions: Vec<TrayAction>) -> Result<()> {
+        let action_count = actions.len();
         let mut failures = Vec::new();
         if self.protocol_mode == DaemonControlProtocolMode::LegacyV1 {
             for action in actions {
@@ -538,17 +567,20 @@ impl Daemon {
                     failures.push(format!("{}: {error:#}", action.as_str()));
                 }
             }
+            self.overlay_action_intents.finish_batch(action_count);
             return finish_action_batch(failures);
         }
 
-        let journal = self
-            .v2_action_journal
-            .as_ref()
-            .context("v2 action journal is not installed")?
-            .clone();
+        let Some(journal) = self.v2_action_journal.clone() else {
+            self.retain_action_admission_retry(actions, 0, &mut failures);
+            failures.push("v2 action journal is not installed".to_string());
+            return finish_action_batch(failures);
+        };
         let mut admitted = Vec::with_capacity(actions.len());
+        let mut retry = Vec::new();
         let mut will_be_visible = self.overlay_state == OverlayState::Visible;
-        for action in actions {
+        let mut actions = actions.into_iter();
+        while let Some(action) = actions.next() {
             if !will_be_visible && matches!(action, crate::tray_action::TrayAction::LightDrawOff) {
                 continue;
             }
@@ -562,6 +594,9 @@ impl Daemon {
                         "failed to admit anonymous action {}: {error:#}",
                         action.as_str()
                     ));
+                    retry.push(action);
+                    retry.extend(actions);
+                    break;
                 }
             }
         }
@@ -600,7 +635,33 @@ impl Daemon {
                 failures.push(format!("{}: {reason}", action.as_str()));
             }
         }
+        let completed = action_count - retry.len();
+        self.retain_action_admission_retry(retry, completed, &mut failures);
         finish_action_batch(failures)
+    }
+
+    fn retain_action_admission_retry(
+        &mut self,
+        retry: Vec<TrayAction>,
+        completed: usize,
+        failures: &mut Vec<String>,
+    ) {
+        self.overlay_action_intents.finish_batch(completed);
+        if retry.is_empty() {
+            return;
+        }
+        self.pending_action_admission_retry.extend(retry);
+        match BootClock::now().and_then(|now| now.checked_add(ACTION_ADMISSION_RETRY_DELAY)) {
+            Ok(deadline) => {
+                self.action_admission_retry_at = Some(
+                    self.action_admission_retry_at
+                        .map_or(deadline, |current| current.min(deadline)),
+                );
+            }
+            Err(error) => failures.push(format!(
+                "failed to schedule anonymous action admission retry: {error}"
+            )),
+        }
     }
 
     fn process_v2_commands(&mut self) -> Result<()> {

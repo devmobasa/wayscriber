@@ -314,8 +314,12 @@ impl OverlayActionIntents {
         state.in_flight -= completed;
     }
 
+    pub(crate) fn is_ready(&self) -> bool {
+        self.ready.load(Ordering::Acquire)
+    }
+
     #[cfg(test)]
-    fn pending_counts(&self) -> (usize, usize) {
+    pub(crate) fn pending_counts(&self) -> (usize, usize) {
         let state = self
             .state
             .lock()

@@ -28,6 +28,31 @@ fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
     assert!(deadline.drain().unwrap());
 }
 
+#[test]
+fn action_admission_retry_uses_the_existing_v2_deadline_source() {
+    let wake = RuntimeWakeSource::new().unwrap();
+    let mut daemon = Daemon::new(None, false, None, None);
+    daemon.v2_deadline_source = Some(BootDeadlineSource::new().unwrap());
+    daemon.action_admission_retry_at = Some(BootDeadline::from_nanos(1));
+    daemon.arm_v2_lifecycle_deadline().unwrap();
+
+    let readiness = wait_for_daemon_lifecycle(
+        &wake,
+        None,
+        daemon.v2_deadline_source.as_ref(),
+        &OverlayChildOwner::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        readiness,
+        DaemonLifecycleReadiness {
+            command_queue: false,
+            deadline: true,
+        }
+    );
+    assert!(daemon.v2_deadline_source.as_ref().unwrap().drain().unwrap());
+}
+
 #[cfg(unix)]
 #[test]
 fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
@@ -390,6 +415,96 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
         &[Some("whiteboard".into())]
     );
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
+
+    // SAFETY: this test still holds the process environment mutex.
+    unsafe {
+        match previous_runtime_dir {
+            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+        }
+    }
+}
+
+#[test]
+fn failed_anonymous_action_admission_does_not_allow_the_tail_to_overtake() {
+    let _env_guard = crate::test_env::lock();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    // SAFETY: this test holds the process environment mutex.
+    unsafe {
+        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+    }
+
+    let token = ProtocolToken::generate().unwrap().to_string();
+    let _owner = CommandOwner::open(&token).unwrap();
+    let journal = ActionJournal::open().unwrap();
+    journal.fail_next_anonymous_publications(1);
+    let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
+    let mut daemon = Daemon::with_backend_runner(None, runner);
+    daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
+    daemon.instance_token = token.clone();
+    daemon.v2_action_journal = Some(journal.clone());
+    let wake = RuntimeWakeSource::new().unwrap();
+    let publisher = daemon.overlay_action_intents.publisher(wake.handle());
+    publisher.publish(TrayAction::ToggleFreeze).unwrap();
+    publisher.publish(TrayAction::ToggleHelp).unwrap();
+
+    let (claimed, claimed_retry) = daemon.claim_overlay_action_batch().unwrap();
+    assert!(!claimed_retry);
+    let error = daemon.process_overlay_action_intents(claimed).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("injected anonymous action admission failure")
+    );
+
+    let overtaking_action = journal
+        .claim_next(&token, |_, _| Ok(true))
+        .unwrap()
+        .map(|claimed| {
+            let action = claimed.action();
+            claimed.finish(false, Some("test cleanup")).unwrap();
+            action
+        });
+    assert_eq!(overtaking_action, None);
+    assert_eq!(daemon.overlay_action_intents.pending_counts(), (0, 2));
+
+    publisher.publish(TrayAction::CaptureRegion).unwrap();
+    assert!(wake.drain().unwrap());
+    assert_eq!(daemon.overlay_action_intents.pending_counts(), (1, 2));
+    daemon.action_admission_retry_at = Some(
+        BootClock::now()
+            .unwrap()
+            .checked_add(Duration::from_secs(60))
+            .unwrap(),
+    );
+    assert!(daemon.claim_overlay_action_batch().unwrap().0.is_empty());
+    assert_eq!(daemon.overlay_action_intents.pending_counts(), (1, 2));
+    daemon.action_admission_retry_at = Some(BootDeadline::from_nanos(0));
+    let (retained, claimed_retry) = daemon.claim_overlay_action_batch().unwrap();
+    assert!(claimed_retry);
+    assert_eq!(retained, [TrayAction::ToggleFreeze, TrayAction::ToggleHelp]);
+    daemon.process_overlay_action_intents(retained).unwrap();
+    assert!(daemon.overlay_action_intents.is_ready());
+    let (newly_queued, claimed_retry) = daemon.claim_overlay_action_batch().unwrap();
+    assert!(!claimed_retry);
+    assert_eq!(newly_queued, [TrayAction::CaptureRegion]);
+    daemon.process_overlay_action_intents(newly_queued).unwrap();
+
+    let mut durable_order = Vec::new();
+    while let Some(claimed) = journal.claim_next(&token, |_, _| Ok(true)).unwrap() {
+        durable_order.push(claimed.action());
+        claimed.finish(false, Some("test cleanup")).unwrap();
+    }
+    assert_eq!(
+        durable_order,
+        [
+            TrayAction::ToggleFreeze,
+            TrayAction::ToggleHelp,
+            TrayAction::CaptureRegion,
+        ]
+    );
+    assert_eq!(daemon.overlay_action_intents.pending_counts(), (0, 0));
 
     // SAFETY: this test still holds the process environment mutex.
     unsafe {

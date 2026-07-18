@@ -18,6 +18,8 @@ use log::{debug, info, warn};
 #[cfg(feature = "portal")]
 use std::collections::HashMap;
 #[cfg(feature = "portal")]
+use std::future::Future;
+#[cfg(feature = "portal")]
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(feature = "portal")]
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
@@ -194,14 +196,33 @@ async fn run_listener(
     portal_app_id: String,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<()> {
-    let connection = Connection::session()
-        .await
-        .context("failed to connect to session D-Bus")?;
-    register_host_portal_app_id(&connection, &portal_app_id).await?;
-    let proxy = GlobalShortcutsProxy::new(&connection)
-        .await
-        .context("org.freedesktop.portal.GlobalShortcuts unavailable")?;
-    match proxy.version().await {
+    let connection = await_portal_operation(
+        Connection::session(),
+        &mut shutdown,
+        "session D-Bus connection",
+    )
+    .await?
+    .context("failed to connect to session D-Bus")?;
+    await_portal_operation(
+        register_host_portal_app_id(&connection, &portal_app_id),
+        &mut shutdown,
+        "host portal app-id registration",
+    )
+    .await??;
+    let proxy = await_portal_operation(
+        GlobalShortcutsProxy::new(&connection),
+        &mut shutdown,
+        "GlobalShortcuts proxy creation",
+    )
+    .await?
+    .context("org.freedesktop.portal.GlobalShortcuts unavailable")?;
+    match await_portal_operation(
+        proxy.version(),
+        &mut shutdown,
+        "GlobalShortcuts version lookup",
+    )
+    .await?
+    {
         Ok(version) => {
             debug!("GlobalShortcuts portal interface version {}", version);
             if version < 2 {
@@ -235,10 +256,13 @@ async fn run_listener(
         portal_app_id, TOGGLE_SHORTCUT_ID, preferred_trigger
     );
 
-    let mut activated_stream = proxy
-        .receive_activated()
-        .await
-        .context("failed to subscribe to GlobalShortcuts.Activated")?;
+    let mut activated_stream = await_portal_operation(
+        proxy.receive_activated(),
+        &mut shutdown,
+        "GlobalShortcuts.Activated subscription",
+    )
+    .await?
+    .context("failed to subscribe to GlobalShortcuts.Activated")?;
 
     loop {
         tokio::select! {
@@ -310,6 +334,33 @@ mod tests {
         observed_rx.recv_timeout(Duration::from_secs(1)).unwrap();
         listener.join().unwrap();
     }
+
+    #[test]
+    fn shutdown_interrupts_a_pending_portal_operation() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
+            let (polled_tx, polled_rx) = tokio::sync::oneshot::channel();
+            let operation = async move {
+                polled_tx.send(()).unwrap();
+                std::future::pending::<()>().await
+            };
+            let shutdown_task = tokio::spawn(async move {
+                polled_rx.await.unwrap();
+                shutdown_tx.send(()).unwrap();
+            });
+
+            let result = tokio::time::timeout(
+                Duration::from_secs(1),
+                await_portal_operation(operation, &mut shutdown_rx, "test portal operation"),
+            )
+            .await
+            .expect("shutdown did not interrupt the pending portal operation")
+            .unwrap_err();
+            assert!(result.to_string().contains("shutdown"));
+            shutdown_task.await.unwrap();
+        });
+    }
 }
 
 #[cfg(feature = "portal")]
@@ -346,10 +397,13 @@ async fn create_global_shortcuts_session(
         Value::from(portal_app_id.to_string()),
     );
 
-    let request_path = proxy
-        .create_session(options)
-        .await
-        .context("GlobalShortcuts.CreateSession call failed")?;
+    let request_path = await_portal_operation(
+        proxy.create_session(options),
+        shutdown,
+        "GlobalShortcuts.CreateSession call",
+    )
+    .await?
+    .context("GlobalShortcuts.CreateSession call failed")?;
 
     let (response, results) = wait_for_request_response(connection, request_path, shutdown).await?;
     if response != 0 {
@@ -395,10 +449,13 @@ async fn bind_toggle_shortcut(
     let session_path = zbus::zvariant::ObjectPath::try_from(session_handle.as_str())
         .map_err(|err| anyhow!("invalid GlobalShortcuts session path: {}", err))?;
 
-    let request_path = proxy
-        .bind_shortcuts(session_path, shortcuts, "", bind_options)
-        .await
-        .context("GlobalShortcuts.BindShortcuts call failed")?;
+    let request_path = await_portal_operation(
+        proxy.bind_shortcuts(session_path, shortcuts, "", bind_options),
+        shutdown,
+        "GlobalShortcuts.BindShortcuts call",
+    )
+    .await?
+    .context("GlobalShortcuts.BindShortcuts call failed")?;
 
     let (response, _) = wait_for_request_response(connection, request_path, shutdown).await?;
     if response != 0 {
@@ -412,6 +469,21 @@ async fn bind_toggle_shortcut(
 }
 
 #[cfg(feature = "portal")]
+async fn await_portal_operation<T>(
+    operation: impl Future<Output = T>,
+    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
+    description: &str,
+) -> Result<T> {
+    tokio::select! {
+        biased;
+        _ = &mut *shutdown => {
+            Err(anyhow!("shutdown requested while waiting for {description}"))
+        }
+        output = operation => Ok(output),
+    }
+}
+
+#[cfg(feature = "portal")]
 async fn wait_for_request_response(
     connection: &Connection,
     request_path: OwnedObjectPath,
@@ -420,29 +492,30 @@ async fn wait_for_request_response(
     let request_proxy = RequestProxy::builder(connection)
         .path(request_path)
         .context("invalid portal request path")?
-        .build()
-        .await
-        .context("failed to build Request proxy")?;
+        .build();
+    let request_proxy =
+        await_portal_operation(request_proxy, shutdown, "portal Request proxy creation")
+            .await?
+            .context("failed to build Request proxy")?;
 
-    let mut response_stream = request_proxy
-        .receive_response()
-        .await
-        .context("failed to subscribe to Request.Response")?;
-    tokio::select! {
-        maybe_signal = crate::zbus_stream::next(&mut response_stream) => {
-            let response_signal = maybe_signal
-                .ok_or_else(|| anyhow!("portal request completed without Response signal"))?;
-            let args = response_signal
-                .args()
-                .context("failed to parse Request.Response signal arguments")?;
-            Ok((args.response, args.results.clone()))
-        }
-        _ = &mut *shutdown => {
-            Err(anyhow!(
-                "shutdown requested while waiting for portal Request.Response"
-            ))
-        }
-    }
+    let mut response_stream = await_portal_operation(
+        request_proxy.receive_response(),
+        shutdown,
+        "portal Request.Response subscription",
+    )
+    .await?
+    .context("failed to subscribe to Request.Response")?;
+    let response_signal = await_portal_operation(
+        crate::zbus_stream::next(&mut response_stream),
+        shutdown,
+        "portal Request.Response",
+    )
+    .await?
+    .ok_or_else(|| anyhow!("portal request completed without Response signal"))?;
+    let args = response_signal
+        .args()
+        .context("failed to parse Request.Response signal arguments")?;
+    Ok((args.response, args.results.clone()))
 }
 
 #[cfg(feature = "portal")]

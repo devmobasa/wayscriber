@@ -19,6 +19,10 @@ use crate::tray_action::TrayAction;
 const MAX_ACTIONS: usize = 2048;
 const MAX_ACTION_QUARANTINE: usize = 1024;
 
+#[cfg(test)]
+static ANONYMOUS_PUBLISH_FAILURES: std::sync::LazyLock<std::sync::Mutex<BTreeMap<PathBuf, usize>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(BTreeMap::new()));
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "owner", deny_unknown_fields)]
 pub(crate) enum ActionOwner {
@@ -109,6 +113,24 @@ pub(crate) struct ActionJournal {
 
 fn action_root() -> PathBuf {
     super::command_root().join("actions")
+}
+
+#[cfg(test)]
+fn consume_anonymous_publish_failure(root: &Path) -> bool {
+    let mut failures = ANONYMOUS_PUBLISH_FAILURES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let remove = match failures.get_mut(root) {
+        Some(remaining) => {
+            *remaining -= 1;
+            *remaining == 0
+        }
+        None => return false,
+    };
+    if remove {
+        failures.remove(root);
+    }
+    true
 }
 
 fn queue_dir(root: &Path) -> PathBuf {
@@ -309,6 +331,18 @@ impl ActionJournal {
         Ok(Self { root })
     }
 
+    #[cfg(test)]
+    pub(crate) fn fail_next_anonymous_publications(&self, count: usize) {
+        let mut failures = ANONYMOUS_PUBLISH_FAILURES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if count == 0 {
+            failures.remove(&self.root);
+        } else {
+            failures.insert(self.root.clone(), count);
+        }
+    }
+
     pub(crate) fn quiesce_for_rollback(&self, compatibility_token: &str) -> Result<()> {
         validate_token(compatibility_token)?;
         let lock = open_journal_lock(&self.root)?;
@@ -487,6 +521,10 @@ impl ActionJournal {
         daemon_token: &str,
         action: TrayAction,
     ) -> Result<PreparedAction> {
+        #[cfg(test)]
+        if consume_anonymous_publish_failure(&self.root) {
+            bail!("injected anonymous action admission failure");
+        }
         validate_token(daemon_token)?;
         self.publish(
             ActionOwner::Anonymous {
