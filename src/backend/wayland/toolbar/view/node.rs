@@ -50,8 +50,9 @@ impl From<String> for WidgetId {
 }
 
 /// A glyph-drawing function from `toolbar_icons`. Compared by function
-/// address; rendered in debug output as an opaque tag so golden dumps stay
-/// stable (semantic identity lives in [`WidgetId`]).
+/// address as a best-effort implementation detail; distinct functions are not
+/// guaranteed to have distinct addresses. Debug output uses an opaque tag so
+/// golden dumps stay stable (semantic identity lives in [`WidgetId`]).
 #[derive(Clone, Copy)]
 pub struct IconFn(pub fn(&cairo::Context, f64, f64, f64));
 
@@ -269,12 +270,11 @@ mod tests {
     }
 
     #[test]
-    fn icon_fn_compares_by_address_and_debugs_stably() {
-        fn a(_: &cairo::Context, _: f64, _: f64, _: f64) {}
-        fn b(_: &cairo::Context, _: f64, _: f64, _: f64) {}
+    fn icon_fn_equality_is_reflexive_and_debugs_stably() {
+        fn icon(_: &cairo::Context, _: f64, _: f64, _: f64) {}
 
-        assert_eq!(IconFn(a), IconFn(a));
-        assert_ne!(IconFn(a), IconFn(b));
-        assert_eq!(format!("{:?}", IconFn(a)), "IconFn");
+        let icon = IconFn(icon);
+        assert_eq!(icon, icon);
+        assert_eq!(format!("{icon:?}"), "IconFn");
     }
 }

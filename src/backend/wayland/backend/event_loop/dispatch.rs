@@ -6,7 +6,7 @@ use super::super::super::state::WaylandState;
 use super::super::helpers::dispatch_with_timeout;
 use super::super::runtime_wake::RuntimeWakeSource;
 use super::super::signals::OverlaySignalState;
-use super::super::tray::process_tray_action;
+use super::process_tray_actions_and_sync;
 
 trait PersistenceWakeDrain {
     fn drain_woken_persistence(&mut self) -> Result<(), anyhow::Error>;
@@ -33,9 +33,8 @@ fn route_woken_sources(
     if signals.exit_requested() {
         state.input_state.should_exit = true;
     }
-    let _signal_hint = signals.take_tray_action_requested();
-    if process_tray_action(state) {
-        state.sync_overlay_interactivity();
+    if signals.take_tray_action_requested() {
+        process_tray_actions_and_sync(state);
     }
     if let Some(failure) = signals.failure() {
         return Err(anyhow::anyhow!("overlay signal listener failed: {failure}"));

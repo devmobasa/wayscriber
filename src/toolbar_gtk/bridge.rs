@@ -185,8 +185,27 @@ impl FeedbackPublisher {
                 match replacement {
                     Some(index) => state.queue[index] = feedback,
                     None => {
-                        state.accepting = false;
-                        overflowed = true;
+                        // A boundary may have consumed a slot by reclaiming a
+                        // move from an older segment. Reclaim another move and
+                        // append this one after the boundary instead of moving
+                        // it across ordered feedback or failing the bridge.
+                        let reclaim = state
+                            .queue
+                            .iter()
+                            .position(|queued| queued.move_kind() == Some(kind))
+                            .or_else(|| {
+                                state
+                                    .queue
+                                    .iter()
+                                    .position(|queued| queued.move_kind().is_some())
+                            });
+                        if let Some(index) = reclaim {
+                            state.queue.remove(index);
+                            state.queue.push_back(feedback);
+                        } else {
+                            state.accepting = false;
+                            overflowed = true;
+                        }
                     }
                 }
             } else {
@@ -251,6 +270,22 @@ impl FeedbackPublisher {
             ));
         }
         drained
+    }
+
+    fn complete_drain(
+        &self,
+        mut drained: Vec<GtkToolbarFeedback>,
+        limit: usize,
+    ) -> (Vec<GtkToolbarFeedback>, bool) {
+        let failed = self.mailbox.health.failed();
+        if failed {
+            // A publisher may have committed feedback after the first drain
+            // and immediately before making the bridge terminal. Stop new
+            // admissions, then collect that accepted tail before failover.
+            self.close_admission();
+            drained.extend(self.drain(limit));
+        }
+        (drained, failed)
     }
 
     fn close_admission(&self) {
@@ -420,14 +455,13 @@ impl GtkToolbarBridge {
         }
     }
 
-    /// True once the GTK thread or bounded feedback bridge reported terminal failure.
-    pub fn failed(&self) -> bool {
-        self.health.failed()
-    }
-
-    /// Drains one bounded pass. Residual feedback retains a coalesced runtime wake.
-    pub fn drain_feedback(&self) -> Vec<GtkToolbarFeedback> {
-        self.feedback.drain(GTK_FEEDBACK_DRAIN_LIMIT)
+    /// Drains one bounded pass and snapshots terminal state. If failure raced
+    /// with the first drain, admission is closed and the accepted tail is
+    /// included before the caller tears down the bridge.
+    pub fn drain_feedback(&self) -> (Vec<GtkToolbarFeedback>, bool) {
+        let drained = self.feedback.drain(GTK_FEEDBACK_DRAIN_LIMIT);
+        self.feedback
+            .complete_drain(drained, GTK_FEEDBACK_DRAIN_LIMIT)
     }
 
     /// Publishes the newest complete update and replaces an unread older update.
@@ -450,9 +484,11 @@ impl Drop for GtkToolbarBridge {
             GTK_THREAD_SHUTDOWN_TIMEOUT,
         ) {
             ThreadShutdownOutcome::Joined => self.health.mark_stopped(),
-            ThreadShutdownOutcome::Panicked => self
-                .health
-                .fail("GTK toolbar thread panicked during shutdown"),
+            ThreadShutdownOutcome::Panicked => {
+                // Shutdown has already made health terminal, so `fail` cannot
+                // publish this late join result. Report it directly.
+                log::warn!("GTK toolbar thread panicked during shutdown");
+            }
             ThreadShutdownOutcome::TimedOut => {
                 log::warn!(
                     "GTK toolbar thread did not stop within {:?}; detaching it safely",
@@ -578,6 +614,30 @@ mod tests {
     }
 
     #[test]
+    fn first_move_after_a_reclaimed_drag_start_reuses_an_older_move_slot() {
+        let (_wake, health, publisher) = channel();
+        let first_start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 1);
+        publisher.publish(first_start.clone()).unwrap();
+        for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
+            publisher
+                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
+                .unwrap();
+        }
+
+        let next_start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 100);
+        let next_move = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 101);
+        publisher.publish(next_start.clone()).unwrap();
+        publisher.publish(next_move.clone()).unwrap();
+
+        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.first(), Some(&first_start));
+        assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 2], next_start);
+        assert_eq!(drained.last(), Some(&next_move));
+        assert!(!health.failed());
+    }
+
+    #[test]
     fn drag_end_reclaims_an_older_move_and_preserves_ordered_boundaries() {
         let (_wake, health, publisher) = channel();
         let start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 1);
@@ -599,7 +659,7 @@ mod tests {
     }
 
     #[test]
-    fn move_never_crosses_an_event_boundary_or_toolbar_kind() {
+    fn reclaimed_move_is_appended_after_event_boundary_and_other_kind() {
         let (_wake, health, publisher) = channel();
         for seq in 0..(GTK_FEEDBACK_CAPACITY - 2) as u64 {
             publisher
@@ -611,8 +671,29 @@ mod tests {
             .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1))
             .unwrap();
 
+        let latest_top = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999);
+        publisher.publish(latest_top.clone()).unwrap();
+
+        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 3], event());
         assert_eq!(
-            publisher.publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999)),
+            drained[GTK_FEEDBACK_CAPACITY - 2],
+            drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1)
+        );
+        assert_eq!(drained.last(), Some(&latest_top));
+        assert!(!health.failed());
+    }
+
+    #[test]
+    fn move_capacity_exhaustion_without_a_reclaimable_move_fails() {
+        let (_wake, health, publisher) = channel();
+        for _ in 0..GTK_FEEDBACK_CAPACITY {
+            publisher.publish(event()).unwrap();
+        }
+
+        assert_eq!(
+            publisher.publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 1)),
             Err(FeedbackPublishError::Failed)
         );
         assert!(health.failed());
@@ -647,6 +728,24 @@ mod tests {
         assert!(wake_is_readable(&wake));
         assert_eq!(publisher.pending_len(), 1);
         assert_eq!(publisher.drain(1), vec![event()]);
+    }
+
+    #[test]
+    fn terminal_transition_after_initial_drain_recovers_accepted_tail() {
+        let (_wake, health, publisher) = channel();
+        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        assert!(drained.is_empty());
+
+        publisher.publish(event()).unwrap();
+        health.fail("intentional terminal transition after initial drain");
+
+        let (drained, failed) = publisher.complete_drain(drained, GTK_FEEDBACK_CAPACITY);
+        assert!(failed);
+        assert_eq!(drained, vec![event()]);
+        assert_eq!(
+            publisher.publish(event()),
+            Err(FeedbackPublishError::Failed)
+        );
     }
 
     #[test]
@@ -705,6 +804,20 @@ mod tests {
         assert_eq!(
             finish_thread_within(&mut thread, &completion_rx, Duration::from_secs(1)),
             ThreadShutdownOutcome::Joined
+        );
+        assert!(thread.is_none());
+    }
+
+    #[test]
+    fn panicked_thread_is_joined_with_panicked_outcome() {
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let mut thread = Some(std::thread::spawn(move || {
+            let _completion = ThreadCompletion(completion_tx);
+            panic!("intentional GTK bridge shutdown test panic");
+        }));
+        assert_eq!(
+            finish_thread_within(&mut thread, &completion_rx, Duration::from_secs(1)),
+            ThreadShutdownOutcome::Panicked
         );
         assert!(thread.is_none());
     }
