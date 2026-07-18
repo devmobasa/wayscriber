@@ -34,7 +34,7 @@ impl ClipboardCommandRunner for WlClipboardCommandRunner {
         timeout: Duration,
         output_cap: usize,
     ) -> anyhow::Result<BrokerOutput> {
-        crate::process_broker::current()?.run(
+        crate::process_broker::current()?.run_prefix(
             HelperKind::WlPaste,
             OsStr::new("wl-paste"),
             [OsStr::new("--type"), OsStr::new(mime_type)],

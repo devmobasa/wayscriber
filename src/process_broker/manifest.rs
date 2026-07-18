@@ -15,6 +15,17 @@ pub(super) fn input_cap(kind: HelperKind) -> usize {
     }
 }
 
+pub(super) fn supports_prefix_output(kind: HelperKind) -> bool {
+    if matches!(kind, HelperKind::WlPaste) {
+        return true;
+    }
+    #[cfg(test)]
+    if matches!(kind, HelperKind::TestShell) {
+        return true;
+    }
+    false
+}
+
 pub(super) fn validate(
     kind: HelperKind,
     program: &OsWire,

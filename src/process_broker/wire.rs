@@ -53,6 +53,15 @@ pub(crate) enum HelperLifetime {
     DetachedAfterExec,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum OutputMode {
+    /// Read the complete stream and reject output beyond the declared cap.
+    Complete,
+    /// Return once the declared stdout prefix is full and stop the helper.
+    Prefix,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct BrokerRequest {
@@ -73,6 +82,7 @@ pub(super) enum BrokerOperation {
         input: BlobWire,
         timeout_ms: u64,
         output_cap: usize,
+        output_mode: OutputMode,
     },
     Publish {
         kind: HelperKind,
@@ -117,6 +127,7 @@ pub(super) enum BrokerOutcome {
         stdout: BlobWire,
         stderr: BlobWire,
         timed_out: bool,
+        stdout_limit_reached: bool,
     },
     Spawned {
         handle: String,
@@ -169,4 +180,5 @@ pub(crate) struct BrokerOutput {
     pub(crate) stdout: Vec<u8>,
     pub(crate) stderr: Vec<u8>,
     pub(crate) timed_out: bool,
+    pub(crate) stdout_limit_reached: bool,
 }

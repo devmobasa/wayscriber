@@ -12,6 +12,7 @@ use super::transport::{decode_blob, encode_blob, recv_packet, send_packet, set_s
 use super::wire::{
     BlobWire, BrokerOperation, BrokerOutcome, BrokerOutput, BrokerRequest, BrokerResponse,
     HelperKind, HelperLifetime, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, MAX_PACKET_BYTES, OsWire,
+    OutputMode,
 };
 
 #[derive(Debug)]
@@ -41,6 +42,13 @@ pub(crate) struct BrokerChild {
 #[derive(Debug)]
 pub(crate) struct ProcessBrokerGuard {
     broker: ProcessBroker,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RunOptions {
+    timeout: Duration,
+    output_cap: usize,
+    output_mode: OutputMode,
 }
 
 static ACTIVE_BROKER: OnceLock<Mutex<Weak<BrokerInner>>> = OnceLock::new();
@@ -207,6 +215,58 @@ impl ProcessBroker {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
+        self.run_with_mode(
+            kind,
+            program,
+            arguments,
+            input,
+            RunOptions {
+                timeout,
+                output_cap,
+                output_mode: OutputMode::Complete,
+            },
+        )
+    }
+
+    /// Reads a bounded stdout prefix. The broker restricts this mode to `wl-paste`.
+    pub(crate) fn run_prefix<I, S>(
+        &self,
+        kind: HelperKind,
+        program: &OsStr,
+        arguments: I,
+        input: Vec<u8>,
+        timeout: Duration,
+        output_cap: usize,
+    ) -> Result<BrokerOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.run_with_mode(
+            kind,
+            program,
+            arguments,
+            input,
+            RunOptions {
+                timeout,
+                output_cap,
+                output_mode: OutputMode::Prefix,
+            },
+        )
+    }
+
+    fn run_with_mode<I, S>(
+        &self,
+        kind: HelperKind,
+        program: &OsStr,
+        arguments: I,
+        input: Vec<u8>,
+        options: RunOptions,
+    ) -> Result<BrokerOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
         let arguments = arguments
             .into_iter()
             .map(|argument| OsWire::from_os(argument.as_ref()))
@@ -223,8 +283,9 @@ impl ProcessBroker {
                 arguments,
                 environment: Vec::new(),
                 input,
-                timeout_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
-                output_cap: output_cap.min(MAX_OUTPUT_BYTES),
+                timeout_ms: u64::try_from(options.timeout.as_millis()).unwrap_or(u64::MAX),
+                output_cap: options.output_cap.min(MAX_OUTPUT_BYTES),
+                output_mode: options.output_mode,
             },
             &request_descriptors,
         )?;
@@ -234,6 +295,7 @@ impl ProcessBroker {
                 stdout,
                 stderr,
                 timed_out,
+                stdout_limit_reached,
             } => {
                 let mut descriptors = VecDeque::from(descriptors);
                 let stdout = decode_blob(stdout, &mut descriptors, MAX_OUTPUT_BYTES)?;
@@ -246,6 +308,7 @@ impl ProcessBroker {
                     stdout,
                     stderr,
                     timed_out,
+                    stdout_limit_reached,
                 })
             }
             _ => bail!("broker returned the wrong response kind for run"),
@@ -295,11 +358,13 @@ impl ProcessBroker {
                 stdout: BlobWire::Inline { bytes: stdout },
                 stderr: BlobWire::Inline { bytes: stderr },
                 timed_out,
+                stdout_limit_reached: false,
             } => Ok(BrokerOutput {
                 status,
                 stdout,
                 stderr,
                 timed_out,
+                stdout_limit_reached: false,
             }),
             _ => bail!("broker returned the wrong response kind for publication"),
         }

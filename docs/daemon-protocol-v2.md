@@ -39,11 +39,12 @@ each overlay child; tray and shortcut producers never carry a PID.
 Each broker also owns an out-of-band shutdown socket. Closing or signaling that channel preempts
 an active bounded helper, kills its process group, and reaps owned children without waiting for the
 request/response exchange lock. The broker runs in its own process group so terminating an overlay
-group leaves the broker alive long enough to perform that cleanup. Helper output that exceeds its
-declared cap fails the operation; screenshot helpers use a larger but still bounded 256 MiB cap so
-large valid compositor captures are not returned as truncated PNG data. Retained `wl-copy`
-publication uses that same cap, and both its input writer and retained provider group are cancelled
-when broker shutdown begins.
+group leaves the broker alive long enough to perform that cleanup. Complete helper output that
+exceeds its declared cap fails the operation; the explicit `wl-paste` prefix mode instead returns a
+bounded sample and stops its helper as soon as the requested prefix is complete. Screenshot helpers
+use a larger but still bounded 256 MiB cap so large valid compositor captures are not returned as
+truncated PNG data. Retained `wl-copy` publication uses that same cap, and both its input writer and
+retained provider group are cancelled when broker shutdown begins.
 
 Overlay startup uses a CSPRNG generation passed only to the candidate. After the candidate wins the
 overlay singleton lock it publishes a private readiness record containing its generation, PID, and

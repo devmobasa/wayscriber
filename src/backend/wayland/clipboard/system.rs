@@ -41,14 +41,21 @@ fn publish_selection_with_runner(
 }
 
 pub(in crate::backend::wayland) fn clipboard_fingerprint() -> Option<ClipboardFingerprint> {
-    let offered = list_mime_types().ok()?;
+    clipboard_fingerprint_with_runner(&WlClipboardCommandRunner)
+}
+
+fn clipboard_fingerprint_with_runner(
+    runner: &impl ClipboardCommandRunner,
+) -> Option<ClipboardFingerprint> {
+    let offered = list_mime_types_with_runner(runner).ok()?;
     let selected_mime_type =
         image::choose_supported_mime(&offered).or_else(|| offered.first().cloned());
     let content_sample = selected_mime_type.as_ref().and_then(|mime| {
-        read_clipboard_mime_prefix(
+        read_clipboard_mime_prefix_with_runner(
             mime,
             CLIPBOARD_FINGERPRINT_BYTES,
             CLIPBOARD_FINGERPRINT_TIMEOUT,
+            runner,
         )
         .ok()
     });
@@ -114,14 +121,6 @@ pub(super) fn read_clipboard_mime(
     read_clipboard_mime_with_runner(mime_type, limit, timeout, &WlClipboardCommandRunner)
 }
 
-fn read_clipboard_mime_prefix(
-    mime_type: &str,
-    limit: usize,
-    timeout: Duration,
-) -> Result<ClipboardPrefixRead, ClipboardReadError> {
-    read_clipboard_mime_prefix_with_runner(mime_type, limit, timeout, &WlClipboardCommandRunner)
-}
-
 fn read_clipboard_mime_with_runner(
     mime_type: &str,
     limit: usize,
@@ -136,7 +135,7 @@ fn read_clipboard_mime_with_runner(
     if output.timed_out {
         return Err(ClipboardReadError::TimedOut);
     }
-    if output.stdout.len() > limit {
+    if output.stdout_limit_reached || output.stdout.len() > limit {
         return Err(ClipboardReadError::TooLarge { limit });
     }
     clipboard_output(output).map(|output| output.stdout)
@@ -156,11 +155,17 @@ fn read_clipboard_mime_prefix_with_runner(
     if output.timed_out {
         return Err(ClipboardReadError::TimedOut);
     }
+    let truncated = output.stdout_limit_reached || output.stdout.len() > limit;
+    if truncated {
+        return Ok(ClipboardPrefixRead {
+            bytes: output.stdout.into_iter().take(limit).collect(),
+            truncated: true,
+        });
+    }
     let output = clipboard_output(output)?;
-    let truncated = output.stdout.len() > limit;
     Ok(ClipboardPrefixRead {
-        bytes: output.stdout.into_iter().take(limit).collect(),
-        truncated,
+        bytes: output.stdout,
+        truncated: false,
     })
 }
 

@@ -9,18 +9,21 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 
 use super::transport::shutdown_requested;
-use super::wire::{HelperKind, MAX_STDERR_BYTES};
+use super::wire::{HelperKind, MAX_STDERR_BYTES, OutputMode};
 
 pub(super) struct BoundedOutput {
     pub(super) status: ExitStatus,
     pub(super) stdout: Vec<u8>,
     pub(super) stderr: Vec<u8>,
     pub(super) timed_out: bool,
+    pub(super) stdout_limit_reached: bool,
 }
 
 pub(super) struct PublishOutput {
-    pub(super) status: ExitStatus,
+    pub(super) status: i32,
     pub(super) timed_out: bool,
+    /// Unreaped successful leader that pins the retained provider's process group.
+    pub(super) retained: Option<Child>,
 }
 
 pub(super) fn supports_retained_publication(kind: HelperKind) -> bool {
@@ -160,23 +163,37 @@ pub(super) fn publish_bounded(
         Some(stdin) => write_input_until(stdin, &input, deadline, shutdown_fd),
         None => Ok(()),
     });
-    let (status, timed_out) = loop {
+    loop {
         if let Some(unreaped_status) = child_status_unreaped(child.child())? {
             let stdin_result = stdin_writer
                 .join()
                 .map_err(|_| anyhow!("broker publication stdin writer panicked"))?;
             if unreaped_status != 0 || stdin_result.is_err() {
                 child.kill_group();
+                let status = status_code(child.wait()?);
+                stdin_result.context("broker publication stdin write failed")?;
+                return Ok(PublishOutput {
+                    status,
+                    timed_out: false,
+                    retained: None,
+                });
             }
-            let status = child.wait()?;
             stdin_result.context("broker publication stdin write failed")?;
-            break (status, false);
+            return Ok(PublishOutput {
+                status: unreaped_status,
+                timed_out: false,
+                retained: Some(child.into_child()),
+            });
         }
         if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
             child.kill_group();
-            let status = child.wait()?;
+            let status = status_code(child.wait()?);
             let _ = stdin_writer.join();
-            break (status, true);
+            return Ok(PublishOutput {
+                status,
+                timed_out: true,
+                retained: None,
+            });
         }
         if shutdown_requested(shutdown_fd)? {
             child.kill_group();
@@ -185,8 +202,7 @@ pub(super) fn publish_bounded(
             return Err(anyhow!("broker publication cancelled during shutdown"));
         }
         std::thread::sleep(Duration::from_millis(5));
-    };
-    Ok(PublishOutput { status, timed_out })
+    }
 }
 
 fn write_input_until(
@@ -236,6 +252,7 @@ pub(super) fn run_bounded(
     input: Vec<u8>,
     timeout: Duration,
     output_cap: usize,
+    output_mode: OutputMode,
     shutdown_fd: std::os::fd::RawFd,
 ) -> Result<BoundedOutput> {
     if shutdown_requested(shutdown_fd)? {
@@ -260,11 +277,14 @@ pub(super) fn run_bounded(
         .stderr
         .take()
         .context("broker stderr pipe missing")?;
-    let stdout_overflow = Arc::new(AtomicBool::new(false));
+    let stdout_limit_reached = Arc::new(AtomicBool::new(false));
     let stderr_overflow = Arc::new(AtomicBool::new(false));
     let stdout_reader = {
-        let overflow = Arc::clone(&stdout_overflow);
-        std::thread::spawn(move || read_capped(stdout, output_cap, &overflow))
+        let limit_reached = Arc::clone(&stdout_limit_reached);
+        std::thread::spawn(move || match output_mode {
+            OutputMode::Complete => read_capped(stdout, output_cap, &limit_reached),
+            OutputMode::Prefix => read_prefix(stdout, output_cap, &limit_reached),
+        })
     };
     let stderr_reader = {
         let overflow = Arc::clone(&stderr_overflow);
@@ -288,7 +308,7 @@ pub(super) fn run_bounded(
             break (child.wait()?, true, false);
         }
         let cancelled = shutdown_requested(shutdown_fd)?;
-        if stdout_overflow.load(Ordering::Acquire)
+        if stdout_limit_reached.load(Ordering::Acquire)
             || stderr_overflow.load(Ordering::Acquire)
             || cancelled
         {
@@ -312,7 +332,8 @@ pub(super) fn run_bounded(
     if cancelled {
         return Err(anyhow!("broker helper cancelled during shutdown"));
     }
-    if stdout_overflow.load(Ordering::Acquire) {
+    let stdout_limit_reached = stdout_limit_reached.load(Ordering::Acquire);
+    if output_mode == OutputMode::Complete && stdout_limit_reached {
         return Err(anyhow!("broker helper stdout exceeded output cap"));
     }
     if stderr_overflow.load(Ordering::Acquire) {
@@ -323,7 +344,34 @@ pub(super) fn run_bounded(
         stdout,
         stderr,
         timed_out,
+        stdout_limit_reached,
     })
+}
+
+fn read_prefix(
+    mut reader: impl Read,
+    cap: usize,
+    limit_reached: &AtomicBool,
+) -> io::Result<Vec<u8>> {
+    let mut retained = Vec::with_capacity(cap.min(8192));
+    if cap == 0 {
+        limit_reached.store(true, Ordering::Release);
+        return Ok(retained);
+    }
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let remaining = cap.saturating_sub(retained.len());
+        let read_cap = buffer.len().min(remaining);
+        let read = reader.read(&mut buffer[..read_cap])?;
+        if read == 0 {
+            return Ok(retained);
+        }
+        retained.extend_from_slice(&buffer[..read]);
+        if retained.len() == cap {
+            limit_reached.store(true, Ordering::Release);
+            return Ok(retained);
+        }
+    }
 }
 
 fn read_capped(mut reader: impl Read, cap: usize, overflow: &AtomicBool) -> io::Result<Vec<u8>> {

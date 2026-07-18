@@ -16,7 +16,7 @@ use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
     BlobWire, BrokerOperation, BrokerOutcome, BrokerRequest, BrokerResponse, BrokerWireResponse,
     HelperKind, HelperLifetime, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, MAX_OWNED_CHILDREN,
-    MAX_PACKET_BYTES,
+    MAX_PACKET_BYTES, OutputMode,
 };
 
 pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
@@ -79,7 +79,7 @@ fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
 }
 
 fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
-    let mut children = OwnedChildren::default();
+    let mut ownership = BrokerOwnership::default();
     loop {
         if wait_for_request(socket, shutdown_fd)? == BrokerWake::Shutdown {
             return Ok(());
@@ -109,7 +109,7 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
         let wire_response = handle_operation(
             request.operation,
             &mut descriptors,
-            &mut children.0,
+            &mut ownership,
             shutdown_fd,
         )
         .unwrap_or_else(|error| BrokerWireResponse {
@@ -190,18 +190,35 @@ pub(super) fn run_loop_for_test(socket: RawFd, shutdown_fd: RawFd, token: &str) 
 }
 
 #[derive(Default)]
-struct OwnedChildren(BTreeMap<String, std::process::Child>);
+struct BrokerOwnership {
+    children: BTreeMap<String, std::process::Child>,
+    /// At most one regular clipboard provider is current for this runtime.
+    retained_publication: Option<std::process::Child>,
+}
 
-impl Drop for OwnedChildren {
+impl BrokerOwnership {
+    fn replace_retained_publication(&mut self, child: std::process::Child) {
+        if let Some(mut previous) = self.retained_publication.replace(child) {
+            kill_child_process_group(&mut previous);
+            let _ = previous.wait();
+        }
+    }
+}
+
+impl Drop for BrokerOwnership {
     fn drop(&mut self) {
-        terminate_owned_children(&mut self.0);
+        if let Some(mut publication) = self.retained_publication.take() {
+            kill_child_process_group(&mut publication);
+            let _ = publication.wait();
+        }
+        terminate_owned_children(&mut self.children);
     }
 }
 
 fn handle_operation(
     operation: BrokerOperation,
     descriptors: &mut VecDeque<OwnedFd>,
-    children: &mut BTreeMap<String, std::process::Child>,
+    ownership: &mut BrokerOwnership,
     shutdown_fd: RawFd,
 ) -> Result<BrokerWireResponse> {
     if shutdown_requested(shutdown_fd)? {
@@ -220,15 +237,20 @@ fn handle_operation(
             input,
             timeout_ms,
             output_cap,
+            output_mode,
         } => {
             let input = decode_blob(input, descriptors, MAX_INPUT_BYTES)?;
             reject_descriptors(descriptors)?;
             super::manifest::validate(kind, &program, &arguments, &environment, &input)?;
+            if output_mode == OutputMode::Prefix && !super::manifest::supports_prefix_output(kind) {
+                bail!("prefix output is restricted to wl-paste");
+            }
             let output = run_bounded(
                 super::manifest::command(program, arguments, environment),
                 input,
                 Duration::from_millis(timeout_ms).min(Duration::from_secs(120)),
                 output_cap.min(MAX_OUTPUT_BYTES),
+                output_mode,
                 shutdown_fd,
             )?;
             let (stdout, stdout_descriptor) = encode_blob(output.stdout, MAX_OUTPUT_BYTES)?;
@@ -239,6 +261,7 @@ fn handle_operation(
                     stdout,
                     stderr,
                     timed_out: output.timed_out,
+                    stdout_limit_reached: output.stdout_limit_reached,
                 },
                 descriptors: stdout_descriptor
                     .into_iter()
@@ -266,12 +289,16 @@ fn handle_operation(
                 Duration::from_millis(timeout_ms).min(Duration::from_secs(120)),
                 shutdown_fd,
             )?;
+            if let Some(retained) = output.retained {
+                ownership.replace_retained_publication(retained);
+            }
             Ok(BrokerWireResponse {
                 outcome: BrokerOutcome::Output {
-                    status: status_code(output.status),
+                    status: output.status,
                     stdout: BlobWire::Inline { bytes: Vec::new() },
                     stderr: BlobWire::Inline { bytes: Vec::new() },
                     timed_out: output.timed_out,
+                    stdout_limit_reached: false,
                 },
                 descriptors: Vec::new(),
             })
@@ -293,7 +320,7 @@ fn handle_operation(
                 environment,
             },
             descriptors,
-            children,
+            &mut ownership.children,
             shutdown_fd,
         ),
         BrokerOperation::Signal { handle, signal } => {
@@ -304,7 +331,8 @@ fn handle_operation(
             ) {
                 bail!("signal is not allowed by broker manifest");
             }
-            let child = children
+            let child = ownership
+                .children
                 .get(&handle)
                 .ok_or_else(|| anyhow!("unknown broker child handle"))?;
             // SAFETY: the broker retains the exact unreaped child handle.
@@ -315,11 +343,12 @@ fn handle_operation(
         }
         BrokerOperation::TryWait { handle } => {
             reject_descriptors(descriptors)?;
-            let child = children
+            let child = ownership
+                .children
                 .get_mut(&handle)
                 .ok_or_else(|| anyhow!("unknown broker child handle"))?;
             if let Some(status) = child.try_wait()? {
-                children.remove(&handle);
+                ownership.children.remove(&handle);
                 Ok(wire_outcome(BrokerOutcome::Exited {
                     status: status_code(status),
                 }))
@@ -329,7 +358,8 @@ fn handle_operation(
         }
         BrokerOperation::KillWait { handle } => {
             reject_descriptors(descriptors)?;
-            let mut child = children
+            let mut child = ownership
+                .children
                 .remove(&handle)
                 .ok_or_else(|| anyhow!("unknown broker child handle"))?;
             kill_child_process_group(&mut child);
