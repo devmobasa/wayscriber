@@ -1,6 +1,7 @@
 mod action;
 mod child;
 mod command;
+mod digest;
 mod linux;
 mod mode;
 mod runtime;

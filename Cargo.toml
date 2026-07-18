@@ -26,6 +26,8 @@ smithay-client-toolkit = { version = "0.20", default-features = false, features 
 
 # Cairo for drawing
 cairo-rs = { version = "0.22", features = ["png", "pdf"] }
+# Already required by Cairo/Pango; protocol v2 also uses its SHA-256 checksum API.
+glib = { version = "0.22", default-features = false }
 
 # Pango for advanced text rendering and font support
 pango = "0.22"
@@ -50,7 +52,6 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "syn
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
 serde_json = "1.0"
-sha2 = "0.10"
 png = "0.18"
 
 # GTK4 toolbar frontend (layer-shell compositors)

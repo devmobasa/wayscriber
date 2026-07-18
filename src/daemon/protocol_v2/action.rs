@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
+use super::digest::sha256_hex;
 use super::wire::{
     ACTION_ENVELOPE_PROTOCOL_VERSION, MAX_ACTION_ENVELOPE_BYTES, bounded_reason, canonical_json,
     fresh_id, parse_canonical_json, validate_digest, validate_id, validate_reason, validate_token,
@@ -271,10 +271,7 @@ fn digest_payload(
         },
         MAX_ACTION_ENVELOPE_BYTES,
     )?;
-    Ok(Sha256::digest(payload)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect())
+    sha256_hex(&payload)
 }
 
 fn validate_record(record: &ActionRecord) -> Result<()> {
@@ -1056,6 +1053,31 @@ mod tests {
 
     use super::*;
     use crate::env_vars::XDG_RUNTIME_DIR_ENV;
+
+    #[test]
+    fn action_digests_match_protocol_v2_golden_values() {
+        const ACTION_ID: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const COMMAND_ID: &str = "cccccccccccccccccccccccccccccccc";
+        const DAEMON_TOKEN: &str =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let anonymous = ActionOwner::Anonymous {
+            daemon_token: DAEMON_TOKEN.into(),
+        };
+        assert_eq!(
+            digest_payload(ACTION_ID, 42, &anonymous, TrayAction::CaptureRegion).unwrap(),
+            "53a40b0ef73b768dfa543746835ac6704255db3b9c9c1ad6b06a38f98a13a9c1"
+        );
+
+        let command = ActionOwner::Command {
+            command_identity: COMMAND_ID.into(),
+            daemon_token: DAEMON_TOKEN.into(),
+        };
+        assert_eq!(
+            digest_payload(ACTION_ID, 42, &command, TrayAction::ToggleHelp).unwrap(),
+            "c8aa91f67acd22621252e0e95cee6221cc02a9f1ca72cdc78e46eb3fd0dabf33"
+        );
+    }
 
     fn with_runtime<T>(run: impl FnOnce() -> T) -> T {
         let _guard = crate::test_env::lock();

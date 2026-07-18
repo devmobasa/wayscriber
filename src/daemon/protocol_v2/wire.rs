@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use sha2::{Digest, Sha256};
 
+use super::digest::sha256_hex;
 use super::{BootIdentity, NamespaceIdentity, ProtocolId, ProtocolToken};
 use crate::daemon::control::DaemonToggleRequest;
 use crate::tray_action::TrayAction;
@@ -703,8 +703,7 @@ pub(crate) fn parse_canonical_json<T: DeserializeOwned + Serialize>(
 
 pub(crate) fn response_digest(response: &CommandResponse) -> Result<String> {
     let canonical = canonical_json(response, MAX_CONTROL_RECORD_BYTES)?;
-    let digest = Sha256::digest(canonical);
-    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+    sha256_hex(&canonical)
 }
 
 pub(crate) fn validate_id(value: &str) -> Result<()> {
@@ -812,15 +811,39 @@ mod tests {
     }
 
     #[test]
-    fn response_digest_is_stable_and_sensitive() {
-        let response = CommandResponse::FailedNoEffect {
-            reason: "no effect".into(),
-        };
-        let first = response_digest(&response).unwrap();
-        let second = response_digest(&response).unwrap();
-        assert_eq!(first, second);
-        validate_digest(&first).unwrap();
-        assert_ne!(first, response_digest(&CommandResponse::Canceled).unwrap());
+    fn response_digests_match_protocol_v2_golden_values() {
+        const EFFECT_ID: &str = "dddddddddddddddddddddddddddddddd";
+        let cases = [
+            (
+                CommandResponse::Canceled,
+                "581a04b91301788c3ef766a098e4ce66c3edb716a23aacdf03b350b2f34e8772",
+            ),
+            (
+                CommandResponse::Succeeded {
+                    effect_id: EFFECT_ID.into(),
+                },
+                "f2b5acec10adfa725c29e83a8d7db772a1b9ea3ae9ffe974ec47185fd70305c0",
+            ),
+            (
+                CommandResponse::FailedNoEffect {
+                    reason: "no effect".into(),
+                },
+                "4f2110e67a9841977efa2239d0a0f83f78028e18b17c547035e70277e58acaa8",
+            ),
+            (
+                CommandResponse::CommittedIndeterminate {
+                    effect_id: EFFECT_ID.into(),
+                    reason: "uncertain".into(),
+                },
+                "b92733344539caff166c5446d8aef4c7f77a6f9a9a7c06198845a5a0a15d6c82",
+            ),
+        ];
+
+        for (response, expected) in cases {
+            let actual = response_digest(&response).unwrap();
+            assert_eq!(actual, expected);
+            validate_digest(&actual).unwrap();
+        }
     }
 
     #[test]
