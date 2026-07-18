@@ -42,6 +42,26 @@ const BODY_SPACING: f64 = 6.0;
 /// `(color, label, bound quick-color action)` like the built-in swatch rows.
 type ColorSwatch = (Color, String, Option<Action>);
 
+#[derive(Default)]
+struct HexPasteRequests {
+    generation: Cell<u64>,
+}
+
+impl HexPasteRequests {
+    fn invalidate(&self) {
+        self.generation.set(self.generation.get().wrapping_add(1));
+    }
+
+    fn begin(&self) -> u64 {
+        self.invalidate();
+        self.generation.get()
+    }
+
+    fn is_current(&self, generation: u64) -> bool {
+        self.generation.get() == generation
+    }
+}
+
 pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget> {
     let card = section_card(
         ctx,
@@ -292,8 +312,9 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
         }
     }));
 
-    // Hex entry: Enter applies, invalid input is ignored. Snapshot updates
-    // never overwrite the text while the user is editing.
+    // Hex entry: focus selects the whole token, Enter applies typed input, and
+    // paste atomically replaces and immediately applies a valid color.
+    // Snapshot updates never overwrite the text while the user is editing.
     let entry = gtk4::Entry::new();
     super::super::super::widgets::keyboard_on_demand_for_entry(&entry);
     entry.set_text(&color_to_hex(ctx.snapshot.color));
@@ -303,13 +324,16 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     entry.set_size_request(ctx.px(HEX_INPUT_WIDTH), ctx.px(HEX_INPUT_HEIGHT));
     entry.set_valign(gtk4::Align::Center);
     entry.set_margin_start(ctx.px(4.0));
-    entry.set_tooltip_text(Some("Type a hex color (Enter applies)"));
+    entry.set_tooltip_text(Some(
+        "Type a hex color (Enter applies); paste applies immediately",
+    ));
     let sender = ctx.feedback.clone();
     entry.connect_activate(move |entry| {
         if let Some(color) = parse_hex_color(&entry.text()) {
             send_event(&sender, ToolbarEvent::SetColor(color));
         }
     });
+    install_hex_paste_replacement(&entry, ctx.feedback.clone());
     row.append(&entry);
     let entry_handle = entry.clone();
     ctx.updaters.push(Box::new(move |snapshot| {
@@ -363,6 +387,91 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     row.append(&eyedropper.button);
 
     body.append(&row);
+}
+
+fn install_hex_paste_replacement(entry: &gtk4::Entry, sender: FeedbackSender) {
+    let Some(text) = entry.delegate().and_downcast::<gtk4::Text>() else {
+        log::warn!("GTK hex entry has no text delegate; using default paste behavior");
+        return;
+    };
+    let paste_requests = Rc::new(HexPasteRequests::default());
+    let changed_paste_requests = paste_requests.clone();
+    entry.connect_changed(move |_| {
+        changed_paste_requests.invalidate();
+    });
+    let weak_entry = entry.downgrade();
+    let clipboard_sender = sender.clone();
+    let clipboard_paste_requests = paste_requests.clone();
+    text.connect_paste_clipboard(move |text| {
+        // GtkText owns Ctrl+V and the native context-menu Paste action. Stop
+        // its insertion semantics because a color is one token, not text to
+        // splice at the caret.
+        text.stop_signal_emission_by_name("paste-clipboard");
+        let Some(entry) = weak_entry.upgrade() else {
+            return;
+        };
+        read_hex_paste(
+            &entry,
+            &text.display().clipboard(),
+            clipboard_sender.clone(),
+            clipboard_paste_requests.clone(),
+        );
+    });
+
+    // GtkText handles PRIMARY-selection paste directly from its middle-click
+    // gesture instead of emitting `paste-clipboard`. Claim that gesture before
+    // it reaches the delegate and route it through the same replacement path.
+    let primary_paste = gtk4::GestureClick::new();
+    primary_paste.set_button(gtk4::gdk::BUTTON_MIDDLE);
+    primary_paste.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    primary_paste.connect_pressed(move |gesture, _, _, _| {
+        let Some(entry) = gesture.widget().and_downcast::<gtk4::Entry>() else {
+            gesture.set_state(gtk4::EventSequenceState::Denied);
+            return;
+        };
+        if !entry.settings().is_gtk_enable_primary_paste() {
+            gesture.set_state(gtk4::EventSequenceState::Denied);
+            return;
+        }
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        entry.grab_focus();
+        read_hex_paste(
+            &entry,
+            &entry.primary_clipboard(),
+            sender.clone(),
+            paste_requests.clone(),
+        );
+    });
+    entry.add_controller(primary_paste);
+}
+
+fn read_hex_paste(
+    entry: &gtk4::Entry,
+    clipboard: &gtk4::gdk::Clipboard,
+    sender: FeedbackSender,
+    paste_requests: Rc<HexPasteRequests>,
+) {
+    let generation = paste_requests.begin();
+    let weak_entry = entry.downgrade();
+    clipboard.read_text_async(None::<&gtk4::gio::Cancellable>, move |result| {
+        let Some(entry) = weak_entry.upgrade() else {
+            return;
+        };
+        if !paste_requests.is_current(generation) {
+            return;
+        }
+        let parsed = result
+            .ok()
+            .flatten()
+            .and_then(|value| parse_hex_color(&value));
+        let Some(color) = parsed else {
+            entry.select_region(0, -1);
+            return;
+        };
+        entry.set_text(&color_to_hex(color));
+        entry.select_region(0, -1);
+        send_event(&sender, ToolbarEvent::SetColor(color));
+    });
 }
 
 fn color_key(color: Color) -> (f64, f64, f64) {
@@ -609,4 +718,29 @@ fn palette_swatch((index, entry): (usize, &QuickColorPaletteEntry)) -> ColorSwat
         entry.label.clone(),
         QuickColorPalette::action_for_index(index),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HexPasteRequests;
+
+    #[test]
+    fn newer_hex_paste_request_supersedes_pending_callback() {
+        let requests = HexPasteRequests::default();
+        let older = requests.begin();
+        let newer = requests.begin();
+
+        assert!(!requests.is_current(older));
+        assert!(requests.is_current(newer));
+    }
+
+    #[test]
+    fn editing_hex_text_invalidates_pending_paste_callback() {
+        let requests = HexPasteRequests::default();
+        let pending = requests.begin();
+
+        requests.invalidate();
+
+        assert!(!requests.is_current(pending));
+    }
 }

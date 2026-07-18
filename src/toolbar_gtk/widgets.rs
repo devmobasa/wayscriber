@@ -113,6 +113,17 @@ pub(super) fn keyboard_on_demand_for_entry(entry: &gtk4::Entry) {
     entry.connect_has_focus_notify(|entry| {
         if entry.has_focus() {
             set_entry_keyboard_mode(entry, true);
+            // Pointer focus positions the caret after focus is assigned. Wait
+            // until that click finishes so the field starts as one atomic
+            // value that typing or copying can replace/read immediately.
+            let weak = entry.downgrade();
+            gtk4::glib::idle_add_local_once(move || {
+                if let Some(entry) = weak.upgrade()
+                    && entry.has_focus()
+                {
+                    entry.select_region(0, -1);
+                }
+            });
         } else {
             release_window_keyboard_focus(entry);
         }
@@ -132,6 +143,23 @@ pub(super) fn keyboard_on_demand_for_entry(entry: &gtk4::Entry) {
         gtk4::glib::Propagation::Proceed
     });
     entry.add_controller(key);
+
+    // GtkText normally opens its context menu with Copy disabled when the
+    // caret has no selection. A hex color is one atomic value, so make an
+    // unselected secondary click target the whole token while preserving any
+    // deliberate partial selection the user already made.
+    let context_click = gtk4::GestureClick::new();
+    context_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
+    context_click.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    context_click.connect_pressed(|gesture, _, _, _| {
+        let Some(entry) = gesture.widget().and_downcast::<gtk4::Entry>() else {
+            return;
+        };
+        if entry.selection_bounds().is_none() {
+            entry.select_region(0, -1);
+        }
+    });
+    entry.add_controller(context_click);
 }
 
 fn release_entry_keyboard_focus(entry: &gtk4::Entry) {
