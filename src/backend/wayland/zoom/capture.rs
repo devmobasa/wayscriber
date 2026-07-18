@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::shm::{
     Shm,
     slot::{Buffer, SlotPool},
@@ -75,7 +75,7 @@ impl ZoomState {
     pub fn start_capture(
         &mut self,
         use_fallback: bool,
-        tokio_handle: &tokio::runtime::Handle,
+        _tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
         if self.capture.is_some() || self.portal_in_progress || self.preflight_pending {
             warn!("Zoom capture already in progress; ignoring request");
@@ -83,14 +83,28 @@ impl ZoomState {
         }
 
         self.capture_done = false;
-
-        if use_fallback || self.manager.is_none() {
-            log::info!("Screencopy unavailable; using portal fallback for zoom capture");
-            return self.capture_via_portal(tokio_handle);
-        }
-
+        self.preflight_use_fallback = use_fallback || self.manager.is_none();
         self.preflight_pending = true;
         Ok(())
+    }
+
+    pub fn begin_preflight_capture<State>(
+        &mut self,
+        use_fallback: bool,
+        shm: &Shm,
+        qh: &QueueHandle<State>,
+        tokio_handle: &tokio::runtime::Handle,
+    ) -> Result<()>
+    where
+        State:
+            Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
+    {
+        if use_fallback || self.manager.is_none() {
+            info!("capture.preflight component=zoom phase=portal-start suppression_ready=true");
+            self.capture_via_portal(tokio_handle)
+        } else {
+            self.begin_screencopy(shm, qh)
+        }
     }
 
     pub fn begin_screencopy<State>(&mut self, shm: &Shm, qh: &QueueHandle<State>) -> Result<()>
@@ -112,7 +126,10 @@ impl ZoomState {
             }
         };
 
-        debug!("Requesting screencopy frame for zoom");
+        info!(
+            "capture.preflight component=zoom phase=screencopy-request output_id={:?}",
+            self.active_output_id
+        );
         let frame = manager.capture_output(0, &output, qh, ());
         self.capture = Some(CaptureSession::new(frame));
 
@@ -131,6 +148,9 @@ impl ZoomState {
                 height,
                 stride,
             } => {
+                info!(
+                    "capture.preflight component=zoom phase=screencopy-buffer width={width} height={height} stride={stride} format={format:?}"
+                );
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
                     warn!("Failed to prepare zoom buffer: {}", err);
                     self.cancel(input_state, false);
@@ -171,6 +191,15 @@ impl ZoomState {
                 input_state.dirty_tracker.mark_full();
                 input_state.needs_redraw = true;
                 self.capture_done = true;
+                if let Some(image) = self.image() {
+                    info!(
+                        "capture.preflight component=zoom phase=screencopy-ready width={} height={} active={} image_generation={}",
+                        image.width,
+                        image.height,
+                        self.active,
+                        self.image_generation()
+                    );
+                }
             }
             FrameEvent::Failed => {
                 warn!("Zoom capture failed");
@@ -280,5 +309,24 @@ impl ZoomState {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn portal_capture_waits_for_suppression_preflight() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().expect("runtime wake");
+        let mut state = ZoomState::new_with_runtime_wake(None, wake.handle());
+
+        state
+            .start_capture(false, &tokio::runtime::Handle::current())
+            .expect("queue portal zoom capture");
+
+        assert!(state.preflight_pending());
+        assert!(!state.portal_in_progress);
+        assert_eq!(state.take_preflight_pending(), Some(true));
     }
 }

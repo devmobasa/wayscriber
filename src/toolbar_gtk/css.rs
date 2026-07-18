@@ -39,6 +39,8 @@ const TOOLTIP_BACKGROUND: (f64, f64, f64, f64) = (0.1, 0.1, 0.15, 0.95);
 const TOOLTIP_BORDER: (f64, f64, f64, f64) = (0.4, 0.4, 0.5, 0.8);
 const DIVIDER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.08);
 
+pub(super) const CAPTURE_TRANSPARENT_CLASS: &str = "wayscriber-capture-transparent";
+
 /// Full stylesheet at the given toolbar scale.
 pub(super) fn stylesheet(scale: f64) -> String {
     let scale = if scale.is_finite() {
@@ -214,6 +216,23 @@ window.wayscriber-toolbar {{
     padding: {pad_popover}px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.50);
 }}
+/* A popover is its own native surface. Its contents and arrow CSS nodes paint
+   outside the application-provided child, so capture suppression must clear
+   their pixels too. Keep border and shadow dimensions unchanged to avoid a
+   resize while the transparent replacement buffer is being acknowledged. */
+.wayscriber-toolbar popover.{capture_transparent_class},
+.wayscriber-toolbar popover.{capture_transparent_class} > arrow {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    outline-color: transparent;
+}}
+.wayscriber-toolbar popover.{capture_transparent_class} > contents {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
+    outline-color: transparent;
+}}
 
 /* ===== Side palette ==================================================== */
 .wayscriber-toolbar .header-band {{
@@ -289,6 +308,16 @@ tooltip {{
     padding: 2px 6px;
     font-size: {font_tooltip}px;
 }}
+/* GtkTooltipWindow is a private GtkNative with its own popup surface. Its
+   native CSS node paints outside the application-provided custom widget, so
+   suppress the chrome without unmapping the popup. */
+tooltip.{capture_transparent_class} {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    outline-color: transparent;
+    color: transparent;
+}}
 "#,
         panel = rgba(PANEL_BACKGROUND),
         accent = rgba(ACCENT),
@@ -312,6 +341,7 @@ tooltip {{
         tooltip_bg = rgba(TOOLTIP_BACKGROUND),
         tooltip_border = rgba(TOOLTIP_BORDER),
         divider = rgba(DIVIDER),
+        capture_transparent_class = CAPTURE_TRANSPARENT_CLASS,
         radius_panel = px(14.0),
         radius_card = px(8.0),
         pad_card = px(6.0),
@@ -326,4 +356,21 @@ tooltip {{
         font_small = px(10.0),
         font_tooltip = px(12.0),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_suppression_clears_private_native_popup_chrome() {
+        let css = stylesheet(1.0);
+        assert!(css.contains(&format!("tooltip.{CAPTURE_TRANSPARENT_CLASS} {{")));
+        assert!(css.contains(&format!(
+            "popover.{CAPTURE_TRANSPARENT_CLASS} > contents {{"
+        )));
+        assert!(css.contains("background: transparent;"));
+        assert!(css.contains("border-color: transparent;"));
+        assert!(css.contains("box-shadow: none;"));
+    }
 }

@@ -203,7 +203,12 @@ impl WaylandState {
         } else {
             log::info!("Zoom: using screencopy fast path");
         }
-        self.enter_overlay_suppression(OverlaySuppression::Zoom);
+        if !self.enter_overlay_suppression_with_keyboard_policy(
+            OverlaySuppression::Zoom,
+            zoom_suppression_keyboard_policy(use_fallback),
+        ) {
+            anyhow::bail!("Zoom capture requested while another overlay operation is preparing");
+        }
         match self.zoom.start_capture(use_fallback, &self.tokio_handle) {
             Ok(()) => Ok(()),
             Err(err) => {
@@ -211,5 +216,33 @@ impl WaylandState {
                 Err(err)
             }
         }
+    }
+}
+
+fn zoom_suppression_keyboard_policy(use_fallback: bool) -> OverlaySuppressionKeyboardPolicy {
+    if use_fallback {
+        // Portal dialogs need the compositor to release Wayscriber's focus.
+        OverlaySuppressionKeyboardPolicy::Release
+    } else {
+        // Native screencopy does not need focus. Keep held modifiers and key
+        // repeats alive while the first transparent frame is captured.
+        OverlaySuppressionKeyboardPolicy::Retain
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_zoom_retains_keyboard_but_portal_zoom_releases_it() {
+        assert_eq!(
+            zoom_suppression_keyboard_policy(false),
+            OverlaySuppressionKeyboardPolicy::Retain
+        );
+        assert_eq!(
+            zoom_suppression_keyboard_policy(true),
+            OverlaySuppressionKeyboardPolicy::Release
+        );
     }
 }

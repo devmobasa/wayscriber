@@ -1,6 +1,6 @@
 // Handles compositor callbacks (frame pacing, surface enter/leave) so the backend
 // can throttle rendering; invoked by smithay through the delegate in `mod.rs`.
-use log::{debug, info, warn};
+use log::{debug, info};
 use smithay_client_toolkit::compositor::CompositorHandler;
 use wayland_client::{
     Connection, QueueHandle,
@@ -69,33 +69,7 @@ impl CompositorHandler for WaylandState {
         );
         self.surface.set_frame_callback_pending(false);
 
-        if let Some(use_fallback) = self.frozen.take_preflight_pending()
-            && let Err(err) =
-                self.frozen
-                    .begin_preflight_capture(use_fallback, &self.shm, qh, &self.tokio_handle)
-        {
-            warn!("Frozen preflight capture failed: {}", err);
-            self.frozen.cancel(&mut self.input_state);
-        }
-
-        if self.zoom.take_preflight_pending()
-            && let Err(err) = self.zoom.begin_screencopy(&self.shm, qh)
-        {
-            warn!("Zoom preflight capture failed: {}", err);
-            self.zoom.cancel(&mut self.input_state, false);
-        }
-
-        if let Some(request) = self.capture.take_preflight_request() {
-            if !self.capture_suppressed() {
-                warn!("Capture preflight completed without capture suppression; cancelling");
-                self.capture.clear_in_progress();
-                self.capture.clear_exit_on_success();
-                self.capture.clear_pending_pdf_export();
-                self.show_overlay();
-            } else {
-                self.begin_pending_capture(request);
-            }
-        }
+        self.mark_overlay_capture_frame_ready(qh);
 
         if self.input_state.needs_redraw {
             debug!(

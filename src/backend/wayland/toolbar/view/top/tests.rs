@@ -221,6 +221,37 @@ fn shape_picker_grid_hosts_the_relocated_shapes() {
 }
 
 #[test]
+fn shape_picker_shows_fill_while_line_is_active() {
+    let mut state = make_test_input_state();
+    state.toolbar_shapes_expanded = true;
+    let mut snapshot =
+        ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
+    snapshot.active_tool = crate::input::Tool::Line;
+    snapshot.tool_override = None;
+
+    let tree = build(&snapshot);
+
+    assert!(
+        tree.node_by_id(&ids::TOP_UTILITY_FILL.as_str().into())
+            .is_some(),
+        "Fill configures the next shape and must not depend on the active tool"
+    );
+
+    snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+        hidden: vec![ids::TOP_UTILITY_FILL.as_str().to_string()],
+        shown: Vec::new(),
+        order: crate::config::ToolbarItemOrderConfig::default(),
+    }
+    .resolved();
+    assert!(
+        build(&snapshot)
+            .node_by_id(&ids::TOP_UTILITY_FILL.as_str().into())
+            .is_none(),
+        "an explicitly hidden Fill item stays hidden"
+    );
+}
+
+#[test]
 fn input_rects_cover_bar_and_open_popovers_only() {
     let mut state = make_test_input_state();
     state.toolbar_shapes_expanded = false;

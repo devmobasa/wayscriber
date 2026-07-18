@@ -19,7 +19,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
     ) -> KeyboardInteractivity {
-        if self.overlay_passthrough_requested() {
+        if self.overlay_keyboard_passthrough_requested() {
             return KeyboardInteractivity::None;
         }
         // GTK bars count as visible layer toolbars: the canvas must drop

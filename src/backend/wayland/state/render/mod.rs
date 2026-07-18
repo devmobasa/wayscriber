@@ -367,9 +367,10 @@ impl WaylandState {
                 wl_surface.damage_buffer(region.x, region.y, region.width, region.height);
             }
 
-            let force_frame_callback = self.frozen.preflight_pending()
-                || self.zoom.preflight_pending()
-                || self.capture.preflight_needs_frame_callback();
+            let force_frame_callback = self
+                .data
+                .overlay_capture_barrier
+                .begin_main_surface_submission();
             if self.config.performance.enable_vsync {
                 debug!("Requesting frame callback (vsync enabled)");
                 wl_surface.frame(qh, wl_surface.clone());
@@ -408,7 +409,6 @@ impl WaylandState {
         if self.capture_suppressed() {
             self.capture.mark_preflight_rendered();
         }
-
         Ok(keep_rendering)
     }
 

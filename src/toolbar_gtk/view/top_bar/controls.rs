@@ -101,7 +101,10 @@ impl TopBar {
                 send_event(&sender, event_for_toggle_state(control, false));
             }
         });
+        let capture_surface = CaptureSurfaceContent::empty();
+        popover.set_child(Some(capture_surface.widget()));
         self.shapes_popover = Some(popover);
+        self.shapes_capture_surface = Some(capture_surface);
         button
     }
 
@@ -298,7 +301,10 @@ impl TopBar {
                 send_event(&sender, event_for_toggle_state(control, false));
             }
         });
+        let capture_surface = CaptureSurfaceContent::empty();
+        popover.set_child(Some(capture_surface.widget()));
         self.overflow_popover = Some(popover);
+        self.overflow_capture_surface = Some(capture_surface);
         button
     }
 

@@ -28,7 +28,7 @@ use super::super::widgets::{
     FeedbackSender, install_shortcut_focus_policy, send_event, set_active_class, sized_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
-use super::{Updater, sections};
+use super::{CaptureProofTarget, CaptureSurfaceContent, Updater, sections};
 use structure::{StructureKey, effective_scale};
 
 const SIDE_WIDTH: f64 = 260.0;
@@ -40,6 +40,7 @@ pub(in crate::toolbar_gtk) struct SideBar {
     pub(in crate::toolbar_gtk) window: gtk4::Window,
     feedback: FeedbackSender,
     root: gtk4::Box,
+    capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     /// Chrome updaters survive content rebuilds; content updaters are
     /// replaced together with the pane body.
@@ -59,6 +60,8 @@ pub(in crate::toolbar_gtk) struct SideBar {
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
     /// backend are ignored by comparing against it.
     offset_seq: Rc<Cell<u64>>,
+    capture_suppressed: bool,
+    mapped_before_capture: bool,
 }
 
 impl SideBar {
@@ -82,12 +85,14 @@ impl SideBar {
 
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
-        window.set_child(Some(&root));
+        let capture_surface = CaptureSurfaceContent::new(&root);
+        window.set_child(Some(capture_surface.widget()));
 
         Self {
             window,
             feedback,
             root,
+            capture_surface,
             structure: None,
             chrome_updaters: Vec::new(),
             content_updaters: Vec::new(),
@@ -99,16 +104,32 @@ impl SideBar {
             move_drag_cancel: None,
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             offset_seq: Rc::new(Cell::new(0)),
+            capture_suppressed: false,
+            mapped_before_capture: false,
         }
     }
 
-    pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
+    pub(in crate::toolbar_gtk) fn apply(
+        &mut self,
+        update: &super::super::GtkToolbarUpdate,
+        defer_capture_input: bool,
+    ) -> bool {
         let snapshot = &update.snapshot;
-        self.drag_blocked.set(update.modal_engaged);
-        super::set_drag_visual_hidden(
-            &self.window,
-            &self.root,
-            GtkToolbarKind::Side,
+        let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
+        if entering_capture_suppression {
+            self.mapped_before_capture = self.window.is_visible() || self.window.is_mapped();
+        } else if !update.capture_suppressed {
+            self.mapped_before_capture = false;
+        }
+        self.capture_suppressed = update.capture_suppressed;
+        self.drag_blocked
+            .set(update.modal_engaged || update.capture_suppressed);
+        if entering_capture_suppression && let Some(cancel) = self.move_drag_cancel.as_ref() {
+            cancel();
+        }
+        let presentation = super::toolbar_surface_presentation(
+            update.side_visible,
+            update.capture_suppressed,
             super::drag_visual_should_be_hidden(
                 update.drag_preview,
                 GtkToolbarKind::Side,
@@ -116,10 +137,28 @@ impl SideBar {
                 self.offset_seq.get(),
                 update.side_offset_seq,
             ),
+            self.mapped_before_capture,
         );
-        if !update.side_visible {
+        if !presentation.window_visible {
+            self.capture_surface
+                .set_transparent(presentation.capture_transparent);
+            super::set_surface_input_enabled(&self.window, false);
             self.window.set_visible(false);
-            return;
+            if let Some(generation) = update.capture_suppression_generation {
+                super::log_capture_surface_state(
+                    generation,
+                    super::CaptureSurfaceLog {
+                        name: "side",
+                        configured_visible: update.side_visible,
+                        mapped_before_capture: self.mapped_before_capture,
+                        presentation,
+                        window: &self.window,
+                        visual: &self.root,
+                        capture_surface: &self.capture_surface,
+                    },
+                );
+            }
+            return false;
         }
         self.apply_offsets(update.side_offset, update.side_offset_seq);
 
@@ -133,6 +172,37 @@ impl SideBar {
         }
         self.sync_viewport(snapshot);
         self.window.set_visible(true);
+        self.capture_surface
+            .set_transparent(presentation.capture_transparent);
+        super::set_visual_hidden(
+            &self.window,
+            &self.root,
+            GtkToolbarKind::Side,
+            presentation.visual_hidden,
+        );
+        super::set_surface_input_enabled(
+            &self.window,
+            presentation.input_enabled || defer_capture_input,
+        );
+        if let Some(generation) = update.capture_suppression_generation {
+            super::log_capture_surface_state(
+                generation,
+                super::CaptureSurfaceLog {
+                    name: "side",
+                    configured_visible: update.side_visible,
+                    mapped_before_capture: self.mapped_before_capture,
+                    presentation,
+                    window: &self.window,
+                    visual: &self.root,
+                    capture_surface: &self.capture_surface,
+                },
+            );
+        }
+        true
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_target(&self) -> CaptureProofTarget {
+        CaptureProofTarget::new("side", &self.window, &self.capture_surface)
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in

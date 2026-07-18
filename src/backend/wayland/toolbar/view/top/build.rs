@@ -47,8 +47,6 @@ pub(super) fn build_top_view_planned(
         ToolbarLayoutSpec::TOP_START_X
     };
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-
     let use_icons = planned_use_icons(snapshot, plan);
     let (btn_w, btn_h) = planned_button_size(snapshot, plan);
     let base_height = base_bar_height(snapshot);
@@ -203,7 +201,7 @@ pub(super) fn build_top_view_planned(
         && let Some(anchor) = picker_anchor
     {
         let rows = model::visible_shape_picker_rows(snapshot, is_simple);
-        let option_rows = shape_option_rows(snapshot, fill_tool_active);
+        let option_rows = shape_option_rows(snapshot);
         let max_row_len = rows.iter().map(Vec::len).max().unwrap_or(0);
         if max_row_len > 0 || !option_rows.is_empty() {
             let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
@@ -410,17 +408,17 @@ fn build_top_minimized_tab(
     tree
 }
 
-/// Per-tool option rows shown at the bottom of the shapes popover: the
-/// controls that used to hang under the bar as mini-checkboxes.
+/// Option rows shown at the bottom of the shapes popover: the controls that
+/// used to hang under the bar as mini-checkboxes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShapeOptionRow {
     Fill,
     PolygonSides,
 }
 
-fn shape_option_rows(snapshot: &ToolbarSnapshot, fill_tool_active: bool) -> Vec<ShapeOptionRow> {
+fn shape_option_rows(snapshot: &ToolbarSnapshot) -> Vec<ShapeOptionRow> {
     let mut rows = Vec::new();
-    if fill_tool_active && model::top_fill_visible(snapshot) {
+    if model::top_fill_visible(snapshot) {
         rows.push(ShapeOptionRow::Fill);
     }
     if snapshot.active_tool == Tool::RegularPolygon
@@ -511,8 +509,7 @@ pub(super) fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
     let gap = planned_gap(&plan);
     let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
     let rows = model::visible_shape_picker_rows(snapshot, is_simple);
-    let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-    let option_rows = shape_option_rows(snapshot, fill_tool_active);
+    let option_rows = shape_option_rows(snapshot);
     if rows.is_empty() && option_rows.is_empty() {
         return 0.0;
     }

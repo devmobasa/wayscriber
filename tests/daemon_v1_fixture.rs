@@ -228,3 +228,27 @@ fn frozen_v1_client_fails_closed_for_nonempty_v2_request_but_keeps_empty_signal(
 
     stop_daemon(daemon.child_mut());
 }
+
+#[test]
+fn frozen_v1_daemon_ignores_unpublished_temporary_request_files() {
+    let temp = TempDir::new().unwrap();
+    let binary = compile_fixture(temp.path());
+    let runtime = temp.path().join("runtime-v1-temp-request");
+    let command_dir = runtime.join("daemon-commands");
+    fs::create_dir_all(&command_dir).unwrap();
+    let unpublished = command_dir.join("00000000000000000000000000000000-00000000.tmp-1234");
+    fs::write(&unpublished, br#"{"daemon_token":"frozen-v1-token"}"#).unwrap();
+
+    let mut daemon = ChildGuard(
+        Command::new(&binary)
+            .arg("daemon-v1")
+            .arg(&runtime)
+            .spawn()
+            .unwrap(),
+    );
+    wait_for(&runtime.join("wayscriber.pid"));
+    wait_for_report(&runtime, 0, 0);
+
+    assert!(unpublished.exists());
+    stop_daemon(daemon.child_mut());
+}

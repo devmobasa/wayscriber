@@ -153,10 +153,6 @@ impl FrozenState {
             || self.pending_image.is_some()
     }
 
-    pub fn preflight_pending(&self) -> bool {
-        self.preflight_pending
-    }
-
     pub fn take_preflight_pending(&mut self) -> Option<bool> {
         if !self.preflight_pending {
             return None;

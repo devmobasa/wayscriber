@@ -183,7 +183,21 @@ fn process_requests(root: &Path) -> io::Result<usize> {
     let mut paths = match fs::read_dir(&dir) {
         Ok(entries) => entries
             .filter_map(Result::ok)
-            .filter_map(|entry| entry.file_type().ok().filter(|kind| kind.is_file()).map(|_| entry.path()))
+            .filter(|entry| {
+                // Atomic publication uses a sibling temporary file. Only the
+                // final `.json` name is a request the daemon may consume.
+                entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension == "json")
+            })
+            .filter_map(|entry| {
+                entry
+                    .file_type()
+                    .ok()
+                    .filter(|kind| kind.is_file())
+                    .map(|_| entry.path())
+            })
             .collect::<Vec<_>>(),
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
         Err(error) => return Err(error),

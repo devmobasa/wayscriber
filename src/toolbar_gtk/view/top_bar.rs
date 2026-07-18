@@ -64,7 +64,7 @@ const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
-use super::Updater;
+use super::{CaptureProofTarget, CaptureSurfaceContent, Updater};
 
 /// Snapshot inputs the shapes-popover grid renders from: active tool,
 /// override, fill flag, polygon sides.
@@ -146,10 +146,13 @@ pub(in crate::toolbar_gtk) struct TopBar {
     pub(in crate::toolbar_gtk) window: gtk4::Window,
     feedback: FeedbackSender,
     root: gtk4::Box,
+    capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     updaters: Rc<RefCell<Vec<Updater>>>,
     shapes_popover: Option<gtk4::Popover>,
+    shapes_capture_surface: Option<CaptureSurfaceContent>,
     overflow_popover: Option<gtk4::Popover>,
+    overflow_capture_surface: Option<CaptureSurfaceContent>,
     /// Popover open state as last driven by the snapshot; lets the
     /// `closed` handlers distinguish user dismissal from state sync.
     shapes_expected_open: Rc<Cell<bool>>,
@@ -168,6 +171,8 @@ pub(in crate::toolbar_gtk) struct TopBar {
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
     /// backend are ignored by comparing against it.
     offset_seq: Rc<Cell<u64>>,
+    capture_suppressed: bool,
+    mapped_before_capture: bool,
 }
 
 impl TopBar {
@@ -204,16 +209,20 @@ impl TopBar {
     fn with_window(feedback: FeedbackSender, window: gtk4::Window) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
-        window.set_child(Some(&root));
+        let capture_surface = CaptureSurfaceContent::new(&root);
+        window.set_child(Some(capture_surface.widget()));
 
         Self {
             window,
             feedback,
             root,
+            capture_surface,
             structure: None,
             updaters: Rc::new(RefCell::new(Vec::new())),
             shapes_popover: None,
+            shapes_capture_surface: None,
             overflow_popover: None,
+            overflow_capture_surface: None,
             shapes_expected_open: Rc::new(Cell::new(false)),
             overflow_expected_open: Rc::new(Cell::new(false)),
             shapes_content_key: Cell::new(None),
@@ -225,16 +234,32 @@ impl TopBar {
             offsets: Rc::new(Cell::new((0.0, 0.0))),
             base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
             offset_seq: Rc::new(Cell::new(0)),
+            capture_suppressed: false,
+            mapped_before_capture: false,
         }
     }
 
-    pub(in crate::toolbar_gtk) fn apply(&mut self, update: &super::super::GtkToolbarUpdate) {
+    pub(in crate::toolbar_gtk) fn apply(
+        &mut self,
+        update: &super::super::GtkToolbarUpdate,
+        defer_capture_input: bool,
+    ) -> bool {
         let snapshot = &update.snapshot;
-        self.drag_blocked.set(update.modal_engaged);
-        super::set_drag_visual_hidden(
-            &self.window,
-            &self.root,
-            GtkToolbarKind::Top,
+        let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
+        if entering_capture_suppression {
+            self.mapped_before_capture = self.window.is_visible() || self.window.is_mapped();
+        } else if !update.capture_suppressed {
+            self.mapped_before_capture = false;
+        }
+        self.capture_suppressed = update.capture_suppressed;
+        self.drag_blocked
+            .set(update.modal_engaged || update.capture_suppressed);
+        if entering_capture_suppression && let Some(cancel) = self.move_drag_cancel.as_ref() {
+            cancel();
+        }
+        let presentation = super::toolbar_surface_presentation(
+            update.top_visible,
+            update.capture_suppressed,
             super::drag_visual_should_be_hidden(
                 update.drag_preview,
                 GtkToolbarKind::Top,
@@ -242,15 +267,36 @@ impl TopBar {
                 self.offset_seq.get(),
                 update.top_offset_seq,
             ),
+            self.mapped_before_capture,
         );
-        if !update.top_visible {
+        if !presentation.window_visible {
             // Suppress the dismissal echoes a hide-triggered popover close
             // would send, so an open picker survives a hide/show cycle
             // like the built-in bars.
-            self.shapes_expected_open.set(false);
-            self.overflow_expected_open.set(false);
+            if update.capture_suppressed {
+                self.set_popovers_capture_transparent(true, defer_capture_input);
+            } else {
+                self.hide_popovers_for_window_hide();
+            }
+            self.capture_surface
+                .set_transparent(presentation.capture_transparent);
+            super::set_surface_input_enabled(&self.window, false);
             self.window.set_visible(false);
-            return;
+            if let Some(generation) = update.capture_suppression_generation {
+                super::log_capture_surface_state(
+                    generation,
+                    super::CaptureSurfaceLog {
+                        name: "top",
+                        configured_visible: update.top_visible,
+                        mapped_before_capture: self.mapped_before_capture,
+                        presentation,
+                        window: &self.window,
+                        visual: &self.root,
+                        capture_surface: &self.capture_surface,
+                    },
+                );
+            }
+            return false;
         }
         self.base_x.set(update.top_base_x);
         self.apply_offsets(update.top_offset, update.top_offset_seq);
@@ -264,8 +310,44 @@ impl TopBar {
         for updater in self.updaters.borrow().iter() {
             updater(snapshot);
         }
-        self.sync_popovers(snapshot, &plan);
+        if update.capture_suppressed {
+            self.set_popovers_capture_transparent(true, defer_capture_input);
+        } else {
+            self.set_popovers_capture_transparent(false, false);
+            self.sync_popovers(snapshot, &plan);
+        }
         self.window.set_visible(true);
+        self.capture_surface
+            .set_transparent(presentation.capture_transparent);
+        super::set_visual_hidden(
+            &self.window,
+            &self.root,
+            GtkToolbarKind::Top,
+            presentation.visual_hidden,
+        );
+        super::set_surface_input_enabled(
+            &self.window,
+            presentation.input_enabled || defer_capture_input,
+        );
+        if let Some(generation) = update.capture_suppression_generation {
+            super::log_capture_surface_state(
+                generation,
+                super::CaptureSurfaceLog {
+                    name: "top",
+                    configured_visible: update.top_visible,
+                    mapped_before_capture: self.mapped_before_capture,
+                    presentation,
+                    window: &self.window,
+                    visual: &self.root,
+                    capture_surface: &self.capture_surface,
+                },
+            );
+        }
+        true
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_target(&self) -> CaptureProofTarget {
+        CaptureProofTarget::new("top", &self.window, &self.capture_surface)
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in
@@ -305,9 +387,11 @@ impl TopBar {
         if let Some(popover) = self.shapes_popover.take() {
             popover.unparent();
         }
+        self.shapes_capture_surface = None;
         if let Some(popover) = self.overflow_popover.take() {
             popover.unparent();
         }
+        self.overflow_capture_surface = None;
         self.shapes_content_key.set(None);
         self.overflow_content_key.set(None);
         while let Some(child) = self.root.first_child() {

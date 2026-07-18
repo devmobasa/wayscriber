@@ -441,10 +441,6 @@ pub(crate) fn is_fill_tool(tool: Tool) -> bool {
     )
 }
 
-pub(crate) fn fill_tool_active(active_tool: Tool, tool_override: Option<Tool>) -> bool {
-    tool_override.is_some_and(is_fill_tool) || is_fill_tool(active_tool)
-}
-
 pub(crate) fn ordered_side_sections(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSideSection> {
     snapshot
         .resolved_toolbar_items

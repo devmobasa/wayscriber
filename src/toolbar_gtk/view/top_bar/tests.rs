@@ -379,9 +379,11 @@ fn detach_test_popovers(top: &mut TopBar) {
     if let Some(popover) = top.shapes_popover.take() {
         popover.unparent();
     }
+    top.shapes_capture_surface = None;
     if let Some(popover) = top.overflow_popover.take() {
         popover.unparent();
     }
+    top.overflow_capture_surface = None;
 }
 
 fn assert_builtin_node(
@@ -674,9 +676,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             )
         })
         .collect::<Vec<_>>();
-    if model::fill_tool_active(shapes.active_tool, shapes.tool_override)
-        && model::top_fill_visible(&shapes)
-    {
+    if model::top_fill_visible(&shapes) {
         expected_shape_ids.push(
             crate::config::toolbar_item_ids::TOP_UTILITY_FILL
                 .as_str()
@@ -717,6 +717,25 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             event: ToolbarEvent::SelectTool(shape_tools[0]),
             rebind_requested: false,
         }
+    );
+
+    let mut line_shapes = shapes.clone();
+    line_shapes.active_tool = Tool::Line;
+    line_shapes.tool_override = None;
+    let line_shape_content = shape_top.build_shapes_popover_content(
+        &line_shapes,
+        (ICON_BUTTON, ICON_BUTTON),
+        ICON_SIZE,
+        true,
+        1.0,
+    );
+    assert!(
+        collect_semantic_widgets(line_shape_content.upcast_ref())
+            .iter()
+            .any(|widget| {
+                widget.widget_name() == crate::config::toolbar_item_ids::TOP_UTILITY_FILL.as_str()
+            }),
+        "GTK Shapes must expose Fill before a fill-capable shape is selected"
     );
 
     let mut overflow_plan = TopStripPlan::unconstrained();
@@ -789,6 +808,39 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         model::TopToolbarControl::Overflow,
         PIN_BUTTON_SIZE,
     );
+    for (popover, capture_surface) in [
+        (
+            event_top.shapes_popover.as_ref().unwrap(),
+            event_top.shapes_capture_surface.as_ref().unwrap(),
+        ),
+        (
+            event_top.overflow_popover.as_ref().unwrap(),
+            event_top.overflow_capture_surface.as_ref().unwrap(),
+        ),
+    ] {
+        let content = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        capture_surface.set_content(&content);
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, true, true);
+        assert!(
+            popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS),
+            "capture suppression must clear native popover chrome"
+        );
+        assert!(
+            popover.can_target(),
+            "input stays enabled until transparent presentation is confirmed"
+        );
+        assert_eq!(capture_surface.content_opacity(), Some(0.0));
+        assert!(capture_surface.proof_visible());
+
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, true, false);
+        assert!(!popover.can_target());
+
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, false, true);
+        assert!(!popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
+        assert!(popover.can_target());
+        assert_eq!(capture_surface.content_opacity(), Some(1.0));
+        assert!(!capture_surface.proof_visible());
+    }
     for (button, expected) in [
         (
             &shape,

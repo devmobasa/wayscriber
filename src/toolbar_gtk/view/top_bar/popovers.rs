@@ -4,8 +4,126 @@
 //! on unrelated snapshot changes.
 
 use super::*;
+use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
+
+pub(super) fn set_popover_capture_transparent(
+    popover: &gtk4::Popover,
+    capture_surface: &CaptureSurfaceContent,
+    transparent: bool,
+    input_enabled: bool,
+) {
+    if transparent {
+        popover.add_css_class(CAPTURE_TRANSPARENT_CLASS);
+    } else {
+        popover.remove_css_class(CAPTURE_TRANSPARENT_CLASS);
+    }
+    capture_surface.set_transparent(transparent);
+    set_popover_input_enabled(popover, input_enabled);
+}
+
+fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
+    popover.set_can_target(enabled);
+    if let Some(surface) = popover.surface() {
+        if enabled {
+            surface.set_input_region(None);
+        } else {
+            let empty = gtk4::cairo::Region::create();
+            surface.set_input_region(Some(&empty));
+        }
+    }
+    popover.queue_draw();
+}
 
 impl TopBar {
+    pub(super) fn hide_popovers_for_window_hide(&self) {
+        self.shapes_expected_open.set(false);
+        self.overflow_expected_open.set(false);
+        if let Some(popover) = self.shapes_popover.as_ref()
+            && popover.is_visible()
+        {
+            popover.popdown();
+        }
+        if let Some(popover) = self.overflow_popover.as_ref()
+            && popover.is_visible()
+        {
+            popover.popdown();
+        }
+    }
+
+    /// Popovers are independent native Wayland surfaces, so their parent's
+    /// opacity does not affect them. Keep any open popover mapped and replace
+    /// its content with the same transparent proof node as the toolbar rather
+    /// than starting a popup close animation during capture.
+    pub(super) fn set_popovers_capture_transparent(
+        &self,
+        transparent: bool,
+        defer_capture_input: bool,
+    ) {
+        for (popover, capture_surface) in [
+            (
+                self.shapes_popover.as_ref(),
+                self.shapes_capture_surface.as_ref(),
+            ),
+            (
+                self.overflow_popover.as_ref(),
+                self.overflow_capture_surface.as_ref(),
+            ),
+        ] {
+            let (Some(popover), Some(capture_surface)) = (popover, capture_surface) else {
+                continue;
+            };
+            if transparent && !popover.is_visible() {
+                continue;
+            }
+            set_popover_capture_transparent(
+                popover,
+                capture_surface,
+                transparent,
+                !transparent || defer_capture_input,
+            );
+        }
+    }
+
+    pub(in crate::toolbar_gtk::view) fn set_popovers_capture_input_enabled(&self, enabled: bool) {
+        for popover in [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            set_popover_input_enabled(popover, enabled);
+        }
+    }
+
+    pub(in crate::toolbar_gtk::view) fn tooltip_roots(&self) -> Vec<gtk4::Widget> {
+        [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
+            .into_iter()
+            .flatten()
+            .map(|popover| popover.clone().upcast::<gtk4::Widget>())
+            .collect()
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_popover_targets(&self) -> Vec<CaptureProofTarget> {
+        [
+            (
+                "top-shapes-popover",
+                self.shapes_popover.as_ref(),
+                self.shapes_capture_surface.as_ref(),
+            ),
+            (
+                "top-overflow-popover",
+                self.overflow_popover.as_ref(),
+                self.overflow_capture_surface.as_ref(),
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(name, popover, capture_surface)| {
+            let popover = popover?;
+            let capture_surface = capture_surface?;
+            (popover.is_visible() && popover.is_mapped())
+                .then(|| CaptureProofTarget::new_withdrawable(name, popover, capture_surface))
+        })
+        .collect()
+    }
+
     /// Keep the popovers' contents and open state in line with the snapshot.
     /// Open state only changes when the snapshot flag differs from what the
     /// popover shows.
@@ -34,13 +152,16 @@ impl TopBar {
                     snapshot.polygon_sides,
                 );
                 if self.shapes_content_key.get() != Some(content_key) {
-                    popover.set_child(Some(&self.build_shapes_popover_content(
-                        snapshot,
-                        button_size,
-                        icon_size,
-                        use_icons,
-                        scale,
-                    )));
+                    self.shapes_capture_surface
+                        .as_ref()
+                        .expect("shapes popover capture surface")
+                        .set_content(&self.build_shapes_popover_content(
+                            snapshot,
+                            button_size,
+                            icon_size,
+                            use_icons,
+                            scale,
+                        ));
                     self.shapes_content_key.set(Some(content_key));
                 }
             }
@@ -65,14 +186,17 @@ impl TopBar {
                 );
                 if self.overflow_content_key.get() != Some(content_key) {
                     let spec = model::TopToolbarSpec::build(snapshot, plan);
-                    popover.set_child(Some(&self.build_overflow_popover_content(
-                        snapshot,
-                        &spec,
-                        button_size,
-                        icon_size,
-                        use_icons,
-                        scale,
-                    )));
+                    self.overflow_capture_surface
+                        .as_ref()
+                        .expect("overflow popover capture surface")
+                        .set_content(&self.build_overflow_popover_content(
+                            snapshot,
+                            &spec,
+                            button_size,
+                            icon_size,
+                            use_icons,
+                            scale,
+                        ));
                     self.overflow_content_key.set(Some(content_key));
                 }
             }
@@ -138,9 +262,7 @@ impl TopBar {
 
         // Option rows: Fill and polygon sides live inside the popover, so
         // using them must not close it (GTK popovers keep inside clicks).
-        let fill_tool_active =
-            model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-        if fill_tool_active && model::top_fill_visible(snapshot) {
+        if model::top_fill_visible(snapshot) {
             let fill = gtk4::CheckButton::with_label(action_short_label(Action::ToggleFill));
             set_semantic_widget_id(
                 &fill,
