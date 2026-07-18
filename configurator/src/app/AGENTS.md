@@ -13,6 +13,8 @@
 ## Invariants
 - Do not do file/process work directly from view code.
 - Preserve non-blocking task behavior and explicit validation feedback.
+- Run synchronous filesystem, locking, and process work from Iced tasks through `blocking_jobs`.
+  One logical operation must use one adapter call; never nest adapter jobs.
 - Session catalog operations must preserve lock checks, artifact movement, primary-file behavior, catalog collision handling, and rollback.
 - Daemon setup behavior must stay aligned with daemon runtime, shared service/shortcut helpers, and packaging service files.
 

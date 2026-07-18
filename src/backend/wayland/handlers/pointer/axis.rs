@@ -134,7 +134,7 @@ impl WaylandState {
 
     fn adjust_active_tool_thickness(&mut self, delta: f64, radial_menu_path: bool) {
         let eraser_active = self.input_state.active_tool() == Tool::Eraser;
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         let prev_thickness = self.input_state.current_thickness;
 
         let changed = if radial_menu_path {
@@ -160,7 +160,7 @@ impl WaylandState {
             }
         }
 
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         if !eraser_active
             && (self.input_state.current_thickness - prev_thickness).abs() > f64::EPSILON
         {

@@ -1,4 +1,4 @@
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::tool::Tool;
 use log::info;
 

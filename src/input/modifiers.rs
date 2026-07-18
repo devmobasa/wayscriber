@@ -1,7 +1,7 @@
 //! Keyboard modifier state tracking.
 
 use crate::config::{DragButtonConfig, MouseDragToolsConfig, enums::ColorSpec};
-use crate::draw::Color;
+use crate::domain::Color;
 
 use super::tool::DragTool;
 use super::{events::MouseButton, tool::Tool};

@@ -1,7 +1,7 @@
 use super::super::base::{
     BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete, UiToastKind,
 };
-use crate::config::Action;
+use crate::domain::Action;
 use crate::input::boards::{
     BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
     BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,

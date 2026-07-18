@@ -14,6 +14,7 @@ pub mod capture;
 mod cli;
 pub mod config;
 mod daemon;
+pub mod domain;
 pub mod draw;
 pub mod durable_io;
 pub mod env_vars;

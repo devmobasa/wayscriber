@@ -1,4 +1,4 @@
-use crate::config::Action;
+use crate::domain::Action;
 use crate::draw::PageDeleteOutcome;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;

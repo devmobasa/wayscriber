@@ -1,4 +1,4 @@
-use crate::input::BoardBackground;
+use crate::domain::BoardBackground;
 
 /// Renders board background for solid board modes.
 ///
@@ -37,4 +37,34 @@ pub fn fill_transparent(ctx: &cairo::Context, width: i32, height: i32) {
     ctx.set_operator(cairo::Operator::Source);
     ctx.rectangle(0.0, 0.0, width as f64, height as f64);
     let _ = ctx.fill();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::Color;
+
+    fn rendered_bytes(background: BoardBackground) -> Vec<u8> {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_board_background(&ctx, &background);
+        drop(ctx);
+        surface.flush();
+        surface.data().unwrap().to_vec()
+    }
+
+    #[test]
+    fn transparent_background_does_not_paint_but_solid_background_does() {
+        let transparent = rendered_bytes(BoardBackground::Transparent);
+        let solid = rendered_bytes(BoardBackground::Solid(Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }));
+
+        assert!(transparent.iter().all(|byte| *byte == 0));
+        assert!(solid.iter().any(|byte| *byte != 0));
+        assert_ne!(solid, transparent);
+    }
 }

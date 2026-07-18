@@ -1,5 +1,5 @@
 use super::keybindings::KeybindingsConfig;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 use super::types::TabletInputConfig;
 use super::types::{
     ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, ExportConfig,
@@ -107,7 +107,7 @@ pub struct Config {
     pub export: ExportConfig,
 
     /// Tablet/stylus input settings (feature-gated)
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     #[serde(default)]
     pub tablet: TabletInputConfig,
 
@@ -134,7 +134,7 @@ impl Default for Config {
             keybindings: KeybindingsConfig::default(),
             capture: CaptureConfig::default(),
             export: ExportConfig::default(),
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             tablet: TabletInputConfig::default(),
             session: SessionConfig::default(),
         }

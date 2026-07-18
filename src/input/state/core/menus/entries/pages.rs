@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
-use crate::config::Action;
+use crate::domain::Action;
 
 /// Maximum number of pages to show in the submenu before truncating.
 const MAX_VISIBLE_PAGES: usize = 8;

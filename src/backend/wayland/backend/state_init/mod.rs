@@ -21,7 +21,7 @@ mod config;
 mod input_state;
 mod output;
 mod session;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 mod tablet;
 
 pub(super) struct BackendRuntime {
@@ -49,7 +49,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         crate::backend::wayland::session::PersistenceController::start(runtime_wake.handle())?;
     let output_prefs = output::resolve(&config);
 
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
@@ -147,7 +147,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         main_surface_uses_overlay_layer: output_prefs.main_surface_uses_overlay_layer,
         pending_freeze_on_start: freeze_on_start,
         screencopy_manager: setup.screencopy_manager,
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         tablet_manager,
     });
 

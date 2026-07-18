@@ -16,7 +16,7 @@ mod presets;
 mod render_profiles;
 mod session;
 mod status_bar;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 mod tablet;
 mod toolbar;
 mod tray;
@@ -53,7 +53,7 @@ pub use render_profiles::{
 };
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use status_bar::StatusBarStyle;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 pub use tablet::{StylusButtonBinding, TabletInputConfig};
 pub use toolbar::ids as toolbar_item_ids;
 #[allow(unused_imports)]

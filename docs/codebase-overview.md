@@ -18,6 +18,7 @@ This document explains how the application boots, how user input travels through
 
 3. **Canonical module graph**
    - `src/lib.rs` declares both reusable public modules and private runtime modules, so the binary does not compile a second copy of shared types or unit tests.
+   - `domain`: owns stable action, tool, color, and board value identities used across higher layers.
    - `config`: loads user settings, key bindings, and drawing defaults.
    - `session`: builds configured or named session targets, validates `--session-file`, loads saved state, and records named-session catalog entries.
 
@@ -25,18 +26,20 @@ This document explains how the application boots, how user input travels through
 
 ## 2. Daemon Mode Lifecycle
 
-**Files:** `src/daemon.rs`, `src/backend/mod.rs`, `src/backend/wayland/*`
+**Modules:** `src/daemon/` (control, core, overlay, tray, shortcuts, and setup), plus the public
+backend entry in `src/backend/mod.rs`.
 
-1. `Daemon::run` starts signal handlers (legacy SIGUSR1 toggle, SIGTERM/SIGINT exit).
-2. Spawns a status tray (`ksni`) for manual toggle/quit/configurator actions.
-3. Maintains two atomics:
-   - `toggle_requested`: set by signals or tray to show/hide overlay.
-   - `should_quit`: set by signals or tray quit item.
-4. On toggle:
-   - Launches (or terminates) the Wayland backend via `backend::run_wayland`.
-   - Keeps track of overlay state so repeated toggles do the right thing.
-5. On exit:
-   - Signals the backend to shut down and joins the tray thread.
+1. `Daemon::run` acquires the single-instance runtime lock, installs the owned Unix signal
+   listener, creates its wake descriptor, and publishes pid plus instance-token readiness only
+   after signal handling is active.
+2. It optionally starts the status tray and portal global-shortcut listener.
+3. Typed `--daemon-toggle` requests are written to the daemon command queue, wake the control loop
+   through SIGUSR1, and wait for a request-specific response. A raw SIGUSR1 remains a legacy
+   argument-free toggle.
+4. The control loop drains published commands, starts/stops or forwards actions to the overlay
+   child, and reaps child state before handling the next transition.
+5. Shutdown invalidates readiness, terminates owned helpers/overlay work, and joins listener and
+   tray threads.
 
 Daemon mode therefore provides a persistent background service that reacts to user keybinds (preferably configured to run `wayscriber --daemon-toggle`, which forwards to the daemon) or to tray actions.
 
@@ -46,9 +49,9 @@ Daemon mode therefore provides a persistent background service that reacts to us
 
 **Modules:**
 - `src/backend/mod.rs`: exported API (`run_wayland`)
-- `src/backend/wayland/backend.rs`: high-level bootstrapper
+- `src/backend/wayland/backend/`: high-level bootstrap, setup, and event loop
 - `src/backend/wayland/state.rs`: runtime state (surfaces, buffers, runtime handles)
-- `src/backend/wayland/handlers/*.rs`: smithay trait impls (input, compositor, registry, etc.)
+- `src/backend/wayland/handlers/`: Smithay trait implementations and protocol handlers
 
 **Flow:**
 1. `backend::run_wayland` creates `WaylandBackend`.
@@ -70,7 +73,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
 
 ## 4. Input Handling & Drawing State
 
-**Files:** `src/input/mod.rs`, `src/input/state/{core,actions,mouse,render}.rs`, `src/draw/*`, `src/ui.rs`
+**Modules:** `src/input/`, `src/input/state/{core,actions,mouse,interaction}/`, `src/input/state/render.rs`, `src/draw/`, `src/ui.rs`, and `src/ui/`
 
 1. **Keyboard events (`handlers/keyboard.rs`)**
    - Translate Wayland keysyms to internal `Key`.
@@ -83,9 +86,11 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Adjust pen thickness or font size via scroll wheel + modifiers.
 
 3. **`InputState` responsibilities**
-   - Holds canvas data (`draw::CanvasSet`), current colors, thickness, fonts, modifier flags, and `DrawingState` (Idle/Drawing/TextInput).
-   - `actions.rs` maps keybindings to `Action` enums and performs side effects (color changes, board mode switches, capture requests).
-   - `mouse.rs` converts drag gestures into shapes (`draw::Shape` variants).
+   - Holds `input::BoardManager`, whose ordered `BoardState` entries each own `draw::BoardPages`,
+     plus current colors, tool settings, fonts, modifiers, and `DrawingState`.
+   - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
+     history, selection, tool, and UI behavior.
+   - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 
 4. **Rendering to the overlay**
@@ -93,7 +98,8 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Draw order: board background → finalized shapes → provisional shape → text cursor preview → status bar (if enabled) → help overlay (if toggled).
    - `ui` module encapsulates status/help overlays, while `draw` handles actual vector geometry routines.
 
-The result is a predictable pipeline: Wayland → handlers → `InputState` → `CanvasSet`/`DrawingState` → `WaylandState::render`.
+The result is a predictable pipeline: Wayland → handlers → `InputState` →
+`BoardManager`/active `BoardPages`/`DrawingState` → `WaylandState::render`.
 
 ---
 
@@ -109,7 +115,7 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` → 
 | `pipeline.rs` | `perform_capture`, `deliver_image`, `deliver_document`, and capture/delivery request definitions. |
 | `sources/` | Strategies for acquiring image bytes: Hyprland fast-path (`hyprland.rs`), portal fallback (`portal.rs`), and URI reader/cleanup (`reader.rs`). |
 | `clipboard.rs`, `file.rs`, `portal.rs` | Support code reused by the pipeline. |
-| `tests.rs` | Unit tests for the manager/pipeline, plus mocks. |
+| `tests/` | Unit tests and fixtures for the manager, sources, and pipeline. |
 
 **Runtime flow:**
 1. `InputState::handle_action` sets `pending_backend_action` for screenshot capture and canvas export actions.
@@ -136,7 +142,39 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 6. Configuration
+## 6. Toolbar Frontends
+
+- `src/ui/toolbar/model/top_spec.rs` owns the renderer-neutral top-toolbar contract: stable
+  control IDs, ordered strip/divider/chrome/overflow nodes, events, active/enabled state, labels,
+  tooltips, shortcut badges, and semantic icons. It consumes the shared width-degradation result
+  but contains no geometry or toolkit types.
+- `src/backend/wayland/toolbar/view/top/` exhaustively adapts that contract to the built-in
+  `WidgetTree`, which remains the sole owner of Cairo geometry, hit testing, popover placement,
+  and surface input regions.
+- `src/toolbar_gtk/view/top_bar/` exhaustively adapts the same contract to GTK widgets while
+  retaining GTK sizing, CSS, updater closures, drag gestures, and popover lifecycle.
+- Shape-picker compound rows and all side-palette layout remain frontend-specific. Their existing
+  tool/section ordering still comes from the shared toolbar model.
+
+---
+
+## 7. Domain Values and Dependency Direction
+
+- **`src/domain/`** is the canonical owner of dependency-light action, tool, color, and board
+  value identities. Production code there depends only on the standard library, serde, and the
+  optional schema derive; runtime policy and mutable state stay in higher layers.
+- Existing paths such as `config::Action`, `input::Tool`, `input::BoardBackground`, and
+  `draw::Color` are compatibility re-exports of the same domain types. They preserve public Rust
+  API and serialized config/session formats while callers migrate incrementally.
+- `src/config/` retains config representation, keybinding syntax/defaults, validation, and action
+  metadata. `src/input/` retains tool catalogs/behavior and board state. `src/draw/` retains shapes,
+  history, and rendering.
+- New dependency-light identities belong in `domain`; I/O, toolkit types, rendering behavior,
+  state machines, and config-specific metadata do not.
+
+---
+
+## 8. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
 - **`ConfigDocument`** is the configurator-facing edit owner. It keeps validated `Config`, the
@@ -152,7 +190,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 7. Session Persistence and Named Session Manager
+## 9. Session Persistence and Named Session Manager
 
 **Modules:**
 - `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
@@ -172,37 +210,40 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 8. Utility Modules
+## 10. Utility Modules
 
-- **`src/draw/`**: Shape definitions, Cairo helpers, arrow geometry, fonts, and the `CanvasSet` abstraction (with undo/history per board mode).
-- **`src/ui.rs`**: Composes the status bar and help overlay using Cairo.
+- **`src/draw/`**: Shape/frame definitions, page storage, undo/history, fonts, and Cairo/Pango
+  rendering helpers. Board ordering and active-page ownership remain in `input::BoardManager`.
+- **`src/ui.rs` and `src/ui/`**: Compose status, help, toolbar models, pickers, panels, and other
+  overlay UI using Cairo-facing render helpers.
 - **`src/notification.rs`**: Tiny helper to send desktop notifications asynchronously (used after captures).
-- **`src/util.rs`**: Misc helpers (color parsing, geometry math, etc.).
+- **`src/util/`**: Shared arrow, color, geometry, and text helpers.
 - **`tests/`**: Integration tests (CLI smoke tests, rendering sanity checks) live outside `src/`.
 
 ---
 
-## 9. Directory Map (excluding configurator)
+## 11. Directory Map (excluding configurator)
 
 | Path | Role |
 |------|------|
 | `src/main.rs` | Thin binary wrapper around the library entry facade. |
 | `src/lib.rs` | Canonical module graph, CLI/error entry facade, and reusable public exports. |
-| `src/daemon.rs` | Background daemon, tray menu, signal handling, overlay toggling. |
+| `src/domain/` | Stable action, tool, color, and board values with no upward runtime dependencies. |
+| `src/daemon/` | Background daemon control queue, lifecycle, overlay child, shortcuts, and tray. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
-| `src/input/` | Event/state machine for drawing tools, board modes, and capture triggers. |
-| `src/draw/` | Vector drawing primitives, canvases, fonts. |
+| `src/input/` | Event/state machine, tools, board/page ownership, selection, and action routing. |
+| `src/draw/` | Vector drawing primitives, frames/pages, history, fonts, and rendering helpers. |
 | `src/ui.rs` | Status/help overlays. |
 | `src/capture/` | Screenshot pipeline (manager, dependencies, sources, clipboard/file helpers). |
 | `src/config/` | Config parsing, defaults, keybinding map. |
 | `src/session/` | Configured and named session persistence, snapshots, sidecars, locks, and catalog metadata. |
 | `src/notification.rs` | Desktop notifications for capture results. |
-| `src/util.rs` | Shared math/color utilities. |
+| `src/util/` | Shared math, color, arrow, and text utilities. |
 | `tests/` | CLI + rendering integration tests. |
 
 ---
 
-## 10. Putting It Together
+## 12. Putting It Together
 
 1. **Launch** via CLI → choose daemon vs active.
 2. **Daemon** provides lifecycle management, tray integration, and toggles the backend on demand.

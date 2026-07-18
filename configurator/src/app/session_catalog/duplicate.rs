@@ -7,14 +7,18 @@ use super::{
     load_session_catalog_sync, service_status_blocker,
 };
 
-use super::super::daemon_setup::load_daemon_runtime_status;
+use super::super::blocking_jobs::{BlockingJobKind, run_blocking};
+use super::super::daemon_setup::load_daemon_runtime_status_sync;
 
 pub(crate) async fn duplicate_session_catalog_entry(
     id: String,
     target: PathBuf,
 ) -> Result<SessionCatalogActionResult, String> {
-    let status = load_daemon_runtime_status().await?;
-    duplicate_session_catalog_entry_sync(&id, &target, &status)
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let status = load_daemon_runtime_status_sync()?;
+        duplicate_session_catalog_entry_sync(&id, &target, &status)
+    })
+    .await
 }
 
 fn duplicate_session_catalog_entry_sync(

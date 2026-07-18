@@ -12,8 +12,7 @@ default-run = "wayscriber"
 members = ["configurator"]
 default-members = ["."]
 
-[workspace.lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tablet)'] }
+[workspace.lints]
 
 [lints]
 workspace = true

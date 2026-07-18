@@ -1,10 +1,9 @@
 //! The GTK top strip.
 //!
-//! Reproduces the built-in strip's reading order — drag grip | pens |
+//! Adapts the shared `TopToolbarSpec` reading order — drag grip | pens |
 //! shapes | shapes-picker | annotations | quick colors + chip | history |
-//! Clear | pin/overflow/minimize — from the same `ui::toolbar::model`
-//! ordering/visibility logic and the same `plan_top_strip` width
-//! degradation, so the two frontends stay behaviorally identical.
+//! Clear | pin/overflow/minimize — into GTK widgets. Width degradation uses
+//! the same shared plan as the built-in frontend.
 //!
 //! The bar content is rebuilt only when its *structure* changes (item
 //! order/visibility, icon mode, plan, scale, palette); per-state changes
@@ -25,15 +24,14 @@ use std::rc::Rc;
 use gtk4::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
-use crate::backend::wayland::{TopStripPlan, plan_top_strip, top_toolbar_size};
-use crate::config::{Action, ToolbarLayoutMode, action_label, action_short_label};
+use crate::backend::wayland::{plan_top_strip, top_toolbar_size};
+use crate::config::{Action, ToolbarLayoutMode, action_short_label};
 use crate::input::Tool;
-use crate::label_format::format_binding_label;
-use crate::toolbar_icons;
-use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
+use crate::toolbar_icons::top_toolbar_icon_painter;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use model::TopStripPlan;
 
-use super::super::icons::{IconWidget, tool_icon_painter};
+use super::super::icons::IconWidget;
 use super::super::widgets::{
     FeedbackSender, SwatchButton, add_shortcut_badge, icon_button, install_shortcut_focus_policy,
     send_event, set_active_class, sized_button, swatch_with_shortcut, text_button,
@@ -119,37 +117,29 @@ fn top_default_width(snapshot: &ToolbarSnapshot) -> i32 {
 }
 
 fn ring_row_active(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> bool {
-    let is_simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
-    (snapshot.use_icons || plan.compact)
-        && !is_simple
-        && snapshot.highlight_tool_active
-        && model::top_highlight_ring_visible(snapshot)
-        && model::visible_top_utility_buttons(snapshot, is_simple, snapshot.use_icons)
-            .contains(&model::TopUtilityButton::Highlight)
-        && !plan
-            .dropped_utilities
-            .contains(&model::TopUtilityButton::Highlight)
+    model::TopToolbarSpec::contextual_highlight_ring_visible(snapshot, plan)
 }
 
-/// Tooltip for a tool button: label plus binding and/or drag hint,
-/// mirroring the built-in `tool_tooltip`.
-fn tool_tooltip(snapshot: &ToolbarSnapshot, tool: Tool) -> String {
-    let label = tool_tooltip_label(tool);
-    let default_hint = model::default_drag_hint(tool);
-    let binding = match (snapshot.binding_hints.for_tool(tool), default_hint) {
-        (Some(binding), Some(fallback)) => Some(format!("{binding}, {fallback}")),
-        (Some(binding), None) => Some(binding.to_string()),
-        (None, Some(fallback)) => Some(fallback.to_string()),
-        (None, None) => None,
-    };
-    format_binding_label(label, binding.as_deref())
+/// Attach the renderer-neutral id to concrete widgets in test builds so the
+/// contract suite can read the actual GTK adapter tree without widening the
+/// production CSS surface.
+fn set_semantic_widget_id(_widget: &impl IsA<gtk4::Widget>, _id: &str) {
+    #[cfg(test)]
+    _widget.as_ref().set_widget_name(_id);
 }
 
-fn action_tooltip(snapshot: &ToolbarSnapshot, action: Action) -> String {
-    format_binding_label(
-        action_label(action),
-        snapshot.binding_hints.binding_for_action(action),
-    )
+fn set_control_widget_id(_widget: &impl IsA<gtk4::Widget>, _control: model::TopToolbarControl) {
+    #[cfg(test)]
+    set_semantic_widget_id(_widget, _control.id().render_id().as_ref());
+}
+
+fn set_prefixed_control_widget_id(
+    _widget: &impl IsA<gtk4::Widget>,
+    _prefix: &str,
+    _control: model::TopToolbarControl,
+) {
+    #[cfg(test)]
+    set_semantic_widget_id(_widget, &format!("{_prefix}{}", _control.id().render_id()));
 }
 
 pub(in crate::toolbar_gtk) struct TopBar {
@@ -201,6 +191,19 @@ impl TopBar {
         // (panels/bars) and do not reserve one.
         window.set_exclusive_zone(-1);
 
+        Self::with_window(feedback, window)
+    }
+
+    /// Build an unpresented GTK widget tree without layer-shell side effects.
+    /// This keeps adapter contract tests usable on any GTK display backend.
+    #[cfg(test)]
+    fn new_for_test(feedback: FeedbackSender) -> Self {
+        let window = gtk4::Window::new();
+        window.add_css_class("wayscriber-toolbar");
+        Self::with_window(feedback, window)
+    }
+
+    fn with_window(feedback: FeedbackSender, window: gtk4::Window) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
         window.set_child(Some(&root));
@@ -372,7 +375,7 @@ impl TopBar {
         self.updaters.borrow_mut().clear();
 
         if snapshot.top_minimized {
-            self.build_minimized(snapshot);
+            self.build_minimized(snapshot, plan);
         } else {
             self.build_strip(snapshot, plan);
         }

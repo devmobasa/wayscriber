@@ -1,8 +1,8 @@
 use crate::config::{MouseDragToolsConfig, enums::ColorSpec};
-use crate::draw::{Color, EraserKind};
-use crate::input::{
-    EraserMode, Tool,
-    tool::{PerToolDrawingSettings, ToolDrawingSettings, ToolSettingsSlot, ToolSizeSource},
+use crate::domain::{Color, EraserMode, Tool};
+use crate::draw::EraserKind;
+use crate::input::tool::{
+    PerToolDrawingSettings, ToolDrawingSettings, ToolSettingsSlot, ToolSizeSource,
 };
 use serde::{Deserialize, Serialize};
 

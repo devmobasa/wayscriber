@@ -1,5 +1,5 @@
-use crate::config::Action;
 use crate::config::QuickColorPalette;
+use crate::domain::Action;
 use crate::draw::Color;
 use crate::input::Tool;
 

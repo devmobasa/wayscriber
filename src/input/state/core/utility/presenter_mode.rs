@@ -1,5 +1,5 @@
 use super::super::base::{InputState, PresenterRestore, UiToastKind};
-use crate::config::keybindings::Action;
+use crate::domain::Action;
 use crate::input::tool::Tool;
 
 impl InputState {

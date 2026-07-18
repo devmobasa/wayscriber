@@ -1,5 +1,6 @@
 use super::super::base::InputState;
-use crate::config::{Action, KeyBinding};
+use crate::config::KeyBinding;
+use crate::domain::Action;
 use crate::label_format::format_binding_labels;
 use std::collections::{HashMap, HashSet};
 

@@ -1,6 +1,47 @@
 use serde::{Deserialize, Serialize};
 
-use super::Tool;
+/// Drawing tool selection.
+///
+/// The active tool determines what shape is created when the user drags the mouse.
+/// Drag modifier mappings are configurable via `[drawing]` drag-tool fields.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Tool {
+    /// Select/cursor tool - interact with UI without drawing
+    Select,
+    /// Freehand drawing - follows mouse path (default, no modifiers)
+    Pen,
+    /// Straight line - between start and end points (Shift)
+    Line,
+    /// Rectangle outline - from corner to corner (Ctrl)
+    Rect,
+    /// Ellipse/circle outline - from center outward (Tab)
+    Ellipse,
+    /// Triangle generated from drag bounds.
+    Triangle,
+    /// Parallelogram generated from drag bounds.
+    Parallelogram,
+    /// Rhombus/diamond generated from drag bounds.
+    Rhombus,
+    /// Regular polygon generated from drag bounds.
+    RegularPolygon,
+    /// Click-to-add freeform polygon.
+    FreeformPolygon,
+    /// Arrow with directional head (Ctrl+Shift)
+    Arrow,
+    /// Privacy blur rectangle over the captured background
+    Blur,
+    /// Semi-transparent marker stroke for highlighting text
+    Marker,
+    /// Highlight-only tool (no drawing, emits click highlight)
+    Highlight,
+    /// Numbered step marker tool (places auto-incrementing bubbles)
+    StepMarker,
+    /// Eraser brush that removes content within its stroke
+    Eraser,
+    // Note: Text mode uses DrawingState::TextInput instead of Tool::Text
+}
 
 /// Tool/action selected by a drag binding.
 ///
@@ -46,12 +87,7 @@ pub enum DragTool {
 
 impl DragTool {
     pub fn from_tool(tool: Tool) -> Option<Self> {
-        let drag_tool = tool.drag_tool();
-        debug_assert_eq!(
-            drag_tool,
-            DragBindableTool::from_tool(tool).map(DragBindableTool::to_drag_tool)
-        );
-        drag_tool
+        DragBindableTool::from_tool(tool).map(DragBindableTool::to_drag_tool)
     }
 
     pub fn as_tool(self) -> Option<Tool> {
@@ -165,4 +201,16 @@ impl DragBindableTool {
             DragTool::Eraser => Some(Self::Eraser),
         }
     }
+}
+
+/// Eraser behavior mode.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum EraserMode {
+    /// Brush-style eraser that clears pixels along its stroke.
+    #[default]
+    Brush,
+    /// Stroke eraser that deletes any shape it touches.
+    Stroke,
 }

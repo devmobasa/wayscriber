@@ -1,6 +1,6 @@
 //! Configuration enum types.
 
-use crate::draw::{Color, color::*};
+use crate::domain::{Color, color::*};
 use crate::util::ConfigHexColorError;
 use log::warn;
 use serde::{Deserialize, Serialize};

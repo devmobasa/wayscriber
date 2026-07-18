@@ -1,4 +1,4 @@
-use crate::config::Action;
+use crate::domain::Action;
 use log::info;
 
 use super::super::{DrawingState, InputState, PendingBackendAction, UiToastKind};

@@ -7,7 +7,8 @@ use wayscriber::session::try_lock_exclusive;
 
 use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem};
 
-use super::daemon_setup::load_daemon_runtime_status;
+use super::blocking_jobs::{BlockingJobKind, run_blocking};
+use super::daemon_setup::load_daemon_runtime_status_sync;
 mod duplicate;
 mod move_file;
 
@@ -15,158 +16,133 @@ pub(super) use duplicate::duplicate_session_catalog_entry;
 pub(super) use move_file::move_session_catalog_entry;
 
 pub(super) async fn load_session_catalog() -> Result<Vec<SessionCatalogItem>, String> {
-    load_session_catalog_sync()
+    run_blocking(
+        BlockingJobKind::SessionCatalogLoad,
+        load_session_catalog_sync,
+    )
+    .await
 }
 
 pub(super) async fn forget_session_catalog_entry(
     id: String,
 ) -> Result<SessionCatalogActionResult, String> {
-    let removed =
-        wayscriber::session::catalog::forget_session_by_id(&id).map_err(|err| err.to_string())?;
-    let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult::success(
-        if removed {
-            "Forgot session metadata.".to_string()
-        } else {
-            "Session was already absent from the catalog.".to_string()
-        },
-        items,
-    ))
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let removed = wayscriber::session::catalog::forget_session_by_id(&id)
+            .map_err(|err| err.to_string())?;
+        let items = load_session_catalog_sync()?;
+        Ok(SessionCatalogActionResult::success(
+            if removed {
+                "Forgot session metadata.".to_string()
+            } else {
+                "Session was already absent from the catalog.".to_string()
+            },
+            items,
+        ))
+    })
+    .await
 }
 
 pub(super) async fn rename_session_catalog_entry(
     id: String,
     display_name: String,
 ) -> Result<SessionCatalogActionResult, String> {
-    let renamed =
-        wayscriber::session::catalog::rename_session_display_name_by_id(&id, display_name.trim())
-            .map_err(|err| err.to_string())?;
-    let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult::success(
-        if let Some(entry) = renamed {
-            format!("Renamed session to {}.", entry.display_name)
-        } else {
-            "Session was already absent from the catalog.".to_string()
-        },
-        items,
-    ))
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let renamed = wayscriber::session::catalog::rename_session_display_name_by_id(
+            &id,
+            display_name.trim(),
+        )
+        .map_err(|err| err.to_string())?;
+        let items = load_session_catalog_sync()?;
+        Ok(SessionCatalogActionResult::success(
+            if let Some(entry) = renamed {
+                format!("Renamed session to {}.", entry.display_name)
+            } else {
+                "Session was already absent from the catalog.".to_string()
+            },
+            items,
+        ))
+    })
+    .await
 }
 
 pub(super) async fn reveal_session_catalog_entry(
     id: String,
 ) -> Result<SessionCatalogActionResult, String> {
-    let item = find_session_catalog_item(&id)?;
-    reveal_path_parent(&item.path)?;
-    let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult::success(
-        format!("Opened folder for {}.", item.display_name),
-        items,
-    ))
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let item = find_session_catalog_item(&id)?;
+        reveal_path_parent(&item.path)?;
+        let items = load_session_catalog_sync()?;
+        Ok(SessionCatalogActionResult::success(
+            format!("Opened folder for {}.", item.display_name),
+            items,
+        ))
+    })
+    .await
 }
 
 pub(super) async fn clear_session_catalog_entry(
     id: String,
 ) -> Result<SessionCatalogActionResult, String> {
-    let status = load_daemon_runtime_status().await?;
-    let item = find_session_catalog_item(&id)?;
-    let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
-        RuntimeLockKind::Daemon,
-        CatalogOperation::Clear,
-    )?;
-    let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
-        RuntimeLockKind::Overlay,
-        CatalogOperation::Clear,
-    )?;
-    if let Some(blocker) = service_status_blocker(Some(&status), CatalogOperation::Clear) {
-        return Err(blocker);
-    }
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let status = load_daemon_runtime_status_sync()?;
+        let item = find_session_catalog_item(&id)?;
+        let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
+            RuntimeLockKind::Daemon,
+            CatalogOperation::Clear,
+        )?;
+        let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
+            RuntimeLockKind::Overlay,
+            CatalogOperation::Clear,
+        )?;
+        if let Some(blocker) = service_status_blocker(Some(&status), CatalogOperation::Clear) {
+            return Err(blocker);
+        }
 
-    let outcome = wayscriber::session::clear_named_session_non_lock_artifacts(&item.path)
-        .map_err(|err| err.to_string())?;
-    let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult::success(
-        if outcome.removed_any() {
-            format!("Cleared saved data for {}.", item.display_name)
-        } else {
-            format!("No saved data found for {}.", item.display_name)
-        },
-        items,
-    ))
+        let outcome = wayscriber::session::clear_named_session_non_lock_artifacts(&item.path)
+            .map_err(|err| err.to_string())?;
+        let items = load_session_catalog_sync()?;
+        Ok(SessionCatalogActionResult::success(
+            if outcome.removed_any() {
+                format!("Cleared saved data for {}.", item.display_name)
+            } else {
+                format!("No saved data found for {}.", item.display_name)
+            },
+            items,
+        ))
+    })
+    .await
 }
 
 pub(super) async fn clear_session_catalog_tool_state_entry(
     id: String,
 ) -> Result<SessionCatalogActionResult, String> {
-    let status = load_daemon_runtime_status().await?;
-    let item = find_session_catalog_item(&id)?;
-    let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
-        RuntimeLockKind::Daemon,
-        CatalogOperation::ClearToolState,
-    )?;
-    let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
-        RuntimeLockKind::Overlay,
-        CatalogOperation::ClearToolState,
-    )?;
-    if let Some(blocker) = service_status_blocker(Some(&status), CatalogOperation::ClearToolState) {
-        return Err(blocker);
-    }
-
-    let options = named_session_options_for_catalog_item(&item)?;
-    let outcome = wayscriber::session::clear_tool_state(&options).map_err(|err| err.to_string())?;
-    let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult::success(
-        clear_tool_state_catalog_message(&item.display_name, outcome),
-        items,
-    ))
-}
-
-pub(super) fn session_clear_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
-    inactive_operation_blocker(status, CatalogOperation::Clear)
-}
-
-pub(super) fn session_clear_tool_state_blocker(
-    status: Option<&DaemonRuntimeStatus>,
-) -> Option<String> {
-    inactive_operation_blocker(status, CatalogOperation::ClearToolState)
-}
-
-pub(super) fn session_duplicate_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
-    inactive_operation_blocker(status, CatalogOperation::Duplicate)
-}
-
-pub(super) fn session_move_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
-    inactive_operation_blocker(status, CatalogOperation::Move)
-}
-
-fn inactive_operation_blocker(
-    status: Option<&DaemonRuntimeStatus>,
-    operation: CatalogOperation,
-) -> Option<String> {
-    match runtime_lock_active(RuntimeLockKind::Overlay, operation) {
-        Ok(true) => {
-            return Some(
-                operation
-                    .running_message(RuntimeLockKind::Overlay)
-                    .to_string(),
-            );
+    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
+        let status = load_daemon_runtime_status_sync()?;
+        let item = find_session_catalog_item(&id)?;
+        let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
+            RuntimeLockKind::Daemon,
+            CatalogOperation::ClearToolState,
+        )?;
+        let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
+            RuntimeLockKind::Overlay,
+            CatalogOperation::ClearToolState,
+        )?;
+        if let Some(blocker) =
+            service_status_blocker(Some(&status), CatalogOperation::ClearToolState)
+        {
+            return Err(blocker);
         }
-        Ok(false) => {}
-        Err(err) => return Some(err),
-    }
 
-    match runtime_lock_active(RuntimeLockKind::Daemon, operation) {
-        Ok(true) => {
-            return Some(
-                operation
-                    .running_message(RuntimeLockKind::Daemon)
-                    .to_string(),
-            );
-        }
-        Ok(false) => {}
-        Err(err) => return Some(err),
-    }
-
-    service_status_blocker(status, operation)
+        let options = named_session_options_for_catalog_item(&item)?;
+        let outcome =
+            wayscriber::session::clear_tool_state(&options).map_err(|err| err.to_string())?;
+        let items = load_session_catalog_sync()?;
+        Ok(SessionCatalogActionResult::success(
+            clear_tool_state_catalog_message(&item.display_name, outcome),
+            items,
+        ))
+    })
+    .await
 }
 
 pub(super) fn session_clear_cached_status_blocker(
@@ -355,6 +331,7 @@ impl CatalogOperation {
     }
 }
 
+#[cfg(test)]
 fn runtime_lock_active(kind: RuntimeLockKind, operation: CatalogOperation) -> Result<bool, String> {
     let path = kind.path();
     let file = match OpenOptions::new().read(true).write(true).open(&path) {
@@ -446,6 +423,7 @@ impl CatalogOperation {
     }
 }
 
+#[cfg(test)]
 fn drop_lock(file: File) {
     drop(file);
 }

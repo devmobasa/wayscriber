@@ -55,75 +55,81 @@ fn daemon_status(active: bool) -> DaemonRuntimeStatus {
 }
 
 #[test]
-fn session_clear_blocker_blocks_running_daemon() {
+fn session_clear_cached_status_blocker_blocks_running_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let status = daemon_status(true);
 
-    let blocker = session_clear_blocker(Some(&status)).expect("daemon should block clear");
+    let blocker =
+        session_clear_cached_status_blocker(Some(&status)).expect("daemon should block clear");
 
     assert!(blocker.contains("background service"));
 }
 
 #[test]
-fn session_clear_blocker_allows_inactive_daemon_when_overlay_lock_is_free() {
+fn session_clear_cached_status_blocker_allows_inactive_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let status = daemon_status(false);
 
-    let blocker = session_clear_blocker(Some(&status));
+    let blocker = session_clear_cached_status_blocker(Some(&status));
 
     assert!(blocker.is_none(), "{blocker:?}");
 }
 
 #[test]
-fn session_duplicate_blocker_uses_duplicate_status_message() {
+fn session_duplicate_cached_status_blocker_uses_duplicate_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker = session_duplicate_blocker(None).expect("unknown status should block duplicate");
+    let blocker = session_duplicate_cached_status_blocker(None)
+        .expect("unknown status should block duplicate");
 
     assert!(blocker.contains("Duplicate Session"));
 }
 
 #[test]
-fn session_move_blocker_uses_move_status_message() {
+fn session_move_cached_status_blocker_uses_move_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker = session_move_blocker(None).expect("unknown status should block move");
+    let blocker =
+        session_move_cached_status_blocker(None).expect("unknown status should block move");
 
     assert!(blocker.contains("Move Session"));
 }
 
 #[test]
-fn session_clear_blocker_blocks_unknown_daemon_status() {
+fn session_clear_cached_status_blocker_blocks_unknown_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker = session_clear_blocker(None).expect("unknown status should block clear");
+    let blocker =
+        session_clear_cached_status_blocker(None).expect("unknown status should block clear");
 
     assert!(blocker.contains("status finishes loading"));
 }
 
 #[test]
-fn session_clear_tool_state_blocker_uses_tool_state_status_message() {
+fn session_clear_tool_state_cached_status_blocker_uses_tool_state_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker =
-        session_clear_tool_state_blocker(None).expect("unknown status should block tool reset");
+    let blocker = session_clear_tool_state_cached_status_blocker(None)
+        .expect("unknown status should block tool reset");
 
     assert!(blocker.contains("Clear saved tool state"));
     assert!(blocker.contains("status finishes loading"));
 }
 
 #[test]
-fn session_clear_blocker_blocks_manual_daemon_lock() {
+fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
-    let status = daemon_status(false);
+    let error = acquire_runtime_lock_for_inactive_operation(
+        RuntimeLockKind::Daemon,
+        CatalogOperation::Clear,
+    )
+    .expect_err("held daemon lock should block the transaction");
 
-    let blocker = session_clear_blocker(Some(&status)).expect("daemon lock should block clear");
-
-    assert!(blocker.contains("manually started daemon"));
+    assert!(error.contains("manually started daemon"));
 }
 
 #[test]

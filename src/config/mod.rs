@@ -67,7 +67,7 @@ pub use types::{
     section_flag_for_item, set_section_visibility, toolbar_item_definitions, toolbar_item_ids,
     toolbar_item_order_group, validate_pdf_label_template,
 };
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]
 pub use types::{StylusButtonBinding, TabletInputConfig};
 

@@ -60,7 +60,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.show_active_output_badge = config.ui.active_output_badge;
     input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
     input_state.radial_menu_mouse_binding = config.ui.radial_menu_mouse_binding;
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     {
         input_state.pressure_variation_threshold = config.tablet.pressure_variation_threshold;
         input_state.pressure_thickness_edit_mode = config.tablet.pressure_thickness_edit_mode;
