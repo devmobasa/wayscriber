@@ -17,6 +17,8 @@ use crate::ui::toolbar::ToolbarSnapshot;
 /// Closure applying one control's state from a fresh snapshot.
 pub(super) type Updater = Box<dyn Fn(&ToolbarSnapshot)>;
 
+const CAPTURE_SURFACE_CONTENT_CLASS: &str = "wayscriber-capture-surface-content";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ToolbarSurfacePresentation {
     window_visible: bool,
@@ -146,6 +148,7 @@ impl CaptureSurfaceContent {
         proof.set_visible(false);
 
         let root = gtk4::Overlay::new();
+        root.add_css_class(CAPTURE_SURFACE_CONTENT_CLASS);
         root.add_overlay(&proof);
 
         Self {
@@ -169,6 +172,12 @@ impl CaptureSurfaceContent {
         W: IsA<gtk4::Widget>,
     {
         self.root.set_child(Some(content));
+    }
+
+    fn take_content(&self) -> Option<gtk4::Widget> {
+        let content = self.root.child()?;
+        self.root.set_child(None::<&gtk4::Widget>);
+        Some(content)
     }
 
     fn widget(&self) -> &gtk4::Overlay {
@@ -215,6 +224,10 @@ impl CaptureSurfaceContent {
         self.proof.get_visible()
     }
 
+    fn is_wrapper(widget: &gtk4::Widget) -> bool {
+        widget.has_css_class(CAPTURE_SURFACE_CONTENT_CLASS)
+    }
+
     #[cfg(test)]
     fn proof_serial(&self) -> u8 {
         self.proof_serial.get()
@@ -226,6 +239,14 @@ struct CaptureProofTarget {
     name: &'static str,
     widget: gtk4::Widget,
     content: CaptureSurfaceContent,
+    lifetime: CaptureProofLifetime,
+    on_withdrawn: Option<std::rc::Rc<dyn Fn()>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CaptureProofLifetime {
+    Required,
+    WhileMapped,
 }
 
 impl CaptureProofTarget {
@@ -237,6 +258,54 @@ impl CaptureProofTarget {
             name,
             widget: widget.clone().upcast(),
             content: content.clone(),
+            lifetime: CaptureProofLifetime::Required,
+            on_withdrawn: None,
+        }
+    }
+
+    fn new_withdrawable<W>(name: &'static str, widget: &W, content: &CaptureSurfaceContent) -> Self
+    where
+        W: IsA<gtk4::Widget>,
+    {
+        Self {
+            name,
+            widget: widget.clone().upcast(),
+            content: content.clone(),
+            lifetime: CaptureProofLifetime::WhileMapped,
+            on_withdrawn: None,
+        }
+    }
+
+    fn new_withdrawable_with_callback<W, F>(
+        name: &'static str,
+        widget: &W,
+        content: &CaptureSurfaceContent,
+        on_withdrawn: F,
+    ) -> Self
+    where
+        W: IsA<gtk4::Widget>,
+        F: Fn() + 'static,
+    {
+        Self {
+            name,
+            widget: widget.clone().upcast(),
+            content: content.clone(),
+            lifetime: CaptureProofLifetime::WhileMapped,
+            on_withdrawn: Some(std::rc::Rc::new(on_withdrawn)),
+        }
+    }
+
+    fn is_withdrawn(&self) -> bool {
+        self.lifetime == CaptureProofLifetime::WhileMapped && !widget_native_is_mapped(&self.widget)
+    }
+
+    fn required_but_unmapped(&self) -> bool {
+        self.lifetime == CaptureProofLifetime::Required && !widget_native_is_mapped(&self.widget)
+    }
+
+    fn mark_withdrawn(&self) {
+        if let Some(on_withdrawn) = self.on_withdrawn.as_ref() {
+            on_withdrawn();
         }
     }
 
@@ -399,29 +468,48 @@ impl Windows {
             .set_suppressed(update.capture_suppressed, defer_capture_input);
         let top_mapped = self.top.apply(update, defer_capture_input);
         let side_mapped = self.side.apply(update, defer_capture_input);
-        self.install_tooltip_sources();
+        self.refresh_popup_capture_sources();
         if let CaptureUpdatePlan::ApplyAndAcknowledge(generation) = capture_plan {
-            let proof = self
-                .wait_for_capture_paints(generation, top_mapped, side_mapped)
-                .await
-                .and_then(|()| {
-                    gtk4::gdk::Display::default().ok_or_else(|| {
-                        "GTK display disappeared during capture suppression".to_string()
+            let proof = async {
+                self.wait_for_capture_paints(generation, top_mapped, side_mapped)
+                    .await?;
+
+                // Once every surface known at entry is transparent, close
+                // compositor input admission. GDK defers input-region changes
+                // until a surface commit, so force and presentation-confirm a
+                // fresh transparent frame before the display roundtrip and
+                // low-priority GTK-main-context settle loop.
+                let display = gtk4::gdk::Display::default().ok_or_else(|| {
+                    "GTK display disappeared during capture suppression".to_string()
+                })?;
+                capture_suppression::commit_input_regions_before_popup_quiescence(
+                    generation,
+                    || self.disable_capture_input(top_mapped, side_mapped),
+                    || self.wait_for_capture_paints(generation, top_mapped, side_mapped),
+                    || display.sync(),
+                )
+                .await?;
+
+                let roots = self.popup_capture_roots();
+                self.tooltip_capture
+                    .wait_for_popover_quiescence(generation, &roots, |targets, deadline| {
+                        capture_suppression::wait_for_presented_transparency_until(
+                            generation, targets, deadline,
+                        )
                     })
-                });
+                    .await?;
+
+                // The GTK bars use a separate Wayland connection. A
+                // compositor frame or presentation timestamp proves the
+                // opacity-zero commit was processed; this final roundtrip
+                // orders every settled GTK request before the backend submits
+                // its hidden frame on another connection.
+                display.sync();
+                Ok::<(), String>(())
+            }
+            .await;
             match proof {
-                Ok(display) => {
-                    // Keep native input active until every visual surface has
-                    // submitted and presented its transparent proof. Input
-                    // region changes are then ordered before acknowledgement
-                    // by the display sync below.
-                    self.disable_capture_input(top_mapped, side_mapped);
-                    // The GTK bars use a separate Wayland connection. A
-                    // compositor frame or presentation timestamp proves the
-                    // opacity-zero commit was processed; this roundtrip orders
-                    // remaining GTK requests before the backend submits its
-                    // hidden frame on another connection.
-                    display.sync();
+                Ok(()) => {
                     log::info!(
                         "capture.preflight id={generation} component=gtk phase=display-sync-complete"
                     );
@@ -470,21 +558,29 @@ impl Windows {
             targets.push(self.side.capture_target());
         }
         targets.extend(self.top.capture_popover_targets());
+        targets.extend(self.tooltip_capture.capture_popover_targets());
         if let Some(tooltip) = self.tooltip_capture.capture_target() {
             targets.push(tooltip);
         }
 
-        capture_suppression::wait_for_presented_transparency(generation, targets).await
+        capture_suppression::wait_for_presented_transparency(generation, targets).await?;
+        self.tooltip_capture.mark_capture_popovers_proven();
+        Ok(())
     }
 
-    fn install_tooltip_sources(&self) {
-        self.tooltip_capture
-            .install_tree(self.top.window.upcast_ref());
-        self.tooltip_capture
-            .install_tree(self.side.window.upcast_ref());
-        for root in self.top.tooltip_roots() {
+    fn refresh_popup_capture_sources(&self) {
+        for root in self.popup_capture_roots() {
             self.tooltip_capture.install_tree(&root);
         }
+    }
+
+    fn popup_capture_roots(&self) -> Vec<gtk4::Widget> {
+        let mut roots = vec![
+            self.top.window.clone().upcast::<gtk4::Widget>(),
+            self.side.window.clone().upcast::<gtk4::Widget>(),
+        ];
+        roots.extend(self.top.tooltip_roots());
+        roots
     }
 
     fn disable_capture_input(&self, top_mapped: bool, side_mapped: bool) {

@@ -363,9 +363,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn capture_suppression_clears_private_tooltip_window_chrome() {
+    fn capture_suppression_clears_private_native_popup_chrome() {
         let css = stylesheet(1.0);
         assert!(css.contains(&format!("tooltip.{CAPTURE_TRANSPARENT_CLASS} {{")));
+        assert!(css.contains(&format!(
+            "popover.{CAPTURE_TRANSPARENT_CLASS} > contents {{"
+        )));
         assert!(css.contains("background: transparent;"));
         assert!(css.contains("border-color: transparent;"));
         assert!(css.contains("box-shadow: none;"));

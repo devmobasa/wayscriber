@@ -119,7 +119,7 @@ impl TopBar {
             let popover = popover?;
             let capture_surface = capture_surface?;
             (popover.is_visible() && popover.is_mapped())
-                .then(|| CaptureProofTarget::new(name, popover, capture_surface))
+                .then(|| CaptureProofTarget::new_withdrawable(name, popover, capture_surface))
         })
         .collect()
     }
