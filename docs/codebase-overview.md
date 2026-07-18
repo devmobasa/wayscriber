@@ -136,7 +136,23 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 6. Configuration
+## 6. Toolbar Frontends
+
+- `src/ui/toolbar/model/top_spec.rs` owns the renderer-neutral top-toolbar contract: stable
+  control IDs, ordered strip/divider/chrome/overflow nodes, events, active/enabled state, labels,
+  tooltips, shortcut badges, and semantic icons. It consumes the shared width-degradation result
+  but contains no geometry or toolkit types.
+- `src/backend/wayland/toolbar/view/top/` exhaustively adapts that contract to the built-in
+  `WidgetTree`, which remains the sole owner of Cairo geometry, hit testing, popover placement,
+  and surface input regions.
+- `src/toolbar_gtk/view/top_bar/` exhaustively adapts the same contract to GTK widgets while
+  retaining GTK sizing, CSS, updater closures, drag gestures, and popover lifecycle.
+- Shape-picker compound rows and all side-palette layout remain frontend-specific. Their existing
+  tool/section ordering still comes from the shared toolbar model.
+
+---
+
+## 7. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
 - **`ConfigDocument`** is the configurator-facing edit owner. It keeps validated `Config`, the
@@ -152,7 +168,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 7. Session Persistence and Named Session Manager
+## 8. Session Persistence and Named Session Manager
 
 **Modules:**
 - `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
@@ -172,7 +188,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 8. Utility Modules
+## 9. Utility Modules
 
 - **`src/draw/`**: Shape definitions, Cairo helpers, arrow geometry, fonts, and the `CanvasSet` abstraction (with undo/history per board mode).
 - **`src/ui.rs`**: Composes the status bar and help overlay using Cairo.
@@ -182,7 +198,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 9. Directory Map (excluding configurator)
+## 10. Directory Map (excluding configurator)
 
 | Path | Role |
 |------|------|
@@ -202,7 +218,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 10. Putting It Together
+## 11. Putting It Together
 
 1. **Launch** via CLI → choose daemon vs active.
 2. **Daemon** provides lifecycle management, tray integration, and toggles the backend on demand.

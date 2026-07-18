@@ -6,6 +6,7 @@ pub(crate) mod header;
 pub(crate) mod session;
 pub(crate) mod settings;
 pub(crate) mod tools;
+mod top_spec;
 
 #[allow(unused_imports)]
 pub(crate) use actions::{
@@ -47,6 +48,11 @@ pub(crate) use tools::{
     top_sticky_note_visible, top_text_visible, top_tool_buttons, top_tool_group,
     visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
     visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
+};
+#[allow(unused_imports)]
+pub(crate) use top_spec::{
+    TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole, TopToolbarDivider,
+    TopToolbarIcon, TopToolbarNode, TopToolbarSpec, TopToolbarUtility, action_tooltip,
 };
 
 #[cfg(test)]

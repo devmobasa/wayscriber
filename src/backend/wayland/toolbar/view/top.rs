@@ -9,7 +9,6 @@
 //! not interactive.
 
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::config::toolbar_item_ids as ids;
 use crate::input::Tool;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
@@ -29,36 +28,14 @@ pub(crate) const TOP_SWATCH_GAP: f64 = 4.0;
 /// Current-color chip size (opens the full picker; never collapses).
 pub(crate) const TOP_CHIP_SIZE: f64 = 28.0;
 /// Maximum quick-color swatches when width allows.
-pub(crate) const TOP_MAX_QUICK_COLORS: usize = 8;
+#[cfg(test)]
+pub(crate) const TOP_MAX_QUICK_COLORS: usize = TopStripPlan::MAX_QUICK_COLORS;
 const TOP_COMPACT_BUTTON: f64 = 26.0;
 const TOP_COMPACT_GAP: f64 = 1.0;
 const TOP_COMPACT_CHROME: f64 = 18.0;
 const TOP_COMPACT_MARGIN_RIGHT: f64 = 8.0;
 
-/// What fits on the strip at the current viewport width: how many quick
-/// swatches render and which items degrade into the overflow menu.
-/// Priority items (pens, Eraser, the chip, Undo/Redo, Clear, chrome) are
-/// never dropped.
-#[derive(Debug, Clone, PartialEq)]
-pub struct TopStripPlan {
-    pub swatch_count: usize,
-    pub dropped_tools: Vec<Tool>,
-    pub dropped_utilities: Vec<model::TopUtilityButton>,
-    pub show_overflow: bool,
-    pub compact: bool,
-}
-
-impl TopStripPlan {
-    fn unconstrained() -> Self {
-        Self {
-            swatch_count: TOP_MAX_QUICK_COLORS,
-            dropped_tools: Vec::new(),
-            dropped_utilities: Vec::new(),
-            show_overflow: false,
-            compact: false,
-        }
-    }
-}
+pub(crate) use model::TopStripPlan;
 
 /// Degrade the strip until it fits the viewport: quick swatches shrink
 /// 8→6→4→0 first, then droppable items move into the overflow menu.
@@ -269,11 +246,7 @@ fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, hei
         .map(|node| node.rect.0 + node.rect.2)
         .fold(0.0_f64, f64::max);
 
-    let mut chrome_count = usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN))
-        + usize::from(model::toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE));
-    if plan.show_overflow {
-        chrome_count += 1;
-    }
+    let chrome_count = model::TopToolbarSpec::chrome_control_count(snapshot, plan);
     let chrome = if chrome_count == 0 {
         0.0
     } else {

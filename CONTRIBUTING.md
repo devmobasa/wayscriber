@@ -897,6 +897,8 @@ If you are working offline, prefetch dependencies first:
   - `bindings.rs` - Toolbar keybinding mapping.
   - `events.rs` - Toolbar events.
   - `snapshot.rs` - Toolbar snapshot helper.
+  - `model/top_spec.rs` - Renderer-neutral top-toolbar IDs, ordering, events, state, and
+    width-degradation result shared by the built-in and GTK adapters.
   - `apply/` - Apply toolbar state to input.
     - `actions.rs` - Toolbar actions.
     - `delays.rs` - Delay adjustments.
