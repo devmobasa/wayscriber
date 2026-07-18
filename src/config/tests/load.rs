@@ -574,7 +574,7 @@ fn ui_defaults_follow_desktop_for_xdg_focus_loss() {
     assert_eq!(Config::default().ui.xdg_focus_loss_behavior, expected);
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {
     with_temp_config_home(|config_root| {
@@ -591,7 +591,7 @@ fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {
     });
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn tablet_stylus_button_bindings_default_to_primary_radial_menu() {
     let config = Config::default();
@@ -603,7 +603,7 @@ fn tablet_stylus_button_bindings_default_to_primary_radial_menu() {
     assert_eq!(config.tablet.stylus_button2.action, None);
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn tablet_stylus_button_action_omission_unbinds_button() {
     let config: Config =
@@ -612,7 +612,7 @@ fn tablet_stylus_button_action_omission_unbinds_button() {
     assert_eq!(config.tablet.stylus_button.action, None);
 }
 
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 #[test]
 fn tablet_stylus_button_bindings_parse_custom_actions() {
     let config: Config = toml::from_str(

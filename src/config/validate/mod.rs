@@ -12,7 +12,7 @@ mod performance;
 mod presets;
 mod render_profiles;
 mod session;
-#[cfg(tablet)]
+#[cfg(feature = "tablet-input")]
 mod tablet;
 mod ui;
 
@@ -32,7 +32,7 @@ impl Config {
     pub fn validate_and_clamp(&mut self) {
         self.validate_drawing();
         self.validate_presets();
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         self.validate_tablet();
         self.validate_history();
         self.validate_arrow();

@@ -27,7 +27,7 @@ const MAX_SHM_SCREENCOPY_VERSION: u32 = 2;
 
 pub(super) struct WaylandSetup {
     pub(super) conn: Connection,
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(super) globals: wayland_client::globals::GlobalList,
     pub(super) event_queue: EventQueue<WaylandState>,
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
@@ -150,7 +150,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
 
     Ok(WaylandSetup {
         conn,
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         globals,
         event_queue,
         qh,

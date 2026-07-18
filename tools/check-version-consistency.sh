@@ -9,7 +9,6 @@ Checks that release/version metadata agrees across:
   * Cargo.toml
   * configurator/Cargo.toml
   * Cargo.lock
-  * configurator/Cargo.lock
   * packaging/PKGBUILD
   * packaging/.SRCINFO
   * flake.nix
@@ -162,13 +161,16 @@ root_version = cargo_version("Cargo.toml")
 config_version = cargo_version("configurator/Cargo.toml")
 require_equal("configurator/Cargo.toml", config_version, root_version)
 
-for lockfile in ("Cargo.lock", "configurator/Cargo.lock"):
-    require_equal(f"{lockfile} wayscriber", lock_package_version(lockfile, "wayscriber"), root_version)
-    require_equal(
-        f"{lockfile} wayscriber-configurator",
-        lock_package_version(lockfile, "wayscriber-configurator"),
-        root_version,
-    )
+require_equal(
+    "Cargo.lock wayscriber",
+    lock_package_version("Cargo.lock", "wayscriber"),
+    root_version,
+)
+require_equal(
+    "Cargo.lock wayscriber-configurator",
+    lock_package_version("Cargo.lock", "wayscriber-configurator"),
+    root_version,
+)
 
 if not version_re.fullmatch(root_version):
     errors.append(f"Cargo.toml version has unsupported format: {root_version}")

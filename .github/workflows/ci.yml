@@ -65,6 +65,12 @@ jobs:
       - name: Check version metadata
         run: bash tools/check-version-consistency.sh
 
+      - name: Check package repository layout
+        run: bash tools/test-package-repo-layout.sh
+
+      - name: Check Rust source coverage
+        run: ./tools/check-rust-source-coverage.py
+
       - name: cargo fmt
         run: cargo fmt --all -- --check
 
@@ -76,6 +82,21 @@ jobs:
 
       - name: cargo test (no default features)
         run: cargo test --workspace --no-default-features
+
+      - name: Record code health
+        if: always()
+        continue-on-error: true
+        run: |
+          ./tools/code-health-report.sh > code-health-report.txt
+          sed -n '1,/^$/p' code-health-report.txt
+
+      - name: Upload code-health report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-code-health
+          path: code-health-report.txt
+          if-no-files-found: warn
 
   nix-flake:
     name: Nix flake

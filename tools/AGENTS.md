@@ -10,6 +10,8 @@
 ## Invariants
 - Preserve release/version/package semantics, including packaging-only hotfix behavior.
 - Keep `tools/lint-and-test.sh` aligned with CI.
+- Keep `check-rust-source-coverage.py` aligned with the workspace's all-feature and
+  no-default-feature target matrix; intentional exceptions must be narrow and documented.
 - Avoid platform-specific assumptions unless the script is explicitly platform-specific.
 
 ## Coupled Changes

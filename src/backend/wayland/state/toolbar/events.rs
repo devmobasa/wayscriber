@@ -226,9 +226,9 @@ impl WaylandState {
             | (ToolbarBackendRoute::MoveSideToolbar, _) => {}
         }
 
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         let prev_thickness = self.input_state.current_thickness;
-        #[cfg(tablet)]
+        #[cfg(feature = "tablet-input")]
         let thickness_event = policy.tablet_thickness_sensitive;
 
         let pane_switch = matches!(event, ToolbarEvent::SetSidePane(_));
@@ -240,7 +240,7 @@ impl WaylandState {
                 self.reset_side_toolbar_focus();
             }
 
-            #[cfg(tablet)]
+            #[cfg(feature = "tablet-input")]
             if thickness_event && self.sync_stylus_thickness_cache(prev_thickness) {
                 if self.stylus_tip_down {
                     self.record_stylus_peak(self.input_state.current_thickness);
@@ -278,7 +278,7 @@ impl WaylandState {
         self.refresh_keyboard_interactivity();
     }
 
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn sync_stylus_thickness_cache(&mut self, prev: f64) -> bool {
         let cur = self.input_state.current_thickness;
         if (cur - prev).abs() <= f64::EPSILON {
@@ -295,7 +295,7 @@ impl WaylandState {
     }
 
     /// Records the maximum stylus thickness seen during the current stroke.
-    #[cfg(tablet)]
+    #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn record_stylus_peak(&mut self, thickness: f64) {
         self.stylus_peak_thickness = Some(
             self.stylus_peak_thickness
