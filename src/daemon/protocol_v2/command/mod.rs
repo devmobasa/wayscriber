@@ -44,6 +44,7 @@ pub(crate) struct ClientCommand {
     pub(super) decision_lock: File,
     pub(super) caller_lease: File,
     pub(super) response_deadline: BootDeadline,
+    pub(super) publication_indeterminate_reason: Option<String>,
 }
 
 #[derive(Debug)]
@@ -58,6 +59,7 @@ pub(crate) enum TerminalCommandResult {
     Succeeded,
     Canceled,
     FailedNoEffect(String),
+    AdmittedIndeterminate(String),
     CommittedIndeterminate(String),
 }
 

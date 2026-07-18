@@ -23,6 +23,27 @@ use super::{AUTHORIZATION_WINDOW, ClientCommand, RESPONSE_WINDOW, TerminalComman
 
 impl ClientCommand {
     pub(crate) fn publish(request: &DaemonRequestV2, daemon_token: &str) -> Result<Self> {
+        Self::publish_with_final_control_write(request, daemon_token, write_control)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn publish_with_final_control_failure(
+        request: &DaemonRequestV2,
+        daemon_token: &str,
+    ) -> Result<Self> {
+        Self::publish_with_final_control_write(request, daemon_token, |_path, _control| {
+            Err(anyhow!("injected final control write failure"))
+        })
+    }
+
+    fn publish_with_final_control_write(
+        request: &DaemonRequestV2,
+        daemon_token: &str,
+        final_control_write: impl FnOnce(
+            &std::path::Path,
+            &super::super::wire::CommandControl,
+        ) -> Result<()>,
+    ) -> Result<Self> {
         request.validate()?;
         validate_token(daemon_token)?;
         let root = command_root();
@@ -97,11 +118,22 @@ impl ClientCommand {
             &reference,
             MAX_QUEUE_REFERENCE_BYTES,
         )?;
-        bump_revision(&mut control)?;
-        control.publication_state = PublicationState::Queued;
-        write_control(&published_control, &control)?;
-        unlock(&decision_lock)?;
-        unlock(&admission)?;
+        let publication_indeterminate_reason = (|| -> Result<()> {
+            bump_revision(&mut control)?;
+            control.publication_state = PublicationState::Queued;
+            final_control_write(&published_control, &control)?;
+            unlock(&decision_lock)?;
+            unlock(&admission)?;
+            Ok(())
+        })()
+        .err()
+        .map(|error| {
+            let _ = unlock(&decision_lock);
+            let _ = unlock(&admission);
+            format!(
+                "command queue admission succeeded, but publication finalization failed: {error:#}"
+            )
+        });
 
         Ok(Self {
             identity,
@@ -109,10 +141,16 @@ impl ClientCommand {
             decision_lock,
             caller_lease,
             response_deadline,
+            publication_indeterminate_reason,
         })
     }
 
-    pub(crate) fn wait(self) -> Result<TerminalCommandResult> {
+    pub(crate) fn wait(mut self) -> Result<TerminalCommandResult> {
+        if let Some(reason) = self.publication_indeterminate_reason.take() {
+            let _ = unlock(&self.decision_lock);
+            let _ = unlock(&self.caller_lease);
+            return Ok(TerminalCommandResult::AdmittedIndeterminate(reason));
+        }
         loop {
             let now = BootClock::now()?;
             let slice = now
@@ -159,7 +197,12 @@ impl ClientCommand {
     }
 
     #[cfg(test)]
-    pub(crate) fn cancel(self) -> Result<TerminalCommandResult> {
+    pub(crate) fn cancel(mut self) -> Result<TerminalCommandResult> {
+        if let Some(reason) = self.publication_indeterminate_reason.take() {
+            let _ = unlock(&self.decision_lock);
+            let _ = unlock(&self.caller_lease);
+            return Ok(TerminalCommandResult::AdmittedIndeterminate(reason));
+        }
         lock_until(&self.decision_lock, libc::LOCK_EX, self.response_deadline)?;
         let mut control = read_control(&self.control_path)?;
         if cancel_open(&mut control)? {

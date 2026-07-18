@@ -13,9 +13,10 @@ use super::super::wire::{
 };
 use super::super::{BootClock, BootDeadline};
 use super::layout::{
-    QuarantineKind, admission_lock, bump_revision, command_root, control_path, controls_dir, flock,
-    gc_dir, is_atomic_temp, lock_until, open_lock, prepare_layout, quarantine_entry, queue_dir,
-    read_control, read_dir_bounded, read_record, unlock, write_control,
+    QuarantineKind, bump_revision, command_root, control_path, controls_dir, flock, gc_dir,
+    is_atomic_temp, lock_until, open_lock, prepare_layout, quarantine_entry, queue_dir, queue_path,
+    read_control, read_dir_bounded, read_record, try_admission_lock, try_lock_until, unlock,
+    write_control,
 };
 use super::recovery::{parse_queue_name, recover_previous_generation, validate_reference};
 use super::staging::recover_staging;
@@ -50,14 +51,37 @@ impl CommandOwner {
             let candidate = if control.response.is_some() {
                 Some(retry)
             } else if matches!(control.publication_state, PublicationState::VisibleUnqueued) {
-                let authorization = BootDeadline::from_nanos(
-                    control.submission_clock.authorization_deadline_boottime_ns,
-                );
-                Some(if authorization > now {
-                    authorization
-                } else {
-                    retry
-                })
+                let reference = queue_path(&self.root, control.queue_order, &control.identity);
+                match fs::symlink_metadata(reference) {
+                    Ok(_) => Some(retry),
+                    Err(error) if error.kind() == ErrorKind::NotFound => {
+                        let authorization = BootDeadline::from_nanos(
+                            control.submission_clock.authorization_deadline_boottime_ns,
+                        );
+                        Some(if authorization > now {
+                            authorization
+                        } else {
+                            retry
+                        })
+                    }
+                    Err(error) => return Err(error.into()),
+                }
+            } else if matches!(
+                control.publication_state,
+                PublicationState::Queued | PublicationState::Claimed { .. }
+            ) && (matches!(control.decision, CommandDecision::Open)
+                || matches!(
+                    (&control.decision, &control.action_status),
+                    (
+                        CommandDecision::Committed {
+                            effect_status: EffectStatus::Authorized,
+                            ..
+                        },
+                        ActionStatus::None
+                    )
+                ))
+            {
+                Some(retry)
             } else {
                 None
             };
@@ -170,7 +194,9 @@ impl CommandOwner {
             Err(error) => return Err(error),
         };
         let retry_deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        lock_until(&decision_lock, libc::LOCK_EX, retry_deadline)?;
+        if !try_lock_until(&decision_lock, libc::LOCK_EX, retry_deadline)? {
+            return Ok(None);
+        }
         let mut control = match read_control(&path) {
             Ok(control) => control,
             Err(_) => {
@@ -370,7 +396,9 @@ impl CommandOwner {
         }
         let decision_lock = open_lock(&path.join("decision.lock"), false)?;
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        lock_until(&decision_lock, libc::LOCK_EX, deadline)?;
+        if !try_lock_until(&decision_lock, libc::LOCK_EX, deadline)? {
+            return Ok(None);
+        }
         let mut control = read_control(&path)?;
         let recoverable = matches!(control.decision, CommandDecision::Open)
             || matches!(
@@ -411,7 +439,9 @@ impl CommandOwner {
 
     pub(crate) fn collect_terminal(&self) -> Result<usize> {
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        let admission = admission_lock(&self.root, deadline)?;
+        let Some(admission) = try_admission_lock(&self.root, deadline)? else {
+            return Ok(0);
+        };
         let mut collected = 0;
         for entry in read_dir_bounded(&controls_dir(&self.root), MAX_DIRECTORY_ENTRIES_PER_SCAN)? {
             let path = entry.path();

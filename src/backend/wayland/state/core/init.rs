@@ -92,7 +92,11 @@ impl WaylandState {
             clipboard_operation_ids.clone(),
             runtime_wake.clone(),
         );
-        let clipboard_paste =
+        let clipboard_paste = ClipboardOperationController::new(
+            clipboard_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
+        let clipboard_hex_copy =
             ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
 
         Self {
@@ -115,6 +119,8 @@ impl WaylandState {
             input_state,
             clipboard_publish,
             clipboard_paste,
+            clipboard_hex_copy,
+            pending_hex_copy: None,
             gtk_toolbar: None,
             onboarding,
             ui_animation_next_tick: None,

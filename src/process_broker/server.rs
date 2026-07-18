@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 
 use super::execution::{
-    ProcessGroupChild, kill_child_process_group, publish_bounded, run_bounded, status_code,
+    OwnedProcess, kill_child_process_group, publish_bounded, run_bounded, status_code,
     supports_retained_publication, terminate_owned_children,
 };
 use super::transport::{
@@ -412,6 +412,9 @@ fn spawn_helper(
         environment,
     } = request;
     super::manifest::validate(kind, &program, &arguments, &environment, &[])?;
+    if matches!(kind, HelperKind::InitialDetach) && lifetime != HelperLifetime::DetachedAfterExec {
+        bail!("initial detach helper must transfer ownership after exec");
+    }
     if children.len() >= MAX_OWNED_CHILDREN {
         bail!("broker child capacity exhausted");
     }
@@ -441,8 +444,11 @@ fn spawn_helper(
         reject_descriptors(descriptors)?;
         None
     };
+    let initial_detach = matches!(kind, HelperKind::InitialDetach);
+    if !initial_detach {
+        command.process_group(0);
+    }
     command
-        .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -455,7 +461,14 @@ fn spawn_helper(
     if shutdown_requested(shutdown_fd)? {
         bail!("broker spawn cancelled during shutdown");
     }
-    let child = ProcessGroupChild::new(command.spawn().context("broker helper spawn failed")?);
+    let child = command.spawn().context("broker helper spawn failed")?;
+    let child = if initial_detach {
+        // The execed overlay calls setsid(). It must not be a process-group leader
+        // at that point or setsid() deterministically fails with EPERM.
+        OwnedProcess::process(child)
+    } else {
+        OwnedProcess::process_group(child)
+    };
     drop(watchdog_descriptor);
     let pid = child.id();
     match lifetime {

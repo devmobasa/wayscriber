@@ -110,13 +110,59 @@ fn prelock_broker_runs_bounded_helpers_and_owns_reaping() {
 fn process_group_guard_cleans_up_before_ownership_transfer() {
     let mut command = std::process::Command::new("sleep");
     command.arg("30").process_group(0);
-    let child = super::execution::ProcessGroupChild::new(command.spawn().unwrap());
+    let child = super::execution::OwnedProcess::process_group(command.spawn().unwrap());
     let pid = i32::try_from(child.id()).unwrap();
 
     drop(child);
 
     // SAFETY: signal zero only probes the test-owned helper PID after guard cleanup.
     assert_ne!(unsafe { libc::kill(pid, 0) }, 0);
+}
+
+#[test]
+fn initial_detach_child_remains_eligible_to_create_a_session() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let helper = temp.path().join("wayscriber-detach-probe");
+    let proof = temp.path().join("detach-state");
+    std::fs::write(
+        &helper,
+        r#"#!/bin/sh
+read -r pid comm state ppid pgrp rest < "/proc/$$/stat"
+if [ "$pid" = "$pgrp" ]; then
+    printf process-group-leader > "$1"
+else
+    printf session-eligible > "$1"
+fi
+"#,
+    )
+    .unwrap();
+    let mut permissions = std::fs::metadata(&helper).unwrap().permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
+    std::fs::set_permissions(&helper, permissions).unwrap();
+
+    let guard = start_for_runtime().unwrap();
+    let _child = guard
+        .broker()
+        .spawn(
+            HelperKind::InitialDetach,
+            HelperLifetime::DetachedAfterExec,
+            helper.as_os_str(),
+            [proof.as_os_str()],
+            Vec::new(),
+        )
+        .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let observed = loop {
+        if let Ok(value) = std::fs::read_to_string(&proof)
+            && matches!(value.as_str(), "session-eligible" | "process-group-leader")
+        {
+            break value;
+        }
+        assert!(Instant::now() < deadline, "detach probe did not complete");
+        std::thread::yield_now();
+    };
+    assert_eq!(observed, "session-eligible");
 }
 
 #[test]

@@ -77,6 +77,23 @@ fn session_file_request_rejects_relative_path() {
 }
 
 #[test]
+fn admitted_indeterminate_v2_result_warns_callers_not_to_retry() {
+    let error = finish_v2_command(
+        crate::daemon::protocol_v2::TerminalCommandResult::AdmittedIndeterminate(
+            "final control publication failed".into(),
+        ),
+    )
+    .unwrap_err();
+
+    assert!(
+        format!("{error:#}").contains(
+            "daemon command was admitted but its outcome is indeterminate; do not retry: final control publication failed"
+        ),
+        "{error:#}"
+    );
+}
+
+#[test]
 fn daemon_toggle_response_round_trips_error_and_is_removed_after_wait() {
     let tmp = crate::test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {

@@ -57,11 +57,30 @@ pub(super) fn kill_child_process_group(child: &mut std::process::Child) {
     let _ = child.kill();
 }
 
-pub(super) struct ProcessGroupChild(Option<Child>);
+#[derive(Clone, Copy)]
+enum KillScope {
+    ProcessGroup,
+    Process,
+}
 
-impl ProcessGroupChild {
-    pub(super) fn new(child: Child) -> Self {
-        Self(Some(child))
+pub(super) struct OwnedProcess {
+    child: Option<Child>,
+    kill_scope: KillScope,
+}
+
+impl OwnedProcess {
+    pub(super) fn process_group(child: Child) -> Self {
+        Self {
+            child: Some(child),
+            kill_scope: KillScope::ProcessGroup,
+        }
+    }
+
+    pub(super) fn process(child: Child) -> Self {
+        Self {
+            child: Some(child),
+            kill_scope: KillScope::Process,
+        }
     }
 
     pub(super) fn id(&self) -> u32 {
@@ -69,34 +88,41 @@ impl ProcessGroupChild {
     }
 
     pub(super) fn into_child(mut self) -> Child {
-        self.0.take().expect("process-group child remains owned")
+        self.child.take().expect("broker child remains owned")
     }
 
     fn child(&self) -> &Child {
-        self.0.as_ref().expect("operation child remains owned")
+        self.child.as_ref().expect("broker child remains owned")
     }
 
     fn child_mut(&mut self) -> &mut Child {
-        self.0.as_mut().expect("operation child remains owned")
+        self.child.as_mut().expect("broker child remains owned")
     }
 
-    fn kill_group(&mut self) {
-        kill_child_process_group(self.child_mut());
+    fn terminate(&mut self) {
+        match self.kill_scope {
+            KillScope::ProcessGroup => kill_child_process_group(self.child_mut()),
+            KillScope::Process => {
+                let _ = self.child_mut().kill();
+            }
+        }
     }
 
     pub(super) fn wait(&mut self) -> io::Result<ExitStatus> {
         let result = self.child_mut().wait();
         if result.is_ok() {
-            self.0 = None;
+            self.child = None;
         }
         result
     }
 }
 
-impl Drop for ProcessGroupChild {
+impl Drop for OwnedProcess {
     fn drop(&mut self) {
-        if let Some(mut child) = self.0.take() {
-            kill_child_process_group(&mut child);
+        if self.child.is_some() {
+            self.terminate();
+        }
+        if let Some(mut child) = self.child.take() {
             let _ = child.wait();
         }
     }
@@ -153,7 +179,7 @@ pub(super) fn publish_bounded(
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    let mut child = ProcessGroupChild::new(
+    let mut child = OwnedProcess::process_group(
         command
             .spawn()
             .context("broker publication helper spawn failed")?,
@@ -169,7 +195,7 @@ pub(super) fn publish_bounded(
                 .join()
                 .map_err(|_| anyhow!("broker publication stdin writer panicked"))?;
             if unreaped_status != 0 || stdin_result.is_err() {
-                child.kill_group();
+                child.terminate();
                 let status = status_code(child.wait()?);
                 stdin_result.context("broker publication stdin write failed")?;
                 return Ok(PublishOutput {
@@ -186,7 +212,7 @@ pub(super) fn publish_bounded(
             });
         }
         if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
-            child.kill_group();
+            child.terminate();
             let status = status_code(child.wait()?);
             let _ = stdin_writer.join();
             return Ok(PublishOutput {
@@ -196,7 +222,7 @@ pub(super) fn publish_bounded(
             });
         }
         if shutdown_requested(shutdown_fd)? {
-            child.kill_group();
+            child.terminate();
             let _ = child.wait();
             let _ = stdin_writer.join();
             return Err(anyhow!("broker publication cancelled during shutdown"));
@@ -265,7 +291,8 @@ pub(super) fn run_bounded(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = ProcessGroupChild::new(command.spawn().context("broker helper spawn failed")?);
+    let mut child =
+        OwnedProcess::process_group(command.spawn().context("broker helper spawn failed")?);
     let mut stdin = child.child_mut().stdin.take();
     let stdout = child
         .child_mut()
@@ -300,11 +327,11 @@ pub(super) fn run_bounded(
     });
     let (status, timed_out, cancelled) = loop {
         if child_status_unreaped(child.child())?.is_some() {
-            child.kill_group();
+            child.terminate();
             break (child.wait()?, false, false);
         }
         if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
-            child.kill_group();
+            child.terminate();
             break (child.wait()?, true, false);
         }
         let cancelled = shutdown_requested(shutdown_fd)?;
@@ -312,7 +339,7 @@ pub(super) fn run_bounded(
             || stderr_overflow.load(Ordering::Acquire)
             || cancelled
         {
-            child.kill_group();
+            child.terminate();
             break (child.wait()?, false, cancelled);
         }
         std::thread::sleep(Duration::from_millis(5));

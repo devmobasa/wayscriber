@@ -22,6 +22,12 @@ selector.
 | Restart recovery | Capped queue/control/journal scans | New daemon generation | Prior open work rejected; committed work preserved as indeterminate |
 | Terminal collection | Admission, decision, and caller-lease locks | Command GC owner | Response, disposition, reconciliation, report, and lease predicates |
 
+The queue-reference rename is the command-admission point. Failures before it are definite
+publication failures. Failures while finalizing control state or releasing locks after it are
+reported as admitted-indeterminate, so callers do not retry a command that the daemon may execute.
+Expected claim or collection lock contention defers work to the protocol's durable retry deadline
+instead of terminating the daemon.
+
 The runtime record carries protocol versions, boot identity, time/PID namespace identities,
 process start ticks, and a CSPRNG instance token. Clients validate that identity against procfs and
 a pidfd before publishing work. Canonical JSON records reject unknown fields, non-canonical

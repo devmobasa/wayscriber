@@ -192,6 +192,8 @@ pub(super) struct WaylandState {
     pub(super) clipboard_publish: ClipboardOperationController<u64, ClipboardPublishCompletion>,
     pub(super) clipboard_paste:
         ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
+    pub(super) clipboard_hex_copy: ClipboardOperationController<String, Result<(), String>>,
+    pub(super) pending_hex_copy: Option<String>,
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
     pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,

@@ -273,6 +273,10 @@ pub(super) fn try_lock_until(
 }
 
 pub(super) fn admission_lock(root: &Path, deadline: BootDeadline) -> Result<File> {
+    try_admission_lock(root, deadline)?.ok_or_else(|| anyhow!("protocol lock deadline expired"))
+}
+
+pub(super) fn try_admission_lock(root: &Path, deadline: BootDeadline) -> Result<Option<File>> {
     let path = root.join("admission.lock");
     let file = match open_lock(&path, true) {
         Ok(file) => file,
@@ -285,8 +289,11 @@ pub(super) fn admission_lock(root: &Path, deadline: BootDeadline) -> Result<File
         }
         Err(error) => return Err(error),
     };
-    lock_until(&file, libc::LOCK_EX, deadline)?;
-    Ok(file)
+    if try_lock_until(&file, libc::LOCK_EX, deadline)? {
+        Ok(Some(file))
+    } else {
+        Ok(None)
+    }
 }
 
 pub(super) fn write_record<T: serde::Serialize>(path: &Path, value: &T, cap: usize) -> Result<()> {

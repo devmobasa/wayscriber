@@ -1,4 +1,5 @@
 use std::env;
+use std::time::Duration;
 
 use super::super::BootClock;
 use super::super::action::ActionJournal;
@@ -140,6 +141,163 @@ fn queue_rename_remains_the_enqueue_point_if_control_update_is_interrupted() {
         assert!(claimed.request().freeze);
         assert!(matches!(claimed.control().decision, CommandDecision::Open));
         claimed.defer().unwrap();
+    });
+}
+
+#[test]
+fn contended_published_command_claim_is_deferred_and_retried() {
+    with_runtime(|| {
+        let token = token();
+        let owner = CommandOwner::open(&token).unwrap();
+        let client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: true,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+        flock(&client.decision_lock, libc::LOCK_EX).unwrap();
+
+        assert!(owner.claim_next().unwrap().is_none());
+        let now = BootClock::now().unwrap();
+        let retry = owner
+            .next_maintenance_deadline()
+            .unwrap()
+            .expect("contended command claim must remain scheduled");
+        assert!(retry > now);
+        assert!(retry <= now.checked_add(Duration::from_millis(100)).unwrap());
+
+        unlock(&client.decision_lock).unwrap();
+        let claimed = owner.claim_next().unwrap().unwrap();
+        assert!(claimed.request().freeze);
+        claimed.defer().unwrap();
+    });
+}
+
+#[test]
+fn contended_ref_less_recovery_is_deferred_and_retried() {
+    with_runtime(|| {
+        let token = token();
+        let owner = CommandOwner::open(&token).unwrap();
+        let client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: Some("whiteboard".into()),
+                freeze: false,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+        let control = read_control(&client.control_path).unwrap();
+        fs::remove_file(queue_path(
+            &owner.root,
+            control.queue_order,
+            &control.identity,
+        ))
+        .unwrap();
+        flock(&client.decision_lock, libc::LOCK_EX).unwrap();
+
+        assert!(owner.claim_next().unwrap().is_none());
+        unlock(&client.decision_lock).unwrap();
+        let claimed = owner.claim_next().unwrap().unwrap();
+        assert_eq!(claimed.request().mode.as_deref(), Some("whiteboard"));
+        claimed.defer().unwrap();
+    });
+}
+
+#[test]
+fn terminal_collection_defers_while_admission_is_busy() {
+    with_runtime(|| {
+        let token = token();
+        let owner = CommandOwner::open(&token).unwrap();
+        let client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: false,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+        let mut claimed = owner.claim_next().unwrap().unwrap();
+        claimed.commit(EffectKind::NoOp).unwrap();
+        claimed.defer().unwrap();
+        drop(client);
+
+        let admission = open_lock(&owner.root.join("admission.lock"), false).unwrap();
+        flock(&admission, libc::LOCK_EX).unwrap();
+        assert_eq!(owner.collect_terminal().unwrap(), 0);
+        let now = BootClock::now().unwrap();
+        let retry = owner
+            .next_maintenance_deadline()
+            .unwrap()
+            .expect("deferred terminal collection must remain scheduled");
+        assert!(retry > now);
+        assert!(retry <= now.checked_add(Duration::from_millis(100)).unwrap());
+        unlock(&admission).unwrap();
+        assert_eq!(owner.collect_terminal().unwrap(), 1);
+    });
+}
+
+#[test]
+fn post_admission_finalization_failure_is_not_an_ordinary_publish_error() {
+    with_runtime(|| {
+        let token = token();
+        let owner = CommandOwner::open(&token).unwrap();
+        let publication = ClientCommand::publish_with_final_control_failure(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: true,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        );
+
+        assert!(
+            publication.is_ok(),
+            "a durably admitted command must not return an ordinary publication error"
+        );
+        let client = publication.unwrap();
+        let result = client.wait().unwrap();
+        assert!(matches!(
+            result,
+            TerminalCommandResult::AdmittedIndeterminate(reason)
+                if reason.contains("injected final control write failure")
+        ));
+        let now = BootClock::now().unwrap();
+        let retry = owner
+            .next_maintenance_deadline()
+            .unwrap()
+            .expect("admitted visible-unqueued command must remain scheduled");
+        assert!(retry > now);
+        assert!(retry <= now.checked_add(Duration::from_millis(100)).unwrap());
+        let mut claimed = owner.claim_next().unwrap().unwrap();
+        assert!(claimed.request().freeze);
+        claimed.commit(EffectKind::NoOp).unwrap();
+        claimed.defer().unwrap();
+        assert_eq!(owner.collect_terminal().unwrap(), 1);
     });
 }
 

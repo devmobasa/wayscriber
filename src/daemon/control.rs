@@ -182,18 +182,7 @@ pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Resul
                 &crate::daemon::protocol_v2::DaemonRequestV2::from(request),
                 &runtime.v2_instance_token,
             )?;
-            return match command.wait()? {
-                crate::daemon::protocol_v2::TerminalCommandResult::Succeeded => Ok(()),
-                crate::daemon::protocol_v2::TerminalCommandResult::Canceled => {
-                    Err(anyhow!("daemon command was canceled before any effect"))
-                }
-                crate::daemon::protocol_v2::TerminalCommandResult::FailedNoEffect(reason) => {
-                    Err(anyhow!(reason))
-                }
-                crate::daemon::protocol_v2::TerminalCommandResult::CommittedIndeterminate(
-                    reason,
-                ) => Err(anyhow!("daemon command outcome is indeterminate: {reason}")),
-            };
+            return finish_v2_command(command.wait()?);
         }
         crate::daemon::protocol_v2::ClassifiedRuntimeRecord::LegacyV1 { .. } => {}
     }
@@ -220,6 +209,26 @@ pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Resul
         wait_daemon_toggle_command_response(&command)?;
     }
     Ok(())
+}
+
+fn finish_v2_command(result: crate::daemon::protocol_v2::TerminalCommandResult) -> Result<()> {
+    match result {
+        crate::daemon::protocol_v2::TerminalCommandResult::Succeeded => Ok(()),
+        crate::daemon::protocol_v2::TerminalCommandResult::Canceled => {
+            Err(anyhow!("daemon command was canceled before any effect"))
+        }
+        crate::daemon::protocol_v2::TerminalCommandResult::FailedNoEffect(reason) => {
+            Err(anyhow!(reason))
+        }
+        crate::daemon::protocol_v2::TerminalCommandResult::AdmittedIndeterminate(reason) => {
+            Err(anyhow!(
+                "daemon command was admitted but its outcome is indeterminate; do not retry: {reason}"
+            ))
+        }
+        crate::daemon::protocol_v2::TerminalCommandResult::CommittedIndeterminate(reason) => {
+            Err(anyhow!("daemon command outcome is indeterminate: {reason}"))
+        }
+    }
 }
 
 pub(crate) fn send_daemon_overlay_action(action: TrayAction) -> Result<()> {
