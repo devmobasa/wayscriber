@@ -13,6 +13,44 @@ mod dispatch;
 mod render;
 pub(in crate::backend::wayland) mod session_save;
 
+const TRAY_ACTION_STARTUP_GRACE: Duration = Duration::from_millis(50);
+
+/// One-shot recovery scan for action publication racing overlay startup.
+/// Runtime SIGUSR2 delivery is wake-driven; this deadline never rearms.
+struct TrayActionStartupFallback {
+    startup_deadline: Option<Instant>,
+}
+
+impl TrayActionStartupFallback {
+    fn new(now: Instant) -> Self {
+        Self {
+            startup_deadline: Some(now.checked_add(TRAY_ACTION_STARTUP_GRACE).unwrap_or(now)),
+        }
+    }
+
+    fn timeout(&self, now: Instant) -> Option<Duration> {
+        self.startup_deadline
+            .map(|deadline| deadline.saturating_duration_since(now))
+    }
+
+    fn take_due(&mut self, now: Instant) -> bool {
+        let Some(deadline) = self.startup_deadline else {
+            return false;
+        };
+        if now < deadline {
+            return false;
+        }
+        self.startup_deadline = None;
+        true
+    }
+}
+
+fn process_tray_actions_and_sync(state: &mut WaylandState) {
+    if process_tray_action(state) {
+        state.sync_overlay_interactivity();
+    }
+}
+
 pub(super) struct EventLoopOutcome {
     pub(super) loop_error: Option<anyhow::Error>,
 }
@@ -39,11 +77,7 @@ pub(super) fn run_event_loop(
     // signal the installed listener and wake the shared runtime descriptor.
     let mut signals = match install_then_scan(
         || setup_signal_handlers(runtime_wake.handle()),
-        || {
-            if process_tray_action(state) {
-                state.sync_overlay_interactivity();
-            }
-        },
+        || process_tray_actions_and_sync(state),
     ) {
         Ok(signals) => Some(signals),
         Err(err) => {
@@ -54,6 +88,7 @@ pub(super) fn run_event_loop(
             None
         }
     };
+    let mut tray_action_fallback = TrayActionStartupFallback::new(Instant::now());
 
     // Track consecutive render failures for error recovery.
     let mut consecutive_render_failures = 0u32;
@@ -63,11 +98,9 @@ pub(super) fn run_event_loop(
 
     // Main event loop.
     while let Some(signal_state) = signals.as_mut() {
-        if let Some(failure) = terminal_signal_failure(signal_state, || {
-            if process_tray_action(state) {
-                state.sync_overlay_interactivity();
-            }
-        }) {
+        if let Some(failure) =
+            terminal_signal_failure(signal_state, || process_tray_actions_and_sync(state))
+        {
             loop_error = Some(failure);
             break;
         }
@@ -130,6 +163,7 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
+        let timeout = min_timeout(timeout, tray_action_fallback.timeout(Instant::now()));
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -142,6 +176,13 @@ pub(super) fn run_event_loop(
             state.reconcile_live_source_interaction_if_idle(
                 "post-dispatch interaction reconciliation",
             );
+        }
+
+        // Cover only the bounded startup publication window. Once this one-shot
+        // scan runs, SIGUSR2 plus the durable queue own subsequent delivery and
+        // the idle overlay can block without a periodic filesystem heartbeat.
+        if tray_action_fallback.take_due(Instant::now()) {
+            process_tray_actions_and_sync(state);
         }
 
         state.process_gtk_toolbar(conn, qh);
@@ -310,11 +351,12 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        finalize_event_loop, install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
+        TRAY_ACTION_STARTUP_GRACE, TrayActionStartupFallback, finalize_event_loop,
+        install_then_scan, min_timeout, should_defer_xdg_unfocused_exit,
     };
 
     #[test]
-    fn runtime_deadlines_merge_without_a_fallback_tick() {
+    fn runtime_deadlines_choose_the_earliest_deadline() {
         assert_eq!(
             min_timeout(
                 Some(Duration::from_secs(10)),
@@ -327,6 +369,22 @@ mod tests {
             Some(Duration::from_millis(1500))
         );
         assert_eq!(min_timeout(None, None), None);
+    }
+
+    #[test]
+    fn tray_action_fallback_scans_only_when_its_deadline_is_due() {
+        let started = std::time::Instant::now();
+        let mut fallback = TrayActionStartupFallback::new(started);
+
+        assert_eq!(fallback.timeout(started), Some(TRAY_ACTION_STARTUP_GRACE));
+        assert!(!fallback.take_due(started));
+        assert!(fallback.take_due(started + TRAY_ACTION_STARTUP_GRACE));
+        assert!(!fallback.take_due(started + TRAY_ACTION_STARTUP_GRACE));
+        assert_eq!(
+            fallback.timeout(started + TRAY_ACTION_STARTUP_GRACE),
+            None,
+            "the startup recovery deadline must become quiescent after one scan"
+        );
     }
 
     #[test]

@@ -144,13 +144,13 @@ impl WayscriberTray {
                 }
             } else {
                 // Overlay not running; request it to show so the action can run on startup.
-                self.toggle_flag.store(true, Ordering::Release);
+                self.request_toggle();
             }
         }
         #[cfg(not(unix))]
         {
             if pid == 0 {
-                self.toggle_flag.store(true, Ordering::Release);
+                self.request_toggle();
             } else {
                 warn!("Tray overlay actions are only supported on Unix platforms");
             }

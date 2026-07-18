@@ -7,9 +7,7 @@ use log::info;
 #[cfg(feature = "tray")]
 use log::{debug, warn};
 use std::sync::Arc;
-#[cfg(feature = "tray")]
-use std::sync::atomic::Ordering;
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::AtomicU32;
 #[cfg(feature = "tray")]
 use std::sync::mpsc;
 use std::thread;
@@ -19,10 +17,11 @@ use std::time::Duration;
 #[cfg(feature = "tray")]
 use zbus::{Connection, Proxy};
 
+use super::super::types::DaemonControlEvent;
 #[cfg(feature = "tray")]
 use super::super::types::TrayStatusShared;
 #[cfg(feature = "tray")]
-use super::WayscriberTray;
+use super::{TrayControl, WayscriberTray};
 #[cfg(feature = "tray")]
 use crate::config::{Config, TrayIconStyle};
 #[cfg(feature = "tray")]
@@ -91,8 +90,8 @@ pub(super) fn update_session_resume_in_config(target_enabled: bool, fallback: bo
 /// System tray implementation
 #[cfg(feature = "tray")]
 pub(crate) fn start_system_tray(
-    toggle_flag: Arc<AtomicBool>,
-    quit_flag: Arc<AtomicBool>,
+    toggle: DaemonControlEvent,
+    quit: DaemonControlEvent,
     overlay_pid: Arc<AtomicU32>,
     tray_status: Arc<TrayStatusShared>,
 ) -> Result<JoinHandle<()>> {
@@ -100,10 +99,12 @@ pub(crate) fn start_system_tray(
         std::env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
     let (session_resume_enabled, icon_style) = load_tray_settings_from_config();
 
-    let tray_quit_flag = quit_flag.clone();
+    let tray_quit = quit.clone();
     let tray = WayscriberTray::new(
-        toggle_flag,
-        tray_quit_flag.clone(),
+        TrayControl {
+            toggle,
+            quit: quit.clone(),
+        },
         configurator_binary,
         session_resume_enabled,
         icon_style,
@@ -150,7 +151,7 @@ pub(crate) fn start_system_tray(
                             }
                             last_revision = revision;
                         }
-                        if tray_quit_flag.load(Ordering::Acquire) {
+                        if tray_quit.is_raised() {
                             info!("Quit signal received - shutting down system tray");
                             let _ = handle.shutdown().await;
                             break;
@@ -176,7 +177,7 @@ pub(crate) fn start_system_tray(
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
             warn!("Timed out waiting for system tray to start");
-            quit_flag.store(true, Ordering::Release);
+            quit.raise("tray startup timeout");
             let _ = tray_thread.join();
             Err(anyhow!("Timed out waiting for system tray to start"))
         }
@@ -191,8 +192,8 @@ pub(crate) fn start_system_tray(
 
 #[cfg(not(feature = "tray"))]
 pub(crate) fn start_system_tray(
-    _toggle_flag: Arc<AtomicBool>,
-    _quit_flag: Arc<AtomicBool>,
+    _toggle: DaemonControlEvent,
+    _quit: DaemonControlEvent,
     _overlay_pid: Arc<AtomicU32>,
     _tray_status: (),
 ) -> Result<JoinHandle<()>> {

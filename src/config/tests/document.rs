@@ -122,6 +122,66 @@ future_output_policy = "keep"
 }
 
 #[test]
+fn document_load_and_save_tolerates_future_keys_in_strict_export_tables() {
+    let temp = TempConfig::new("future-export-keys");
+    let original = r#"config_revision = 1
+[export]
+future_format = "svg"
+
+[export.pdf]
+page_size = "a4"
+future_bleed = 12.5
+
+[export.pdf.labels]
+enabled = true
+future_font_weight = 600
+"#;
+    temp.write(original);
+
+    let document = ConfigDocument::load_from_path(&temp.path)
+        .expect("future export settings remain editor-compatible");
+    let paths = diagnostic_paths(&document);
+    for expected in [
+        "export.future_format",
+        "export.pdf.future_bleed",
+        "export.pdf.labels.future_font_weight",
+    ] {
+        assert!(
+            paths.iter().any(|path| path.ends_with(expected)),
+            "missing diagnostic for {expected}: {paths:?}"
+        );
+    }
+
+    document
+        .save_with_backup(document.config().clone())
+        .expect("save config with future export settings");
+
+    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+}
+
+#[test]
+fn no_op_save_removes_known_option_discarded_by_validation() {
+    let temp = TempConfig::new("validated-away-known-option");
+    temp.write(
+        r#"config_revision = 1
+[render_profiles]
+active = "missing"
+future_profile_policy = "keep"
+"#,
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load render profiles");
+    assert!(document.config().render_profiles.active.is_none());
+
+    document
+        .save_with_backup(document.config().clone())
+        .expect("save validated render profiles");
+
+    let saved = fs::read_to_string(&temp.path).expect("read validated render profiles");
+    assert!(!saved.contains("active ="));
+    assert!(saved.contains("future_profile_policy = \"keep\""));
+}
+
+#[test]
 fn no_op_save_does_not_materialize_omitted_defaults() {
     let temp = TempConfig::new("omitted-defaults");
     let original =
@@ -417,6 +477,95 @@ future_owner = "owner-b"
     assert_eq!(profiles[0]["future_owner"].as_str(), Some("owner-b"));
     assert_eq!(profiles[1]["id"].as_str(), Some("a"));
     assert_eq!(profiles[1]["future_owner"].as_str(), Some("owner-a"));
+}
+
+#[test]
+fn no_op_save_preserves_separated_array_table_positions() {
+    let temp = TempConfig::new("separated-array-table-positions");
+    let original = r#"config_revision = 1
+[[render_profiles.profiles]]
+id = "first"
+name = "First"
+
+[performance]
+max_fps_no_vsync = 144
+
+[[render_profiles.profiles]]
+id = "second"
+name = "Second"
+"#;
+    temp.write(original);
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load separated profiles");
+
+    document
+        .save_with_backup(document.config().clone())
+        .expect("save separated profiles without changes");
+
+    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+}
+
+#[test]
+fn no_op_save_preserves_separated_nested_array_table_positions() {
+    let temp = TempConfig::new("separated-nested-array-table-positions");
+    let original = r##"config_revision = 1
+[[render_profiles.profiles]]
+id = "first"
+name = "First"
+
+[performance]
+max_fps_no_vsync = 144
+
+[[render_profiles.profiles.mappings]]
+from = "#111111"
+to = "#AAAAAA"
+"##;
+    temp.write(original);
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load separated mapping");
+
+    document
+        .save_with_backup(document.config().clone())
+        .expect("save separated mapping without changes");
+
+    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+}
+
+#[test]
+fn adding_nested_array_table_keeps_it_with_the_edited_parent() {
+    let temp = TempConfig::new("added-nested-array-table-position");
+    temp.write(
+        r#"config_revision = 1
+[[render_profiles.profiles]]
+id = "first"
+name = "First"
+
+[performance]
+max_fps_no_vsync = 144
+
+[[render_profiles.profiles]]
+id = "second"
+name = "Second"
+"#,
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load separated profiles");
+    let mut updated = document.config().clone();
+    updated.render_profiles.profiles[0]
+        .mappings
+        .push(RenderColorMappingConfig {
+            from: "#111111".to_string(),
+            to: "#AAAAAA".to_string(),
+        });
+
+    document
+        .save_with_backup(updated)
+        .expect("save added nested mapping");
+
+    let saved = fs::read_to_string(&temp.path).expect("read profiles with nested mapping");
+    let value: toml::Value = toml::from_str(&saved).expect("parse profiles with nested mapping");
+    let profiles = value["render_profiles"]["profiles"]
+        .as_array()
+        .expect("profiles array");
+    assert_eq!(profiles[0]["mappings"].as_array().unwrap().len(), 1);
+    assert!(profiles[1].get("mappings").is_none());
 }
 
 #[test]

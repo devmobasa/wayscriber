@@ -90,11 +90,21 @@ where
 
     publish_registered_signals(signals);
     SIGNAL_WRITE_FD.store(write_fd.as_raw_fd(), Ordering::Release);
+    // The registered slots and stable self-pipe are ready before any custom
+    // handler is installed. Admit each handler immediately so signals cannot
+    // disappear between sigaction and listener-thread startup.
+    publish_listener_active(epoch);
 
     let mut installed_handlers = Vec::with_capacity(signals.len());
     for &signal in signals {
         match install_handler(signal) {
-            Ok(previous) => installed_handlers.push((signal, previous)),
+            Ok(previous) => {
+                installed_handlers.push((signal, previous));
+                #[cfg(test)]
+                super::test_hooks::pause_if_requested(
+                    super::test_hooks::PAUSE_AFTER_HANDLER_INSTALL,
+                );
+            }
             Err(err) => {
                 rollback_setup(epoch, &installed_handlers);
                 return Err(err);
@@ -125,7 +135,6 @@ where
         }
     };
 
-    publish_listener_active(epoch);
     Ok(SignalListener {
         epoch,
         thread: Some(thread),
@@ -138,10 +147,17 @@ where
 }
 
 fn rollback_setup(epoch: u64, installed_handlers: &[(libc::c_int, libc::sigaction)]) {
+    // Setup owns this epoch and published it active before installing handlers.
+    // Closing the gate first prevents new admissions while the old actions and
+    // descriptors are restored.
+    if let Err(err) = begin_listener_teardown(epoch) {
+        log::error!("Signal listener setup rollback could not close its admission gate: {err}");
+    }
     restore_handlers(installed_handlers);
+    wait_for_admitted_handlers();
     SIGNAL_WRITE_FD.store(-1, Ordering::Release);
     clear_registered_signals();
-    rollback_listener_reservation(epoch);
+    finish_listener_teardown(epoch);
 }
 
 impl SignalListener {
