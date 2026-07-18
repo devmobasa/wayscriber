@@ -368,10 +368,6 @@ pub(super) async fn wait_for_presented_transparency_until(
     // confirm one native surface at a time so each counter has one source.
     let proof_started = Instant::now();
     for (ordinal, target) in targets.iter().enumerate() {
-        if target.is_withdrawn() {
-            handle_withdrawn_target(generation, target, started);
-            continue;
-        }
         wait_for_surface_presentation(
             generation,
             target,
@@ -402,10 +398,7 @@ async fn wait_for_surface_presentation(
 ) -> Result<(), String> {
     let name = target.name;
     let widget = &target.widget;
-    if target.is_withdrawn() {
-        handle_withdrawn_target(generation, target, started);
-        return Ok(());
-    }
+    reject_withdrawn_target(generation, target, started)?;
     let frame_clock = widget.frame_clock().ok_or_else(|| {
         format!(
             "GTK capture suppression generation {generation} found no frame clock for mapped {name}"
@@ -429,10 +422,7 @@ async fn wait_for_surface_presentation(
     });
 
     while rendered_counter.get().is_none() {
-        if target.is_withdrawn() {
-            handle_withdrawn_target(generation, target, started);
-            return Ok(());
-        }
+        reject_withdrawn_target(generation, target, started)?;
         if proof_started.elapsed() >= CAPTURE_PAINT_TIMEOUT || Instant::now() >= deadline {
             return Err(format!(
                 "GTK capture suppression generation {generation} timed out waiting for a dedicated transparent render from {name}"
@@ -450,10 +440,7 @@ async fn wait_for_surface_presentation(
     );
 
     loop {
-        if target.is_withdrawn() {
-            handle_withdrawn_target(generation, target, started);
-            return Ok(());
-        }
+        reject_withdrawn_target(generation, target, started)?;
         let timings = frame_clock.timings(frame_counter);
         let state = capture_presentation_state(
             timings
@@ -483,13 +470,29 @@ async fn wait_for_surface_presentation(
     }
 }
 
-fn handle_withdrawn_target(generation: u64, target: &CaptureProofTarget, started: Instant) {
+/// Unmapping is not proof of transparency: a compositor may animate the
+/// popup's last visible buffer after GTK withdraws its surface. Only a target
+/// that reaches compositor presentation may leave the barrier successfully.
+fn reject_withdrawn_target(
+    generation: u64,
+    target: &CaptureProofTarget,
+    started: Instant,
+) -> Result<(), String> {
+    if !target.is_withdrawn() {
+        return Ok(());
+    }
+
     target.mark_withdrawn();
-    log::info!(
-        "capture.preflight id={generation} component=gtk surface={} phase=withdrawn elapsed_ms={}",
+    let error = format!(
+        "GTK capture suppression generation {generation} cannot prove {} safe after it was withdrawn before transparent presentation",
+        target.name
+    );
+    log::warn!(
+        "capture.preflight id={generation} component=gtk surface={} phase=withdrawn-before-proof elapsed_ms={} error={error}",
         target.name,
         started.elapsed().as_millis()
     );
+    Err(error)
 }
 
 #[cfg(test)]
@@ -679,13 +682,17 @@ mod tests {
             &capture.inner.content,
             move || withdrawn_callback.set(true),
         );
-        gtk4::glib::MainContext::default()
+        let error = gtk4::glib::MainContext::default()
             .block_on(wait_for_presented_transparency_until(
                 90,
                 vec![closed_target],
                 Instant::now() + Duration::from_millis(20),
             ))
-            .expect("an unmapped native popup is safely withdrawn");
+            .expect_err("an unproven withdrawn popup must cancel capture");
+        assert!(
+            error.contains("withdrawn before transparent presentation"),
+            "unexpected withdrawal error: {error}"
+        );
         assert!(withdrawn.get());
 
         // Exercise the production discovery path across a main-context yield.
