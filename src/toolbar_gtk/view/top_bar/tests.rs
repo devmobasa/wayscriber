@@ -676,9 +676,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             )
         })
         .collect::<Vec<_>>();
-    if model::fill_tool_active(shapes.active_tool, shapes.tool_override)
-        && model::top_fill_visible(&shapes)
-    {
+    if model::top_fill_visible(&shapes) {
         expected_shape_ids.push(
             crate::config::toolbar_item_ids::TOP_UTILITY_FILL
                 .as_str()
@@ -719,6 +717,25 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             event: ToolbarEvent::SelectTool(shape_tools[0]),
             rebind_requested: false,
         }
+    );
+
+    let mut line_shapes = shapes.clone();
+    line_shapes.active_tool = Tool::Line;
+    line_shapes.tool_override = None;
+    let line_shape_content = shape_top.build_shapes_popover_content(
+        &line_shapes,
+        (ICON_BUTTON, ICON_BUTTON),
+        ICON_SIZE,
+        true,
+        1.0,
+    );
+    assert!(
+        collect_semantic_widgets(line_shape_content.upcast_ref())
+            .iter()
+            .any(|widget| {
+                widget.widget_name() == crate::config::toolbar_item_ids::TOP_UTILITY_FILL.as_str()
+            }),
+        "GTK Shapes must expose Fill before a fill-capable shape is selected"
     );
 
     let mut overflow_plan = TopStripPlan::unconstrained();

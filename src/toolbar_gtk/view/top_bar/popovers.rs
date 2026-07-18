@@ -262,9 +262,7 @@ impl TopBar {
 
         // Option rows: Fill and polygon sides live inside the popover, so
         // using them must not close it (GTK popovers keep inside clicks).
-        let fill_tool_active =
-            model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-        if fill_tool_active && model::top_fill_visible(snapshot) {
+        if model::top_fill_visible(snapshot) {
             let fill = gtk4::CheckButton::with_label(action_short_label(Action::ToggleFill));
             set_semantic_widget_id(
                 &fill,
