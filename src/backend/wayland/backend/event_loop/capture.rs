@@ -69,6 +69,8 @@ pub(super) fn handle_pending_actions(
     state.apply_capture_completion();
     state.poll_clipboard_publish_completion();
     state.poll_clipboard_paste_completion();
+    state.poll_hex_copy_completion();
+    state.poll_session_file_dialog_completion(qh);
     state.drain_clipboard_requests();
     state.handle_pending_eyedropper_toggle();
     handle_frozen_toggle(state);

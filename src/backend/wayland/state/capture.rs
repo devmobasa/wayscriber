@@ -4,14 +4,18 @@ use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
 mod backdrop;
 mod pdf;
 
+fn should_exit_after_capture(mode: ExitAfterCaptureMode, destination: CaptureDestination) -> bool {
+    let is_clipboard_only = matches!(destination, CaptureDestination::ClipboardOnly);
+    match mode {
+        ExitAfterCaptureMode::Always => true,
+        ExitAfterCaptureMode::Never => false,
+        ExitAfterCaptureMode::Auto => is_clipboard_only,
+    }
+}
+
 impl WaylandState {
     fn should_exit_after_capture(&self, destination: CaptureDestination) -> bool {
-        let is_clipboard_only = matches!(destination, CaptureDestination::ClipboardOnly);
-        match self.exit_after_capture_mode {
-            ExitAfterCaptureMode::Always => true,
-            ExitAfterCaptureMode::Never => false,
-            ExitAfterCaptureMode::Auto => is_clipboard_only,
-        }
+        should_exit_after_capture(self.exit_after_capture_mode, destination)
     }
 
     pub(in crate::backend::wayland) fn apply_capture_completion(&mut self) {
@@ -337,5 +341,26 @@ impl WaylandState {
             crate::input::state::UiToastKind::Error,
             format!("{} failed: {error}", operation.saved_log_label()),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_exit_mode_exits_after_clipboard_only_capture() {
+        assert!(should_exit_after_capture(
+            ExitAfterCaptureMode::Auto,
+            CaptureDestination::ClipboardOnly
+        ));
+        assert!(!should_exit_after_capture(
+            ExitAfterCaptureMode::Auto,
+            CaptureDestination::FileOnly
+        ));
+        assert!(!should_exit_after_capture(
+            ExitAfterCaptureMode::Auto,
+            CaptureDestination::ClipboardAndFile
+        ));
     }
 }

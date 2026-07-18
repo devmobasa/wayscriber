@@ -125,6 +125,7 @@ impl RuntimeWakeSource {
     }
 
     /// Waits for and drains this eventfd. `None` blocks until a producer wake.
+    #[cfg(test)]
     pub(crate) fn wait_readable(&self, timeout: Option<Duration>) -> io::Result<bool> {
         let readable = poll_with_retry(timeout, |timeout_ms| {
             let mut pollfd = libc::pollfd {

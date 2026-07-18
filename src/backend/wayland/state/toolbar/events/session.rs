@@ -108,7 +108,7 @@ fn recent_session_snapshots(
 
 mod dialog;
 
-use dialog::choose_session_file;
+pub(in crate::backend::wayland::state) use dialog::SessionFileDialogController;
 pub(super) use dialog::{SessionFileDialogMode, ensure_save_as_extension};
 #[cfg(test)]
 pub(super) use dialog::{
@@ -161,19 +161,24 @@ impl WaylandState {
             .map(crate::session::SessionOptions::session_file_path)
     }
 
-    fn choose_session_file_with_overlay_suppressed(
+    fn start_session_file_dialog_with_overlay_suppressed(
         &mut self,
         mode: SessionFileDialogMode,
         current_path: Option<&Path>,
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
-    ) -> Result<Option<PathBuf>> {
+    ) -> Result<()> {
         let suppressed = self.enter_external_dialog_suppression(conn, qh)?;
-        let result = choose_session_file(mode, current_path);
-        if suppressed {
-            self.exit_external_dialog_suppression(conn, qh)?;
+        if let Err(error) = self
+            .session_dialog
+            .start(mode, current_path.map(Path::to_path_buf))
+        {
+            if suppressed {
+                self.exit_external_dialog_suppression(conn, qh)?;
+            }
+            return Err(error);
         }
-        result
+        Ok(())
     }
 
     fn enter_external_dialog_suppression(
@@ -228,15 +233,13 @@ impl WaylandState {
     ) {
         self.clear_toolbar_save_as_overwrite_prompt();
         let current_path = self.current_session_file_path();
-        match self.choose_session_file_with_overlay_suppressed(
+        if let Err(err) = self.start_session_file_dialog_with_overlay_suppressed(
             SessionFileDialogMode::Open,
             current_path.as_deref(),
             conn,
             qh,
         ) {
-            Ok(Some(path)) => self.handle_toolbar_open_session_path(&path),
-            Ok(None) => {}
-            Err(err) => self.set_session_toolbar_error(format!("Open session failed: {err:#}")),
+            self.set_session_toolbar_error(format!("Open session failed: {err:#}"));
         }
     }
 
@@ -274,35 +277,66 @@ impl WaylandState {
     ) {
         self.clear_toolbar_save_as_overwrite_prompt();
         let current_path = self.current_session_file_path();
-        match self.choose_session_file_with_overlay_suppressed(
+        if let Err(err) = self.start_session_file_dialog_with_overlay_suppressed(
             SessionFileDialogMode::SaveAs,
             current_path.as_deref(),
             conn,
             qh,
         ) {
-            Ok(Some(path)) => {
-                let path = ensure_save_as_extension(path);
-                match self.save_named_session_as_requires_overwrite(&path) {
-                    Ok(true) => {
-                        self.input_state.set_pending_save_as_overwrite(path.clone());
-                        self.set_session_toolbar_info(format!(
-                            "Replace existing session {}?",
-                            session_display_name(&path)
-                        ));
-                    }
-                    Ok(false) => {
-                        self.commit_toolbar_save_session_as(
-                            &path,
-                            crate::session::SaveAsOverwrite::Deny,
-                        );
-                    }
-                    Err(err) => {
-                        self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
-                    }
-                }
+            self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
+        }
+    }
+
+    pub(in crate::backend::wayland) fn poll_session_file_dialog_completion(
+        &mut self,
+        qh: &QueueHandle<Self>,
+    ) {
+        let completion = match self.session_dialog.try_receive() {
+            Ok(Some(completion)) => completion,
+            Ok(None) => return,
+            Err(error) => {
+                let _ = self.exit_external_dialog_suppression(None, Some(qh));
+                self.set_session_toolbar_error(format!("Session dialog failed: {error:#}"));
+                return;
             }
-            Ok(None) => {}
-            Err(err) => self.set_session_toolbar_error(format!("Save session failed: {err:#}")),
+        };
+        if let Err(error) = self.exit_external_dialog_suppression(None, Some(qh)) {
+            self.set_session_toolbar_error(format!("Session dialog restoration failed: {error:#}"));
+            return;
+        }
+        match (completion.mode, completion.result) {
+            (SessionFileDialogMode::Open, Ok(Some(path))) => {
+                self.handle_toolbar_open_session_path(&path)
+            }
+            (SessionFileDialogMode::Open, Ok(None)) | (SessionFileDialogMode::SaveAs, Ok(None)) => {
+            }
+            (SessionFileDialogMode::Open, Err(error)) => {
+                self.set_session_toolbar_error(format!("Open session failed: {error}"));
+            }
+            (SessionFileDialogMode::SaveAs, Err(error)) => {
+                self.set_session_toolbar_error(format!("Save session failed: {error}"));
+            }
+            (SessionFileDialogMode::SaveAs, Ok(Some(path))) => {
+                self.handle_selected_save_as_path(ensure_save_as_extension(path));
+            }
+        }
+    }
+
+    fn handle_selected_save_as_path(&mut self, path: PathBuf) {
+        match self.save_named_session_as_requires_overwrite(&path) {
+            Ok(true) => {
+                self.input_state.set_pending_save_as_overwrite(path.clone());
+                self.set_session_toolbar_info(format!(
+                    "Replace existing session {}?",
+                    session_display_name(&path)
+                ));
+            }
+            Ok(false) => {
+                self.commit_toolbar_save_session_as(&path, crate::session::SaveAsOverwrite::Deny)
+            }
+            Err(err) => {
+                self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
+            }
         }
     }
 

@@ -6,6 +6,7 @@ use crate::durable_io::AtomicWriteOptions;
 use crate::paths::{daemon_command_dir, daemon_command_file};
 use anyhow::{Context, Result, anyhow};
 use log::warn;
+use std::ffi::OsStr;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -19,11 +20,93 @@ pub(super) fn clear_file(path: &std::path::Path) -> Result<()> {
     }
 }
 
-fn clear_dir(path: &std::path::Path) -> Result<()> {
-    match fs::remove_dir_all(path) {
+fn is_legacy_request_name(name: &OsStr) -> bool {
+    let Some(name) = name.to_str() else {
+        return false;
+    };
+    let Some((stem, extension)) = name.rsplit_once('.') else {
+        return false;
+    };
+    if extension != "json" || stem.len() != 41 {
+        return false;
+    }
+    let bytes = stem.as_bytes();
+    bytes[32] == b'-'
+        && bytes[..32]
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        && bytes[33..]
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
+fn remove_legacy_entries(dir: &Path) -> Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(err) => {
+            return Err(err).with_context(|| format!("failed to read {}", dir.display()));
+        }
+    };
+
+    for entry in entries {
+        let entry = entry.with_context(|| format!("failed to read entry in {}", dir.display()))?;
+        if !is_legacy_request_name(&entry.file_name()) {
+            continue;
+        }
+        let file_type = entry.file_type().with_context(|| {
+            format!(
+                "failed to inspect legacy daemon entry {}",
+                entry.path().display()
+            )
+        })?;
+        if file_type.is_dir() {
+            return Err(anyhow!(
+                "legacy daemon entry {} is unexpectedly a directory",
+                entry.path().display()
+            ));
+        }
+        clear_file(&entry.path())?;
+    }
+    Ok(())
+}
+
+fn clear_legacy_command_files() -> Result<()> {
+    let dir = daemon_command_dir();
+    remove_legacy_entries(&dir)?;
+
+    let responses = dir.join("responses");
+    match fs::symlink_metadata(&responses) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+            remove_legacy_entries(&responses)?;
+            match fs::remove_dir(&responses) {
+                Ok(()) => {}
+                Err(err) if err.kind() == ErrorKind::NotFound => {}
+                Err(err) if err.kind() == ErrorKind::DirectoryNotEmpty => {}
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("failed to remove empty {}", responses.display())
+                    });
+                }
+            }
+        }
+        Ok(_) => {
+            return Err(anyhow!(
+                "daemon response path {} is not a regular directory",
+                responses.display()
+            ));
+        }
+        Err(err) if err.kind() == ErrorKind::NotFound => {}
+        Err(err) => {
+            return Err(err).with_context(|| format!("failed to inspect {}", responses.display()));
+        }
+    }
+
+    match fs::remove_dir(&dir) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(err).with_context(|| format!("failed to remove {}", path.display())),
+        Err(err) if err.kind() == ErrorKind::DirectoryNotEmpty => Ok(()),
+        Err(err) => Err(err).with_context(|| format!("failed to remove empty {}", dir.display())),
     }
 }
 
@@ -59,7 +142,7 @@ pub(super) fn write_file_atomic(path: &std::path::Path, payload: &[u8]) -> Resul
 
 pub(crate) fn clear_daemon_toggle_request_file() -> Result<()> {
     clear_file(&daemon_command_file())?;
-    clear_dir(&daemon_command_dir())
+    clear_legacy_command_files()
 }
 
 pub(super) fn write_daemon_toggle_request(

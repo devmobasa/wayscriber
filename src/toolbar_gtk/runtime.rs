@@ -6,7 +6,7 @@ use gtk4::glib;
 use std::future::Future;
 
 use super::GtkToolbarUpdate;
-use super::bridge::{BridgeHealth, FeedbackPublisher};
+use super::bridge::{BridgeHealth, FeedbackPublisher, LatestValueReceiver};
 
 /// Flags the bridge as failed unless the shutdown was the clean
 /// channel-close path. The update task is supervised separately so both task
@@ -40,7 +40,7 @@ impl Drop for FailureGuard {
 }
 
 pub(super) fn run(
-    updates: async_channel::Receiver<GtkToolbarUpdate>,
+    mut updates: LatestValueReceiver<GtkToolbarUpdate>,
     feedback: FeedbackPublisher,
     health: BridgeHealth,
 ) {
@@ -81,7 +81,7 @@ pub(super) fn run(
         &glib::MainContext::default(),
         async move {
             let mut windows: Option<super::view::Windows> = None;
-            while let Ok(update) = updates.recv().await {
+            while let Some(update) = updates.recv().await {
                 windows
                     .get_or_insert_with(|| {
                         super::view::Windows::new(super::widgets::FeedbackSender::new(

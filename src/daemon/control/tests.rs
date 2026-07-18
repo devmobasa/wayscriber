@@ -77,6 +77,23 @@ fn session_file_request_rejects_relative_path() {
 }
 
 #[test]
+fn admitted_indeterminate_v2_result_warns_callers_not_to_retry() {
+    let error = finish_v2_command(
+        crate::daemon::protocol_v2::TerminalCommandResult::AdmittedIndeterminate(
+            "final control publication failed".into(),
+        ),
+    )
+    .unwrap_err();
+
+    assert!(
+        format!("{error:#}").contains(
+            "daemon command was admitted but its outcome is indeterminate; do not retry: final control publication failed"
+        ),
+        "{error:#}"
+    );
+}
+
+#[test]
 fn daemon_toggle_response_round_trips_error_and_is_removed_after_wait() {
     let tmp = crate::test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {
@@ -246,6 +263,60 @@ fn stale_cleanup_removes_matching_runtime_while_lock_is_free() {
 
     assert!(!daemon_pid_file().exists());
     assert!(!daemon_command_dir().exists());
+
+    match prev {
+        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
+        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    }
+}
+
+#[test]
+fn stale_cleanup_removes_only_legacy_commands_and_preserves_versioned_state() {
+    let _guard = crate::test_env::lock();
+    let tmp = crate::test_temp::tempdir().unwrap();
+    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    unsafe {
+        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
+    }
+
+    let runtime = DaemonRuntimeInfo {
+        pid: 1234,
+        token: Some("old-token".into()),
+    };
+    write_daemon_pid_file(runtime.pid, runtime.token.as_deref().unwrap()).unwrap();
+    let command = write_daemon_toggle_request(
+        &DaemonToggleRequest {
+            freeze: true,
+            ..Default::default()
+        },
+        "old-token",
+    )
+    .unwrap();
+    write_daemon_toggle_command_success(&command).unwrap();
+
+    let versioned_sentinel = daemon_command_dir()
+        .join("v2")
+        .join("controls")
+        .join("sentinel");
+    fs::create_dir_all(versioned_sentinel.parent().unwrap()).unwrap();
+    fs::write(&versioned_sentinel, b"unresolved-v2-state").unwrap();
+    let noncanonical_v1_sentinel =
+        daemon_command_dir().join("0000000000000000000000000000000A-00000001.json");
+    fs::write(&noncanonical_v1_sentinel, b"not-a-canonical-v1-request").unwrap();
+
+    clear_stale_daemon_state_if_matches(&runtime);
+
+    assert!(!daemon_pid_file().exists());
+    assert!(!command.request_path.exists());
+    assert!(!command.response_path.exists());
+    assert_eq!(
+        fs::read(&versioned_sentinel).unwrap(),
+        b"unresolved-v2-state"
+    );
+    assert_eq!(
+        fs::read(&noncanonical_v1_sentinel).unwrap(),
+        b"not-a-canonical-v1-request"
+    );
 
     match prev {
         Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },

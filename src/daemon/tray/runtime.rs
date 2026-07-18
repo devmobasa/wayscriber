@@ -7,7 +7,7 @@ use log::info;
 #[cfg(feature = "tray")]
 use log::{debug, warn};
 use std::sync::Arc;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicBool;
 #[cfg(feature = "tray")]
 use std::sync::mpsc;
 use std::thread;
@@ -17,9 +17,9 @@ use std::time::Duration;
 #[cfg(feature = "tray")]
 use zbus::{Connection, Proxy};
 
-use super::super::types::DaemonControlEvent;
 #[cfg(feature = "tray")]
 use super::super::types::TrayStatusShared;
+use super::super::types::{DaemonControlEvent, OverlayActionPublisher, VisibilityPublisher};
 #[cfg(feature = "tray")]
 use super::{TrayControl, WayscriberTray};
 #[cfg(feature = "tray")]
@@ -90,9 +90,10 @@ pub(super) fn update_session_resume_in_config(target_enabled: bool, fallback: bo
 /// System tray implementation
 #[cfg(feature = "tray")]
 pub(crate) fn start_system_tray(
-    toggle: DaemonControlEvent,
+    visibility: VisibilityPublisher,
+    action: OverlayActionPublisher,
     quit: DaemonControlEvent,
-    overlay_pid: Arc<AtomicU32>,
+    overlay_active: Arc<AtomicBool>,
     tray_status: Arc<TrayStatusShared>,
 ) -> Result<JoinHandle<()>> {
     let configurator_binary =
@@ -102,13 +103,14 @@ pub(crate) fn start_system_tray(
     let tray_quit = quit.clone();
     let tray = WayscriberTray::new(
         TrayControl {
-            toggle,
+            visibility,
+            action,
             quit: quit.clone(),
         },
         configurator_binary,
         session_resume_enabled,
         icon_style,
-        overlay_pid,
+        overlay_active,
         tray_status.clone(),
     );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
@@ -177,7 +179,9 @@ pub(crate) fn start_system_tray(
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
             warn!("Timed out waiting for system tray to start");
-            quit.raise("tray startup timeout");
+            if let Err(error) = quit.raise("tray startup timeout") {
+                warn!("Failed to wake daemon after tray startup timeout: {error}");
+            }
             let _ = tray_thread.join();
             Err(anyhow!("Timed out waiting for system tray to start"))
         }
@@ -192,9 +196,10 @@ pub(crate) fn start_system_tray(
 
 #[cfg(not(feature = "tray"))]
 pub(crate) fn start_system_tray(
-    _toggle: DaemonControlEvent,
+    _visibility: VisibilityPublisher,
+    _action: OverlayActionPublisher,
     _quit: DaemonControlEvent,
-    _overlay_pid: Arc<AtomicU32>,
+    _overlay_active: Arc<AtomicBool>,
     _tray_status: (),
 ) -> Result<JoinHandle<()>> {
     info!("Tray feature disabled; skipping system tray startup");

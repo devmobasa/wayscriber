@@ -1,22 +1,48 @@
 use tokio::task;
 
 use crate::capture::types::CaptureError;
+use crate::process_broker::{HelperKind, current};
+use std::ffi::OsStr;
+use std::time::Duration;
+
+// Large, noisy multi-monitor PNGs can exceed the former 16 MiB transport cap.
+// Keep capture bounded while allowing several uncompressed 8K-sized frames.
+const CAPTURE_OUTPUT_CAP: usize = 256 * 1024 * 1024;
+
+fn run_helper(
+    kind: HelperKind,
+    program: &str,
+    arguments: &[&str],
+    timeout: Duration,
+    output_cap: usize,
+) -> Result<crate::process_broker::BrokerOutput, CaptureError> {
+    current()
+        .and_then(|broker| {
+            broker.run(
+                kind,
+                OsStr::new(program),
+                arguments.iter().map(OsStr::new),
+                Vec::new(),
+                timeout,
+                output_cap,
+            )
+        })
+        .map_err(|error| CaptureError::ImageError(format!("failed to run {program}: {error:#}")))
+}
 
 /// Capture the entire Wayland scene using `grim`.
 pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
     task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
-        use std::process::{Command, Stdio};
-
         log::debug!("Capturing full screen via grim");
-        let output = Command::new("grim")
-            .arg("-")
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|e| {
-                CaptureError::ImageError(format!("Failed to run grim for full screen: {}", e))
-            })?;
+        let output = run_helper(
+            HelperKind::Grim,
+            "grim",
+            &["-"],
+            Duration::from_secs(30),
+            CAPTURE_OUTPUT_CAP,
+        )?;
 
-        if !output.status.success() {
+        if output.timed_out || output.status != 0 {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(CaptureError::ImageError(format!(
                 "grim full screen capture failed: {}",
@@ -42,18 +68,17 @@ pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
 pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
     task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
         use serde_json::Value;
-        use std::process::{Command, Stdio};
 
         // Query Hyprland for the active window geometry
-        let output = Command::new("hyprctl")
-            .args(["activewindow", "-j"])
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|e| {
-                CaptureError::ImageError(format!("Failed to run hyprctl activewindow: {}", e))
-            })?;
+        let output = run_helper(
+            HelperKind::Hyprctl,
+            "hyprctl",
+            &["activewindow", "-j"],
+            Duration::from_secs(5),
+            2 * 1024 * 1024,
+        )?;
 
-        if !output.status.success() {
+        if output.timed_out || output.status != 0 {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(CaptureError::ImageError(format!(
                 "hyprctl activewindow failed: {}",
@@ -120,13 +145,15 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         );
 
         log::debug!("Capturing active window via grim: {}", geometry);
-        let grim_output = Command::new("grim")
-            .args(["-g", &geometry, "-"])
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?;
+        let grim_output = run_helper(
+            HelperKind::Grim,
+            "grim",
+            &["-g", &geometry, "-"],
+            Duration::from_secs(30),
+            CAPTURE_OUTPUT_CAP,
+        )?;
 
-        if !grim_output.status.success() {
+        if grim_output.timed_out || grim_output.status != 0 {
             let stderr = String::from_utf8_lossy(&grim_output.stderr);
             return Err(CaptureError::ImageError(format!(
                 "grim failed: {}",
@@ -149,20 +176,17 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
 /// Capture a user-selected region using `slurp` + `grim` (Hyprland/wlroots fast path).
 pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
     task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
-        use std::process::{Command, Stdio};
-
         // `slurp` outputs geometry in the format "x,y widthxheight"
-        let output = Command::new("slurp")
-            .args(["-f", "%x,%y %wx%h"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .map_err(|e| {
-                CaptureError::ImageError(format!("Failed to run slurp for region selection: {}", e))
-            })?;
+        let output = run_helper(
+            HelperKind::Slurp,
+            "slurp",
+            &["-f", "%x,%y %wx%h"],
+            Duration::from_secs(120),
+            4096,
+        )?;
 
-        if !output.status.success() {
-            if output.status.code() == Some(1) {
+        if output.timed_out || output.status != 0 {
+            if output.status == 1 {
                 log::info!("Selection capture cancelled by user (slurp exit code 1)");
                 return Err(CaptureError::Cancelled("Selection cancelled".into()));
             }
@@ -184,14 +208,15 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
         }
 
         log::debug!("Capturing region via grim: {}", geometry);
-        let grim_output = Command::new("grim")
-            .args(["-g", geometry, "-"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?;
+        let grim_output = run_helper(
+            HelperKind::Grim,
+            "grim",
+            &["-g", geometry, "-"],
+            Duration::from_secs(30),
+            CAPTURE_OUTPUT_CAP,
+        )?;
 
-        if !grim_output.status.success() {
+        if grim_output.timed_out || grim_output.status != 0 {
             let stderr = String::from_utf8_lossy(&grim_output.stderr);
             return Err(CaptureError::ImageError(format!(
                 "grim failed: {}",
@@ -218,19 +243,20 @@ fn hyprland_monitor_scale(
     monitor_name: Option<&str>,
 ) -> Result<Option<f64>, CaptureError> {
     use serde_json::Value;
-    use std::process::{Command, Stdio};
 
     if monitor_id.is_none() && monitor_name.is_none() {
         return Ok(None);
     }
 
-    let output = Command::new("hyprctl")
-        .args(["monitors", "-j"])
-        .stdout(Stdio::piped())
-        .output()
-        .map_err(|e| CaptureError::ImageError(format!("Failed to run hyprctl monitors: {}", e)))?;
+    let output = run_helper(
+        HelperKind::Hyprctl,
+        "hyprctl",
+        &["monitors", "-j"],
+        Duration::from_secs(5),
+        2 * 1024 * 1024,
+    )?;
 
-    if !output.status.success() {
+    if output.timed_out || output.status != 0 {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(CaptureError::ImageError(format!(
             "hyprctl monitors failed: {}",

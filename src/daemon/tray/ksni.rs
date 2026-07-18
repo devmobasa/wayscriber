@@ -55,7 +55,7 @@ impl ksni::Tray for WayscriberTray {
 
     fn tool_tip(&self) -> ksni::ToolTip {
         let status = self.tray_status.snapshot();
-        let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
+        let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let TrayStatus {
             overlay_error,
             watcher_offline,
@@ -112,7 +112,7 @@ impl ksni::Tray for WayscriberTray {
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
         let use_theme_icons = menu_theme_icons_enabled();
-        let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
+        let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let toggle_label = toggle_overlay_menu_label();
 
         vec![
