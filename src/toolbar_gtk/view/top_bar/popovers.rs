@@ -4,6 +4,29 @@
 //! on unrelated snapshot changes.
 
 use super::*;
+use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
+
+pub(super) fn set_popover_capture_transparent(
+    popover: &gtk4::Popover,
+    capture_surface: &CaptureSurfaceContent,
+    transparent: bool,
+) {
+    if transparent {
+        popover.add_css_class(CAPTURE_TRANSPARENT_CLASS);
+    } else {
+        popover.remove_css_class(CAPTURE_TRANSPARENT_CLASS);
+    }
+    capture_surface.set_transparent(transparent);
+    popover.set_can_target(!transparent);
+    if let Some(surface) = popover.surface() {
+        if transparent {
+            let empty = gtk4::cairo::Region::create();
+            surface.set_input_region(Some(&empty));
+        } else {
+            surface.set_input_region(None);
+        }
+    }
+}
 
 impl TopBar {
     pub(super) fn hide_popovers_for_window_hide(&self) {
@@ -22,27 +45,27 @@ impl TopBar {
     }
 
     /// Popovers are independent native Wayland surfaces, so their parent's
-    /// opacity does not affect them. Keep any open popover mapped and commit
-    /// opacity zero alongside the top toolbar rather than starting a popup
-    /// close animation during capture.
+    /// opacity does not affect them. Keep any open popover mapped and replace
+    /// its content with the same transparent proof node as the toolbar rather
+    /// than starting a popup close animation during capture.
     pub(super) fn set_popovers_capture_transparent(&self, transparent: bool) {
-        for popover in [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
-            .into_iter()
-            .flatten()
-        {
+        for (popover, capture_surface) in [
+            (
+                self.shapes_popover.as_ref(),
+                self.shapes_capture_surface.as_ref(),
+            ),
+            (
+                self.overflow_popover.as_ref(),
+                self.overflow_capture_surface.as_ref(),
+            ),
+        ] {
+            let (Some(popover), Some(capture_surface)) = (popover, capture_surface) else {
+                continue;
+            };
             if transparent && !popover.is_visible() {
                 continue;
             }
-            super::super::set_capture_transparent(popover, transparent);
-            popover.set_can_target(!transparent);
-            if let Some(surface) = popover.surface() {
-                if transparent {
-                    let empty = gtk4::cairo::Region::create();
-                    surface.set_input_region(Some(&empty));
-                } else {
-                    surface.set_input_region(None);
-                }
-            }
+            set_popover_capture_transparent(popover, capture_surface, transparent);
         }
     }
 
@@ -90,13 +113,16 @@ impl TopBar {
                     snapshot.polygon_sides,
                 );
                 if self.shapes_content_key.get() != Some(content_key) {
-                    popover.set_child(Some(&self.build_shapes_popover_content(
-                        snapshot,
-                        button_size,
-                        icon_size,
-                        use_icons,
-                        scale,
-                    )));
+                    self.shapes_capture_surface
+                        .as_ref()
+                        .expect("shapes popover capture surface")
+                        .set_content(&self.build_shapes_popover_content(
+                            snapshot,
+                            button_size,
+                            icon_size,
+                            use_icons,
+                            scale,
+                        ));
                     self.shapes_content_key.set(Some(content_key));
                 }
             }
@@ -121,14 +147,17 @@ impl TopBar {
                 );
                 if self.overflow_content_key.get() != Some(content_key) {
                     let spec = model::TopToolbarSpec::build(snapshot, plan);
-                    popover.set_child(Some(&self.build_overflow_popover_content(
-                        snapshot,
-                        &spec,
-                        button_size,
-                        icon_size,
-                        use_icons,
-                        scale,
-                    )));
+                    self.overflow_capture_surface
+                        .as_ref()
+                        .expect("overflow popover capture surface")
+                        .set_content(&self.build_overflow_popover_content(
+                            snapshot,
+                            &spec,
+                            button_size,
+                            icon_size,
+                            use_icons,
+                            scale,
+                        ));
                     self.overflow_content_key.set(Some(content_key));
                 }
             }

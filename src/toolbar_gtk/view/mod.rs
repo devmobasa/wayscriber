@@ -112,33 +112,106 @@ pub(super) fn set_visual_hidden(
     window.queue_draw();
 }
 
-/// Render the mapped GTK toplevel fully transparent during capture. Unlike
-/// hiding its only child, changing toplevel opacity invalidates the complete
-/// rendered surface while retaining its size and mapping.
-fn set_capture_transparent<W>(widget: &W, transparent: bool)
-where
-    W: IsA<gtk4::Widget>,
-{
-    let opacity = if transparent { 0.0 } else { 1.0 };
-    if (widget.opacity() - opacity).abs() <= f64::EPSILON {
-        return;
-    }
-    widget.set_opacity(opacity);
-    widget.queue_draw();
+/// A mapped native surface whose ordinary content can be replaced by a real,
+/// fully transparent render node during capture.
+///
+/// GTK omits widgets with opacity zero from the render tree. If every child is
+/// omitted, the Wayland backend can issue only a state-only surface commit;
+/// there is then no replacement buffer for the compositor to acknowledge.
+/// The transparent texture keeps one render node in the snapshot without
+/// changing any output pixel, so the capture barrier can wait for an actual
+/// transparent buffer submission and presentation.
+pub(super) struct CaptureSurfaceContent {
+    root: gtk4::Overlay,
+    proof: gtk4::Picture,
 }
 
-fn log_capture_surface_state(
-    generation: u64,
-    name: &str,
+impl CaptureSurfaceContent {
+    fn empty() -> Self {
+        // Keep non-zero RGB data behind a zero alpha channel. Renderers cannot
+        // infer an empty node from the texture format or pixels, while normal
+        // source-over composition still contributes exactly zero opacity.
+        let bytes = gtk4::glib::Bytes::from_static(&[0xff, 0x00, 0xff, 0x00]);
+        let texture =
+            gtk4::gdk::MemoryTexture::new(1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8, &bytes, 4);
+        let proof = gtk4::Picture::for_paintable(&texture);
+        proof.set_content_fit(gtk4::ContentFit::Fill);
+        proof.set_halign(gtk4::Align::Fill);
+        proof.set_valign(gtk4::Align::Fill);
+        proof.set_hexpand(true);
+        proof.set_vexpand(true);
+        proof.set_can_target(false);
+        proof.set_visible(false);
+
+        let root = gtk4::Overlay::new();
+        root.add_overlay(&proof);
+
+        Self { root, proof }
+    }
+
+    fn new<W>(content: &W) -> Self
+    where
+        W: IsA<gtk4::Widget>,
+    {
+        let surface = Self::empty();
+        surface.set_content(content);
+        surface
+    }
+
+    fn set_content<W>(&self, content: &W)
+    where
+        W: IsA<gtk4::Widget>,
+    {
+        self.root.set_child(Some(content));
+    }
+
+    fn widget(&self) -> &gtk4::Overlay {
+        &self.root
+    }
+
+    fn set_transparent(&self, transparent: bool) {
+        let opacity = if transparent { 0.0 } else { 1.0 };
+        if let Some(content) = self.root.child()
+            && (content.opacity() - opacity).abs() > f64::EPSILON
+        {
+            content.set_opacity(opacity);
+        }
+        self.proof.set_visible(transparent);
+        self.root.queue_draw();
+    }
+
+    fn content_opacity(&self) -> Option<f64> {
+        self.root.child().map(|content| content.opacity())
+    }
+
+    fn proof_visible(&self) -> bool {
+        self.proof.get_visible()
+    }
+}
+
+pub(super) struct CaptureSurfaceLog<'a> {
+    name: &'a str,
     configured_visible: bool,
     mapped_before_capture: bool,
     presentation: ToolbarSurfacePresentation,
-    window: &gtk4::Window,
-    visual: &gtk4::Box,
-) {
+    window: &'a gtk4::Window,
+    visual: &'a gtk4::Box,
+    capture_surface: &'a CaptureSurfaceContent,
+}
+
+fn log_capture_surface_state(generation: u64, state: CaptureSurfaceLog<'_>) {
+    let CaptureSurfaceLog {
+        name,
+        configured_visible,
+        mapped_before_capture,
+        presentation,
+        window,
+        visual,
+        capture_surface,
+    } = state;
     let surface_mapped = window.surface().is_some_and(|surface| surface.is_mapped());
     log::info!(
-        "capture.preflight id={generation} component=gtk surface={name} phase=applied configured_visible={configured_visible} mapped_before_capture={mapped_before_capture} planned_window_visible={} planned_capture_transparent={} planned_visual_hidden={} planned_input_enabled={} window_visible={} window_mapped={} surface_mapped={surface_mapped} visual_child_visible={} can_target={} size={}x{} opacity={:.3}",
+        "capture.preflight id={generation} component=gtk surface={name} phase=applied configured_visible={configured_visible} mapped_before_capture={mapped_before_capture} planned_window_visible={} planned_capture_transparent={} planned_visual_hidden={} planned_input_enabled={} window_visible={} window_mapped={} surface_mapped={surface_mapped} visual_child_visible={} can_target={} size={}x{} window_opacity={:.3} content_opacity={:.3?} transparent_proof_visible={}",
         presentation.window_visible,
         presentation.capture_transparent,
         presentation.visual_hidden,
@@ -150,6 +223,8 @@ fn log_capture_surface_state(
         window.width(),
         window.height(),
         window.opacity(),
+        capture_surface.content_opacity(),
+        capture_surface.proof_visible(),
     );
 }
 

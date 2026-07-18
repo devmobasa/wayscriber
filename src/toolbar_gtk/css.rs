@@ -39,6 +39,8 @@ const TOOLTIP_BACKGROUND: (f64, f64, f64, f64) = (0.1, 0.1, 0.15, 0.95);
 const TOOLTIP_BORDER: (f64, f64, f64, f64) = (0.4, 0.4, 0.5, 0.8);
 const DIVIDER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.08);
 
+pub(super) const CAPTURE_TRANSPARENT_CLASS: &str = "wayscriber-capture-transparent";
+
 /// Full stylesheet at the given toolbar scale.
 pub(super) fn stylesheet(scale: f64) -> String {
     let scale = if scale.is_finite() {
@@ -214,6 +216,23 @@ window.wayscriber-toolbar {{
     padding: {pad_popover}px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.50);
 }}
+/* A popover is its own native surface. Its contents and arrow CSS nodes paint
+   outside the application-provided child, so capture suppression must clear
+   their pixels too. Keep border and shadow dimensions unchanged to avoid a
+   resize while the transparent replacement buffer is being acknowledged. */
+.wayscriber-toolbar popover.{capture_transparent_class},
+.wayscriber-toolbar popover.{capture_transparent_class} > arrow {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    outline-color: transparent;
+}}
+.wayscriber-toolbar popover.{capture_transparent_class} > contents {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
+    outline-color: transparent;
+}}
 
 /* ===== Side palette ==================================================== */
 .wayscriber-toolbar .header-band {{
@@ -312,6 +331,7 @@ tooltip {{
         tooltip_bg = rgba(TOOLTIP_BACKGROUND),
         tooltip_border = rgba(TOOLTIP_BORDER),
         divider = rgba(DIVIDER),
+        capture_transparent_class = CAPTURE_TRANSPARENT_CLASS,
         radius_panel = px(14.0),
         radius_card = px(8.0),
         pad_card = px(6.0),

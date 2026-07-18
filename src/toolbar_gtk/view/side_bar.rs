@@ -28,7 +28,7 @@ use super::super::widgets::{
     FeedbackSender, install_shortcut_focus_policy, send_event, set_active_class, sized_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
-use super::{Updater, sections};
+use super::{CaptureSurfaceContent, Updater, sections};
 use structure::{StructureKey, effective_scale};
 
 const SIDE_WIDTH: f64 = 260.0;
@@ -40,6 +40,7 @@ pub(in crate::toolbar_gtk) struct SideBar {
     pub(in crate::toolbar_gtk) window: gtk4::Window,
     feedback: FeedbackSender,
     root: gtk4::Box,
+    capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     /// Chrome updaters survive content rebuilds; content updaters are
     /// replaced together with the pane body.
@@ -84,12 +85,14 @@ impl SideBar {
 
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
-        window.set_child(Some(&root));
+        let capture_surface = CaptureSurfaceContent::new(&root);
+        window.set_child(Some(capture_surface.widget()));
 
         Self {
             window,
             feedback,
             root,
+            capture_surface,
             structure: None,
             chrome_updaters: Vec::new(),
             content_updaters: Vec::new(),
@@ -136,18 +139,22 @@ impl SideBar {
             self.mapped_before_capture,
         );
         if !presentation.window_visible {
-            super::set_capture_transparent(&self.window, presentation.capture_transparent);
+            self.capture_surface
+                .set_transparent(presentation.capture_transparent);
             super::set_surface_input_enabled(&self.window, false);
             self.window.set_visible(false);
             if let Some(generation) = update.capture_suppression_generation {
                 super::log_capture_surface_state(
                     generation,
-                    "side",
-                    update.side_visible,
-                    self.mapped_before_capture,
-                    presentation,
-                    &self.window,
-                    &self.root,
+                    super::CaptureSurfaceLog {
+                        name: "side",
+                        configured_visible: update.side_visible,
+                        mapped_before_capture: self.mapped_before_capture,
+                        presentation,
+                        window: &self.window,
+                        visual: &self.root,
+                        capture_surface: &self.capture_surface,
+                    },
                 );
             }
             return false;
@@ -164,7 +171,8 @@ impl SideBar {
         }
         self.sync_viewport(snapshot);
         self.window.set_visible(true);
-        super::set_capture_transparent(&self.window, presentation.capture_transparent);
+        self.capture_surface
+            .set_transparent(presentation.capture_transparent);
         super::set_visual_hidden(
             &self.window,
             &self.root,
@@ -175,12 +183,15 @@ impl SideBar {
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,
-                "side",
-                update.side_visible,
-                self.mapped_before_capture,
-                presentation,
-                &self.window,
-                &self.root,
+                super::CaptureSurfaceLog {
+                    name: "side",
+                    configured_visible: update.side_visible,
+                    mapped_before_capture: self.mapped_before_capture,
+                    presentation,
+                    window: &self.window,
+                    visual: &self.root,
+                    capture_surface: &self.capture_surface,
+                },
             );
         }
         true

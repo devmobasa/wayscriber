@@ -64,7 +64,7 @@ const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
-use super::Updater;
+use super::{CaptureSurfaceContent, Updater};
 
 /// Snapshot inputs the shapes-popover grid renders from: active tool,
 /// override, fill flag, polygon sides.
@@ -146,10 +146,13 @@ pub(in crate::toolbar_gtk) struct TopBar {
     pub(in crate::toolbar_gtk) window: gtk4::Window,
     feedback: FeedbackSender,
     root: gtk4::Box,
+    capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     updaters: Rc<RefCell<Vec<Updater>>>,
     shapes_popover: Option<gtk4::Popover>,
+    shapes_capture_surface: Option<CaptureSurfaceContent>,
     overflow_popover: Option<gtk4::Popover>,
+    overflow_capture_surface: Option<CaptureSurfaceContent>,
     /// Popover open state as last driven by the snapshot; lets the
     /// `closed` handlers distinguish user dismissal from state sync.
     shapes_expected_open: Rc<Cell<bool>>,
@@ -206,16 +209,20 @@ impl TopBar {
     fn with_window(feedback: FeedbackSender, window: gtk4::Window) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
-        window.set_child(Some(&root));
+        let capture_surface = CaptureSurfaceContent::new(&root);
+        window.set_child(Some(capture_surface.widget()));
 
         Self {
             window,
             feedback,
             root,
+            capture_surface,
             structure: None,
             updaters: Rc::new(RefCell::new(Vec::new())),
             shapes_popover: None,
+            shapes_capture_surface: None,
             overflow_popover: None,
+            overflow_capture_surface: None,
             shapes_expected_open: Rc::new(Cell::new(false)),
             overflow_expected_open: Rc::new(Cell::new(false)),
             shapes_content_key: Cell::new(None),
@@ -270,18 +277,22 @@ impl TopBar {
             } else {
                 self.hide_popovers_for_window_hide();
             }
-            super::set_capture_transparent(&self.window, presentation.capture_transparent);
+            self.capture_surface
+                .set_transparent(presentation.capture_transparent);
             super::set_surface_input_enabled(&self.window, false);
             self.window.set_visible(false);
             if let Some(generation) = update.capture_suppression_generation {
                 super::log_capture_surface_state(
                     generation,
-                    "top",
-                    update.top_visible,
-                    self.mapped_before_capture,
-                    presentation,
-                    &self.window,
-                    &self.root,
+                    super::CaptureSurfaceLog {
+                        name: "top",
+                        configured_visible: update.top_visible,
+                        mapped_before_capture: self.mapped_before_capture,
+                        presentation,
+                        window: &self.window,
+                        visual: &self.root,
+                        capture_surface: &self.capture_surface,
+                    },
                 );
             }
             return false;
@@ -305,7 +316,8 @@ impl TopBar {
             self.sync_popovers(snapshot, &plan);
         }
         self.window.set_visible(true);
-        super::set_capture_transparent(&self.window, presentation.capture_transparent);
+        self.capture_surface
+            .set_transparent(presentation.capture_transparent);
         super::set_visual_hidden(
             &self.window,
             &self.root,
@@ -316,12 +328,15 @@ impl TopBar {
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,
-                "top",
-                update.top_visible,
-                self.mapped_before_capture,
-                presentation,
-                &self.window,
-                &self.root,
+                super::CaptureSurfaceLog {
+                    name: "top",
+                    configured_visible: update.top_visible,
+                    mapped_before_capture: self.mapped_before_capture,
+                    presentation,
+                    window: &self.window,
+                    visual: &self.root,
+                    capture_surface: &self.capture_surface,
+                },
             );
         }
         true
@@ -364,9 +379,11 @@ impl TopBar {
         if let Some(popover) = self.shapes_popover.take() {
             popover.unparent();
         }
+        self.shapes_capture_surface = None;
         if let Some(popover) = self.overflow_popover.take() {
             popover.unparent();
         }
+        self.overflow_capture_surface = None;
         self.shapes_content_key.set(None);
         self.overflow_content_key.set(None);
         while let Some(child) = self.root.first_child() {
