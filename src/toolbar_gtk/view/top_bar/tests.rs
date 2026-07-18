@@ -803,16 +803,22 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     ] {
         let content = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         capture_surface.set_content(&content);
-        super::popovers::set_popover_capture_transparent(popover, capture_surface, true);
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, true, true);
         assert!(
             popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS),
             "capture suppression must clear native popover chrome"
         );
-        assert!(!popover.can_target());
+        assert!(
+            popover.can_target(),
+            "input stays enabled until transparent presentation is confirmed"
+        );
         assert_eq!(capture_surface.content_opacity(), Some(0.0));
         assert!(capture_surface.proof_visible());
 
-        super::popovers::set_popover_capture_transparent(popover, capture_surface, false);
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, true, false);
+        assert!(!popover.can_target());
+
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, false, true);
         assert!(!popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
         assert!(popover.can_target());
         assert_eq!(capture_surface.content_opacity(), Some(1.0));

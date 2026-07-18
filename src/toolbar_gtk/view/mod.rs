@@ -121,9 +121,11 @@ pub(super) fn set_visual_hidden(
 /// The transparent texture keeps one render node in the snapshot without
 /// changing any output pixel, so the capture barrier can wait for an actual
 /// transparent buffer submission and presentation.
+#[derive(Clone)]
 pub(super) struct CaptureSurfaceContent {
     root: gtk4::Overlay,
     proof: gtk4::Picture,
+    proof_serial: std::rc::Rc<std::cell::Cell<u8>>,
 }
 
 impl CaptureSurfaceContent {
@@ -146,7 +148,11 @@ impl CaptureSurfaceContent {
         let root = gtk4::Overlay::new();
         root.add_overlay(&proof);
 
-        Self { root, proof }
+        Self {
+            root,
+            proof,
+            proof_serial: std::rc::Rc::new(std::cell::Cell::new(0)),
+        }
     }
 
     fn new<W>(content: &W) -> Self
@@ -180,12 +186,62 @@ impl CaptureSurfaceContent {
         self.root.queue_draw();
     }
 
+    /// Replace the invisible proof texture so GTK cannot coalesce this
+    /// surface's dedicated proof render with the transparency change that
+    /// another native surface already presented.
+    fn refresh_transparent_proof(&self) {
+        let serial = self.proof_serial.get().wrapping_add(1);
+        self.proof_serial.set(serial);
+        // Both variants remain fully transparent. Alternating hidden RGB and
+        // allocating a new texture changes the render node identity without
+        // contributing a visible pixel to the capture.
+        let bytes = if serial & 1 == 0 {
+            [0xff, 0x00, 0xff, 0x00]
+        } else {
+            [0x00, 0xff, 0xff, 0x00]
+        };
+        let bytes = gtk4::glib::Bytes::from_owned(bytes);
+        let texture =
+            gtk4::gdk::MemoryTexture::new(1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8, &bytes, 4);
+        self.proof.set_paintable(Some(&texture));
+        self.root.queue_draw();
+    }
+
     fn content_opacity(&self) -> Option<f64> {
         self.root.child().map(|content| content.opacity())
     }
 
     fn proof_visible(&self) -> bool {
         self.proof.get_visible()
+    }
+
+    #[cfg(test)]
+    fn proof_serial(&self) -> u8 {
+        self.proof_serial.get()
+    }
+}
+
+#[derive(Clone)]
+struct CaptureProofTarget {
+    name: &'static str,
+    widget: gtk4::Widget,
+    content: CaptureSurfaceContent,
+}
+
+impl CaptureProofTarget {
+    fn new<W>(name: &'static str, widget: &W, content: &CaptureSurfaceContent) -> Self
+    where
+        W: IsA<gtk4::Widget>,
+    {
+        Self {
+            name,
+            widget: widget.clone().upcast(),
+            content: content.clone(),
+        }
+    }
+
+    fn refresh_transparent_proof(&self) {
+        self.content.refresh_transparent_proof();
     }
 }
 
@@ -290,6 +346,7 @@ where
 pub(super) struct Windows {
     top: top_bar::TopBar,
     side: side_bar::SideBar,
+    tooltip_capture: capture_suppression::TooltipCapture,
     css_provider: gtk4::CssProvider,
     css_scale_milli: i64,
     pinned_output: Option<String>,
@@ -311,6 +368,7 @@ impl Windows {
         Self {
             top: top_bar::TopBar::new(feedback.clone()),
             side: side_bar::SideBar::new(feedback.clone()),
+            tooltip_capture: capture_suppression::TooltipCapture::new(),
             css_provider,
             css_scale_milli: 1000,
             pinned_output: None,
@@ -336,8 +394,12 @@ impl Windows {
         }
         self.refresh_css(update);
         self.pin_to_output(update);
-        let top_mapped = self.top.apply(update);
-        let side_mapped = self.side.apply(update);
+        let defer_capture_input = matches!(capture_plan, CaptureUpdatePlan::ApplyAndAcknowledge(_));
+        self.tooltip_capture
+            .set_suppressed(update.capture_suppressed, defer_capture_input);
+        let top_mapped = self.top.apply(update, defer_capture_input);
+        let side_mapped = self.side.apply(update, defer_capture_input);
+        self.install_tooltip_sources();
         if let CaptureUpdatePlan::ApplyAndAcknowledge(generation) = capture_plan {
             let proof = self
                 .wait_for_capture_paints(generation, top_mapped, side_mapped)
@@ -349,6 +411,11 @@ impl Windows {
                 });
             match proof {
                 Ok(display) => {
+                    // Keep native input active until every visual surface has
+                    // submitted and presented its transparent proof. Input
+                    // region changes are then ordered before acknowledgement
+                    // by the display sync below.
+                    self.disable_capture_input(top_mapped, side_mapped);
                     // The GTK bars use a separate Wayland connection. A
                     // compositor frame or presentation timestamp proves the
                     // opacity-zero commit was processed; this roundtrip orders
@@ -395,26 +462,40 @@ impl Windows {
         top_mapped: bool,
         side_mapped: bool,
     ) -> Result<(), String> {
-        let targets = [
-            (
-                "top",
-                top_mapped,
-                self.top.window.clone().upcast::<gtk4::Widget>(),
-            ),
-            (
-                "side",
-                side_mapped,
-                self.side.window.clone().upcast::<gtk4::Widget>(),
-            ),
-        ]
-        .into_iter()
-        .filter_map(|(name, visible, window)| visible.then_some((name, window)))
-        .collect::<Vec<_>>();
-
-        let mut targets = targets;
+        let mut targets = Vec::new();
+        if top_mapped {
+            targets.push(self.top.capture_target());
+        }
+        if side_mapped {
+            targets.push(self.side.capture_target());
+        }
         targets.extend(self.top.capture_popover_targets());
+        if let Some(tooltip) = self.tooltip_capture.capture_target() {
+            targets.push(tooltip);
+        }
 
         capture_suppression::wait_for_presented_transparency(generation, targets).await
+    }
+
+    fn install_tooltip_sources(&self) {
+        self.tooltip_capture
+            .install_tree(self.top.window.upcast_ref());
+        self.tooltip_capture
+            .install_tree(self.side.window.upcast_ref());
+        for root in self.top.tooltip_roots() {
+            self.tooltip_capture.install_tree(&root);
+        }
+    }
+
+    fn disable_capture_input(&self, top_mapped: bool, side_mapped: bool) {
+        if top_mapped {
+            set_surface_input_enabled(&self.top.window, false);
+        }
+        if side_mapped {
+            set_surface_input_enabled(&self.side.window, false);
+        }
+        self.top.set_popovers_capture_input_enabled(false);
+        self.tooltip_capture.set_input_enabled(false);
     }
 
     /// Regenerate the stylesheet when the toolbar scale changes.

@@ -10,6 +10,7 @@ pub(super) fn set_popover_capture_transparent(
     popover: &gtk4::Popover,
     capture_surface: &CaptureSurfaceContent,
     transparent: bool,
+    input_enabled: bool,
 ) {
     if transparent {
         popover.add_css_class(CAPTURE_TRANSPARENT_CLASS);
@@ -17,15 +18,20 @@ pub(super) fn set_popover_capture_transparent(
         popover.remove_css_class(CAPTURE_TRANSPARENT_CLASS);
     }
     capture_surface.set_transparent(transparent);
-    popover.set_can_target(!transparent);
+    set_popover_input_enabled(popover, input_enabled);
+}
+
+fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
+    popover.set_can_target(enabled);
     if let Some(surface) = popover.surface() {
-        if transparent {
+        if enabled {
+            surface.set_input_region(None);
+        } else {
             let empty = gtk4::cairo::Region::create();
             surface.set_input_region(Some(&empty));
-        } else {
-            surface.set_input_region(None);
         }
     }
+    popover.queue_draw();
 }
 
 impl TopBar {
@@ -48,7 +54,11 @@ impl TopBar {
     /// opacity does not affect them. Keep any open popover mapped and replace
     /// its content with the same transparent proof node as the toolbar rather
     /// than starting a popup close animation during capture.
-    pub(super) fn set_popovers_capture_transparent(&self, transparent: bool) {
+    pub(super) fn set_popovers_capture_transparent(
+        &self,
+        transparent: bool,
+        defer_capture_input: bool,
+    ) {
         for (popover, capture_surface) in [
             (
                 self.shapes_popover.as_ref(),
@@ -65,22 +75,51 @@ impl TopBar {
             if transparent && !popover.is_visible() {
                 continue;
             }
-            set_popover_capture_transparent(popover, capture_surface, transparent);
+            set_popover_capture_transparent(
+                popover,
+                capture_surface,
+                transparent,
+                !transparent || defer_capture_input,
+            );
         }
     }
 
-    pub(in crate::toolbar_gtk::view) fn capture_popover_targets(
-        &self,
-    ) -> Vec<(&'static str, gtk4::Widget)> {
+    pub(in crate::toolbar_gtk::view) fn set_popovers_capture_input_enabled(&self, enabled: bool) {
+        for popover in [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            set_popover_input_enabled(popover, enabled);
+        }
+    }
+
+    pub(in crate::toolbar_gtk::view) fn tooltip_roots(&self) -> Vec<gtk4::Widget> {
+        [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
+            .into_iter()
+            .flatten()
+            .map(|popover| popover.clone().upcast::<gtk4::Widget>())
+            .collect()
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_popover_targets(&self) -> Vec<CaptureProofTarget> {
         [
-            ("top-shapes-popover", self.shapes_popover.as_ref()),
-            ("top-overflow-popover", self.overflow_popover.as_ref()),
+            (
+                "top-shapes-popover",
+                self.shapes_popover.as_ref(),
+                self.shapes_capture_surface.as_ref(),
+            ),
+            (
+                "top-overflow-popover",
+                self.overflow_popover.as_ref(),
+                self.overflow_capture_surface.as_ref(),
+            ),
         ]
         .into_iter()
-        .filter_map(|(name, popover)| {
+        .filter_map(|(name, popover, capture_surface)| {
             let popover = popover?;
+            let capture_surface = capture_surface?;
             (popover.is_visible() && popover.is_mapped())
-                .then(|| (name, popover.clone().upcast::<gtk4::Widget>()))
+                .then(|| CaptureProofTarget::new(name, popover, capture_surface))
         })
         .collect()
     }

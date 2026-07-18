@@ -308,6 +308,16 @@ tooltip {{
     padding: 2px 6px;
     font-size: {font_tooltip}px;
 }}
+/* GtkTooltipWindow is a private GtkNative with its own popup surface. Its
+   native CSS node paints outside the application-provided custom widget, so
+   suppress the chrome without unmapping the popup. */
+tooltip.{capture_transparent_class} {{
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    outline-color: transparent;
+    color: transparent;
+}}
 "#,
         panel = rgba(PANEL_BACKGROUND),
         accent = rgba(ACCENT),
@@ -346,4 +356,18 @@ tooltip {{
         font_small = px(10.0),
         font_tooltip = px(12.0),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_suppression_clears_private_tooltip_window_chrome() {
+        let css = stylesheet(1.0);
+        assert!(css.contains(&format!("tooltip.{CAPTURE_TRANSPARENT_CLASS} {{")));
+        assert!(css.contains("background: transparent;"));
+        assert!(css.contains("border-color: transparent;"));
+        assert!(css.contains("box-shadow: none;"));
+    }
 }

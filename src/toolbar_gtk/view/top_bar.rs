@@ -64,7 +64,7 @@ const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
-use super::{CaptureSurfaceContent, Updater};
+use super::{CaptureProofTarget, CaptureSurfaceContent, Updater};
 
 /// Snapshot inputs the shapes-popover grid renders from: active tool,
 /// override, fill flag, polygon sides.
@@ -242,6 +242,7 @@ impl TopBar {
     pub(in crate::toolbar_gtk) fn apply(
         &mut self,
         update: &super::super::GtkToolbarUpdate,
+        defer_capture_input: bool,
     ) -> bool {
         let snapshot = &update.snapshot;
         let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
@@ -273,7 +274,7 @@ impl TopBar {
             // would send, so an open picker survives a hide/show cycle
             // like the built-in bars.
             if update.capture_suppressed {
-                self.set_popovers_capture_transparent(true);
+                self.set_popovers_capture_transparent(true, defer_capture_input);
             } else {
                 self.hide_popovers_for_window_hide();
             }
@@ -310,9 +311,9 @@ impl TopBar {
             updater(snapshot);
         }
         if update.capture_suppressed {
-            self.set_popovers_capture_transparent(true);
+            self.set_popovers_capture_transparent(true, defer_capture_input);
         } else {
-            self.set_popovers_capture_transparent(false);
+            self.set_popovers_capture_transparent(false, false);
             self.sync_popovers(snapshot, &plan);
         }
         self.window.set_visible(true);
@@ -324,7 +325,10 @@ impl TopBar {
             GtkToolbarKind::Top,
             presentation.visual_hidden,
         );
-        super::set_surface_input_enabled(&self.window, presentation.input_enabled);
+        super::set_surface_input_enabled(
+            &self.window,
+            presentation.input_enabled || defer_capture_input,
+        );
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,
@@ -340,6 +344,10 @@ impl TopBar {
             );
         }
         true
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_target(&self) -> CaptureProofTarget {
+        CaptureProofTarget::new("top", &self.window, &self.capture_surface)
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in

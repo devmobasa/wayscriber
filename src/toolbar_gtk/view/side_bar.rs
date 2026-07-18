@@ -28,7 +28,7 @@ use super::super::widgets::{
     FeedbackSender, install_shortcut_focus_policy, send_event, set_active_class, sized_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
-use super::{CaptureSurfaceContent, Updater, sections};
+use super::{CaptureProofTarget, CaptureSurfaceContent, Updater, sections};
 use structure::{StructureKey, effective_scale};
 
 const SIDE_WIDTH: f64 = 260.0;
@@ -112,6 +112,7 @@ impl SideBar {
     pub(in crate::toolbar_gtk) fn apply(
         &mut self,
         update: &super::super::GtkToolbarUpdate,
+        defer_capture_input: bool,
     ) -> bool {
         let snapshot = &update.snapshot;
         let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
@@ -179,7 +180,10 @@ impl SideBar {
             GtkToolbarKind::Side,
             presentation.visual_hidden,
         );
-        super::set_surface_input_enabled(&self.window, presentation.input_enabled);
+        super::set_surface_input_enabled(
+            &self.window,
+            presentation.input_enabled || defer_capture_input,
+        );
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,
@@ -195,6 +199,10 @@ impl SideBar {
             );
         }
         true
+    }
+
+    pub(in crate::toolbar_gtk::view) fn capture_target(&self) -> CaptureProofTarget {
+        CaptureProofTarget::new("side", &self.window, &self.capture_surface)
     }
 
     /// Mirror backend offsets into layer margins unless a local drag is in
