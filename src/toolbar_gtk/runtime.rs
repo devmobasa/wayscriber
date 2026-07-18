@@ -3,17 +3,31 @@
 //! goes through the bridge channels.
 
 use gtk4::glib;
+use std::future::Future;
 
 use super::GtkToolbarUpdate;
 use super::bridge::{BridgeHealth, FeedbackPublisher};
 
 /// Flags the bridge as failed unless the shutdown was the clean
-/// channel-close path — covers panics anywhere on this thread and an
-/// unexpectedly exiting main loop, so the backend falls back to the
-/// built-in bars instead of running headless.
+/// channel-close path. The update task is supervised separately so both task
+/// panics and an unexpectedly exiting main loop restore the built-in bars.
 struct FailureGuard {
     health: BridgeHealth,
     clean: std::cell::Cell<bool>,
+}
+
+fn spawn_monitored_local<F, C>(context: &glib::MainContext, future: F, completed: C)
+where
+    F: Future<Output = ()> + 'static,
+    C: FnOnce(Result<(), glib::JoinError>) + 'static,
+{
+    let task = context.spawn_local(future);
+    // GLib catches task panics and reports them only through JoinHandle. Keep a
+    // detached supervisor on the same context so every terminal result reaches
+    // bridge health instead of silently freezing the GTK frontend.
+    drop(context.spawn_local(async move {
+        completed(task.await);
+    }));
 }
 
 impl Drop for FailureGuard {
@@ -63,19 +77,38 @@ pub(super) fn run(
     let main_loop = glib::MainLoop::new(None, false);
     let loop_handle = main_loop.clone();
     let loop_guard = guard.clone();
-    glib::MainContext::default().spawn_local(async move {
-        let mut windows: Option<super::view::Windows> = None;
-        while let Ok(update) = updates.recv().await {
-            windows
-                .get_or_insert_with(|| {
-                    super::view::Windows::new(super::widgets::FeedbackSender::new(feedback.clone()))
-                })
-                .apply(&update);
-        }
-        // The backend dropped the bridge; shut the GTK side down with it.
-        loop_guard.clean.set(true);
-        loop_handle.quit();
-    });
+    spawn_monitored_local(
+        &glib::MainContext::default(),
+        async move {
+            let mut windows: Option<super::view::Windows> = None;
+            while let Ok(update) = updates.recv().await {
+                windows
+                    .get_or_insert_with(|| {
+                        super::view::Windows::new(super::widgets::FeedbackSender::new(
+                            feedback.clone(),
+                        ))
+                    })
+                    .apply(&update);
+            }
+        },
+        move |result| {
+            match result {
+                Ok(()) => {
+                    // The backend dropped the bridge; shut the GTK side down with it.
+                    loop_guard.clean.set(true);
+                }
+                Err(err) => {
+                    loop_guard.health.fail(format!(
+                        "GTK toolbar update loop failed ({err}); restoring built-in toolbars"
+                    ));
+                    // The supervised task already published the terminal state;
+                    // suppress the two fallback reports after MainLoop::run.
+                    loop_guard.clean.set(true);
+                }
+            }
+            loop_handle.quit();
+        },
+    );
     main_loop.run();
     if !guard.clean.get() {
         health.fail("GTK toolbar main loop returned unexpectedly; restoring built-in toolbars");
@@ -84,7 +117,9 @@ pub(super) fn run(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
     use std::os::fd::AsRawFd;
+    use std::rc::Rc;
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
@@ -127,5 +162,28 @@ mod tests {
         };
         // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
         assert_eq!(unsafe { libc::poll(&mut pollfd, 1, 0) }, 0);
+    }
+
+    #[test]
+    fn panicking_local_task_reports_its_terminal_result() {
+        let context = glib::MainContext::new();
+        let _owner = context.acquire().expect("test owns main context");
+        let completed = Rc::new(Cell::new(None));
+        let observed = Rc::clone(&completed);
+
+        spawn_monitored_local(
+            &context,
+            async { panic!("expected GTK update-loop panic") },
+            move |result| observed.set(Some(result.is_err())),
+        );
+        while context.pending() {
+            context.iteration(false);
+        }
+
+        assert_eq!(
+            completed.get(),
+            Some(true),
+            "a detached GLib task hides its panic from bridge health"
+        );
     }
 }

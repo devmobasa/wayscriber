@@ -3,14 +3,11 @@ use log::{info, warn};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
-use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
-#[cfg(test)]
-use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -30,20 +27,20 @@ use super::control::DaemonToggleRequest;
 use super::control::read_daemon_toggle_response;
 #[cfg(test)]
 use super::control::{DaemonToggleCommand, DaemonToggleCommands};
-use super::global_shortcuts::start_global_shortcuts_listener;
+use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_listener};
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
-use super::types::{AlreadyRunningError, BackendRunner, OverlayState};
+use super::types::{AlreadyRunningError, BackendRunner, DaemonControlEvent, OverlayState};
 
 // Some desktop custom shortcut runners, observed on KDE, can launch the same
 // plain `--daemon-toggle` command twice about 400-600ms apart from one key press.
 // Suppress only duplicate plain toggles after a successful toggle completes, so
 // typed requests still run.
 const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(700);
-// This remains a real child/process/tray lifecycle deadline. Signal delivery
-// and signal-listener failure independently wake the daemon control owner.
-const DAEMON_LIFECYCLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
+#[cfg(unix)]
+const DAEMON_SIGNALS: [libc::c_int; 4] =
+    [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT, libc::SIGCHLD];
 
 mod toggles;
 
@@ -60,7 +57,7 @@ pub struct Daemon {
     pub(super) tray_enabled: bool,
     pub(super) backend_runner: Option<Arc<BackendRunner>>,
     pub(super) tray_thread: Option<JoinHandle<()>>,
-    pub(super) global_shortcuts_thread: Option<JoinHandle<()>>,
+    pub(super) global_shortcuts_listener: Option<GlobalShortcutsListener>,
     pub(super) overlay_child: Option<Child>,
     pub(super) overlay_pid: Arc<AtomicU32>,
     pub(super) pending_activation_token: Option<String>,
@@ -101,7 +98,7 @@ impl Daemon {
             tray_enabled,
             backend_runner: None,
             tray_thread: None,
-            global_shortcuts_thread: None,
+            global_shortcuts_listener: None,
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
             pending_activation_token: None,
@@ -139,7 +136,7 @@ impl Daemon {
             tray_enabled: true,
             backend_runner: Some(backend_runner),
             tray_thread: None,
-            global_shortcuts_thread: None,
+            global_shortcuts_listener: None,
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
             pending_activation_token: None,
@@ -242,15 +239,15 @@ impl Daemon {
             );
         }
 
-        #[cfg(unix)]
-        const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
-
         let toggle_flag = self.toggle_requested.clone();
         let signal_toggle_flag = self.signal_toggle_requested.clone();
         let quit_flag = self.should_quit.clone();
 
         let daemon_wake =
             RuntimeWakeSource::new().context("Failed to create daemon control wake descriptor")?;
+        let toggle_event =
+            DaemonControlEvent::new(self.toggle_requested.clone(), daemon_wake.handle());
+        let quit_event = DaemonControlEvent::new(self.should_quit.clone(), daemon_wake.handle());
 
         #[cfg(unix)]
         {
@@ -279,6 +276,9 @@ impl Daemon {
                                 );
                                 quit_flag.store(true, Ordering::Release);
                             }
+                            // Child exit is observed by update_overlay_process_state
+                            // on the owner thread after this signal wakes it.
+                            libc::SIGCHLD => {}
                             _ => warn!("Received unexpected signal: {sig}"),
                         }
                     },
@@ -308,14 +308,17 @@ impl Daemon {
 
         // Start system tray (optional)
         if self.tray_enabled {
-            let tray_toggle = self.toggle_requested.clone();
-            let tray_quit = self.should_quit.clone();
             let tray_overlay_pid = self.overlay_pid.clone();
             #[cfg(feature = "tray")]
             let tray_status = self.tray_status.clone();
             #[cfg(not(feature = "tray"))]
             let tray_status = ();
-            match start_system_tray(tray_toggle, tray_quit, tray_overlay_pid, tray_status) {
+            match start_system_tray(
+                toggle_event.clone(),
+                quit_event,
+                tray_overlay_pid,
+                tray_status,
+            ) {
                 Ok(tray_handle) => {
                     self.tray_thread = Some(tray_handle);
                 }
@@ -332,12 +335,12 @@ impl Daemon {
 
         match current_shortcut_runtime_backend() {
             ShortcutRuntimeBackend::PortalGlobalShortcuts => {
-                self.global_shortcuts_thread = start_global_shortcuts_listener(
-                    self.toggle_requested.clone(),
+                self.global_shortcuts_listener = start_global_shortcuts_listener(
+                    toggle_event,
                     self.should_quit.clone(),
                     self.portal_activation_token_slot.clone(),
                 );
-                if self.global_shortcuts_thread.is_some() {
+                if self.global_shortcuts_listener.is_some() {
                     info!("Global shortcuts portal listener started");
                 }
             }
@@ -417,14 +420,17 @@ impl Daemon {
             warn!("Failed to hide overlay during shutdown: {}", err);
         }
         self.should_quit.store(true, Ordering::Release);
+        if let Some(listener) = self.global_shortcuts_listener.as_mut() {
+            listener.request_shutdown();
+        }
         if let Some(handle) = self.tray_thread.take() {
             match handle.join() {
                 Ok(()) => info!("System tray thread joined"),
                 Err(err) => warn!("System tray thread panicked: {:?}", err),
             }
         }
-        if let Some(handle) = self.global_shortcuts_thread.take() {
-            match handle.join() {
+        if let Some(listener) = self.global_shortcuts_listener.take() {
+            match listener.join() {
                 Ok(()) => info!("Global shortcuts listener thread joined"),
                 Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
             }
@@ -483,39 +489,10 @@ impl Daemon {
 }
 
 fn wait_for_daemon_lifecycle(daemon_wake: &RuntimeWakeSource) -> Result<()> {
-    let mut pollfd = libc::pollfd {
-        fd: daemon_wake.poll_fd().as_raw_fd(),
-        events: libc::POLLIN,
-        revents: 0,
-    };
-    let deadline = Instant::now() + DAEMON_LIFECYCLE_POLL_INTERVAL;
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        let timeout_ms = remaining.as_millis().min(i32::MAX as u128) as i32;
-        // SAFETY: the descriptor remains owned by `daemon_wake` throughout poll.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
-        if ready == 0 {
-            return Ok(());
-        }
-        if ready < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.kind() == ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(err).context("daemon lifecycle poll failed");
-        }
-        let terminal = pollfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL);
-        if terminal != 0 || pollfd.revents & libc::POLLIN == 0 {
-            return Err(anyhow::anyhow!(
-                "daemon wake descriptor returned invalid readiness {:#x}",
-                pollfd.revents
-            ));
-        }
-        daemon_wake
-            .drain()
-            .context("failed to drain daemon wake descriptor")?;
-        return Ok(());
-    }
+    daemon_wake
+        .wait_readable(None)
+        .context("daemon lifecycle wait failed")?;
+    Ok(())
 }
 
 #[cfg(test)]
