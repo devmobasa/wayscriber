@@ -124,7 +124,8 @@ future_output_policy = "keep"
 #[test]
 fn document_load_and_save_tolerates_future_keys_in_strict_export_tables() {
     let temp = TempConfig::new("future-export-keys");
-    let original = r#"config_revision = 1
+    let original = format!(
+        r#"config_revision = {CURRENT_CONFIG_REVISION}
 [export]
 future_format = "svg"
 
@@ -135,8 +136,9 @@ future_bleed = 12.5
 [export.pdf.labels]
 enabled = true
 future_font_weight = 600
-"#;
-    temp.write(original);
+"#
+    );
+    temp.write(&original);
 
     let document = ConfigDocument::load_from_path(&temp.path)
         .expect("future export settings remain editor-compatible");
@@ -184,9 +186,10 @@ future_profile_policy = "keep"
 #[test]
 fn no_op_save_does_not_materialize_omitted_defaults() {
     let temp = TempConfig::new("omitted-defaults");
-    let original =
-        "config_revision = 1\n# intentionally sparse\n[performance]\nmax_fps_no_vsync = 120\n";
-    temp.write(original);
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n# intentionally sparse\n[performance]\nmax_fps_no_vsync = 120\n"
+    );
+    temp.write(&original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load sparse document");
 
     document
@@ -260,7 +263,7 @@ future_knob = 17
     assert!(saved.contains("future_root = \"preserve me\""));
     assert!(saved.contains("future_knob = 17"));
     assert!(!saved.contains("buffer_count"));
-    assert!(saved.contains("config_revision = 1"));
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
     let backup = outcome.backup_path().expect("repair backup");
     assert_eq!(fs::read_to_string(backup).unwrap(), original);
     ConfigDocument::load_from_path(&temp.path).expect("repaired config is valid");
@@ -373,8 +376,10 @@ boards = { max_count = 2, default_board = "transparent", items = [{ id = "transp
 #[test]
 fn no_op_save_preserves_semantically_equal_scalar_formatting() {
     let temp = TempConfig::new("scalar-formatting");
-    let original = "config_revision = 1\n[performance]\nmax_fps_no_vsync = 1_200\n";
-    temp.write(original);
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n[performance]\nmax_fps_no_vsync = 1_200\n"
+    );
+    temp.write(&original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load precise scalar");
 
     document
@@ -387,8 +392,9 @@ fn no_op_save_preserves_semantically_equal_scalar_formatting() {
 #[test]
 fn no_op_save_preserves_integer_spelling_for_float_fields() {
     let temp = TempConfig::new("integer-float-spelling");
-    let original = "config_revision = 1\n[drawing]\ndefault_thickness = 2\n";
-    temp.write(original);
+    let original =
+        format!("config_revision = {CURRENT_CONFIG_REVISION}\n[drawing]\ndefault_thickness = 2\n");
+    temp.write(&original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load integer-form float");
 
     document
@@ -482,7 +488,8 @@ future_owner = "owner-b"
 #[test]
 fn no_op_save_preserves_separated_array_table_positions() {
     let temp = TempConfig::new("separated-array-table-positions");
-    let original = r#"config_revision = 1
+    let original = format!(
+        r#"config_revision = {CURRENT_CONFIG_REVISION}
 [[render_profiles.profiles]]
 id = "first"
 name = "First"
@@ -493,8 +500,9 @@ max_fps_no_vsync = 144
 [[render_profiles.profiles]]
 id = "second"
 name = "Second"
-"#;
-    temp.write(original);
+"#
+    );
+    temp.write(&original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load separated profiles");
 
     document
@@ -507,7 +515,8 @@ name = "Second"
 #[test]
 fn no_op_save_preserves_separated_nested_array_table_positions() {
     let temp = TempConfig::new("separated-nested-array-table-positions");
-    let original = r##"config_revision = 1
+    let original = format!(
+        r##"config_revision = {CURRENT_CONFIG_REVISION}
 [[render_profiles.profiles]]
 id = "first"
 name = "First"
@@ -518,8 +527,9 @@ max_fps_no_vsync = 144
 [[render_profiles.profiles.mappings]]
 from = "#111111"
 to = "#AAAAAA"
-"##;
-    temp.write(original);
+"##
+    );
+    temp.write(&original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load separated mapping");
 
     document

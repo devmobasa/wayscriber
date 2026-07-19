@@ -39,6 +39,23 @@ window.wayscriber-toolbar {{
     padding: 0;
 }}
 
+/* Top-strip islands: detached pills sharing the panel treatment. The
+   window root stays transparent behind them. The horizontal padding is the
+   island pad the builtin planner budgets with (TOP_ISLAND_PAD), not the
+   wider panel padding. */
+.wayscriber-toolbar .pill {{
+    background-color: {panel};
+    border: {hairline}px solid {panel_border};
+    border-radius: {radius_panel}px;
+    padding: {pad_std}px {pad_island}px;
+}}
+
+/* Compact plans tighten the island inner padding, mirroring the builtin
+   TOP_COMPACT_ISLAND_PAD. */
+.wayscriber-toolbar .pill.compact {{
+    padding: {pad_std}px {pad_island_compact}px;
+}}
+
 /* ===== Buttons ========================================================= */
 .wayscriber-toolbar button {{
     min-width: 0;
@@ -94,7 +111,7 @@ window.wayscriber-toolbar {{
     color: {drag_handle_hover};
 }}
 
-/* Round chrome buttons (pin, minimize, overflow, restore tabs). */
+/* Round chrome buttons (pin, minimize, restore tabs). */
 .wayscriber-toolbar button.chrome {{
     border-radius: {radius_full}px;
     background-color: {pin_default};
@@ -172,9 +189,11 @@ window.wayscriber-toolbar {{
     font-size: {font_badge}px;
     font-weight: {weight_bold};
 }}
-/* Swatch key letters read as small captions in the secondary text color
-   (mirrors COLOR_LABEL_HINT), one step larger than boxed corner badges. */
-.wayscriber-toolbar label.shortcut-badge.above-swatch {{
+/* Swatch key letters (above) and icon-button captions (below) read as
+   small unboxed captions in the secondary text color (mirrors
+   COLOR_LABEL_HINT), one step larger than boxed corner badges. */
+.wayscriber-toolbar label.shortcut-badge.above-swatch,
+.wayscriber-toolbar label.shortcut-badge.below-icon {{
     background-color: transparent;
     border-color: transparent;
     padding: 0;
@@ -349,6 +368,8 @@ tooltip.{capture_transparent_class} {{
         radius_std_fixed = v.radius_std_fixed,
         pad_std = v.pad_std,
         pad_panel_h = v.pad_panel_h,
+        pad_island = v.pad_island,
+        pad_island_compact = v.pad_island_compact,
         pad_popover = v.pad_popover,
         check_size = v.check_size,
         font_label = v.font_label,

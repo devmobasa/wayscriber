@@ -276,7 +276,7 @@ fn icon_for_button(snapshot: &ToolbarSnapshot, button: &ToolbarButtonModel) -> A
     match &button.event {
         ToolbarEvent::Undo => toolbar_icons::draw_icon_undo as ActionIconFn,
         ToolbarEvent::Redo => toolbar_icons::draw_icon_redo as ActionIconFn,
-        ToolbarEvent::ClearCanvas => toolbar_icons::draw_icon_clear as ActionIconFn,
+        ToolbarEvent::ClearCanvas { .. } => toolbar_icons::draw_icon_clear as ActionIconFn,
         ToolbarEvent::ZoomIn => toolbar_icons::draw_icon_zoom_in as ActionIconFn,
         ToolbarEvent::ZoomOut => toolbar_icons::draw_icon_zoom_out as ActionIconFn,
         ToolbarEvent::ResetZoom => toolbar_icons::draw_icon_zoom_reset as ActionIconFn,

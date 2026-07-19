@@ -153,6 +153,8 @@ impl InputState {
             toolbar_shapes_expanded: false,
             toolbar_top_overflow_open: false,
             toolbar_top_minimized: false,
+            toolbar_top_display_mode: crate::config::TopDisplayMode::Full,
+            last_draw_activity: std::time::Instant::now(),
             toolbar_side_minimized: false,
             toolbar_picker_hsv: None,
             toolbar_side_pane: crate::ui::toolbar::SidePane::Draw,

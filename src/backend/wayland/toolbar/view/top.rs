@@ -1,12 +1,14 @@
 //! Top-strip tree builder.
 //!
-//! The strip reads left to right as divider-chunked groups: drag grip,
-//! pens (Select/Pen/Marker/Step/Eraser), shapes (Line/Arrow/Shapes picker),
-//! annotations (Text/Note/Screenshot/Highlight), quick colors + the current
-//! color chip, history (Undo/Redo), then the destructive Clear isolated by a
-//! double gap, and right-aligned chrome (pin, close). Blue is reserved for
-//! the active tool; Clear is red; disabled history buttons are dimmed and
-//! not interactive.
+//! The strip reads left to right as three detached pill islands. Island A
+//! (tools): drag grip, pens (Select/Pen/Marker/Step/Eraser), shapes
+//! (Line/Arrow/Shapes picker), annotations (Text/Note/Screenshot/Highlight),
+//! and quick colors + the current color chip, with thin dividers between the
+//! groups. Island B (history): Undo/Redo plus the overflow toggle whose menu
+//! anchors the destructive Clear (red on hover) and any width-dropped items.
+//! Island C (chrome): the quieter right-aligned pin and minimize buttons.
+//! Blue is reserved for the active tool; disabled history buttons are dimmed
+//! and not interactive.
 
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::Tool;
@@ -34,6 +36,11 @@ const TOP_COMPACT_BUTTON: f64 = 26.0;
 const TOP_COMPACT_GAP: f64 = 1.0;
 const TOP_COMPACT_CHROME: f64 = 18.0;
 const TOP_COMPACT_MARGIN_RIGHT: f64 = 8.0;
+/// Tightened island gap/padding for the last-resort compact presentation.
+/// The pad shares its number with the GTK `.pill.compact` padding via
+/// `theme::toolbar::COMPACT_ISLAND_PAD`.
+const TOP_COMPACT_ISLAND_GAP: f64 = 4.0;
+const TOP_COMPACT_ISLAND_PAD: f64 = crate::ui::theme::toolbar::COMPACT_ISLAND_PAD;
 
 pub(crate) use model::TopStripPlan;
 
@@ -41,7 +48,7 @@ pub(crate) use model::TopStripPlan;
 /// 8→6→4→0 first, then droppable items move into the overflow menu.
 pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
     let mut plan = TopStripPlan::unconstrained();
-    if snapshot.top_minimized {
+    if snapshot.top_minimized || snapshot.top_micro_active() {
         return plan;
     }
     let Some(budget) = snapshot.top_viewport_max else {
@@ -57,7 +64,6 @@ pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
             return plan;
         }
     }
-    plan.show_overflow = true;
     let visible_utilities = model::visible_top_utility_buttons(
         snapshot,
         snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple,
@@ -150,6 +156,19 @@ fn planned_gap(plan: &TopStripPlan) -> f64 {
     }
 }
 
+/// `(island_gap, island_pad)` for the plan: the clear space between pill
+/// islands and the inner padding between a pill edge and its content.
+fn planned_island_metrics(plan: &TopStripPlan) -> (f64, f64) {
+    if plan.compact {
+        (TOP_COMPACT_ISLAND_GAP, TOP_COMPACT_ISLAND_PAD)
+    } else {
+        (
+            ToolbarLayoutSpec::TOP_ISLAND_GAP,
+            ToolbarLayoutSpec::TOP_ISLAND_PAD,
+        )
+    }
+}
+
 fn planned_button_size(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> (f64, f64) {
     if plan.compact {
         (TOP_COMPACT_BUTTON, TOP_COMPACT_BUTTON)
@@ -177,24 +196,31 @@ pub fn build_top_view(snapshot: &ToolbarSnapshot, width: f64, height: f64) -> Wi
 }
 
 /// Input rects for the top surface in tree-logical coordinates, or None
-/// when the whole surface should accept input. While a popover grows the
-/// surface, only the bar band and the popover panels take clicks — the
-/// transparent remainder stays click-through to the canvas.
+/// when the whole surface should accept input (the minimized restore tab
+/// and the micro chip). The full strip always restricts input to the
+/// island pills — plus the popover panels while one is open — so the
+/// transparent inter-island gaps consistently stay click-through to the
+/// canvas whether or not a popover is up.
 pub fn top_input_rects(
     snapshot: &ToolbarSnapshot,
     width: f64,
     height: f64,
 ) -> Option<Vec<(f64, f64, f64, f64)>> {
-    if snapshot.top_minimized {
-        return None;
-    }
-    if build::shape_popover_height(snapshot) + build::overflow_height(snapshot) <= 0.0 {
+    if snapshot.top_minimized || snapshot.top_micro_active() {
         return None;
     }
     let plan = plan_top_strip(snapshot);
     let bar_h = bar_band_height(snapshot, &plan);
     let tree = build_top_view(snapshot, width, height);
-    let mut rects = vec![(0.0, 0.0, width, bar_h)];
+    let mut rects: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.island."))
+        .map(|node| node.rect)
+        .collect();
+    if rects.is_empty() {
+        rects.push((0.0, 0.0, width, bar_h));
+    }
     for id in ["top.shapes.panel", "top.overflow.panel"] {
         if let Some(node) = tree.node_by_id(&id.to_string().into()) {
             let (x, y, w, h) = node.rect;
@@ -208,7 +234,7 @@ pub fn top_input_rects(
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, and the overflow popover.
 pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
-    if snapshot.top_minimized {
+    if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
     }
     build::shape_popover_height(snapshot)
@@ -230,45 +256,50 @@ fn natural_width_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64
 }
 
 fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, height: f64) -> f64 {
-    let gap = planned_gap(plan);
     let tree = build::build_top_view_planned(snapshot, plan, 0.0, height);
+    // The tools/history island cards already include their trailing padding,
+    // so the max right edge of the left-hand content is the pill edge. The
+    // right-anchored chrome (island card and buttons) is excluded because it
+    // is positioned from the sentinel width.
     let left_end = tree
         .nodes()
         .iter()
         .filter(|node| {
             let id = node.id.as_str();
             id != "top.panel"
+                && id != "top.island.chrome"
                 && !id.starts_with("top.chrome.pin")
                 && !id.starts_with("top.chrome.close")
-                && !id.starts_with("top.chrome.overflow")
                 && !id.starts_with("top.overflow.")
         })
         .map(|node| node.rect.0 + node.rect.2)
         .fold(0.0_f64, f64::max);
 
     let chrome_count = model::TopToolbarSpec::chrome_control_count(snapshot, plan);
-    let chrome = if chrome_count == 0 {
-        0.0
+    if chrome_count == 0 {
+        return left_end;
+    }
+    let (island_gap, island_pad) = planned_island_metrics(plan);
+    let chrome_size = if plan.compact {
+        TOP_COMPACT_CHROME
     } else {
-        let chrome_size = if plan.compact {
-            TOP_COMPACT_CHROME
-        } else {
-            ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE
-        };
-        let chrome_gap = if plan.compact {
-            TOP_COMPACT_GAP
-        } else {
-            ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP
-        };
-        chrome_size * chrome_count as f64
-            + chrome_gap * chrome_count.saturating_sub(1) as f64
-            + if plan.compact {
-                TOP_COMPACT_MARGIN_RIGHT
-            } else {
-                ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
-            }
+        ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE
     };
-    left_end + gap + chrome
+    let chrome_gap = if plan.compact {
+        TOP_COMPACT_GAP
+    } else {
+        ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP
+    };
+    let chrome = chrome_size * chrome_count as f64
+        + chrome_gap * chrome_count.saturating_sub(1) as f64
+        + if plan.compact {
+            TOP_COMPACT_MARGIN_RIGHT
+        } else {
+            ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
+        };
+    // Gap to the chrome pill, its leading padding, then the chrome block
+    // (which carries its own trailing margin inside the pill).
+    left_end + island_gap + island_pad + chrome
 }
 
 #[cfg(test)]

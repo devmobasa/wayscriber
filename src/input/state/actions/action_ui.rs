@@ -52,6 +52,28 @@ impl InputState {
                 }
                 true
             }
+            Action::CycleToolbarDisplay => {
+                // Same presenter gate as ToggleToolbar: while presenter mode
+                // owns toolbar visibility, the cycle must not fight it.
+                if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+                    return true;
+                }
+                let mode = self.cycle_top_toolbar_display();
+                self.pending_onboarding_usage.used_toolbar_toggle = true;
+                self.set_ui_toast(
+                    UiToastKind::Info,
+                    match mode {
+                        crate::config::TopDisplayMode::Full => "Toolbar: full",
+                        crate::config::TopDisplayMode::Micro => "Toolbar: micro",
+                        crate::config::TopDisplayMode::Hidden => "Toolbar: hidden",
+                    },
+                );
+                self.set_pending_backend_action(PendingBackendAction::PersistToolbarConfig);
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                info!("Toolbar display mode cycled to {mode:?}");
+                true
+            }
             Action::TogglePresenterMode => {
                 let enabled = self.toggle_presenter_mode();
                 info!(

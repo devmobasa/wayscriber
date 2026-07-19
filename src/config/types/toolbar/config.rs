@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier,
+    ToolbarRebindModifier, TopDisplayMode,
 };
 
 /// Toolbar visibility and pinning configuration.
@@ -39,6 +39,12 @@ pub struct ToolbarConfig {
     /// Start the top toolbar minimized to its edge restore tab
     #[serde(default)]
     pub top_minimized: bool,
+
+    /// Display form of the top strip restored at startup ("full", "micro").
+    /// "hidden" is accepted but treated as "full"; visibility at startup is
+    /// governed by `top_pinned`.
+    #[serde(default)]
+    pub top_display_mode: TopDisplayMode,
 
     /// Start the side toolbar minimized to its edge restore tab
     #[serde(default)]
@@ -155,6 +161,7 @@ impl Default for ToolbarConfig {
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
             top_minimized: false,
+            top_display_mode: TopDisplayMode::default(),
             side_minimized: false,
             side_active_pane: default_side_active_pane(),
             collapsed_sections: Vec::new(),

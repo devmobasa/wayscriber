@@ -5,7 +5,7 @@
 # Delete this file to reset to defaults.
 
 # Internal migration provenance. Keep this value when editing the file.
-config_revision = 1
+config_revision = 2
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
@@ -154,8 +154,12 @@ toggle_quick_help = ["Shift+F1"]
 # Toggle status bar
 toggle_status_bar = ["F12", "F4"]
 
-# Toggle toolbars
-toggle_toolbar = ["F2", "F9"]
+# Toggle toolbars (show/hide top and side together)
+toggle_toolbar = ["F9"]
+
+# Cycle the top toolbar's display: full strip -> micro chip -> hidden
+# (F2 used to toggle the toolbars; the cycle still reaches hidden)
+cycle_toolbar_display = ["F2"]
 
 # Toggle click highlight
 toggle_click_highlight = ["Ctrl+Shift+H"]
@@ -359,7 +363,7 @@ active_output_badge = true
 radial_menu_mouse_binding = "middle"
 
 # ───────────────────────────────────────────────────────────────────────────────
-# Floating Toolbars (Press F2/F9 to toggle)
+# Floating Toolbars (F9 toggles; F2 cycles full -> micro -> hidden)
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]
@@ -419,6 +423,12 @@ side_pinned = true
 # clickable tab on screen to bring it back
 top_minimized = false
 side_minimized = false
+
+# Display form of the top strip restored at startup: "full" or "micro"
+# (one 44px round chip: active tool glyph + a ring in the current color).
+# The cycle keybinding updates this; a cycle-hidden strip is runtime-only
+# and comes back per top_pinned
+top_display_mode = "full"
 
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
 # The overlay updates this as you switch panes
@@ -627,6 +637,10 @@ enabled = true
 hide_status_bar = true
 hide_toolbars = true
 hide_tool_preview = true
+
+# What hide_toolbars does to the top strip: "hidden" removes it entirely,
+# "micro" collapses it to the 44px micro chip (side toolbars always hide)
+toolbar_mode = "hidden"
 
 # Close the help overlay when entering presenter mode
 close_help_overlay = true

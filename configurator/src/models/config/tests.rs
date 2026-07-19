@@ -76,8 +76,11 @@ fn config_draft_to_config_reports_errors() {
 fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
     let temp = crate::test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
-    let original = "config_revision = 1\n# intentionally sparse\n";
-    std::fs::write(&path, original).expect("write sparse config");
+    let original = format!(
+        "config_revision = {}\n# intentionally sparse\n",
+        wayscriber::config::CURRENT_CONFIG_REVISION
+    );
+    std::fs::write(&path, &original).expect("write sparse config");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
     let draft = ConfigDraft::from_config(document.config());
     let updated = draft
@@ -210,12 +213,15 @@ fn config_draft_preserves_implicit_quick_color_defaults() {
 fn config_draft_preserves_sparse_explicit_quick_colors_without_padding_the_file() {
     let temp = crate::test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
-    let original = r#"config_revision = 1
+    let original = format!(
+        r#"config_revision = {}
 [[drawing.quick_colors]]
 label = "Only configured color"
 color = "blue"
-"#;
-    std::fs::write(&path, original).expect("write sparse quick colors");
+"#,
+        wayscriber::config::CURRENT_CONFIG_REVISION
+    );
+    std::fs::write(&path, &original).expect("write sparse quick colors");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse quick colors");
     assert_eq!(
         document

@@ -161,7 +161,7 @@ pub fn render_side_palette(
     hover: Option<(f64, f64)>,
     hover_start: Option<Instant>,
 ) -> Result<()> {
-    draw_panel_background(ctx, width, height);
+    draw_panel_background(ctx, 0.0, 0.0, width, height);
 
     if snapshot.side_minimized {
         draw_side_minimized_tab(ctx, width, height, hits, hover, hover_start);

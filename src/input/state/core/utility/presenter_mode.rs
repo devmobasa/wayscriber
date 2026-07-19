@@ -27,6 +27,12 @@ impl InputState {
                 if let Some(value) = restore.toolbar_side_visible {
                     self.toolbar_side_visible = value;
                 }
+                if let Some(value) = restore.toolbar_top_display_mode {
+                    self.toolbar_top_display_mode = value;
+                }
+                if let Some(value) = restore.toolbar_top_minimized {
+                    self.toolbar_top_minimized = value;
+                }
                 if let Some(value) = restore.tool_override {
                     self.set_tool_override(value);
                 }
@@ -57,6 +63,8 @@ impl InputState {
             toolbar_visible: None,
             toolbar_top_visible: None,
             toolbar_side_visible: None,
+            toolbar_top_display_mode: None,
+            toolbar_top_minimized: None,
             click_highlight_enabled: None,
             tool_override: None,
         };
@@ -82,9 +90,21 @@ impl InputState {
             restore.toolbar_visible = Some(self.toolbar_visible);
             restore.toolbar_top_visible = Some(self.toolbar_top_visible);
             restore.toolbar_side_visible = Some(self.toolbar_side_visible);
-            self.toolbar_visible = false;
-            self.toolbar_top_visible = false;
-            self.toolbar_side_visible = false;
+            match config.toolbar_mode {
+                crate::config::PresenterToolbarMode::Hidden => {
+                    self.toolbar_visible = false;
+                    self.toolbar_top_visible = false;
+                    self.toolbar_side_visible = false;
+                }
+                crate::config::PresenterToolbarMode::Micro => {
+                    // The top strip stays up as the micro chip; side (and
+                    // bottom) toolbars keep the hidden behavior.
+                    restore.toolbar_top_display_mode = Some(self.toolbar_top_display_mode);
+                    restore.toolbar_top_minimized = Some(self.toolbar_top_minimized);
+                    self.toolbar_side_visible = false;
+                    self.set_top_display_mode(crate::config::TopDisplayMode::Micro);
+                }
+            }
         }
         if !matches!(
             config.tool_behavior,

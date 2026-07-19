@@ -43,7 +43,7 @@ pub use export::{
 pub use help_overlay::HelpOverlayStyle;
 pub use history::HistoryConfig;
 pub use performance::PerformanceConfig;
-pub use presenter_mode::{PresenterModeConfig, PresenterToolBehavior};
+pub use presenter_mode::{PresenterModeConfig, PresenterToolBehavior, PresenterToolbarMode};
 pub use presets::{
     PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig, PresetToolSettingConfig,
     PresetToolStatesConfig, ToolPresetConfig,
@@ -61,8 +61,8 @@ pub use toolbar::{
     ResolvedToolbarItems, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, toolbar_item_definitions,
-    toolbar_item_order_group,
+    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, TopDisplayMode,
+    toolbar_item_definitions, toolbar_item_order_group,
 };
 pub use toolbar::{
     ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,

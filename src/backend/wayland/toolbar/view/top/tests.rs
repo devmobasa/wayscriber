@@ -40,7 +40,7 @@ fn strip_reads_as_divider_chunked_groups() {
         "top.group.quick-colors",
         "top.utility.undo",
         "top.utility.redo",
-        "top.utility.clear-canvas",
+        "top.chrome.overflow",
     ];
     let mut last = 0;
     for id in expected_order {
@@ -58,11 +58,57 @@ fn strip_reads_as_divider_chunked_groups() {
     // The Ico/Txt segmented toggle left the strip for the Settings pane.
     assert!(!ids.contains(&"top.utility.icon-mode"));
 
-    // Divider-chunked groups exist.
+    // Clear moved into the overflow menu; the strip carries no Clear tile.
+    assert!(!ids.contains(&"top.utility.clear-canvas"));
+
+    // Divider-chunked groups exist inside the tools island; the old
+    // history divider became the tools|history island gap.
     assert!(ids.contains(&"top.divider.tools"));
     assert!(ids.contains(&"top.divider.annotations"));
     assert!(ids.contains(&"top.divider.colors"));
-    assert!(ids.contains(&"top.divider.history"));
+    assert!(!ids.contains(&"top.divider.history"));
+
+    // The three pill islands back the strip.
+    assert!(ids.contains(&"top.island.tools"));
+    assert!(ids.contains(&"top.island.history"));
+    assert!(ids.contains(&"top.island.chrome"));
+}
+
+#[test]
+fn islands_are_detached_pills_in_reading_order() {
+    let snapshot = snapshot();
+    let tree = build(&snapshot);
+    let island = |key: &str| {
+        tree.node_by_id(&format!("top.island.{key}").into())
+            .unwrap_or_else(|| panic!("{key} island"))
+    };
+    let tools = island("tools");
+    let history = island("history");
+    let chrome = island("chrome");
+
+    // Pills read left to right with clear gaps between their edges.
+    let gap = ToolbarLayoutSpec::TOP_ISLAND_GAP;
+    assert!((history.rect.0 - (tools.rect.0 + tools.rect.2) - gap).abs() < 1e-9);
+    assert!(chrome.rect.0 >= history.rect.0 + history.rect.2 + gap - 1e-9);
+    // Pills hug the surface edges and paint the panel treatment.
+    assert_eq!(tools.rect.0, 0.0);
+    let (w, _) = tree.size();
+    assert!((chrome.rect.0 + chrome.rect.2 - w).abs() < 1e-9);
+    for node in [&tools, &history, &chrome] {
+        assert!(matches!(node.kind, WidgetKind::Panel));
+        assert!(node.interact.is_none());
+    }
+
+    // The island contents stay inside their pill.
+    let undo = tree.node_by_id(&"top.utility.undo".into()).expect("undo");
+    assert!(
+        undo.rect.0 >= history.rect.0
+            && undo.rect.0 + undo.rect.2 <= history.rect.0 + history.rect.2
+    );
+    let overflow = tree
+        .node_by_id(&"top.chrome.overflow".into())
+        .expect("overflow toggle");
+    assert!(overflow.rect.0 + overflow.rect.2 <= history.rect.0 + history.rect.2 + 1e-9);
 }
 
 #[test]
@@ -121,9 +167,10 @@ fn shortcut_badges_follow_the_snapshot_bindings() {
             .map(|badge| badge.label.as_str()),
         Some("F")
     );
+    // Icon buttons caption their shortcut under the icon.
     assert_eq!(
         pen.shortcut_badge.as_ref().map(|badge| badge.placement),
-        Some(ShortcutBadgePlacement::Corner)
+        Some(ShortcutBadgePlacement::Below)
     );
 
     let red = tree
@@ -147,6 +194,22 @@ fn shortcut_badges_follow_the_snapshot_bindings() {
             .as_deref()
             .is_some_and(|text| text.contains("(R)"))
     );
+
+    // Text-label buttons keep the boxed corner micro-badge.
+    let mut text_snapshot = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    text_snapshot.use_icons = false;
+    let text_tree = build(&text_snapshot);
+    let text_pen = text_tree.node_by_id(&"top.tool.pen".into()).expect("pen");
+    assert_eq!(
+        text_pen
+            .shortcut_badge
+            .as_ref()
+            .map(|badge| badge.placement),
+        Some(ShortcutBadgePlacement::Corner)
+    );
 }
 
 #[test]
@@ -163,21 +226,33 @@ fn history_buttons_disable_without_history() {
 }
 
 #[test]
-fn clear_sits_isolated_after_history() {
-    let snapshot = snapshot();
+fn clear_lives_in_overflow_first_with_destructive_styling() {
+    let mut snapshot = snapshot();
+    snapshot.top_overflow_open = true;
     let tree = build(&snapshot);
-    let redo = tree.node_by_id(&"top.utility.redo".into()).expect("redo");
-    let clear = tree
-        .node_by_id(&"top.utility.clear-canvas".into())
-        .expect("clear");
-    let gap = ToolbarLayoutSpec::TOP_GAP;
+
     assert!(
-        clear.rect.0 >= redo.rect.0 + redo.rect.2 + gap * 2.0 - 1e-9,
-        "double gap isolates Clear"
+        tree.node_by_id(&"top.utility.clear-canvas".into())
+            .is_none(),
+        "Clear left the strip for the overflow menu"
+    );
+    let first_overflow_item = tree
+        .nodes()
+        .iter()
+        .find(|node| node.id.as_str().starts_with("top.overflow.") && node.interact.is_some())
+        .expect("open overflow menu content");
+    assert_eq!(
+        first_overflow_item.id.as_str(),
+        "top.overflow.top.utility.clear-canvas",
+        "Clear leads the overflow menu"
     );
     assert!(matches!(
-        clear.kind,
+        first_overflow_item.kind,
         WidgetKind::IconButton { style, .. } if style.destructive
+    ));
+    assert!(matches!(
+        first_overflow_item.interact.as_ref().unwrap().event,
+        ToolbarEvent::ClearCanvas { instant: false }
     ));
 }
 
@@ -252,51 +327,78 @@ fn shape_picker_shows_fill_while_line_is_active() {
 }
 
 #[test]
-fn input_rects_cover_bar_and_open_popovers_only() {
+fn input_rects_cover_islands_and_open_popovers_only() {
     let mut state = make_test_input_state();
     state.toolbar_shapes_expanded = false;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
-    assert!(
-        top_input_rects(&snapshot, w as f64, h as f64).is_none(),
-        "no popover: whole surface takes input"
-    );
+    let rects = top_input_rects(&snapshot, w as f64, h as f64)
+        .expect("no popover: the islands still restrict input");
+    assert_eq!(rects.len(), 3, "three island pills only: {rects:?}");
+    // The gaps between islands click through to the canvas even in the
+    // common no-popover state: consecutive island rects do not touch.
+    assert!(rects[0].0 + rects[0].2 < rects[1].0);
+    assert!(rects[1].0 + rects[1].2 < rects[2].0);
+    let tree = build_top_view(&snapshot, w as f64, h as f64);
+    let islands: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.island."))
+        .collect();
+    assert_eq!(islands.len(), 3);
+    for (island, input_rect) in islands.iter().zip(&rects) {
+        assert_eq!(island.rect, *input_rect, "{}", island.id);
+    }
 
     state.toolbar_shapes_expanded = true;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
     let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("partial input region");
-    assert_eq!(rects.len(), 2, "bar band + shapes panel: {rects:?}");
+    assert_eq!(rects.len(), 4, "three islands + shapes panel: {rects:?}");
     assert_eq!(rects[0].0, 0.0);
     assert_eq!(rects[0].1, 0.0);
-    assert!(rects[0].3 < h as f64, "bar band ends above the popover");
+    for island in &rects[..3] {
+        assert!(
+            island.1 + island.3 < h as f64,
+            "islands end above the popover"
+        );
+    }
+    // The gaps between islands stay click-through: consecutive island
+    // rects do not touch.
+    assert!(rects[0].0 + rects[0].2 < rects[1].0);
+    assert!(rects[1].0 + rects[1].2 < rects[2].0);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
     let panel = tree
         .node_by_id(&"top.shapes.panel".into())
         .expect("panel node");
-    assert!(rects[1].1 <= panel.rect.1 && rects[1].3 >= panel.rect.3);
+    assert!(rects[3].1 <= panel.rect.1 && rects[3].3 >= panel.rect.3);
 }
 
 #[test]
-fn panel_background_stops_at_bar_band_when_popover_is_open() {
+fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
     let mut state = make_test_input_state();
     state.toolbar_shapes_expanded = true;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
-    let panel = tree
-        .node_by_id(&"top.panel".into())
-        .expect("top panel node");
     let input_rects = top_input_rects(&snapshot, w as f64, h as f64).expect("partial input region");
 
-    assert_eq!(panel.rect, input_rects[0]);
-    assert!(
-        panel.rect.3 < h as f64,
-        "popover area must stay transparent"
-    );
+    let islands: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.island."))
+        .collect();
+    assert_eq!(islands.len(), 3, "tools/history/chrome pills");
+    for (island, input_rect) in islands.iter().zip(&input_rects[..3]) {
+        assert_eq!(island.rect, *input_rect, "{}", island.id);
+        assert!(
+            island.rect.1 + island.rect.3 < h as f64,
+            "popover area must stay transparent"
+        );
+    }
 }
 
 #[test]
@@ -319,6 +421,71 @@ fn minimized_strip_is_a_single_restore_tab() {
         interactive[0].interact.as_ref().unwrap().event,
         ToolbarEvent::SetTopMinimized(false)
     ));
+}
+
+#[test]
+fn micro_strip_is_a_single_round_chip() {
+    let mut snapshot = snapshot();
+    snapshot.top_display_mode = crate::config::TopDisplayMode::Micro;
+
+    let (w, h) = top_size(&snapshot);
+    assert_eq!(
+        (w, h),
+        ToolbarLayoutSpec::TOP_MICRO_SIZE,
+        "micro mode is one 44px chip"
+    );
+
+    let tree = build_top_view(&snapshot, w as f64, h as f64);
+    let interactive: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.interact.is_some())
+        .collect();
+    assert_eq!(interactive.len(), 1, "one chip control only");
+    assert_eq!(interactive[0].id.as_str(), "top.chrome.micro");
+    assert!(matches!(
+        interactive[0].interact.as_ref().unwrap().event,
+        ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Full)
+    ));
+    match &interactive[0].kind {
+        WidgetKind::MicroChip {
+            glyph,
+            ring_color,
+            ring_width,
+        } => {
+            let expected_icon = crate::ui::toolbar::model::TopToolbarIcon::Tool(
+                crate::ui::toolbar::model::semantic_icon_for_tool(snapshot.active_tool),
+            );
+            assert!(std::ptr::fn_addr_eq(
+                glyph.0,
+                crate::toolbar_icons::top_toolbar_icon_painter(expected_icon)
+            ));
+            assert_eq!(
+                *ring_color,
+                (
+                    snapshot.color.r,
+                    snapshot.color.g,
+                    snapshot.color.b,
+                    snapshot.color.a
+                ),
+                "ring strokes in the current color"
+            );
+            assert_eq!(
+                *ring_width,
+                crate::ui::toolbar::model::micro_ring_width(snapshot.thickness)
+            );
+        }
+        other => panic!("micro chip kind, got {other:?}"),
+    }
+
+    // No popovers, ring rows, or partial input regions in micro mode: the
+    // whole 44px surface takes input.
+    assert!(top_input_rects(&snapshot, w as f64, h as f64).is_none());
+    assert_eq!(top_extra_height(&snapshot), 0.0);
+
+    // Minimized wins if both states are somehow set.
+    snapshot.top_minimized = true;
+    assert_eq!(top_size(&snapshot), ToolbarLayoutSpec::TOP_MINIMIZED_SIZE);
 }
 
 #[test]
@@ -348,7 +515,6 @@ fn overflow_utility_tooltips_remain_bare_action_labels() {
     snapshot.top_overflow_open = true;
     let mut plan = TopStripPlan::unconstrained();
     plan.swatch_count = 0;
-    plan.show_overflow = true;
     plan.dropped_utilities = vec![model::TopUtilityButton::Text];
 
     let tree = super::build::build_top_view_planned(&snapshot, &plan, 800.0, 160.0);

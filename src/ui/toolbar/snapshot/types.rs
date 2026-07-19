@@ -1,6 +1,7 @@
 use crate::config::QuickColorPalette;
 use crate::config::{
-    ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, toolbar_item_ids as ids,
+    ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode,
+    toolbar_item_ids as ids,
 };
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
@@ -319,6 +320,13 @@ pub struct ToolbarSnapshot {
     pub top_overflow_open: bool,
     /// Whether the top strip is minimized to its edge restore tab
     pub top_minimized: bool,
+    /// Display form of the top strip (full strip vs. micro chip). `Hidden`
+    /// never reaches a renderer — hidden strips have no surface.
+    pub top_display_mode: TopDisplayMode,
+    /// Idle-fade opacity of the top-strip islands: 1.0 = full,
+    /// `fade::TOP_STRIP_DIM_LEVEL` = dimmed, values between while a fade
+    /// transition is in flight. Owned by the backend fade engine.
+    pub top_fade: f64,
     /// Whether the side palette is minimized to its edge restore tab
     pub side_minimized: bool,
     /// Width available to the top strip in pre-scale spec units, when
@@ -362,6 +370,13 @@ pub struct ToolbarSnapshot {
 }
 
 impl ToolbarSnapshot {
+    /// Whether the top strip renders as the micro chip. Minimized wins when
+    /// both states are somehow set (e.g. a hand-edited config): the restore
+    /// tab is the more explicit "bring me back" affordance.
+    pub fn top_micro_active(&self) -> bool {
+        self.top_display_mode == TopDisplayMode::Micro && !self.top_minimized
+    }
+
     pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {
         self.resolved_toolbar_items.is_hidden(item)
     }

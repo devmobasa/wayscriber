@@ -29,6 +29,9 @@ pub(super) struct FeedbackSender {
     backend_rebind_active: Rc<Cell<bool>>,
     click_rebind_requested: Rc<Cell<bool>>,
     click_in_progress: Rc<Cell<bool>>,
+    /// Shift state captured from the current GTK click; consumed by
+    /// `send_event` to upgrade Clear to its instant (no-toast) variant.
+    click_shift: Rc<Cell<bool>>,
 }
 
 pub(super) trait FeedbackSink {
@@ -56,6 +59,7 @@ impl FeedbackSender {
             backend_rebind_active: Rc::new(Cell::new(false)),
             click_rebind_requested: Rc::new(Cell::new(false)),
             click_in_progress: Rc::new(Cell::new(false)),
+            click_shift: Rc::new(Cell::new(false)),
         }
     }
 
@@ -71,6 +75,8 @@ impl FeedbackSender {
 
     fn capture_click_modifiers(&self, state: gtk4::gdk::ModifierType) {
         self.click_in_progress.set(true);
+        self.click_shift
+            .set(state.contains(gtk4::gdk::ModifierType::SHIFT_MASK));
         if self.rebind_modifier.get().matches(
             state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
             state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
@@ -82,6 +88,7 @@ impl FeedbackSender {
 
     fn finish_pointer_click(&self) {
         self.click_in_progress.set(false);
+        self.click_shift.set(false);
         if !self.backend_rebind_active.get() {
             self.click_rebind_requested.set(false);
         }
@@ -94,11 +101,37 @@ impl FeedbackSender {
 
 pub(super) fn send_event(sender: &FeedbackSender, event: ToolbarEvent) {
     let rebind_requested = sender.click_rebind_requested.replace(false);
+    let shift_click = sender.click_shift.replace(false);
     sender.click_in_progress.set(false);
+    // GTK runs on its own Wayland connection, so the backend cannot read
+    // this click's modifiers; resolve the Shift = instant-clear upgrade at
+    // capture time and forward the resolved variant.
+    let event = match event {
+        ToolbarEvent::ClearCanvas { instant } => ToolbarEvent::ClearCanvas {
+            instant: instant || shift_click,
+        },
+        other => other,
+    };
     let _ = sender.send(GtkToolbarFeedback::Event {
         event,
         rebind_requested,
     });
+}
+
+/// Capture click modifiers on a widget subtree that lives outside the
+/// toolbar window's own capture controller (popovers are separate GTK
+/// natives, so the window-level gesture never sees their clicks).
+pub(super) fn install_click_modifier_capture(
+    widget: &impl IsA<gtk4::Widget>,
+    feedback: &FeedbackSender,
+) {
+    let click = gtk4::GestureClick::new();
+    click.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    let feedback = feedback.clone();
+    click.connect_pressed(move |gesture, _, _, _| {
+        feedback.capture_click_modifiers(gesture.current_event_state());
+    });
+    widget.as_ref().add_controller(click);
 }
 
 /// Fixed-size button so GTK widths match the deterministic layout plan.
@@ -323,6 +356,43 @@ pub(super) fn add_shortcut_badge(button: &gtk4::Button, badge: Option<&str>) {
     label.set_margin_end(2);
     overlay.add_overlay(&label);
     button.set_child(Some(&overlay));
+}
+
+/// Stack a small caption with the shortcut key under the button's icon
+/// (Excalidraw pattern), inside the unchanged button tile. Icon-mode
+/// counterpart of the boxed corner badge that text buttons keep.
+pub(super) fn add_shortcut_caption_below(button: &gtk4::Button, badge: Option<&str>) {
+    let Some(badge) = badge else {
+        return;
+    };
+    let column = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    column.set_halign(gtk4::Align::Center);
+    column.set_valign(gtk4::Align::Center);
+    if let Some(child) = button.child() {
+        button.set_child(None::<&gtk4::Widget>);
+        column.append(&child);
+    }
+    let label = gtk4::Label::new(Some(badge));
+    label.add_css_class("shortcut-badge");
+    label.add_css_class("below-icon");
+    label.set_can_target(false);
+    label.set_halign(gtk4::Align::Center);
+    column.append(&label);
+    button.set_child(Some(&column));
+}
+
+/// Shortcut hint for a strip/popover button: icon buttons get the caption
+/// under the icon, text buttons keep the boxed corner badge.
+pub(super) fn add_button_shortcut_hint(
+    button: &gtk4::Button,
+    badge: Option<&str>,
+    use_icons: bool,
+) {
+    if use_icons {
+        add_shortcut_caption_below(button, badge);
+    } else {
+        add_shortcut_badge(button, badge);
+    }
 }
 
 /// Put a quick-color shortcut above its swatch without changing the swatch's

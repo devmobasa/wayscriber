@@ -340,6 +340,10 @@ pub(super) fn build_main_sections(
             action_label(Action::ToggleToolbar),
         ),
         row(
+            binding_or_fallback(bindings, Action::CycleToolbarDisplay, NOT_BOUND_LABEL),
+            action_label(Action::CycleToolbarDisplay),
+        ),
+        row(
             binding_or_fallback(bindings, Action::TogglePresenterMode, NOT_BOUND_LABEL),
             action_label(Action::TogglePresenterMode),
         ),

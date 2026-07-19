@@ -3,6 +3,7 @@ use super::*;
 
 mod drag;
 mod events;
+mod fade;
 pub(in crate::backend::wayland::state) use events::SessionFileDialogController;
 mod geometry;
 #[cfg(feature = "toolbar-gtk")]

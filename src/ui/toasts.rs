@@ -394,6 +394,9 @@ mod tests {
 
     #[test]
     fn ui_toast_uses_a_short_fixed_end_fade() {
+        // The fade helpers read the process-wide motion flag; hold the
+        // override guard so parallel reduced-motion tests cannot flip it.
+        let _motion = crate::ui::anim::override_motion_for_test(true);
         assert_eq!(ui_toast_fade(0.0, 5.0), 1.0);
         assert_eq!(ui_toast_fade(4.8, 5.0), 1.0);
         assert!((ui_toast_fade(4.9, 5.0) - 0.5).abs() < 1e-9);
@@ -402,6 +405,7 @@ mod tests {
 
     #[test]
     fn preset_toast_keeps_its_proportional_fade() {
+        let _motion = crate::ui::anim::override_motion_for_test(true);
         assert_eq!(preset_toast_fade(0.0), 1.0);
         assert_eq!(preset_toast_fade(PRESET_TOAST_HOLD_RATIO), 1.0);
         assert_eq!(preset_toast_fade(0.875), 0.5);

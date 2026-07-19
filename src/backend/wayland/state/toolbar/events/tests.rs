@@ -506,6 +506,66 @@ fn tool_preview_config_preserves_presenter_mode_restore_value() {
 }
 
 #[test]
+fn toolbar_persist_during_presenter_micro_writes_the_pre_presenter_top_state() {
+    use crate::config::{PresenterToolbarMode, TopDisplayMode};
+
+    let mut state = make_test_input_state();
+    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    state.toolbar_top_minimized = true;
+    state.toolbar_top_display_mode = TopDisplayMode::Full;
+
+    state.toggle_presenter_mode();
+    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Micro);
+    assert!(
+        !state.toolbar_top_minimized,
+        "micro mapping clears minimized"
+    );
+
+    // A Persist(Toolbar) event during presenter mode (e.g. the pin toggle)
+    // runs `save_toolbar_pin_config`, which routes these two fields through
+    // the helpers below: the written config must keep the saved
+    // pre-presenter values, not the presenter mapping.
+    let restore = state.presenter_restore.as_ref().expect("presenter restore");
+    assert!(persisted_top_minimized_value(
+        state.toolbar_top_minimized,
+        restore.toolbar_top_minimized
+    ));
+    assert_eq!(
+        persisted_top_display_mode_value(
+            state.toolbar_top_display_mode,
+            restore.toolbar_top_display_mode
+        ),
+        TopDisplayMode::Full
+    );
+
+    // Exit restores the live values and drops the restore slots, so a
+    // post-exit persist writes live state again.
+    state.toggle_presenter_mode();
+    assert!(state.presenter_restore.is_none());
+    assert!(state.toolbar_top_minimized);
+    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert!(persisted_top_minimized_value(
+        state.toolbar_top_minimized,
+        None
+    ));
+    state.set_top_display_mode(TopDisplayMode::Micro);
+    assert_eq!(
+        persisted_top_display_mode_value(state.toolbar_top_display_mode, None),
+        TopDisplayMode::Micro
+    );
+    // The hidden step stays runtime-only even through the presenter path.
+    assert_eq!(
+        persisted_top_display_mode_value(TopDisplayMode::Hidden, None),
+        TopDisplayMode::Full
+    );
+    assert_eq!(
+        persisted_top_display_mode_value(TopDisplayMode::Micro, Some(TopDisplayMode::Hidden)),
+        TopDisplayMode::Full
+    );
+}
+
+#[test]
 fn shape_picker_survives_its_own_inline_options() {
     // The Shapes popover hosts the Fill checkbox and the polygon-sides stepper,
     // so using them must not dismiss the popover...

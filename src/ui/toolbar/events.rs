@@ -222,7 +222,12 @@ pub enum ToolbarEvent {
     RedoAllDelayed,
     Undo,
     Redo,
-    ClearCanvas,
+    /// Clear the canvas. The default mouse path (`instant: false`) offers a
+    /// short "Cleared — Undo?" toast; Shift+click and the keyboard action use
+    /// the instant variant with no toast.
+    ClearCanvas {
+        instant: bool,
+    },
     CaptureScreenshot,
     PagePrev,
     PageNext,
@@ -277,6 +282,9 @@ pub enum ToolbarEvent {
     /// Minimize the top strip to a small edge tab (click restores), or
     /// restore it. Replaces closing: there is always a way back on screen.
     SetTopMinimized(bool),
+    /// Set the top strip's display form (full strip / micro chip / hidden).
+    /// The micro chip's click emits `SetTopDisplayMode(Full)`.
+    SetTopDisplayMode(crate::config::TopDisplayMode),
     /// Minimize the side palette to a small edge tab, or restore it.
     SetSideMinimized(bool),
     /// Deprecated alias for `SetTopMinimized(true)`; kept so external
@@ -395,7 +403,7 @@ impl ToolbarEvent {
     pub fn is_destructive(&self) -> bool {
         matches!(
             self,
-            ToolbarEvent::ClearCanvas
+            ToolbarEvent::ClearCanvas { .. }
                 | ToolbarEvent::UndoAll
                 | ToolbarEvent::UndoAllDelayed
                 | ToolbarEvent::BoardDelete

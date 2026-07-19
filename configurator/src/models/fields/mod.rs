@@ -17,7 +17,7 @@ pub use export::{
     PdfPageSizeOption, PdfTransparentBackgroundOption,
 };
 pub use font::{FontStyleOption, FontWeightOption};
-pub use presenter::PresenterToolBehaviorOption;
+pub use presenter::{PresenterToolBehaviorOption, PresenterToolbarModeOption};
 #[cfg(feature = "tablet-input")]
 pub use pressure::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use session::{SessionCompressionOption, SessionStorageModeOption};

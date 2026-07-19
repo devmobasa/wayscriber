@@ -60,7 +60,7 @@ impl TourStep {
                 "Click and drag to draw with the pen tool.\nUse R/G/B/Y keys to change colors.\nScroll wheel or +/- to adjust thickness.\nMiddle-click opens the radial menu for quick tool/color changes."
             }
             Self::ToolbarIntro => {
-                "Press F2 to toggle the toolbar.\nThe toolbar provides quick access to all tools and settings.\nBy default, Ctrl+Shift+click a bindable control to change its shortcut."
+                "Press F9 to toggle the toolbar; F2 cycles it full \u{2192} micro \u{2192} hidden.\nThe toolbar provides quick access to all tools and settings.\nBy default, Ctrl+Shift+click a bindable control to change its shortcut."
             }
             Self::CommandPalette => {
                 "Press Ctrl+K to open the command palette.\nQuickly search and run any action by typing.\nUse the row controls to edit, unbind, or reset shortcuts."

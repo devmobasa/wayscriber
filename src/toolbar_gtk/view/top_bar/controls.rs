@@ -180,7 +180,7 @@ impl TopBar {
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         if show_badge {
             let badge = control.shortcut_badge(snapshot);
-            add_shortcut_badge(&button, badge.as_deref());
+            add_button_shortcut_hint(&button, badge.as_deref(), use_icons);
         }
         let sender = self.feedback.clone();
         if matches!(
@@ -257,22 +257,24 @@ impl TopBar {
         button
     }
 
+    /// Overflow ⋯ toggle: a regular strip-sized icon button in the history
+    /// island (no round chrome styling) anchoring the overflow popover.
     pub(super) fn overflow_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
         control: model::TopToolbarControl,
-        size: f64,
+        button_size: (f64, f64),
+        icon_size: f64,
     ) -> gtk4::Button {
         assert_eq!(control, model::TopToolbarControl::Overflow);
-        let button = sized_button(size, size);
+        let button = sized_button(button_size.0, button_size.1);
         set_control_widget_id(&button, control);
-        button.add_css_class("chrome");
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
             top_toolbar_icon_painter(control.icon(snapshot).expect("overflow icon")),
-            size * 0.7,
+            icon_size,
         );
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();

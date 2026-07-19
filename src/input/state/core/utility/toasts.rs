@@ -285,9 +285,10 @@ impl InputState {
 mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{Color, FontDescriptor};
+    use crate::draw::{Color, FontDescriptor, Shape};
     use crate::input::state::core::base::TextEditEntryFeedback;
     use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::ui::toolbar::ToolbarEvent;
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -358,6 +359,71 @@ mod tests {
         assert_eq!(action, Some(Action::OpenCaptureFolder));
         assert!(state.ui_toast.is_none());
         assert!(state.ui_toast_bounds.is_none());
+    }
+
+    fn add_test_shape(state: &mut InputState) {
+        state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 10,
+            y: 10,
+            w: 5,
+            h: 5,
+            fill: false,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 1.0,
+        });
+    }
+
+    #[test]
+    fn toolbar_clear_offers_a_two_second_undo_toast() {
+        let mut state = make_state();
+        add_test_shape(&mut state);
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ClearCanvas { instant: false }));
+
+        assert!(state.boards.active_frame().shapes.is_empty());
+        assert!(
+            state.boards.active_frame().undo_stack_len() > 0,
+            "the toast's Undo? chip needs an undoable clear"
+        );
+        let toast = state.ui_toast.as_ref().expect("undo toast");
+        assert_eq!(toast.kind, UiToastKind::Info);
+        assert_eq!(toast.message, "Cleared");
+        assert_eq!(toast.duration_ms, 2000, "short-lived action toast");
+        let action = toast.action.as_ref().expect("undo action chip");
+        assert_eq!(action.label, "Undo?");
+        assert_eq!(action.action, Action::Undo);
+
+        // Clicking inside the toast returns the attached Undo action.
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        assert_eq!(state.check_toast_click(50, 40), (true, Some(Action::Undo)));
+    }
+
+    #[test]
+    fn instant_clear_skips_the_undo_toast() {
+        let mut state = make_state();
+        add_test_shape(&mut state);
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ClearCanvas { instant: true }));
+
+        assert!(state.boards.active_frame().shapes.is_empty());
+        assert!(state.ui_toast.is_none(), "Shift+click clears silently");
+    }
+
+    #[test]
+    fn empty_canvas_clear_shows_no_undo_toast() {
+        let mut state = make_state();
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ClearCanvas { instant: false }));
+
+        assert!(
+            state.ui_toast.is_none(),
+            "nothing was cleared, so nothing to undo"
+        );
     }
 
     #[test]

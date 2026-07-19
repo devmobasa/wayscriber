@@ -174,6 +174,13 @@ pub enum WidgetKind {
         color: (f64, f64, f64, f64),
         selected: bool,
     },
+    /// Micro-mode chip: the top strip collapsed to one round chip with the
+    /// active tool's glyph inside a ring stroked in the current color.
+    MicroChip {
+        glyph: IconFn,
+        ring_color: (f64, f64, f64, f64),
+        ring_width: f64,
+    },
     /// Pin (open-at-startup) toggle.
     PinButton { pinned: bool },
     /// Minimize chrome button (collapses the bar to its restore tab).
@@ -184,8 +191,13 @@ pub enum WidgetKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShortcutBadgePlacement {
+    /// Boxed micro-badge in the button's top-right corner (text buttons).
     Corner,
+    /// Unboxed caption centered above the widget (quick-color swatches).
     Above,
+    /// Unboxed caption centered under the icon, inside the button rect
+    /// (icon buttons, Excalidraw-style).
+    Below,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

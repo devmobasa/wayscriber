@@ -110,7 +110,13 @@ pub(super) fn run_event_loop(
             || !state.surface.is_configured()
             || (vsync_enabled && frame_callback_pending);
         let now = Instant::now();
-        let animation_timeout = state.ui_animation_timeout(now);
+        // Transient toolbar-fade animation shares the animation timeout slot:
+        // a fade in flight (or a pending 4s idle dim) wakes the loop, and a
+        // settled fade contributes nothing.
+        let animation_timeout = min_timeout(
+            state.ui_animation_timeout(now),
+            state.top_strip_fade_timeout(now),
+        );
         let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
@@ -241,6 +247,11 @@ pub(super) fn run_event_loop(
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
             warn!("Failed to autosave session state: {}", err);
         }
+
+        // Advance the top-strip idle fade before the snapshot consumers
+        // (GTK bridge below, layer/inline toolbar rendering inside
+        // maybe_render) read `top_fade` for this pass.
+        state.update_top_strip_fade(Instant::now());
 
         state.push_gtk_toolbar_update();
 

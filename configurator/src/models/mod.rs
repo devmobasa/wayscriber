@@ -25,10 +25,10 @@ pub use fields::{
     DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption,
     FontStyleOption, FontWeightOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
     PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresetEraserKindOption,
-    PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField, ReducedMotionOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
     ToolbarRebindModifierOption, TripletField, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]

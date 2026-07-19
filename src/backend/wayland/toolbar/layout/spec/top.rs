@@ -6,9 +6,19 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 58);
     /// Minimized top strip: the edge restore tab.
     pub(in crate::backend::wayland::toolbar) const TOP_MINIMIZED_SIZE: (u32, u32) = (64, 24);
+    /// Micro-mode top strip: one round tool/color chip.
+    pub(in crate::backend::wayland::toolbar) const TOP_MICRO_SIZE: (u32, u32) = (44, 44);
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_TEXT: (u32, u32) = (875, 60);
 
     pub(in crate::backend::wayland::toolbar) const TOP_GAP: f64 = 5.0;
+    /// Clear space between the detached top-strip islands (pill edges).
+    pub(in crate::backend::wayland::toolbar) const TOP_ISLAND_GAP: f64 = 10.0;
+    /// Inner horizontal padding between an island edge and its content.
+    /// The number lives in `theme::toolbar::ISLAND_PAD` so the GTK
+    /// stylesheet interpolates the same island padding — one source for
+    /// both frontends (theme must not depend on this backend module).
+    pub(in crate::backend::wayland::toolbar) const TOP_ISLAND_PAD: f64 =
+        crate::ui::theme::toolbar::ISLAND_PAD;
     pub(in crate::backend::wayland::toolbar) const TOP_START_X: f64 = 19.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_SIZE: f64 = 18.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_Y: f64 = 20.0;
@@ -33,6 +43,9 @@ impl ToolbarLayoutSpec {
     ) -> (u32, u32) {
         if snapshot.top_minimized {
             return Self::TOP_MINIMIZED_SIZE;
+        }
+        if snapshot.top_micro_active() {
+            return Self::TOP_MICRO_SIZE;
         }
         let base_height = if self.use_icons {
             Self::TOP_SIZE_ICONS.1

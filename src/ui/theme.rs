@@ -487,6 +487,15 @@ pub mod toolbar {
     // ---- GTK metrics: scale with `toolbar_scale` ----
     /// Panel horizontal padding
     pub const PANEL_PADDING_H: f64 = 10.0;
+    /// Top-strip island (pill) inner horizontal padding. One source for
+    /// both frontends: the builtin planner consumes it as
+    /// `ToolbarLayoutSpec::TOP_ISLAND_PAD` (width budgeting and pill
+    /// geometry) and the GTK stylesheet interpolates it as the `.pill`
+    /// horizontal padding, so the two cannot drift.
+    pub const ISLAND_PAD: f64 = 8.0;
+    /// Compact-mode counterpart of [`ISLAND_PAD`] (the last-resort
+    /// tightened presentation), shared the same way.
+    pub const COMPACT_ISLAND_PAD: f64 = 4.0;
     /// Checkbox indicator square size
     pub const CHECKBOX_SIZE: f64 = 14.0;
     /// Boxed shortcut badge font size

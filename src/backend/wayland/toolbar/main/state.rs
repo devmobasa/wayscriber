@@ -69,6 +69,12 @@ impl ToolbarSurfaceManager {
         self.top.is_surface(surface) || self.side.is_surface(surface)
     }
 
+    /// Whether the pointer (or keyboard focus hover) is currently on the
+    /// top strip. Drives the idle-fade restore.
+    pub fn top_pointer_present(&self) -> bool {
+        self.top_hover.is_some() || self.top.focused_hover().is_some()
+    }
+
     pub fn set_suppressed(&mut self, compositor: &CompositorState, suppressed: bool) {
         if self.suppressed == suppressed {
             return;

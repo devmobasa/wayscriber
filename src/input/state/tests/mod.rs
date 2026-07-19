@@ -32,5 +32,6 @@ mod step_markers;
 mod text_edit;
 mod text_input;
 mod tool_controls;
+mod toolbar_display;
 mod transform;
 mod zoom_actions;

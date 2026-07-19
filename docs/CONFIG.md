@@ -554,12 +554,17 @@ Control which UI elements presenter mode hides and how tools behave when it is a
 [presenter_mode]
 hide_status_bar = true
 hide_toolbars = true
+toolbar_mode = "hidden"
 hide_tool_preview = true
 close_help_overlay = true
 enable_click_highlight = true
 tool_behavior = "force-highlight"
 show_toast = true
 ```
+
+**Toolbar mode options** (what `hide_toolbars` does to the top strip):
+- `"hidden"` (default): hide the top strip along with the side toolbars
+- `"micro"`: collapse the top strip to the 44px micro chip (active tool glyph in a ring of the current color); side toolbars still hide
 
 **Tool behavior options:**
 - `"keep"`: Leave the active tool unchanged
@@ -585,7 +590,7 @@ Use `--light-draw-on` on key/button press and `--light-draw-off` on release for 
 
 ### `[ui.toolbar]` - Floating Toolbars
 
-Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
+Controls the top and side toolbars (<kbd>F9</kbd> toggles both; <kbd>F2</kbd> cycles the top strip full → micro → hidden).
 
 ```toml
 [ui.toolbar]
@@ -639,6 +644,11 @@ side_pinned = true
 # Start toolbars minimized to their edge restore tabs
 top_minimized = false
 side_minimized = false
+
+# Display form of the top strip restored at startup: "full" or "micro".
+# "hidden" is accepted but treated as "full" (startup visibility is
+# governed by top_pinned)
+top_display_mode = "full"
 
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
 side_active_pane = "draw"
@@ -782,14 +792,17 @@ side_sections = [
 - **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
-- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F2/F9 still toggle full visibility.
+- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F9 still toggles full visibility.
+- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists via `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
+- **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
 - **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
 - **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
-- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that always appears when width pressure moves visible controls into it. The icon/text mode toggle lives in the side palette's Settings pane.
+- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content: it always anchors Clear (`top.utility.clear-canvas`, unless that item is hidden) plus anything width pressure moves into it. The icon/text mode toggle lives in the side palette's Settings pane.
+- **Clear canvas**: Clear lives in the top strip's overflow (⋯) menu. A plain click clears and shows a short "Cleared — Undo?" toast; Shift+click clears instantly without the toast. The `clear_canvas` keyboard action is always instant and shows no toast.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
@@ -1277,8 +1290,13 @@ toggle_quick_help = ["Shift+F1"]
 # Toggle status bar visibility
 toggle_status_bar = ["F12", "F4"]
 
-# Toggle toolbars
-toggle_toolbar = ["F2", "F9"]
+# Toggle toolbars (show/hide top and side together).
+# Note: F2 moved to cycle_toolbar_display; hiding is still reachable via
+# the cycle, and explicit user configs keep whatever they bound.
+toggle_toolbar = ["F9"]
+
+# Cycle the top toolbar's display: full strip -> micro chip -> hidden
+cycle_toolbar_display = ["F2"]
 
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+M"]

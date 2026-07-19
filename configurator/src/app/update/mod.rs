@@ -209,6 +209,9 @@ impl ConfiguratorApp {
             Message::PresenterToolBehaviorChanged(option) => {
                 self.handle_presenter_tool_behavior_changed(option)
             }
+            Message::PresenterToolbarModeChanged(option) => {
+                self.handle_presenter_toolbar_mode_changed(option)
+            }
             Message::ExportPdfPageSizeChanged(option) => {
                 self.handle_export_pdf_page_size_changed(option)
             }

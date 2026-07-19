@@ -52,7 +52,8 @@ pub(crate) use tools::{
 #[allow(unused_imports)]
 pub(crate) use top_spec::{
     TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole, TopToolbarDivider,
-    TopToolbarIcon, TopToolbarNode, TopToolbarSpec, TopToolbarUtility, action_tooltip,
+    TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec, TopToolbarUtility,
+    action_tooltip, micro_ring_width,
 };
 
 #[cfg(test)]

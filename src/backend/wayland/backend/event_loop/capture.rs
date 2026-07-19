@@ -95,6 +95,9 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::EditKeybinding(request) => {
                 state.handle_keybinding_edit(request);
             }
+            PendingBackendAction::PersistToolbarConfig => {
+                state.save_toolbar_pin_config();
+            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {

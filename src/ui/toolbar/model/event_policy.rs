@@ -83,7 +83,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::RedoAll => Some(Action::RedoAll),
         ToolbarEvent::UndoAllDelayed => Some(Action::UndoAllDelayed),
         ToolbarEvent::RedoAllDelayed => Some(Action::RedoAllDelayed),
-        ToolbarEvent::ClearCanvas => Some(Action::ClearCanvas),
+        ToolbarEvent::ClearCanvas { .. } => Some(Action::ClearCanvas),
         ToolbarEvent::CaptureScreenshot => Some(Action::CaptureSelection),
         ToolbarEvent::PagePrev => Some(Action::PagePrev),
         ToolbarEvent::PageNext => Some(Action::PageNext),
@@ -204,6 +204,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::SetToolbarLayoutMode(_)
         | ToolbarEvent::SetSidePane(_)
         | ToolbarEvent::SetTopMinimized(_)
+        | ToolbarEvent::SetTopDisplayMode(_)
         | ToolbarEvent::SetSideMinimized(_)
         | ToolbarEvent::CloseTopToolbar
         | ToolbarEvent::CloseSideToolbar

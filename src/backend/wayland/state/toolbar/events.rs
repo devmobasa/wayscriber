@@ -18,6 +18,27 @@ fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) 
     presenter_restore.unwrap_or(current)
 }
 
+/// While presenter mode owns the top strip (`[presenter_mode] toolbar_mode =
+/// "micro"`), the live display mode and minimized flag hold presenter-mapped
+/// values (`Micro`, force-cleared `false`), not user preferences. Any
+/// `Persist(Toolbar)` event fired during presenter mode — a pin toggle, an
+/// icon-mode switch, ... — must therefore write the saved pre-presenter
+/// values from `PresenterRestore`. Outside presenter mode (and under the
+/// `"hidden"` mapping, which leaves both fields untouched) the restore slots
+/// are `None` and the live values persist as usual.
+fn persisted_top_minimized_value(current: bool, presenter_restore: Option<bool>) -> bool {
+    presenter_restore.unwrap_or(current)
+}
+
+fn persisted_top_display_mode_value(
+    current: crate::config::TopDisplayMode,
+    presenter_restore: Option<crate::config::TopDisplayMode>,
+) -> crate::config::TopDisplayMode {
+    // Hidden persists as Full: like the F9 visibility toggle, a hidden
+    // strip is runtime-only and `top_pinned` governs startup.
+    presenter_restore.unwrap_or(current).persisted()
+}
+
 fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
     if state.drawer_hint_count >= crate::onboarding::DRAWER_HINT_MAX {
         return false;
@@ -85,6 +106,7 @@ impl WaylandState {
         populate_session_snapshot(&mut snapshot, self.session.options());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
+        snapshot.top_fade = self.data.top_strip_fade.value();
         snapshot
     }
 
@@ -134,6 +156,15 @@ impl WaylandState {
             self.input_state.modifiers.shift,
             self.input_state.modifiers.alt,
         );
+        // Built-in press resolution: Shift+click on Clear skips the undo
+        // toast. (GTK resolves the same upgrade from its own click-time
+        // modifier capture before the event reaches the bridge.)
+        let event = match event {
+            ToolbarEvent::ClearCanvas { instant } => ToolbarEvent::ClearCanvas {
+                instant: instant || self.input_state.modifiers.shift,
+            },
+            other => other,
+        };
         self.handle_toolbar_event_with_rebind(event, rebind_requested, conn, qh);
     }
 
@@ -305,12 +336,25 @@ impl WaylandState {
     }
 
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
-    pub(super) fn save_toolbar_pin_config(&mut self) {
+    pub(in crate::backend::wayland) fn save_toolbar_pin_config(&mut self) {
         self.config.ui.toolbar.layout_mode = self.input_state.toolbar_layout_mode;
         self.config.ui.toolbar.items = self.input_state.toolbar_items.clone();
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
-        self.config.ui.toolbar.top_minimized = self.input_state.toolbar_top_minimized;
+        self.config.ui.toolbar.top_minimized = persisted_top_minimized_value(
+            self.input_state.toolbar_top_minimized,
+            self.input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.toolbar_top_minimized),
+        );
+        self.config.ui.toolbar.top_display_mode = persisted_top_display_mode_value(
+            self.input_state.toolbar_top_display_mode,
+            self.input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.toolbar_top_display_mode),
+        );
         self.config.ui.toolbar.side_minimized = self.input_state.toolbar_side_minimized;
         self.config.ui.toolbar.side_active_pane =
             self.input_state.toolbar_side_pane.config_id().to_string();

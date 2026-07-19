@@ -56,6 +56,26 @@ impl InputState {
         true
     }
 
+    /// Set the top strip's display form (micro chip click → `Full`).
+    pub(super) fn apply_toolbar_set_top_display_mode(
+        &mut self,
+        mode: crate::config::TopDisplayMode,
+    ) -> bool {
+        // Same presenter gate as Action::CycleToolbarDisplay: while presenter
+        // mode owns toolbar visibility (e.g. the micro chip mapping), a chip
+        // click must neither override the mapping nor persist a display mode
+        // the user never chose. Returning false also skips the event-policy
+        // persistence for this event.
+        if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+            return false;
+        }
+        if self.top_display_state() == mode {
+            return false;
+        }
+        self.set_top_display_mode(mode);
+        true
+    }
+
     pub(super) fn apply_toolbar_set_side_minimized(&mut self, minimized: bool) -> bool {
         if self.toolbar_side_minimized == minimized {
             return false;

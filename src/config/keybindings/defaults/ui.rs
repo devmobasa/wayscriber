@@ -14,8 +14,14 @@ pub(crate) fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
 }
 
+// F2 moved to `cycle_toolbar_display` (which still reaches the hidden
+// state); explicit user configs keep whatever they bound.
 pub(crate) fn default_toggle_toolbar() -> Vec<String> {
-    vec!["F2".to_string(), "F9".to_string()]
+    vec!["F9".to_string()]
+}
+
+pub(crate) fn default_cycle_toolbar_display() -> Vec<String> {
+    vec!["F2".to_string()]
 }
 
 pub(crate) fn default_toggle_presenter_mode() -> Vec<String> {

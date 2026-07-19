@@ -12,18 +12,27 @@ const COLOR_POPOVER_SHADOW_CORE: Rgba = (0.0, 0.0, 0.0, 0.35);
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_panel_background(
     ctx: &cairo::Context,
+    x: f64,
+    y: f64,
     width: f64,
     height: f64,
 ) {
     set_color(ctx, COLOR_PANEL_BACKGROUND);
-    draw_round_rect(ctx, 0.0, 0.0, width, height, RADIUS_PANEL);
+    draw_round_rect(ctx, x, y, width, height, RADIUS_PANEL);
     let _ = ctx.fill();
 
     // 1px hairline border, matching the GTK panel's
     // `border: 1px solid rgba(255, 255, 255, 0.10)`.
     set_color(ctx, COLOR_PANEL_BORDER);
     ctx.set_line_width(1.0);
-    draw_round_rect(ctx, 0.5, 0.5, width - 1.0, height - 1.0, RADIUS_PANEL - 0.5);
+    draw_round_rect(
+        ctx,
+        x + 0.5,
+        y + 0.5,
+        width - 1.0,
+        height - 1.0,
+        RADIUS_PANEL - 0.5,
+    );
     let _ = ctx.stroke();
 }
 

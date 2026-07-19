@@ -230,7 +230,7 @@ impl TopBar {
                 let accessible_label = control.accessible_label(snapshot);
                 button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                 let badge = control.shortcut_badge(snapshot);
-                add_shortcut_badge(&button, badge.as_deref());
+                add_button_shortcut_hint(&button, badge.as_deref(), use_icons);
                 set_active_class(&button, control.active(snapshot));
                 let sender = self.feedback.clone();
                 let event = control.event(snapshot);
@@ -303,6 +303,10 @@ impl TopBar {
         set_semantic_widget_id(&grid, "top.overflow.panel");
         grid.set_row_spacing(gap as u32);
         grid.set_column_spacing(gap as u32);
+        // The popover is its own GTK native; the window-level capture never
+        // sees its clicks, so Shift (instant Clear) and the rebind chord are
+        // captured here.
+        install_click_modifier_capture(&grid, &self.feedback);
         let dropped_count = spec.overflow().len();
         let cols = dropped_count.clamp(1, 5) as i32;
         let mut index = 0i32;
@@ -329,7 +333,11 @@ impl TopBar {
             button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
             if button_size.0 > COMPACT_BUTTON * scale {
                 let badge = control.shortcut_badge(snapshot);
-                add_shortcut_badge(&button, badge.as_deref());
+                add_button_shortcut_hint(&button, badge.as_deref(), use_icons);
+            }
+            if control.role() == model::TopToolbarControlRole::Destructive {
+                // Clear inside the menu keeps the red-on-hover treatment.
+                button.add_css_class("destructive");
             }
             set_active_class(&button, control.active(snapshot));
             button.set_sensitive(control.enabled(snapshot));

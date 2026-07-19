@@ -125,6 +125,9 @@ pub struct StateData {
     /// blocked until its matching drag-end feedback arrives.
     pub(super) gtk_top_drag_blocked: bool,
     pub(super) gtk_side_drag_blocked: bool,
+    /// Pointer is over the GTK top toolbar window (reported via feedback;
+    /// GTK runs on its own connection). Restores the top-strip idle fade.
+    pub(super) gtk_top_hover: bool,
     pub(super) last_applied_top_margin: Option<i32>,
     pub(super) last_applied_side_margin: Option<i32>,
     pub(super) last_applied_top_margin_top: Option<i32>,
@@ -175,6 +178,9 @@ pub struct StateData {
     pub(super) blocked_feedback_was_active: bool,
     pub(super) prev_text_edit_entry_damage: Option<crate::util::Rect>,
     pub(super) prev_status_hud_damage: Option<crate::util::Rect>,
+    /// Idle-fade engine for the top-strip islands; its value is published
+    /// on every toolbar snapshot as `top_fade`.
+    pub(super) top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade,
 }
 
 impl StateData {
@@ -218,6 +224,7 @@ impl StateData {
             gtk_side_offset_seq: 0,
             gtk_drag_preview: None,
             gtk_top_drag_blocked: false,
+            gtk_top_hover: false,
             gtk_side_drag_blocked: false,
             last_applied_top_margin: None,
             last_applied_side_margin: None,
@@ -258,6 +265,7 @@ impl StateData {
             blocked_feedback_was_active: false,
             prev_text_edit_entry_damage: None,
             prev_status_hud_damage: None,
+            top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
         }
     }
 }

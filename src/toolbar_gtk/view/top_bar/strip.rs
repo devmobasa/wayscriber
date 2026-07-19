@@ -5,6 +5,9 @@
 
 use super::*;
 
+/// Micro-chip ring state: `(ring color, spec-unit ring width)`.
+type MicroRing = ((f64, f64, f64, f64), f64);
+
 pub(super) fn top_toolbar_spec(
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
@@ -40,6 +43,9 @@ impl TopBar {
             (MINIMIZED_SIZE.0 * scale).round() as i32,
             (MINIMIZED_SIZE.1 * scale).round() as i32,
         );
+        // The strip mode strips `.panel` from the root (the pills own the
+        // background); the minimized tab is a single surface again.
+        self.root.add_css_class("panel");
         self.root.add_css_class("minimized");
         let restore = sized_button(MINIMIZED_SIZE.0 * scale, MINIMIZED_SIZE.1 * scale);
         set_control_widget_id(&restore, control);
@@ -60,9 +66,141 @@ impl TopBar {
         self.root.append(&restore);
     }
 
+    /// Micro-mode top strip: one 44px round chip (active tool glyph inside
+    /// a ring stroked in the current color). Clicking restores the full
+    /// strip. The drawing itself is shared with the built-in frontend via
+    /// `toolbar_icons::draw_micro_chip`.
+    pub(super) fn build_micro(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
+        let spec = top_toolbar_spec(snapshot, plan);
+        let control = match spec.strip() {
+            [model::TopToolbarNode::Control(control)] => *control,
+            _ => unreachable!("micro specification contains one chip control"),
+        };
+        let scale = effective_scale(snapshot);
+        self.window.set_default_size(
+            (MICRO_SIZE * scale).round() as i32,
+            (MICRO_SIZE * scale).round() as i32,
+        );
+        // The chip paints its own round panel disc; the window root and the
+        // button chrome stay transparent (the `.swatch` treatment).
+        self.root.remove_css_class("panel");
+        self.root.remove_css_class("minimized");
+        let chip = sized_button(MICRO_SIZE * scale, MICRO_SIZE * scale);
+        set_control_widget_id(&chip, control);
+        chip.add_css_class("swatch");
+        let accessible_label = control.accessible_label(snapshot);
+        chip.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        chip.set_tooltip_text(Some(&control.tooltip(snapshot)));
+
+        let painter = Rc::new(Cell::new(crate::toolbar_icons::top_toolbar_icon_painter(
+            control.icon(snapshot).expect("micro chip tool icon"),
+        )));
+        let ring: Rc<Cell<MicroRing>> = Rc::new(Cell::new((
+            (
+                snapshot.color.r,
+                snapshot.color.g,
+                snapshot.color.b,
+                snapshot.color.a,
+            ),
+            model::micro_ring_width(snapshot.thickness),
+        )));
+        let hovered = Rc::new(Cell::new(false));
+
+        let area = gtk4::DrawingArea::new();
+        let size = (MICRO_SIZE * scale).round().max(1.0) as i32;
+        area.set_content_width(size);
+        area.set_content_height(size);
+        area.set_can_target(false);
+        let draw_painter = painter.clone();
+        let draw_ring = ring.clone();
+        let draw_hovered = hovered.clone();
+        area.set_draw_func(move |area, ctx, width, height| {
+            let color = area.color();
+            let (ring_color, ring_width) = draw_ring.get();
+            let chip_size = (width.min(height) as f64).max(1.0);
+            let x = (width as f64 - chip_size) / 2.0;
+            let y = (height as f64 - chip_size) / 2.0;
+            crate::toolbar_icons::draw_micro_chip(
+                ctx,
+                x,
+                y,
+                chip_size,
+                draw_painter.get(),
+                &crate::toolbar_icons::MicroChipStyle {
+                    ring_color,
+                    // Ring width is in spec units; scale with the chip.
+                    ring_width: ring_width * (chip_size / MICRO_SIZE),
+                    icon_color: (
+                        color.red() as f64,
+                        color.green() as f64,
+                        color.blue() as f64,
+                        color.alpha() as f64,
+                    ),
+                    hovered: draw_hovered.get(),
+                },
+            );
+        });
+        chip.set_child(Some(&area));
+
+        let motion = gtk4::EventControllerMotion::new();
+        let enter_hovered = hovered.clone();
+        let enter_area = area.clone();
+        motion.connect_enter(move |_, _, _| {
+            enter_hovered.set(true);
+            enter_area.queue_draw();
+        });
+        let leave_hovered = hovered;
+        let leave_area = area.clone();
+        motion.connect_leave(move |_| {
+            leave_hovered.set(false);
+            leave_area.queue_draw();
+        });
+        chip.add_controller(motion);
+
+        let sender = self.feedback.clone();
+        let event = control.event(snapshot);
+        chip.connect_clicked(move |_| {
+            send_event(&sender, event.clone());
+        });
+        self.root.append(&chip);
+
+        // Live state: tool glyph, ring color, and ring width track the
+        // snapshot without rebuilding the chip.
+        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            let next_painter = crate::toolbar_icons::top_toolbar_icon_painter(
+                model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool)),
+            );
+            let mut dirty = false;
+            if !std::ptr::fn_addr_eq(painter.get(), next_painter) {
+                painter.set(next_painter);
+                dirty = true;
+            }
+            let next_ring = (
+                (
+                    snapshot.color.r,
+                    snapshot.color.g,
+                    snapshot.color.b,
+                    snapshot.color.a,
+                ),
+                model::micro_ring_width(snapshot.thickness),
+            );
+            if ring.get() != next_ring {
+                ring.set(next_ring);
+                dirty = true;
+            }
+            if dirty {
+                area.queue_draw();
+            }
+        }));
+    }
+
     pub(super) fn build_strip(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         let spec = top_toolbar_spec(snapshot, plan);
         self.root.remove_css_class("minimized");
+        // The window root stays transparent behind the pill islands (only
+        // the minimized restore tab re-adds `.panel`); the pills carry the
+        // panel background themselves so nothing double-boxes.
+        self.root.remove_css_class("panel");
         // GTK toplevels retain their previous default width across widget-tree
         // rebuilds. Reset it from the shared natural-size calculation so a
         // narrower layout (notably `simple`) does not keep the regular strip's
@@ -72,6 +210,11 @@ impl TopBar {
         let scale = effective_scale(snapshot);
         let use_icons = snapshot.use_icons || plan.compact;
         let gap = if plan.compact { COMPACT_GAP } else { GAP };
+        let island_gap = if plan.compact {
+            COMPACT_ISLAND_GAP
+        } else {
+            ISLAND_GAP
+        };
         let (btn_w, btn_h) = if plan.compact {
             (COMPACT_BUTTON, COMPACT_BUTTON)
         } else if use_icons {
@@ -82,22 +225,45 @@ impl TopBar {
         let sz = |value: f64| value * scale;
         let px = |value: f64| (value * scale).round() as i32;
 
-        let bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-        bar.set_margin_start(px(if plan.compact {
-            COMPACT_START_X
-        } else {
-            START_X
-        }));
-        bar.set_margin_end(0);
-        self.root.append(&bar);
+        // Three detached pill islands (spec-derived membership) inside a
+        // transparent outer row: tools | history | chrome. Compact plans
+        // tighten the pill's inner padding via the `.compact` CSS variant
+        // (mirrors the builtin TOP_COMPACT_ISLAND_PAD).
+        let style_pill = |widget: &gtk4::Widget| {
+            widget.add_css_class("pill");
+            if plan.compact {
+                widget.add_css_class("compact");
+            }
+        };
+        let outer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        let island_tools = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        style_pill(island_tools.upcast_ref());
+        set_island_widget_id(&island_tools, model::TopToolbarIsland::Tools);
+        let island_history = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        style_pill(island_history.upcast_ref());
+        set_island_widget_id(&island_history, model::TopToolbarIsland::History);
+        let island_chrome = gtk4::Box::new(
+            gtk4::Orientation::Horizontal,
+            px(if plan.compact {
+                COMPACT_GAP
+            } else {
+                PIN_BUTTON_GAP
+            }),
+        );
+        style_pill(island_chrome.upcast_ref());
+        set_island_widget_id(&island_chrome, model::TopToolbarIsland::Chrome);
 
         // Running spec-unit x used to align the contextual ring row under
         // the Highlight button selected by the shared specification.
-        let mut x = if plan.compact {
-            COMPACT_START_X
-        } else {
-            START_X
-        };
+        //
+        // Accounting: x measures from island A's *content* origin, so it
+        // starts at 0. The outer island row sits at the window origin (the
+        // strip root carries no `.panel` padding), island A is its first
+        // child, and both island A and the ring row below are `.pill`s that
+        // share the same hairline border and inner leading padding — those
+        // offsets cancel, so `margin_start(px(highlight_x))` on the ring row
+        // lands its content exactly under the Highlight button's left edge.
+        let mut x = 0.0;
         let mut highlight_x: Option<f64> = None;
 
         let append_gap = |bar: &gtk4::Box, widget: &gtk4::Widget, gap_units: f64| {
@@ -130,8 +296,12 @@ impl TopBar {
         let mut quick_color_seen = 0usize;
 
         for node in spec.strip() {
+            let bar = match node.island() {
+                model::TopToolbarIsland::History => &island_history,
+                _ => &island_tools,
+            };
             match *node {
-                model::TopToolbarNode::Divider(divider) => push_divider(&bar, &mut x, divider),
+                model::TopToolbarNode::Divider(divider) => push_divider(bar, &mut x, divider),
                 model::TopToolbarNode::Control(control) => match control {
                     model::TopToolbarControl::DragHandle => {
                         let grip = IconWidget::new(
@@ -150,7 +320,7 @@ impl TopBar {
                         grip.area.set_valign(gtk4::Align::Center);
                         grip.area.set_cursor_from_name(Some("grab"));
                         self.attach_move_drag(&grip.area);
-                        append_gap(&bar, grip.area.as_ref(), gap);
+                        append_gap(bar, grip.area.as_ref(), gap);
                         x += HANDLE_SIZE + gap;
                     }
                     model::TopToolbarControl::Tool(_) => {
@@ -162,7 +332,7 @@ impl TopBar {
                             use_icons,
                             !plan.compact,
                         );
-                        append_gap(&bar, button.as_ref(), gap);
+                        append_gap(bar, button.as_ref(), gap);
                         x += btn_w + gap;
                     }
                     model::TopToolbarControl::ShapePicker => {
@@ -173,7 +343,7 @@ impl TopBar {
                             sz(ICON_SIZE),
                             use_icons,
                         );
-                        append_gap(&bar, button.as_ref(), gap);
+                        append_gap(bar, button.as_ref(), gap);
                         x += btn_w + gap;
                     }
                     model::TopToolbarControl::Utility(_) => {
@@ -191,7 +361,7 @@ impl TopBar {
                             use_icons,
                             !plan.compact,
                         ) {
-                            append_gap(&bar, button.as_ref(), gap);
+                            append_gap(bar, button.as_ref(), gap);
                             x += btn_w + gap;
                         }
                     }
@@ -228,7 +398,7 @@ impl TopBar {
                             )
                         };
                         set_control_widget_id(&swatch_root, control);
-                        append_gap(&bar, &swatch_root, if is_last { gap } else { SWATCH_GAP });
+                        append_gap(bar, &swatch_root, if is_last { gap } else { SWATCH_GAP });
                         x += SWATCH_SIZE + if is_last { gap } else { SWATCH_GAP };
                         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
                             swatch.set_selected(entry_color == snapshot.color);
@@ -252,7 +422,7 @@ impl TopBar {
                         chip.button.connect_clicked(move |_| {
                             send_event(&sender, event.clone());
                         });
-                        append_gap(&bar, chip.button.as_ref(), gap);
+                        append_gap(bar, chip.button.as_ref(), gap);
                         x += CHIP_SIZE + gap;
                         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
                             chip.set_color(snapshot.color);
@@ -267,27 +437,27 @@ impl TopBar {
                             use_icons,
                             !plan.compact,
                         );
-                        append_gap(&bar, button.as_ref(), gap);
+                        append_gap(bar, button.as_ref(), gap);
                         x += btn_w + gap;
                     }
-                    model::TopToolbarControl::ClearCanvas => {
-                        let button = self.action_button(
+                    model::TopToolbarControl::Overflow => {
+                        // The ⋯ toggle anchors the overflow menu (Clear
+                        // first, then width-dropped items) from the history
+                        // island.
+                        let button = self.overflow_button(
                             snapshot,
                             control,
                             (sz(btn_w), sz(btn_h)),
                             sz(ICON_SIZE),
-                            use_icons,
-                            !plan.compact,
                         );
-                        button.add_css_class("destructive");
-                        button.set_margin_start(px(gap));
-                        append_gap(&bar, button.as_ref(), gap);
-                        x += btn_w + gap * 2.0;
+                        append_gap(bar, button.as_ref(), gap);
+                        x += btn_w + gap;
                     }
                     model::TopToolbarControl::Restore
+                    | model::TopToolbarControl::MicroChip
                     | model::TopToolbarControl::Pin
-                    | model::TopToolbarControl::Overflow
                     | model::TopToolbarControl::Minimize
+                    | model::TopToolbarControl::ClearCanvas
                     | model::TopToolbarControl::HighlightRing => {
                         unreachable!("control belongs outside the main strip")
                     }
@@ -295,39 +465,45 @@ impl TopBar {
             }
         }
 
-        // --- Right-aligned chrome -----------------------------------------------
+        // --- Right-aligned chrome island ----------------------------------------
         let chrome_size = if plan.compact {
             COMPACT_CHROME
         } else {
             PIN_BUTTON_SIZE
         };
-        let chrome_gap = if plan.compact {
-            COMPACT_GAP
-        } else {
-            PIN_BUTTON_GAP
-        };
-        let chrome = gtk4::Box::new(gtk4::Orientation::Horizontal, px(chrome_gap));
-        chrome.set_margin_end(px(if plan.compact {
-            COMPACT_MARGIN_RIGHT
-        } else {
-            PIN_MARGIN_RIGHT
-        }));
-        chrome.set_valign(gtk4::Align::Center);
         for control in spec.chrome().iter().copied() {
             match control {
                 model::TopToolbarControl::Pin => {
-                    chrome.append(&self.pin_button(snapshot, control, sz(chrome_size)));
-                }
-                model::TopToolbarControl::Overflow => {
-                    chrome.append(&self.overflow_button(snapshot, control, sz(chrome_size)));
+                    island_chrome.append(&self.pin_button(snapshot, control, sz(chrome_size)));
                 }
                 model::TopToolbarControl::Minimize => {
-                    chrome.append(&self.minimize_button(snapshot, control, sz(chrome_size)));
+                    island_chrome.append(&self.minimize_button(snapshot, control, sz(chrome_size)));
                 }
                 _ => unreachable!("non-chrome control in chrome specification"),
             }
         }
-        bar.append(&chrome);
+
+        // Assemble only the populated pills; every pill after the first is
+        // separated by the shared inter-island gap.
+        for island in [&island_tools, &island_history, &island_chrome] {
+            if island.first_child().is_none() {
+                continue;
+            }
+            if outer.first_child().is_some() {
+                island.set_margin_start(px(island_gap));
+            }
+            outer.append(island);
+        }
+        self.root.append(&outer);
+
+        // Idle fade: the pill islands dim with the snapshot's fade value
+        // (1.0 full, 0.55 dimmed, in-between while animating; the backend
+        // engine snaps under reduced motion). Continuous opacity, driven
+        // per-update, so open popovers and hover state survive.
+        let fade_outer = outer.clone();
+        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            fade_outer.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
+        }));
 
         // --- Contextual highlight ring row ----------------------------------------
         if let Some(control) = spec.contextual().first().copied()
@@ -338,9 +514,18 @@ impl TopBar {
             let accessible_label = control.accessible_label(snapshot);
             ring.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
             ring.add_css_class("mini");
+            // The root is transparent behind the pills, so the contextual
+            // ring row carries its own small pill background. It uses the
+            // same `.pill` (and compact) padding as island A, which keeps
+            // the ring-x accounting above exact.
+            style_pill(ring.upcast_ref());
             ring.set_tooltip_text(Some(&control.tooltip(snapshot)));
             ring.set_active(control.active(snapshot));
             ring.set_halign(gtk4::Align::Start);
+            // `ring_x` is the Highlight button's offset from island A's
+            // content origin (see the x accounting above): the shared pill
+            // border + leading padding on this row reproduce the same
+            // content inset, so the plain margin aligns the two.
             ring.set_margin_start(px(ring_x));
             ring.set_margin_top(px(2.0));
             let sender = self.feedback.clone();
@@ -361,6 +546,8 @@ impl TopBar {
                     ring_handle.set_active(snapshot.highlight_tool_ring_enabled);
                     syncing.set(false);
                 }
+                // The contextual ring row fades with the islands above it.
+                ring_handle.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
             }));
             self.root.append(&ring);
         }

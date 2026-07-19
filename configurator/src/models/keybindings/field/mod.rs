@@ -63,6 +63,7 @@ pub enum KeybindingField {
     ToggleStatusBar,
     ToggleClickHighlight,
     ToggleToolbar,
+    CycleToolbarDisplay,
     TogglePresenterMode,
     RenderProfileNext,
     RenderProfilePrevious,

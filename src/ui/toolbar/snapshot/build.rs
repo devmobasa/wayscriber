@@ -189,6 +189,10 @@ impl ToolbarSnapshot {
             shape_picker_open: state.toolbar_shapes_expanded,
             top_overflow_open: state.toolbar_top_overflow_open,
             top_minimized: state.toolbar_top_minimized,
+            top_display_mode: state.toolbar_top_display_mode,
+            // Fade is owned by the backend engine; renderers see 1.0 until
+            // the backend publishes the animated value.
+            top_fade: 1.0,
             side_minimized: state.toolbar_side_minimized,
             top_viewport_max: None,
             active_side_pane,

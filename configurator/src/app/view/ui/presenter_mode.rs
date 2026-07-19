@@ -4,7 +4,7 @@ use iced::{Element, Length};
 use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
-use crate::models::{PresenterToolBehaviorOption, ToggleField};
+use crate::models::{PresenterToolBehaviorOption, PresenterToolbarModeOption, ToggleField};
 
 use super::super::widgets::{labeled_control, toggle_row};
 
@@ -14,6 +14,11 @@ impl ConfiguratorApp {
             PresenterToolBehaviorOption::list(),
             Some(self.draft.presenter_tool_behavior),
             Message::PresenterToolBehaviorChanged,
+        );
+        let toolbar_mode_pick = pick_list(
+            PresenterToolbarModeOption::list(),
+            Some(self.draft.presenter_toolbar_mode),
+            Message::PresenterToolbarModeChanged,
         );
 
         let column = column![
@@ -32,6 +37,12 @@ impl ConfiguratorApp {
                 self.draft.presenter_hide_toolbars,
                 self.defaults.presenter_hide_toolbars,
                 ToggleField::PresenterHideToolbars,
+            ),
+            labeled_control(
+                "Top toolbar while presenting",
+                toolbar_mode_pick.width(Length::Fill).into(),
+                self.defaults.presenter_toolbar_mode.label().to_string(),
+                self.draft.presenter_toolbar_mode != self.defaults.presenter_toolbar_mode,
             ),
             toggle_row(
                 "Hide tool preview",

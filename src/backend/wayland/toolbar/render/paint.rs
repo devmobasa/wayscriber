@@ -73,18 +73,19 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
     let Some(badge) = &node.shortcut_badge else {
         return;
     };
-    let (x, y, w, _) = node.rect;
+    let (x, y, w, h) = node.rect;
     let badge_h = 10.0;
     let badge_w = (badge.label.chars().count() as f64 * 5.0 + 4.0)
         .max(10.0)
         .min(w.max(10.0));
     let badge_x = match badge.placement {
         ShortcutBadgePlacement::Corner => x + w - badge_w - 2.0,
-        ShortcutBadgePlacement::Above => x + (w - badge_w) / 2.0,
+        ShortcutBadgePlacement::Above | ShortcutBadgePlacement::Below => x + (w - badge_w) / 2.0,
     };
     let badge_y = match badge.placement {
         ShortcutBadgePlacement::Corner => y + 2.0,
         ShortcutBadgePlacement::Above => (y - badge_h - 1.0).max(1.0),
+        ShortcutBadgePlacement::Below => y + h - badge_h - 2.0,
     };
 
     if badge.placement == ShortcutBadgePlacement::Corner {
@@ -96,11 +97,11 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
         draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
         let _ = ctx.stroke();
     }
-    // Swatch key letters ("Above") read as 9px captions in the secondary
+    // Above/Below key letters read as unboxed 9px captions in the secondary
     // text color; corner badges keep the boxed 8px icon-color treatment.
     let (font_size, label_color) = match badge.placement {
         ShortcutBadgePlacement::Corner => (8.0, COLOR_ICON_DEFAULT),
-        ShortcutBadgePlacement::Above => (9.0, COLOR_LABEL_HINT),
+        ShortcutBadgePlacement::Above | ShortcutBadgePlacement::Below => (9.0, COLOR_LABEL_HINT),
     };
     draw_label_center_color(
         ctx,
@@ -118,7 +119,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
     let (x, y, w, h) = node.rect;
     let is_hover = hovered(node, hover) && node.interact.is_some();
     match &node.kind {
-        WidgetKind::Panel => draw_panel_background(ctx, w, h),
+        WidgetKind::Panel => draw_panel_background(ctx, x, y, w, h),
         WidgetKind::Card => draw_group_card(ctx, x, y, w, h),
         WidgetKind::Divider { vertical } => {
             if *vertical {
@@ -144,8 +145,18 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             } else {
                 set_icon_color(ctx, is_hover);
             }
+            // A caption under the icon shares the tile: lift the icon a few
+            // pixels so both fit inside the unchanged button rect.
+            let caption_lift = if matches!(
+                node.shortcut_badge.as_ref().map(|badge| badge.placement),
+                Some(ShortcutBadgePlacement::Below)
+            ) {
+                4.0
+            } else {
+                0.0
+            };
             let icon_x = x + (w - icon_size) / 2.0;
-            let icon_y = y + (h - icon_size) / 2.0;
+            let icon_y = y + (h - icon_size) / 2.0 - caption_lift;
             (glyph.0)(ctx, icon_x, icon_y, *icon_size);
         }
         WidgetKind::TextButton { label, style } => {
@@ -248,6 +259,29 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
                 let _ = ctx.stroke();
             }
+        }
+        WidgetKind::MicroChip {
+            glyph,
+            ring_color,
+            ring_width,
+        } => {
+            crate::toolbar_icons::draw_micro_chip(
+                ctx,
+                x,
+                y,
+                w.min(h),
+                glyph.0,
+                &crate::toolbar_icons::MicroChipStyle {
+                    ring_color: *ring_color,
+                    ring_width: *ring_width,
+                    icon_color: if is_hover {
+                        super::widgets::constants::COLOR_ICON_HOVER
+                    } else {
+                        COLOR_ICON_DEFAULT
+                    },
+                    hovered: is_hover,
+                },
+            );
         }
         WidgetKind::PinButton { pinned } => {
             draw_pin_button(ctx, x, y, w, *pinned, is_hover);

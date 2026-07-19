@@ -32,6 +32,17 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        CycleToolbarDisplay,
+        "Cycle Toolbar Display",
+        Some("Toolbar Display"),
+        "Cycle top toolbar: full, micro chip, hidden",
+        UI,
+        true,
+        true,
+        false,
+        &["micro toolbar", "toolbar mode", "compact toolbar"]
+    ),
+    meta!(
         ToggleStatusBar,
         "Toggle Status Bar",
         None,

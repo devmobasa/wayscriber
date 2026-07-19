@@ -12,6 +12,7 @@ impl KeybindingsConfig {
             Action::ToggleClickHighlight,
         )?;
         inserter.insert_all(&self.ui.toggle_toolbar, Action::ToggleToolbar)?;
+        inserter.insert_all(&self.ui.cycle_toolbar_display, Action::CycleToolbarDisplay)?;
         inserter.insert_all(&self.ui.toggle_presenter_mode, Action::TogglePresenterMode)?;
         inserter.insert_all(&self.ui.toggle_light_mode, Action::ToggleLightMode)?;
         inserter.insert_all(

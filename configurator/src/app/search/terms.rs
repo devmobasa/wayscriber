@@ -270,6 +270,8 @@ pub(super) const UI_PRESENTER_MODE_TERMS: &[&str] = &[
     "presenter mode",
     "hide status bar",
     "hide toolbars",
+    "top toolbar while presenting",
+    "micro toolbar",
     "hide tool preview",
     "close help overlay on entry",
     "force click highlights on",

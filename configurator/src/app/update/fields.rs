@@ -7,10 +7,10 @@ use crate::models::{
     EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField, NamedColorOption,
     OverrideOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
-    PresenterToolBehaviorOption, QuadField, ReducedMotionOption, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, TripletField,
-    UiThemeOption,
+    PresenterToolBehaviorOption, PresenterToolbarModeOption, QuadField, ReducedMotionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
+    TripletField, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -332,6 +332,16 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.presenter_tool_behavior = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_presenter_toolbar_mode_changed(
+        &mut self,
+        option: PresenterToolbarModeOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.presenter_toolbar_mode = option;
         self.refresh_dirty_flag();
         Task::none()
     }

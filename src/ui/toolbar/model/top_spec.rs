@@ -25,7 +25,6 @@ pub(crate) struct TopStripPlan {
     pub(crate) swatch_count: usize,
     pub(crate) dropped_tools: Vec<Tool>,
     pub(crate) dropped_utilities: Vec<TopUtilityButton>,
-    pub(crate) show_overflow: bool,
     pub(crate) compact: bool,
 }
 
@@ -37,7 +36,6 @@ impl TopStripPlan {
             swatch_count: Self::MAX_QUICK_COLORS,
             dropped_tools: Vec::new(),
             dropped_utilities: Vec::new(),
-            show_overflow: false,
             compact: false,
         }
     }
@@ -57,6 +55,14 @@ impl TopToolbarSpec {
         if snapshot.top_minimized {
             return Self {
                 strip: vec![TopToolbarNode::Control(TopToolbarControl::Restore)],
+                chrome: Vec::new(),
+                overflow: Vec::new(),
+                contextual: Vec::new(),
+            };
+        }
+        if snapshot.top_micro_active() {
+            return Self {
+                strip: vec![TopToolbarNode::Control(TopToolbarControl::MicroChip)],
                 chrome: Vec::new(),
                 overflow: Vec::new(),
                 contextual: Vec::new(),
@@ -94,7 +100,6 @@ impl TopToolbarSpec {
         }
 
         let visible_utilities = visible_top_utility_buttons(snapshot, simple, snapshot.use_icons);
-        let clear_visible = visible_utilities.contains(&TopUtilityButton::ClearCanvas);
         let utilities: Vec<_> = visible_utilities
             .iter()
             .copied()
@@ -126,26 +131,28 @@ impl TopToolbarSpec {
             strip.push(TopToolbarNode::Control(TopToolbarControl::CurrentColor));
         }
 
+        // The history island: Undo/Redo plus the always-anchored overflow
+        // toggle. Clear lives inside the overflow menu (first entry), so the
+        // toggle shows whenever the menu has content — not only under width
+        // pressure.
         let undo_visible = toolbar_item_visible(snapshot, ids::TOP_UTILITY_UNDO);
         let redo_visible = toolbar_item_visible(snapshot, ids::TOP_UTILITY_REDO);
-        if undo_visible || redo_visible {
-            strip.push(TopToolbarNode::Divider(TopToolbarDivider::History));
-        }
         if undo_visible {
             strip.push(TopToolbarNode::Control(TopToolbarControl::Undo));
         }
         if redo_visible {
             strip.push(TopToolbarNode::Control(TopToolbarControl::Redo));
         }
-        if clear_visible {
-            strip.push(TopToolbarNode::Control(TopToolbarControl::ClearCanvas));
+        let overflow: Vec<_> =
+            Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).collect();
+        if !overflow.is_empty() {
+            strip.push(TopToolbarNode::Control(TopToolbarControl::Overflow));
         }
 
-        let chrome = Self::chrome_controls(snapshot, plan)
+        let chrome = Self::chrome_controls(snapshot)
             .into_iter()
             .flatten()
             .collect();
-        let overflow = Self::overflow_controls(plan).collect();
         let contextual = if Self::contextual_highlight_ring_visible(snapshot, plan) {
             vec![TopToolbarControl::HighlightRing]
         } else {
@@ -177,7 +184,9 @@ impl TopToolbarSpec {
     }
 
     pub(crate) fn shape_picker_visible(snapshot: &ToolbarSnapshot) -> bool {
-        !snapshot.top_minimized && top_shape_picker_visible(snapshot)
+        !snapshot.top_minimized
+            && !snapshot.top_micro_active()
+            && top_shape_picker_visible(snapshot)
     }
 
     pub(crate) fn contextual_highlight_ring_visible(
@@ -185,6 +194,7 @@ impl TopToolbarSpec {
         plan: &TopStripPlan,
     ) -> bool {
         !snapshot.top_minimized
+            && !snapshot.top_micro_active()
             && snapshot.layout_mode != ToolbarLayoutMode::Simple
             && snapshot.use_icons
             && snapshot.highlight_tool_active
@@ -195,40 +205,54 @@ impl TopToolbarSpec {
                 .contains(&TopUtilityButton::Highlight)
     }
 
-    pub(crate) fn chrome_control_count(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> usize {
-        if snapshot.top_minimized {
+    pub(crate) fn chrome_control_count(snapshot: &ToolbarSnapshot, _plan: &TopStripPlan) -> usize {
+        if snapshot.top_minimized || snapshot.top_micro_active() {
             return 0;
         }
-        Self::chrome_controls(snapshot, plan)
+        Self::chrome_controls(snapshot)
             .into_iter()
             .flatten()
             .count()
     }
 
     pub(crate) fn overflow_control_count(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> usize {
-        if snapshot.top_minimized {
+        if snapshot.top_minimized || snapshot.top_micro_active() {
             return 0;
         }
-        Self::overflow_controls(plan).count()
+        Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).count()
     }
 
-    fn chrome_controls(
-        snapshot: &ToolbarSnapshot,
-        plan: &TopStripPlan,
-    ) -> [Option<TopToolbarControl>; 3] {
+    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 2] {
         [
             toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN).then_some(TopToolbarControl::Pin),
-            plan.show_overflow.then_some(TopToolbarControl::Overflow),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE)
                 .then_some(TopToolbarControl::Minimize),
         ]
     }
 
-    fn overflow_controls(plan: &TopStripPlan) -> impl Iterator<Item = TopToolbarControl> + '_ {
-        plan.dropped_tools
-            .iter()
-            .copied()
-            .map(TopToolbarControl::Tool)
+    /// Clear moved off the strip into the overflow menu; it stays subject to
+    /// the same visibility rules it had as a strip utility.
+    fn clear_canvas_in_overflow(snapshot: &ToolbarSnapshot) -> bool {
+        let simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
+        visible_top_utility_buttons(snapshot, simple, snapshot.use_icons)
+            .contains(&TopUtilityButton::ClearCanvas)
+    }
+
+    /// Overflow menu content, in menu order: the destructive Clear first,
+    /// then the width-dropped tools and utilities in configured order.
+    fn overflow_controls(
+        clear_visible: bool,
+        plan: &TopStripPlan,
+    ) -> impl Iterator<Item = TopToolbarControl> + '_ {
+        clear_visible
+            .then_some(TopToolbarControl::ClearCanvas)
+            .into_iter()
+            .chain(
+                plan.dropped_tools
+                    .iter()
+                    .copied()
+                    .map(TopToolbarControl::Tool),
+            )
             .chain(
                 plan.dropped_utilities
                     .iter()
@@ -245,12 +269,44 @@ pub(crate) enum TopToolbarNode {
     Control(TopToolbarControl),
 }
 
+impl TopToolbarNode {
+    /// Island membership of a strip node. Thin dividers only exist inside
+    /// the tools island; the island boundaries themselves are gaps, not
+    /// divider nodes.
+    pub(crate) fn island(&self) -> TopToolbarIsland {
+        match self {
+            Self::Divider(_) => TopToolbarIsland::Tools,
+            Self::Control(control) => control.island(),
+        }
+    }
+}
+
+/// The three detached pill islands of the top strip, in reading order:
+/// tools (drag grip through colors), history (undo/redo/overflow), chrome
+/// (pin/minimize). Both frontends and the contract tests derive island
+/// membership from this one accessor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum TopToolbarIsland {
+    Tools,
+    History,
+    Chrome,
+}
+
+impl TopToolbarIsland {
+    pub(crate) const fn key(self) -> &'static str {
+        match self {
+            Self::Tools => "tools",
+            Self::History => "history",
+            Self::Chrome => "chrome",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopToolbarDivider {
     Tools,
     Annotations,
     Colors,
-    History,
 }
 
 impl TopToolbarDivider {
@@ -259,7 +315,6 @@ impl TopToolbarDivider {
             Self::Tools => "top.divider.tools",
             Self::Annotations => "top.divider.annotations",
             Self::Colors => "top.divider.colors",
-            Self::History => "top.divider.history",
         }
     }
 }
@@ -267,6 +322,10 @@ impl TopToolbarDivider {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopToolbarControl {
     Restore,
+    /// The micro-mode chip: the whole strip collapsed to one round chip
+    /// showing the active tool inside a ring in the current color. Like
+    /// `Restore`, it is the way back and therefore never hideable.
+    MicroChip,
     DragHandle,
     Tool(Tool),
     ShapePicker,
@@ -286,6 +345,7 @@ impl TopToolbarControl {
     pub(crate) fn id(self) -> TopToolbarControlId {
         let id = match self {
             Self::Restore => return TopToolbarControlId::Restore,
+            Self::MicroChip => return TopToolbarControlId::MicroChip,
             Self::DragHandle => ids::TOP_CHROME_DRAG,
             Self::Tool(tool) => toolbar_item_id_for_tool(tool),
             Self::ShapePicker => ids::TOP_UTILITY_SHAPE_PICKER,
@@ -311,6 +371,7 @@ impl TopToolbarControl {
     pub(crate) fn event(self, snapshot: &ToolbarSnapshot) -> ToolbarEvent {
         match self {
             Self::Restore => ToolbarEvent::SetTopMinimized(false),
+            Self::MicroChip => ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Full),
             Self::DragHandle => ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
             Self::Tool(tool) => ToolbarEvent::SelectTool(tool),
             Self::ShapePicker => ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
@@ -325,7 +386,9 @@ impl TopToolbarControl {
             Self::CurrentColor => ToolbarEvent::OpenColorPickerPopup,
             Self::Undo => ToolbarEvent::Undo,
             Self::Redo => ToolbarEvent::Redo,
-            Self::ClearCanvas => ToolbarEvent::ClearCanvas,
+            // The mouse path clears with an undo toast; the frontends
+            // upgrade to the instant variant when Shift is held.
+            Self::ClearCanvas => ToolbarEvent::ClearCanvas { instant: false },
             Self::Pin => ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
             Self::Overflow => ToolbarEvent::ToggleTopOverflow(!snapshot.top_overflow_open),
             Self::Minimize => ToolbarEvent::SetTopMinimized(true),
@@ -373,23 +436,43 @@ impl TopToolbarControl {
 
     pub(crate) fn role(self) -> TopToolbarControlRole {
         match self {
-            Self::Restore => TopToolbarControlRole::Restore,
+            // The micro chip shares the restore role: a single non-hideable
+            // control whose click brings the full strip back.
+            Self::Restore | Self::MicroChip => TopToolbarControlRole::Restore,
             Self::DragHandle => TopToolbarControlRole::DragHandle,
             Self::QuickColor(_) | Self::CurrentColor => TopToolbarControlRole::Swatch,
             Self::ClearCanvas => TopToolbarControlRole::Destructive,
             Self::ShapePicker
             | Self::Utility(TopToolbarUtility::Highlight)
-            | Self::Pin
             | Self::Overflow
             | Self::HighlightRing => TopToolbarControlRole::Toggle,
-            Self::Minimize => TopToolbarControlRole::Chrome,
+            // The chrome island (pin, minimize) renders quieter than the
+            // content islands; both frontends key that styling off this role.
+            Self::Pin | Self::Minimize => TopToolbarControlRole::Chrome,
             _ => TopToolbarControlRole::Button,
+        }
+    }
+
+    /// Which pill island the control belongs to. Total over all controls so
+    /// non-strip lanes (chrome, overflow, contextual) answer consistently.
+    pub(crate) fn island(self) -> TopToolbarIsland {
+        match self {
+            Self::Undo | Self::Redo | Self::Overflow | Self::ClearCanvas => {
+                TopToolbarIsland::History
+            }
+            Self::Pin | Self::Minimize | Self::Restore | Self::MicroChip => {
+                TopToolbarIsland::Chrome
+            }
+            _ => TopToolbarIsland::Tools,
         }
     }
 
     pub(crate) fn icon(self, snapshot: &ToolbarSnapshot) -> Option<TopToolbarIcon> {
         Some(match self {
             Self::Restore => TopToolbarIcon::Restore,
+            // The chip shows the active tool's glyph; the ring around it is
+            // frontend paint, not an icon.
+            Self::MicroChip => TopToolbarIcon::Tool(semantic_icon_for_tool(snapshot.active_tool)),
             Self::DragHandle => TopToolbarIcon::Drag,
             Self::Tool(tool) => TopToolbarIcon::Tool(semantic_icon_for_tool(tool)),
             Self::ShapePicker => TopToolbarIcon::ShapePicker,
@@ -411,6 +494,7 @@ impl TopToolbarControl {
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
             Self::Restore => Cow::Borrowed("Show toolbar"),
+            Self::MicroChip => Cow::Borrowed("Show full toolbar"),
             Self::DragHandle => Cow::Borrowed("Drag toolbar"),
             Self::Tool(tool) => Cow::Borrowed(tool_label(tool)),
             Self::ShapePicker => Cow::Borrowed("Shapes"),
@@ -466,6 +550,7 @@ impl TopToolbarControl {
             }
             Self::Pin => "Pin: click to open at startup".to_string(),
             Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
+            Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
             Self::HighlightRing => "Highlight ring".to_string(),
             _ => self.accessible_label(snapshot).into_owned(),
         }
@@ -501,6 +586,7 @@ pub(crate) enum TopToolbarControlId {
     Item(ToolbarItemId),
     QuickColor(usize),
     Restore,
+    MicroChip,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -529,6 +615,7 @@ impl TopToolbarControlId {
             Self::Item(id) => Cow::Borrowed(id.as_str()),
             Self::QuickColor(index) => Cow::Owned(format!("top.quick-color.{index}")),
             Self::Restore => Cow::Borrowed("top.chrome.restore"),
+            Self::MicroChip => Cow::Borrowed("top.chrome.micro"),
         }
     }
 }
@@ -593,6 +680,19 @@ fn utility_short_label(utility: TopToolbarUtility) -> &'static str {
 
 fn utility_accessible_label(utility: TopToolbarUtility) -> &'static str {
     action_label(utility_action(utility))
+}
+
+/// Ring stroke width of the micro chip for a given stroke thickness.
+///
+/// Perceptual mapping shared by both frontends: thickness 1px → 1.5px ring,
+/// growing linearly to a 5px ring at 20px thickness and clamped there — the
+/// upper stroke range (to 50px) would otherwise swallow the chip.
+pub(crate) fn micro_ring_width(thickness: f64) -> f64 {
+    const MIN_RING: f64 = 1.5;
+    const MAX_RING: f64 = 5.0;
+    const THICKNESS_AT_MAX: f64 = 20.0;
+    let normalized = ((thickness - 1.0) / (THICKNESS_AT_MAX - 1.0)).clamp(0.0, 1.0);
+    MIN_RING + normalized * (MAX_RING - MIN_RING)
 }
 
 pub(crate) fn action_tooltip(snapshot: &ToolbarSnapshot, action: Action) -> String {
@@ -666,7 +766,7 @@ mod tests {
             "top.group.quick-colors",
             "top.utility.undo",
             "top.utility.redo",
-            "top.utility.clear-canvas",
+            "top.chrome.overflow",
         ];
         let mut position = 0;
         for expected in expected_order {
@@ -677,6 +777,16 @@ mod tests {
                 .unwrap_or_else(|| panic!("{expected} missing from {ids:?}"));
             position = next + 1;
         }
+
+        assert!(
+            !ids.contains(&ids::TOP_UTILITY_CLEAR_CANVAS.as_str().to_string()),
+            "Clear lives in the overflow menu, not the strip: {ids:?}"
+        );
+        assert_eq!(
+            spec.overflow(),
+            [TopToolbarControl::ClearCanvas],
+            "an unconstrained plan still anchors Clear in the overflow"
+        );
 
         assert_eq!(chrome_ids(&spec), ["top.chrome.pin", "top.chrome.close"]);
         let pen = spec
@@ -706,8 +816,8 @@ mod tests {
                 "top.divider.tools",
                 "top.divider.annotations",
                 "top.divider.colors",
-                "top.divider.history",
-            ]
+            ],
+            "thin dividers exist only inside the tools island"
         );
     }
 
@@ -759,6 +869,52 @@ mod tests {
     }
 
     #[test]
+    fn micro_spec_contains_only_the_non_hideable_micro_chip_control() {
+        let mut snapshot = snapshot();
+        snapshot.top_display_mode = crate::config::TopDisplayMode::Micro;
+        snapshot
+            .resolved_toolbar_items
+            .hidden
+            .insert(ids::TOP_CHROME_CLOSE);
+
+        let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+        assert_eq!(strip_control_ids(&spec), ["top.chrome.micro"]);
+        assert!(spec.chrome().is_empty());
+        assert!(spec.overflow().is_empty());
+        assert!(spec.contextual().is_empty());
+        let chip = match spec.strip() {
+            [TopToolbarNode::Control(control)] => *control,
+            other => panic!("unexpected micro spec: {other:?}"),
+        };
+        assert_eq!(
+            chip.event(&snapshot),
+            ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Full)
+        );
+        assert_eq!(chip.role(), TopToolbarControlRole::Restore);
+        assert_eq!(
+            chip.icon(&snapshot),
+            Some(TopToolbarIcon::Tool(semantic_icon_for_tool(
+                snapshot.active_tool
+            )))
+        );
+
+        // Minimized wins when both states are somehow set.
+        snapshot.top_minimized = true;
+        let minimized = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+        assert_eq!(strip_control_ids(&minimized), ["top.chrome.restore"]);
+    }
+
+    #[test]
+    fn micro_ring_width_maps_thickness_into_the_clamped_ring_range() {
+        assert_eq!(micro_ring_width(0.0), 1.5);
+        assert_eq!(micro_ring_width(1.0), 1.5);
+        assert_eq!(micro_ring_width(20.0), 5.0);
+        assert_eq!(micro_ring_width(50.0), 5.0);
+        let mid = micro_ring_width(10.5);
+        assert!(mid > 1.5 && mid < 5.0);
+    }
+
+    #[test]
     fn narrow_spec_moves_dropped_controls_to_one_ordered_overflow() {
         let snapshot = snapshot();
         let mut plan = TopStripPlan::unconstrained();
@@ -769,7 +925,6 @@ mod tests {
             TopUtilityButton::StickyNote,
             TopUtilityButton::Highlight,
         ];
-        plan.show_overflow = true;
         plan.compact = true;
 
         let spec = TopToolbarSpec::build(&snapshot, &plan);
@@ -791,21 +946,67 @@ mod tests {
         assert_eq!(
             overflow_ids,
             [
+                "top.utility.clear-canvas",
                 "top.tool.line",
                 "top.tool.arrow",
                 "top.utility.text",
                 "top.utility.sticky-note",
                 "top.utility.highlight",
-            ]
+            ],
+            "Clear leads the overflow menu; dropped items follow in order"
         );
-        assert_eq!(
-            chrome_ids(&spec),
-            ["top.chrome.pin", "top.chrome.overflow", "top.chrome.close"]
+        assert!(
+            strip_ids.contains(&ids::TOP_CHROME_OVERFLOW.as_str().to_string()),
+            "the overflow toggle anchors in the history island: {strip_ids:?}"
         );
+        assert_eq!(chrome_ids(&spec), ["top.chrome.pin", "top.chrome.close"]);
         assert_eq!(
             spec.overflow()[0].event(&snapshot),
+            ToolbarEvent::ClearCanvas { instant: false }
+        );
+        assert_eq!(
+            spec.overflow()[0].role(),
+            TopToolbarControlRole::Destructive
+        );
+        assert_eq!(
+            spec.overflow()[1].event(&snapshot),
             ToolbarEvent::SelectTool(Tool::Line)
         );
+    }
+
+    #[test]
+    fn island_assignment_is_total_and_ordered() {
+        let regular = snapshot();
+        let mut narrow_plan = TopStripPlan::unconstrained();
+        narrow_plan.swatch_count = 0;
+        narrow_plan.dropped_tools = vec![Tool::Line];
+        narrow_plan.dropped_utilities = vec![TopUtilityButton::Text];
+
+        for plan in [TopStripPlan::unconstrained(), narrow_plan] {
+            let spec = TopToolbarSpec::build(&regular, &plan);
+            let islands: Vec<_> = spec.strip().iter().map(TopToolbarNode::island).collect();
+
+            // Total: every strip node maps to exactly one non-chrome island.
+            assert!(!islands.is_empty());
+            assert!(
+                islands
+                    .iter()
+                    .all(|island| *island != TopToolbarIsland::Chrome),
+                "chrome controls never appear in the strip: {islands:?}"
+            );
+            // Ordered: the tools island fully precedes the history island.
+            assert!(
+                islands.windows(2).all(|pair| pair[0] <= pair[1]),
+                "islands must be contiguous and ordered: {islands:?}"
+            );
+            assert!(islands.contains(&TopToolbarIsland::Tools));
+            assert!(islands.contains(&TopToolbarIsland::History));
+
+            // Chrome lane is exactly the chrome island.
+            for control in spec.chrome() {
+                assert_eq!(control.island(), TopToolbarIsland::Chrome);
+            }
+        }
     }
 
     #[test]
@@ -849,7 +1050,6 @@ mod tests {
         let mut minimized = highlighted.clone();
         minimized.top_minimized = true;
         let mut narrow_plan = TopStripPlan::unconstrained();
-        narrow_plan.show_overflow = true;
         narrow_plan.dropped_tools = vec![Tool::Line, Tool::Arrow];
         narrow_plan.dropped_utilities = vec![TopUtilityButton::Text];
 

@@ -89,7 +89,8 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (1120, 58));
+    // Width includes the island gaps/padding of the three-pill layout.
+    assert_eq!(top_size(&snapshot), (1145, 58));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
@@ -102,10 +103,10 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
     state.toolbar_use_icons = true;
     let mut snapshot = snapshot_from_state(&state);
 
-    // Unconstrained: all eight swatches, no overflow chrome.
+    // Unconstrained: all eight swatches, nothing dropped into the overflow.
     let full = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
     assert_eq!(full.swatch_count, 8);
-    assert!(!full.show_overflow);
+    assert!(full.dropped_tools.is_empty() && full.dropped_utilities.is_empty());
     let full_width = top_size(&snapshot).0;
 
     // Slightly narrow: swatches degrade before anything is dropped.
@@ -119,7 +120,6 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
     // protected core (Pen, Eraser, chip, Undo/Redo, Clear) stays.
     snapshot.top_viewport_max = Some(700.0);
     let tight = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-    assert!(tight.show_overflow);
     assert!(!tight.dropped_utilities.is_empty());
     assert!(top_size(&snapshot).0 as f64 <= 700.0);
     let (w, h) = top_size(&snapshot);
@@ -130,7 +130,6 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
         "top.tool.eraser",
         "top.group.quick-colors",
         "top.utility.undo",
-        "top.utility.clear-canvas",
         "top.chrome.overflow",
     ] {
         assert!(
@@ -139,7 +138,7 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
         );
     }
 
-    // Opening the overflow reveals the dropped items below the bar.
+    // Opening the overflow reveals Clear first, then the dropped items.
     snapshot.top_overflow_open = true;
     let (w, h) = top_size(&snapshot);
     let tree =
@@ -151,8 +150,16 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
         .filter(|id| id.starts_with("top.overflow."))
         .collect();
     assert!(
-        overflow_ids.len() > 1,
-        "panel + dropped items: {overflow_ids:?}"
+        overflow_ids.len() > 2,
+        "panel + Clear + dropped items: {overflow_ids:?}"
+    );
+    assert_eq!(
+        overflow_ids
+            .iter()
+            .find(|id| **id != "top.overflow.panel")
+            .copied(),
+        Some("top.overflow.top.utility.clear-canvas"),
+        "Clear leads the overflow menu"
     );
 }
 
@@ -171,7 +178,10 @@ fn overflow_contains_only_visible_items_and_is_structural() {
     snapshot.top_viewport_max = Some(700.0);
 
     let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-    assert!(plan.show_overflow);
+    assert!(
+        !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty(),
+        "the 700px budget must force items into the overflow: {plan:?}"
+    );
     assert!(
         !plan
             .dropped_utilities
@@ -375,7 +385,9 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
     snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
         snapshot.top_viewport_max = Some(budget as f64);
         let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-        (plan.show_overflow
+        let has_dropped_items =
+            !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty();
+        (has_dropped_items
             && !plan
                 .dropped_utilities
                 .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight))
@@ -492,7 +504,7 @@ fn canvas_pane_right_aligns_destructive_buttons() {
     for (event_name, matcher) in [
         (
             "ClearCanvas",
-            &(|hit: &HitRegion| matches!(hit.event, ToolbarEvent::ClearCanvas))
+            &(|hit: &HitRegion| matches!(hit.event, ToolbarEvent::ClearCanvas { .. }))
                 as &dyn Fn(&HitRegion) -> bool,
         ),
         ("BoardDelete", &|hit: &HitRegion| {

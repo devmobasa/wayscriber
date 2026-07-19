@@ -211,6 +211,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::ToggleHelp,
     Action::ToggleQuickHelp,
     Action::ToggleToolbar,
+    Action::CycleToolbarDisplay,
     Action::ToggleStatusBar,
     Action::TogglePresenterMode,
     Action::ToggleLightMode,

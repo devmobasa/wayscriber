@@ -49,6 +49,10 @@ pub(crate) struct PresenterRestore {
     pub(crate) toolbar_visible: Option<bool>,
     pub(crate) toolbar_top_visible: Option<bool>,
     pub(crate) toolbar_side_visible: Option<bool>,
+    /// Top-strip form/minimize state before presenter mapped the strip to
+    /// the micro chip (`[presenter_mode] toolbar_mode = "micro"`).
+    pub(crate) toolbar_top_display_mode: Option<crate::config::TopDisplayMode>,
+    pub(crate) toolbar_top_minimized: Option<bool>,
     pub(crate) click_highlight_enabled: Option<bool>,
     pub(crate) tool_override: Option<Option<Tool>>,
 }
@@ -224,6 +228,12 @@ pub struct InputState {
     pub toolbar_top_overflow_open: bool,
     /// Whether the top strip is minimized to its edge restore tab.
     pub toolbar_top_minimized: bool,
+    /// Display form of the top strip (full strip / micro chip / cycle-hidden).
+    /// Sibling of `toolbar_top_minimized`; minimized wins when both are set.
+    pub toolbar_top_display_mode: crate::config::TopDisplayMode,
+    /// When drawing input last started or committed a stroke; drives the
+    /// top-strip idle fade.
+    pub(crate) last_draw_activity: Instant,
     /// Whether the side palette is minimized to its edge restore tab.
     pub toolbar_side_minimized: bool,
     /// Last HSV triple committed from the side palette's color picker;
@@ -486,4 +496,17 @@ pub struct InputState {
     /// Cursor position within the help overlay search input
     #[allow(dead_code)]
     pub help_overlay_search_cursor: usize,
+}
+
+impl InputState {
+    /// Record drawing activity (stroke start/commit); resets the top-strip
+    /// idle-fade clock.
+    pub(crate) fn mark_draw_activity(&mut self) {
+        self.last_draw_activity = Instant::now();
+    }
+
+    /// When drawing input last started or committed a stroke.
+    pub fn last_draw_activity(&self) -> Instant {
+        self.last_draw_activity
+    }
 }

@@ -145,7 +145,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - See [Session manager and persistence](#session-manager-and-persistence) for the full workflow
 
 ### Toolbars and UI
-- Floating toolbars (pin/unpin: <kbd>F2</kbd>/<kbd>F9</kbd>)
+- Floating toolbars (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro chip → hidden)
 - Two toolbar frontends: GTK4-rendered bars on layer-shell compositors (Hyprland, KWin, Wayfire, River, ...), with automatic fallback to the built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline mode, builds without the `toolbar-gtk` feature)
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
@@ -731,7 +731,8 @@ pick_screen_color = ["I"]
 | Cancel action | <kbd>Right-click</kbd> (while drawing) / <kbd>Escape</kbd> |
 | Context menu | <kbd>Right-click</kbd> (idle) / <kbd>Shift+F10</kbd> / <kbd>Menu</kbd>, <kbd>Arrow keys</kbd> + <kbd>Enter</kbd>/<kbd>Space</kbd> |
 | Edit selected text/note | <kbd>Enter</kbd> (single selection) |
-| Toggle toolbars | <kbd>F2</kbd> / <kbd>F9</kbd> |
+| Toggle toolbars | <kbd>F9</kbd> |
+| Cycle top strip (full → micro → hidden) | <kbd>F2</kbd> |
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
 | Quick reference | <kbd>Shift+F1</kbd> |
 | Configurator | <kbd>F11</kbd> |

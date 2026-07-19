@@ -100,7 +100,7 @@ impl ToolbarActionsModel {
                 vec![
                     ToolbarButtonModel::new(ToolbarEvent::Undo, snapshot.undo_available),
                     ToolbarButtonModel::new(ToolbarEvent::Redo, snapshot.redo_available),
-                    ToolbarButtonModel::new(ToolbarEvent::ClearCanvas, true),
+                    ToolbarButtonModel::new(ToolbarEvent::ClearCanvas { instant: false }, true),
                 ],
             );
         }
@@ -237,7 +237,7 @@ fn toolbar_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
     Some(match event {
         ToolbarEvent::Undo => ids::SIDE_ACTIONS_UNDO,
         ToolbarEvent::Redo => ids::SIDE_ACTIONS_REDO,
-        ToolbarEvent::ClearCanvas => ids::SIDE_ACTIONS_CLEAR_CANVAS,
+        ToolbarEvent::ClearCanvas { .. } => ids::SIDE_ACTIONS_CLEAR_CANVAS,
         ToolbarEvent::ZoomIn => ids::SIDE_ACTIONS_ZOOM_IN,
         ToolbarEvent::ZoomOut => ids::SIDE_ACTIONS_ZOOM_OUT,
         ToolbarEvent::ResetZoom => ids::SIDE_ACTIONS_RESET_ZOOM,

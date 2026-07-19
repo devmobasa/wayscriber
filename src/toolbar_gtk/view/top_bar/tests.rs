@@ -66,7 +66,11 @@ fn degraded_layout_requests_the_selected_plan_width() {
     snapshot.top_viewport_max = Some(700.0);
 
     let plan = plan_top_strip(&snapshot);
-    assert!(plan.compact || plan.show_overflow || plan.swatch_count < 8);
+    let degraded = plan.compact
+        || !plan.dropped_tools.is_empty()
+        || !plan.dropped_utilities.is_empty()
+        || plan.swatch_count < 8;
+    assert!(degraded, "the 700px budget must degrade the plan: {plan:?}");
     assert!(top_default_width(&snapshot) <= 700);
 }
 
@@ -243,6 +247,51 @@ fn collect_semantic_widgets(root: &gtk4::Widget) -> Vec<gtk4::Widget> {
         visit(&current, &mut widgets);
     }
     widgets
+}
+
+/// Key of the nearest `island.<key>`-named ancestor container, or None when
+/// the widget lives outside every pill island (the contextual ring row and
+/// the minimized/micro single-control surfaces).
+fn nearest_island_key(widget: &gtk4::Widget) -> Option<String> {
+    let mut ancestor = widget.parent();
+    while let Some(current) = ancestor {
+        let name = current.widget_name();
+        if let Some(key) = name.as_str().strip_prefix("island.") {
+            return Some(key.to_string());
+        }
+        ancestor = current.parent();
+    }
+    None
+}
+
+/// Expected island container per semantic widget id, derived from the shared
+/// spec's `node.island()`/`control.island()` accessors. `None` marks widgets
+/// the GTK adapter intentionally hosts outside the pill islands: the
+/// contextual ring row (its own detached pill below the strip) and the
+/// minimized tab / micro chip (the whole surface is the control).
+fn expected_island_keys(
+    snapshot: &ToolbarSnapshot,
+    spec: &model::TopToolbarSpec,
+) -> HashMap<String, Option<&'static str>> {
+    let mut expected = HashMap::new();
+    let islands_built = !snapshot.top_minimized && !snapshot.top_micro_active();
+    for node in spec.strip() {
+        let id = match node {
+            model::TopToolbarNode::Divider(divider) => divider.id().to_string(),
+            model::TopToolbarNode::Control(control) => control.id().render_id().into_owned(),
+        };
+        expected.insert(id, islands_built.then(|| node.island().key()));
+    }
+    for control in spec.chrome() {
+        expected.insert(
+            control.id().render_id().into_owned(),
+            islands_built.then(|| control.island().key()),
+        );
+    }
+    for control in spec.contextual() {
+        expected.insert(control.id().render_id().into_owned(), None);
+    }
+    expected
 }
 
 fn expected_main_widget_ids(spec: &model::TopToolbarSpec) -> Vec<String> {
@@ -435,6 +484,14 @@ fn assert_builtin_node(
             );
         }
         W::Swatch { selected, .. } => assert_eq!(*selected, expected.active),
+        W::MicroChip { glyph, .. } => {
+            let icon = expected.icon.expect("semantic icon for micro chip");
+            assert!(std::ptr::fn_addr_eq(
+                glyph.0,
+                crate::toolbar_icons::top_toolbar_icon_painter(icon)
+            ));
+            assert_eq!(expected.role, model::TopToolbarControlRole::Restore);
+        }
         W::PinButton { pinned } => assert_eq!(*pinned, expected.active),
         W::MiniCheckbox { checked, label } => {
             assert_eq!(*checked, expected.active);
@@ -500,6 +557,8 @@ fn shared_spec_matches_builtin_order_and_full_semantics_without_starting_a_gui()
     simple.layout_mode = ToolbarLayoutMode::Simple;
     let mut minimized = regular.clone();
     minimized.top_minimized = true;
+    let mut micro = regular.clone();
+    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
     let mut narrow = regular.clone();
     narrow.top_viewport_max = Some(520.0);
     narrow.top_overflow_open = true;
@@ -515,6 +574,7 @@ fn shared_spec_matches_builtin_order_and_full_semantics_without_starting_a_gui()
         ("regular", regular),
         ("simple", simple),
         ("minimized", minimized),
+        ("micro", micro),
         ("narrow", narrow),
         ("text", text),
         ("shapes", shapes),
@@ -567,6 +627,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     simple.layout_mode = ToolbarLayoutMode::Simple;
     let mut minimized = regular.clone();
     minimized.top_minimized = true;
+    let mut micro = regular.clone();
+    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
     let mut text = regular.clone();
     text.use_icons = false;
     let mut highlighted = regular.clone();
@@ -578,6 +640,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         ("regular", regular.clone()),
         ("simple", simple),
         ("minimized", minimized),
+        ("micro", micro),
         ("text", text),
         ("highlighted", highlighted.clone()),
         ("narrow", narrow),
@@ -589,6 +652,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
         if snapshot.top_minimized {
             top.build_minimized(&snapshot, &plan);
+        } else if snapshot.top_micro_active() {
+            top.build_micro(&snapshot, &plan);
         } else {
             top.build_strip(&snapshot, &plan);
         }
@@ -605,6 +670,21 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             expected_main_widget_ids(&spec),
             "{name} GTK widget order"
         );
+        // Ordered ids alone cannot catch a control appended to the wrong
+        // pill: also assert every widget's ancestor chain reaches the
+        // island container the shared spec assigns it.
+        let expected_islands = expected_island_keys(&snapshot, &spec);
+        for widget in &widgets {
+            let id = widget.widget_name().to_string();
+            let expected_island = expected_islands
+                .get(&id)
+                .unwrap_or_else(|| panic!("{name}: no island expectation for {id}"));
+            assert_eq!(
+                nearest_island_key(widget).as_deref(),
+                *expected_island,
+                "{name}: {id} island membership"
+            );
+        }
         for widget in widgets {
             let id = widget.widget_name();
             let Some(control) = expected.iter().find_map(|record| match record {
@@ -647,6 +727,11 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             .find(|widget| widget.widget_name() == control.id)
             .expect("compact quick-color widget");
         assert_gtk_control_widget(widget, control);
+        assert_eq!(
+            nearest_island_key(widget).as_deref(),
+            Some(model::TopToolbarIsland::Tools.key()),
+            "compact quick colors live in the tools island"
+        );
     }
     detach_test_popovers(&mut compact_top);
 
@@ -739,7 +824,6 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     );
 
     let mut overflow_plan = TopStripPlan::unconstrained();
-    overflow_plan.show_overflow = true;
     overflow_plan.dropped_tools = vec![Tool::Line, Tool::Arrow];
     overflow_plan.dropped_utilities = vec![
         model::TopUtilityButton::Screenshot,
@@ -806,7 +890,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     let overflow = event_top.overflow_button(
         &regular,
         model::TopToolbarControl::Overflow,
-        PIN_BUTTON_SIZE,
+        (ICON_BUTTON, ICON_BUTTON),
+        ICON_SIZE,
     );
     for (popover, capture_surface) in [
         (

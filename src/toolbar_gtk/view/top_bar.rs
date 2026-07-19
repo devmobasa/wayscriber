@@ -1,9 +1,10 @@
 //! The GTK top strip.
 //!
-//! Adapts the shared `TopToolbarSpec` reading order — drag grip | pens |
-//! shapes | shapes-picker | annotations | quick colors + chip | history |
-//! Clear | pin/overflow/minimize — into GTK widgets. Width degradation uses
-//! the same shared plan as the built-in frontend.
+//! Adapts the shared `TopToolbarSpec` into three detached pill islands —
+//! tools (drag grip | pens | shapes | shapes-picker | annotations | quick
+//! colors + chip), history (undo/redo + the overflow toggle anchoring Clear
+//! and width-dropped items), and chrome (pin/minimize) — as GTK widgets.
+//! Width degradation uses the same shared plan as the built-in frontend.
 //!
 //! The bar content is rebuilt only when its *structure* changes (item
 //! order/visibility, icon mode, plan, scale, palette); per-state changes
@@ -33,8 +34,9 @@ use model::TopStripPlan;
 
 use super::super::icons::IconWidget;
 use super::super::widgets::{
-    FeedbackSender, SwatchButton, add_shortcut_badge, icon_button, install_shortcut_focus_policy,
-    send_event, set_active_class, sized_button, swatch_with_shortcut, text_button,
+    FeedbackSender, SwatchButton, add_button_shortcut_hint, icon_button,
+    install_click_modifier_capture, install_shortcut_focus_policy, send_event, set_active_class,
+    sized_button, swatch_with_shortcut, text_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 
@@ -42,7 +44,10 @@ use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 // (`layout/spec/top.rs`); the plan/natural-width math reuses the builtin
 // functions directly, these only size the GTK widgets.
 const GAP: f64 = 5.0;
-const START_X: f64 = 19.0;
+/// Clear space between the detached pill islands
+/// (`ToolbarLayoutSpec::TOP_ISLAND_GAP`).
+const ISLAND_GAP: f64 = 10.0;
+const COMPACT_ISLAND_GAP: f64 = 4.0;
 const HANDLE_SIZE: f64 = 18.0;
 const ICON_BUTTON: f64 = 46.0;
 const ICON_SIZE: f64 = 28.0;
@@ -50,7 +55,6 @@ const TEXT_BUTTON_W: f64 = 60.0;
 const TEXT_BUTTON_H: f64 = 36.0;
 const PIN_BUTTON_SIZE: f64 = 24.0;
 const PIN_BUTTON_GAP: f64 = 6.0;
-const PIN_MARGIN_RIGHT: f64 = 15.0;
 const DIVIDER_SPAN: f64 = 7.0;
 const SWATCH_SIZE: f64 = 22.0;
 const SWATCH_GAP: f64 = 4.0;
@@ -58,9 +62,9 @@ const CHIP_SIZE: f64 = 28.0;
 const COMPACT_BUTTON: f64 = 26.0;
 const COMPACT_GAP: f64 = 1.0;
 const COMPACT_CHROME: f64 = 18.0;
-const COMPACT_MARGIN_RIGHT: f64 = 8.0;
-const COMPACT_START_X: f64 = 4.0;
 const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
+/// Micro-mode chip size (`ToolbarLayoutSpec::TOP_MICRO_SIZE`).
+const MICRO_SIZE: f64 = 44.0;
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
@@ -78,6 +82,7 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool);
 #[derive(PartialEq)]
 struct StructureKey {
     minimized: bool,
+    micro: bool,
     use_icons: bool,
     layout_mode: ToolbarLayoutMode,
     scale_milli: i64,
@@ -92,6 +97,7 @@ impl StructureKey {
     fn of(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> Self {
         Self {
             minimized: snapshot.top_minimized,
+            micro: snapshot.top_micro_active(),
             use_icons: snapshot.use_icons || plan.compact,
             layout_mode: snapshot.layout_mode,
             scale_milli: (effective_scale(snapshot) * 1000.0).round() as i64,
@@ -140,6 +146,16 @@ fn set_prefixed_control_widget_id(
 ) {
     #[cfg(test)]
     set_semantic_widget_id(_widget, &format!("{_prefix}{}", _control.id().render_id()));
+}
+
+/// Test-only name for an island pill container: `island.<key>`, derived from
+/// the shared spec island key. Deliberately *not* `top.`-prefixed so the
+/// contract suite's `collect_semantic_widgets` keeps descending into the
+/// pill boxes (it stops only at `top.`-named semantic widgets) while island
+/// membership stays assertable via the widget ancestry.
+fn set_island_widget_id(_widget: &impl IsA<gtk4::Widget>, _island: model::TopToolbarIsland) {
+    #[cfg(test)]
+    set_semantic_widget_id(_widget, &format!("island.{}", _island.key()));
 }
 
 pub(in crate::toolbar_gtk) struct TopBar {
@@ -193,6 +209,12 @@ impl TopBar {
         // Match the built-in bars: do not shift for other exclusive zones
         // (panels/bars) and do not reserve one.
         window.set_exclusive_zone(-1);
+        // Known divergence from the built-in strip: the built-in top surface
+        // restricts its input region to the island pills so the inter-island
+        // gaps click through to the canvas. This GTK window never carves
+        // per-island input regions — the gaps swallow clicks here. Accepted
+        // for now; fixing it would require wl_surface input-region surgery
+        // on the GTK window.
 
         Self::with_window(feedback, window)
     }
@@ -211,6 +233,20 @@ impl TopBar {
         root.add_css_class("panel");
         let capture_surface = CaptureSurfaceContent::new(&root);
         window.set_child(Some(capture_surface.widget()));
+
+        // Report top-window hover to the backend: GTK runs on its own
+        // Wayland connection, so this is the only way the backend's
+        // top-strip idle fade can restore on pointer approach.
+        let hover = gtk4::EventControllerMotion::new();
+        let enter_feedback = feedback.clone();
+        hover.connect_enter(move |_, _, _| {
+            let _ = enter_feedback.send(GtkToolbarFeedback::TopHover { hovered: true });
+        });
+        let leave_feedback = feedback.clone();
+        hover.connect_leave(move |_| {
+            let _ = leave_feedback.send(GtkToolbarFeedback::TopHover { hovered: false });
+        });
+        window.add_controller(hover);
 
         Self {
             window,
@@ -397,6 +433,8 @@ impl TopBar {
 
         if snapshot.top_minimized {
             self.build_minimized(snapshot, plan);
+        } else if snapshot.top_micro_active() {
+            self.build_micro(snapshot, plan);
         } else {
             self.build_strip(snapshot, plan);
         }

@@ -61,7 +61,7 @@ impl InputState {
             ToolbarEvent::RedoAllDelayed => self.apply_toolbar_redo_all_delayed(),
             ToolbarEvent::CustomUndo => self.apply_toolbar_custom_undo(),
             ToolbarEvent::CustomRedo => self.apply_toolbar_custom_redo(),
-            ToolbarEvent::ClearCanvas => self.apply_toolbar_clear_canvas(),
+            ToolbarEvent::ClearCanvas { instant } => self.apply_toolbar_clear_canvas(instant),
             ToolbarEvent::CaptureScreenshot => self.apply_toolbar_capture_screenshot(),
             ToolbarEvent::PagePrev => self.apply_toolbar_page_prev(),
             ToolbarEvent::PageNext => self.apply_toolbar_page_next(),
@@ -100,6 +100,7 @@ impl InputState {
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)
             }
+            ToolbarEvent::SetTopDisplayMode(mode) => self.apply_toolbar_set_top_display_mode(mode),
             ToolbarEvent::SetSideMinimized(minimized) => {
                 self.apply_toolbar_set_side_minimized(minimized)
             }

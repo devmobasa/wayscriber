@@ -194,7 +194,7 @@ fn action_icon(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> IconPainter 
     match event {
         ToolbarEvent::Undo => toolbar_icons::draw_icon_undo,
         ToolbarEvent::Redo => toolbar_icons::draw_icon_redo,
-        ToolbarEvent::ClearCanvas => toolbar_icons::draw_icon_clear,
+        ToolbarEvent::ClearCanvas { .. } => toolbar_icons::draw_icon_clear,
         ToolbarEvent::ZoomIn => toolbar_icons::draw_icon_zoom_in,
         ToolbarEvent::ZoomOut => toolbar_icons::draw_icon_zoom_out,
         ToolbarEvent::ResetZoom => toolbar_icons::draw_icon_zoom_reset,
