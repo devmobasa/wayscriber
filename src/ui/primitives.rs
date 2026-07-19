@@ -54,7 +54,6 @@ const PILL_SHADOW_LAYERS: u32 = 3;
 /// Draw a floating pill/panel surface: optional layered soft shadow, fill,
 /// and a 1px hairline border. The canonical chrome surface for islands,
 /// HUD segments, and popovers as they migrate to the theme.
-#[allow(dead_code)] // consumed by the chip HUD / islands (M2+)
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_pill(
     ctx: &cairo::Context,
@@ -163,6 +162,62 @@ pub(crate) enum BadgeAlign {
     Right,
 }
 
+/// Badge box `(width, height, text_inset)` from measured label/hint extents.
+/// Shared by [`draw_badge`] and [`measure_badge`] so layout and rendering can
+/// never disagree about badge geometry.
+fn badge_box(
+    label_extents: &crate::ui_text::UiTextExtents,
+    hint_extents: Option<&crate::ui_text::UiTextExtents>,
+) -> (f64, f64, f64) {
+    let padding = BADGE_PADDING;
+    match hint_extents {
+        Some(hint_extents) => (
+            label_extents.width().max(hint_extents.width()) + padding * 1.6,
+            label_extents.height() + hint_extents.height() + padding * 1.2,
+            padding * 0.8,
+        ),
+        None => (
+            label_extents.width() + padding * 1.4,
+            label_extents.height() + padding,
+            padding * 0.7,
+        ),
+    }
+}
+
+/// Measure the `(width, height)` [`draw_badge`] would occupy, without a
+/// rendering context (used for HUD badge stacking and damage geometry).
+pub(crate) fn measure_badge(
+    label: &str,
+    label_font_size: f64,
+    hint: Option<(&str, f64)>,
+) -> Option<(f64, f64)> {
+    let label_extents = crate::ui_text::measure_text(
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: label_font_size,
+        },
+        label,
+        None,
+    )?;
+    let hint_extents = match hint {
+        Some((text, font_size)) => Some(crate::ui_text::measure_text(
+            UiTextStyle {
+                family: "Sans",
+                slant: cairo::FontSlant::Normal,
+                weight: cairo::FontWeight::Normal,
+                size: font_size,
+            },
+            text,
+            None,
+        )?),
+        None => None,
+    };
+    let (width, height, _) = badge_box(&label_extents, hint_extents.as_ref());
+    Some((width, height))
+}
+
 /// Draw a rounded, tinted status badge with a bold `label` and an optional
 /// dimmer `(text, font_size)` hint line below it. Returns the measured badge
 /// height so callers can stack badges without hardcoding heights.
@@ -207,18 +262,8 @@ pub(crate) fn draw_badge(
         (layout, extents)
     });
 
-    let (width, height, text_inset) = match &hint_layout {
-        Some((_, hint_extents)) => (
-            label_extents.width().max(hint_extents.width()) + padding * 1.6,
-            label_extents.height() + hint_extents.height() + padding * 1.2,
-            padding * 0.8,
-        ),
-        None => (
-            label_extents.width() + padding * 1.4,
-            label_extents.height() + padding,
-            padding * 0.7,
-        ),
-    };
+    let (width, height, text_inset) =
+        badge_box(&label_extents, hint_layout.as_ref().map(|(_, ext)| ext));
 
     let x = match align {
         BadgeAlign::Left => anchor_x,

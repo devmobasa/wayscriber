@@ -36,6 +36,10 @@ impl UiTextExtents {
         self.height
     }
 
+    pub(crate) fn x_advance(self) -> f64 {
+        self.x_advance
+    }
+
     pub(crate) fn to_cairo(self) -> cairo::TextExtents {
         cairo::TextExtents::new(
             self.x_bearing,

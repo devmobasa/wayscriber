@@ -4,6 +4,55 @@ use super::super::theme::overlay;
 /// Vertical inset of the floating page badge from the screen edge.
 const PAGE_BADGE_EDGE_PADDING: f64 = overlay::SPACING_SM;
 
+/// Warning tint for the FROZEN badge — literal red for the safety state,
+/// deliberately never abstracted behind the theme.
+pub(crate) const FROZEN_BADGE_TINT: [f64; 4] = [0.82, 0.22, 0.2, 0.9];
+/// Teal tint for the zoom badge.
+pub(crate) const ZOOM_BADGE_TINT: [f64; 4] = [0.2, 0.52, 0.7, 0.9];
+/// Olive tint for the pan badge.
+pub(crate) const PAN_BADGE_TINT: [f64; 4] = [0.33, 0.44, 0.24, 0.92];
+/// Teal accent tint for the text-editing badge.
+pub(crate) const EDITING_BADGE_TINT: [f64; 4] = [0.2, 0.55, 0.65, 0.9];
+
+// Shared badge specs (labels, font sizes, hint) consumed by both the
+// top-corner badges below and the HUD-stacked pills in `bar.rs`
+// (`layout_mode_badges`) so the two renderings cannot drift.
+
+/// FROZEN badge label.
+pub(crate) const FROZEN_BADGE_LABEL: &str = "FROZEN";
+/// FROZEN badge label font size.
+pub(crate) const FROZEN_BADGE_FONT_SIZE: f64 = 16.0;
+/// Zoom badge label font size.
+pub(crate) const ZOOM_BADGE_FONT_SIZE: f64 = 15.0;
+/// Pan badge label font size.
+pub(crate) const PAN_BADGE_FONT_SIZE: f64 = 14.0;
+/// EDITING badge label.
+pub(crate) const EDITING_BADGE_LABEL: &str = "EDITING";
+/// EDITING badge label font size.
+pub(crate) const EDITING_BADGE_FONT_SIZE: f64 = 15.0;
+/// EDITING badge hint line shown below the label.
+pub(crate) const EDITING_BADGE_HINT: (&str, f64) = ("Return=save  Esc=cancel", 11.0);
+
+/// Zoom badge label ("ZOOM {pct}%", plus " LOCKED" when the zoom is locked).
+pub(crate) fn zoom_badge_label(zoom_scale: f64, locked: bool) -> String {
+    let pct = (zoom_scale * 100.0).round() as i32;
+    if locked {
+        format!("ZOOM {pct}% LOCKED")
+    } else {
+        format!("ZOOM {pct}%")
+    }
+}
+
+/// Pan badge label in the HUD's mixed-case form; the top-corner badge
+/// renders the same label uppercased.
+pub(crate) fn pan_badge_label(panned: bool) -> &'static str {
+    if panned {
+        "PANNED Space+Drag"
+    } else {
+        "PAN Space+Drag"
+    }
+}
+
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
     draw_badge(
@@ -11,11 +60,10 @@ pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_heig
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
-        "FROZEN",
-        16.0,
+        FROZEN_BADGE_LABEL,
+        FROZEN_BADGE_FONT_SIZE,
         None,
-        // Warning tint
-        [0.82, 0.22, 0.2, 0.9],
+        FROZEN_BADGE_TINT,
     );
 }
 
@@ -30,22 +78,16 @@ pub fn render_zoom_badge(
     zoom_scale: f64,
     locked: bool,
 ) -> f64 {
-    let zoom_pct = (zoom_scale * 100.0).round() as i32;
-    let label = if locked {
-        format!("ZOOM {}% LOCKED", zoom_pct)
-    } else {
-        format!("ZOOM {}%", zoom_pct)
-    };
+    let label = zoom_badge_label(zoom_scale, locked);
     let height = draw_badge(
         ctx,
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
         &label,
-        15.0,
+        ZOOM_BADGE_FONT_SIZE,
         None,
-        // Teal tint
-        [0.2, 0.52, 0.7, 0.9],
+        ZOOM_BADGE_TINT,
     );
     height + BADGE_STACK_GAP
 }
@@ -61,21 +103,18 @@ pub fn render_pan_badge(
     panned: bool,
     offset_y: f64,
 ) -> f64 {
-    let label = if panned {
-        "PANNED SPACE+DRAG"
-    } else {
-        "PAN SPACE+DRAG"
-    };
+    // Same label as the HUD-stacked pill, uppercased for the top corner
+    // (historic form; keeps the rendering visually unchanged).
+    let label = pan_badge_label(panned).to_uppercase();
     let height = draw_badge(
         ctx,
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
-        label,
-        14.0,
+        &label,
+        PAN_BADGE_FONT_SIZE,
         None,
-        // Olive tint
-        [0.33, 0.44, 0.24, 0.92],
+        PAN_BADGE_TINT,
     );
     height + BADGE_STACK_GAP
 }
@@ -92,11 +131,10 @@ pub fn render_editing_badge(
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
-        "EDITING",
-        15.0,
-        Some(("Return=save  Esc=cancel", 11.0)),
-        // Teal accent
-        [0.2, 0.55, 0.65, 0.9],
+        EDITING_BADGE_LABEL,
+        EDITING_BADGE_FONT_SIZE,
+        Some(EDITING_BADGE_HINT),
+        EDITING_BADGE_TINT,
     );
 }
 

@@ -227,6 +227,7 @@ pub(super) const UI_TOOLBAR_VISIBILITY_TERMS: &[&str] = &[
 pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
     "status bar",
     "show status bar",
+    "clickable status bar segments",
     "show board label",
     "show page counter",
     "show overlay badge with status bar",

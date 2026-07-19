@@ -56,20 +56,21 @@ impl WaylandState {
                     cursor_y,
                 );
             }
-            // Render frozen badge even if status bar is hidden
+            // Mode badges: when the status HUD is visible they render as
+            // pills stacked on the HUD (see render_status_bar); the floating
+            // top-corner badges below cover the hidden-status-bar case only.
             if self.input_state.frozen_active()
                 && !self.zoom.active
                 && self.config.ui.show_frozen_badge
+                && !self.input_state.show_status_bar
             {
                 crate::ui::render_frozen_badge(ctx, width, height);
             }
-            // Render a zoom badge when the status bar is hidden or zoom is locked.
+            // Render a zoom badge when the status bar is hidden.
             // Badge renderers return the vertical space they consume (measured
             // height plus stacking gap) so stacked badges never overlap.
             let mut top_badge_offset = 0.0;
-            if self.input_state.zoom_active()
-                && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
-            {
+            if self.input_state.zoom_active() && !self.input_state.show_status_bar {
                 top_badge_offset += crate::ui::render_zoom_badge(
                     ctx,
                     width,
@@ -94,6 +95,7 @@ impl WaylandState {
             // Render editing badge when in text edit mode
             if matches!(self.input_state.state, DrawingState::TextInput { .. })
                 && self.input_state.text_edit_target.is_some()
+                && !self.input_state.show_status_bar
             {
                 crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);
             }
@@ -117,12 +119,12 @@ impl WaylandState {
                 }
             }
 
-            // Render status bar if enabled
+            // Render the status HUD if enabled (layout was cached for this
+            // frame by collect_ui_effect_damage).
             if self.input_state.show_status_bar {
                 crate::ui::render_status_bar(
                     ctx,
                     &self.input_state,
-                    self.config.ui.status_bar_position,
                     &self.config.ui.status_bar_style,
                     width,
                     height,

@@ -54,6 +54,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
     input_state.polygon_sides = clamp_regular_sides(config.drawing.polygon_sides);
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
+    input_state.status_bar_interactive = config.ui.status_bar_interactive;
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
@@ -188,6 +189,7 @@ mod tests {
     fn build_input_state_applies_selected_ui_flags() {
         let mut config = Config::default();
         config.ui.context_menu.enabled = false;
+        config.ui.status_bar_interactive = false;
         config.ui.show_status_board_badge = false;
         config.ui.show_status_page_badge = false;
         config.ui.show_floating_badge_always = true;
@@ -200,6 +202,7 @@ mod tests {
         let input = build_input_state(&config);
 
         assert!(!input.context_menu_enabled());
+        assert!(!input.status_bar_interactive);
         assert!(!input.show_status_board_badge);
         assert!(!input.show_status_page_badge);
         assert!(input.show_floating_badge_always);

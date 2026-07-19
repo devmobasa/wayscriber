@@ -26,6 +26,19 @@ fn config_draft_round_trips_toolbar_rebind_modifier() {
         wayscriber::config::ToolbarRebindModifier::ShiftAlt
     );
 }
+
+#[test]
+fn config_draft_round_trips_status_bar_interactive() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(draft.ui_status_bar_interactive, "defaults to interactive");
+
+    draft.set_toggle(ToggleField::UiStatusBarInteractive, false);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("status bar interactive round trip");
+    assert!(!round_trip.ui.status_bar_interactive);
+}
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{

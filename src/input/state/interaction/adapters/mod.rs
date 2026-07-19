@@ -23,5 +23,6 @@ pub(crate) use pointer::{
     handle_left_context_menu_press, handle_middle_press, handle_properties_panel_motion,
     handle_properties_panel_press, handle_radial_menu_motion, handle_radial_menu_press,
     handle_radial_menu_release, handle_release_overlays, handle_right_press,
-    handle_tool_button_press, handle_unbound_left_press, update_pointer_positions,
+    handle_status_hud_press, handle_tool_button_press, handle_unbound_left_press,
+    update_pointer_positions,
 };

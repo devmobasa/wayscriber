@@ -8,6 +8,7 @@ impl ConfigDraft {
         config.ui.theme = self.ui_theme.to_theme();
         config.ui.reduced_motion = self.ui_reduced_motion.to_reduced_motion();
         config.ui.show_status_bar = self.ui_show_status_bar;
+        config.ui.status_bar_interactive = self.ui_status_bar_interactive;
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;
         config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;

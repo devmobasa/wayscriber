@@ -167,6 +167,9 @@ pub struct InputState {
     pub command_palette_toast_duration_ms: u64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether status HUD segments consume clicks to open their surfaces
+    /// (`[ui] status_bar_interactive`); false keeps the bar display-only
+    pub status_bar_interactive: bool,
     /// Whether to show the board label in the status bar
     pub show_status_board_badge: bool,
     /// Whether to show the page counter in the status bar
@@ -383,6 +386,12 @@ pub struct InputState {
     pub context_menu_layout: Option<ContextMenuLayout>,
     /// Cached layout details for the board picker overlay
     pub board_picker_layout: Option<BoardPickerLayout>,
+    /// Cached layout details for the status HUD (segmented status bar)
+    pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
+    /// Set when the internal pointer-routing chain consumed a left press on
+    /// the status HUD (tablet and other paths that bypass the backend's own
+    /// press→release flag); the matching release activates the chip.
+    pub(in crate::input::state) status_hud_press_pending: bool,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
     pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)

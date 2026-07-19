@@ -141,6 +141,13 @@ impl WaylandState {
                 self.set_pending_toast_press(true);
                 return;
             }
+            // Interactive status HUD: report the hit on press without side
+            // effects; the matching surface opens on release-inside.
+            self.set_pending_status_hud_press(false);
+            if self.input_state.status_hud_contains(screen_x, screen_y) {
+                self.set_pending_status_hud_press(true);
+                return;
+            }
         }
 
         debug!(

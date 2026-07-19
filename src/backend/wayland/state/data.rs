@@ -157,6 +157,8 @@ pub struct StateData {
     pub(super) suppress_next_release: bool,
     /// True when a left press began inside the main-surface toast.
     pub(super) pending_toast_press: bool,
+    /// True when a left press began inside the interactive status HUD.
+    pub(super) pending_status_hud_press: bool,
     /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
     pub(super) suppress_focus_exit_until: Option<Instant>,
     /// Short guard window after xdg focus loss where compositor close requests are ignored
@@ -172,6 +174,7 @@ pub struct StateData {
     pub(super) prev_preset_toast_damage: Option<crate::util::Rect>,
     pub(super) blocked_feedback_was_active: bool,
     pub(super) prev_text_edit_entry_damage: Option<crate::util::Rect>,
+    pub(super) prev_status_hud_damage: Option<crate::util::Rect>,
 }
 
 impl StateData {
@@ -245,6 +248,7 @@ impl StateData {
             overlay_ready: false,
             suppress_next_release: false,
             pending_toast_press: false,
+            pending_status_hud_press: false,
             suppress_focus_exit_until: None,
             xdg_close_guard_until: None,
             xdg_explicit_close_requested: false,
@@ -253,6 +257,7 @@ impl StateData {
             prev_preset_toast_damage: None,
             blocked_feedback_was_active: false,
             prev_text_edit_entry_damage: None,
+            prev_status_hud_damage: None,
         }
     }
 }

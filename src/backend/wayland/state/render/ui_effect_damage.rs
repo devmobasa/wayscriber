@@ -46,12 +46,14 @@ impl WaylandState {
     /// text-edit entry glow) for the current frame. Also updates the
     /// previous-frame tracking state, so this must be called exactly once per
     /// rendered frame, even on frames that force full damage for other reasons.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn collect_ui_effect_damage(
         &mut self,
         ui_toast_active: bool,
         preset_feedback_active: bool,
         blocked_feedback_active: bool,
         text_edit_entry_active: bool,
+        status_hud_active: bool,
         width: u32,
         height: u32,
     ) -> Vec<Rect> {
@@ -99,6 +101,29 @@ impl WaylandState {
             entry_rect,
         );
         self.data.prev_text_edit_entry_damage = entry_rect;
+
+        // The status HUD layout is refreshed here, once per frame and before
+        // rendering, so damage geometry, rendering, and pointer hit-testing
+        // all read the same cache for the frame.
+        let status_hud_rect = if status_hud_active {
+            self.input_state.update_status_hud_layout(
+                self.config.ui.status_bar_position,
+                &self.config.ui.status_bar_style,
+                width,
+                height,
+            );
+            crate::ui::status_hud_geometry(&self.input_state, width, height)
+                .and_then(|bounds| effect_rect(bounds, width, height))
+        } else {
+            self.input_state.clear_status_hud_layout();
+            None
+        };
+        push_effect_damage(
+            &mut regions,
+            self.data.prev_status_hud_damage,
+            status_hud_rect,
+        );
+        self.data.prev_status_hud_damage = status_hud_rect;
 
         regions
     }
@@ -161,5 +186,30 @@ mod tests {
         let mut cleanup = Vec::new();
         push_effect_damage(&mut cleanup, Some(prev), None);
         assert_eq!(cleanup, vec![prev]);
+    }
+
+    /// The status HUD follows the same appear → move → disappear union
+    /// contract as the toasts: every transition damages both the old and new
+    /// footprint so stale pixels are always cleaned up.
+    #[test]
+    fn status_hud_damage_lifecycle_unions_prev_and_current_footprints() {
+        let corner = effect_rect((15.0, 900.0, 400.0, 40.0), 1920, 1080);
+        let moved = effect_rect((1505.0, 900.0, 400.0, 40.0), 1920, 1080);
+        assert!(corner.is_some() && moved.is_some());
+
+        // Appear: only the new footprint.
+        let mut appear = Vec::new();
+        push_effect_damage(&mut appear, None, corner);
+        assert_eq!(appear, vec![corner.unwrap()]);
+
+        // Move (e.g. status_bar_position change): old + new footprints.
+        let mut relocate = Vec::new();
+        push_effect_damage(&mut relocate, corner, moved);
+        assert_eq!(relocate, vec![corner.unwrap(), moved.unwrap()]);
+
+        // Disappear (bar hidden / UI suppressed): old footprint only.
+        let mut vanish = Vec::new();
+        push_effect_damage(&mut vanish, moved, None);
+        assert_eq!(vanish, vec![moved.unwrap()]);
     }
 }

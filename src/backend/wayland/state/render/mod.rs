@@ -92,6 +92,7 @@ impl WaylandState {
                 preset_feedback_active,
                 blocked_feedback_active,
                 text_edit_entry_active,
+                render_ui && self.input_state.show_status_bar,
                 width,
                 height,
             );

@@ -31,6 +31,12 @@ pub struct UiConfig {
     #[serde(default = "default_show_status")]
     pub show_status_bar: bool,
 
+    /// Allow clicking status bar segments (board, page, color, tool, help)
+    /// to open their surfaces. When false the status bar is display-only and
+    /// clicks pass through to the canvas.
+    #[serde(default = "default_status_bar_interactive")]
+    pub status_bar_interactive: bool,
+
     /// Show the board label in the status bar
     #[serde(default = "default_show_status_board_badge")]
     pub show_status_board_badge: bool,
@@ -125,6 +131,7 @@ impl Default for UiConfig {
             theme: UiTheme::default(),
             reduced_motion: ReducedMotion::default(),
             show_status_bar: default_show_status(),
+            status_bar_interactive: default_status_bar_interactive(),
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),
             show_floating_badge_always: default_show_page_badge_with_status_bar(),
@@ -149,6 +156,10 @@ impl Default for UiConfig {
 }
 
 fn default_show_status() -> bool {
+    true
+}
+
+fn default_status_bar_interactive() -> bool {
     true
 }
 

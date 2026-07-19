@@ -658,6 +658,27 @@ fn ui_defaults_follow_desktop_for_xdg_focus_loss() {
     assert_eq!(Config::default().ui.xdg_focus_loss_behavior, expected);
 }
 
+#[test]
+fn ui_status_bar_interactive_defaults_to_true() {
+    assert!(Config::default().ui.status_bar_interactive);
+
+    // Omitting the key in an existing [ui] table keeps the default.
+    let config: Config = toml::from_str("[ui]\nshow_status_bar = true\n")
+        .expect("ui table without status_bar_interactive should parse");
+    assert!(config.ui.status_bar_interactive);
+}
+
+#[test]
+fn ui_status_bar_interactive_round_trips_disabled_value() {
+    let parsed: Config = toml::from_str("[ui]\nstatus_bar_interactive = false\n")
+        .expect("status_bar_interactive = false should parse");
+    assert!(!parsed.ui.status_bar_interactive);
+
+    let serialized = toml::to_string(&parsed).expect("config serializes");
+    let reparsed: Config = toml::from_str(&serialized).expect("serialized config reparses");
+    assert!(!reparsed.ui.status_bar_interactive);
+}
+
 #[cfg(feature = "tablet-input")]
 #[test]
 fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {

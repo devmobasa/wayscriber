@@ -65,6 +65,7 @@ pub struct ConfigDraft {
     pub ui_theme: UiThemeOption,
     pub ui_reduced_motion: ReducedMotionOption,
     pub ui_show_status_bar: bool,
+    pub ui_status_bar_interactive: bool,
     pub ui_show_status_board_badge: bool,
     pub ui_show_status_page_badge: bool,
     pub ui_show_page_badge_with_status_bar: bool,

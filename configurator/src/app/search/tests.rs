@@ -303,6 +303,7 @@ fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
         (ids::TOP_TOOL_BLUR.as_str(), UiTabId::ToolbarVisibility),
         (ids::SIDE_GROUP_PRESETS.as_str(), UiTabId::ToolbarVisibility),
         ("status bar position", UiTabId::StatusBar),
+        ("clickable status bar segments", UiTabId::StatusBar),
         ("click highlight radius", UiTabId::ClickHighlight),
     ];
 

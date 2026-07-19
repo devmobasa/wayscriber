@@ -580,6 +580,19 @@ impl Theme {
         }
     }
 
+    /// Status chrome palette `(bg, text)` that contrasts with a solid board
+    /// background: light boards get dark chrome, dark boards get light
+    /// chrome. Board adaptivity is orthogonal to the installed variant
+    /// (`ThemeMode::Auto` still resolves the overall theme to dark), so this
+    /// is an associated helper rather than a method on the active theme.
+    pub fn status_palette_for_background(r: f64, g: f64, b: f64) -> ([f64; 4], [f64; 4]) {
+        if relative_luminance(r, g, b) > STATUS_PALETTE_LUMINANCE_THRESHOLD {
+            ([0.15, 0.15, 0.15, 0.85], [1.0, 1.0, 1.0, 1.0])
+        } else {
+            ([0.85, 0.85, 0.85, 0.85], [0.0, 0.0, 0.0, 1.0])
+        }
+    }
+
     /// Light chrome variant (for light solid boards once surfaces consume
     /// the runtime theme). Accent/radii/spacing match dark.
     pub fn light() -> Self {
@@ -634,6 +647,15 @@ pub fn current() -> &'static Theme {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/// Backgrounds brighter than this luminance get dark status chrome.
+const STATUS_PALETTE_LUMINANCE_THRESHOLD: f64 = 0.5;
+
+/// Rec. 709 relative luminance of an RGB color (0.0–1.0 channels).
+#[inline]
+pub fn relative_luminance(r: f64, g: f64, b: f64) -> f64 {
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
 
 /// Apply an RGBA color tuple to a Cairo context
 #[inline]
@@ -730,5 +752,37 @@ mod tests {
     #[test]
     fn current_falls_back_to_dark_without_init() {
         assert_eq!(*current(), Theme::dark());
+    }
+
+    #[test]
+    fn relative_luminance_uses_rec709_weights() {
+        assert!((relative_luminance(1.0, 0.0, 0.0) - 0.2126).abs() < 1e-9);
+        assert!((relative_luminance(0.0, 1.0, 0.0) - 0.7152).abs() < 1e-9);
+        assert!((relative_luminance(0.0, 0.0, 1.0) - 0.0722).abs() < 1e-9);
+        assert!((relative_luminance(1.0, 1.0, 1.0) - 1.0).abs() < 1e-9);
+        assert_eq!(relative_luminance(0.0, 0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn status_palette_darkens_chrome_on_light_backgrounds() {
+        let (bg, text) = Theme::status_palette_for_background(1.0, 1.0, 1.0);
+        assert_eq!(bg, [0.15, 0.15, 0.15, 0.85]);
+        assert_eq!(text, [1.0, 1.0, 1.0, 1.0]);
+
+        // Saturated green is bright enough (luminance 0.7152) for dark chrome.
+        let (green_bg, _) = Theme::status_palette_for_background(0.0, 1.0, 0.0);
+        assert_eq!(green_bg, [0.15, 0.15, 0.15, 0.85]);
+    }
+
+    #[test]
+    fn status_palette_lightens_chrome_on_dark_backgrounds() {
+        let (bg, text) = Theme::status_palette_for_background(0.0, 0.0, 0.0);
+        assert_eq!(bg, [0.85, 0.85, 0.85, 0.85]);
+        assert_eq!(text, [0.0, 0.0, 0.0, 1.0]);
+
+        // Exactly at the threshold stays on the dark-background side.
+        let (mid_bg, mid_text) = Theme::status_palette_for_background(0.5, 0.5, 0.5);
+        assert_eq!(mid_bg, [0.85, 0.85, 0.85, 0.85]);
+        assert_eq!(mid_text, [0.0, 0.0, 0.0, 1.0]);
     }
 }

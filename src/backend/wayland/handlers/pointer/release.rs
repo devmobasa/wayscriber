@@ -21,6 +21,7 @@ impl WaylandState {
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self.take_suppress_next_release() {
             self.set_pending_toast_press(false);
+            self.set_pending_status_hud_press(false);
             return;
         }
 
@@ -28,6 +29,7 @@ impl WaylandState {
         if self.input_state.command_palette_open || self.input_state.tour_active {
             // For command palette, press handles the click - release is a no-op
             self.set_pending_toast_press(false);
+            self.set_pending_status_hud_press(false);
             return;
         }
 
@@ -41,6 +43,25 @@ impl WaylandState {
                 let (hit, action) = self
                     .input_state
                     .check_toast_click(screen_x.round() as i32, screen_y.round() as i32);
+                if hit && let Some(action) = action {
+                    self.dispatch_input_action(action);
+                }
+            }
+            return;
+        }
+
+        if button == BTN_LEFT && self.take_pending_status_hud_press() {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let Some((screen_x, screen_y)) = screen_position {
+                // Segment activations open their surfaces directly; help
+                // comes back as an action to dispatch.
+                let (hit, action) = self
+                    .input_state
+                    .check_status_hud_click(screen_x.round() as i32, screen_y.round() as i32);
                 if hit && let Some(action) = action {
                     self.dispatch_input_action(action);
                 }

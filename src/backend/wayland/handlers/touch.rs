@@ -111,6 +111,7 @@ impl WaylandState {
 
         let target = self.active_touch.target();
         self.set_pending_toast_press(false);
+        self.set_pending_status_hud_press(false);
         self.set_suppress_next_release(false);
 
         if !matches!(
@@ -251,6 +252,13 @@ impl WaylandState {
             return target;
         }
 
+        // Interactive status HUD: press reports the hit; release activates.
+        self.set_pending_status_hud_press(false);
+        if self.input_state.status_hud_contains(screen_x, screen_y) {
+            self.set_pending_status_hud_press(true);
+            return target;
+        }
+
         if self.board_pan_key_held() && self.can_start_board_pan() {
             self.start_board_pan(screen_position.0, screen_position.1);
             self.input_state.needs_redraw = true;
@@ -356,11 +364,13 @@ impl WaylandState {
     ) {
         if self.take_suppress_next_release() {
             self.set_pending_toast_press(false);
+            self.set_pending_status_hud_press(false);
             return;
         }
 
         if self.input_state.command_palette_open || self.input_state.tour_active {
             self.set_pending_toast_press(false);
+            self.set_pending_status_hud_press(false);
             self.cancel_active_touch_sequence();
             return;
         }
@@ -391,6 +401,14 @@ impl WaylandState {
 
         if self.take_pending_toast_press() {
             let (hit, action) = self.input_state.check_toast_click(screen_x, screen_y);
+            if hit && let Some(action) = action {
+                self.dispatch_input_action(action);
+            }
+            return;
+        }
+
+        if self.take_pending_status_hud_press() {
+            let (hit, action) = self.input_state.check_status_hud_click(screen_x, screen_y);
             if hit && let Some(action) = action {
                 self.dispatch_input_action(action);
             }

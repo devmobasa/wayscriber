@@ -16,6 +16,7 @@ mod selection_actions;
 mod session;
 mod session_preflight;
 mod session_preflight_exact;
+mod status_hud;
 mod tool_controls;
 mod tour;
 mod utility;

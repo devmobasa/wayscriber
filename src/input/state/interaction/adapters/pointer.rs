@@ -99,6 +99,28 @@ pub(crate) fn handle_left_context_menu_press(
     Some(RoutingOutcome::Consumed(ConsumedBy::ContextMenu))
 }
 
+/// Swallow left presses on the interactive status HUD so chip clicks never
+/// start a stroke. The pointer backend consumes HUD presses earlier via its
+/// press→release contract; this guard covers input paths that route presses
+/// directly (tablet, touch fallbacks). No activation happens on press: the
+/// pending flag set here makes the matching release activate the chip in
+/// `route_pointer_release`.
+pub(crate) fn handle_status_hud_press(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if button != MouseButton::Left {
+        return None;
+    }
+    let screen = points.screen();
+    if !state.status_hud_contains(screen.x(), screen.y()) {
+        return None;
+    }
+    state.set_status_hud_press_pending();
+    Some(RoutingOutcome::Consumed(ConsumedBy::StatusHud))
+}
+
 pub(crate) fn close_properties_panel_before_tool_routing(state: &mut InputState) {
     state.close_properties_panel();
 }

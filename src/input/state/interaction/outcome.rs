@@ -24,6 +24,7 @@ pub(crate) enum ConsumedBy {
     ToolButton,
     RightClickContextMenu,
     RadialMenuToggle,
+    StatusHud,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

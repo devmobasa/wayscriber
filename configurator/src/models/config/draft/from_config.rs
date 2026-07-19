@@ -112,6 +112,7 @@ impl ConfigDraft {
             ui_theme: UiThemeOption::from_theme(config.ui.theme),
             ui_reduced_motion: ReducedMotionOption::from_reduced_motion(config.ui.reduced_motion),
             ui_show_status_bar: config.ui.show_status_bar,
+            ui_status_bar_interactive: config.ui.status_bar_interactive,
             ui_show_status_board_badge: config.ui.show_status_board_badge,
             ui_show_status_page_badge: config.ui.show_status_page_badge,
             ui_show_page_badge_with_status_bar: config.ui.show_floating_badge_always,

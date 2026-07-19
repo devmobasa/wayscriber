@@ -417,6 +417,10 @@ reduced_motion = "auto"
 # Show status bar with current color/thickness/tool
 show_status_bar = true
 
+# Allow clicking status bar segments (board, page, color dot, tool, help)
+# to open their surfaces; set false for a display-only status bar
+status_bar_interactive = true
+
 # Show board label in the status bar
 show_status_board_badge = true
 
@@ -533,6 +537,7 @@ enabled = true
 - Theme: auto (currently dark)
 - Reduced motion: auto (full motion)
 - Show status bar: true
+- Interactive status bar segments: true
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle
