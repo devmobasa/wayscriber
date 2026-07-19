@@ -23,7 +23,19 @@ impl ToolbarSessionModel {
         {
             return None;
         }
+        Self::build(snapshot)
+    }
 
+    /// The same model for the top strip's Session popover. The popover is
+    /// navigation like the Settings pane — it ignores the side palette's
+    /// pane selection and the hideable `side.group.session` section flag
+    /// (under `side_layout = "pill"` it is the only Session surface) while
+    /// keeping the per-button hidden overrides.
+    pub(crate) fn for_popover(snapshot: &ToolbarSnapshot) -> Option<Self> {
+        Self::build(snapshot)
+    }
+
+    fn build(snapshot: &ToolbarSnapshot) -> Option<Self> {
         let active_name = snapshot
             .active_session_name
             .clone()

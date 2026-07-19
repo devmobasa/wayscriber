@@ -221,6 +221,8 @@ pub(super) fn build_top_view_planned(
                 | model::TopToolbarControl::Pin
                 | model::TopToolbarControl::Minimize
                 | model::TopToolbarControl::ClearCanvas
+                | model::TopToolbarControl::SessionMenu
+                | model::TopToolbarControl::SettingsMenu
                 | model::TopToolbarControl::HighlightRing => {
                     unreachable!("control belongs outside the main strip")
                 }
@@ -421,6 +423,12 @@ pub(super) fn build_top_view_planned(
                 ));
             }
         }
+    }
+
+    // --- Session/Settings popovers: the re-hosted side panes -----------------
+    if let Some(anchor) = overflow_anchor {
+        let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
+        super::menus::push_menu_popover(&mut tree, snapshot, popover_anchor, (width, height));
     }
 
     tree

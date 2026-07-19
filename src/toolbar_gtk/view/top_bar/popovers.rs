@@ -38,15 +38,20 @@ impl TopBar {
     pub(super) fn hide_popovers_for_window_hide(&self) {
         self.shapes_expected_open.set(false);
         self.overflow_expected_open.set(false);
-        if let Some(popover) = self.shapes_popover.as_ref()
-            && popover.is_visible()
+        self.session_expected_open.set(false);
+        self.settings_expected_open.set(false);
+        for popover in [
+            self.shapes_popover.as_ref(),
+            self.overflow_popover.as_ref(),
+            self.session_popover.as_ref(),
+            self.settings_popover.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
         {
-            popover.popdown();
-        }
-        if let Some(popover) = self.overflow_popover.as_ref()
-            && popover.is_visible()
-        {
-            popover.popdown();
+            if popover.is_visible() {
+                popover.popdown();
+            }
         }
     }
 
@@ -64,6 +69,14 @@ impl TopBar {
                 self.overflow_popover.as_ref(),
                 self.overflow_capture_surface.as_ref(),
             ),
+            (
+                self.session_popover.as_ref(),
+                self.session_capture_surface.as_ref(),
+            ),
+            (
+                self.settings_popover.as_ref(),
+                self.settings_capture_surface.as_ref(),
+            ),
         ] {
             let (Some(popover), Some(capture_surface)) = (popover, capture_surface) else {
                 continue;
@@ -76,11 +89,16 @@ impl TopBar {
     }
 
     pub(in crate::toolbar_gtk::view) fn tooltip_roots(&self) -> Vec<gtk4::Widget> {
-        [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
-            .into_iter()
-            .flatten()
-            .map(|popover| popover.clone().upcast::<gtk4::Widget>())
-            .collect()
+        [
+            self.shapes_popover.as_ref(),
+            self.overflow_popover.as_ref(),
+            self.session_popover.as_ref(),
+            self.settings_popover.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|popover| popover.clone().upcast::<gtk4::Widget>())
+        .collect()
     }
 
     pub(in crate::toolbar_gtk::view) fn capture_popover_targets(&self) -> Vec<CaptureProofTarget> {
@@ -94,6 +112,16 @@ impl TopBar {
                 "top-overflow-popover",
                 self.overflow_popover.as_ref(),
                 self.overflow_capture_surface.as_ref(),
+            ),
+            (
+                "top-session-popover",
+                self.session_popover.as_ref(),
+                self.session_capture_surface.as_ref(),
+            ),
+            (
+                "top-settings-popover",
+                self.settings_popover.as_ref(),
+                self.settings_capture_surface.as_ref(),
             ),
         ]
         .into_iter()
@@ -165,6 +193,8 @@ impl TopBar {
                     snapshot.text_active,
                     snapshot.note_active,
                     snapshot.any_highlight_active,
+                    snapshot.session_popover_open,
+                    snapshot.settings_popover_open,
                 );
                 if self.overflow_content_key.get() != Some(content_key) {
                     let spec = model::TopToolbarSpec::build(snapshot, plan);
@@ -191,6 +221,108 @@ impl TopBar {
         } else {
             self.overflow_expected_open.set(false);
         }
+
+        self.sync_session_settings_popovers(snapshot, scale);
+    }
+
+    /// Keep the Session/Settings popovers' contents and open state in line
+    /// with the snapshot, mirroring the shapes/overflow pattern: content
+    /// rebuilds only when the model's snapshot inputs change.
+    fn sync_session_settings_popovers(&mut self, snapshot: &ToolbarSnapshot, scale: f64) {
+        if let Some(popover) = self.session_popover.clone() {
+            let open = snapshot.session_popover_open;
+            if open {
+                let content_key = SessionMenuContentKey::of(snapshot);
+                if self.session_content_key.borrow().as_ref() != Some(&content_key) {
+                    self.session_capture_surface
+                        .as_ref()
+                        .expect("session popover capture surface")
+                        .set_content(&self.build_session_popover_content(snapshot, scale));
+                    *self.session_content_key.borrow_mut() = Some(content_key);
+                }
+            }
+            self.session_expected_open.set(open);
+            if open && !popover.is_visible() {
+                popover.popup();
+            } else if !open && popover.is_visible() {
+                popover.popdown();
+            }
+        } else {
+            self.session_expected_open.set(false);
+        }
+
+        if let Some(popover) = self.settings_popover.clone() {
+            let open = snapshot.settings_popover_open;
+            if open {
+                let content_key = SettingsMenuContentKey::of(snapshot);
+                if self.settings_content_key.borrow().as_ref() != Some(&content_key) {
+                    self.settings_capture_surface
+                        .as_ref()
+                        .expect("settings popover capture surface")
+                        .set_content(&self.build_settings_popover_content(snapshot, scale));
+                    *self.settings_content_key.borrow_mut() = Some(content_key);
+                }
+            }
+            self.settings_expected_open.set(open);
+            if open && !popover.is_visible() {
+                popover.popup();
+            } else if !open && popover.is_visible() {
+                popover.popdown();
+            }
+        } else {
+            self.settings_expected_open.set(false);
+        }
+    }
+
+    /// Session popover content: the Session pane's rows (meta labels,
+    /// action grid or Save-As confirmation, recents) inside a scrollable
+    /// viewport. Updaters register into a scratch list — content-key
+    /// rebuilds carry the live state instead.
+    pub(super) fn build_session_popover_content(
+        &self,
+        snapshot: &ToolbarSnapshot,
+        scale: f64,
+    ) -> gtk4::Widget {
+        let mut scratch_updaters = Vec::new();
+        let mut ctx = super::super::sections::SectionCtx {
+            snapshot,
+            feedback: self.feedback.clone(),
+            scale,
+            use_icons: snapshot.use_icons,
+            updaters: &mut scratch_updaters,
+        };
+        let content = match model::ToolbarSessionModel::for_popover(snapshot) {
+            Some(session) => {
+                super::super::sections::session_pane::build_popover_content(&mut ctx, &session)
+            }
+            None => gtk4::Box::new(gtk4::Orientation::Vertical, 0),
+        };
+        menu_popover_viewport(&content, "top.menu.session.panel", scale, &self.feedback)
+    }
+
+    /// Settings popover content: the Settings pane's control set (layout
+    /// mode, toggles, buttons, customization sub-panel) inside a scrollable
+    /// viewport.
+    pub(super) fn build_settings_popover_content(
+        &self,
+        snapshot: &ToolbarSnapshot,
+        scale: f64,
+    ) -> gtk4::Widget {
+        let mut scratch_updaters = Vec::new();
+        let mut ctx = super::super::sections::SectionCtx {
+            snapshot,
+            feedback: self.feedback.clone(),
+            scale,
+            use_icons: snapshot.use_icons,
+            updaters: &mut scratch_updaters,
+        };
+        let content = match model::ToolbarSettingsModel::for_popover(snapshot) {
+            Some(settings) => {
+                super::super::sections::settings_pane::build_popover_content(&mut ctx, &settings)
+            }
+            None => gtk4::Box::new(gtk4::Orientation::Vertical, 0),
+        };
+        menu_popover_viewport(&content, "top.menu.settings.panel", scale, &self.feedback)
     }
 
     pub(super) fn build_shapes_popover_content(
@@ -350,6 +482,28 @@ impl TopBar {
         }
         grid
     }
+}
+
+/// Wrap Session/Settings popover content in a capped, scrollable viewport
+/// (the GTK counterpart of the builtin popovers' internal scrollbar) and
+/// install the click-time modifier capture the popover's own GTK native
+/// needs for the rebind chord.
+fn menu_popover_viewport(
+    content: &gtk4::Box,
+    semantic_id: &str,
+    scale: f64,
+    feedback: &FeedbackSender,
+) -> gtk4::Widget {
+    set_semantic_widget_id(content, semantic_id);
+    content.set_size_request((MENU_CONTENT_W * scale).round() as i32, -1);
+    install_click_modifier_capture(content, feedback);
+    let scroller = gtk4::ScrolledWindow::new();
+    scroller.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    scroller.set_propagate_natural_width(true);
+    scroller.set_propagate_natural_height(true);
+    scroller.set_max_content_height((MENU_MAX_CONTENT_H * scale).round() as i32);
+    scroller.set_child(Some(content));
+    scroller.upcast()
 }
 
 /// Without an autohide grab, Escape needs explicit wiring to dismiss an

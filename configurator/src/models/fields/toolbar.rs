@@ -110,13 +110,13 @@ pub enum ToolbarSideLayoutOption {
 
 impl ToolbarSideLayoutOption {
     pub fn list() -> Vec<Self> {
-        vec![Self::Panel, Self::Pill]
+        vec![Self::Pill, Self::Panel]
     }
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Pill => "Pill (preview)",
-            Self::Panel => "Panel (default)",
+            Self::Pill => "Pill (default)",
+            Self::Panel => "Panel (legacy)",
         }
     }
 

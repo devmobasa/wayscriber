@@ -306,6 +306,15 @@ pub enum ToolbarEvent {
     CustomRedo,
     /// Open/close the top strip's overflow menu (width-dropped items)
     ToggleTopOverflow(bool),
+    /// Open/close the Session popover anchored to the top strip's overflow
+    /// toggle. Opening it closes the Settings popover and the overflow menu.
+    ToggleSessionPopover(bool),
+    /// Open/close the Settings popover anchored to the top strip's overflow
+    /// toggle. Opening it closes the Session popover and the overflow menu.
+    ToggleSettingsPopover(bool),
+    /// Set the internal scroll offset of the open Session/Settings popover
+    /// (absolute, logical pixels; emitted by the popover scrollbar drag).
+    ScrollTopPopover(f64),
     /// Minimize the top strip to a small edge tab (click restores), or
     /// restore it. Replaces closing: there is always a way back on screen.
     SetTopMinimized(bool),

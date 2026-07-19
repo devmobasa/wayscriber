@@ -89,8 +89,96 @@ use super::{CaptureProofTarget, CaptureSurfaceContent, Updater};
 type ShapesContentKey = (Tool, Option<Tool>, bool, u8);
 
 /// Snapshot inputs the overflow grid renders from: active tool, override,
-/// text/note/highlight active flags.
-type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool);
+/// text/note/highlight active flags, and the popover open flags (entry
+/// active states).
+type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool);
+
+/// Snapshot inputs the Session popover content renders from — the session
+/// model is a pure function of these (plus structural inputs already in
+/// `StructureKey`). `use_icons` is captured directly: the pane's action
+/// buttons render icon+label in icon mode, and `StructureKey.use_icons`
+/// (`use_icons || plan.compact`) can mask a flip while the plan is compact.
+#[derive(PartialEq)]
+struct SessionMenuContentKey {
+    active_session_name: Option<String>,
+    active_session_path: Option<std::path::PathBuf>,
+    recent_sessions: Vec<crate::ui::toolbar::SessionRecentSnapshot>,
+    pending_save_as_overwrite_path: Option<std::path::PathBuf>,
+    use_icons: bool,
+}
+
+impl SessionMenuContentKey {
+    fn of(snapshot: &ToolbarSnapshot) -> Self {
+        Self {
+            active_session_name: snapshot.active_session_name.clone(),
+            active_session_path: snapshot.active_session_path.clone(),
+            recent_sessions: snapshot.recent_sessions.clone(),
+            pending_save_as_overwrite_path: snapshot.pending_save_as_overwrite_path.clone(),
+            use_icons: snapshot.use_icons,
+        }
+    }
+}
+
+/// Snapshot inputs the Settings popover content renders from — the settings
+/// model reads these toggle/customization fields on top of the structural
+/// inputs already captured by `StructureKey`.
+#[derive(PartialEq)]
+struct SettingsMenuContentKey {
+    /// Drives the "Icon buttons" checkbox state and its baked
+    /// `ToggleIconMode(!use_icons)` event (plus icon-vs-text button
+    /// rendering). Captured directly because `StructureKey.use_icons` is
+    /// `use_icons || plan.compact`, which masks a flip while the plan is
+    /// compact — without this field the stored event goes stale.
+    use_icons: bool,
+    context_aware_ui: bool,
+    show_text_controls: bool,
+    show_status_bar: bool,
+    show_status_board_badge: bool,
+    show_status_page_badge: bool,
+    show_floating_badge_always: bool,
+    show_preset_toasts: bool,
+    show_presets: bool,
+    show_actions_section: bool,
+    show_zoom_actions: bool,
+    show_actions_advanced: bool,
+    show_boards_section: bool,
+    show_pages_section: bool,
+    show_step_section: bool,
+    customize_items_open: bool,
+    customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+    layout_mode: ToolbarLayoutMode,
+}
+
+impl SettingsMenuContentKey {
+    fn of(snapshot: &ToolbarSnapshot) -> Self {
+        Self {
+            use_icons: snapshot.use_icons,
+            context_aware_ui: snapshot.context_aware_ui,
+            show_text_controls: snapshot.show_text_controls,
+            show_status_bar: snapshot.show_status_bar,
+            show_status_board_badge: snapshot.show_status_board_badge,
+            show_status_page_badge: snapshot.show_status_page_badge,
+            show_floating_badge_always: snapshot.show_floating_badge_always,
+            show_preset_toasts: snapshot.show_preset_toasts,
+            show_presets: snapshot.show_presets,
+            show_actions_section: snapshot.show_actions_section,
+            show_zoom_actions: snapshot.show_zoom_actions,
+            show_actions_advanced: snapshot.show_actions_advanced,
+            show_boards_section: snapshot.show_boards_section,
+            show_pages_section: snapshot.show_pages_section,
+            show_step_section: snapshot.show_step_section,
+            customize_items_open: snapshot.customize_items_open,
+            customize_items_group: snapshot.customize_items_group,
+            layout_mode: snapshot.layout_mode,
+        }
+    }
+}
+
+/// Session/Settings popover content width and internal-scroll cap, in spec
+/// units — the same theme tokens the builtin `view/top/menus.rs` popovers
+/// build from, so the frontends cannot drift.
+const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
+const MENU_MAX_CONTENT_H: f64 = crate::ui::theme::toolbar::MENU_MAX_CONTENT_H;
 
 /// Inputs that force a rebuild of the bar's widget structure.
 #[derive(PartialEq)]
@@ -192,14 +280,22 @@ pub(in crate::toolbar_gtk) struct TopBar {
     shapes_capture_surface: Option<CaptureSurfaceContent>,
     overflow_popover: Option<gtk4::Popover>,
     overflow_capture_surface: Option<CaptureSurfaceContent>,
+    session_popover: Option<gtk4::Popover>,
+    session_capture_surface: Option<CaptureSurfaceContent>,
+    settings_popover: Option<gtk4::Popover>,
+    settings_capture_surface: Option<CaptureSurfaceContent>,
     /// Popover open state as last driven by the snapshot; lets the
     /// `closed` handlers distinguish user dismissal from state sync.
     shapes_expected_open: Rc<Cell<bool>>,
     overflow_expected_open: Rc<Cell<bool>>,
+    session_expected_open: Rc<Cell<bool>>,
+    settings_expected_open: Rc<Cell<bool>>,
     /// Discriminants of the currently built popover contents; skips the
     /// per-snapshot rebuild that would reset hover and in-flight presses.
     shapes_content_key: Cell<Option<ShapesContentKey>>,
     overflow_content_key: Cell<Option<OverflowContentKey>>,
+    session_content_key: RefCell<Option<SessionMenuContentKey>>,
+    settings_content_key: RefCell<Option<SettingsMenuContentKey>>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -282,10 +378,18 @@ impl TopBar {
             shapes_capture_surface: None,
             overflow_popover: None,
             overflow_capture_surface: None,
+            session_popover: None,
+            session_capture_surface: None,
+            settings_popover: None,
+            settings_capture_surface: None,
             shapes_expected_open: Rc::new(Cell::new(false)),
             overflow_expected_open: Rc::new(Cell::new(false)),
+            session_expected_open: Rc::new(Cell::new(false)),
+            settings_expected_open: Rc::new(Cell::new(false)),
             shapes_content_key: Cell::new(None),
             overflow_content_key: Cell::new(None),
+            session_content_key: RefCell::new(None),
+            settings_content_key: RefCell::new(None),
             drag_active: Rc::new(Cell::new(false)),
             drag_blocked: Rc::new(Cell::new(false)),
             move_drag: None,
@@ -439,6 +543,8 @@ impl TopBar {
         // buttons go away or GTK complains and leaks the popover widgets.
         self.shapes_expected_open.set(false);
         self.overflow_expected_open.set(false);
+        self.session_expected_open.set(false);
+        self.settings_expected_open.set(false);
         if let Some(popover) = self.shapes_popover.take() {
             popover.unparent();
         }
@@ -447,8 +553,18 @@ impl TopBar {
             popover.unparent();
         }
         self.overflow_capture_surface = None;
+        if let Some(popover) = self.session_popover.take() {
+            popover.unparent();
+        }
+        self.session_capture_surface = None;
+        if let Some(popover) = self.settings_popover.take() {
+            popover.unparent();
+        }
+        self.settings_capture_surface = None;
         self.shapes_content_key.set(None);
         self.overflow_content_key.set(None);
+        *self.session_content_key.borrow_mut() = None;
+        *self.settings_content_key.borrow_mut() = None;
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }

@@ -363,8 +363,12 @@ fn draw_recent_sessions(
 
 /// Middle-ellipsize so both the head and the distinguishing tail survive.
 /// Tail truncation made e.g. two different "lecture-05-…" files render
-/// identically in the recents list.
-fn truncate_middle(value: &str, max_chars: usize) -> String {
+/// identically in the recents list. Shared with the top strip's Session
+/// popover so both surfaces truncate identically.
+pub(in crate::backend::wayland::toolbar) fn truncate_middle(
+    value: &str,
+    max_chars: usize,
+) -> String {
     let count = value.chars().count();
     if count <= max_chars {
         return value.to_string();
@@ -380,7 +384,10 @@ fn truncate_middle(value: &str, max_chars: usize) -> String {
 
 /// Keep the tail of a path — the leading directories are the least
 /// informative part of a session path.
-fn truncate_start(value: &str, max_chars: usize) -> String {
+pub(in crate::backend::wayland::toolbar) fn truncate_start(
+    value: &str,
+    max_chars: usize,
+) -> String {
     let count = value.chars().count();
     if count <= max_chars {
         return value.to_string();
@@ -393,7 +400,7 @@ fn truncate_start(value: &str, max_chars: usize) -> String {
 
 /// Drop the constant session-file extension in list rows; it costs the
 /// characters that distinguish one session from another.
-fn strip_session_extension(value: &str) -> &str {
+pub(in crate::backend::wayland::toolbar) fn strip_session_extension(value: &str) -> &str {
     value
         .strip_suffix(".wayscriber-session")
         .or_else(|| value.strip_suffix(".wayscriber"))

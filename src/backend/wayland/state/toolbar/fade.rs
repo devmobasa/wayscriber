@@ -59,14 +59,54 @@ impl WaylandState {
             || self.toolbar.top_pointer_present()
             || self.data.inline_top_hover.is_some()
             || self.data.gtk_top_hover;
-        let menus_open = input.toolbar_shapes_expanded
-            || input.toolbar_top_overflow_open
-            || input.is_color_picker_popup_open();
         TopStripFadeInputs {
             idle_for: now.saturating_duration_since(input.last_draw_activity()),
             pointer_near,
-            menus_open,
+            menus_open: top_menus_open(input),
             reduced_chrome,
         }
+    }
+}
+
+/// True while any top-strip-anchored menu or popover is open. Open menus
+/// hold the idle fade: the strip (and the popover hosted on its surface)
+/// must stay full-opacity while one is up, even with the pointer away.
+fn top_menus_open(input: &crate::input::state::InputState) -> bool {
+    input.toolbar_shapes_expanded
+        || input.toolbar_top_overflow_open
+        || input.toolbar_session_popover_open
+        || input.toolbar_settings_popover_open
+        || input.is_color_picker_popup_open()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::top_menus_open;
+    use crate::input::state::test_support::make_test_input_state;
+
+    /// Every top-strip menu — including the Session/Settings popovers the
+    /// overflow anchors — holds the idle fade while open.
+    #[test]
+    fn every_open_top_menu_holds_the_idle_fade() {
+        let mut input = make_test_input_state();
+        assert!(!top_menus_open(&input));
+
+        input.toolbar_shapes_expanded = true;
+        assert!(top_menus_open(&input));
+        input.toolbar_shapes_expanded = false;
+
+        input.toolbar_top_overflow_open = true;
+        assert!(top_menus_open(&input));
+        input.toolbar_top_overflow_open = false;
+
+        input.toolbar_session_popover_open = true;
+        assert!(top_menus_open(&input));
+        input.toolbar_session_popover_open = false;
+
+        input.toolbar_settings_popover_open = true;
+        assert!(top_menus_open(&input));
+        input.toolbar_settings_popover_open = false;
+
+        assert!(!top_menus_open(&input));
     }
 }

@@ -307,7 +307,50 @@ impl TopBar {
         popover.set_child(Some(capture_surface.widget()));
         self.overflow_popover = Some(popover);
         self.overflow_capture_surface = Some(capture_surface);
+
+        // The Session/Settings popovers anchor to the same ⋯ toggle their
+        // menu entries live in; the entries themselves render inside the
+        // overflow popover from the shared spec.
+        let (session_popover, session_capture) = self.menu_popover(
+            &button,
+            self.session_expected_open.clone(),
+            ToolbarEvent::ToggleSessionPopover(false),
+        );
+        self.session_popover = Some(session_popover);
+        self.session_capture_surface = Some(session_capture);
+        let (settings_popover, settings_capture) = self.menu_popover(
+            &button,
+            self.settings_expected_open.clone(),
+            ToolbarEvent::ToggleSettingsPopover(false),
+        );
+        self.settings_popover = Some(settings_popover);
+        self.settings_capture_surface = Some(settings_capture);
         button
+    }
+
+    /// One overflow-anchored Session/Settings popover following the shapes/
+    /// overflow pattern: no autohide grab (the backend dismissal policy owns
+    /// click-away), Escape wired explicitly, `closed` echoing user dismissal.
+    fn menu_popover(
+        &self,
+        parent: &gtk4::Button,
+        expected_open: Rc<Cell<bool>>,
+        dismiss: ToolbarEvent,
+    ) -> (gtk4::Popover, CaptureSurfaceContent) {
+        let popover = gtk4::Popover::new();
+        popover.set_parent(parent);
+        popover.set_position(gtk4::PositionType::Bottom);
+        popover.set_autohide(false);
+        attach_escape_dismiss(&popover, &self.feedback, dismiss.clone());
+        let sender = self.feedback.clone();
+        popover.connect_closed(move |_| {
+            if expected_open.get() {
+                send_event(&sender, dismiss.clone());
+            }
+        });
+        let capture_surface = CaptureSurfaceContent::empty();
+        popover.set_child(Some(capture_surface.widget()));
+        (popover, capture_surface)
     }
 
     pub(super) fn minimize_button(

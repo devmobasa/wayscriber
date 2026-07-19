@@ -189,6 +189,10 @@ pub enum WidgetKind {
     MinimizeButton,
     /// Anchored popover panel (shadow, background, caret at `caret_x`).
     Popover { caret_x: f64, caret_up: bool },
+    /// Vertical scrollbar: proportional thumb (`thumb` fraction of the
+    /// track) at normalized position `t` in `[0, 1]`. The drag mapping
+    /// lives on the node's interaction (`HitKind::DragScrollTopPopover`).
+    VScrollbar { t: f64, thumb: f64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

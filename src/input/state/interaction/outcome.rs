@@ -46,6 +46,8 @@ pub(crate) enum CancelTarget {
     PendingBoardDelete,
     PendingPageDelete,
     Selection,
+    /// The top strip's Session/Settings popover (Escape dismissal).
+    TopPopover,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

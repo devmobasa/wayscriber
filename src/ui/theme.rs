@@ -499,6 +499,15 @@ pub mod toolbar {
     /// Compact-mode counterpart of [`ISLAND_PAD`] (the last-resort
     /// tightened presentation), shared the same way.
     pub const COMPACT_ISLAND_PAD: f64 = 4.0;
+    /// Session/Settings popover content-column width, in spec units
+    /// (mirrors the retired side palette's content column). One source for
+    /// both frontends: the builtin popover tree builds its rows at this
+    /// width and the GTK popover sizes its viewport from it.
+    pub const MENU_CONTENT_W: f64 = 232.0;
+    /// Cap on the Session/Settings popover's visible content height, in
+    /// spec units; taller content scrolls internally. Shared by the builtin
+    /// scroll viewport and the GTK `ScrolledWindow` max content height.
+    pub const MENU_MAX_CONTENT_H: f64 = 420.0;
     /// Checkbox indicator square size
     pub const CHECKBOX_SIZE: f64 = 14.0;
     /// Boxed shortcut badge font size

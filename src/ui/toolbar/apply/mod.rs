@@ -97,6 +97,13 @@ impl InputState {
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
             ToolbarEvent::OpenCommandPalette => self.apply_toolbar_open_command_palette(),
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
+            ToolbarEvent::ToggleSessionPopover(open) => {
+                self.apply_toolbar_toggle_session_popover(open)
+            }
+            ToolbarEvent::ToggleSettingsPopover(open) => {
+                self.apply_toolbar_toggle_settings_popover(open)
+            }
+            ToolbarEvent::ScrollTopPopover(offset) => self.apply_toolbar_scroll_top_popover(offset),
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)
             }

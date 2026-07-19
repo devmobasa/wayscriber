@@ -112,6 +112,8 @@ pub(crate) fn top_toolbar_icon_painter(
         I::Unpin => draw_icon_unpin,
         I::Overflow => draw_icon_more,
         I::Minimize => draw_icon_minimize,
+        I::Session => draw_icon_file,
+        I::Settings => draw_icon_settings,
         I::Tool(T::Select) => draw_icon_select,
         I::Tool(T::Pen) => draw_icon_pen,
         I::Tool(T::Line) => draw_icon_line,

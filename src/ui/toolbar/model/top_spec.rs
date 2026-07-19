@@ -239,7 +239,14 @@ impl TopToolbarSpec {
     }
 
     /// Overflow menu content, in menu order: the destructive Clear first,
-    /// then the width-dropped tools and utilities in configured order.
+    /// then the width-dropped tools and utilities in configured order, then
+    /// the Session/Settings popover entries. The two menu entries appear in
+    /// every layout (`side_layout = "panel"` included): under `pill` they
+    /// are the only surface hosting those functions, and under `panel` the
+    /// popovers are transient quick surfaces that cannot be confused with
+    /// the pinned side panes — so they are unconditional rather than
+    /// pill-gated. Like the restore controls they are not hideable items:
+    /// under `pill` they must always be reachable.
     fn overflow_controls(
         clear_visible: bool,
         plan: &TopStripPlan,
@@ -260,6 +267,10 @@ impl TopToolbarSpec {
                     .filter_map(TopToolbarUtility::from_model)
                     .map(TopToolbarControl::Utility),
             )
+            .chain([
+                TopToolbarControl::SessionMenu,
+                TopToolbarControl::SettingsMenu,
+            ])
     }
 }
 
@@ -339,6 +350,11 @@ pub(crate) enum TopToolbarControl {
     Overflow,
     Minimize,
     HighlightRing,
+    /// Overflow menu entry opening the Session popover (open/save/recent).
+    SessionMenu,
+    /// Overflow menu entry opening the Settings popover (toolbar options
+    /// and customization).
+    SettingsMenu,
 }
 
 impl TopToolbarControl {
@@ -346,6 +362,8 @@ impl TopToolbarControl {
         let id = match self {
             Self::Restore => return TopToolbarControlId::Restore,
             Self::MicroChip => return TopToolbarControlId::MicroChip,
+            Self::SessionMenu => return TopToolbarControlId::SessionMenu,
+            Self::SettingsMenu => return TopToolbarControlId::SettingsMenu,
             Self::DragHandle => ids::TOP_CHROME_DRAG,
             Self::Tool(tool) => toolbar_item_id_for_tool(tool),
             Self::ShapePicker => ids::TOP_UTILITY_SHAPE_PICKER,
@@ -391,6 +409,10 @@ impl TopToolbarControl {
             Self::ClearCanvas => ToolbarEvent::ClearCanvas { instant: false },
             Self::Pin => ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
             Self::Overflow => ToolbarEvent::ToggleTopOverflow(!snapshot.top_overflow_open),
+            Self::SessionMenu => ToolbarEvent::ToggleSessionPopover(!snapshot.session_popover_open),
+            Self::SettingsMenu => {
+                ToolbarEvent::ToggleSettingsPopover(!snapshot.settings_popover_open)
+            }
             Self::Minimize => ToolbarEvent::SetTopMinimized(true),
             Self::HighlightRing => {
                 ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled)
@@ -429,6 +451,8 @@ impl TopToolbarControl {
             Self::CurrentColor => true,
             Self::Pin => snapshot.top_pinned,
             Self::Overflow => snapshot.top_overflow_open,
+            Self::SessionMenu => snapshot.session_popover_open,
+            Self::SettingsMenu => snapshot.settings_popover_open,
             Self::HighlightRing => snapshot.highlight_tool_ring_enabled,
             _ => false,
         }
@@ -445,6 +469,8 @@ impl TopToolbarControl {
             Self::ShapePicker
             | Self::Utility(TopToolbarUtility::Highlight)
             | Self::Overflow
+            | Self::SessionMenu
+            | Self::SettingsMenu
             | Self::HighlightRing => TopToolbarControlRole::Toggle,
             // The chrome island (pin, minimize) renders quieter than the
             // content islands; both frontends key that styling off this role.
@@ -457,9 +483,12 @@ impl TopToolbarControl {
     /// non-strip lanes (chrome, overflow, contextual) answer consistently.
     pub(crate) fn island(self) -> TopToolbarIsland {
         match self {
-            Self::Undo | Self::Redo | Self::Overflow | Self::ClearCanvas => {
-                TopToolbarIsland::History
-            }
+            Self::Undo
+            | Self::Redo
+            | Self::Overflow
+            | Self::ClearCanvas
+            | Self::SessionMenu
+            | Self::SettingsMenu => TopToolbarIsland::History,
             Self::Pin | Self::Minimize | Self::Restore | Self::MicroChip => {
                 TopToolbarIsland::Chrome
             }
@@ -486,6 +515,8 @@ impl TopToolbarControl {
             Self::Pin if snapshot.top_pinned => TopToolbarIcon::Pin,
             Self::Pin => TopToolbarIcon::Unpin,
             Self::Overflow => TopToolbarIcon::Overflow,
+            Self::SessionMenu => TopToolbarIcon::Session,
+            Self::SettingsMenu => TopToolbarIcon::Settings,
             Self::Minimize => TopToolbarIcon::Minimize,
             Self::QuickColor(_) | Self::CurrentColor | Self::HighlightRing => return None,
         })
@@ -511,6 +542,8 @@ impl TopToolbarControl {
             Self::Pin if snapshot.top_pinned => Cow::Borrowed("Unpin top toolbar"),
             Self::Pin => Cow::Borrowed("Pin top toolbar"),
             Self::Overflow => Cow::Borrowed("More tools"),
+            Self::SessionMenu => Cow::Borrowed("Session..."),
+            Self::SettingsMenu => Cow::Borrowed("Settings..."),
             Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
             Self::HighlightRing => Cow::Borrowed("Ring"),
         }
@@ -528,6 +561,8 @@ impl TopToolbarControl {
                     .label
                     .clone(),
             ),
+            Self::SessionMenu => Cow::Borrowed("Session menu"),
+            Self::SettingsMenu => Cow::Borrowed("Settings menu"),
             _ => self.label(snapshot),
         }
     }
@@ -551,6 +586,8 @@ impl TopToolbarControl {
             Self::Pin => "Pin: click to open at startup".to_string(),
             Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
             Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
+            Self::SessionMenu => "Session: open, save, recent files".to_string(),
+            Self::SettingsMenu => "Settings: toolbar options and customization".to_string(),
             Self::HighlightRing => "Highlight ring".to_string(),
             _ => self.accessible_label(snapshot).into_owned(),
         }
@@ -587,6 +624,8 @@ pub(crate) enum TopToolbarControlId {
     QuickColor(usize),
     Restore,
     MicroChip,
+    SessionMenu,
+    SettingsMenu,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -616,6 +655,8 @@ impl TopToolbarControlId {
             Self::QuickColor(index) => Cow::Owned(format!("top.quick-color.{index}")),
             Self::Restore => Cow::Borrowed("top.chrome.restore"),
             Self::MicroChip => Cow::Borrowed("top.chrome.micro"),
+            Self::SessionMenu => Cow::Borrowed("top.menu.session"),
+            Self::SettingsMenu => Cow::Borrowed("top.menu.settings"),
         }
     }
 }
@@ -648,6 +689,10 @@ pub(crate) enum TopToolbarIcon {
     Unpin,
     Overflow,
     Minimize,
+    /// Session popover entry (file glyph).
+    Session,
+    /// Settings popover entry (gear glyph).
+    Settings,
 }
 
 fn utility_event(utility: TopToolbarUtility, snapshot: &ToolbarSnapshot) -> ToolbarEvent {
@@ -784,8 +829,12 @@ mod tests {
         );
         assert_eq!(
             spec.overflow(),
-            [TopToolbarControl::ClearCanvas],
-            "an unconstrained plan still anchors Clear in the overflow"
+            [
+                TopToolbarControl::ClearCanvas,
+                TopToolbarControl::SessionMenu,
+                TopToolbarControl::SettingsMenu,
+            ],
+            "an unconstrained plan still anchors Clear plus the Session/Settings entries"
         );
 
         assert_eq!(chrome_ids(&spec), ["top.chrome.pin", "top.chrome.close"]);
@@ -952,8 +1001,11 @@ mod tests {
                 "top.utility.text",
                 "top.utility.sticky-note",
                 "top.utility.highlight",
+                "top.menu.session",
+                "top.menu.settings",
             ],
-            "Clear leads the overflow menu; dropped items follow in order"
+            "Clear leads the overflow menu; dropped items follow in order; \
+             the Session/Settings entries close it"
         );
         assert!(
             strip_ids.contains(&ids::TOP_CHROME_OVERFLOW.as_str().to_string()),
@@ -971,6 +1023,99 @@ mod tests {
         assert_eq!(
             spec.overflow()[1].event(&snapshot),
             ToolbarEvent::SelectTool(Tool::Line)
+        );
+    }
+
+    #[test]
+    fn overflow_hosts_session_and_settings_entries_in_every_layout() {
+        // Decision (M4-B3): the two popover entries are unconditional —
+        // they show under both `side_layout` values and are not hideable
+        // items, because under `pill` they are the only surface hosting
+        // Session/Settings.
+        for layout_mode in [ToolbarLayoutMode::Regular, ToolbarLayoutMode::Simple] {
+            let mut snapshot = snapshot();
+            snapshot.layout_mode = layout_mode;
+            let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+            let tail: Vec<_> = spec
+                .overflow()
+                .iter()
+                .rev()
+                .take(2)
+                .rev()
+                .copied()
+                .collect();
+            assert_eq!(
+                tail,
+                [
+                    TopToolbarControl::SessionMenu,
+                    TopToolbarControl::SettingsMenu,
+                ],
+                "{layout_mode:?}: the menu entries close the overflow"
+            );
+            assert!(
+                !spec.overflow().is_empty(),
+                "the overflow toggle always has content"
+            );
+            assert!(
+                spec.strip()
+                    .contains(&TopToolbarNode::Control(TopToolbarControl::Overflow))
+            );
+        }
+
+        let mut snapshot = snapshot();
+        let session = TopToolbarControl::SessionMenu;
+        let settings = TopToolbarControl::SettingsMenu;
+
+        assert_eq!(session.id().render_id(), "top.menu.session");
+        assert_eq!(settings.id().render_id(), "top.menu.settings");
+        assert_eq!(session.label(&snapshot), "Session...");
+        assert_eq!(settings.label(&snapshot), "Settings...");
+        assert_eq!(session.icon(&snapshot), Some(TopToolbarIcon::Session));
+        assert_eq!(settings.icon(&snapshot), Some(TopToolbarIcon::Settings));
+        assert_eq!(session.role(), TopToolbarControlRole::Toggle);
+        assert_eq!(settings.role(), TopToolbarControlRole::Toggle);
+        assert_eq!(session.island(), TopToolbarIsland::History);
+        assert_eq!(settings.island(), TopToolbarIsland::History);
+        assert!(session.enabled(&snapshot) && settings.enabled(&snapshot));
+
+        // Entries toggle their popover open state and report it as active.
+        assert_eq!(
+            session.event(&snapshot),
+            ToolbarEvent::ToggleSessionPopover(true)
+        );
+        assert_eq!(
+            settings.event(&snapshot),
+            ToolbarEvent::ToggleSettingsPopover(true)
+        );
+        assert!(!session.active(&snapshot) && !settings.active(&snapshot));
+        snapshot.session_popover_open = true;
+        assert!(session.active(&snapshot));
+        assert_eq!(
+            session.event(&snapshot),
+            ToolbarEvent::ToggleSessionPopover(false)
+        );
+        snapshot.session_popover_open = false;
+        snapshot.settings_popover_open = true;
+        assert!(settings.active(&snapshot));
+        assert_eq!(
+            settings.event(&snapshot),
+            ToolbarEvent::ToggleSettingsPopover(false)
+        );
+
+        // Minimized and micro strips carry no overflow (and so no entries).
+        let mut minimized = self::snapshot();
+        minimized.top_minimized = true;
+        assert!(
+            TopToolbarSpec::build(&minimized, &TopStripPlan::unconstrained())
+                .overflow()
+                .is_empty()
+        );
+        let mut micro = self::snapshot();
+        micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+        assert!(
+            TopToolbarSpec::build(&micro, &TopStripPlan::unconstrained())
+                .overflow()
+                .is_empty()
         );
     }
 

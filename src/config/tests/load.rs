@@ -108,16 +108,16 @@ fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
 }
 
 #[test]
-fn toolbar_side_layout_defaults_to_panel_and_round_trips() {
+fn toolbar_side_layout_defaults_to_pill_and_round_trips() {
     use crate::config::ToolbarSideLayout;
 
-    // Panel stays the default until the Session/Settings panes are
-    // re-hosted in the top strip (M4-B3); flipping the default to Pill
-    // before then would retire the only surface those panes live on.
+    // Pill became the default once the Session/Settings panes were
+    // re-hosted as top-strip overflow popovers (M4-B3); the classic panel
+    // remains a deprecated escape hatch.
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(
         default_config.ui.toolbar.side_layout,
-        ToolbarSideLayout::Panel
+        ToolbarSideLayout::Pill
     );
 
     for (value, expected) in [

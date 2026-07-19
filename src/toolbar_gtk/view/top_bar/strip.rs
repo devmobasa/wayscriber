@@ -458,6 +458,8 @@ impl TopBar {
                     | model::TopToolbarControl::Pin
                     | model::TopToolbarControl::Minimize
                     | model::TopToolbarControl::ClearCanvas
+                    | model::TopToolbarControl::SessionMenu
+                    | model::TopToolbarControl::SettingsMenu
                     | model::TopToolbarControl::HighlightRing => {
                         unreachable!("control belongs outside the main strip")
                     }

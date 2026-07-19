@@ -28,6 +28,13 @@ pub fn side_scroll_bounds(snapshot: &ToolbarSnapshot) -> (f64, f64) {
     (natural, viewport as f64)
 }
 
+/// Scroll bounds for the open Session/Settings popover on the top strip as
+/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// while neither popover is open.
+pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
+    super::view::top::top_popover_scroll_bounds(snapshot)
+}
+
 fn scale_size(size: (u32, u32), scale: f64) -> (u32, u32) {
     // Sanitize scale: handle NaN/Inf and enforce bounds
     let scale = if scale.is_finite() {

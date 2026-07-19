@@ -35,6 +35,45 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
     assert_eq!(changed.binding_hints.badge_for_tool(Tool::Pen), Some("9"));
 }
 
+/// `StructureKey.use_icons` is `use_icons || plan.compact`, so a compact
+/// plan masks an icon-mode flip from the structural rebuild. The popover
+/// content keys must therefore track `use_icons` themselves: the Settings
+/// "Icon buttons" checkbox bakes `ToggleIconMode(!use_icons)` at build
+/// time and would otherwise re-emit the stale pre-flip value, and both
+/// popovers render icon-vs-text button bodies from it.
+#[test]
+fn popover_content_keys_track_icon_mode_even_when_the_compact_plan_masks_it() {
+    let mut state = make_test_input_state();
+    state.toolbar_use_icons = false;
+    let text_mode = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    state.toolbar_use_icons = true;
+    let icon_mode = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+
+    // The masking scenario is real: under a compact plan the structure key
+    // cannot tell the two snapshots apart.
+    let mut compact_plan = TopStripPlan::unconstrained();
+    compact_plan.compact = true;
+    assert!(
+        StructureKey::of(&text_mode, &compact_plan) == StructureKey::of(&icon_mode, &compact_plan),
+        "compact plan masks the icon-mode flip from the structural rebuild"
+    );
+
+    assert!(
+        SettingsMenuContentKey::of(&text_mode) != SettingsMenuContentKey::of(&icon_mode),
+        "settings popover content key tracks icon mode"
+    );
+    assert!(
+        SessionMenuContentKey::of(&text_mode) != SessionMenuContentKey::of(&icon_mode),
+        "session popover content key tracks icon mode"
+    );
+}
+
 #[test]
 fn simple_layout_requests_its_smaller_natural_width() {
     let mut state = make_test_input_state();
@@ -682,6 +721,14 @@ fn detach_test_popovers(top: &mut TopBar) {
         popover.unparent();
     }
     top.overflow_capture_surface = None;
+    if let Some(popover) = top.session_popover.take() {
+        popover.unparent();
+    }
+    top.session_capture_surface = None;
+    if let Some(popover) = top.settings_popover.take() {
+        popover.unparent();
+    }
+    top.settings_capture_surface = None;
 }
 
 fn assert_builtin_node(
@@ -1729,6 +1776,154 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         }
     );
     detach_test_popovers(&mut event_top);
+
+    // --- Session/Settings popovers: the re-hosted pane content ---------------
+    fn collect_descendants<W: IsA<gtk4::Widget>>(root: &gtk4::Widget, out: &mut Vec<W>) {
+        if let Ok(widget) = root.clone().downcast::<W>() {
+            out.push(widget);
+        }
+        let mut child = root.first_child();
+        while let Some(current) = child {
+            child = current.next_sibling();
+            collect_descendants(&current, out);
+        }
+    }
+
+    let mut session_snapshot = regular.clone();
+    session_snapshot.session_popover_open = true;
+    session_snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
+    session_snapshot.active_session_path =
+        Some(std::path::PathBuf::from("/tmp/lecture.wayscriber-session"));
+    session_snapshot.recent_sessions = vec![crate::ui::toolbar::SessionRecentSnapshot {
+        display_name: "recent-0.wayscriber-session".to_string(),
+        path: std::path::PathBuf::from("/tmp/recent-0.wayscriber-session"),
+    }];
+    let (tx, menu_rx) = std::sync::mpsc::channel();
+    let mut menu_top = TopBar::new_for_test(FeedbackSender::new(tx));
+    // Building the strip creates the two overflow-anchored native popovers.
+    menu_top.build_strip(&session_snapshot, &plan_top_strip(&session_snapshot));
+    assert!(menu_top.session_popover.is_some(), "session popover exists");
+    assert!(
+        menu_top.settings_popover.is_some(),
+        "settings popover exists"
+    );
+
+    let session_model =
+        model::ToolbarSessionModel::for_popover(&session_snapshot).expect("session model");
+    let session_content = menu_top.build_session_popover_content(&session_snapshot, 1.0);
+    let session_panel = find_widget_named(&session_content, "top.menu.session.panel")
+        .expect("session popover panel box");
+    let mut session_buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&session_panel, &mut session_buttons);
+    assert_eq!(
+        session_buttons.len(),
+        session_model.buttons.len() + session_model.recents.len(),
+        "the popover exposes exactly the pane's controls"
+    );
+    for (button, button_model) in session_buttons.iter().zip(session_model.buttons.iter()) {
+        assert_eq!(
+            button.tooltip_text().as_deref(),
+            Some(button_model.label),
+            "session button tooltip"
+        );
+        assert_eq!(button.is_sensitive(), button_model.enabled);
+    }
+    session_buttons[0].emit_clicked();
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("GTK session open event"),
+        GtkToolbarFeedback::Event {
+            event: session_model.buttons[0].event.clone(),
+            rebind_requested: false,
+        }
+    );
+    session_buttons
+        .last()
+        .expect("recent row button")
+        .emit_clicked();
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("GTK recent event"),
+        GtkToolbarFeedback::Event {
+            event: session_model.recents[0].event(),
+            rebind_requested: false,
+        }
+    );
+
+    let mut settings_snapshot = regular.clone();
+    settings_snapshot.settings_popover_open = true;
+    let settings_model =
+        model::ToolbarSettingsModel::for_popover(&settings_snapshot).expect("settings model");
+    let settings_content = menu_top.build_settings_popover_content(&settings_snapshot, 1.0);
+    let settings_panel = find_widget_named(&settings_content, "top.menu.settings.panel")
+        .expect("settings popover panel box");
+
+    // Toggle parity: one check button per pane toggle, same order/state.
+    let mut checks: Vec<gtk4::CheckButton> = Vec::new();
+    collect_descendants(&settings_panel, &mut checks);
+    let toggles: Vec<_> = settings_model.toggle_rows().into_iter().flatten().collect();
+    assert_eq!(checks.len(), toggles.len(), "settings toggle parity");
+    for (check, toggle) in checks.iter().zip(&toggles) {
+        assert_eq!(check.label().as_deref(), Some(toggle.label.as_ref()));
+        assert_eq!(check.is_active(), toggle.checked, "{}", toggle.label);
+    }
+    checks[0].set_active(!toggles[0].checked);
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("GTK settings toggle event"),
+        GtkToolbarFeedback::Event {
+            event: toggles[0].activation.compatibility_event(),
+            rebind_requested: false,
+        }
+    );
+
+    // Layout-mode segments and the settings button grid carry the pane's
+    // events.
+    let mut buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&settings_panel, &mut buttons);
+    let tabs: Vec<_> = buttons
+        .iter()
+        .filter(|button| button.has_css_class("tab"))
+        .collect();
+    let control = model::layout_mode_control(settings_snapshot.layout_mode);
+    let model::ToolbarControlKind::Segmented(segmented) = &control.kind else {
+        panic!("layout mode control is segmented");
+    };
+    assert_eq!(tabs.len(), segmented.segments().len());
+    tabs[0].emit_clicked();
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("GTK layout mode event"),
+        GtkToolbarFeedback::Event {
+            event: segmented.segments()[0].activation.compatibility_event(),
+            rebind_requested: false,
+        }
+    );
+    let plain_buttons: Vec<_> = buttons
+        .iter()
+        .filter(|button| !button.has_css_class("tab"))
+        .collect();
+    assert_eq!(
+        plain_buttons.len(),
+        settings_model.buttons().len(),
+        "settings button parity"
+    );
+    plain_buttons[0].emit_clicked();
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("GTK settings button event"),
+        GtkToolbarFeedback::Event {
+            event: settings_model.buttons()[0].event.clone(),
+            rebind_requested: false,
+        }
+    );
+
+    detach_test_popovers(&mut menu_top);
 }
 
 #[test]

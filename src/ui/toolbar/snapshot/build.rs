@@ -188,6 +188,9 @@ impl ToolbarSnapshot {
             preset_feedback,
             shape_picker_open: state.toolbar_shapes_expanded,
             top_overflow_open: state.toolbar_top_overflow_open,
+            session_popover_open: state.toolbar_session_popover_open,
+            settings_popover_open: state.toolbar_settings_popover_open,
+            top_popover_scroll: state.toolbar_top_popover_scroll,
             top_minimized: state.toolbar_top_minimized,
             top_display_mode: state.toolbar_top_display_mode,
             // Fade is owned by the backend engine; renderers see 1.0 until

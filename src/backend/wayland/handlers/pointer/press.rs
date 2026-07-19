@@ -182,11 +182,15 @@ impl WaylandState {
     }
 
     fn dismiss_top_toolbar_menus(&mut self) -> bool {
-        let changed =
-            self.input_state.toolbar_shapes_expanded || self.input_state.toolbar_top_overflow_open;
+        let changed = self.input_state.toolbar_shapes_expanded
+            || self.input_state.toolbar_top_overflow_open
+            || self.input_state.toolbar_session_popover_open
+            || self.input_state.toolbar_settings_popover_open;
         if changed {
             self.input_state.toolbar_shapes_expanded = false;
             self.input_state.toolbar_top_overflow_open = false;
+            self.input_state.toolbar_session_popover_open = false;
+            self.input_state.toolbar_settings_popover_open = false;
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }

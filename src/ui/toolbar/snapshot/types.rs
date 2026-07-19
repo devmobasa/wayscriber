@@ -318,6 +318,13 @@ pub struct ToolbarSnapshot {
     pub shape_picker_open: bool,
     /// Whether the top strip's overflow menu is open
     pub top_overflow_open: bool,
+    /// Whether the Session popover (anchored to the overflow toggle) is open
+    pub session_popover_open: bool,
+    /// Whether the Settings popover (anchored to the overflow toggle) is open
+    pub settings_popover_open: bool,
+    /// Internal scroll offset of the open Session/Settings popover
+    /// (logical pixels, clamped at render)
+    pub top_popover_scroll: f64,
     /// Whether the top strip is minimized to its edge restore tab
     pub top_minimized: bool,
     /// Display form of the top strip (full strip vs. micro chip). `Hidden`

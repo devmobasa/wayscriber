@@ -4,9 +4,14 @@ use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
     pub(super) fn close_top_toolbar_menus(&mut self) -> bool {
-        let changed = self.toolbar_shapes_expanded || self.toolbar_top_overflow_open;
+        let changed = self.toolbar_shapes_expanded
+            || self.toolbar_top_overflow_open
+            || self.toolbar_session_popover_open
+            || self.toolbar_settings_popover_open;
         self.toolbar_shapes_expanded = false;
         self.toolbar_top_overflow_open = false;
+        self.toolbar_session_popover_open = false;
+        self.toolbar_settings_popover_open = false;
         if changed {
             self.needs_redraw = true;
         }
@@ -51,6 +56,8 @@ impl InputState {
         if minimized {
             self.toolbar_shapes_expanded = false;
             self.toolbar_top_overflow_open = false;
+            self.toolbar_session_popover_open = false;
+            self.toolbar_settings_popover_open = false;
         }
         self.needs_redraw = true;
         true
@@ -268,10 +275,94 @@ impl InputState {
             self.toolbar_shapes_expanded = false;
             changed = true;
         }
+        if open {
+            changed |= self.close_top_session_settings_popovers();
+        }
         if changed {
             self.needs_redraw = true;
         }
         changed
+    }
+
+    /// Close both overflow-anchored popovers; true when one was open.
+    fn close_top_session_settings_popovers(&mut self) -> bool {
+        let changed = self.toolbar_session_popover_open || self.toolbar_settings_popover_open;
+        self.toolbar_session_popover_open = false;
+        self.toolbar_settings_popover_open = false;
+        changed
+    }
+
+    /// Open/close the Session popover. Opening it closes the Settings
+    /// popover, the overflow menu, and the shapes picker, and resets the
+    /// popovers' shared internal scroll.
+    pub(super) fn apply_toolbar_toggle_session_popover(&mut self, open: bool) -> bool {
+        let mut changed = false;
+        if self.toolbar_session_popover_open != open {
+            self.toolbar_session_popover_open = open;
+            changed = true;
+        }
+        if open {
+            if self.toolbar_settings_popover_open {
+                self.toolbar_settings_popover_open = false;
+                changed = true;
+            }
+            changed |= self.close_other_top_menus_for_popover();
+        }
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
+    /// Open/close the Settings popover; symmetric with the Session popover.
+    pub(super) fn apply_toolbar_toggle_settings_popover(&mut self, open: bool) -> bool {
+        let mut changed = false;
+        if self.toolbar_settings_popover_open != open {
+            self.toolbar_settings_popover_open = open;
+            changed = true;
+        }
+        if open {
+            if self.toolbar_session_popover_open {
+                self.toolbar_session_popover_open = false;
+                changed = true;
+            }
+            changed |= self.close_other_top_menus_for_popover();
+        }
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
+    }
+
+    fn close_other_top_menus_for_popover(&mut self) -> bool {
+        let mut changed = false;
+        if self.toolbar_top_overflow_open {
+            self.toolbar_top_overflow_open = false;
+            changed = true;
+        }
+        if self.toolbar_shapes_expanded {
+            self.toolbar_shapes_expanded = false;
+            changed = true;
+        }
+        if self.toolbar_top_popover_scroll != 0.0 {
+            self.toolbar_top_popover_scroll = 0.0;
+            changed = true;
+        }
+        changed
+    }
+
+    /// Set the internal scroll offset of the open Session/Settings popover.
+    pub(super) fn apply_toolbar_scroll_top_popover(&mut self, offset: f64) -> bool {
+        if !self.toolbar_session_popover_open && !self.toolbar_settings_popover_open {
+            return false;
+        }
+        let offset = offset.max(0.0);
+        if (self.toolbar_top_popover_scroll - offset).abs() < 0.5 {
+            return false;
+        }
+        self.toolbar_top_popover_scroll = offset;
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_set_side_pane(
@@ -414,6 +505,9 @@ impl InputState {
             self.toolbar_top_overflow_open = false;
             changed = true;
         }
+        if open {
+            changed |= self.close_top_session_settings_popovers();
+        }
         if changed {
             self.needs_redraw = true;
         }
@@ -494,11 +588,71 @@ mod tests {
         let mut state = make_test_input_state();
         state.toolbar_shapes_expanded = true;
         state.toolbar_top_overflow_open = true;
+        state.toolbar_session_popover_open = true;
+        state.toolbar_settings_popover_open = true;
 
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
 
         assert!(!state.toolbar_shapes_expanded);
         assert!(!state.toolbar_top_overflow_open);
+        assert!(!state.toolbar_session_popover_open);
+        assert!(!state.toolbar_settings_popover_open);
+    }
+
+    #[test]
+    fn session_and_settings_popovers_are_mutually_exclusive_with_the_top_menus() {
+        let mut state = make_test_input_state();
+
+        // Opening the Session popover closes the other top menus and
+        // resets the shared internal scroll.
+        state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
+        state.toolbar_shapes_expanded = true;
+        state.toolbar_top_popover_scroll = 40.0;
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true)));
+        assert!(state.toolbar_session_popover_open);
+        assert!(!state.toolbar_settings_popover_open);
+        assert!(!state.toolbar_top_overflow_open);
+        assert!(!state.toolbar_shapes_expanded);
+        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+
+        // Opening the Settings popover closes the Session popover.
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true)));
+        assert!(state.toolbar_settings_popover_open);
+        assert!(!state.toolbar_session_popover_open);
+
+        // Re-opening the overflow (or the shapes picker) closes an open
+        // popover.
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true)));
+        assert!(!state.toolbar_settings_popover_open);
+        state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true)));
+        assert!(!state.toolbar_session_popover_open);
+
+        // Explicit close is a plain toggle.
+        state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(false)));
+        assert!(!state.toolbar_settings_popover_open);
+    }
+
+    #[test]
+    fn top_popover_scroll_applies_only_while_a_popover_is_open() {
+        let mut state = make_test_input_state();
+
+        // No popover open: the scroll event is a no-op.
+        assert!(!state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(24.0)));
+        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
+        assert!(state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(24.0)));
+        assert_eq!(state.toolbar_top_popover_scroll, 24.0);
+        // Negative offsets clamp to the top.
+        assert!(state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(-5.0)));
+        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+
+        // Switching popovers resets the scroll.
+        state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(31.0));
+        state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true));
+        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
     }
 
     #[test]

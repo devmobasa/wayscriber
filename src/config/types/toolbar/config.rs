@@ -50,12 +50,13 @@ pub struct ToolbarConfig {
     #[serde(default)]
     pub side_minimized: bool,
 
-    /// Where the side-palette functions live ("panel", "pill"). The default
-    /// "panel" is the classic side palette. The opt-in "pill" preview
-    /// retires it (drawing properties live in the contextual style pill,
-    /// canvas management in the status HUD/board picker); "pill" becomes
-    /// the default once the Session/Settings panes are re-hosted in the
-    /// top strip.
+    /// Where the side-palette functions live ("pill", "panel"). The default
+    /// "pill" retires the side palette: drawing properties live in the
+    /// contextual style pill, canvas management in the status HUD/board
+    /// picker, and Session/Settings in popovers on the top strip's
+    /// overflow menu. "panel" is the legacy escape hatch restoring the
+    /// classic side palette (deprecated; removal planned one release after
+    /// the pill default).
     #[serde(default)]
     pub side_layout: ToolbarSideLayout,
 

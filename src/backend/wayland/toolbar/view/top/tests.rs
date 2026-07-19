@@ -966,6 +966,399 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 }
 
 #[test]
+fn overflow_menu_always_carries_the_session_and_settings_entries() {
+    let mut snapshot = snapshot();
+    snapshot.top_overflow_open = true;
+    let tree = build(&snapshot);
+
+    let session = tree
+        .node_by_id(&"top.overflow.top.menu.session".into())
+        .expect("Session... entry");
+    assert!(matches!(
+        session.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleSessionPopover(true)
+    ));
+    let settings = tree
+        .node_by_id(&"top.overflow.top.menu.settings".into())
+        .expect("Settings... entry");
+    assert!(matches!(
+        settings.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleSettingsPopover(true)
+    ));
+}
+
+#[test]
+fn session_popover_re_hosts_the_session_pane_content() {
+    use std::path::PathBuf;
+
+    let mut snapshot = snapshot();
+    snapshot.session_popover_open = true;
+    snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
+    snapshot.active_session_path = Some(PathBuf::from("/tmp/lecture.wayscriber-session"));
+    snapshot.recent_sessions = (0..2)
+        .map(|index| crate::ui::toolbar::SessionRecentSnapshot {
+            display_name: format!("recent-{index}.wayscriber-session"),
+            path: PathBuf::from(format!("/tmp/recent-{index}.wayscriber-session")),
+        })
+        .collect();
+
+    let (w, h) = top_size(&snapshot);
+    let tree = build_top_view(&snapshot, w as f64, h as f64);
+    let panel = tree
+        .node_by_id(&"top.menu.session.panel".into())
+        .expect("session popover panel");
+    assert!(matches!(panel.kind, WidgetKind::Popover { .. }));
+
+    // Content parity with the Session pane: the same model drives both, so
+    // every model control appears exactly once with the same event.
+    let model = crate::ui::toolbar::model::ToolbarSessionModel::for_popover(&snapshot)
+        .expect("session model");
+    assert_eq!(model.buttons.len(), 5);
+    for button in &model.buttons {
+        let node = tree
+            .nodes()
+            .iter()
+            .find(|node| {
+                node.id.as_str().starts_with("top.menu.session.")
+                    && node
+                        .interact
+                        .as_ref()
+                        .is_some_and(|interact| interact.event == button.event)
+            })
+            .unwrap_or_else(|| panic!("popover control for {:?}", button.event));
+        match &node.kind {
+            WidgetKind::TextButton { label, style } => {
+                assert_eq!(label.text, button.label);
+                assert_eq!(style.disabled, !button.enabled);
+                assert_eq!(
+                    style.destructive,
+                    matches!(button.event, ToolbarEvent::ClearSession)
+                );
+            }
+            other => panic!("session button kind, got {other:?}"),
+        }
+    }
+    for (index, recent) in model.recents.iter().enumerate() {
+        let node = tree
+            .node_by_id(&format!("top.menu.session.recent.{index}").into())
+            .expect("recent row");
+        assert_eq!(node.interact.as_ref().unwrap().event, recent.event());
+    }
+    // Meta labels are decor; the pane's collapsible header is side chrome
+    // and deliberately absent.
+    assert!(tree.node_by_id(&"top.menu.session.name".into()).is_some());
+    assert!(tree.node_by_id(&"top.menu.session.path".into()).is_some());
+
+    // Every content node paints inside the panel.
+    for node in tree.nodes() {
+        if node.id.as_str().starts_with("top.menu.session.")
+            && node.id.as_str() != "top.menu.session.panel"
+        {
+            assert!(
+                node.rect.0 >= panel.rect.0 - 1e-9
+                    && node.rect.1 >= panel.rect.1 - 1e-9
+                    && node.rect.0 + node.rect.2 <= panel.rect.0 + panel.rect.2 + 1e-9
+                    && node.rect.1 + node.rect.3 <= panel.rect.1 + panel.rect.3 + 1e-9,
+                "{} escapes the popover panel",
+                node.id
+            );
+        }
+    }
+
+    // The popover joins the input region as an extra rect below the band.
+    let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("input rects");
+    assert!(
+        rects
+            .iter()
+            .any(|rect| rect.1 + rect.3 >= panel.rect.1 + panel.rect.3
+                && rect.0 <= panel.rect.0
+                && rect.0 + rect.2 >= panel.rect.0 + panel.rect.2),
+        "popover rect missing from {rects:?}"
+    );
+
+    // A pending Save-As overwrite swaps the button grid for the
+    // confirmation, exactly like the pane.
+    snapshot.pending_save_as_overwrite_path =
+        Some(PathBuf::from("/tmp/existing.wayscriber-session"));
+    let tree = build(&snapshot);
+    let replace = tree
+        .node_by_id(&"top.menu.session.confirm-replace".into())
+        .expect("replace button");
+    assert!(matches!(
+        &replace.interact.as_ref().unwrap().event,
+        ToolbarEvent::SaveSessionAsConfirm(path)
+            if path.as_path() == std::path::Path::new("/tmp/existing.wayscriber-session")
+    ));
+    let cancel = tree
+        .node_by_id(&"top.menu.session.confirm-cancel".into())
+        .expect("cancel button");
+    assert!(matches!(
+        cancel.interact.as_ref().unwrap().event,
+        ToolbarEvent::SaveSessionAsCancel
+    ));
+    assert!(tree.node_by_id(&"top.menu.session.open".into()).is_none());
+}
+
+#[test]
+fn settings_popover_re_hosts_the_settings_pane_content() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+
+    let tree = build(&snapshot);
+    let panel = tree
+        .node_by_id(&"top.menu.settings.panel".into())
+        .expect("settings popover panel");
+    assert!(matches!(panel.kind, WidgetKind::Popover { .. }));
+
+    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
+        .expect("settings model");
+
+    // Layout-mode segments render as three exclusive tabs.
+    let control = crate::ui::toolbar::model::layout_mode_control(snapshot.layout_mode);
+    let crate::ui::toolbar::model::ToolbarControlKind::Segmented(segmented) = &control.kind else {
+        panic!("layout mode control is segmented");
+    };
+    for (index, segment) in segmented.segments().iter().enumerate() {
+        let node = tree
+            .node_by_id(&format!("top.menu.settings.mode.{index}").into())
+            .expect("mode segment");
+        assert_eq!(
+            node.interact.as_ref().unwrap().event,
+            segment.activation.compatibility_event()
+        );
+        assert!(matches!(
+            &node.kind,
+            WidgetKind::TextButton { style, .. }
+                if style.active == (segmented.active_segment() == Some(segment.id))
+        ));
+    }
+
+    // Every pane toggle appears once, as a checkbox with the same event.
+    let toggles: Vec<_> = model.toggle_rows().into_iter().flatten().collect();
+    assert!(!toggles.is_empty());
+    for (index, toggle) in toggles.iter().enumerate() {
+        let node = tree
+            .node_by_id(&format!("top.menu.settings.toggle.{index}").into())
+            .unwrap_or_else(|| panic!("toggle {index} ({})", toggle.label));
+        assert_eq!(
+            node.interact.as_ref().unwrap().event,
+            toggle.activation.compatibility_event(),
+            "{}",
+            toggle.label
+        );
+        assert!(matches!(
+            node.kind,
+            WidgetKind::Checkbox { checked, .. } if checked == toggle.checked
+        ));
+    }
+
+    // Every settings button appears once with the same event.
+    for (index, button) in model.buttons().iter().enumerate() {
+        let node = tree
+            .node_by_id(&format!("top.menu.settings.button.{index}").into())
+            .unwrap_or_else(|| panic!("button {index} ({})", button.label));
+        assert_eq!(node.interact.as_ref().unwrap().event, button.event);
+    }
+}
+
+#[test]
+fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    snapshot.customize_items_open = true;
+    snapshot.customize_items_group = Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+
+    let tree = build(&snapshot);
+    let model = crate::ui::toolbar::model::ToolbarSettingsModel::for_popover(&snapshot)
+        .expect("settings model");
+    let overrides = model.item_overrides();
+    assert!(!overrides.is_empty());
+
+    // Some rows may sit behind the internal scrollbar; the visible ones
+    // must carry the pane's exact events (checkbox, up/down, row drag).
+    let mut seen = 0;
+    for (index, item) in overrides.iter().enumerate() {
+        let Some(check) = tree.node_by_id(&format!("top.menu.settings.item.{index}").into()) else {
+            continue;
+        };
+        seen += 1;
+        assert_eq!(
+            check.interact.as_ref().unwrap().event,
+            item.activation.compatibility_event()
+        );
+        let order = item.order.as_ref().expect("top tools rows are orderable");
+        let drag = tree
+            .node_by_id(&format!("top.menu.settings.item.{index}.drag").into())
+            .expect("row drag region");
+        assert!(matches!(
+            drag.interact.as_ref().unwrap().kind,
+            crate::backend::wayland::toolbar::events::HitKind::DragToolbarItem { id, .. }
+                if id == item.id
+        ));
+        let up = tree
+            .node_by_id(&format!("top.menu.settings.item.{index}.up").into())
+            .expect("move up");
+        assert_eq!(
+            up.interact.as_ref().map(|interact| &interact.event),
+            order
+                .can_move_up
+                .then(|| order.move_up.compatibility_event())
+                .as_ref()
+        );
+        let down = tree
+            .node_by_id(&format!("top.menu.settings.item.{index}.down").into())
+            .expect("move down");
+        assert_eq!(
+            down.interact.as_ref().map(|interact| &interact.event),
+            order
+                .can_move_down
+                .then(|| order.move_down.compatibility_event())
+                .as_ref()
+        );
+    }
+    assert!(seen > 0, "at least the first rows are visible");
+
+    // The customize back button replaces the settings buttons.
+    let back = tree
+        .node_by_id(&"top.menu.settings.button.0".into())
+        .expect("back button");
+    assert!(matches!(
+        back.interact.as_ref().unwrap().event,
+        ToolbarEvent::SetToolbarItemCustomizationGroup(None)
+    ));
+    // Customizing hides the layout-mode segments (pane parity).
+    assert!(
+        tree.node_by_id(&"top.menu.settings.mode.0".into())
+            .is_none()
+    );
+}
+
+#[test]
+fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    snapshot.customize_items_open = true;
+    // The Top controls group lists enough rows to exceed the cap.
+    snapshot.customize_items_group =
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+
+    let (w, h) = top_size(&snapshot);
+    let tree = build_top_view(&snapshot, w as f64, h as f64);
+    let panel = tree
+        .node_by_id(&"top.menu.settings.panel".into())
+        .expect("settings popover panel");
+    assert!(
+        panel.rect.3 <= super::menus::MENU_MAX_CONTENT_H + 2.0 * 10.0 + 1e-9,
+        "panel height capped: {}",
+        panel.rect.3
+    );
+
+    let scrollbar = tree
+        .node_by_id(&"top.menu.settings.scrollbar".into())
+        .expect("internal scrollbar");
+    let interaction = scrollbar.interact.as_ref().expect("scroll drag");
+    let crate::backend::wayland::toolbar::events::HitKind::DragScrollTopPopover { max_scroll } =
+        interaction.kind
+    else {
+        panic!("scrollbar kind, got {:?}", interaction.kind);
+    };
+    assert!(max_scroll > 0.0);
+    assert!(matches!(scrollbar.kind, WidgetKind::VScrollbar { .. }));
+
+    // Content nodes never paint outside the panel, scrolled or not.
+    let assert_content_inside = |tree: &WidgetTree, panel_rect: (f64, f64, f64, f64)| {
+        for node in tree.nodes() {
+            if node.id.as_str().starts_with("top.menu.settings.")
+                && node.id.as_str() != "top.menu.settings.panel"
+            {
+                assert!(
+                    node.rect.1 >= panel_rect.1 - 1e-9
+                        && node.rect.1 + node.rect.3 <= panel_rect.1 + panel_rect.3 + 1e-9,
+                    "{} escapes the capped panel",
+                    node.id
+                );
+            }
+        }
+    };
+    assert_content_inside(&tree, panel.rect);
+
+    // Scrolling reveals the tail rows: the first row leaves, the last
+    // appears, and the thumb reaches the bottom.
+    let unscrolled_first = tree.node_by_id(&"top.menu.settings.button.0".into());
+    assert!(unscrolled_first.is_some(), "top row visible before scroll");
+    snapshot.top_popover_scroll = max_scroll + 500.0; // clamps to max
+    let scrolled = build_top_view(&snapshot, w as f64, h as f64);
+    let scrolled_panel = scrolled
+        .node_by_id(&"top.menu.settings.panel".into())
+        .expect("panel");
+    assert_content_inside(&scrolled, scrolled_panel.rect);
+    assert!(
+        scrolled
+            .node_by_id(&"top.menu.settings.button.0".into())
+            .is_none(),
+        "top row scrolled out"
+    );
+    let scrollbar = scrolled
+        .node_by_id(&"top.menu.settings.scrollbar".into())
+        .expect("scrollbar");
+    assert!(matches!(
+        scrollbar.kind,
+        WidgetKind::VScrollbar { t, .. } if (t - 1.0).abs() < 1e-9
+    ));
+}
+
+/// The wheel path scrolls the open popover against the same bounds the
+/// tree's scrollbar drags against — the popover must stay wheel-scrollable
+/// like the side panes it re-hosts (and the GTK `ScrolledWindow`).
+#[test]
+fn top_popover_scroll_bounds_serve_the_wheel_path() {
+    let mut snapshot = snapshot();
+    assert!(
+        top_popover_scroll_bounds(&snapshot).is_none(),
+        "no bounds while neither popover is open"
+    );
+
+    snapshot.settings_popover_open = true;
+    snapshot.customize_items_open = true;
+    snapshot.customize_items_group =
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    let (natural, viewport) =
+        top_popover_scroll_bounds(&snapshot).expect("bounds while the settings popover is open");
+    assert_eq!(
+        viewport,
+        super::menus::MENU_MAX_CONTENT_H,
+        "tall content caps at the viewport"
+    );
+    assert!(
+        natural > viewport,
+        "the Top-controls list overflows the cap"
+    );
+
+    // The wheel bounds and the scrollbar the tree builds agree on the exact
+    // max scroll, so the two scroll paths can never diverge.
+    let tree = build(&snapshot);
+    let scrollbar = tree
+        .node_by_id(&"top.menu.settings.scrollbar".into())
+        .expect("internal scrollbar");
+    let crate::backend::wayland::toolbar::events::HitKind::DragScrollTopPopover { max_scroll } =
+        scrollbar.interact.as_ref().expect("scroll drag").kind
+    else {
+        panic!("scrollbar kind");
+    };
+    assert!((max_scroll - (natural - viewport)).abs() < 1e-9);
+
+    // The session popover reports bounds too; its short default content
+    // fits the viewport, so the wheel path has nothing to scroll.
+    snapshot.settings_popover_open = false;
+    snapshot.customize_items_open = false;
+    snapshot.customize_items_group = None;
+    snapshot.session_popover_open = true;
+    let (natural, viewport) =
+        top_popover_scroll_bounds(&snapshot).expect("bounds while the session popover is open");
+    assert_eq!(natural, viewport, "short content never scrolls");
+}
+
+#[test]
 fn hidden_items_produce_no_nodes() {
     let mut snapshot = snapshot();
     snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {

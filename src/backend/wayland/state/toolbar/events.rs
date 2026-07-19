@@ -84,6 +84,73 @@ fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
         )
 }
 
+/// Events shared by both overflow-anchored popovers that never dismiss
+/// them: their own open/close toggles (mutual exclusion lives in the apply
+/// layer) and the internal scrollbar.
+fn event_spared_by_session_settings_popovers(event: &ToolbarEvent) -> bool {
+    matches!(
+        event,
+        ToolbarEvent::ToggleSessionPopover(_)
+            | ToolbarEvent::ToggleSettingsPopover(_)
+            | ToolbarEvent::ScrollTopPopover(_)
+    )
+}
+
+/// The Session popover hosts the session controls, so those events must not
+/// close it out from under the pointer; everything else dismisses it like
+/// the overflow flyout.
+fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
+    !event_spared_by_session_settings_popovers(event)
+        && !matches!(
+            event,
+            ToolbarEvent::OpenSession
+                | ToolbarEvent::OpenRecentSession(_)
+                | ToolbarEvent::SaveSessionAs
+                | ToolbarEvent::SaveSessionAsConfirm(_)
+                | ToolbarEvent::SaveSessionAsCancel
+                | ToolbarEvent::SessionInfo
+                | ToolbarEvent::ClearSession
+                | ToolbarEvent::OpenConfigurator
+        )
+}
+
+/// The Settings popover hosts the full Settings-pane control set (layout
+/// mode, toggles, buttons, and the customization sub-panel), so all of
+/// those events keep it open; everything else dismisses it.
+fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
+    !event_spared_by_session_settings_popovers(event)
+        && !matches!(
+            event,
+            ToolbarEvent::SetToolbarLayoutMode(_)
+                | ToolbarEvent::ToggleContextAwareUi(_)
+                | ToolbarEvent::ToggleIconMode(_)
+                | ToolbarEvent::ToggleTextControls(_)
+                | ToolbarEvent::ToggleStatusBar(_)
+                | ToolbarEvent::ToggleStatusBoardBadge(_)
+                | ToolbarEvent::ToggleStatusPageBadge(_)
+                | ToolbarEvent::ToggleFloatingBadgeAlways(_)
+                | ToolbarEvent::TogglePresetToasts(_)
+                | ToolbarEvent::TogglePresets(_)
+                | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::ToggleZoomActions(_)
+                | ToolbarEvent::ToggleActionsAdvanced(_)
+                | ToolbarEvent::ToggleBoardsSection(_)
+                | ToolbarEvent::TogglePagesSection(_)
+                | ToolbarEvent::ToggleStepSection(_)
+                | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
+                | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
+                | ToolbarEvent::SetToolbarItemHidden(_, _)
+                | ToolbarEvent::MoveToolbarItem { .. }
+                | ToolbarEvent::StartToolbarItemDrag { .. }
+                | ToolbarEvent::DragToolbarItemOver { .. }
+                | ToolbarEvent::ResetToolbarItemOrder(_)
+                | ToolbarEvent::ResetToolbarItemHiddenOverrides
+                | ToolbarEvent::OpenCommandPalette
+                | ToolbarEvent::OpenConfigurator
+                | ToolbarEvent::OpenConfigFile
+        )
+}
+
 fn apply_toolbar_ui_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
@@ -214,12 +281,22 @@ impl WaylandState {
             self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
         let dismiss_shapes =
             self.input_state.toolbar_shapes_expanded && event_dismisses_shape_picker(&event);
-        if dismiss_overflow || dismiss_shapes {
+        let dismiss_session = self.input_state.toolbar_session_popover_open
+            && event_dismisses_session_popover(&event);
+        let dismiss_settings = self.input_state.toolbar_settings_popover_open
+            && event_dismisses_settings_popover(&event);
+        if dismiss_overflow || dismiss_shapes || dismiss_session || dismiss_settings {
             if dismiss_overflow {
                 self.input_state.toolbar_top_overflow_open = false;
             }
             if dismiss_shapes {
                 self.input_state.toolbar_shapes_expanded = false;
+            }
+            if dismiss_session {
+                self.input_state.toolbar_session_popover_open = false;
+            }
+            if dismiss_settings {
+                self.input_state.toolbar_settings_popover_open = false;
             }
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;

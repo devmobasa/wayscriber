@@ -305,6 +305,21 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         WidgetKind::Popover { caret_x, caret_up } => {
             draw_popover_panel(ctx, x, y, w, h, *caret_x, *caret_up);
         }
+        WidgetKind::VScrollbar { t, thumb } => {
+            // Same treatment as the side palette's scrollbar: a soft track
+            // with the theme's proportional slider thumb.
+            set_color(
+                ctx,
+                crate::backend::wayland::toolbar::render::side_palette::COLOR_SCROLLBAR_TRACK,
+            );
+            draw_round_rect(ctx, x, y, w, h, w / 2.0);
+            let _ = ctx.fill();
+            let thumb_h = (h * thumb.clamp(0.0, 1.0)).max(w * 2.0).min(h);
+            let thumb_y = y + (h - thumb_h) * t.clamp(0.0, 1.0);
+            set_color(ctx, crate::ui::theme::toolbar::COLOR_SCROLLBAR_SLIDER);
+            draw_round_rect(ctx, x, thumb_y, w, thumb_h, w / 2.0);
+            let _ = ctx.fill();
+        }
     }
     paint_shortcut_badge(ctx, node);
 }

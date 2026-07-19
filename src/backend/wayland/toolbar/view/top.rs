@@ -19,6 +19,7 @@ use crate::ui::toolbar::{ToolbarSnapshot, model};
 use super::tree::WidgetTree;
 
 mod build;
+mod menus;
 
 const TOP_LABEL_FONT_SIZE: f64 = 14.0;
 const MINI_LABEL_FONT_SIZE: f64 = 10.0; // FONT_SIZE_SMALL
@@ -223,7 +224,12 @@ pub fn top_input_rects(
     if rects.is_empty() {
         rects.push((0.0, 0.0, width, bar_h));
     }
-    for id in ["top.shapes.panel", "top.overflow.panel"] {
+    for id in [
+        "top.shapes.panel",
+        "top.overflow.panel",
+        "top.menu.session.panel",
+        "top.menu.settings.panel",
+    ] {
         if let Some(node) = tree.node_by_id(&id.to_string().into()) {
             let (x, y, w, h) = node.rect;
             // Cover the caret and the anchor gap above the panel.
@@ -234,8 +240,8 @@ pub fn top_input_rects(
 }
 
 /// Everything that grows the surface below the base bar: the shapes/options
-/// popover, the contextual highlight-ring row, the style pill, and the
-/// overflow popover.
+/// popover, the contextual highlight-ring row, the style pill, the overflow
+/// popover, and the Session/Settings popovers.
 pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
@@ -244,6 +250,15 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
         + build::ring_row_height(snapshot)
         + build::style_pill_height(snapshot)
         + build::overflow_height(snapshot)
+        + menus::menu_popover_height(snapshot)
+}
+
+/// Scroll bounds for the open Session/Settings popover as
+/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// while neither popover is open. The wheel path scrolls against these the
+/// way `side_scroll_bounds` served the retired side palette.
+pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
+    menus::menu_scroll_bounds(snapshot)
 }
 
 /// Natural width of the strip: the left-to-right content walk plus the
@@ -275,6 +290,7 @@ fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, hei
                 && !id.starts_with("top.chrome.pin")
                 && !id.starts_with("top.chrome.close")
                 && !id.starts_with("top.overflow.")
+                && !id.starts_with("top.menu.")
         })
         .map(|node| node.rect.0 + node.rect.2)
         .fold(0.0_f64, f64::max);

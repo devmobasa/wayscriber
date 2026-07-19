@@ -102,6 +102,25 @@ pub(crate) fn handle_properties_panel_key(
     Some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }
 
+/// Escape dismisses an open top-strip Session/Settings popover, mirroring
+/// the GTK popovers' Escape wiring. Click-away dismissal lives with the
+/// backend pointer path; this adapter only owns the keyboard route.
+pub(crate) fn handle_top_popover_dismiss_key(
+    state: &mut InputState,
+    key: Key,
+) -> Option<RoutingOutcome> {
+    if matches!(key, Key::Escape)
+        && (state.toolbar_session_popover_open || state.toolbar_settings_popover_open)
+    {
+        state.toolbar_session_popover_open = false;
+        state.toolbar_settings_popover_open = false;
+        state.needs_redraw = true;
+        return Some(RoutingOutcome::Canceled(CancelTarget::TopPopover));
+    }
+
+    None
+}
+
 pub(crate) fn handle_pending_delete_cancel_key(
     state: &mut InputState,
     key: Key,

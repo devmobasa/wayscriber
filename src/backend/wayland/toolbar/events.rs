@@ -33,6 +33,10 @@ pub enum HitKind {
     DragScrollSide {
         max_scroll: f64,
     },
+    /// Internal scrollbar of the top strip's Session/Settings popover.
+    DragScrollTopPopover {
+        max_scroll: f64,
+    },
     DragToolbarItem {
         group: ToolbarItemOrderGroup,
         id: ToolbarItemId,
@@ -68,6 +72,7 @@ impl HitKind {
             | HitKind::DragMoveTop
             | HitKind::DragMoveSide
             | HitKind::DragScrollSide { .. }
+            | HitKind::DragScrollTopPopover { .. }
             | HitKind::DragToolbarItem { .. } => ToolbarCursorHint::Grab,
             HitKind::PickSatVal { .. } | HitKind::PickHue { .. } => ToolbarCursorHint::Crosshair,
         }

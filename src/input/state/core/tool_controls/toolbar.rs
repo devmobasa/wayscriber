@@ -44,11 +44,16 @@ impl InputState {
         self.toolbar_top_visible && self.toolbar_top_display_mode != TopDisplayMode::Hidden
     }
 
-    /// Returns whether the side toolbar is visible. Under the opt-in
+    /// Returns whether the side toolbar is visible. Under the default
     /// `side_layout = "pill"` the side palette is retired: its surface never
     /// appears (layer-shell, inline fallback, or GTK), regardless of the
-    /// visibility toggles. The default `"panel"` keeps the classic
-    /// behavior.
+    /// visibility toggles. The deprecated `"panel"` escape hatch keeps the
+    /// classic behavior.
+    ///
+    /// Invariant: the `InputState` struct-field default stays `Panel` (for
+    /// side-palette test ergonomics) while the *config* default is `Pill`;
+    /// startup init applies the config value via
+    /// [`Self::init_toolbar_side_layout_from_config`].
     pub fn toolbar_side_visible(&self) -> bool {
         self.toolbar_side_visible
             && self.toolbar_side_layout == crate::config::ToolbarSideLayout::Panel
@@ -205,11 +210,15 @@ impl InputState {
                 self.toolbar_top_minimized = false;
                 self.toolbar_shapes_expanded = false;
                 self.toolbar_top_overflow_open = false;
+                self.toolbar_session_popover_open = false;
+                self.toolbar_settings_popover_open = false;
                 self.show_top_strip_surface();
             }
             TopDisplayMode::Hidden => {
                 self.toolbar_shapes_expanded = false;
                 self.toolbar_top_overflow_open = false;
+                self.toolbar_session_popover_open = false;
+                self.toolbar_settings_popover_open = false;
             }
         }
         self.needs_redraw = true;
@@ -446,16 +455,22 @@ mod tests {
     #[test]
     fn pill_side_layout_retires_the_side_surface_and_panel_restores_it() {
         let mut state = make_test_input_state();
-        // The struct (and config) default keeps the classic panel behavior
-        // until the Session/Settings panes are re-hosted in the top strip.
+        // The struct-field default stays Panel for side-palette test
+        // ergonomics; the *config* default is Pill and startup init applies
+        // it via init_toolbar_side_layout_from_config.
         assert_eq!(
             state.toolbar_side_layout,
             crate::config::ToolbarSideLayout::Panel
         );
+        assert_eq!(
+            crate::config::ToolbarSideLayout::default(),
+            crate::config::ToolbarSideLayout::Pill,
+            "the config default is pill; the struct default is test ergonomics only"
+        );
         assert!(state.toolbar_side_visible());
 
-        // Opting into Pill retires the side surface: it never reports
-        // visible, even through the plain visibility toggles.
+        // The default Pill layout retires the side surface: it never
+        // reports visible, even through the plain visibility toggles.
         state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
         assert!(!state.toolbar_side_visible());
         state.set_toolbar_visible(true);

@@ -58,7 +58,7 @@ impl ConfiguratorApp {
                 self.defaults.ui_toolbar_side_layout.label().to_string(),
                 self.draft.ui_toolbar_side_layout != self.defaults.ui_toolbar_side_layout,
             ),
-            text("Panel is the classic side palette. Pill (preview) moves drawing properties into the top strip's style pill and retires the side palette; until the Session/Settings panes are re-hosted there, they have no toolbar surface under Pill.").size(12),
+            text("Pill (the default) retires the side palette: drawing properties live in the top strip's style pill, canvas management in the status HUD and board picker, and Session/Settings in popovers on the top strip's overflow menu. Panel is the legacy escape hatch restoring the classic side palette; it is deprecated and planned for removal one release after the pill default.").size(12),
             labeled_control(
                 "Shortcut edit click",
                 rebind_modifier.width(Length::Fill).into(),

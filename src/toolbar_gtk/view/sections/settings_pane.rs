@@ -28,23 +28,39 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
         // even while the Settings section is flagged collapsed.
         card.body.set_visible(true);
     }
+    card.body.append(&content(ctx, &settings_model));
+    Some(card.root.upcast())
+}
 
-    if !customizing {
-        card.body.append(&layout_mode_segments(ctx));
+/// The pane's content for the top strip's Settings popover: identical
+/// controls without the collapsible-card chrome. Live updates come from
+/// content-key rebuilds in the popover host; the updaters registered here
+/// go to a scratch list the host discards.
+pub(in crate::toolbar_gtk) fn build_popover_content(
+    ctx: &mut SectionCtx,
+    settings_model: &model::ToolbarSettingsModel,
+) -> gtk4::Box {
+    content(ctx, settings_model)
+}
+
+fn content(ctx: &mut SectionCtx, settings_model: &model::ToolbarSettingsModel) -> gtk4::Box {
+    let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
+    if !ctx.snapshot.customize_items_open {
+        column.append(&layout_mode_segments(ctx));
     }
-    if let Some(grid) = toggle_grid(ctx, &settings_model) {
-        card.body.append(&grid);
+    if let Some(grid) = toggle_grid(ctx, settings_model) {
+        column.append(&grid);
     }
     if let Some(grid) = buttons_grid(ctx, settings_model.buttons()) {
-        card.body.append(&grid);
+        column.append(&grid);
     }
-    if let Some(chooser) = group_chooser(ctx, &settings_model) {
-        card.body.append(&chooser);
+    if let Some(chooser) = group_chooser(ctx, settings_model) {
+        column.append(&chooser);
     }
-    if let Some(items) = item_override_rows(ctx, &settings_model) {
-        card.body.append(&items);
+    if let Some(items) = item_override_rows(ctx, settings_model) {
+        column.append(&items);
     }
-    Some(card.root.upcast())
+    column
 }
 
 /// Simple / Regular / Advanced presets. Non-destructive: switching

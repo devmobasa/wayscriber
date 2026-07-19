@@ -849,25 +849,33 @@ fn config_draft_round_trips_toolbar_side_layout() {
     use super::super::fields::ToolbarSideLayoutOption;
     use wayscriber::config::ToolbarSideLayout;
 
-    // The default draft mirrors the config default: panel (until the
-    // Session/Settings panes are re-hosted in the top strip).
+    // The default draft mirrors the config default: pill (the
+    // Session/Settings panes live in top-strip overflow popovers).
     let default_draft = ConfigDraft::from_config(&Config::default());
     assert_eq!(
         default_draft.ui_toolbar_side_layout,
-        ToolbarSideLayoutOption::Panel
+        ToolbarSideLayoutOption::Pill
     );
     let saved = default_draft
         .to_config(&Config::default())
         .expect("default draft should convert");
-    assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Panel);
-
-    // The opt-in pill preview round-trips through the draft.
-    let mut config = Config::default();
-    config.ui.toolbar.side_layout = ToolbarSideLayout::Pill;
-    let draft = ConfigDraft::from_config(&config);
-    assert_eq!(draft.ui_toolbar_side_layout, ToolbarSideLayoutOption::Pill);
-    let saved = draft.to_config(&config).expect("draft should convert");
     assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Pill);
+
+    // The pick list leads with the default and the legacy escape hatch
+    // round-trips through the draft.
+    assert_eq!(
+        ToolbarSideLayoutOption::list(),
+        vec![
+            ToolbarSideLayoutOption::Pill,
+            ToolbarSideLayoutOption::Panel,
+        ]
+    );
+    let mut config = Config::default();
+    config.ui.toolbar.side_layout = ToolbarSideLayout::Panel;
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_toolbar_side_layout, ToolbarSideLayoutOption::Panel);
+    let saved = draft.to_config(&config).expect("draft should convert");
+    assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Panel);
 }
 
 #[test]

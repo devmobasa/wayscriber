@@ -226,6 +226,15 @@ pub struct InputState {
     pub toolbar_shapes_expanded: bool,
     /// Whether the top strip's overflow menu (width-dropped items) is open.
     pub toolbar_top_overflow_open: bool,
+    /// Whether the Session popover (anchored to the top overflow toggle) is
+    /// open. Mutually exclusive with the Settings popover and the overflow.
+    pub toolbar_session_popover_open: bool,
+    /// Whether the Settings popover (anchored to the top overflow toggle)
+    /// is open. Mutually exclusive with the Session popover and the overflow.
+    pub toolbar_settings_popover_open: bool,
+    /// Internal scroll offset of the open Session/Settings popover
+    /// (logical pixels, clamped at render; reset when a popover opens).
+    pub toolbar_top_popover_scroll: f64,
     /// Whether the top strip is minimized to its edge restore tab.
     pub toolbar_top_minimized: bool,
     /// Display form of the top strip (full strip / micro chip / cycle-hidden).
@@ -238,9 +247,11 @@ pub struct InputState {
     pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
     /// Whether the side palette is minimized to its edge restore tab.
     pub toolbar_side_minimized: bool,
-    /// Where the side-palette functions live. Under the opt-in `Pill`
-    /// layout the side surface never appears; `Panel` (the default) keeps
-    /// the classic side palette. Startup init applies the config value.
+    /// Where the side-palette functions live. Under the default `Pill`
+    /// layout the side surface never appears; the deprecated `Panel`
+    /// escape hatch keeps the classic side palette. Startup init applies
+    /// the config value; this struct field deliberately defaults to
+    /// `Panel` so side-palette tests exercise the panel without setup.
     pub toolbar_side_layout: crate::config::ToolbarSideLayout,
     /// Last HSV triple committed from the side palette's color picker;
     /// preserves hue/saturation across gray colors where RGB loses them.
