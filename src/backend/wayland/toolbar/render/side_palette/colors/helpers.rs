@@ -10,8 +10,32 @@ use crate::toolbar_icons;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui_text::UiTextStyle;
 
-use super::super::super::widgets::constants::FONT_FAMILY_DEFAULT;
+use super::super::super::widgets::constants::{
+    COLOR_TEXT_SECONDARY, COLOR_TEXT_TERTIARY, FONT_FAMILY_DEFAULT, FONT_SIZE_SECONDARY, set_color,
+};
 use super::super::super::widgets::{set_icon_color, *};
+use crate::ui::theme::Rgba;
+
+/// Preview swatch hover: white halo fill plus a brighter outline.
+const COLOR_PREVIEW_HOVER_HALO: Rgba = (1.0, 1.0, 1.0, 0.3);
+const COLOR_PREVIEW_BORDER_HOVER: Rgba = (1.0, 1.0, 1.0, 0.7);
+/// Preview swatch idle outline: muted blue-gray with no theme token.
+const COLOR_PREVIEW_BORDER: Rgba = (0.5, 0.55, 0.6, 0.6);
+/// Dark circle behind the expand arrow; deeper than SHADOW_RGBA so the
+/// glyph stays legible over any swatch color.
+const COLOR_EXPAND_ICON_BACKDROP: Rgba = (0.0, 0.0, 0.0, 0.4);
+/// Hex chip hover wash (fainter than COLOR_DIVIDER white).
+const COLOR_HEX_HOVER_WASH: Rgba = (1.0, 1.0, 1.0, 0.06);
+/// Hex chip fill (hover/idle). Hover is near COLOR_CHECKBOX_HOVER but not
+/// equal — kept to avoid a visible shift.
+const COLOR_HEX_BG_HOVER: Rgba = (0.35, 0.35, 0.4, 0.9);
+const COLOR_HEX_BG: Rgba = (0.2, 0.2, 0.2, 0.6);
+/// Hex chip hover outline (COLOR_CLOSE_DEFAULT gray at -0.1 alpha).
+const COLOR_HEX_BORDER_HOVER: Rgba = (0.5, 0.5, 0.55, 0.6);
+/// Copy icon at rest (brightens to COLOR_TEXT_TERTIARY on hover).
+const COLOR_COPY_ICON_IDLE: Rgba = (0.6, 0.6, 0.6, 0.5);
+/// Hex value text: dimmer than COLOR_ICON_DEFAULT — kept as-is.
+const COLOR_HEX_TEXT: Rgba = (0.85, 0.85, 0.85, 1.0);
 
 pub(super) type ColorSwatch = (Color, String, Option<Action>);
 pub(super) type ColorToggleIconFn = fn(&cairo::Context, f64, f64, f64);
@@ -110,7 +134,7 @@ pub(super) fn draw_preview_swatch_and_icon(
         .unwrap_or(false);
 
     if preview_hover {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.3);
+        set_color(ctx, COLOR_PREVIEW_HOVER_HALO);
         draw_round_rect(
             ctx,
             x - 2.0,
@@ -120,10 +144,10 @@ pub(super) fn draw_preview_swatch_and_icon(
             6.0,
         );
         let _ = ctx.fill();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
+        set_color(ctx, COLOR_PREVIEW_BORDER_HOVER);
         ctx.set_line_width(1.5);
     } else {
-        ctx.set_source_rgba(0.5, 0.55, 0.6, 0.6);
+        set_color(ctx, COLOR_PREVIEW_BORDER);
         ctx.set_line_width(1.0);
     }
     draw_round_rect(
@@ -143,7 +167,7 @@ pub(super) fn draw_preview_swatch_and_icon(
     let icon_size = ToolbarLayoutSpec::SIDE_COLOR_EXPAND_ICON_SIZE;
     let icon_x = x + preview_size - icon_size - 2.0;
     let icon_y = preview_row_y + preview_size - icon_size - 2.0;
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
+    set_color(ctx, COLOR_EXPAND_ICON_BACKDROP);
     ctx.arc(
         icon_x + icon_size / 2.0,
         icon_y + icon_size / 2.0,
@@ -152,7 +176,7 @@ pub(super) fn draw_preview_swatch_and_icon(
         PI * 2.0,
     );
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    set_color(ctx, COLOR_TEXT_SECONDARY);
     ctx.set_line_width(1.2);
     ctx.set_line_cap(cairo::LineCap::Round);
     let arrow_margin = icon_size * 0.2;
@@ -193,7 +217,7 @@ pub(super) fn draw_hex_input(
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 11.0,
+        size: FONT_SIZE_SECONDARY,
     };
 
     let hex_input_x = x + preview_size + 8.0;
@@ -208,7 +232,7 @@ pub(super) fn draw_hex_input(
         .unwrap_or(false);
 
     if hex_hover {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.06);
+        set_color(ctx, COLOR_HEX_HOVER_WASH);
         draw_round_rect(
             ctx,
             hex_input_x - 1.0,
@@ -218,15 +242,15 @@ pub(super) fn draw_hex_input(
             5.0,
         );
         let _ = ctx.fill();
-        ctx.set_source_rgba(0.35, 0.35, 0.4, 0.9);
+        set_color(ctx, COLOR_HEX_BG_HOVER);
     } else {
-        ctx.set_source_rgba(0.2, 0.2, 0.2, 0.6);
+        set_color(ctx, COLOR_HEX_BG);
     }
     draw_round_rect(ctx, hex_input_x, hex_input_y, hex_input_w, hex_input_h, 4.0);
     let _ = ctx.fill();
 
     if hex_hover {
-        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.6);
+        set_color(ctx, COLOR_HEX_BORDER_HOVER);
         ctx.set_line_width(1.0);
         draw_round_rect(ctx, hex_input_x, hex_input_y, hex_input_w, hex_input_h, 4.0);
         let _ = ctx.stroke();
@@ -235,13 +259,13 @@ pub(super) fn draw_hex_input(
     let copy_icon_x = hex_input_x + hex_input_w - hex_icon_size - hex_icon_pad;
     let copy_icon_y = hex_input_y + (hex_input_h - hex_icon_size) / 2.0;
     if hex_hover {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85);
+        set_color(ctx, COLOR_TEXT_TERTIARY);
     } else {
-        ctx.set_source_rgba(0.6, 0.6, 0.6, 0.5);
+        set_color(ctx, COLOR_COPY_ICON_IDLE);
     }
     toolbar_icons::draw_icon_copy(ctx, copy_icon_x, copy_icon_y, hex_icon_size);
 
-    ctx.set_source_rgba(0.85, 0.85, 0.85, 1.0);
+    set_color(ctx, COLOR_HEX_TEXT);
     let hex_layout = crate::ui_text::text_layout(ctx, hex_style, hex, None);
     let hex_extents = hex_layout.ink_extents();
     let text_area_w = hex_input_w - hex_icon_size - hex_icon_pad;

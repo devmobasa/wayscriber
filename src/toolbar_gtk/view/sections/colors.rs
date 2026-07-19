@@ -16,13 +16,30 @@ use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
 use crate::input::state::{color_to_hex, parse_hex_color};
 use crate::label_format::format_binding_label;
 use crate::toolbar_icons;
+use crate::ui::theme::toolbar::COLOR_TEXT_SECONDARY;
+use crate::ui::theme::{Rgba, SHADOW_RGBA, set_color};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 
 use super::super::super::icons::IconPainter;
 use super::super::super::widgets::{
-    FeedbackSender, icon_button, rounded_rect_path, send_event, sized_button,
+    COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, FeedbackSender, icon_button,
+    rounded_rect_path, send_event, sized_button,
 };
 use super::{SectionCtx, scoped_title, section_card};
+
+/// Outline around the gradient picker areas (sat/val square, hue bar) and
+/// the outer white ring of the position indicator dot; mirror the built-in
+/// `render::widgets::color`. Specific tints — no theme token.
+/// TODO(theme-consolidation): hoist these mirrored pairs into
+/// `theme::toolbar` so the two frontends cannot drift.
+const COLOR_PICKER_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.4);
+const COLOR_INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.9);
+/// Preview swatch idle outline: muted blue-gray with no theme token
+/// (mirrors the built-in `side_palette::colors::helpers`).
+const COLOR_PREVIEW_BORDER: Rgba = (0.5, 0.55, 0.6, 0.6);
+/// Dark circle behind the expand arrow; deeper than SHADOW_RGBA so the
+/// glyph stays legible over any swatch color.
+const COLOR_EXPAND_ICON_BACKDROP: Rgba = (0.0, 0.0, 0.0, 0.4);
 
 // Spec units mirroring `ToolbarLayoutSpec::SIDE_COLOR_*`.
 const SV_HEIGHT: f64 = 72.0;
@@ -251,7 +268,7 @@ fn draw_hue_bar(cr: &cairo::Context, w: f64, h: f64) {
 }
 
 fn stroke_picker_border(cr: &cairo::Context, w: f64, h: f64) {
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+    set_color(cr, COLOR_PICKER_OUTLINE);
     cr.rectangle(0.5, 0.5, w - 1.0, h - 1.0);
     cr.set_line_width(1.0);
     let _ = cr.stroke();
@@ -262,7 +279,7 @@ fn draw_indicator(cr: &cairo::Context, x: f64, y: f64, color: Color, scale: f64)
     let radius = 5.0 * scale;
     let ring = radius + 1.5 * scale;
 
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    set_color(cr, COLOR_INDICATOR_RING);
     cr.arc(x, y, ring, 0.0, PI * 2.0);
     let _ = cr.fill();
 
@@ -270,7 +287,7 @@ fn draw_indicator(cr: &cairo::Context, x: f64, y: f64, color: Color, scale: f64)
     cr.arc(x, y, radius, 0.0, PI * 2.0);
     let _ = cr.fill();
 
-    cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+    set_color(cr, SHADOW_RGBA);
     cr.set_line_width(1.0);
     cr.arc(x, y, ring, 0.0, PI * 2.0);
     let _ = cr.stroke();
@@ -482,7 +499,7 @@ fn color_key(color: Color) -> (f64, f64, f64) {
 /// inset so the resting outline stays inside the widget, with the popup
 /// expand-arrow badge in the bottom-right corner.
 fn draw_preview_swatch(cr: &cairo::Context, size: f64, r: f64, g: f64, b: f64, scale: f64) {
-    cr.set_source_rgba(0.5, 0.55, 0.6, 0.6);
+    set_color(cr, COLOR_PREVIEW_BORDER);
     cr.set_line_width(1.0);
     rounded_rect_path(cr, 0.5, 0.5, size - 1.0, size - 1.0, 5.0);
     let _ = cr.stroke();
@@ -493,7 +510,7 @@ fn draw_preview_swatch(cr: &cairo::Context, size: f64, r: f64, g: f64, b: f64, s
 
     let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
     if luminance < 0.3 {
-        cr.set_source_rgba(0.5, 0.5, 0.5, 0.8);
+        set_color(cr, COLOR_SWATCH_HAIRLINE_DARK);
         cr.set_line_width(1.5);
         rounded_rect_path(cr, 1.5, 1.5, size - 3.0, size - 3.0, 4.0);
         let _ = cr.stroke();
@@ -502,7 +519,7 @@ fn draw_preview_swatch(cr: &cairo::Context, size: f64, r: f64, g: f64, b: f64, s
     let icon = EXPAND_ICON_SIZE * scale;
     let icon_x = size - icon - 2.0;
     let icon_y = size - icon - 2.0;
-    cr.set_source_rgba(0.0, 0.0, 0.0, 0.4);
+    set_color(cr, COLOR_EXPAND_ICON_BACKDROP);
     cr.arc(
         icon_x + icon / 2.0,
         icon_y + icon / 2.0,
@@ -511,7 +528,7 @@ fn draw_preview_swatch(cr: &cairo::Context, size: f64, r: f64, g: f64, b: f64, s
         PI * 2.0,
     );
     let _ = cr.fill();
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    set_color(cr, COLOR_TEXT_SECONDARY);
     cr.set_line_width(1.2);
     cr.set_line_cap(cairo::LineCap::Round);
     let margin = icon * 0.2;
@@ -643,17 +660,16 @@ fn rect_swatch(
 
         let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
         if luminance < 0.3 {
-            cr.set_source_rgba(0.5, 0.5, 0.5, 0.8);
+            set_color(cr, COLOR_SWATCH_HAIRLINE_DARK);
         } else {
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.16);
+            set_color(cr, COLOR_SWATCH_HAIRLINE);
         }
         cr.set_line_width(1.0);
         rounded_rect_path(cr, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
         let _ = cr.stroke();
 
         if draw_selected.get() {
-            let (ar, ag, ab, aa) = super::super::super::css::ACCENT;
-            cr.set_source_rgba(ar, ag, ab, aa);
+            set_color(cr, super::super::super::css::ACCENT);
             cr.set_line_width(2.0);
             rounded_rect_path(cr, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
             let _ = cr.stroke();

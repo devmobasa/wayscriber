@@ -1,11 +1,21 @@
 use crate::input::InputState;
 use crate::input::state::ContextMenuState;
+use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BG_HOVER, BORDER_CONTEXT_MENU, BORDER_FOCUS, FOCUS_RING_WIDTH, NAV_HINT_MENU,
-    PANEL_BG_CONTEXT_MENU, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+    self, BG_HOVER, BORDER_CONTEXT_MENU, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW,
+    NAV_HINT_MENU, PANEL_BG_CONTEXT_MENU, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_DISABLED,
+    TEXT_HINT, TEXT_PRIMARY,
 };
+
+/// Footer strip below the menu: darker than the menu surface so the hint reads
+/// as an attachment (no matching theme token; kept from pre-theme literals).
+const HINT_FOOTER_BG: Rgba = (0.08, 0.10, 0.14, 0.9);
+/// Footer hint text: slightly brighter than TEXT_TERTIARY for legibility on
+/// the darker strip (kept from pre-theme literals).
+const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
 
 /// Renders a floating context menu for shape or canvas actions.
 pub fn render_context_menu(
@@ -41,24 +51,20 @@ pub fn render_context_menu(
         size: layout.font_size,
     };
 
-    // Background and border
-    constants::set_color(ctx, PANEL_BG_CONTEXT_MENU);
-    ctx.rectangle(
+    // Background and hairline border (popover radius, matching the other
+    // overlay popups)
+    draw_rounded_rect(
+        ctx,
         layout.origin_x,
         layout.origin_y,
         layout.width,
         layout.height,
+        RADIUS_PANEL,
     );
-    let _ = ctx.fill();
-
+    constants::set_color(ctx, PANEL_BG_CONTEXT_MENU);
+    let _ = ctx.fill_preserve();
     constants::set_color(ctx, BORDER_CONTEXT_MENU);
     ctx.set_line_width(1.0);
-    ctx.rectangle(
-        layout.origin_x,
-        layout.origin_y,
-        layout.width,
-        layout.height,
-    );
     let _ = ctx.stroke();
 
     for (index, entry) in entries.iter().enumerate() {
@@ -71,7 +77,14 @@ pub fn render_context_menu(
 
         if is_hovered {
             constants::set_color(ctx, BG_HOVER);
-            ctx.rectangle(layout.origin_x, row_top, layout.width, layout.row_height);
+            draw_rounded_rect(
+                ctx,
+                layout.origin_x + 4.0,
+                row_top,
+                layout.width - 8.0,
+                layout.row_height,
+                RADIUS_SM,
+            );
             let _ = ctx.fill();
         }
 
@@ -79,22 +92,25 @@ pub fn render_context_menu(
             // Draw focus ring (outline) when keyboard navigating
             constants::set_color(ctx, BORDER_FOCUS);
             ctx.set_line_width(FOCUS_RING_WIDTH);
-            ctx.rectangle(
+            draw_rounded_rect(
+                ctx,
                 layout.origin_x + 2.0,
                 row_top + 1.0,
                 layout.width - 4.0,
                 layout.row_height - 2.0,
+                RADIUS_SM,
             );
             let _ = ctx.stroke();
         }
 
-        let (text_r, text_g, text_b, text_a) = if entry.disabled {
+        let text_color = if entry.disabled {
             TEXT_DISABLED
         } else {
             TEXT_PRIMARY
         };
+        let text_a = text_color.3;
 
-        ctx.set_source_rgba(text_r, text_g, text_b, text_a);
+        constants::set_color(ctx, text_color);
         draw_text_baseline(
             ctx,
             text_style,
@@ -125,16 +141,7 @@ pub fn render_context_menu(
             let arrow_x =
                 layout.origin_x + layout.width - layout.padding_x - layout.arrow_width * 0.6;
             let arrow_y = row_center;
-            let arrow_color = constants::with_alpha(
-                (
-                    super::constants::ICON_SUBMENU_ARROW.0,
-                    super::constants::ICON_SUBMENU_ARROW.1,
-                    super::constants::ICON_SUBMENU_ARROW.2,
-                    super::constants::ICON_SUBMENU_ARROW.3,
-                ),
-                text_a,
-            );
-            constants::set_color(ctx, arrow_color);
+            constants::set_color(ctx, constants::with_alpha(ICON_SUBMENU_ARROW, text_a));
             ctx.move_to(arrow_x, arrow_y - 5.0);
             ctx.line_to(arrow_x + 6.0, arrow_y);
             ctx.line_to(arrow_x, arrow_y + 5.0);
@@ -154,12 +161,19 @@ pub fn render_context_menu(
     let hint_y = layout.origin_y + layout.height + 4.0;
 
     // Draw hint background
-    ctx.set_source_rgba(0.08, 0.10, 0.14, 0.9);
-    ctx.rectangle(layout.origin_x, hint_y, layout.width, hint_height);
+    constants::set_color(ctx, HINT_FOOTER_BG);
+    draw_rounded_rect(
+        ctx,
+        layout.origin_x,
+        hint_y,
+        layout.width,
+        hint_height,
+        RADIUS_STD,
+    );
     let _ = ctx.fill();
 
     // Draw hint text
-    ctx.set_source_rgba(0.65, 0.68, 0.75, 1.0);
+    constants::set_color(ctx, HINT_FOOTER_TEXT);
     draw_text_baseline(
         ctx,
         hint_style,

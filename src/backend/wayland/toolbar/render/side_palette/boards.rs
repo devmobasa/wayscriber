@@ -14,6 +14,11 @@ use super::super::widgets::constants::{
 };
 use super::super::widgets::*;
 use super::section_header::draw_collapsible_header;
+use crate::ui::theme::Rgba;
+
+/// Right-aligned keybinding hint next to the section label. Muted
+/// blue-gray with no theme token.
+const COLOR_BINDING_HINT: Rgba = (0.55, 0.58, 0.65, 0.9);
 
 pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -65,7 +70,7 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         let hint_width = hint_layout.ink_extents().width();
         let chevron_reserve = ToolbarLayoutSpec::SIDE_COLLAPSE_CHEVRON_SIZE + 10.0;
         let hint_x = x + content_width - hint_width - chevron_reserve;
-        ctx.set_source_rgba(0.55, 0.58, 0.65, 0.9);
+        set_color(ctx, COLOR_BINDING_HINT);
         hint_layout.show_at_baseline(ctx, hint_x, label_y);
     }
     if snapshot.side_section_collapsed(ToolbarSideSection::Boards) {

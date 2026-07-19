@@ -1,7 +1,8 @@
 use super::super::primitives::{BADGE_PADDING, BADGE_STACK_GAP, BadgeAlign, draw_badge};
+use super::super::theme::overlay;
 
 /// Vertical inset of the floating page badge from the screen edge.
-const PAGE_BADGE_EDGE_PADDING: f64 = 4.0;
+const PAGE_BADGE_EDGE_PADDING: f64 = overlay::SPACING_SM;
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {

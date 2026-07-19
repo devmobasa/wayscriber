@@ -25,7 +25,15 @@ use crate::ui::toolbar::{SidePane, ToolbarEvent, ToolbarSideSection, ToolbarSnap
 
 use std::time::Instant;
 
+use super::widgets::constants::set_color;
 use super::widgets::{draw_panel_background, draw_round_rect, draw_tooltip_with_delay};
+use crate::ui::theme::Rgba;
+
+/// Scrollbar track tint: a white wash with no theme token (value-coincides
+/// with COLOR_DIVIDER but is a control surface, not a separator). The thumb
+/// shares the GTK scrollbar slider token.
+const COLOR_SCROLLBAR_TRACK: Rgba = (1.0, 1.0, 1.0, 0.08);
+use crate::ui::theme::toolbar::COLOR_SCROLLBAR_SLIDER as COLOR_SCROLLBAR_THUMB;
 
 pub(super) struct SidePaletteLayout<'a> {
     pub(super) ctx: &'a cairo::Context,
@@ -363,7 +371,7 @@ fn draw_scrollbar(
         return;
     }
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+    set_color(ctx, COLOR_SCROLLBAR_TRACK);
     draw_round_rect(ctx, track_x, track_y, track_w, track_h, 2.0);
     let _ = ctx.fill();
 
@@ -371,7 +379,7 @@ fn draw_scrollbar(
     let thumb_h = (track_h * (viewport / natural)).max(20.0);
     let max_scroll = natural - height;
     let thumb_y = track_y + (track_h - thumb_h) * (scroll / max_scroll).clamp(0.0, 1.0);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+    set_color(ctx, COLOR_SCROLLBAR_THUMB);
     draw_round_rect(ctx, track_x, thumb_y, track_w, thumb_h, 2.0);
     let _ = ctx.fill();
 

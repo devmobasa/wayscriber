@@ -11,11 +11,11 @@ use crate::models::{
     PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
     PdfPageSizeOption, PdfTransparentBackgroundOption, PresenterToolBehaviorOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
-    RenderProfileExportOption, RenderProfileMappingSide, RenderProfileTextField,
-    SessionCatalogActionResult, SessionCatalogItem, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, TripletField,
-    UiTabId,
+    ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
+    RenderProfileTextField, SessionCatalogActionResult, SessionCatalogItem,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, TripletField, UiTabId, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -77,6 +77,8 @@ pub enum Message {
     DrawingMouseDragToolChanged(DragMouseButton, DragToolField, DragToolOption),
     DrawingMouseDragColorChanged(DragMouseButton, DragToolField, DragColorOption),
     StatusPositionChanged(StatusPositionOption),
+    UiThemeChanged(UiThemeOption),
+    UiReducedMotionChanged(ReducedMotionOption),
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
     ToolbarRebindModifierChanged(ToolbarRebindModifierOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),

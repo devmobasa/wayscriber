@@ -406,6 +406,14 @@ Controls visual indicators, overlays, and UI styling.
 
 ```toml
 [ui]
+# Overlay chrome theme
+# Options: "auto", "dark", "light" ("auto" currently resolves to dark)
+theme = "auto"
+
+# Reduce UI motion (disable animations)
+# Options: "auto", "on", "off"
+reduced_motion = "auto"
+
 # Show status bar with current color/thickness/tool
 show_status_bar = true
 
@@ -498,6 +506,10 @@ enabled = true
 - `"bottom-left"`: Lower left corner (default)
 - `"bottom-right"`: Lower right corner
 
+**Theme & Motion:**
+- **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome; `"light"` takes effect progressively as overlay surfaces adopt the runtime theme (until then it also renders dark).
+- **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
+
 **UI Styling:**
 - **Font sizes**: Customize text size for status bar and help overlay
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
@@ -518,6 +530,8 @@ enabled = true
 - For GNOME/xdg fallback, set `preferred_output` (or env override `WAYSCRIBER_XDG_OUTPUT`) to pin the overlay to a specific monitor.
 
 **Defaults:**
+- Theme: auto (currently dark)
+- Reduced motion: auto (full motion)
 - Show status bar: true
 - Show frozen badge: false
 - Position: bottom-left

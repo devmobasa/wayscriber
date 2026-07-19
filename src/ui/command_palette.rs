@@ -15,6 +15,7 @@ use super::constants::{
     SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
+use super::theme::Rgba;
 
 mod command_palette_row;
 
@@ -30,9 +31,20 @@ const COMMAND_PALETTE_HINT_TEXT_SIZE: f64 = 11.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X: f64 = 5.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT: f64 = 18.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_GAP: f64 = 12.0;
+const COMMAND_PALETTE_SHORTCUT_BADGE_RADIUS: f64 = 3.0;
 const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
 const COMMAND_PALETTE_INPUT_HINT: &str =
     "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
+/// Offset of the frame drop shadow below/right of the palette.
+const FRAME_SHADOW_OFFSET: f64 = 4.0;
+/// Action tooltip surface: darker than PANEL_BG_COMMAND_PALETTE so the
+/// tooltip reads above the palette (no matching theme token; kept).
+const TOOLTIP_BG: Rgba = (0.04, 0.05, 0.07, 0.98);
+/// Scrollbar track/thumb white-alpha ladder.
+/// TODO(theme-consolidation): thumb duplicates
+/// `theme::toolbar::COLOR_SCROLLBAR_SLIDER`; track has no token.
+const SCROLL_TRACK: Rgba = (1.0, 1.0, 1.0, 0.1);
+const SCROLL_THUMB: Rgba = (1.0, 1.0, 1.0, 0.35);
 
 /// Render the command palette if open.
 pub fn render_command_palette(
@@ -147,7 +159,7 @@ fn draw_command_palette_action_tooltip(
     let x = (pointer_x + OFFSET).min((screen_width - width - 4.0).max(4.0));
     let y = (pointer_y + OFFSET).min((screen_height - height - 4.0).max(4.0));
 
-    ctx.set_source_rgba(0.04, 0.05, 0.07, 0.98);
+    constants::set_color(ctx, TOOLTIP_BG);
     draw_rounded_rect(ctx, x, y, width, height, 5.0);
     let _ = ctx.fill();
     constants::set_color(ctx, TEXT_WHITE);
@@ -252,7 +264,14 @@ fn draw_command_palette_frame(
     let _ = ctx.fill();
 
     constants::set_color(ctx, SHADOW);
-    draw_rounded_rect(ctx, x + 4.0, y + 4.0, palette_width, height, RADIUS_LG);
+    draw_rounded_rect(
+        ctx,
+        x + FRAME_SHADOW_OFFSET,
+        y + FRAME_SHADOW_OFFSET,
+        palette_width,
+        height,
+        RADIUS_LG,
+    );
     let _ = ctx.fill();
 
     constants::set_color(ctx, PANEL_BG_COMMAND_PALETTE);
@@ -381,12 +400,7 @@ fn draw_command_palette_empty_state(
         cairo::FontWeight::Normal,
         cairo::FontSlant::Italic,
     );
-    ctx.set_source_rgba(
-        TEXT_DESCRIPTION.0,
-        TEXT_DESCRIPTION.1,
-        TEXT_DESCRIPTION.2,
-        0.7,
-    );
+    constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, 0.7));
     let suggest_extents = text_extents_for(
         ctx,
         COMMAND_PALETTE_FONT_FAMILY,
@@ -422,7 +436,7 @@ fn render_command_palette_scroll_indicator(
     let scroll_track_h = (COMMAND_PALETTE_MAX_VISIBLE as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
     let scroll_track_w = 4.0;
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.1);
+    constants::set_color(ctx, SCROLL_TRACK);
     draw_rounded_rect(
         ctx,
         scroll_track_x,
@@ -443,7 +457,7 @@ fn render_command_palette_scroll_indicator(
     };
     let thumb_y = start_y + scroll_progress * (scroll_track_h - thumb_h);
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+    constants::set_color(ctx, SCROLL_THUMB);
     draw_rounded_rect(ctx, scroll_track_x, thumb_y, scroll_track_w, thumb_h, 2.0);
     let _ = ctx.fill();
 }
@@ -460,12 +474,7 @@ fn draw_command_palette_escape_hint(
         cairo::FontWeight::Normal,
         cairo::FontSlant::Normal,
     );
-    ctx.set_source_rgba(
-        TEXT_DESCRIPTION.0,
-        TEXT_DESCRIPTION.1,
-        TEXT_DESCRIPTION.2,
-        0.6,
-    );
+    constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, 0.6));
     let hint_y = y + height - HINT_BASELINE_BOTTOM_OFFSET;
     let hint_extents = text_extents_for(
         ctx,

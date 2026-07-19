@@ -1,7 +1,14 @@
 use super::constants::{
-    COLOR_CARD_BACKGROUND, COLOR_PANEL_BACKGROUND, RADIUS_CARD, RADIUS_PANEL, set_color,
+    COLOR_CARD_BACKGROUND, COLOR_PANEL_BACKGROUND, COLOR_PANEL_BORDER, RADIUS_CARD, RADIUS_PANEL,
+    set_color,
 };
 use super::draw_round_rect;
+use crate::ui::theme::Rgba;
+/// Two-layer popover drop shadow approximating the GTK popover's
+/// `0 2px 12px rgba(0, 0, 0, 0.35)` box-shadow: a wide faint halo plus a
+/// tight core. Specific to this fake-blur trick — not the shared shadow token.
+const COLOR_POPOVER_SHADOW_HALO: Rgba = (0.0, 0.0, 0.0, 0.18);
+const COLOR_POPOVER_SHADOW_CORE: Rgba = (0.0, 0.0, 0.0, 0.35);
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_panel_background(
     ctx: &cairo::Context,
@@ -14,7 +21,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_panel_background(
 
     // 1px hairline border, matching the GTK panel's
     // `border: 1px solid rgba(255, 255, 255, 0.10)`.
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.10);
+    set_color(ctx, COLOR_PANEL_BORDER);
     ctx.set_line_width(1.0);
     draw_round_rect(ctx, 0.5, 0.5, width - 1.0, height - 1.0, RADIUS_PANEL - 0.5);
     let _ = ctx.stroke();
@@ -48,10 +55,10 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_popover_panel(
     // Soft drop shadow so the panel reads as floating over the bar. Two
     // layers approximate the GTK popover's `0 2px 12px rgba(0, 0, 0, 0.35)`
     // box-shadow: a wide faint halo plus a tight core at the same offset.
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.18);
+    set_color(ctx, COLOR_POPOVER_SHADOW_HALO);
     draw_round_rect(ctx, x - 3.0, y - 1.0, w + 6.0, h + 6.0, RADIUS_PANEL + 3.0);
     let _ = ctx.fill();
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    set_color(ctx, COLOR_POPOVER_SHADOW_CORE);
     draw_round_rect(ctx, x, y + 2.0, w, h, RADIUS_PANEL);
     let _ = ctx.fill();
 
@@ -75,7 +82,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_popover_panel(
     let _ = ctx.fill();
 
     // Hairline border at the same alpha as the GTK popover contents border.
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.10);
+    set_color(ctx, COLOR_PANEL_BORDER);
     ctx.set_line_width(1.0);
     draw_round_rect(ctx, x + 0.5, y + 0.5, w - 1.0, h - 1.0, RADIUS_PANEL);
     let _ = ctx.stroke();

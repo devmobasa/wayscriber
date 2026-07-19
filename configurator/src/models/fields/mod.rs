@@ -6,6 +6,7 @@ mod presenter;
 mod pressure;
 mod session;
 mod status;
+mod theme;
 mod toggles;
 mod tool;
 mod toolbar;
@@ -21,6 +22,7 @@ pub use presenter::PresenterToolBehaviorOption;
 pub use pressure::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use session::{SessionCompressionOption, SessionStorageModeOption};
 pub use status::StatusPositionOption;
+pub use theme::{ReducedMotionOption, UiThemeOption};
 pub use toggles::{
     PresetTextField, PresetToggleField, QuadField, TextField, ToggleField, TripletField,
 };

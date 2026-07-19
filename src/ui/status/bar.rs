@@ -1,6 +1,7 @@
 use std::f64::consts::PI;
 
 use super::super::primitives::draw_rounded_rect;
+use super::super::theme::overlay;
 use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
 use crate::label_format::format_binding_labels;
@@ -12,7 +13,7 @@ use crate::ui_text::{UiTextLayout, UiTextStyle, text_layout};
 // ============================================================================
 
 /// Inset between the pill background and the screen edges
-const STATUS_BAR_EDGE_INSET: f64 = 8.0;
+const STATUS_BAR_EDGE_INSET: f64 = overlay::SPACING_MD;
 /// Corner radius of the pill background
 const STATUS_BAR_CORNER_RADIUS: f64 = 11.0;
 /// Horizontal gap between the color dot and its neighbouring text pieces

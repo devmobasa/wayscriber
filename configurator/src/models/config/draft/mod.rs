@@ -4,9 +4,9 @@ use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
-    ToolbarRebindModifierOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, ReducedMotionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -62,6 +62,8 @@ pub struct ConfigDraft {
     pub performance_max_fps_no_vsync: String,
     pub performance_ui_animation_fps: String,
 
+    pub ui_theme: UiThemeOption,
+    pub ui_reduced_motion: ReducedMotionOption,
     pub ui_show_status_bar: bool,
     pub ui_show_status_board_badge: bool,
     pub ui_show_status_page_badge: bool,

@@ -2,7 +2,9 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui_text::{UiTextStyle, text_layout};
 
-use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::super::widgets::constants::{
+    COLOR_LABEL_HINT, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, FONT_SIZE_SMALL, set_color,
+};
 use super::super::section_header::draw_collapsible_header;
 use super::SidePaletteLayout;
 
@@ -51,14 +53,14 @@ pub(super) fn draw_presets_header(
             family: FONT_FAMILY_DEFAULT,
             slant: cairo::FontSlant::Normal,
             weight: cairo::FontWeight::Normal,
-            size: 10.0,
+            size: FONT_SIZE_SMALL,
         };
         let layout = text_layout(ctx, hint_style, &hint, None);
         let ext = layout.ink_extents();
         let chevron_reserve = ToolbarLayoutSpec::SIDE_COLLAPSE_CHEVRON_SIZE + 10.0;
         let hint_x = card_x + card_w - ext.width() - chevron_reserve - ext.x_bearing();
         let hint_y = section_y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y;
-        ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
+        set_color(ctx, COLOR_LABEL_HINT);
         layout.show_at_baseline(ctx, hint_x, hint_y);
     }
 }

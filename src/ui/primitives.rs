@@ -1,5 +1,6 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
+use crate::ui::theme::{self, Rgba};
 use crate::ui_text::{UiTextStyle, text_layout};
 
 pub(crate) fn text_extents_for(
@@ -39,6 +40,108 @@ pub(crate) fn draw_rounded_rect(
     ctx.arc(x + r, y + height - r, r, FRAC_PI_2, PI);
     ctx.arc(x + r, y + r, r, PI, 3.0 * FRAC_PI_2);
     ctx.close_path();
+}
+
+// ============================================================================
+// Floating island surfaces (M1 foundation; consumed by the HUD and island
+// chrome from M2 on)
+// ============================================================================
+
+/// Number of layered strokes used to approximate a soft shadow (no gaussian —
+/// this stays cheap on the 120fps no-vsync path).
+const PILL_SHADOW_LAYERS: u32 = 3;
+
+/// Draw a floating pill/panel surface: optional layered soft shadow, fill,
+/// and a 1px hairline border. The canonical chrome surface for islands,
+/// HUD segments, and popovers as they migrate to the theme.
+#[allow(dead_code)] // consumed by the chip HUD / islands (M2+)
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_pill(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    radius: f64,
+    fill: Rgba,
+    hairline: Rgba,
+    shadow: Option<Rgba>,
+) {
+    if let Some((sr, sg, sb, sa)) = shadow {
+        for layer in (1..=PILL_SHADOW_LAYERS).rev() {
+            let spread = layer as f64;
+            let alpha = sa * (1.0 - (layer as f64 - 1.0) / PILL_SHADOW_LAYERS as f64) * 0.35;
+            ctx.set_source_rgba(sr, sg, sb, alpha);
+            draw_rounded_rect(
+                ctx,
+                x - spread,
+                y - spread + 1.5,
+                width + spread * 2.0,
+                height + spread * 2.0,
+                radius + spread,
+            );
+            let _ = ctx.fill();
+        }
+    }
+
+    theme::set_color(ctx, fill);
+    draw_rounded_rect(ctx, x, y, width, height, radius);
+    let _ = ctx.fill();
+
+    theme::set_color(ctx, hairline);
+    ctx.set_line_width(1.0);
+    draw_rounded_rect(
+        ctx,
+        x + 0.5,
+        y + 0.5,
+        width - 1.0,
+        height - 1.0,
+        radius - 0.5,
+    );
+    let _ = ctx.stroke();
+}
+
+/// Draw a flat keycap chip (rounded rect + centered label) and return its
+/// (width, height). The single keycap language that replaces the per-surface
+/// badge renderings as surfaces migrate (M2+).
+#[allow(dead_code)] // consumed by help/palette keycap unification (M2+)
+pub(crate) fn draw_keycap(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    label: &str,
+    font_size: f64,
+    fill: Rgba,
+    text_color: Rgba,
+) -> (f64, f64) {
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        label,
+        None,
+    );
+    let extents = layout.ink_extents();
+    let pad_x = font_size * 0.5;
+    let pad_y = font_size * 0.3;
+    let width = extents.width() + pad_x * 2.0;
+    let height = extents.height() + pad_y * 2.0;
+
+    theme::set_color(ctx, fill);
+    draw_rounded_rect(ctx, x, y, width, height, theme::overlay::RADIUS_SM);
+    let _ = ctx.fill();
+
+    theme::set_color(ctx, text_color);
+    layout.show_at_baseline(
+        ctx,
+        x + pad_x - extents.x_bearing(),
+        y + pad_y - extents.y_bearing(),
+    );
+    (width, height)
 }
 
 // ============================================================================
@@ -127,7 +230,7 @@ pub(crate) fn draw_badge(
     draw_rounded_rect(ctx, x, top_y, width, height, BADGE_RADIUS);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    theme::set_color(ctx, theme::overlay::TEXT_WHITE);
     match &hint_layout {
         Some((hint_text_layout, hint_extents)) => {
             label_layout.show_at_baseline(
@@ -136,7 +239,7 @@ pub(crate) fn draw_badge(
                 top_y + label_extents.height() + padding * 0.3,
             );
             // Hint text (dimmer)
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
+            theme::set_color(ctx, theme::with_alpha(theme::overlay::TEXT_WHITE, 0.7));
             hint_text_layout.show_at_baseline(
                 ctx,
                 x + text_inset,

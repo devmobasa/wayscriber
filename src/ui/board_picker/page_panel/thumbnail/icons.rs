@@ -1,6 +1,13 @@
 use std::f64::consts::PI;
 
-use crate::ui::constants::{self, TEXT_TERTIARY};
+use crate::ui::constants::{self, TEXT_TERTIARY, TEXT_WHITE};
+use crate::ui::theme::{ACCENT_RGB, Rgb};
+
+/// Delete-icon circle: softer than DESTRUCTIVE_RGB — the small filled disc
+/// reads harsh at full saturation (kept from the pre-theme literal).
+const DELETE_ICON_RGB: Rgb = (0.85, 0.2, 0.2);
+/// Rename-icon circle: neutral gray with no matching theme token.
+const RENAME_ICON_RGB: Rgb = (0.45, 0.45, 0.5);
 
 pub(super) fn icon_alpha(is_hovered: bool, icon_hovered: bool) -> f64 {
     if icon_hovered {
@@ -28,11 +35,11 @@ pub(super) fn draw_delete_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, 
     let radius = size * 0.5;
 
     ctx.arc(x, y, radius, 0.0, PI * 2.0);
-    ctx.set_source_rgba(0.85, 0.2, 0.2, alpha);
+    constants::set_color_alpha(ctx, DELETE_ICON_RGB, alpha);
     let _ = ctx.fill();
 
     let x_size = size * 0.28;
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha.min(0.95));
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha.min(0.95)));
     ctx.set_line_width(1.8);
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.move_to(x - x_size, y - x_size);
@@ -47,16 +54,16 @@ pub(super) fn draw_duplicate_icon(ctx: &cairo::Context, x: f64, y: f64, size: f6
     let radius = size * 0.5;
 
     ctx.arc(x, y, radius, 0.0, PI * 2.0);
-    ctx.set_source_rgba(0.2078, 0.5176, 0.8941, alpha);
+    constants::set_color_alpha(ctx, ACCENT_RGB, alpha);
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha * 0.6);
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha * 0.6));
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
     let page_w = size * 0.42;
     let page_h = size * 0.54;
     let offset = size * 0.12;
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha.min(0.95));
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha.min(0.95)));
     ctx.set_line_width(1.4);
 
     ctx.rectangle(
@@ -75,7 +82,7 @@ pub(super) fn draw_rename_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, 
     let radius = size * 0.5;
 
     ctx.arc(x, y, radius, 0.0, PI * 2.0);
-    ctx.set_source_rgba(0.45, 0.45, 0.5, alpha);
+    constants::set_color_alpha(ctx, RENAME_ICON_RGB, alpha);
     let _ = ctx.fill();
 
     let pencil_len = size * 0.55;
@@ -84,7 +91,7 @@ pub(super) fn draw_rename_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, 
     let cos_a = angle.cos();
     let sin_a = angle.sin();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha.min(0.95));
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha.min(0.95)));
     ctx.set_line_width(pencil_w);
     ctx.set_line_cap(cairo::LineCap::Round);
 

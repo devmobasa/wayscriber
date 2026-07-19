@@ -2,9 +2,10 @@ use crate::input::InputState;
 use crate::input::state::{PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UiToastKind};
 use std::time::Instant;
 
+use super::anim;
 use super::constants::{
-    self, BLOCKED_FLASH, PROGRESS_TRACK, RADIUS_SM, TEXT_WHITE, TOAST_ERROR, TOAST_INFO,
-    TOAST_SUCCESS, TOAST_WARNING,
+    self, BLOCKED_FLASH, PROGRESS_TRACK, RADIUS_LG, RADIUS_SM, SPACING_LG, TEXT_WHITE, TOAST_ERROR,
+    TOAST_INFO, TOAST_SUCCESS, TOAST_WARNING,
 };
 use super::primitives::draw_rounded_rect;
 use crate::ui_text::{UiTextStyle, measure_text, text_layout};
@@ -23,7 +24,7 @@ const PRESET_TOAST_Y_RATIO: f64 = 0.2;
 
 const UI_TOAST_FONT_SIZE: f64 = 15.0;
 const PRESET_TOAST_FONT_SIZE: f64 = 16.0;
-const TOAST_PADDING_X: f64 = 16.0;
+const TOAST_PADDING_X: f64 = SPACING_LG;
 const TOAST_PADDING_Y: f64 = 9.0;
 const TOAST_WARNING_TEXT: (f64, f64, f64) = (0.07, 0.09, 0.15);
 
@@ -37,25 +38,11 @@ fn toast_text_style(size: f64) -> UiTextStyle<'static> {
 }
 
 fn preset_toast_fade(progress: f64) -> f64 {
-    if progress <= PRESET_TOAST_HOLD_RATIO {
-        1.0
-    } else {
-        let fade_progress = (progress - PRESET_TOAST_HOLD_RATIO) / (1.0 - PRESET_TOAST_HOLD_RATIO);
-        (1.0 - fade_progress).clamp(0.0, 1.0)
-    }
+    anim::hold_then_fade_out(progress, PRESET_TOAST_HOLD_RATIO)
 }
 
 fn ui_toast_fade(elapsed_secs: f64, duration_secs: f64) -> f64 {
-    let fade_duration = duration_secs.min(UI_TOAST_FADE_SECONDS);
-    if fade_duration <= 0.0 {
-        return 0.0;
-    }
-    let fade_start = duration_secs - fade_duration;
-    if elapsed_secs <= fade_start {
-        1.0
-    } else {
-        ((duration_secs - elapsed_secs) / fade_duration).clamp(0.0, 1.0)
-    }
+    anim::end_fade(elapsed_secs, duration_secs, UI_TOAST_FADE_SECONDS)
 }
 
 /// Box geometry for a toast label centered horizontally at a screen-height ratio.
@@ -189,7 +176,7 @@ pub fn render_preset_toast(
     };
 
     let label = preset_feedback_label(slot, kind);
-    let radius = 10.0;
+    let radius = RADIUS_LG;
 
     let text_style = toast_text_style(PRESET_TOAST_FONT_SIZE);
     let layout = text_layout(ctx, text_style, &label, None);
@@ -241,7 +228,7 @@ pub fn render_ui_toast(
 
     let label = toast.message.as_str();
     let padding_x = TOAST_PADDING_X;
-    let radius = 10.0;
+    let radius = RADIUS_LG;
 
     // Calculate label with optional action suffix
     let action_suffix = toast
@@ -282,7 +269,7 @@ pub fn render_ui_toast(
     let outline = if toast.kind == UiToastKind::Warning {
         TOAST_WARNING_TEXT
     } else {
-        (1.0, 1.0, 1.0)
+        (TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2)
     };
     ctx.set_source_rgba(outline.0, outline.1, outline.2, 0.28 * fade);
     ctx.set_line_width(1.0);
@@ -320,7 +307,7 @@ pub fn render_ui_toast(
             let progress_color = if toast.kind == UiToastKind::Warning {
                 TOAST_WARNING_TEXT
             } else {
-                (1.0, 1.0, 1.0)
+                (TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2)
             };
             ctx.set_source_rgba(
                 progress_color.0,
@@ -390,17 +377,8 @@ pub fn render_blocked_feedback(
         return;
     };
 
-    // Quick fade in, then fade out with smoother pulse
-    let alpha = if progress < 0.15 {
-        // Fade in during first 15%
-        (progress / 0.15) * 0.22
-    } else if progress < 0.4 {
-        // Hold at peak
-        0.22
-    } else {
-        // Fade out during remaining time
-        0.22 * (1.0 - (progress - 0.4) / 0.6)
-    };
+    // Quick fade in, hold at peak, then fade out
+    let alpha = anim::flash(progress, 0.15, 0.4, 0.22);
 
     // Red tint on all four screen edges
     constants::set_color_alpha(ctx, BLOCKED_FLASH, alpha);

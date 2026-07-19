@@ -1,5 +1,6 @@
 pub mod toolbar;
 
+pub mod anim;
 mod board_picker;
 mod color_picker_popup;
 mod command_palette;
@@ -11,6 +12,7 @@ mod primitives;
 mod properties_panel;
 mod radial_menu;
 mod status;
+pub mod theme;
 mod toasts;
 mod tour;
 

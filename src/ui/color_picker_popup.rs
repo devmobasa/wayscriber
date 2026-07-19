@@ -7,12 +7,47 @@ use crate::draw::Color;
 use crate::input::InputState;
 use crate::input::state::COLOR_PICKER_PREVIEW_SIZE;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::theme::Rgba;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
     self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, BORDER_MODAL, INPUT_BG,
     INPUT_BORDER_FOCUSED, INPUT_CARET, OVERLAY_DIM_MEDIUM, PANEL_BG_MODAL, RADIUS_MD, RADIUS_PANEL,
-    TEXT_PRIMARY,
+    RADIUS_SM, RADIUS_STD, TEXT_PRIMARY,
 };
+
+// File-local colors with no matching theme token (M1 keep-if-not-matching
+// rule: values kept verbatim from the pre-theme literals).
+/// Hairline around the HSV gradient so it separates from the panel.
+const GRADIENT_BORDER: Rgba = (1.0, 1.0, 1.0, 0.4);
+/// White ring around the gradient position indicator.
+const INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.95);
+/// Dark outline outside the indicator ring (contrast on light hues).
+const INDICATOR_OUTLINE: Rgba = (0.0, 0.0, 0.0, 0.4);
+/// Alpha-checkerboard tiles behind the preview swatch.
+const CHECKER_LIGHT: Rgba = (0.6, 0.6, 0.6, 1.0);
+const CHECKER_DARK: Rgba = (0.4, 0.4, 0.4, 1.0);
+/// Preview swatch border on dark colors (light gray) / light colors (dark).
+/// TODO(theme-consolidation): dark variant duplicates
+/// `theme::toolbar::COLOR_SWATCH_HAIRLINE_DARK`.
+const SWATCH_BORDER_ON_DARK: Rgba = (0.5, 0.5, 0.5, 0.8);
+const SWATCH_BORDER_ON_LIGHT: Rgba = (0.2, 0.2, 0.2, 0.6);
+/// Validation-error red for the hex field (softer than DESTRUCTIVE_RGB).
+const HEX_INVALID_GLOW: Rgba = (0.9, 0.3, 0.3, 0.25);
+const HEX_INVALID_BORDER: Rgba = (0.9, 0.35, 0.3, 0.9);
+/// Hex input border when unfocused.
+const INPUT_BORDER_IDLE: Rgba = (0.3, 0.3, 0.35, 0.8);
+/// Neutral fill for the eyedropper button at rest.
+const EYEDROPPER_BG: Rgba = (0.18, 0.2, 0.24, 0.95);
+/// Secondary (Cancel) button fill/border ladder.
+const BUTTON_SECONDARY_BG: Rgba = (0.25, 0.25, 0.30, 0.95);
+const BUTTON_SECONDARY_BG_HOVER: Rgba = (0.30, 0.30, 0.38, 0.98);
+const BUTTON_SECONDARY_BORDER: Rgba = (0.4, 0.4, 0.45, 0.8);
+const BUTTON_SECONDARY_BORDER_HOVER: Rgba = (0.5, 0.5, 0.55, 0.9);
+/// White glow behind hovered secondary buttons.
+const BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.1);
+/// Keyboard shortcut hint below the buttons (dimmer than TEXT_HINT).
+const HINT_TEXT: Rgba = (0.6, 0.6, 0.65, 0.7);
 
 /// Render the color picker popup.
 pub fn render_color_picker_popup(
@@ -64,12 +99,22 @@ pub fn render_color_picker_popup(
     let _ = ctx.stroke();
 
     // Title
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(16.0);
+    let title_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: 16.0,
+    };
     constants::set_color(ctx, TEXT_PRIMARY);
     let title_y = layout.origin_y + 20.0 + 16.0;
-    ctx.move_to(layout.origin_x + 20.0, title_y);
-    let _ = ctx.show_text("Select Color");
+    draw_text_baseline(
+        ctx,
+        title_style,
+        "Select Color",
+        layout.origin_x + 20.0,
+        title_y,
+        None,
+    );
 
     // Gradient picker
     draw_color_gradient(
@@ -127,7 +172,7 @@ pub fn render_color_picker_popup(
     if eyedropper_hover {
         constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.8));
     } else {
-        ctx.set_source_rgba(0.18, 0.2, 0.24, 0.95);
+        constants::set_color(ctx, EYEDROPPER_BG);
     }
     let _ = ctx.fill_preserve();
     constants::set_color(ctx, BORDER_MODAL);
@@ -175,9 +220,13 @@ pub fn render_color_picker_popup(
     );
 
     // Keyboard shortcut hint
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(10.0);
-    ctx.set_source_rgba(0.6, 0.6, 0.65, 0.7);
+    let hint_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 10.0,
+    };
+    constants::set_color(ctx, HINT_TEXT);
     let hint = "Enter = OK  •  Esc = Cancel";
     let hint_extents = text_extents_for(
         ctx,
@@ -189,8 +238,7 @@ pub fn render_color_picker_popup(
     );
     let hint_x = layout.origin_x + (layout.width - hint_extents.width()) / 2.0;
     let hint_y = layout.ok_btn_y + layout.btn_height + 12.0;
-    ctx.move_to(hint_x, hint_y);
-    let _ = ctx.show_text(hint);
+    draw_text_baseline(ctx, hint_style, hint, hint_x, hint_y, None);
 
     let _ = ctx.restore();
 }
@@ -221,7 +269,7 @@ fn draw_color_gradient(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
     let _ = ctx.fill();
 
     // Border
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+    constants::set_color(ctx, GRADIENT_BORDER);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
@@ -232,7 +280,7 @@ fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: Color) {
     let radius = 6.0;
 
     // Outer white ring
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    constants::set_color(ctx, INDICATOR_RING);
     ctx.arc(x, y, radius + 2.0, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
 
@@ -242,7 +290,7 @@ fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: Color) {
     let _ = ctx.fill();
 
     // Dark outline
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
+    constants::set_color(ctx, INDICATOR_OUTLINE);
     ctx.set_line_width(1.0);
     ctx.arc(x, y, radius + 2.0, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.stroke();
@@ -252,11 +300,11 @@ fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: Color) {
 fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color) {
     // Draw checkered background for transparency preview
     let check_size = 6.0;
-    ctx.set_source_rgba(0.6, 0.6, 0.6, 1.0);
-    draw_rounded_rect(ctx, x, y, size, size, 4.0);
+    constants::set_color(ctx, CHECKER_LIGHT);
+    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(0.4, 0.4, 0.4, 1.0);
+    constants::set_color(ctx, CHECKER_DARK);
     let mut cy = y;
     let mut row = 0;
     while cy < y + size {
@@ -274,18 +322,18 @@ fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: C
 
     // Draw color
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-    draw_rounded_rect(ctx, x, y, size, size, 4.0);
+    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
     let _ = ctx.fill();
 
     // Border
     let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
     if luminance < 0.3 {
-        ctx.set_source_rgba(0.5, 0.5, 0.5, 0.8);
+        constants::set_color(ctx, SWATCH_BORDER_ON_DARK);
     } else {
-        ctx.set_source_rgba(0.2, 0.2, 0.2, 0.6);
+        constants::set_color(ctx, SWATCH_BORDER_ON_LIGHT);
     }
     ctx.set_line_width(1.5);
-    draw_rounded_rect(ctx, x, y, size, size, 4.0);
+    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
     let _ = ctx.stroke();
 }
 
@@ -307,35 +355,38 @@ fn draw_hex_input(
         if valid {
             constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.2));
         } else {
-            ctx.set_source_rgba(0.9, 0.3, 0.3, 0.25);
+            constants::set_color(ctx, HEX_INVALID_GLOW);
         }
-        draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 6.0);
+        draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_STD);
         let _ = ctx.fill();
     }
 
     // Background
     constants::set_color(ctx, INPUT_BG);
-    draw_rounded_rect(ctx, x, y, w, h, 4.0);
+    draw_rounded_rect(ctx, x, y, w, h, RADIUS_SM);
     let _ = ctx.fill();
 
     // Border - red if invalid, blue if focused, gray otherwise
     if !valid && focused {
-        ctx.set_source_rgba(0.9, 0.35, 0.3, 0.9);
+        constants::set_color(ctx, HEX_INVALID_BORDER);
         ctx.set_line_width(2.0);
     } else if focused {
         constants::set_color(ctx, INPUT_BORDER_FOCUSED);
         ctx.set_line_width(2.0);
     } else {
-        ctx.set_source_rgba(0.3, 0.3, 0.35, 0.8);
+        constants::set_color(ctx, INPUT_BORDER_IDLE);
         ctx.set_line_width(1.0);
     }
-    draw_rounded_rect(ctx, x, y, w, h, 4.0);
+    draw_rounded_rect(ctx, x, y, w, h, RADIUS_SM);
     let _ = ctx.stroke();
 
     // Text
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(13.0);
-
+    let value_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 13.0,
+    };
     let extents = text_extents_for(
         ctx,
         "Sans",
@@ -362,8 +413,7 @@ fn draw_hex_input(
     }
 
     constants::set_color(ctx, TEXT_PRIMARY);
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(value);
+    draw_text_baseline(ctx, value_style, value, text_x, text_y, None);
 
     // Cursor when focused (at end of text)
     if focused {
@@ -393,9 +443,9 @@ fn draw_button(
         let glow_color = if primary {
             constants::with_alpha(ACCENT_PRIMARY, 0.25)
         } else {
-            (1.0, 1.0, 1.0, 0.1)
+            BUTTON_HOVER_GLOW
         };
-        ctx.set_source_rgba(glow_color.0, glow_color.1, glow_color.2, glow_color.3);
+        constants::set_color(ctx, glow_color);
         draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_MD + 2.0);
         let _ = ctx.fill();
     }
@@ -410,9 +460,9 @@ fn draw_button(
             constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.95));
         }
     } else if hover {
-        ctx.set_source_rgba(0.30, 0.30, 0.38, 0.98);
+        constants::set_color(ctx, BUTTON_SECONDARY_BG_HOVER);
     } else {
-        ctx.set_source_rgba(0.25, 0.25, 0.30, 0.95);
+        constants::set_color(ctx, BUTTON_SECONDARY_BG);
     }
     draw_rounded_rect(ctx, x, y, w, h, RADIUS_MD);
     let _ = ctx.fill();
@@ -425,17 +475,21 @@ fn draw_button(
             constants::set_color(ctx, constants::with_alpha(ACCENT_BRIGHT, 0.9));
         }
     } else if hover {
-        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.9);
+        constants::set_color(ctx, BUTTON_SECONDARY_BORDER_HOVER);
     } else {
-        ctx.set_source_rgba(0.4, 0.4, 0.45, 0.8);
+        constants::set_color(ctx, BUTTON_SECONDARY_BORDER);
     }
     ctx.set_line_width(1.0);
     draw_rounded_rect(ctx, x, y, w, h, RADIUS_MD);
     let _ = ctx.stroke();
 
     // Label
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(13.0);
+    let label_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: 13.0,
+    };
     constants::set_color(ctx, TEXT_PRIMARY);
 
     let extents = text_extents_for(
@@ -448,6 +502,5 @@ fn draw_button(
     );
     let text_x = x + (w - extents.width()) / 2.0;
     let text_y = y + h / 2.0 + extents.height() / 2.0;
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(label);
+    draw_text_baseline(ctx, label_style, label, text_x, text_y, None);
 }

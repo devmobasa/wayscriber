@@ -6,10 +6,19 @@ use crate::toolbar_icons;
 use crate::ui::toolbar::model::{self, SemanticToolIcon};
 use crate::ui::toolbar::{PresetSlotSnapshot, ToolbarEvent, ToolbarSnapshot};
 
+use super::super::super::super::widgets::constants::{COLOR_TEXT_SECONDARY, set_color};
 use super::super::super::super::widgets::{draw_round_rect, draw_swatch};
 use super::super::format::{preset_tooltip_text, truncate_label};
 use super::super::widgets::draw_preset_name_tag;
 use super::PresetSlotLayout;
+use crate::ui::theme::Rgba;
+
+/// Thickness preview line across a filled slot's bottom edge.
+const COLOR_PREVIEW_LINE: Rgba = (1.0, 1.0, 1.0, 0.8);
+/// Outline around the mini color swatch in a filled slot.
+const COLOR_SWATCH_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.75);
+/// Dashed outline marking an empty slot.
+const COLOR_EMPTY_SLOT_DASH: Rgba = (1.0, 1.0, 1.0, 0.35);
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_preset_content(
@@ -47,14 +56,14 @@ pub(super) fn draw_preset_content(
             tooltip: Some(tooltip),
         });
 
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        set_color(ctx, COLOR_TEXT_SECONDARY);
         let icon_x = slot_x + (layout_spec.slot_size - layout_spec.icon_size) / 2.0;
         let icon_y = layout_spec.slot_row_y + (layout_spec.slot_size - layout_spec.icon_size) / 2.0;
         draw_preset_icon(ctx, preset.tool, icon_x, icon_y, layout_spec.icon_size);
 
         let preview_thickness = (preset.size / 50.0 * 6.0).clamp(1.0, 6.0);
         let preview_y = layout_spec.slot_row_y + layout_spec.slot_size - 6.0;
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8);
+        set_color(ctx, COLOR_PREVIEW_LINE);
         ctx.set_line_width(preview_thickness);
         ctx.move_to(slot_x + 4.0, preview_y);
         ctx.line_to(slot_x + layout_spec.slot_size - 4.0, preview_y);
@@ -71,7 +80,7 @@ pub(super) fn draw_preset_content(
             preset.color,
             false,
         );
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.75);
+        set_color(ctx, COLOR_SWATCH_OUTLINE);
         ctx.set_line_width(1.0);
         draw_round_rect(
             ctx,
@@ -97,7 +106,7 @@ pub(super) fn draw_preset_content(
             );
         }
     } else {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+        set_color(ctx, COLOR_EMPTY_SLOT_DASH);
         ctx.set_line_width(1.0);
         ctx.set_dash(&[3.0, 2.0], 0.0);
         draw_round_rect(

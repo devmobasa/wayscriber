@@ -2,7 +2,13 @@ use super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::keycaps::{KeyComboStyle, draw_key_combo, draw_key_combo_highlight, measure_key_combo};
 use super::layout::GridLayout;
 use super::search::{HighlightStyle, draw_highlight, find_match_range};
+use crate::ui::theme::{self, Rgba};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
+
+/// Section badge label text: near-white, slightly softer than the pure-white
+/// token so it sits comfortably on the tinted badge fill (no matching theme
+/// token).
+const BADGE_LABEL_TEXT: Rgba = (1.0, 1.0, 1.0, 0.92);
 
 pub(crate) struct GridStyle<'a> {
     pub(crate) help_font_family: &'a str,
@@ -265,7 +271,7 @@ pub(crate) fn draw_sections_grid(
                     ctx.set_line_width(1.0);
                     let _ = ctx.stroke();
 
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
+                    theme::set_color(ctx, BADGE_LABEL_TEXT);
                     let text_x = badge_x + style.badge_padding_x;
                     let text_y =
                         section_y + (style.badge_height - badge_metrics.1) / 2.0 - badge_metrics.2;

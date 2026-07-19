@@ -7,12 +7,25 @@ use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::bindings::{action_for_clear_preset, action_for_save_preset};
 
+use super::super::super::widgets::constants::{
+    COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, set_color,
+};
 use super::super::super::widgets::{draw_button, draw_round_rect, point_in_rect};
 use super::SidePaletteLayout;
 use super::widgets::draw_keycap;
+use crate::ui::theme::{Rgb, Rgba, set_color_alpha};
 
 mod content;
 mod feedback;
+
+/// Empty slot well: near-black tint one step darker than
+/// COLOR_PANEL_BACKGROUND (alpha varies with hover).
+const EMPTY_SLOT_BG_RGB: Rgb = (0.05, 0.05, 0.07);
+/// Dim save-hint plus glyph in an idle empty slot.
+const COLOR_EMPTY_SLOT_PLUS: Rgba = (1.0, 1.0, 1.0, 0.45);
+/// Clear badge fill: muted destructive red, quieter than the destructive
+/// root. TODO(theme-consolidation): near COLOR_CLOSE_HOVER.
+const COLOR_CLEAR_BADGE: Rgba = (0.75, 0.2, 0.2, 0.9);
 
 pub(super) struct PresetSlotLayout {
     pub(super) slot_size: f64,
@@ -124,7 +137,7 @@ pub(super) fn draw_preset_slot(
     } else {
         // Empty slot: click saves the current tool setup here.
         let bg_alpha = if empty_slot_hover { 0.45 } else { 0.35 };
-        ctx.set_source_rgba(0.05, 0.05, 0.07, bg_alpha);
+        set_color_alpha(ctx, EMPTY_SLOT_BG_RGB, bg_alpha);
         draw_round_rect(
             ctx,
             slot_x + 1.0,
@@ -154,7 +167,14 @@ pub(super) fn draw_preset_slot(
         });
 
         let plus = layout_spec.icon_size.min(14.0);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, if empty_slot_hover { 0.9 } else { 0.45 });
+        set_color(
+            ctx,
+            if empty_slot_hover {
+                COLOR_TEXT_SECONDARY
+            } else {
+                COLOR_EMPTY_SLOT_PLUS
+            },
+        );
         toolbar_icons::draw_icon_plus(
             ctx,
             slot_x + (layout_spec.slot_size - plus) / 2.0,
@@ -204,7 +224,7 @@ pub(super) fn draw_preset_slot(
 
 fn draw_clear_badge(ctx: &cairo::Context, x: f64, y: f64) {
     let size = CLEAR_BADGE_SIZE;
-    ctx.set_source_rgba(0.75, 0.2, 0.2, 0.9);
+    set_color(ctx, COLOR_CLEAR_BADGE);
     ctx.arc(
         x + size / 2.0,
         y + size / 2.0,
@@ -213,7 +233,7 @@ fn draw_clear_badge(ctx: &cairo::Context, x: f64, y: f64) {
         std::f64::consts::PI * 2.0,
     );
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     let inset = size * 0.3;
     ctx.set_line_width(1.6);
     ctx.set_line_cap(cairo::LineCap::Round);

@@ -47,6 +47,57 @@ pub enum XdgFocusLossBehavior {
     Stay,
 }
 
+/// Overlay chrome theme (`[ui] theme`).
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiTheme {
+    /// Follow context. Currently resolves to dark chrome; context-aware
+    /// selection lands when surfaces consume the runtime theme.
+    #[default]
+    Auto,
+    /// Always dark chrome.
+    Dark,
+    /// Always light chrome.
+    Light,
+}
+
+impl UiTheme {
+    /// Maps the config value onto the runtime theme mode.
+    pub fn to_theme_mode(self) -> crate::ui::theme::ThemeMode {
+        match self {
+            UiTheme::Auto => crate::ui::theme::ThemeMode::Auto,
+            UiTheme::Dark => crate::ui::theme::ThemeMode::Dark,
+            UiTheme::Light => crate::ui::theme::ThemeMode::Light,
+        }
+    }
+}
+
+/// Reduced-motion preference (`[ui] reduced_motion`).
+///
+/// `on` disables UI animations. `auto` is reserved for a future desktop-portal
+/// (system preference) query and currently behaves like `off` (full motion).
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReducedMotion {
+    /// Follow the system preference once desktop-portal support lands;
+    /// full motion today.
+    #[default]
+    Auto,
+    /// Reduce motion: disable UI animations.
+    On,
+    /// Full motion.
+    Off,
+}
+
+impl ReducedMotion {
+    /// Whether UI animations should run.
+    pub fn motion_enabled(self) -> bool {
+        !matches!(self, ReducedMotion::On)
+    }
+}
+
 /// Color specification - either a named color, `#RRGGBB` hex string, or RGB values.
 ///
 /// # Examples

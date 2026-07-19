@@ -11,7 +11,14 @@ use super::bridge::FeedbackPublisher;
 use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
+use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
 use crate::ui::toolbar::ToolbarEvent;
+
+pub(super) use crate::ui::theme::toolbar::{COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK};
+/// Filled (dragged) portion of the slider track: the accent at reduced
+/// alpha so it stays quieter than the knob (same tint as
+/// COLOR_SEGMENT_ACTIVE).
+const COLOR_TRACK_FILL: Rgba = rgba(ACCENT_RGB, 0.55);
 
 /// Sender the view hands to every control closure. Clones share the configured
 /// rebind chord and modifier state captured from the actual GTK click.
@@ -382,13 +389,12 @@ impl SwatchButton {
             ctx.set_source_rgba(r, g, b, a);
             rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
             let _ = ctx.fill();
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.16);
+            set_color(ctx, COLOR_SWATCH_HAIRLINE);
             ctx.set_line_width(1.0);
             rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
             let _ = ctx.stroke();
             if draw_selected.get() {
-                let (ar, ag, ab, aa) = super::css::ACCENT;
-                ctx.set_source_rgba(ar, ag, ab, aa);
+                set_color(ctx, super::css::ACCENT);
                 ctx.set_line_width(2.0);
                 rounded_rect_path(ctx, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
                 let _ = ctx.stroke();
@@ -468,21 +474,18 @@ impl SliderRow {
             let t = ((draw_state.value.get() - draw_state.min) / (draw_state.max - draw_state.min))
                 .clamp(0.0, 1.0);
             // Track
-            let (tr, tg, tb, ta) = super::css::TRACK_BACKGROUND;
             rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
-            ctx.set_source_rgba(tr, tg, tb, ta);
+            set_color(ctx, super::css::TRACK_BACKGROUND);
             let _ = ctx.fill();
             // Filled portion (accent at reduced alpha)
-            let (ar, ag, ab, _) = super::css::ACCENT;
             rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
-            ctx.set_source_rgba(ar, ag, ab, 0.55);
+            set_color(ctx, COLOR_TRACK_FILL);
             let _ = ctx.fill();
             // Knob
-            let (kr, kg, kb, ka) = super::css::TRACK_KNOB;
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = knob_r + t * (w - knob_r * 2.0);
             ctx.arc(knob_x, h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            ctx.set_source_rgba(kr, kg, kb, ka);
+            set_color(ctx, super::css::TRACK_KNOB);
             let _ = ctx.fill();
         });
 

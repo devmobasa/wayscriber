@@ -1,8 +1,13 @@
 use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::theme::{self, Rgba};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::super::search::{draw_segmented_text, ellipsize_to_fit};
 use super::NavState;
+
+/// Dark inset fill behind the search input. Numerically equal to the theme
+/// shadow token, but semantically an input well, so it stays file-local.
+const SEARCH_BOX_BG: Rgba = (0.0, 0.0, 0.0, 0.3);
 
 pub(crate) struct NavDrawStyle<'a> {
     pub(crate) font_family: &'a str,
@@ -87,7 +92,7 @@ pub(crate) fn draw_nav(
         search_box_height,
         search_box_radius,
     );
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+    theme::set_color(ctx, SEARCH_BOX_BG);
     let _ = ctx.fill_preserve();
     ctx.set_source_rgba(
         style.search_color[0],

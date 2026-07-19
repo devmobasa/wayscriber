@@ -2,9 +2,9 @@ use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
-    ToolbarRebindModifierOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, ReducedMotionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -109,6 +109,8 @@ impl ConfigDraft {
             performance_max_fps_no_vsync: config.performance.max_fps_no_vsync.to_string(),
             performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
+            ui_theme: UiThemeOption::from_theme(config.ui.theme),
+            ui_reduced_motion: ReducedMotionOption::from_reduced_motion(config.ui.reduced_motion),
             ui_show_status_bar: config.ui.show_status_bar,
             ui_show_status_board_badge: config.ui.show_status_board_badge,
             ui_show_status_page_badge: config.ui.show_status_page_badge,

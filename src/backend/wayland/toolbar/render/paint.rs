@@ -11,8 +11,8 @@ use crate::backend::wayland::toolbar::view::{
 use crate::ui_text::UiTextStyle;
 
 use super::widgets::constants::{
-    COLOR_ACCENT, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT, COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT,
-    set_color,
+    COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
+    COLOR_SWATCH_HAIRLINE, COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
@@ -21,6 +21,10 @@ use super::widgets::{
     draw_panel_background, draw_pin_button, draw_popover_panel, draw_round_rect,
     draw_segmented_control, point_in_rect, set_icon_color,
 };
+
+/// Hover ring around an unselected swatch (dimmer sibling of the accent
+/// selection ring).
+const SWATCH_HOVER_RING: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.4);
 
 /// Paint every node of `tree` in order. `hover` is in the same logical space
 /// as the tree's rects.
@@ -84,10 +88,10 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
     };
 
     if badge.placement == ShortcutBadgePlacement::Corner {
-        ctx.set_source_rgba(0.035, 0.04, 0.06, 0.82);
+        set_color(ctx, COLOR_BADGE_BACKGROUND);
         draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
         let _ = ctx.fill();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.24);
+        set_color(ctx, COLOR_BADGE_BORDER);
         ctx.set_line_width(1.0);
         draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
         let _ = ctx.stroke();
@@ -229,7 +233,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0);
             let _ = ctx.fill();
             // Subtle inner hairline keeps dark fills defined against the bar.
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.16);
+            set_color(ctx, COLOR_SWATCH_HAIRLINE);
             ctx.set_line_width(1.0);
             draw_round_rect(ctx, x + 1.5, y + 1.5, w - 3.0, h - 3.0, 4.5);
             let _ = ctx.stroke();
@@ -239,7 +243,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
                 let _ = ctx.stroke();
             } else if is_hover {
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+                set_color(ctx, SWATCH_HOVER_RING);
                 ctx.set_line_width(1.5);
                 draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
                 let _ = ctx.stroke();

@@ -5,6 +5,8 @@ use wayscriber::config::{Config, XdgFocusLossBehavior};
 
 impl ConfigDraft {
     pub(super) fn apply_ui(&self, config: &mut Config, errors: &mut Vec<FormError>) {
+        config.ui.theme = self.ui_theme.to_theme();
+        config.ui.reduced_motion = self.ui_reduced_motion.to_reduced_motion();
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;

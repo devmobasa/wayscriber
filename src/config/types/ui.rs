@@ -1,4 +1,6 @@
-use crate::config::enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
+use crate::config::enums::{
+    RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
+};
 use crate::env_vars::DESKTOP_ENV_KEYS;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -13,6 +15,18 @@ use super::{
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiConfig {
+    /// Overlay chrome theme: auto (default), dark, or light.
+    /// `auto` currently resolves to dark chrome.
+    #[serde(default)]
+    pub theme: UiTheme,
+
+    /// Reduced-motion preference: auto (default), on, or off.
+    ///
+    /// `on` disables UI animations. `auto` is reserved for a future
+    /// desktop-portal query and currently behaves like `off` (full motion).
+    #[serde(default)]
+    pub reduced_motion: ReducedMotion,
+
     /// Show the status bar displaying current color, thickness, and tool
     #[serde(default = "default_show_status")]
     pub show_status_bar: bool,
@@ -108,6 +122,8 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
+            theme: UiTheme::default(),
+            reduced_motion: ReducedMotion::default(),
             show_status_bar: default_show_status(),
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),

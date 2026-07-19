@@ -5,15 +5,15 @@ mod status_bar;
 mod toolbar;
 
 use crate::app::view::theme;
-use iced::Element;
-use iced::widget::{Row, button, column, text};
+use iced::widget::{Row, button, column, pick_list, text};
+use iced::{Element, Length};
 
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
-use crate::models::{TextField, ToggleField, UiTabId};
+use crate::models::{ReducedMotionOption, TextField, ToggleField, UiTabId, UiThemeOption};
 
 use super::super::search::{SearchArea, TabSearchSummary};
-use super::widgets::{labeled_input, toggle_row};
+use super::widgets::{labeled_control, labeled_input, toggle_row};
 
 impl ConfiguratorApp {
     pub(super) fn ui_tab(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {
@@ -46,8 +46,37 @@ impl ConfiguratorApp {
             None => None,
         };
 
+        let ui_theme = pick_list(
+            UiThemeOption::list(),
+            Some(self.draft.ui_theme),
+            Message::UiThemeChanged,
+        );
+        let reduced_motion = pick_list(
+            ReducedMotionOption::list(),
+            Some(self.draft.ui_reduced_motion),
+            Message::UiReducedMotionChanged,
+        );
+
         let general = column![
             text("General UI").size(18),
+            labeled_control(
+                "Theme",
+                ui_theme.width(Length::Fill).into(),
+                self.defaults.ui_theme.label().to_string(),
+                self.draft.ui_theme != self.defaults.ui_theme,
+            ),
+            text("\"Auto\" currently uses the dark theme; \"Light\" takes effect as overlay surfaces adopt the runtime theme.")
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            labeled_control(
+                "Reduced motion",
+                reduced_motion.width(Length::Fill).into(),
+                self.defaults.ui_reduced_motion.label().to_string(),
+                self.draft.ui_reduced_motion != self.defaults.ui_reduced_motion,
+            ),
+            text("\"On\" disables UI animations. \"Auto\" follows the system preference in a future release and keeps full motion for now.")
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             labeled_input(
                 "Preferred output (GNOME fallback)",
                 &self.draft.ui_preferred_output,

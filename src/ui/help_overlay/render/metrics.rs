@@ -1,5 +1,12 @@
 use crate::config::HelpOverlayStyle;
 
+/// Per-surface type-scale multiplier for the help overlay. The metric set in
+/// `from_style` is designed against the user-configurable `HelpOverlayStyle`
+/// base sizes, then uniformly tightened to 80% so the full shortcut grid fits
+/// on one screen at the default config; keeping the factor explicit keeps the
+/// design-time values below readable at their 1x sizes.
+const HELP_OVERLAY_TYPE_SCALE: f64 = 0.8;
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RenderMetrics {
     pub(super) body_font_size: f64,
@@ -46,7 +53,7 @@ impl RenderMetrics {
         screen_width: u32,
         screen_height: u32,
     ) -> Self {
-        let scale = 0.8;
+        let scale = HELP_OVERLAY_TYPE_SCALE;
         let body_font_size = style.font_size * scale;
         let heading_font_size = body_font_size + 6.0 * scale;
         let title_font_size = heading_font_size + 6.0 * scale;

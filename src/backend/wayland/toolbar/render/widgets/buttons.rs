@@ -1,14 +1,24 @@
 use super::constants::{
     COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
     COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
-    COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
+    COLOR_CLOSE_HOVER, COLOR_DRAG_HANDLE, COLOR_DRAG_HANDLE_HOVER, COLOR_FOCUS_RING,
+    COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
     COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
-    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, RADIUS_LG,
-    RADIUS_STD, set_color,
+    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY,
+    COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, set_color,
 };
 use super::draw_round_rect;
+use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba};
 use crate::ui_text::{UiTextStyle, text_layout};
 use std::f64::consts::PI;
+
+/// Faint white glow behind a hovered flat button (quieter than
+/// COLOR_ICON_HOVER_BG; value-coincides with COLOR_DIVIDER but is a hover
+/// affordance, not a separator).
+const COLOR_BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.08);
+/// Warning-tinted glow behind a hovered destructive button (destructive
+/// root at a faint tint alpha).
+const COLOR_DESTRUCTIVE_GLOW: Rgba = rgba(DESTRUCTIVE_RGB, 0.15);
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
     ctx: &cairo::Context,
@@ -20,19 +30,31 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
 ) {
     draw_round_rect(ctx, x, y, w, h, RADIUS_STD);
     // Improved visibility: higher fill alpha
-    let fill_alpha = if hover { 0.75 } else { 0.45 };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, fill_alpha);
+    set_color(
+        ctx,
+        if hover {
+            COLOR_DRAG_HANDLE_HOVER
+        } else {
+            COLOR_DRAG_HANDLE
+        },
+    );
     let _ = ctx.fill();
 
     // Add subtle glow on hover
     if hover {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.15);
+        set_color(ctx, COLOR_ICON_HOVER_BG);
         draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_STD + 1.0);
         let _ = ctx.stroke();
     }
 
-    let bar_alpha = if hover { 1.0 } else { 0.85 };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, bar_alpha);
+    set_color(
+        ctx,
+        if hover {
+            COLOR_ICON_HOVER
+        } else {
+            COLOR_TEXT_TERTIARY
+        },
+    );
     let icon_size = w.min(h);
     crate::toolbar_icons::draw_icon_drag(
         ctx,
@@ -164,7 +186,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
 ) {
     // Add subtle glow on hover for better visibility
     if hover && !active {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+        set_color(ctx, COLOR_BUTTON_HOVER_GLOW);
         draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
         let _ = ctx.fill();
     }
@@ -247,7 +269,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     }
 
     // Warning-tinted glow behind the hovered tile
-    ctx.set_source_rgba(0.9608, 0.2, 0.2471, 0.15);
+    set_color(ctx, COLOR_DESTRUCTIVE_GLOW);
     draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
     let _ = ctx.fill();
 

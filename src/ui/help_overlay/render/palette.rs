@@ -1,4 +1,5 @@
 use crate::config::HelpOverlayStyle;
+use crate::ui::theme::{ACCENT_BRIGHT_RGB, ACCENT_RGB};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RenderPalette {
@@ -34,11 +35,17 @@ impl RenderPalette {
             bg_a,
         ];
 
-        // The one accent: #3584E4, shared with the toolbars and overlays
-        let accent = [0.2078, 0.5176, 0.8941, 1.0];
+        // The one accent (#3584E4), shared with the toolbars and overlays
+        // via the theme root
+        let accent = [ACCENT_RGB.0, ACCENT_RGB.1, ACCENT_RGB.2, 1.0];
         // Lighter tint of the accent for elements that sit on top of it or
         // need to read against the accent-highlighted rows
-        let accent_bright = [0.41, 0.72, 1.0, 1.0];
+        let accent_bright = [
+            ACCENT_BRIGHT_RGB.0,
+            ACCENT_BRIGHT_RGB.1,
+            ACCENT_BRIGHT_RGB.2,
+            1.0,
+        ];
         let accent_muted = [accent[0], accent[1], accent[2], 0.85];
         let highlight = [accent[0], accent[1], accent[2], 0.22];
         let heading_icon = [accent[0], accent[1], accent[2], 0.9];

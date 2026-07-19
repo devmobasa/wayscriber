@@ -2,9 +2,9 @@ use super::super::color::ColorInput;
 use super::super::fields::{
     DragMouseButton, DragToolField, DragToolOption, FontWeightOption, OverrideOption,
     PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, QuadField, SessionStorageModeOption, TextField, ToggleField,
-    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    TripletField,
+    PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, SessionStorageModeOption,
+    TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, TripletField, UiThemeOption,
 };
 
 #[test]
@@ -31,9 +31,9 @@ use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
     ColorSpec, Config, ConfigDocument, PdfFitMode, PdfLabelContentMode, PdfLabelPosition,
     PdfOrientation, PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig,
-    QuickColorConfig, RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode,
-    ToolPresetConfig, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig,
-    ToolbarSectionFlag, XdgFocusLossBehavior, toolbar_item_ids as ids,
+    QuickColorConfig, ReducedMotion, RenderColorMappingConfig, RenderProfileConfig,
+    RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
+    ToolbarItemsConfig, ToolbarSectionFlag, UiTheme, XdgFocusLossBehavior, toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -1086,6 +1086,34 @@ fn config_draft_round_trips_xdg_focus_loss_behavior() {
         round_trip.ui.xdg_focus_loss_behavior,
         XdgFocusLossBehavior::Stay
     );
+}
+
+#[test]
+fn config_draft_round_trips_ui_theme() {
+    let mut config = Config::default();
+    config.ui.theme = UiTheme::Light;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_theme, UiThemeOption::Light);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(round_trip.ui.theme, UiTheme::Light);
+}
+
+#[test]
+fn config_draft_round_trips_ui_reduced_motion() {
+    let mut config = Config::default();
+    config.ui.reduced_motion = ReducedMotion::On;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_reduced_motion, ReducedMotionOption::On);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(round_trip.ui.reduced_motion, ReducedMotion::On);
 }
 
 #[test]

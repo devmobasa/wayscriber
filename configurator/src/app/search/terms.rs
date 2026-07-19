@@ -155,6 +155,12 @@ pub(super) const HISTORY_CUSTOM_TERMS: &[&str] = &[
 ];
 pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "general ui",
+    "theme",
+    "dark mode",
+    "light mode",
+    "reduced motion",
+    "motion",
+    "disable animations",
     "preferred output",
     "gnome fallback",
     "use fullscreen xdg fallback",

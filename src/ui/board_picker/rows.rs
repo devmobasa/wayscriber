@@ -1,12 +1,20 @@
 use crate::draw::Color;
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::theme::Rgba;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
     self, ACCENT_PRIMARY, BG_SELECTED_INDICATOR, BG_SELECTION, DIVIDER_LIGHT, ICON_PIN_ACTIVE,
     ICON_PIN_INACTIVE, INPUT_CARET, TEXT_ACTIVE, TEXT_HINT, TEXT_SECONDARY,
 };
-use super::helpers::{board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon};
+use super::helpers::{
+    SWATCH_EDGE, board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon,
+};
+
+/// Outline + cross for the transparent-board swatch (no matching theme token;
+/// kept from the pre-theme literal).
+const SWATCH_TRANSPARENT_OUTLINE: Rgba = (0.62, 0.68, 0.76, 0.85);
 
 pub(super) fn render_board_rows(
     ctx: &cairo::Context,
@@ -47,14 +55,29 @@ pub(super) fn render_board_rows(
     let edit_state = input_state.board_picker_edit_state();
     let pinned_count = input_state.board_picker_pinned_count();
 
+    let body_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: layout.body_font_size,
+    };
+
     // Draw "Pinned" section label.
     if pinned_count > 0 && !input_state.board_picker_is_quick() {
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(layout.footer_font_size * 0.9);
-        ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.6);
+        let pinned_style = UiTextStyle {
+            size: layout.footer_font_size * 0.9,
+            ..body_style
+        };
+        constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.6));
         let pinned_label_y = rows_top - layout.footer_font_size * 0.4;
-        ctx.move_to(layout.origin_x + layout.padding_x, pinned_label_y);
-        let _ = ctx.show_text("Pinned");
+        draw_text_baseline(
+            ctx,
+            pinned_style,
+            "Pinned",
+            layout.origin_x + layout.padding_x,
+            pinned_label_y,
+            None,
+        );
     }
 
     // Draw pinned/unpinned section divider.
@@ -132,7 +155,7 @@ pub(super) fn render_board_rows(
             let board = &input_state.boards.board_states()[board_index];
             match board.spec.background {
                 BoardBackground::Transparent => {
-                    ctx.set_source_rgba(0.62, 0.68, 0.76, 0.85);
+                    constants::set_color(ctx, SWATCH_TRANSPARENT_OUTLINE);
                     draw_rounded_rect(
                         ctx,
                         swatch_x,
@@ -159,7 +182,7 @@ pub(super) fn render_board_rows(
                         3.5,
                     );
                     let _ = ctx.fill();
-                    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
+                    constants::set_color(ctx, SWATCH_EDGE);
                     draw_rounded_rect(
                         ctx,
                         swatch_x,
@@ -185,9 +208,6 @@ pub(super) fn render_board_rows(
             }
         }
 
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(layout.body_font_size);
-
         if is_new_row {
             let label = if board_count >= max_count {
                 "New board (max reached)"
@@ -195,8 +215,14 @@ pub(super) fn render_board_rows(
                 "New board"
             };
             constants::set_color(ctx, TEXT_HINT);
-            ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
-            let _ = ctx.show_text(label);
+            draw_text_baseline(
+                ctx,
+                body_style,
+                label,
+                name_x,
+                row_center + layout.body_font_size * 0.35,
+                None,
+            );
             continue;
         }
 
@@ -247,8 +273,14 @@ pub(super) fn render_board_rows(
             TEXT_SECONDARY
         };
         constants::set_color(ctx, name_color);
-        ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
-        let _ = ctx.show_text(&name);
+        draw_text_baseline(
+            ctx,
+            body_style,
+            &name,
+            name_x,
+            row_center + layout.body_font_size * 0.35,
+            None,
+        );
 
         // Show page count badge after board name (skip when page panel is visible).
         let page_count = board.pages.page_count();
@@ -262,12 +294,15 @@ pub(super) fn render_board_rows(
                 &name,
             );
             let page_label = format!(" ({} pages)", page_count);
-            ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.85);
-            ctx.move_to(
+            constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.85));
+            draw_text_baseline(
+                ctx,
+                body_style,
+                &page_label,
                 name_x + name_extents.width(),
                 row_center + layout.body_font_size * 0.35,
+                None,
             );
-            let _ = ctx.show_text(&page_label);
         }
 
         if let Some((mode, edit_index, _buffer)) = edit_state
@@ -301,8 +336,14 @@ pub(super) fn render_board_rows(
             let hint = hint_override.or_else(|| board_slot_hint(input_state, board_index));
             if let Some(hint) = hint {
                 constants::set_color(ctx, TEXT_HINT);
-                ctx.move_to(hint_x, row_center + layout.body_font_size * 0.35);
-                let _ = ctx.show_text(&hint);
+                draw_text_baseline(
+                    ctx,
+                    body_style,
+                    &hint,
+                    hint_x,
+                    row_center + layout.body_font_size * 0.35,
+                    None,
+                );
 
                 if let Some((mode, edit_index, _)) = edit_state
                     && edit_index == row

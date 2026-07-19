@@ -1,7 +1,8 @@
 use super::*;
 use wayscriber::config::{
     PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
-    PdfTransparentBackground, SessionCompression, SessionStorageMode, StatusPosition,
+    PdfTransparentBackground, ReducedMotion, SessionCompression, SessionStorageMode,
+    StatusPosition, UiTheme,
 };
 
 #[test]
@@ -34,6 +35,33 @@ fn status_position_option_round_trips() {
         option.to_status_position(),
         StatusPosition::BottomRight
     ));
+}
+
+#[test]
+fn ui_theme_option_round_trips() {
+    for (config_value, option) in [
+        (UiTheme::Auto, UiThemeOption::Auto),
+        (UiTheme::Dark, UiThemeOption::Dark),
+        (UiTheme::Light, UiThemeOption::Light),
+    ] {
+        assert_eq!(UiThemeOption::from_theme(config_value), option);
+        assert_eq!(option.to_theme(), config_value);
+    }
+}
+
+#[test]
+fn reduced_motion_option_round_trips() {
+    for (config_value, option) in [
+        (ReducedMotion::Auto, ReducedMotionOption::Auto),
+        (ReducedMotion::On, ReducedMotionOption::On),
+        (ReducedMotion::Off, ReducedMotionOption::Off),
+    ] {
+        assert_eq!(
+            ReducedMotionOption::from_reduced_motion(config_value),
+            option
+        );
+        assert_eq!(option.to_reduced_motion(), config_value);
+    }
 }
 
 #[test]

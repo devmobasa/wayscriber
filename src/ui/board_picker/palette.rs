@@ -1,8 +1,8 @@
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::draw_rounded_rect;
 
-use super::constants::{self, INPUT_CARET};
-use super::helpers::BOARD_PALETTE;
+use super::constants::{self, INPUT_CARET, RADIUS_SM};
+use super::helpers::{BOARD_PALETTE, SWATCH_EDGE};
 
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;
@@ -43,17 +43,17 @@ pub(super) fn render_board_palette(
                 swatch_y,
                 PALETTE_SWATCH_SIZE,
                 PALETTE_SWATCH_SIZE,
-                4.0,
+                RADIUS_SM,
             );
             let _ = ctx.fill();
-            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
+            constants::set_color(ctx, SWATCH_EDGE);
             draw_rounded_rect(
                 ctx,
                 swatch_x,
                 swatch_y,
                 PALETTE_SWATCH_SIZE,
                 PALETTE_SWATCH_SIZE,
-                4.0,
+                RADIUS_SM,
             );
             let _ = ctx.stroke();
 

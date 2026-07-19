@@ -4,6 +4,11 @@ use crate::config::Action;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::InputState;
 use crate::ui::constants::{self, ICON_DRAG_HANDLE, ICON_SUBMENU_ARROW};
+use crate::ui::theme::Rgba;
+
+/// Subtle dark edge stroked around solid color swatches (scrim over the
+/// swatch color rather than chrome; no matching theme token).
+pub(super) const SWATCH_EDGE: Rgba = (0.0, 0.0, 0.0, 0.2);
 
 pub(super) const BOARD_PALETTE: [Color; 11] = [
     RED,

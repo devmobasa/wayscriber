@@ -1,5 +1,6 @@
 use crate::input::InputState;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
     self, BORDER_BOARD_PICKER, NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM,
@@ -61,32 +62,43 @@ pub fn render_board_picker(
     let board_count = input_state.boards.board_count();
     let max_count = input_state.boards.max_count();
     let title = input_state.board_picker_title(board_count, max_count);
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(layout.title_font_size);
+    let title_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: layout.title_font_size,
+    };
     constants::set_color(ctx, TEXT_PRIMARY);
     let title_y = layout.origin_y + layout.padding_y + layout.title_font_size;
-    ctx.move_to(layout.origin_x + layout.padding_x, title_y);
-    let _ = ctx.show_text(&title);
+    draw_text_baseline(
+        ctx,
+        title_style,
+        &title,
+        layout.origin_x + layout.padding_x,
+        title_y,
+        None,
+    );
 
     // Footer with navigation hint
     let footer = input_state.board_picker_footer_text();
     let recent = input_state.board_picker_recent_label();
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(layout.footer_font_size);
+    let footer_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: layout.footer_font_size,
+    };
     constants::set_color(ctx, TEXT_TERTIARY);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
-    let footer_extents = text_extents_for(
+    let footer_extents = draw_text_baseline(
         ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        layout.footer_font_size,
+        footer_style,
         &footer,
+        layout.origin_x + layout.padding_x,
+        footer_y,
+        None,
     );
-    ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
-    let _ = ctx.show_text(&footer);
     // Navigation hint on right side
-    ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.7);
     let nav_extents = text_extents_for(
         ctx,
         "Sans",
@@ -98,14 +110,27 @@ pub fn render_board_picker(
     let nav_start = layout.origin_x + layout.width - layout.padding_x - nav_extents.width();
     let footer_end = layout.origin_x + layout.padding_x + footer_extents.width();
     if footer_end + layout.footer_font_size * 0.5 <= nav_start {
-        ctx.move_to(nav_start, footer_y);
-        let _ = ctx.show_text(NAV_HINT_BOARD_PICKER);
+        constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.7));
+        draw_text_baseline(
+            ctx,
+            footer_style,
+            NAV_HINT_BOARD_PICKER,
+            nav_start,
+            footer_y,
+            None,
+        );
     }
     if let Some(recent) = recent {
         let recent_y = footer_y - layout.recent_height;
-        ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.8);
-        ctx.move_to(layout.origin_x + layout.padding_x, recent_y);
-        let _ = ctx.show_text(&recent);
+        constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.8));
+        draw_text_baseline(
+            ctx,
+            footer_style,
+            &recent,
+            layout.origin_x + layout.padding_x,
+            recent_y,
+            None,
+        );
     }
 
     render_board_rows(ctx, input_state, layout, board_count, max_count);

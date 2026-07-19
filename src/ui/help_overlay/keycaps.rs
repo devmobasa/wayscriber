@@ -1,5 +1,19 @@
 use super::super::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::theme::{self, Rgba};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
+
+// ---- Keycap face colors ----
+// The 3D keycap look reflows in a later milestone; until then the layered
+// face colors live here, pointed at theme tokens only where they match
+// exactly.
+/// Keycap drop shadow — the standard deep shadow token.
+const KEYCAP_SHADOW: Rgba = theme::overlay::SHADOW_DEEP;
+/// Keycap body fill (cool slate; no matching theme token).
+const KEYCAP_BG: Rgba = (0.18, 0.22, 0.3, 1.0);
+/// Inner top-light stroke that gives the cap its raised depth.
+const KEYCAP_HIGHLIGHT: Rgba = (1.0, 1.0, 1.0, 0.12);
+/// Outer keycap border.
+const KEYCAP_BORDER: Rgba = (1.0, 1.0, 1.0, 0.2);
 
 pub(crate) struct KeyComboStyle<'a> {
     pub(crate) font_family: &'a str,
@@ -65,12 +79,12 @@ fn draw_keycap(
         cap_height,
         radius,
     );
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    theme::set_color(ctx, KEYCAP_SHADOW);
     let _ = ctx.fill();
 
     // Keycap main background
     draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
-    ctx.set_source_rgba(0.18, 0.22, 0.3, 1.0);
+    theme::set_color(ctx, KEYCAP_BG);
     let _ = ctx.fill();
 
     // Inner highlight for depth
@@ -82,13 +96,13 @@ fn draw_keycap(
         cap_height - 2.0,
         radius - 1.0,
     );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.12);
+    theme::set_color(ctx, KEYCAP_HIGHLIGHT);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
     // Outer border
     draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.2);
+    theme::set_color(ctx, KEYCAP_BORDER);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

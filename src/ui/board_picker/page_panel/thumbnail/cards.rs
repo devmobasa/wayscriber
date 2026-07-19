@@ -1,8 +1,19 @@
 use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::ui::constants::{
-    self, ACCENT_PRIMARY, BG_SELECTION, BORDER_BOARD_PICKER, BORDER_FOCUS, PANEL_BG_BOARD_PICKER,
+    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_SELECTION, BORDER_BOARD_PICKER, BORDER_FOCUS,
+    PANEL_BG_BOARD_PICKER, RADIUS_MD, RADIUS_SM, RADIUS_STD, SHADOW_DEEP, TEXT_WHITE,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::theme::Rgba;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
+
+// File-local colors with no matching theme token (kept from the pre-theme
+// literals).
+/// Add-page card fill (white tint, brighter on hover).
+const ADD_CARD_BG: Rgba = (1.0, 1.0, 1.0, 0.03);
+const ADD_CARD_BG_HOVER: Rgba = (1.0, 1.0, 1.0, 0.10);
+/// Scrim behind the hover-preview page label.
+const PREVIEW_LABEL_BG: Rgba = (0.0, 0.0, 0.0, 0.55);
 
 use super::super::super::helpers::draw_drag_handle;
 use super::content::{render_page_content, render_page_name_label};
@@ -33,7 +44,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
         duplicate_hovered,
         rename_hovered,
     } = args;
-    let radius = 6.0;
+    let radius = RADIUS_STD;
     draw_rounded_rect(ctx, x, y, width, height, radius);
     if is_drop_target {
         constants::set_color(ctx, BG_SELECTION);
@@ -74,7 +85,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     if is_search_match {
         // Lighter tint of the accent so a search hit stays distinguishable
         // from the active-page ring while staying in the accent family.
-        ctx.set_source_rgba(0.41, 0.72, 1.0, 0.82);
+        constants::set_color(ctx, constants::with_alpha(ACCENT_BRIGHT, 0.82));
         ctx.set_line_width(1.25);
         draw_rounded_rect(
             ctx,
@@ -168,8 +179,12 @@ fn draw_page_badge(ctx: &cairo::Context, x: f64, y: f64, page_number: usize, is_
     let badge = page_number.to_string();
     let badge_font_size = if is_hovered { 10.0 } else { 9.0 };
     let badge_bg_alpha = if is_hovered { 0.6 } else { 0.35 };
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(badge_font_size);
+    let badge_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: badge_font_size,
+    };
     let extents = text_extents_for(
         ctx,
         "Sans",
@@ -182,12 +197,19 @@ fn draw_page_badge(ctx: &cairo::Context, x: f64, y: f64, page_number: usize, is_
     let badge_h = 14.0;
     let badge_x = x + 6.0;
     let badge_y = y + 6.0;
+    // Black scrim behind the number so it reads over any page content.
     ctx.set_source_rgba(0.0, 0.0, 0.0, badge_bg_alpha);
-    draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 4.0);
+    draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, RADIUS_SM);
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-    ctx.move_to(badge_x + 4.0, badge_y + badge_h - 4.0);
-    let _ = ctx.show_text(&badge);
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, 0.9));
+    draw_text_baseline(
+        ctx,
+        badge_style,
+        &badge,
+        badge_x + 4.0,
+        badge_y + badge_h - 4.0,
+        None,
+    );
 }
 
 pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
@@ -199,13 +221,13 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     is_hovered: bool,
     is_empty_state: bool,
 ) {
-    let radius = 6.0;
+    let radius = RADIUS_STD;
 
     draw_rounded_rect(ctx, x, y, width, height, radius);
     if is_hovered {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.10);
+        constants::set_color(ctx, ADD_CARD_BG_HOVER);
     } else {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.03);
+        constants::set_color(ctx, ADD_CARD_BG);
     }
     let _ = ctx.fill_preserve();
 
@@ -234,17 +256,30 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     } else {
         "Add page"
     };
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(10.0);
+    let label_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 10.0,
+    };
     let text_alpha = if is_hovered { 0.7 } else { 0.4 };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, text_alpha);
-    if let Ok(extents) = ctx.text_extents(label) {
-        ctx.move_to(
-            x + (width - extents.width()) * 0.5,
-            y + height * 0.65 + extents.height() * 0.5,
-        );
-        let _ = ctx.show_text(label);
-    }
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        10.0,
+        label,
+    );
+    draw_text_baseline(
+        ctx,
+        label_style,
+        label,
+        x + (width - extents.width()) * 0.5,
+        y + height * 0.65 + extents.height() * 0.5,
+        None,
+    );
 }
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePreviewArgs<'_>) {
@@ -275,18 +310,18 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
     preview_x = preview_x.clamp(margin, max_x.max(margin));
     preview_y = preview_y.clamp(margin, max_y.max(margin));
 
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    constants::set_color(ctx, SHADOW_DEEP);
     draw_rounded_rect(
         ctx,
         preview_x + 4.0,
         preview_y + 6.0,
         preview_w,
         preview_h,
-        8.0,
+        RADIUS_MD,
     );
     let _ = ctx.fill();
 
-    draw_rounded_rect(ctx, preview_x, preview_y, preview_w, preview_h, 8.0);
+    draw_rounded_rect(ctx, preview_x, preview_y, preview_w, preview_h, RADIUS_MD);
     constants::set_color(ctx, PANEL_BG_BOARD_PICKER);
     let _ = ctx.fill_preserve();
     constants::set_color(ctx, BORDER_BOARD_PICKER);
@@ -309,21 +344,37 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
         .page_name()
         .map(|name| format!("Page {} — {}", page_number, name))
         .unwrap_or_else(|| format!("Page {page_number}"));
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(11.0);
-    if let Ok(extents) = ctx.text_extents(&label) {
-        let label_w = (extents.width() + 10.0).min(preview_w - 8.0);
-        let label_x = preview_x + 6.0;
-        let label_y = preview_y + 6.0;
-        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55);
-        draw_rounded_rect(ctx, label_x, label_y, label_w, 16.0, 4.0);
-        let _ = ctx.fill();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-        let _ = ctx.save();
-        ctx.rectangle(label_x + 4.0, label_y, label_w - 8.0, 16.0);
-        ctx.clip();
-        ctx.move_to(label_x + 4.0, label_y + 12.0);
-        let _ = ctx.show_text(&label);
-        let _ = ctx.restore();
-    }
+    let label_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 11.0,
+    };
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        11.0,
+        &label,
+    );
+    let label_w = (extents.width() + 10.0).min(preview_w - 8.0);
+    let label_x = preview_x + 6.0;
+    let label_y = preview_y + 6.0;
+    constants::set_color(ctx, PREVIEW_LABEL_BG);
+    draw_rounded_rect(ctx, label_x, label_y, label_w, 16.0, RADIUS_SM);
+    let _ = ctx.fill();
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, 0.9));
+    let _ = ctx.save();
+    ctx.rectangle(label_x + 4.0, label_y, label_w - 8.0, 16.0);
+    ctx.clip();
+    draw_text_baseline(
+        ctx,
+        label_style,
+        &label,
+        label_x + 4.0,
+        label_y + 12.0,
+        None,
+    );
+    let _ = ctx.restore();
 }

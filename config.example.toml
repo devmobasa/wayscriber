@@ -294,6 +294,17 @@ icon_style = "auto"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [ui]
+# Overlay chrome theme
+# Options: "auto", "dark", "light" ("auto" currently resolves to dark;
+# "light" takes effect as overlay surfaces adopt the runtime theme)
+theme = "auto"
+
+# Reduce UI motion (disable animations)
+# Options: "auto", "on", "off". "on" disables UI animations. "auto" is
+# reserved for a future desktop-portal (system preference) query and
+# currently behaves like "off" (full motion).
+reduced_motion = "auto"
+
 # Show status bar with current color/thickness/tool
 show_status_bar = true
 

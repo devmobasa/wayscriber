@@ -8,7 +8,9 @@ use crate::ui::toolbar::model::{ToolbarActivation, ToolbarIcon, ToolbarSettingsM
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
-use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::widgets::constants::{
+    FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, FONT_SIZE_SECONDARY, FONT_SIZE_TOOLTIP,
+};
 use super::super::widgets::*;
 use super::section_header::draw_collapsible_header;
 
@@ -32,7 +34,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Bold,
-        size: 12.0,
+        size: FONT_SIZE_TOOLTIP,
     };
 
     let Some(settings_model) = ToolbarSettingsModel::from_snapshot(snapshot) else {
@@ -155,7 +157,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 11.0,
+        size: FONT_SIZE_SECONDARY,
     };
     for (item, button) in button_layout.items.iter().zip(buttons.iter()) {
         let button_hover = hover

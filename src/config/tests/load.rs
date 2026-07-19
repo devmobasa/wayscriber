@@ -38,6 +38,59 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
 }
 
 #[test]
+fn ui_theme_defaults_to_auto_and_parses_explicit_values() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(default_config.ui.theme, UiTheme::Auto);
+
+    for (value, expected) in [
+        ("auto", UiTheme::Auto),
+        ("dark", UiTheme::Dark),
+        ("light", UiTheme::Light),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui]\ntheme = '{value}'\n"))
+            .expect("supported ui theme should parse");
+        assert_eq!(config.ui.theme, expected);
+    }
+}
+
+#[test]
+fn ui_theme_rejects_unknown_values() {
+    let error = toml::from_str::<Config>("[ui]\ntheme = 'sepia'\n")
+        .expect_err("unknown ui theme should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
+fn ui_reduced_motion_defaults_to_auto_and_parses_explicit_values() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(default_config.ui.reduced_motion, ReducedMotion::Auto);
+
+    for (value, expected) in [
+        ("auto", ReducedMotion::Auto),
+        ("on", ReducedMotion::On),
+        ("off", ReducedMotion::Off),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui]\nreduced_motion = '{value}'\n"))
+            .expect("supported reduced motion value should parse");
+        assert_eq!(config.ui.reduced_motion, expected);
+    }
+}
+
+#[test]
+fn ui_reduced_motion_rejects_unknown_values() {
+    let error = toml::from_str::<Config>("[ui]\nreduced_motion = 'sometimes'\n")
+        .expect_err("unknown reduced motion value should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
+fn ui_reduced_motion_maps_to_motion_enabled() {
+    assert!(ReducedMotion::Auto.motion_enabled());
+    assert!(ReducedMotion::Off.motion_enabled());
+    assert!(!ReducedMotion::On.motion_enabled());
+}
+
+#[test]
 fn tray_icon_style_defaults_to_auto_and_parses_explicit_values() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(default_config.tray.icon_style, TrayIconStyle::Auto);

@@ -35,7 +35,9 @@ pub use core::{CURRENT_CONFIG_REVISION, Config};
 pub use document::{
     ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
 };
-pub use enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
+pub use enums::{
+    RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
+};
 pub use field_metadata::{
     PERFORMANCE_BUFFER_COUNT_MAX, PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_BUFFER_COUNTS,
     PERFORMANCE_FIELD_METADATA, PERFORMANCE_UI_ANIMATION_FPS_MAX, PerformanceFieldGroup,

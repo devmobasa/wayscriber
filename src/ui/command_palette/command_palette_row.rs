@@ -8,12 +8,13 @@ use crate::input::state::{
 };
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
-use super::super::constants::TEXT_DESCRIPTION;
+use super::super::constants::{self, BG_INPUT_SELECTION, RADIUS_SM, TEXT_DESCRIPTION, TEXT_WHITE};
 use super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::{
     COMMAND_PALETTE_FONT_FAMILY, COMMAND_PALETTE_SHORTCUT_BADGE_GAP,
     COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT, COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X,
-    COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH, ellipsize_to_width,
+    COMMAND_PALETTE_SHORTCUT_BADGE_RADIUS, COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH,
+    ellipsize_to_width,
 };
 
 pub(super) struct CommandPaletteRowStyle {
@@ -60,20 +61,15 @@ pub(super) fn render_command_row(
             item_y,
             inner_width,
             COMMAND_PALETTE_ITEM_HEIGHT - 2.0,
-            super::super::constants::RADIUS_SM,
+            RADIUS_SM,
         );
-        super::super::constants::set_color(ctx, super::super::constants::BG_INPUT_SELECTION);
+        constants::set_color(ctx, BG_INPUT_SELECTION);
         let _ = ctx.fill();
     }
 
     let text_alpha = if is_selected { 1.0 } else { 0.85 };
     let label_y = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + styles.label.size / 3.0;
-    ctx.set_source_rgba(
-        super::super::constants::TEXT_WHITE.0,
-        super::super::constants::TEXT_WHITE.1,
-        super::super::constants::TEXT_WHITE.2,
-        text_alpha,
-    );
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
     render_command_row_label(ctx, cmd.label, inner_x + 10.0, label_y, styles);
 
     let label_extents = text_extents_for(
@@ -133,7 +129,7 @@ fn render_command_row_actions(
     let left = content_right - stride * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
     let icon_y = item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ACTION_SIZE) / 2.0;
     let alpha = if selected { 0.95 } else { 0.62 };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha);
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha));
     crate::toolbar_icons::draw_icon_pencil(
         ctx,
         left + 3.0,
@@ -210,20 +206,22 @@ pub(super) fn render_command_row_shortcut_badge(
                     - 1.0;
                 badge_left_edge = badge_x;
 
+                // White-alpha ladder: badge fill and text both derive from
+                // the white root, brighter when the row is selected.
                 let badge_alpha = if is_selected { 0.35 } else { 0.25 };
-                ctx.set_source_rgba(1.0, 1.0, 1.0, badge_alpha);
+                constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, badge_alpha));
                 draw_rounded_rect(
                     ctx,
                     badge_x,
                     badge_y,
                     badge_w,
                     COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT,
-                    3.0,
+                    COMMAND_PALETTE_SHORTCUT_BADGE_RADIUS,
                 );
                 let _ = ctx.fill();
 
                 let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
-                ctx.set_source_rgba(1.0, 1.0, 1.0, shortcut_alpha);
+                constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, shortcut_alpha));
                 draw_text_baseline(
                     ctx,
                     *shortcut_style,
@@ -247,12 +245,7 @@ pub(super) fn render_command_row_description(
     max_desc_width: f64,
     desc_alpha: f64,
 ) {
-    ctx.set_source_rgba(
-        TEXT_DESCRIPTION.0,
-        TEXT_DESCRIPTION.1,
-        TEXT_DESCRIPTION.2,
-        desc_alpha,
-    );
+    constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, desc_alpha));
     if max_desc_width > 6.0 {
         let desc_display = ellipsize_to_width(
             ctx,
