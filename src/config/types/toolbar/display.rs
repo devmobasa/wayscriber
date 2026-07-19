@@ -32,3 +32,28 @@ impl TopDisplayMode {
         }
     }
 }
+
+/// Where the side-palette functions live.
+///
+/// `Panel` (the default) is the classic four-pane side palette
+/// (`side_active_pane`, `collapsed_sections`, `side_pinned`,
+/// `side_minimized` all apply). `Pill` is the opt-in preview that retires
+/// the standalone side palette: its Draw pane lives in the top strip's
+/// contextual style pill and the Canvas pane in the status HUD and board
+/// picker. Until the Session/Settings panes are re-hosted in the top
+/// strip, `pill` leaves session save/restore and the Settings toggles
+/// without a toolbar surface (keyboard/palette actions still work); once
+/// that re-host lands, `pill` becomes the default and `panel` a
+/// deprecated escape hatch.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolbarSideLayout {
+    /// No side palette surface; its functions live in the pill and the
+    /// status HUD/board picker. Opt-in preview until the Session/Settings
+    /// re-host lands.
+    Pill,
+    /// The classic side palette, unchanged (default).
+    #[default]
+    Panel,
+}

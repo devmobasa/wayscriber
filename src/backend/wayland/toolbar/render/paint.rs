@@ -12,7 +12,8 @@ use crate::ui_text::UiTextStyle;
 
 use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
-    COLOR_SWATCH_HAIRLINE, COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, set_color,
+    COLOR_SWATCH_HAIRLINE, COLOR_TEXT_DISABLED, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB,
+    FONT_FAMILY_DEFAULT, set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
@@ -237,6 +238,20 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             );
         }
         WidgetKind::HitArea => {}
+        WidgetKind::Slider { t } => {
+            // Track and knob share the side-palette slider treatment: a
+            // rounded track with the accent knob riding the inset travel.
+            let track_h = (h * 0.5).min(8.0);
+            let track_y = y + (h - track_h) / 2.0;
+            set_color(ctx, COLOR_TRACK_BACKGROUND);
+            draw_round_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
+            let _ = ctx.fill();
+            let knob_r = (h / 2.0).min(7.0);
+            let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
+            set_color(ctx, COLOR_TRACK_KNOB);
+            ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+            let _ = ctx.fill();
+        }
         WidgetKind::Swatch { color, selected } => {
             // Rounded square inset one pixel so the accent selection ring
             // (2px stroke, ~2px gap) stays clear of the neighbouring swatch.

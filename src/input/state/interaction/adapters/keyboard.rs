@@ -58,6 +58,14 @@ pub(crate) fn handle_radial_menu_key(state: &mut InputState, key: Key) -> Option
     Some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 
+pub(crate) fn handle_precision_entry_key(
+    state: &mut InputState,
+    key: Key,
+) -> Option<RoutingOutcome> {
+    (state.is_precision_entry_open() && state.handle_precision_entry_key(key))
+        .then_some(RoutingOutcome::Consumed(ConsumedBy::PrecisionEntry))
+}
+
 pub(crate) fn handle_color_picker_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
     (state.is_color_picker_popup_open() && state.handle_color_picker_popup_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup))

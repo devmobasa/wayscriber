@@ -160,15 +160,17 @@ pub enum WidgetKind {
     Checkbox { checked: bool, label: LabelSpec },
     /// Two-segment control; the halves' interactions are separate
     /// [`WidgetKind::HitArea`] nodes layered on top.
-    #[allow(dead_code)] // Used by the staged side-palette tree port.
     SegmentedControl {
         left: LabelSpec,
         right: LabelSpec,
         active_right: bool,
     },
     /// Invisible interactive region (segment halves, full-row toggles).
-    #[allow(dead_code)] // Used by the staged side-palette tree port.
     HitArea,
+    /// Horizontal slider track with a round knob at normalized position
+    /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
+    /// (`HitKind::DragSet*`); the paint only shows the current value.
+    Slider { t: f64 },
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),

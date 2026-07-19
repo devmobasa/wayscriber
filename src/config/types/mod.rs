@@ -61,8 +61,8 @@ pub use toolbar::{
     ResolvedToolbarItems, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, TopDisplayMode,
-    toolbar_item_definitions, toolbar_item_order_group,
+    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, ToolbarSideLayout,
+    TopDisplayMode, toolbar_item_definitions, toolbar_item_order_group,
 };
 pub use toolbar::{
     ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,

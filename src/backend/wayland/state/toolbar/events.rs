@@ -62,6 +62,17 @@ fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
     )
 }
 
+/// The precise-entry popup dismisses on any toolbar interaction other
+/// than its own open/commit/cancel events (mirroring the overflow flyout).
+fn event_dismisses_precision_entry(event: &ToolbarEvent) -> bool {
+    !matches!(
+        event,
+        ToolbarEvent::OpenPrecisionEntry(_)
+            | ToolbarEvent::CommitPrecisionEntry { .. }
+            | ToolbarEvent::CancelPrecisionEntry
+    )
+}
+
 /// The Shapes popover dismisses on everything the overflow does *except* its own
 /// inline options: the Fill checkbox and the polygon-sides stepper live inside
 /// the popover, so using them must not close it out from under the pointer.
@@ -193,6 +204,12 @@ impl WaylandState {
         }
         // Toolbar actions win over the modal sampler: cancel without sampling,
         // then apply the requested toolbar event normally.
+        if self.input_state.is_precision_entry_open()
+            && event_dismisses_precision_entry(&event)
+            && self.input_state.cancel_precision_entry()
+        {
+            self.toolbar.mark_dirty();
+        }
         let dismiss_overflow =
             self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
         let dismiss_shapes =

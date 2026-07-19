@@ -8,6 +8,7 @@ pub mod constants;
 mod context_menu;
 mod help_overlay;
 mod onboarding_card;
+mod precision_entry;
 mod primitives;
 mod properties_panel;
 mod radial_menu;
@@ -25,6 +26,7 @@ pub use help_overlay::HelpOverlayBindings;
 #[allow(unused_imports)]
 pub use help_overlay::{invalidate_help_overlay_cache, render_help_overlay};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
+pub use precision_entry::render_precision_entry_popup;
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub use status::{

@@ -174,6 +174,10 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "toolbar",
     "layout mode",
+    "side layout",
+    "side palette",
+    "style pill",
+    "panel",
     "shortcut edit click",
     "toolbar rebind modifier",
     "pin top toolbar",

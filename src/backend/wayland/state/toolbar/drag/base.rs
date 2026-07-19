@@ -13,7 +13,7 @@ fn active_drag_top_base_x(
 impl WaylandState {
     /// Base X position for the top toolbar when laid out inline.
     /// When a drag is in progress we freeze this base to avoid shifting the top bar while moving the side bar.
-    pub(in crate::backend::wayland::state::toolbar) fn inline_top_base_x(
+    pub(in crate::backend::wayland::state) fn inline_top_base_x(
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
@@ -86,7 +86,7 @@ impl WaylandState {
         ));
     }
 
-    pub(in crate::backend::wayland::state::toolbar) fn inline_top_base_y(&self) -> f64 {
+    pub(in crate::backend::wayland::state) fn inline_top_base_y(&self) -> f64 {
         if self.is_move_dragging()
             && let Some(y) = self.data.drag_top_base_y
         {

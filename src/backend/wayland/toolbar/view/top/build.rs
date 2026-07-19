@@ -368,6 +368,9 @@ pub(super) fn build_top_view_planned(
         chrome_x += chrome_size + chrome_gap;
     }
 
+    // --- Style pill (island D): contextual tool properties -------------------
+    push_style_pill(&mut tree, snapshot, plan, band_h);
+
     // --- Overflow popover: the width-dropped items ---------------------------
     if snapshot.top_overflow_open
         && let Some(anchor) = overflow_anchor
@@ -611,6 +614,322 @@ pub(super) fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
     ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP + content_h + 4.0 + 6.0
 }
 
+/// Style pill (island D): the contextual tool-property row rendered as a
+/// fourth detached pill under the islands. Structure comes from the shared
+/// `StylePillSpec`; this function owns only the geometry.
+fn push_style_pill(
+    tree: &mut WidgetTree,
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+    band_h: f64,
+) {
+    let spec = model::StylePillSpec::build(snapshot, plan);
+    if spec.controls().is_empty() {
+        return;
+    }
+    let gap = planned_gap(plan);
+    let (_, island_pad) = planned_island_metrics(plan);
+    let pill_y = band_h + ToolbarLayoutSpec::TOP_STYLE_PILL_GAP;
+    let pill_h = ToolbarLayoutSpec::TOP_STYLE_PILL_H;
+    let row_h = ToolbarLayoutSpec::TOP_STYLE_ROW_H;
+    let center = |h: f64| pill_y + (pill_h - h) / 2.0;
+
+    // Content nodes are collected first so the pill card — whose extent is
+    // only known after the walk — can be pushed underneath them.
+    let mut nodes: Vec<WidgetNode> = Vec::new();
+    let mut x = island_pad;
+    let swatch_count = spec
+        .controls()
+        .iter()
+        .filter(|control| matches!(control, model::StylePillControl::QuickSwatch(_)))
+        .count();
+    for control in spec.controls().iter().copied() {
+        let id = control.id().into_owned();
+        match control {
+            model::StylePillControl::ColorChip => {
+                nodes.push(WidgetNode::new(
+                    id,
+                    (x, center(TOP_CHIP_SIZE), TOP_CHIP_SIZE, TOP_CHIP_SIZE),
+                    WidgetKind::Swatch {
+                        color: (
+                            snapshot.color.r,
+                            snapshot.color.g,
+                            snapshot.color.b,
+                            snapshot.color.a,
+                        ),
+                        selected: control.active(snapshot),
+                    },
+                    control
+                        .event(snapshot)
+                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                ));
+                x += TOP_CHIP_SIZE + gap;
+            }
+            model::StylePillControl::QuickSwatch(index) => {
+                let entry = &snapshot.quick_colors.rendered_entries()[index];
+                nodes.push(WidgetNode::new(
+                    id,
+                    (x, center(TOP_SWATCH_SIZE), TOP_SWATCH_SIZE, TOP_SWATCH_SIZE),
+                    WidgetKind::Swatch {
+                        color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
+                        selected: control.active(snapshot),
+                    },
+                    control
+                        .event(snapshot)
+                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                ));
+                let is_last = index + 1 == swatch_count;
+                x += TOP_SWATCH_SIZE + if is_last { gap } else { TOP_SWATCH_GAP };
+            }
+            model::StylePillControl::ThicknessSlider
+            | model::StylePillControl::OpacitySlider
+            | model::StylePillControl::FontSizeSlider => {
+                let (slider_spec, value) = control.slider(snapshot).expect("slider control");
+                let kind = match control {
+                    model::StylePillControl::ThicknessSlider => HitKind::DragSetThickness {
+                        min: slider_spec.min,
+                        max: slider_spec.max,
+                    },
+                    model::StylePillControl::OpacitySlider => HitKind::DragSetMarkerOpacity {
+                        min: slider_spec.min,
+                        max: slider_spec.max,
+                    },
+                    _ => HitKind::DragSetFontSize,
+                };
+                let rect = (
+                    x,
+                    center(row_h),
+                    ToolbarLayoutSpec::TOP_STYLE_SLIDER_W,
+                    row_h,
+                );
+                nodes.push(WidgetNode::new(
+                    id,
+                    rect,
+                    WidgetKind::Slider {
+                        t: slider_spec.t_from_value(value),
+                    },
+                    Some(Interaction {
+                        event: control.event(snapshot).expect("slider event"),
+                        kind,
+                        tooltip: None,
+                    }),
+                ));
+                x += ToolbarLayoutSpec::TOP_STYLE_SLIDER_W + gap;
+                // The opacity slider carries its readout as decoration; the
+                // thickness/text-size numerals are distinct value controls.
+                if control == model::StylePillControl::OpacitySlider {
+                    nodes.push(WidgetNode::decor(
+                        format!("{}.readout", control.id()),
+                        (
+                            x,
+                            center(row_h),
+                            ToolbarLayoutSpec::TOP_STYLE_VALUE_W,
+                            row_h,
+                        ),
+                        WidgetKind::Label(LabelSpec::new(
+                            control.value_text(snapshot).expect("opacity readout"),
+                            TOP_LABEL_FONT_SIZE,
+                            true,
+                        )),
+                    ));
+                    x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
+                }
+            }
+            model::StylePillControl::ThicknessValue | model::StylePillControl::FontSizeValue => {
+                // Live numeral button (pango-rendered); clicking opens the
+                // overlay precise-entry popup.
+                nodes.push(WidgetNode::new(
+                    id,
+                    (
+                        x,
+                        center(row_h),
+                        ToolbarLayoutSpec::TOP_STYLE_VALUE_W,
+                        row_h,
+                    ),
+                    WidgetKind::TextButton {
+                        label: LabelSpec::new(
+                            control.value_text(snapshot).expect("numeral text"),
+                            TOP_LABEL_FONT_SIZE,
+                            true,
+                        ),
+                        style: ButtonStyle::plain(),
+                    },
+                    control
+                        .event(snapshot)
+                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                ));
+                x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
+            }
+            model::StylePillControl::FillToggle | model::StylePillControl::AutoNumberToggle => {
+                let w = if control == model::StylePillControl::FillToggle {
+                    ToolbarLayoutSpec::TOP_STYLE_FILL_W
+                } else {
+                    ToolbarLayoutSpec::TOP_STYLE_AUTO_NUMBER_W
+                };
+                let toggle_h = ToolbarLayoutSpec::TOP_STYLE_TOGGLE_H;
+                nodes.push(WidgetNode::new(
+                    id,
+                    (x, center(toggle_h), w, toggle_h),
+                    WidgetKind::MiniCheckbox {
+                        checked: control.active(snapshot),
+                        label: LabelSpec::new(control.label(snapshot), MINI_LABEL_FONT_SIZE, false),
+                    },
+                    control
+                        .event(snapshot)
+                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                ));
+                x += w + gap;
+            }
+            model::StylePillControl::CounterReset(_) => {
+                nodes.push(WidgetNode::new(
+                    id,
+                    (
+                        x,
+                        center(row_h),
+                        ToolbarLayoutSpec::TOP_STYLE_RESET_W,
+                        row_h,
+                    ),
+                    WidgetKind::TextButton {
+                        label: LabelSpec::new(control.label(snapshot), TOP_LABEL_FONT_SIZE, true),
+                        style: ButtonStyle::plain(),
+                    },
+                    control
+                        .event(snapshot)
+                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                ));
+                x += ToolbarLayoutSpec::TOP_STYLE_RESET_W + gap;
+            }
+            model::StylePillControl::SelectionCycle(_) => {
+                let enabled = control.enabled(snapshot);
+                nodes.push(WidgetNode::new(
+                    id,
+                    (
+                        x,
+                        center(row_h),
+                        ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W,
+                        row_h,
+                    ),
+                    WidgetKind::TextButton {
+                        label: LabelSpec::new(
+                            control.value_text(snapshot).unwrap_or_default(),
+                            TOP_LABEL_FONT_SIZE,
+                            true,
+                        ),
+                        style: if enabled {
+                            ButtonStyle::plain()
+                        } else {
+                            ButtonStyle::disabled()
+                        },
+                    },
+                    (enabled)
+                        .then(|| control.event(snapshot))
+                        .flatten()
+                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                ));
+                x += ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W + gap;
+            }
+            model::StylePillControl::SelectionStepper(_) => {
+                let enabled = control.enabled(snapshot);
+                let steps = control.steps(snapshot).expect("stepper halves");
+                let step_w = ToolbarLayoutSpec::TOP_STYLE_STEP_W;
+                let value_w = ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W;
+                let step_style = if enabled {
+                    ButtonStyle::plain()
+                } else {
+                    ButtonStyle::disabled()
+                };
+                nodes.push(WidgetNode::new(
+                    steps[0].id,
+                    (x, center(row_h), step_w, row_h),
+                    WidgetKind::TextButton {
+                        label: LabelSpec::new(steps[0].label, TOP_LABEL_FONT_SIZE, true),
+                        style: step_style,
+                    },
+                    enabled.then(|| {
+                        Interaction::click(steps[0].event.clone(), Some(steps[0].tooltip.clone()))
+                    }),
+                ));
+                nodes.push(WidgetNode::decor(
+                    format!("{id}.value"),
+                    (x + step_w, center(row_h), value_w, row_h),
+                    WidgetKind::Label(LabelSpec::new(
+                        control.value_text(snapshot).unwrap_or_default(),
+                        TOP_LABEL_FONT_SIZE,
+                        true,
+                    )),
+                ));
+                nodes.push(WidgetNode::new(
+                    steps[1].id,
+                    (x + step_w + value_w, center(row_h), step_w, row_h),
+                    WidgetKind::TextButton {
+                        label: LabelSpec::new(steps[1].label, TOP_LABEL_FONT_SIZE, true),
+                        style: step_style,
+                    },
+                    enabled.then(|| {
+                        Interaction::click(steps[1].event.clone(), Some(steps[1].tooltip.clone()))
+                    }),
+                ));
+                x += step_w * 2.0 + value_w + gap;
+            }
+            model::StylePillControl::FontFamilySegment
+            | model::StylePillControl::EraserModeSegment => {
+                let segments = control.segments(snapshot).expect("segment halves");
+                let rect = (
+                    x,
+                    center(row_h),
+                    ToolbarLayoutSpec::TOP_STYLE_SEGMENT_W,
+                    row_h,
+                );
+                nodes.push(WidgetNode::decor(
+                    id,
+                    rect,
+                    WidgetKind::SegmentedControl {
+                        left: LabelSpec::new(segments[0].label, TOP_LABEL_FONT_SIZE, true),
+                        right: LabelSpec::new(segments[1].label, TOP_LABEL_FONT_SIZE, true),
+                        active_right: segments[1].active,
+                    },
+                ));
+                let half_w = rect.2 / 2.0;
+                for (index, segment) in segments.iter().enumerate() {
+                    nodes.push(WidgetNode::new(
+                        segment.id,
+                        (rect.0 + index as f64 * half_w, rect.1, half_w, rect.3),
+                        WidgetKind::HitArea,
+                        Some(Interaction::click(
+                            segment.event.clone(),
+                            Some(segment.tooltip.clone()),
+                        )),
+                    ));
+                }
+                x += ToolbarLayoutSpec::TOP_STYLE_SEGMENT_W + gap;
+            }
+        }
+    }
+
+    let content_right = x - gap;
+    tree.push(WidgetNode::decor(
+        "top.island.style",
+        (0.0, pill_y, content_right + island_pad, pill_h),
+        WidgetKind::Panel,
+    ));
+    for node in nodes {
+        tree.push(node);
+    }
+}
+
+/// Height the style pill adds under the island band (gap plus pill).
+pub(super) fn style_pill_height(snapshot: &ToolbarSnapshot) -> f64 {
+    let plan = plan_top_strip(snapshot);
+    style_pill_height_planned(snapshot, &plan)
+}
+
+pub(super) fn style_pill_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
+    if !model::StylePillSpec::visible(snapshot, plan) {
+        return 0.0;
+    }
+    ToolbarLayoutSpec::TOP_STYLE_PILL_GAP + ToolbarLayoutSpec::TOP_STYLE_PILL_H
+}
+
 /// The highlight ring row grows the bar only while the highlight tool is
 /// active — the lane is no longer permanently reserved.
 pub(super) fn ring_row_height(snapshot: &ToolbarSnapshot) -> f64 {
@@ -625,6 +944,9 @@ pub(super) fn ring_row_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStri
     ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT + 2.0
 }
 
+/// Shift a popover anchor below the contextual rows (the highlight ring
+/// row inside the band and the detached style pill under it) so an open
+/// popover never covers them.
 fn popover_anchor_below_ring(
     anchor: (f64, f64, f64, f64),
     snapshot: &ToolbarSnapshot,
@@ -632,14 +954,23 @@ fn popover_anchor_below_ring(
     button_y: f64,
     button_h: f64,
 ) -> (f64, f64, f64, f64) {
-    if ring_row_height_planned(snapshot, plan) <= 0.0 {
+    let ring = ring_row_height_planned(snapshot, plan);
+    let pill = style_pill_height_planned(snapshot, plan);
+    if ring <= 0.0 && pill <= 0.0 {
         return anchor;
     }
-    let ring_bottom = button_y
-        + button_h
-        + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET
-        + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
-    (anchor.0, ring_bottom - anchor.3, anchor.2, anchor.3)
+    let mut bottom = button_y + button_h;
+    if ring > 0.0 {
+        bottom = button_y
+            + button_h
+            + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET
+            + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
+    }
+    if pill > 0.0 {
+        // The pill bottom: island band plus its gap-and-height extent.
+        bottom = bar_band_height(snapshot, plan) + pill;
+    }
+    (anchor.0, bottom - anchor.3, anchor.2, anchor.3)
 }
 
 pub(super) fn overflow_height(snapshot: &ToolbarSnapshot) -> f64 {

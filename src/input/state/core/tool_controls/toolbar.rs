@@ -28,9 +28,13 @@ impl InputState {
         true
     }
 
-    /// Returns whether any toolbar is marked visible.
+    /// Returns whether any toolbar surface is effectively visible: the top
+    /// strip (not cycle-hidden) or the side palette (not retired by
+    /// `side_layout = "pill"`). Raw visibility flags that cannot produce a
+    /// surface do not count, so the F9 toggle always has a visible effect
+    /// on its first press.
     pub fn toolbar_visible(&self) -> bool {
-        self.toolbar_visible || self.toolbar_top_visible || self.toolbar_side_visible
+        self.toolbar_top_visible() || self.toolbar_side_visible()
     }
 
     /// Returns whether the top toolbar surface is visible. The cycle
@@ -40,9 +44,22 @@ impl InputState {
         self.toolbar_top_visible && self.toolbar_top_display_mode != TopDisplayMode::Hidden
     }
 
-    /// Returns whether the side toolbar is visible.
+    /// Returns whether the side toolbar is visible. Under the opt-in
+    /// `side_layout = "pill"` the side palette is retired: its surface never
+    /// appears (layer-shell, inline fallback, or GTK), regardless of the
+    /// visibility toggles. The default `"panel"` keeps the classic
+    /// behavior.
     pub fn toolbar_side_visible(&self) -> bool {
         self.toolbar_side_visible
+            && self.toolbar_side_layout == crate::config::ToolbarSideLayout::Panel
+    }
+
+    /// Restore the persisted side layout (called at startup).
+    pub fn init_toolbar_side_layout_from_config(
+        &mut self,
+        layout: crate::config::ToolbarSideLayout,
+    ) {
+        self.toolbar_side_layout = layout;
     }
 
     /// Initialize toolbar visibility from config (called at startup).
@@ -424,6 +441,31 @@ mod tests {
             crate::config::ToolbarLayoutMode::Advanced,
         ));
         assert!(!state.show_zoom_actions);
+    }
+
+    #[test]
+    fn pill_side_layout_retires_the_side_surface_and_panel_restores_it() {
+        let mut state = make_test_input_state();
+        // The struct (and config) default keeps the classic panel behavior
+        // until the Session/Settings panes are re-hosted in the top strip.
+        assert_eq!(
+            state.toolbar_side_layout,
+            crate::config::ToolbarSideLayout::Panel
+        );
+        assert!(state.toolbar_side_visible());
+
+        // Opting into Pill retires the side surface: it never reports
+        // visible, even through the plain visibility toggles.
+        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
+        assert!(!state.toolbar_side_visible());
+        state.set_toolbar_visible(true);
+        assert!(!state.toolbar_side_visible());
+        // The top strip is unaffected by the side retirement.
+        assert!(state.toolbar_top_visible());
+
+        // The deprecated escape hatch restores the classic behavior.
+        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
+        assert!(state.toolbar_side_visible());
     }
 
     #[test]

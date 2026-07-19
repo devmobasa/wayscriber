@@ -551,5 +551,8 @@ impl TopBar {
             }));
             self.root.append(&ring);
         }
+
+        // --- Style pill (island D): contextual tool properties -------------------
+        self.build_style_pill(snapshot, plan);
     }
 }

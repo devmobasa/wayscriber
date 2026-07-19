@@ -615,6 +615,12 @@ impl SliderRow {
         }
     }
 
+    /// Hide the built-in readout when a separate numeral control shows the
+    /// value (the style pill pairs its sliders with distinct value buttons).
+    pub(super) fn set_value_label_visible(&self, visible: bool) {
+        self.value_label.set_visible(visible);
+    }
+
     /// Applies a backend value unless the user is mid-drag.
     pub(super) fn set_value(&self, value: f64) {
         if self.state.dragging.get() {

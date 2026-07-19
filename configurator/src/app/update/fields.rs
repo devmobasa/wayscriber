@@ -10,7 +10,7 @@ use crate::models::{
     PresenterToolBehaviorOption, PresenterToolbarModeOption, QuadField, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    TripletField, UiThemeOption,
+    ToolbarSideLayoutOption, TripletField, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -239,6 +239,16 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.apply_toolbar_layout_mode(option);
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_side_layout_changed(
+        &mut self,
+        option: ToolbarSideLayoutOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_toolbar_side_layout = option;
         self.refresh_dirty_flag();
         Task::none()
     }

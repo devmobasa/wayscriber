@@ -430,8 +430,19 @@ side_minimized = false
 # and comes back per top_pinned
 top_display_mode = "full"
 
+# Where the side-palette functions live: "panel" (default) or "pill".
+# "panel" is the classic four-pane side palette; side_active_pane,
+# collapsed_sections, side_pinned, and side_minimized apply only under
+# "panel". "pill" is an opt-in preview that retires the standalone side
+# palette: drawing properties live in the top strip's contextual style
+# pill and canvas management in the status HUD and board picker. Until the
+# Session/Settings panes are re-hosted in the top strip, "pill" leaves
+# them without a toolbar surface (keyboard and command-palette actions
+# still work); once that lands, "pill" becomes the default
+side_layout = "panel"
+
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
-# The overlay updates this as you switch panes
+# The overlay updates this as you switch panes (side_layout = "panel" only)
 side_active_pane = "draw"
 
 # Side-palette sections collapsed to their header row

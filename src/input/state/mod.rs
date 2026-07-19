@@ -21,11 +21,12 @@ pub use core::{
     CompositorCapabilities, ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind,
     ContextMenuState, DesktopEnvironment, DrawingState, EyedropperCaptureSource, EyedropperUiState,
     HelpOverlayCursorHint, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
-    OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction,
-    PresetFeedbackKind, PressureThicknessEditMode, PressureThicknessEntryMode, RADIAL_TOOL_LABELS,
-    RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialSegmentId, SelectionAxis,
-    SelectionHandle, SelectionState, ShellMode, TextInputMode, TourStep, UI_TOAST_DURATION_MS,
-    UiToastKind, ZoomAction, color_picker_rgb_to_hsv, sub_ring_child_count, sub_ring_child_label,
+    OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PrecisionEntryState,
+    PresetAction, PresetFeedbackKind, PressureThicknessEditMode, PressureThicknessEntryMode,
+    RADIAL_TOOL_LABELS, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState,
+    RadialSegmentId, SelectionAxis, SelectionHandle, SelectionPropertyEntry, SelectionPropertyKind,
+    SelectionState, ShellMode, TextInputMode, TourStep, UI_TOAST_DURATION_MS, UiToastKind,
+    ZoomAction, color_picker_rgb_to_hsv, sub_ring_child_count, sub_ring_child_label,
 };
 pub(crate) use core::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,

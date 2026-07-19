@@ -595,6 +595,22 @@ fn top_overflow_menu_closes_on_any_non_toggle_event() {
     assert!(event_dismisses_top_overflow(
         &ToolbarEvent::NudgePolygonSides(1)
     ));
+    assert!(event_dismisses_precision_entry(&ToolbarEvent::SelectTool(
+        crate::input::Tool::Pen
+    )));
+    assert!(event_dismisses_precision_entry(&ToolbarEvent::Undo));
+    assert!(!event_dismisses_precision_entry(
+        &ToolbarEvent::OpenPrecisionEntry(crate::ui::toolbar::PrecisionEntryTarget::Thickness)
+    ));
+    assert!(!event_dismisses_precision_entry(
+        &ToolbarEvent::CommitPrecisionEntry {
+            target: crate::ui::toolbar::PrecisionEntryTarget::Thickness,
+            value: 4.0,
+        }
+    ));
+    assert!(!event_dismisses_precision_entry(
+        &ToolbarEvent::CancelPrecisionEntry
+    ));
     assert!(event_dismisses_top_overflow(&ToolbarEvent::SelectTool(
         Tool::Line
     )));

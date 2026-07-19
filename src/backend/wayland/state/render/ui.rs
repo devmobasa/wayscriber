@@ -170,6 +170,25 @@ impl WaylandState {
                 self.input_state.clear_color_picker_popup_layout();
             }
 
+            if self.input_state.is_precision_entry_open() {
+                // Anchor under the top strip (the pill is its bottom row):
+                // the same base position both the inline fallback and the
+                // layer-shell margins derive from.
+                let snapshot = self.toolbar_snapshot();
+                let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
+                let anchor = (
+                    self.inline_top_base_x(&snapshot) + self.data.toolbar_top_offset,
+                    self.inline_top_base_y() + self.data.toolbar_top_offset_y + top_h as f64 + 8.0,
+                );
+                crate::ui::render_precision_entry_popup(
+                    ctx,
+                    &self.input_state,
+                    width,
+                    height,
+                    anchor,
+                );
+            }
+
             self.render_eyedropper_loupe(ctx, width, height);
 
             if self.input_state.is_radial_menu_open() {

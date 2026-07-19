@@ -116,6 +116,16 @@ impl InputState {
             ToolbarEvent::PasteHexColor => self.apply_toolbar_paste_hex_color(),
             ToolbarEvent::EditHexColor => self.apply_toolbar_edit_hex_color(),
             ToolbarEvent::OpenColorPickerPopup => self.apply_toolbar_open_color_picker_popup(),
+            ToolbarEvent::AdjustSelectionProperty { kind, direction } => {
+                self.adjust_selection_property_kind(kind, direction)
+            }
+            ToolbarEvent::OpenPrecisionEntry(target) => {
+                self.apply_toolbar_open_precision_entry(target)
+            }
+            ToolbarEvent::CommitPrecisionEntry { target, value } => {
+                self.apply_toolbar_commit_precision_entry(target, value)
+            }
+            ToolbarEvent::CancelPrecisionEntry => self.cancel_precision_entry(),
             ToolbarEvent::PickScreenColor => {
                 self.request_eyedropper_toggle();
                 true

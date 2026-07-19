@@ -106,6 +106,9 @@ pub mod overlay {
     pub const TEXT_SECONDARY: Rgba = (0.86, 0.89, 0.94, 1.0);
     /// Hint/shortcut text
     pub const TEXT_HINT: Rgba = (0.70, 0.73, 0.78, 0.9);
+    /// Dim keyboard-shortcut hint inside overlay popups (dimmer than
+    /// `TEXT_HINT`): the color popup's hint row, the precise-entry hint.
+    pub const TEXT_HINT_DIM: Rgba = (0.6, 0.6, 0.65, 0.7);
     /// Disabled text
     pub const TEXT_DISABLED: Rgba = (0.60, 0.64, 0.68, 0.65);
     /// Placeholder text

@@ -7,6 +7,8 @@
 //! groups. Island B (history): Undo/Redo plus the overflow toggle whose menu
 //! anchors the destructive Clear (red on hover) and any width-dropped items.
 //! Island C (chrome): the quieter right-aligned pin and minimize buttons.
+//! Island D (style pill): a fourth detached pill under the band carrying
+//! the active tool's contextual properties (`model::StylePillSpec`).
 //! Blue is reserved for the active tool; disabled history buttons are dimmed
 //! and not interactive.
 
@@ -232,13 +234,15 @@ pub fn top_input_rects(
 }
 
 /// Everything that grows the surface below the base bar: the shapes/options
-/// popover, the contextual highlight-ring row, and the overflow popover.
+/// popover, the contextual highlight-ring row, the style pill, and the
+/// overflow popover.
 pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
     }
     build::shape_popover_height(snapshot)
         + build::ring_row_height(snapshot)
+        + build::style_pill_height(snapshot)
         + build::overflow_height(snapshot)
 }
 

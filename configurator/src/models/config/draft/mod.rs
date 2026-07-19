@@ -1,6 +1,7 @@
 mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
+use super::super::fields::ToolbarSideLayoutOption;
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
@@ -82,6 +83,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
+    pub ui_toolbar_side_layout: ToolbarSideLayoutOption,
     pub ui_toolbar_rebind_modifier: ToolbarRebindModifierOption,
     pub ui_toolbar_items: ToolbarItemsConfig,
     pub ui_toolbar_show_presets: bool,

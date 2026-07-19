@@ -5,6 +5,7 @@ pub(crate) mod event_policy;
 pub(crate) mod header;
 pub(crate) mod session;
 pub(crate) mod settings;
+mod style_pill;
 pub(crate) mod tools;
 mod top_spec;
 
@@ -37,6 +38,11 @@ pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
+#[allow(unused_imports)]
+pub(crate) use style_pill::{
+    StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSpec,
+    StylePillState,
+};
 #[allow(unused_imports)]
 pub(crate) use tools::{
     SemanticToolIcon, TopToolGroup, TopUtilityButton, current_shape_tool, default_drag_hint,

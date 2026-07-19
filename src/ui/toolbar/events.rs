@@ -181,6 +181,33 @@ impl SidePane {
     }
 }
 
+/// Value targeted by the style pill's precise-entry popup (opened from
+/// the pill's live numeral buttons).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrecisionEntryTarget {
+    /// Stroke thickness (the snapshot already routes eraser/marker sizes
+    /// through the thickness slider, so one target covers all px numerals).
+    Thickness,
+    /// Text size in points.
+    FontSize,
+}
+
+impl PrecisionEntryTarget {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Thickness => "Thickness",
+            Self::FontSize => "Text size",
+        }
+    }
+
+    pub fn unit(self) -> &'static str {
+        match self {
+            Self::Thickness => "px",
+            Self::FontSize => "pt",
+        }
+    }
+}
+
 /// Events emitted by the floating toolbar UI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToolbarEvent {
@@ -310,6 +337,26 @@ pub enum ToolbarEvent {
     EditHexColor,
     /// Open the color picker popup
     OpenColorPickerPopup,
+    /// Open the precise numeric entry popup for a pill numeral. The popup
+    /// renders on the overlay (the same Cairo keyboard surface as the
+    /// color popup's hex field) and commits/cancels via the events below.
+    OpenPrecisionEntry(PrecisionEntryTarget),
+    /// Commit a typed value from the precise-entry popup; the apply arm
+    /// clamps it to the target's slider range.
+    CommitPrecisionEntry {
+        target: PrecisionEntryTarget,
+        value: f64,
+    },
+    /// Dismiss the precise-entry popup without applying.
+    CancelPrecisionEntry,
+    /// Adjust one property of the current selection from the style pill's
+    /// docked selection controls. Routes through the same apply machinery
+    /// as the overlay properties popup; cycle controls use `direction = 1`,
+    /// steppers -1/+1.
+    AdjustSelectionProperty {
+        kind: crate::input::SelectionPropertyKind,
+        direction: i32,
+    },
     /// Pick a color from the displayed desktop image.
     PickScreenColor,
     /// Toggle Actions section visibility (undo all, redo all, etc.)

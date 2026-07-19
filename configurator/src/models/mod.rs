@@ -29,7 +29,7 @@ pub use fields::{
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
     ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
     TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, TripletField, UiThemeOption,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

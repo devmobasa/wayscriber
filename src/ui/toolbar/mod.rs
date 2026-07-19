@@ -8,7 +8,9 @@ pub(crate) mod model;
 pub mod snapshot;
 
 pub use bindings::ToolbarBindingHints;
-pub use events::{SidePane, ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection};
+pub use events::{
+    PrecisionEntryTarget, SidePane, ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSideSection,
+};
 #[allow(unused_imports)]
 pub use snapshot::{
     PresetFeedbackSnapshot, PresetSlotSnapshot, SessionRecentSnapshot, ToolContext,

@@ -650,7 +650,14 @@ side_minimized = false
 # governed by top_pinned)
 top_display_mode = "full"
 
+# Where the side-palette functions live: "panel" (default) or "pill"
+# ("pill" is an opt-in preview that retires the side palette; it becomes
+# the default once the Session/Settings panes are re-hosted in the top
+# strip)
+side_layout = "panel"
+
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
+# (side_layout = "panel" only)
 side_active_pane = "draw"
 
 # Side-palette sections collapsed to their header row
@@ -795,7 +802,8 @@ side_sections = [
 - **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F9 still toggles full visibility.
 - **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists via `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
 - **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
-- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
+- **Side layout**: `side_layout` picks where the side-palette functions live. The default `"panel"` is the classic four-pane side palette. `"pill"` is an **opt-in preview** that retires the standalone side palette entirely — its surface is never created (layer-shell, inline fallback, or GTK): drawing properties live in the top strip's contextual style pill and canvas management in the status HUD and board picker. Until the Session/Settings panes are re-hosted in the top strip, `"pill"` leaves session save/restore and the Settings-pane toggles without a toolbar surface (keyboard shortcuts and the command palette still reach them); once that re-host lands, `"pill"` becomes the default. (The original plan document called this key `layout_mode = "panel"`, but `layout_mode` is an orthogonal complexity preset — Simple/Regular/Advanced — so the switch lives under its own `side_layout` key instead.)
+- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves. Both keys (and `side_pinned`/`side_minimized`) only take effect under `side_layout = "panel"`.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
 - **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.

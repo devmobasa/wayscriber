@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use super::panel_layout::selection_panel_anchor;
-use super::types::{PropertiesPanelLayout, ShapePropertiesPanel};
+use super::types::{PropertiesPanelLayout, SelectionPropertyEntry, ShapePropertiesPanel};
 use super::utils::format_timestamp;
 
 impl InputState {
@@ -14,6 +14,19 @@ impl InputState {
 
     pub fn is_properties_panel_open(&self) -> bool {
         self.shape_properties_panel.is_some()
+    }
+
+    /// Entries for the top-strip style pill's selection docking: the same
+    /// list the properties popup shows, built directly from the current
+    /// selection. Empty when nothing is selected. The popup itself stays
+    /// available from the context menu; the pill is an additional
+    /// always-visible surface over the same apply machinery.
+    pub fn selection_pill_entries(&self) -> Vec<SelectionPropertyEntry> {
+        let ids = self.selected_shape_ids();
+        if ids.is_empty() {
+            return Vec::new();
+        }
+        self.build_selection_property_entries(ids)
     }
 
     pub fn close_properties_panel(&mut self) {

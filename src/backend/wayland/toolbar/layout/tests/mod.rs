@@ -89,12 +89,14 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    // Width includes the island gaps/padding of the three-pill layout.
-    assert_eq!(top_size(&snapshot), (1145, 58));
+    // Width includes the island gaps/padding of the three-pill layout;
+    // height adds the contextual style pill under the 58px island band
+    // (6px gap + 40px pill) while a drawing tool is active.
+    assert_eq!(top_size(&snapshot), (1145, 104));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot).1, 60);
+    assert_eq!(top_size(&snapshot).1, 106);
 }
 
 #[test]
@@ -322,12 +324,13 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
         ToolbarEvent::NudgePolygonSides(-1)
     ));
 
-    // With the popover closed the bar carries no fill checkbox at all —
-    // the permanently reserved mini-checkbox lane is gone.
+    // With the popover closed the bar keeps only the island band plus the
+    // contextual style pill — the permanently reserved mini-checkbox lane
+    // is gone. The pill carries its own Fill toggle for shape tools.
     state.toolbar_shapes_expanded = false;
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&snapshot);
-    assert_eq!(h, 58);
+    assert_eq!(h, 104);
     let tree =
         crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
     assert!(tree.node_by_id(&"top.utility.fill".into()).is_none());
@@ -338,15 +341,22 @@ fn highlight_ring_row_grows_the_bar_only_while_active() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot).1, 58);
+    // Band (58) plus the contextual style pill (6 + 40) — no ring lane yet.
+    assert_eq!(top_size(&snapshot).1, 104);
 
     state.set_highlight_tool(true);
     let snapshot = snapshot_from_state(&state);
     assert!(snapshot.highlight_tool_active);
     let (w, h) = top_size(&snapshot);
+    // The highlight tool has no style properties, so the pill yields and
+    // only the ring lane grows the 58px band.
     assert!(h > 58, "ring row grows the bar: {h}");
     let tree =
         crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    assert!(
+        tree.node_by_id(&"top.island.style".into()).is_none(),
+        "no style pill while the highlight tool is active"
+    );
     let ring = tree
         .node_by_id(&"top.utility.highlight-ring".into())
         .expect("ring checkbox");

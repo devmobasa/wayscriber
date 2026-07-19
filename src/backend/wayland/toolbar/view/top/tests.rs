@@ -68,10 +68,12 @@ fn strip_reads_as_divider_chunked_groups() {
     assert!(ids.contains(&"top.divider.colors"));
     assert!(!ids.contains(&"top.divider.history"));
 
-    // The three pill islands back the strip.
+    // The four pill islands back the strip: the band's three plus the
+    // contextual style pill underneath.
     assert!(ids.contains(&"top.island.tools"));
     assert!(ids.contains(&"top.island.history"));
     assert!(ids.contains(&"top.island.chrome"));
+    assert!(ids.contains(&"top.island.style"));
 }
 
 #[test]
@@ -86,6 +88,8 @@ fn islands_are_detached_pills_in_reading_order() {
     let history = island("history");
     let chrome = island("chrome");
 
+    let style = island("style");
+
     // Pills read left to right with clear gaps between their edges.
     let gap = ToolbarLayoutSpec::TOP_ISLAND_GAP;
     assert!((history.rect.0 - (tools.rect.0 + tools.rect.2) - gap).abs() < 1e-9);
@@ -94,9 +98,28 @@ fn islands_are_detached_pills_in_reading_order() {
     assert_eq!(tools.rect.0, 0.0);
     let (w, _) = tree.size();
     assert!((chrome.rect.0 + chrome.rect.2 - w).abs() < 1e-9);
-    for node in [&tools, &history, &chrome] {
+    for node in [&tools, &history, &chrome, &style] {
         assert!(matches!(node.kind, WidgetKind::Panel));
         assert!(node.interact.is_none());
+    }
+
+    // The style pill is a detached fourth pill left-aligned with island A
+    // under the band.
+    assert_eq!(style.rect.0, 0.0);
+    assert!(
+        (style.rect.1 - (tools.rect.1 + tools.rect.3 + ToolbarLayoutSpec::TOP_STYLE_PILL_GAP))
+            .abs()
+            < 1e-9,
+        "style pill sits one gap under the band"
+    );
+    assert_eq!(style.rect.3, ToolbarLayoutSpec::TOP_STYLE_PILL_H);
+    // The pill contents stay inside their pill.
+    for node in tree.nodes() {
+        if node.id.as_str().starts_with("top.style.") {
+            assert!(node.rect.1 >= style.rect.1 && node.rect.0 >= style.rect.0);
+            assert!(node.rect.0 + node.rect.2 <= style.rect.0 + style.rect.2 + 1e-9);
+            assert!(node.rect.1 + node.rect.3 <= style.rect.1 + style.rect.3 + 1e-9);
+        }
     }
 
     // The island contents stay inside their pill.
@@ -335,18 +358,24 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     let (w, h) = top_size(&snapshot);
     let rects = top_input_rects(&snapshot, w as f64, h as f64)
         .expect("no popover: the islands still restrict input");
-    assert_eq!(rects.len(), 3, "three island pills only: {rects:?}");
-    // The gaps between islands click through to the canvas even in the
-    // common no-popover state: consecutive island rects do not touch.
+    assert_eq!(
+        rects.len(),
+        4,
+        "band pills plus the style pill only: {rects:?}"
+    );
+    // The gaps between the band islands click through to the canvas even in
+    // the common no-popover state: consecutive island rects do not touch.
     assert!(rects[0].0 + rects[0].2 < rects[1].0);
     assert!(rects[1].0 + rects[1].2 < rects[2].0);
+    // The style pill is the fourth rect, detached below the band.
+    assert!(rects[3].1 > rects[0].1 + rects[0].3);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
     let islands: Vec<_> = tree
         .nodes()
         .iter()
         .filter(|node| node.id.as_str().starts_with("top.island."))
         .collect();
-    assert_eq!(islands.len(), 3);
+    assert_eq!(islands.len(), 4);
     for (island, input_rect) in islands.iter().zip(&rects) {
         assert_eq!(island.rect, *input_rect, "{}", island.id);
     }
@@ -356,24 +385,29 @@ fn input_rects_cover_islands_and_open_popovers_only() {
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
     let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("partial input region");
-    assert_eq!(rects.len(), 4, "three islands + shapes panel: {rects:?}");
+    assert_eq!(rects.len(), 5, "four islands + shapes panel: {rects:?}");
     assert_eq!(rects[0].0, 0.0);
     assert_eq!(rects[0].1, 0.0);
-    for island in &rects[..3] {
+    for island in &rects[..4] {
         assert!(
             island.1 + island.3 < h as f64,
             "islands end above the popover"
         );
     }
-    // The gaps between islands stay click-through: consecutive island
-    // rects do not touch.
+    // The gaps between the band islands stay click-through: consecutive
+    // island rects do not touch.
     assert!(rects[0].0 + rects[0].2 < rects[1].0);
     assert!(rects[1].0 + rects[1].2 < rects[2].0);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
     let panel = tree
         .node_by_id(&"top.shapes.panel".into())
         .expect("panel node");
-    assert!(rects[3].1 <= panel.rect.1 && rects[3].3 >= panel.rect.3);
+    assert!(rects[4].1 <= panel.rect.1 && rects[4].3 >= panel.rect.3);
+    // The popover opens below the style pill, never over it.
+    let style = tree
+        .node_by_id(&"top.island.style".into())
+        .expect("style pill");
+    assert!(panel.rect.1 >= style.rect.1 + style.rect.3);
 }
 
 #[test]
@@ -391,8 +425,8 @@ fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
         .iter()
         .filter(|node| node.id.as_str().starts_with("top.island."))
         .collect();
-    assert_eq!(islands.len(), 3, "tools/history/chrome pills");
-    for (island, input_rect) in islands.iter().zip(&input_rects[..3]) {
+    assert_eq!(islands.len(), 4, "tools/history/chrome/style pills");
+    for (island, input_rect) in islands.iter().zip(&input_rects[..4]) {
         assert_eq!(island.rect, *input_rect, "{}", island.id);
         assert!(
             island.rect.1 + island.rect.3 < h as f64,
@@ -527,6 +561,408 @@ fn overflow_utility_tooltips_remain_bare_action_labels() {
             .and_then(|interaction| interaction.tooltip.as_deref()),
         Some(action_label(Action::EnterTextMode))
     );
+}
+
+/// Snapshot with one tool active and the settings overrides pinned off, so
+/// each case exercises exactly one pure style-pill morph state (the
+/// overrides themselves are covered by the spec's unit tests).
+fn snapshot_for_tool(tool: crate::input::Tool) -> ToolbarSnapshot {
+    let mut snapshot = snapshot();
+    snapshot.active_tool = tool;
+    snapshot.tool_override = None;
+    snapshot.thickness_targets_eraser = tool == crate::input::Tool::Eraser;
+    snapshot.thickness_targets_marker = tool == crate::input::Tool::Marker;
+    snapshot.show_text_controls = false;
+    snapshot.show_marker_opacity_section = false;
+    snapshot
+}
+
+fn style_ids(tree: &WidgetTree) -> Vec<String> {
+    tree.nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.style."))
+        .map(|node| node.id.as_str().to_string())
+        .collect()
+}
+
+#[test]
+fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
+    use crate::backend::wayland::toolbar::events::HitKind;
+
+    let snapshot = snapshot_for_tool(crate::input::Tool::Pen);
+    let tree = build(&snapshot);
+
+    let chip = tree
+        .node_by_id(&"top.style.color-chip".into())
+        .expect("pill color chip");
+    assert!(matches!(
+        chip.interact.as_ref().unwrap().event,
+        ToolbarEvent::OpenColorPickerPopup
+    ));
+    match chip.kind {
+        WidgetKind::Swatch { color, selected } => {
+            assert_eq!(
+                color,
+                (
+                    snapshot.color.r,
+                    snapshot.color.g,
+                    snapshot.color.b,
+                    snapshot.color.a
+                )
+            );
+            assert!(selected, "the chip always shows the live color as active");
+        }
+        ref other => panic!("chip swatch kind, got {other:?}"),
+    }
+
+    let swatch = tree
+        .node_by_id(&"top.style.swatch.0".into())
+        .expect("pill quick swatch");
+    let entry = &snapshot.quick_colors.rendered_entries()[0];
+    assert!(matches!(
+        swatch.interact.as_ref().unwrap().event,
+        ToolbarEvent::SetQuickColor { color, action }
+            if color == entry.color
+                && action == crate::config::QuickColorPalette::action_for_index(0)
+    ));
+
+    let slider = tree
+        .node_by_id(&"top.style.thickness".into())
+        .expect("pill thickness slider");
+    let spec = model::ToolbarSliderSpec::THICKNESS;
+    match slider.kind {
+        WidgetKind::Slider { t } => {
+            assert!((t - spec.t_from_value(snapshot.thickness)).abs() < 1e-9);
+        }
+        ref other => panic!("slider kind, got {other:?}"),
+    }
+    let interaction = slider.interact.as_ref().unwrap();
+    assert_eq!(
+        interaction.kind,
+        HitKind::DragSetThickness {
+            min: spec.min,
+            max: spec.max,
+        },
+        "the pill reuses the existing thickness drag kind"
+    );
+    assert!(matches!(
+        interaction.event,
+        ToolbarEvent::SetThickness(value) if value == snapshot.thickness
+    ));
+
+    // The live numeral is a distinct pango-labelled button that opens the
+    // overlay precise-entry popup.
+    let numeral = tree
+        .node_by_id(&"top.style.thickness-value".into())
+        .expect("pill thickness numeral");
+    match &numeral.kind {
+        WidgetKind::TextButton { label, .. } => {
+            assert_eq!(label.text, format!("{:.0}px", snapshot.thickness));
+        }
+        other => panic!("numeral kind, got {other:?}"),
+    }
+    // The numeral opens the overlay precise-entry popup.
+    assert_eq!(
+        numeral.interact.as_ref().map(|interact| &interact.event),
+        Some(&ToolbarEvent::OpenPrecisionEntry(
+            crate::ui::toolbar::PrecisionEntryTarget::Thickness
+        ))
+    );
+}
+
+#[test]
+fn style_pill_morphs_per_tool() {
+    use crate::backend::wayland::toolbar::events::HitKind;
+    use crate::input::{EraserMode, Tool};
+
+    // Marker: thickness (targeting the marker size) plus the opacity slider
+    // with its inline readout decoration.
+    let marker = snapshot_for_tool(Tool::Marker);
+    let tree = build(&marker);
+    let opacity = tree
+        .node_by_id(&"top.style.opacity".into())
+        .expect("marker opacity slider");
+    let spec = model::ToolbarSliderSpec::MARKER_OPACITY;
+    assert_eq!(
+        opacity.interact.as_ref().unwrap().kind,
+        HitKind::DragSetMarkerOpacity {
+            min: spec.min,
+            max: spec.max,
+        }
+    );
+    let readout = tree
+        .node_by_id(&"top.style.opacity.readout".into())
+        .expect("opacity readout");
+    match &readout.kind {
+        WidgetKind::Label(label) => {
+            assert_eq!(label.text, format!("{:.0}%", marker.marker_opacity * 100.0));
+        }
+        other => panic!("readout kind, got {other:?}"),
+    }
+    assert!(readout.interact.is_none());
+
+    // Eraser: colorless; the old checkbox became a Brush/Stroke segment
+    // emitting SetEraserMode, painted by the activated SegmentedControl.
+    let eraser = snapshot_for_tool(Tool::Eraser);
+    let tree = build(&eraser);
+    let ids = style_ids(&tree);
+    assert!(!ids.contains(&"top.style.color-chip".to_string()));
+    assert!(!ids.contains(&"top.style.swatch.0".to_string()));
+    let segment = tree
+        .node_by_id(&"top.style.eraser-mode".into())
+        .expect("eraser mode segment");
+    match &segment.kind {
+        WidgetKind::SegmentedControl {
+            left,
+            right,
+            active_right,
+        } => {
+            assert_eq!(left.text, "Brush");
+            assert_eq!(right.text, "Stroke");
+            assert_eq!(*active_right, eraser.eraser_mode == EraserMode::Stroke);
+        }
+        other => panic!("segment kind, got {other:?}"),
+    }
+    assert!(segment.interact.is_none(), "halves carry the interactions");
+    for (id, mode) in [
+        ("top.style.eraser-mode.brush", EraserMode::Brush),
+        ("top.style.eraser-mode.stroke", EraserMode::Stroke),
+    ] {
+        let half = tree.node_by_id(&id.into()).expect("segment half");
+        assert!(matches!(half.kind, WidgetKind::HitArea));
+        assert!(matches!(
+            half.interact.as_ref().unwrap().event,
+            ToolbarEvent::SetEraserMode(value) if value == mode
+        ));
+    }
+    // The eraser-size numeral shares the thickness precise-entry target
+    // (the snapshot routes the eraser size through `thickness`).
+    match tree
+        .node_by_id(&"top.style.thickness-value".into())
+        .expect("eraser size numeral")
+        .interact
+        .as_ref()
+        .map(|interact| &interact.event)
+    {
+        Some(ToolbarEvent::OpenPrecisionEntry(
+            crate::ui::toolbar::PrecisionEntryTarget::Thickness,
+        )) => {}
+        other => panic!("numeral opens the precise entry, got {other:?}"),
+    }
+
+    // Shapes: the Fill mini-toggle joins the stroke controls.
+    let rect = snapshot_for_tool(Tool::Rect);
+    let tree = build(&rect);
+    let fill = tree
+        .node_by_id(&"top.style.fill".into())
+        .expect("fill toggle");
+    assert!(matches!(
+        fill.kind,
+        WidgetKind::MiniCheckbox { checked, .. } if checked == rect.fill_enabled
+    ));
+    assert!(matches!(
+        fill.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleFill(value) if value == !rect.fill_enabled
+    ));
+
+    // Arrow: auto-number toggle, and the reset button (with the next-N
+    // tooltip) only while numbering is enabled.
+    let mut arrow = snapshot_for_tool(Tool::Arrow);
+    arrow.arrow_label_enabled = false;
+    let tree = build(&arrow);
+    assert!(tree.node_by_id(&"top.style.auto-number".into()).is_some());
+    assert!(
+        tree.node_by_id(&"top.style.counter-reset.arrow".into())
+            .is_none()
+    );
+    arrow.arrow_label_enabled = true;
+    arrow.arrow_label_next = 7;
+    let tree = build(&arrow);
+    let reset = tree
+        .node_by_id(&"top.style.counter-reset.arrow".into())
+        .expect("arrow counter reset");
+    let interaction = reset.interact.as_ref().unwrap();
+    assert!(matches!(
+        interaction.event,
+        ToolbarEvent::ResetArrowLabelCounter
+    ));
+    assert_eq!(
+        interaction.tooltip.as_deref(),
+        Some("Reset numbering to 1 (next: 7)")
+    );
+
+    // Step marker: the reset targets the step counter.
+    let mut step = snapshot_for_tool(Tool::StepMarker);
+    step.step_marker_next = 4;
+    let tree = build(&step);
+    let reset = tree
+        .node_by_id(&"top.style.counter-reset.step".into())
+        .expect("step counter reset");
+    let interaction = reset.interact.as_ref().unwrap();
+    assert!(matches!(
+        interaction.event,
+        ToolbarEvent::ResetStepMarkerCounter
+    ));
+    assert_eq!(
+        interaction.tooltip.as_deref(),
+        Some("Reset numbering to 1 (next: 4)")
+    );
+
+    // Text: pt-labelled size slider plus the Sans/Mono segment.
+    let mut text = snapshot();
+    text.text_active = true;
+    let tree = build(&text);
+    let size = tree
+        .node_by_id(&"top.style.font-size".into())
+        .expect("font size slider");
+    assert_eq!(
+        size.interact.as_ref().unwrap().kind,
+        HitKind::DragSetFontSize
+    );
+    match &tree
+        .node_by_id(&"top.style.font-size-value".into())
+        .expect("font size numeral")
+        .kind
+    {
+        WidgetKind::TextButton { label, .. } => {
+            assert_eq!(label.text, format!("{:.0}pt", text.font_size));
+        }
+        other => panic!("numeral kind, got {other:?}"),
+    }
+    assert!(matches!(
+        &tree
+            .node_by_id(&"top.style.font-family".into())
+            .expect("font family segment")
+            .kind,
+        WidgetKind::SegmentedControl { left, right, .. }
+            if left.text == "Sans" && right.text == "Mono"
+    ));
+    for (id, family) in [
+        ("top.style.font-family.sans", "Sans"),
+        ("top.style.font-family.mono", "Monospace"),
+    ] {
+        let half = tree.node_by_id(&id.into()).expect("family half");
+        assert!(matches!(
+            &half.interact.as_ref().unwrap().event,
+            ToolbarEvent::SetFont(font) if font.family == family
+        ));
+    }
+    assert!(!style_ids(&tree).contains(&"top.style.thickness".to_string()));
+}
+
+#[test]
+fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
+    use crate::input::Tool;
+
+    // Select without a selection: the pill yields entirely — no pill node,
+    // no fourth input rect, no extra height for it.
+    let select = snapshot_for_tool(Tool::Select);
+    let (w, h) = top_size(&select);
+    let tree = build_top_view(&select, w as f64, h as f64);
+    assert!(tree.node_by_id(&"top.island.style".into()).is_none());
+    assert!(style_ids(&tree).is_empty());
+    let rects = top_input_rects(&select, w as f64, h as f64).expect("island input rects");
+    assert_eq!(rects.len(), 3, "no pill rect for Select: {rects:?}");
+
+    // Select with a selection: the docked properties bring the pill (and
+    // its fourth input rect) back, with the same geometry contract.
+    let mut selection = snapshot_for_tool(Tool::Select);
+    selection.selection_properties = vec![
+        crate::input::SelectionPropertyEntry {
+            label: "Color".to_string(),
+            value: "Red".to_string(),
+            kind: crate::input::SelectionPropertyKind::Color,
+            disabled: false,
+        },
+        crate::input::SelectionPropertyEntry {
+            label: "Thickness".to_string(),
+            value: "3.0px".to_string(),
+            kind: crate::input::SelectionPropertyKind::Thickness,
+            disabled: false,
+        },
+    ];
+    let (w, h) = top_size(&selection);
+    let tree = build_top_view(&selection, w as f64, h as f64);
+    let style = tree
+        .node_by_id(&"top.island.style".into())
+        .expect("selection pill card");
+    assert_eq!(
+        style.rect.3,
+        ToolbarLayoutSpec::TOP_STYLE_PILL_H,
+        "selection pill height"
+    );
+    assert_eq!(
+        style_ids(&tree),
+        [
+            "top.style.sel.color",
+            "top.style.sel.thickness.minus",
+            "top.style.sel.thickness.value",
+            "top.style.sel.thickness.plus",
+        ]
+    );
+    let rects = top_input_rects(&selection, w as f64, h as f64).expect("island input rects");
+    assert_eq!(rects.len(), 4, "selection pill rect: {rects:?}");
+    let pill_rect = rects[3];
+    assert_eq!(
+        (pill_rect.0, pill_rect.1, pill_rect.2, pill_rect.3),
+        style.rect,
+        "pill input rect matches the card"
+    );
+
+    for tool in [
+        Tool::Pen,
+        Tool::Marker,
+        Tool::Eraser,
+        Tool::Rect,
+        Tool::Arrow,
+        Tool::StepMarker,
+    ] {
+        let snapshot = snapshot_for_tool(tool);
+        let (w, h) = top_size(&snapshot);
+        let tree = build_top_view(&snapshot, w as f64, h as f64);
+        let tools = tree
+            .node_by_id(&"top.island.tools".into())
+            .expect("tools island");
+        let style = tree
+            .node_by_id(&"top.island.style".into())
+            .unwrap_or_else(|| panic!("{tool:?} style pill"));
+
+        // Detached fourth pill: left-aligned with island A, one gap under
+        // the band, pill-token height.
+        assert_eq!(style.rect.0, 0.0, "{tool:?}");
+        assert!(
+            (style.rect.1 - (tools.rect.1 + tools.rect.3 + ToolbarLayoutSpec::TOP_STYLE_PILL_GAP))
+                .abs()
+                < 1e-9,
+            "{tool:?} pill y"
+        );
+        assert_eq!(
+            style.rect.3,
+            ToolbarLayoutSpec::TOP_STYLE_PILL_H,
+            "{tool:?}"
+        );
+
+        // Every pill control paints and hits inside the pill card.
+        let ids = style_ids(&tree);
+        assert!(!ids.is_empty(), "{tool:?} pill content");
+        for node in tree.nodes() {
+            if node.id.as_str().starts_with("top.style.") {
+                assert!(
+                    node.rect.0 >= style.rect.0 - 1e-9
+                        && node.rect.1 >= style.rect.1 - 1e-9
+                        && node.rect.0 + node.rect.2 <= style.rect.0 + style.rect.2 + 1e-9
+                        && node.rect.1 + node.rect.3 <= style.rect.1 + style.rect.3 + 1e-9,
+                    "{tool:?} {} escapes the pill",
+                    node.id
+                );
+            }
+        }
+
+        // The pill joins the surface input region as the fourth rect.
+        let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("island input rects");
+        assert_eq!(rects.len(), 4, "{tool:?} rects: {rects:?}");
+        assert_eq!(rects[3], style.rect, "{tool:?} pill input rect");
+    }
 }
 
 #[test]

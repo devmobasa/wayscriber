@@ -367,6 +367,10 @@ pub struct ToolbarSnapshot {
     pub recent_sessions: Vec<SessionRecentSnapshot>,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub pending_save_as_overwrite_path: Option<PathBuf>,
+    /// Selection-property entries docked into the style pill while the
+    /// select tool has an active selection (mirrors the overlay properties
+    /// popup's entry list; empty when nothing is selected).
+    pub selection_properties: Vec<crate::input::SelectionPropertyEntry>,
 }
 
 impl ToolbarSnapshot {

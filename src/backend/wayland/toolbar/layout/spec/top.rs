@@ -37,6 +37,34 @@ impl ToolbarLayoutSpec {
     /// Height of one option row (Fill, polygon sides) inside the popover.
     pub(in crate::backend::wayland::toolbar) const TOP_OPTION_ROW_H: f64 = 24.0;
 
+    // ---- Style pill (island D): the contextual row under the islands ----
+    /// Vertical gap between the island band and the style pill.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PILL_GAP: f64 = 6.0;
+    /// Style pill height (one control row plus vertical padding).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PILL_H: f64 = 40.0;
+    /// Slider track width inside the pill.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SLIDER_W: f64 = 110.0;
+    /// Standard control-row height inside the pill (sliders, buttons,
+    /// segments, numerals).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_ROW_H: f64 = 24.0;
+    /// Live numeral button width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_VALUE_W: f64 = 44.0;
+    /// Mini-toggle height (Fill, Auto-number).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_TOGGLE_H: f64 = 18.0;
+    /// Fill toggle width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_FILL_W: f64 = 64.0;
+    /// Auto-number toggle width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_AUTO_NUMBER_W: f64 = 108.0;
+    /// Counter reset button width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_RESET_W: f64 = 56.0;
+    /// Two-segment control width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_W: f64 = 120.0;
+    /// Docked selection-property value button width (cycle buttons and
+    /// the readout between stepper halves).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEL_VALUE_W: f64 = 64.0;
+    /// Stepper half (−/+) width for docked numeric selection properties.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_STEP_W: f64 = 20.0;
+
     pub(in crate::backend::wayland::toolbar) fn top_size(
         &self,
         snapshot: &ToolbarSnapshot,

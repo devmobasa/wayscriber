@@ -194,6 +194,11 @@ impl ToolbarSnapshot {
             // the backend publishes the animated value.
             top_fade: 1.0,
             side_minimized: state.toolbar_side_minimized,
+            selection_properties: if active_tool == crate::input::Tool::Select {
+                state.selection_pill_entries()
+            } else {
+                Vec::new()
+            },
             top_viewport_max: None,
             active_side_pane,
             side_scroll,

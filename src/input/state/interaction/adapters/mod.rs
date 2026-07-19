@@ -12,7 +12,7 @@ pub(crate) use keyboard::{
     action_for_key_binding, handle_board_picker_key, handle_building_polygon_key,
     handle_color_picker_key, handle_command_palette_key, handle_context_menu_key,
     handle_drawing_escape_cancel_key, handle_global_modifier_key, handle_help_overlay_key,
-    handle_idle_selection_cancel_key, handle_pending_delete_cancel_key,
+    handle_idle_selection_cancel_key, handle_pending_delete_cancel_key, handle_precision_entry_key,
     handle_properties_panel_key, handle_radial_menu_key, handle_return_edit_selected_text_key,
     handle_text_input_key, handle_tour_key,
 };

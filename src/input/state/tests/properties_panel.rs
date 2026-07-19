@@ -71,6 +71,80 @@ fn show_properties_panel_for_multi_selection_includes_locked_count_and_summary()
 }
 
 #[test]
+fn style_pill_selection_docking_routes_through_the_properties_apply_machinery() {
+    use crate::input::SelectionPropertyKind;
+    use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+
+    let mut state = create_test_input_state();
+    let shape_id = add_rect(&mut state, 10, 20, 30, 40);
+    state.set_selection(vec![shape_id]);
+    assert!(state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Select)));
+
+    // The pill mirrors the popup's entry list without the popup opening.
+    let entries = state.selection_pill_entries();
+    assert!(state.properties_panel().is_none());
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.kind == SelectionPropertyKind::Thickness)
+    );
+
+    // The snapshot docks the same entries under the select tool.
+    let snapshot = ToolbarSnapshot::from_input(&state);
+    assert_eq!(snapshot.selection_properties, entries);
+
+    // A pill event adjusts the shape through the shared apply machinery.
+    let thickness_of = |state: &InputState| match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("selected shape")
+        .shape
+    {
+        Shape::Rect { thick, .. } => *thick,
+        other => panic!("unexpected shape {other:?}"),
+    };
+    let before = thickness_of(&state);
+    assert!(
+        state.apply_toolbar_event(ToolbarEvent::AdjustSelectionProperty {
+            kind: SelectionPropertyKind::Thickness,
+            direction: 1,
+        })
+    );
+    assert!(thickness_of(&state) > before);
+
+    // Locked shapes surface as disabled entries and refuse adjustment.
+    let index = state
+        .boards
+        .active_frame()
+        .find_index(shape_id)
+        .expect("shape index");
+    state.boards.active_frame_mut().shapes[index].locked = true;
+    let entries = state.selection_pill_entries();
+    assert!(
+        entries.iter().all(|entry| entry.disabled),
+        "locked selection disables every entry: {entries:?}"
+    );
+    let locked_before = thickness_of(&state);
+    assert!(
+        !state.apply_toolbar_event(ToolbarEvent::AdjustSelectionProperty {
+            kind: SelectionPropertyKind::Thickness,
+            direction: 1,
+        })
+    );
+    assert_eq!(thickness_of(&state), locked_before);
+
+    // Clearing the selection empties the docked list again.
+    state.clear_selection();
+    assert!(state.selection_pill_entries().is_empty());
+    assert!(
+        ToolbarSnapshot::from_input(&state)
+            .selection_properties
+            .is_empty()
+    );
+}
+
+#[test]
 fn close_properties_panel_clears_panel_and_requests_redraw() {
     let mut state = create_test_input_state();
     let shape_id = add_rect(&mut state, 5, 5, 10, 10);

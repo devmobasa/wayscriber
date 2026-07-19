@@ -15,7 +15,7 @@ use crate::models::{
     RenderProfileMappingSide, RenderProfileTextField, SessionCatalogActionResult,
     SessionCatalogItem, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
     TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, TripletField, UiTabId, UiThemeOption,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiTabId, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -80,6 +80,7 @@ pub enum Message {
     UiThemeChanged(UiThemeOption),
     UiReducedMotionChanged(ReducedMotionOption),
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
+    ToolbarSideLayoutChanged(ToolbarSideLayoutOption),
     ToolbarRebindModifierChanged(ToolbarRebindModifierOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideChanged(ToolbarOverrideField, OverrideOption),

@@ -108,6 +108,37 @@ fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
 }
 
 #[test]
+fn toolbar_side_layout_defaults_to_panel_and_round_trips() {
+    use crate::config::ToolbarSideLayout;
+
+    // Panel stays the default until the Session/Settings panes are
+    // re-hosted in the top strip (M4-B3); flipping the default to Pill
+    // before then would retire the only surface those panes live on.
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(
+        default_config.ui.toolbar.side_layout,
+        ToolbarSideLayout::Panel
+    );
+
+    for (value, expected) in [
+        ("pill", ToolbarSideLayout::Pill),
+        ("panel", ToolbarSideLayout::Panel),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui.toolbar]\nside_layout = '{value}'\n"))
+            .expect("supported side layout should parse");
+        assert_eq!(config.ui.toolbar.side_layout, expected);
+
+        let saved = toml::to_string(&config).expect("config should serialize");
+        let reloaded: Config = toml::from_str(&saved).expect("saved config should reload");
+        assert_eq!(reloaded.ui.toolbar.side_layout, expected);
+    }
+
+    let error = toml::from_str::<Config>("[ui.toolbar]\nside_layout = 'drawer'\n")
+        .expect_err("unknown side layout should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
 fn ui_theme_rejects_unknown_values() {
     let error = toml::from_str::<Config>("[ui]\ntheme = 'sepia'\n")
         .expect_err("unknown ui theme should fail");

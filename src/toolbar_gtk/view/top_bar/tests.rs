@@ -213,6 +213,46 @@ fn expected_semantic_records(
     records
 }
 
+/// Variant of `base` with one tool active and the settings overrides pinned
+/// off, so each scenario exercises exactly one pure style-pill morph state.
+fn style_pill_tool_snapshot(base: &ToolbarSnapshot, tool: Tool) -> ToolbarSnapshot {
+    let mut snapshot = base.clone();
+    snapshot.active_tool = tool;
+    snapshot.tool_override = None;
+    snapshot.thickness_targets_eraser = tool == Tool::Eraser;
+    snapshot.thickness_targets_marker = tool == Tool::Marker;
+    snapshot.show_text_controls = false;
+    snapshot.show_marker_opacity_section = false;
+    snapshot
+}
+
+fn selection_property_entry(
+    label: &str,
+    value: &str,
+    kind: crate::input::SelectionPropertyKind,
+    disabled: bool,
+) -> crate::input::SelectionPropertyEntry {
+    crate::input::SelectionPropertyEntry {
+        label: label.to_string(),
+        value: value.to_string(),
+        kind,
+        disabled,
+    }
+}
+
+/// Select tool with a docked selection: a cycle entry, a stepper entry,
+/// and a locked (disabled) cycle entry.
+fn style_pill_selection_snapshot(base: &ToolbarSnapshot) -> ToolbarSnapshot {
+    use crate::input::SelectionPropertyKind as K;
+    let mut snapshot = style_pill_tool_snapshot(base, Tool::Select);
+    snapshot.selection_properties = vec![
+        selection_property_entry("Color", "Red", K::Color, false),
+        selection_property_entry("Thickness", "3.0px", K::Thickness, false),
+        selection_property_entry("Fill", "Locked", K::Fill, true),
+    ];
+    snapshot
+}
+
 fn record_id(record: &SemanticAdapterRecord) -> &str {
     match record {
         SemanticAdapterRecord::Divider(id) => id,
@@ -272,6 +312,7 @@ fn nearest_island_key(widget: &gtk4::Widget) -> Option<String> {
 fn expected_island_keys(
     snapshot: &ToolbarSnapshot,
     spec: &model::TopToolbarSpec,
+    plan: &TopStripPlan,
 ) -> HashMap<String, Option<&'static str>> {
     let mut expected = HashMap::new();
     let islands_built = !snapshot.top_minimized && !snapshot.top_micro_active();
@@ -291,10 +332,32 @@ fn expected_island_keys(
     for control in spec.contextual() {
         expected.insert(control.id().render_id().into_owned(), None);
     }
+    // Every style-pill control must sit inside the detached `island.style`
+    // pill box under the band.
+    for (id, _) in style_pill_controls(snapshot, plan) {
+        expected.insert(id, Some("style"));
+    }
     expected
 }
 
-fn expected_main_widget_ids(spec: &model::TopToolbarSpec) -> Vec<String> {
+/// Ordered `(id, control)` list of the style pill for one snapshot, from
+/// the shared morph spec both frontends render.
+fn style_pill_controls(
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+) -> Vec<(String, model::StylePillControl)> {
+    model::StylePillSpec::build(snapshot, plan)
+        .controls()
+        .iter()
+        .map(|control| (control.id().into_owned(), *control))
+        .collect()
+}
+
+fn expected_main_widget_ids(
+    spec: &model::TopToolbarSpec,
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+) -> Vec<String> {
     let mut ids = spec
         .strip()
         .iter()
@@ -308,6 +371,12 @@ fn expected_main_widget_ids(spec: &model::TopToolbarSpec) -> Vec<String> {
             .iter()
             .chain(spec.contextual())
             .map(|control| control.id().render_id().into_owned()),
+    );
+    // The style pill renders under the islands, after every band widget.
+    ids.extend(
+        style_pill_controls(snapshot, plan)
+            .into_iter()
+            .map(|(id, _)| id),
     );
     ids
 }
@@ -421,6 +490,186 @@ fn assert_gtk_control_widget(widget: &gtk4::Widget, expected: &SemanticControlRe
         && let Some(label) = button.label()
     {
         assert_eq!(label, expected.label, "{} text label", expected.id);
+    }
+}
+
+/// Assert one GTK style-pill widget against its shared-spec control: widget
+/// class per role, live label/value text, tooltip, active state, and the
+/// segment halves' labels/actives for segmented controls.
+fn assert_gtk_style_widget(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+) {
+    let id = widget.widget_name().to_string();
+    match control.role() {
+        model::StylePillRole::Swatch => {
+            let button = widget
+                .clone()
+                .downcast::<gtk4::Button>()
+                .unwrap_or_else(|_| panic!("{id} is a swatch button"));
+            assert!(button.has_css_class("swatch"), "{id} swatch class");
+            assert_eq!(
+                button.tooltip_text().as_deref(),
+                control.tooltip(snapshot).as_deref(),
+                "{id} tooltip"
+            );
+            assert_accessible_label(widget, &control.label(snapshot), &id);
+        }
+        model::StylePillRole::Slider => {
+            // SliderRow: a box hosting the hand-drawn track DrawingArea.
+            assert!(widget.is::<gtk4::Box>(), "{id} slider row");
+            assert!(
+                find_control_surface(widget)
+                    .is_some_and(|surface| surface.is::<gtk4::DrawingArea>()),
+                "{id} slider track"
+            );
+        }
+        model::StylePillRole::Value => {
+            let button = widget
+                .clone()
+                .downcast::<gtk4::Button>()
+                .unwrap_or_else(|_| panic!("{id} is a numeral button"));
+            assert_eq!(
+                button.label().as_deref(),
+                control.value_text(snapshot).as_deref(),
+                "{id} live numeral"
+            );
+            assert_eq!(
+                button.tooltip_text().as_deref(),
+                control.tooltip(snapshot).as_deref(),
+                "{id} tooltip"
+            );
+        }
+        model::StylePillRole::Toggle => {
+            let check = widget
+                .clone()
+                .downcast::<gtk4::CheckButton>()
+                .unwrap_or_else(|_| panic!("{id} is a check button"));
+            assert_eq!(check.is_active(), control.active(snapshot), "{id} state");
+            assert_eq!(
+                check.label().as_deref(),
+                Some(control.label(snapshot).as_ref()),
+                "{id} label"
+            );
+            assert_eq!(
+                check.tooltip_text().as_deref(),
+                control.tooltip(snapshot).as_deref(),
+                "{id} tooltip"
+            );
+        }
+        model::StylePillRole::Button => {
+            let button = widget
+                .clone()
+                .downcast::<gtk4::Button>()
+                .unwrap_or_else(|_| panic!("{id} is a button"));
+            // Docked selection cycle buttons show the live value; plain
+            // buttons show their label.
+            let expected_text = match control {
+                model::StylePillControl::SelectionCycle(_) => {
+                    control.value_text(snapshot).expect("cycle value text")
+                }
+                _ => control.label(snapshot).into_owned(),
+            };
+            assert_eq!(
+                button.label().as_deref(),
+                Some(expected_text.as_str()),
+                "{id} text"
+            );
+            assert_eq!(
+                button.is_sensitive(),
+                control.enabled(snapshot),
+                "{id} enabled"
+            );
+            assert_eq!(
+                button.tooltip_text().as_deref(),
+                control.tooltip(snapshot).as_deref(),
+                "{id} tooltip"
+            );
+        }
+        model::StylePillRole::Stepper => {
+            let steps = control.steps(snapshot).expect("stepper halves");
+            assert!(widget.is::<gtk4::Box>(), "{id} stepper row");
+            let minus = widget.first_child().expect("stepper minus half");
+            let value = minus.next_sibling().expect("stepper value readout");
+            let plus = value.next_sibling().expect("stepper plus half");
+            assert!(plus.next_sibling().is_none(), "{id} has three children");
+            for (half, step) in [(&minus, &steps[0]), (&plus, &steps[1])] {
+                let button = half
+                    .clone()
+                    .downcast::<gtk4::Button>()
+                    .unwrap_or_else(|_| panic!("{} is a button", step.id));
+                assert_eq!(half.widget_name().as_str(), step.id, "{id} half id");
+                assert_eq!(
+                    button.label().as_deref(),
+                    Some(step.label),
+                    "{} label",
+                    step.id
+                );
+                assert_eq!(
+                    button.tooltip_text().as_deref(),
+                    Some(step.tooltip.as_str()),
+                    "{} tooltip",
+                    step.id
+                );
+                assert_eq!(
+                    button.is_sensitive(),
+                    control.enabled(snapshot),
+                    "{} enabled",
+                    step.id
+                );
+            }
+            let value_label = value
+                .downcast::<gtk4::Label>()
+                .unwrap_or_else(|_| panic!("{id} value readout is a label"));
+            assert_eq!(
+                value_label.widget_name().as_str(),
+                format!("{}.value", control.id()),
+                "{id} value id"
+            );
+            assert_eq!(
+                Some(value_label.text().to_string()),
+                control.value_text(snapshot),
+                "{id} live value"
+            );
+        }
+        model::StylePillRole::Segmented => {
+            let segments = control.segments(snapshot).expect("segment halves");
+            let mut buttons = Vec::new();
+            let mut child = widget.first_child();
+            while let Some(current) = child {
+                child = current.next_sibling();
+                buttons.push(
+                    current
+                        .downcast::<gtk4::Button>()
+                        .unwrap_or_else(|_| panic!("{id} segment half is a button")),
+                );
+            }
+            assert_eq!(buttons.len(), segments.len(), "{id} segment count");
+            for (button, segment) in buttons.iter().zip(&segments) {
+                // Contract-id parity with the builtin tree's HitArea halves.
+                assert_eq!(button.widget_name().as_str(), segment.id, "{id} half id");
+                assert!(button.has_css_class("tab"), "{id} tab class");
+                assert_eq!(
+                    button.label().as_deref(),
+                    Some(segment.label),
+                    "{} label",
+                    segment.id
+                );
+                assert_eq!(
+                    button.has_css_class("active"),
+                    segment.active,
+                    "{} active state",
+                    segment.id
+                );
+                assert_eq!(
+                    button.tooltip_text().as_deref(),
+                    Some(segment.tooltip.as_str()),
+                    "{} tooltip",
+                    segment.id
+                );
+            }
+        }
     }
 }
 
@@ -596,6 +845,323 @@ fn shared_spec_matches_builtin_order_and_full_semantics_without_starting_a_gui()
     }
 }
 
+/// Expected builtin node kinds per style-pill control, in tree order.
+enum StylePillNodeExpectation {
+    Control(model::StylePillControl),
+    /// Inline readout decoration (the opacity slider's percent label).
+    Readout(model::StylePillControl),
+    /// Interactive half of a segmented control.
+    SegmentHalf(model::StylePillControl, usize),
+    /// Interactive −/+ half of a selection stepper.
+    StepHalf(model::StylePillControl, usize),
+    /// The value readout between the stepper halves (decor).
+    StepValue(model::StylePillControl),
+}
+
+fn expected_style_pill_nodes(
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+) -> Vec<(String, StylePillNodeExpectation)> {
+    let mut nodes = Vec::new();
+    for (id, control) in style_pill_controls(snapshot, plan) {
+        // Steppers render as three nodes (−, readout, +) without a node
+        // carrying the control id itself.
+        if let Some(steps) = control.steps(snapshot) {
+            nodes.push((
+                steps[0].id.to_string(),
+                StylePillNodeExpectation::StepHalf(control, 0),
+            ));
+            nodes.push((
+                format!("{id}.value"),
+                StylePillNodeExpectation::StepValue(control),
+            ));
+            nodes.push((
+                steps[1].id.to_string(),
+                StylePillNodeExpectation::StepHalf(control, 1),
+            ));
+            continue;
+        }
+        nodes.push((id.clone(), StylePillNodeExpectation::Control(control)));
+        if control == model::StylePillControl::OpacitySlider {
+            nodes.push((
+                format!("{id}.readout"),
+                StylePillNodeExpectation::Readout(control),
+            ));
+        }
+        if let Some(segments) = control.segments(snapshot) {
+            for (index, segment) in segments.iter().enumerate() {
+                nodes.push((
+                    segment.id.to_string(),
+                    StylePillNodeExpectation::SegmentHalf(control, index),
+                ));
+            }
+        }
+    }
+    nodes
+}
+
+#[test]
+fn style_pill_spec_matches_builtin_tree_across_morph_states() {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    let state = make_test_input_state();
+    let regular = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let mut arrow = style_pill_tool_snapshot(&regular, Tool::Arrow);
+    arrow.arrow_label_enabled = true;
+    arrow.arrow_label_next = 7;
+    let mut text_mode = style_pill_tool_snapshot(&regular, Tool::Pen);
+    text_mode.text_active = true;
+    let mut minimized = regular.clone();
+    minimized.top_minimized = true;
+    let mut micro = regular.clone();
+    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+
+    for (name, snapshot) in [
+        ("regular", regular.clone()),
+        ("pen", style_pill_tool_snapshot(&regular, Tool::Pen)),
+        ("marker", style_pill_tool_snapshot(&regular, Tool::Marker)),
+        ("eraser", style_pill_tool_snapshot(&regular, Tool::Eraser)),
+        ("shape", style_pill_tool_snapshot(&regular, Tool::Rect)),
+        ("arrow", arrow),
+        (
+            "step-marker",
+            style_pill_tool_snapshot(&regular, Tool::StepMarker),
+        ),
+        ("text-mode", text_mode),
+        ("select", style_pill_tool_snapshot(&regular, Tool::Select)),
+        ("selection", style_pill_selection_snapshot(&regular)),
+        ("minimized", minimized),
+        ("micro", micro),
+    ] {
+        let plan = plan_top_strip(&snapshot);
+        let expected = expected_style_pill_nodes(&snapshot, &plan);
+        let (width, height) = top_toolbar_size(&snapshot);
+        let tree =
+            crate::backend::wayland::build_top_toolbar_view(&snapshot, width as f64, height as f64);
+
+        assert_eq!(
+            tree.node_by_id(&"top.island.style".into()).is_some(),
+            !expected.is_empty(),
+            "{name}: the pill card exists exactly when the spec has controls"
+        );
+
+        let actual: Vec<_> = tree
+            .nodes()
+            .iter()
+            .filter(|node| node.id.as_str().starts_with("top.style."))
+            .collect();
+        assert_eq!(
+            actual
+                .iter()
+                .map(|node| node.id.as_str().to_string())
+                .collect::<Vec<_>>(),
+            expected
+                .iter()
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>(),
+            "{name}: builtin pill node order"
+        );
+
+        for (node, (id, expectation)) in actual.iter().zip(&expected) {
+            let interaction_event = node.interact.as_ref().map(|interaction| &interaction.event);
+            let interaction_tooltip = node
+                .interact
+                .as_ref()
+                .and_then(|interaction| interaction.tooltip.clone());
+            match expectation {
+                StylePillNodeExpectation::Control(control) => {
+                    let expected_event = control
+                        .enabled(&snapshot)
+                        .then(|| control.event(&snapshot))
+                        .flatten();
+                    assert_eq!(
+                        interaction_event,
+                        expected_event.as_ref(),
+                        "{name}: {id} event"
+                    );
+                    if node.interact.is_some() {
+                        assert_eq!(
+                            interaction_tooltip,
+                            control.tooltip(&snapshot),
+                            "{name}: {id} tooltip"
+                        );
+                    }
+                    match (control.role(), &node.kind) {
+                        (model::StylePillRole::Swatch, W::Swatch { color, selected }) => {
+                            let expected_color = match control {
+                                model::StylePillControl::QuickSwatch(index) => {
+                                    snapshot.quick_colors.rendered_entries()[*index].color
+                                }
+                                _ => snapshot.color,
+                            };
+                            assert_eq!(
+                                *color,
+                                (
+                                    expected_color.r,
+                                    expected_color.g,
+                                    expected_color.b,
+                                    expected_color.a
+                                ),
+                                "{name}: {id} color"
+                            );
+                            assert_eq!(*selected, control.active(&snapshot), "{name}: {id}");
+                        }
+                        (model::StylePillRole::Slider, W::Slider { t }) => {
+                            let (spec, value) = control.slider(&snapshot).expect("slider spec");
+                            assert!(
+                                (*t - spec.t_from_value(value)).abs() < 1e-9,
+                                "{name}: {id} slider position"
+                            );
+                        }
+                        (model::StylePillRole::Value, W::TextButton { label, .. }) => {
+                            assert_eq!(
+                                Some(label.text.clone()),
+                                control.value_text(&snapshot),
+                                "{name}: {id} live numeral"
+                            );
+                            // Covered by the generic event assertion above:
+                            // the numeral opens the precise-entry popup.
+                            assert!(
+                                matches!(
+                                    interaction_event,
+                                    Some(crate::ui::toolbar::ToolbarEvent::OpenPrecisionEntry(_))
+                                ),
+                                "{name}: {id} opens the precise entry"
+                            );
+                        }
+                        (model::StylePillRole::Toggle, W::MiniCheckbox { checked, label }) => {
+                            assert_eq!(*checked, control.active(&snapshot), "{name}: {id}");
+                            assert_eq!(
+                                label.text,
+                                control.label(&snapshot).as_ref(),
+                                "{name}: {id} label"
+                            );
+                        }
+                        (model::StylePillRole::Button, W::TextButton { label, style }) => {
+                            // Docked selection cycle buttons show the live
+                            // value; plain buttons show their label.
+                            let expected_text = match control {
+                                model::StylePillControl::SelectionCycle(_) => {
+                                    control.value_text(&snapshot).expect("cycle value text")
+                                }
+                                _ => control.label(&snapshot).into_owned(),
+                            };
+                            assert_eq!(label.text, expected_text, "{name}: {id} text");
+                            assert_eq!(
+                                style.disabled,
+                                !control.enabled(&snapshot),
+                                "{name}: {id} disabled style"
+                            );
+                        }
+                        (
+                            model::StylePillRole::Segmented,
+                            W::SegmentedControl {
+                                left,
+                                right,
+                                active_right,
+                            },
+                        ) => {
+                            let segments = control.segments(&snapshot).expect("segments");
+                            assert_eq!(left.text, segments[0].label, "{name}: {id}");
+                            assert_eq!(right.text, segments[1].label, "{name}: {id}");
+                            assert_eq!(*active_right, segments[1].active, "{name}: {id}");
+                            assert!(node.interact.is_none(), "halves carry the interactions");
+                        }
+                        (role, kind) => panic!("{name}: {id} role {role:?} painted as {kind:?}"),
+                    }
+                }
+                StylePillNodeExpectation::Readout(control) => {
+                    assert!(node.interact.is_none(), "{name}: {id} readout is decor");
+                    match &node.kind {
+                        W::Label(label) => assert_eq!(
+                            Some(label.text.clone()),
+                            control.value_text(&snapshot),
+                            "{name}: {id} readout"
+                        ),
+                        other => panic!("{name}: {id} readout kind {other:?}"),
+                    }
+                }
+                StylePillNodeExpectation::StepHalf(control, index) => {
+                    let steps = control.steps(&snapshot).expect("stepper halves");
+                    let step = &steps[*index];
+                    let enabled = control.enabled(&snapshot);
+                    match &node.kind {
+                        W::TextButton { label, style } => {
+                            assert_eq!(label.text, step.label, "{name}: {id} step label");
+                            assert_eq!(style.disabled, !enabled, "{name}: {id} step style");
+                        }
+                        other => panic!("{name}: {id} step kind {other:?}"),
+                    }
+                    assert_eq!(
+                        interaction_event,
+                        enabled.then_some(&step.event),
+                        "{name}: {id} step event"
+                    );
+                    assert_eq!(
+                        interaction_tooltip.as_deref(),
+                        enabled.then_some(step.tooltip.as_str()),
+                        "{name}: {id} step tooltip"
+                    );
+                }
+                StylePillNodeExpectation::StepValue(control) => {
+                    assert!(node.interact.is_none(), "{name}: {id} readout is decor");
+                    match &node.kind {
+                        W::Label(label) => assert_eq!(
+                            Some(label.text.clone()),
+                            control.value_text(&snapshot),
+                            "{name}: {id} stepper readout"
+                        ),
+                        other => panic!("{name}: {id} stepper readout kind {other:?}"),
+                    }
+                }
+                StylePillNodeExpectation::SegmentHalf(control, index) => {
+                    let segments = control.segments(&snapshot).expect("segments");
+                    let segment = &segments[*index];
+                    assert!(matches!(node.kind, W::HitArea), "{name}: {id}");
+                    assert_eq!(
+                        interaction_event,
+                        Some(&segment.event),
+                        "{name}: {id} segment event"
+                    );
+                    assert_eq!(
+                        interaction_tooltip.as_deref(),
+                        Some(segment.tooltip.as_str()),
+                        "{name}: {id} segment tooltip"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn top_structure_rebuilds_when_the_style_pill_morphs() {
+    let state = make_test_input_state();
+    let regular = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let pen = style_pill_tool_snapshot(&regular, Tool::Pen);
+    let eraser = style_pill_tool_snapshot(&regular, Tool::Eraser);
+
+    let pen_key = StructureKey::of(&pen, &plan_top_strip(&pen));
+    let eraser_key = StructureKey::of(&eraser, &plan_top_strip(&eraser));
+    assert!(
+        pen_key != eraser_key,
+        "a pill morph change must rebuild the GTK bar structure"
+    );
+
+    // Pure value churn (thickness) keeps the structure stable: live values
+    // run through updaters, not rebuilds.
+    let mut thicker = pen.clone();
+    thicker.thickness += 3.0;
+    let thicker_key = StructureKey::of(&thicker, &plan_top_strip(&thicker));
+    assert!(pen_key == thicker_key, "value churn must not rebuild");
+}
+
 #[test]
 fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     const CHILD_ENV: &str = "WAYSCRIBER_GTK_WIDGET_CONTRACT_CHILD";
@@ -636,7 +1202,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     let mut narrow = regular.clone();
     narrow.top_viewport_max = Some(520.0);
 
-    for (name, snapshot) in [
+    let mut scenarios = vec![
         ("regular", regular.clone()),
         ("simple", simple),
         ("minimized", minimized),
@@ -644,10 +1210,30 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         ("text", text),
         ("highlighted", highlighted.clone()),
         ("narrow", narrow),
-    ] {
+    ];
+    // One scenario per style-pill morph state, so every pill shape passes
+    // the full order/island/semantics contract.
+    scenarios.extend(
+        [
+            ("marker-tool", Tool::Marker),
+            ("eraser-tool", Tool::Eraser),
+            ("shape-tool", Tool::Rect),
+            ("arrow-tool", Tool::Arrow),
+            ("step-marker-tool", Tool::StepMarker),
+            ("select-tool", Tool::Select),
+        ]
+        .map(|(name, tool)| (name, style_pill_tool_snapshot(&regular, tool))),
+    );
+    let mut text_mode = style_pill_tool_snapshot(&regular, Tool::Pen);
+    text_mode.text_active = true;
+    scenarios.push(("text-mode", text_mode));
+    scenarios.push(("selection", style_pill_selection_snapshot(&regular)));
+
+    for (name, snapshot) in scenarios {
         let plan = plan_top_strip(&snapshot);
         let spec = super::strip::top_toolbar_spec(&snapshot, &plan);
         let expected = expected_semantic_records(&snapshot, &spec, &plan);
+        let style_controls = style_pill_controls(&snapshot, &plan);
         let (tx, _rx) = std::sync::mpsc::channel();
         let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
         if snapshot.top_minimized {
@@ -667,13 +1253,13 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
                 .iter()
                 .map(|widget| widget.widget_name().to_string())
                 .collect::<Vec<_>>(),
-            expected_main_widget_ids(&spec),
+            expected_main_widget_ids(&spec, &snapshot, &plan),
             "{name} GTK widget order"
         );
         // Ordered ids alone cannot catch a control appended to the wrong
         // pill: also assert every widget's ancestor chain reaches the
         // island container the shared spec assigns it.
-        let expected_islands = expected_island_keys(&snapshot, &spec);
+        let expected_islands = expected_island_keys(&snapshot, &spec, &plan);
         for widget in &widgets {
             let id = widget.widget_name().to_string();
             let expected_island = expected_islands
@@ -687,6 +1273,13 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         }
         for widget in widgets {
             let id = widget.widget_name();
+            if let Some((_, control)) = style_controls
+                .iter()
+                .find(|(control_id, _)| *control_id == id)
+            {
+                assert_gtk_style_widget(&widget, *control, &snapshot);
+                continue;
+            }
             let Some(control) = expected.iter().find_map(|record| match record {
                 SemanticAdapterRecord::Control(control) if control.id == id => Some(control),
                 _ => None,
@@ -996,6 +1589,142 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             .expect("GTK ring event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::ToggleHighlightToolRing(!highlighted.highlight_tool_ring_enabled),
+            rebind_requested: false,
+        }
+    );
+    detach_test_popovers(&mut event_top);
+
+    // --- Style pill interactions --------------------------------------------
+    fn find_widget_named(root: &gtk4::Widget, name: &str) -> Option<gtk4::Widget> {
+        if root.widget_name() == name {
+            return Some(root.clone());
+        }
+        let mut child = root.first_child();
+        while let Some(current) = child {
+            child = current.next_sibling();
+            if let Some(found) = find_widget_named(&current, name) {
+                return Some(found);
+            }
+        }
+        None
+    }
+    let pill_widget = |top: &TopBar, id: &str| {
+        find_widget_named(top.root.upcast_ref(), id)
+            .unwrap_or_else(|| panic!("style pill widget {id}"))
+    };
+
+    // Eraser morph: the Brush/Stroke segment emits SetEraserMode per half;
+    // the size numeral opens the overlay precise-entry popup.
+    let eraser = style_pill_tool_snapshot(&regular, Tool::Eraser);
+    event_top.build_strip(&eraser, &plan_top_strip(&eraser));
+    let segment_row = pill_widget(&event_top, "top.style.eraser-mode");
+    let mut halves = Vec::new();
+    let mut child = segment_row.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        halves.push(
+            current
+                .downcast::<gtk4::Button>()
+                .expect("segment half button"),
+        );
+    }
+    assert_eq!(halves.len(), 2);
+    for (half, mode) in halves.iter().zip([
+        crate::input::EraserMode::Brush,
+        crate::input::EraserMode::Stroke,
+    ]) {
+        half.emit_clicked();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("GTK eraser segment event"),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::SetEraserMode(mode),
+                rebind_requested: false,
+            }
+        );
+    }
+    let numeral = pill_widget(&event_top, "top.style.thickness-value")
+        .downcast::<gtk4::Button>()
+        .expect("numeral button");
+    numeral.emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK numeral event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::OpenPrecisionEntry(
+                crate::ui::toolbar::PrecisionEntryTarget::Thickness
+            ),
+            rebind_requested: false,
+        },
+        "the numeral opens the overlay precise-entry popup"
+    );
+    detach_test_popovers(&mut event_top);
+
+    // Stroke morph: the chip opens the one true picker popup, swatches set
+    // quick colors, and the updaters drive the live numeral and idle fade.
+    let pen = style_pill_tool_snapshot(&regular, Tool::Pen);
+    event_top.build_strip(&pen, &plan_top_strip(&pen));
+    pill_widget(&event_top, "top.style.color-chip")
+        .downcast::<gtk4::Button>()
+        .expect("chip button")
+        .emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK chip event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::OpenColorPickerPopup,
+            rebind_requested: false,
+        }
+    );
+    pill_widget(&event_top, "top.style.swatch.1")
+        .downcast::<gtk4::Button>()
+        .expect("swatch button")
+        .emit_clicked();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK swatch event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::SetQuickColor {
+                color: pen.quick_colors.rendered_entries()[1].color,
+                action: crate::config::QuickColorPalette::action_for_index(1),
+            },
+            rebind_requested: false,
+        }
+    );
+    let mut churned = pen.clone();
+    churned.thickness += 3.0;
+    churned.top_fade = 0.4;
+    for updater in event_top.updaters.borrow().iter() {
+        updater(&churned);
+    }
+    let numeral = pill_widget(&event_top, "top.style.thickness-value")
+        .downcast::<gtk4::Button>()
+        .expect("numeral button");
+    assert_eq!(
+        numeral.label().as_deref(),
+        Some(format!("{:.0}px", churned.thickness).as_str()),
+        "the numeral tracks the live thickness"
+    );
+    let pill_box = find_widget_named(event_top.root.upcast_ref(), "island.style")
+        .expect("style pill container");
+    assert!(
+        (pill_box.opacity() - 0.4).abs() < 1e-6,
+        "the pill fades with the strip"
+    );
+    detach_test_popovers(&mut event_top);
+
+    // Shape morph: the Fill mini-toggle emits the requested state.
+    let shape = style_pill_tool_snapshot(&regular, Tool::Rect);
+    event_top.build_strip(&shape, &plan_top_strip(&shape));
+    let fill = pill_widget(&event_top, "top.style.fill")
+        .downcast::<gtk4::CheckButton>()
+        .expect("fill check button");
+    fill.set_active(!shape.fill_enabled);
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK fill event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::ToggleFill(!shape.fill_enabled),
             rebind_requested: false,
         }
     );

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, TopDisplayMode,
+    ToolbarRebindModifier, ToolbarSideLayout, TopDisplayMode,
 };
 
 /// Toolbar visibility and pinning configuration.
@@ -49,6 +49,15 @@ pub struct ToolbarConfig {
     /// Start the side toolbar minimized to its edge restore tab
     #[serde(default)]
     pub side_minimized: bool,
+
+    /// Where the side-palette functions live ("panel", "pill"). The default
+    /// "panel" is the classic side palette. The opt-in "pill" preview
+    /// retires it (drawing properties live in the contextual style pill,
+    /// canvas management in the status HUD/board picker); "pill" becomes
+    /// the default once the Session/Settings panes are re-hosted in the
+    /// top strip.
+    #[serde(default)]
+    pub side_layout: ToolbarSideLayout,
 
     /// Side-palette pane restored at startup ("draw", "canvas", "session", "settings")
     #[serde(default = "default_side_active_pane")]
@@ -163,6 +172,7 @@ impl Default for ToolbarConfig {
             top_minimized: false,
             top_display_mode: TopDisplayMode::default(),
             side_minimized: false,
+            side_layout: ToolbarSideLayout::default(),
             side_active_pane: default_side_active_pane(),
             collapsed_sections: Vec::new(),
             use_icons: default_toolbar_use_icons(),

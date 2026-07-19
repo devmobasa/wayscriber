@@ -1,10 +1,12 @@
 //! The GTK top strip.
 //!
-//! Adapts the shared `TopToolbarSpec` into three detached pill islands —
+//! Adapts the shared `TopToolbarSpec` into four detached pill islands —
 //! tools (drag grip | pens | shapes | shapes-picker | annotations | quick
 //! colors + chip), history (undo/redo + the overflow toggle anchoring Clear
-//! and width-dropped items), and chrome (pin/minimize) — as GTK widgets.
-//! Width degradation uses the same shared plan as the built-in frontend.
+//! and width-dropped items), chrome (pin/minimize), and the contextual
+//! style pill (island D, `style_pill` module, from `StylePillSpec`) — as
+//! GTK widgets. Width degradation uses the same shared plan as the
+//! built-in frontend.
 //!
 //! The bar content is rebuilt only when its *structure* changes (item
 //! order/visibility, icon mode, plan, scale, palette); per-state changes
@@ -16,6 +18,7 @@ mod controls;
 mod drag;
 mod popovers;
 mod strip;
+mod style_pill;
 #[cfg(test)]
 mod tests;
 
@@ -34,7 +37,7 @@ use model::TopStripPlan;
 
 use super::super::icons::IconWidget;
 use super::super::widgets::{
-    FeedbackSender, SwatchButton, add_button_shortcut_hint, icon_button,
+    FeedbackSender, SliderRow, SwatchButton, add_button_shortcut_hint, icon_button,
     install_click_modifier_capture, install_shortcut_focus_policy, send_event, set_active_class,
     sized_button, swatch_with_shortcut, text_button,
 };
@@ -65,6 +68,17 @@ const COMPACT_CHROME: f64 = 18.0;
 const MINIMIZED_SIZE: (f64, f64) = (64.0, 24.0);
 /// Micro-mode chip size (`ToolbarLayoutSpec::TOP_MICRO_SIZE`).
 const MICRO_SIZE: f64 = 44.0;
+/// Style pill spec-unit tokens (`ToolbarLayoutSpec::TOP_STYLE_*`).
+const STYLE_PILL_GAP: f64 = 6.0;
+const STYLE_SLIDER_W: f64 = 110.0;
+const STYLE_VALUE_W: f64 = 44.0;
+const STYLE_ROW_H: f64 = 24.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W`.
+const STYLE_SEL_VALUE_W: f64 = 64.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_STEP_W`.
+const STYLE_STEP_W: f64 = 20.0;
+/// Segment tab height (matches the Settings pane's segmented tabs).
+const STYLE_TAB_H: f64 = 22.0;
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
@@ -91,6 +105,10 @@ struct StructureKey {
     binding_hints: crate::ui::toolbar::ToolbarBindingHints,
     plan: TopStripPlan,
     ring_row: bool,
+    /// Ordered style-pill control ids: captures the pill's morph state
+    /// (including swatch count, reset presence, and segment kind) so a
+    /// tool change rebuilds the pill while value churn stays in updaters.
+    style_pill: Vec<String>,
 }
 
 impl StructureKey {
@@ -106,6 +124,11 @@ impl StructureKey {
             binding_hints: snapshot.binding_hints.clone(),
             plan: plan.clone(),
             ring_row: ring_row_active(snapshot, plan),
+            style_pill: model::StylePillSpec::build(snapshot, plan)
+                .controls()
+                .iter()
+                .map(|control| control.id().into_owned())
+                .collect(),
         }
     }
 }

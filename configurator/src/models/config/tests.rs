@@ -845,6 +845,32 @@ fn section_toggle_replaces_overlay_item_override_on_save() {
 }
 
 #[test]
+fn config_draft_round_trips_toolbar_side_layout() {
+    use super::super::fields::ToolbarSideLayoutOption;
+    use wayscriber::config::ToolbarSideLayout;
+
+    // The default draft mirrors the config default: panel (until the
+    // Session/Settings panes are re-hosted in the top strip).
+    let default_draft = ConfigDraft::from_config(&Config::default());
+    assert_eq!(
+        default_draft.ui_toolbar_side_layout,
+        ToolbarSideLayoutOption::Panel
+    );
+    let saved = default_draft
+        .to_config(&Config::default())
+        .expect("default draft should convert");
+    assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Panel);
+
+    // The opt-in pill preview round-trips through the draft.
+    let mut config = Config::default();
+    config.ui.toolbar.side_layout = ToolbarSideLayout::Pill;
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_toolbar_side_layout, ToolbarSideLayoutOption::Pill);
+    let saved = draft.to_config(&config).expect("draft should convert");
+    assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Pill);
+}
+
+#[test]
 fn config_draft_round_trips_presets_and_history() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 500;

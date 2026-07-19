@@ -17,6 +17,9 @@ pub(crate) fn route_key_press(state: &mut InputState, key: Key) -> RoutingOutcom
     if let Some(outcome) = adapters::handle_radial_menu_key(state, key) {
         return outcome;
     }
+    if let Some(outcome) = adapters::handle_precision_entry_key(state, key) {
+        return outcome;
+    }
     if let Some(outcome) = adapters::handle_color_picker_key(state, key) {
         return outcome;
     }

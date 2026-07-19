@@ -13,7 +13,7 @@ use crate::ui_text::{UiTextStyle, draw_text_baseline};
 use super::constants::{
     self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, BORDER_MODAL, INPUT_BG,
     INPUT_BORDER_FOCUSED, INPUT_CARET, OVERLAY_DIM_MEDIUM, PANEL_BG_MODAL, RADIUS_MD, RADIUS_PANEL,
-    RADIUS_SM, RADIUS_STD, TEXT_PRIMARY,
+    RADIUS_SM, RADIUS_STD, TEXT_HINT_DIM, TEXT_PRIMARY,
 };
 
 // File-local colors with no matching theme token (M1 keep-if-not-matching
@@ -46,8 +46,6 @@ const BUTTON_SECONDARY_BORDER: Rgba = (0.4, 0.4, 0.45, 0.8);
 const BUTTON_SECONDARY_BORDER_HOVER: Rgba = (0.5, 0.5, 0.55, 0.9);
 /// White glow behind hovered secondary buttons.
 const BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.1);
-/// Keyboard shortcut hint below the buttons (dimmer than TEXT_HINT).
-const HINT_TEXT: Rgba = (0.6, 0.6, 0.65, 0.7);
 
 /// Render the color picker popup.
 pub fn render_color_picker_popup(
@@ -226,7 +224,7 @@ pub fn render_color_picker_popup(
         weight: cairo::FontWeight::Normal,
         size: 10.0,
     };
-    constants::set_color(ctx, HINT_TEXT);
+    constants::set_color(ctx, TEXT_HINT_DIM);
     let hint = "Enter = OK  •  Esc = Cancel";
     let hint_extents = text_extents_for(
         ctx,

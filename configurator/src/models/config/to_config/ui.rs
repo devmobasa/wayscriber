@@ -39,6 +39,7 @@ impl ConfigDraft {
         config.ui.toolbar.show_more_colors = self.ui_toolbar_show_more_colors;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
+        config.ui.toolbar.side_layout = self.ui_toolbar_side_layout.to_config();
         config.ui.toolbar.rebind_modifier = self.ui_toolbar_rebind_modifier.to_config();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.items = self.ui_toolbar_items.clone();

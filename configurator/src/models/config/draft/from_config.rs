@@ -1,4 +1,5 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
+use super::super::super::fields::ToolbarSideLayoutOption;
 use super::super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
@@ -136,6 +137,9 @@ impl ConfigDraft {
             ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
+            ),
+            ui_toolbar_side_layout: ToolbarSideLayoutOption::from_config(
+                config.ui.toolbar.side_layout,
             ),
             ui_toolbar_rebind_modifier: ToolbarRebindModifierOption::from_config(
                 config.ui.toolbar.rebind_modifier,

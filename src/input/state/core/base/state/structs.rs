@@ -234,8 +234,14 @@ pub struct InputState {
     /// When drawing input last started or committed a stroke; drives the
     /// top-strip idle fade.
     pub(crate) last_draw_activity: Instant,
+    /// Precise numeric entry popup opened from a pill numeral, when open.
+    pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
     /// Whether the side palette is minimized to its edge restore tab.
     pub toolbar_side_minimized: bool,
+    /// Where the side-palette functions live. Under the opt-in `Pill`
+    /// layout the side surface never appears; `Panel` (the default) keeps
+    /// the classic side palette. Startup init applies the config value.
+    pub toolbar_side_layout: crate::config::ToolbarSideLayout,
     /// Last HSV triple committed from the side palette's color picker;
     /// preserves hue/saturation across gray colors where RGB loses them.
     pub toolbar_picker_hsv: Option<(f64, f64, f64)>,

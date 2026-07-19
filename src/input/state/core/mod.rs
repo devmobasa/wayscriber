@@ -51,12 +51,14 @@ pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };
+pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::state::{sub_ring_child_count, sub_ring_child_label};
 pub use radial_menu::{
     RadialMenuLayout, RadialMenuState, RadialSegmentId, TOOL_LABELS as RADIAL_TOOL_LABELS,
     TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT,
 };
 pub use selection::SelectionState;
+pub use tool_controls::PrecisionEntryState;
 pub use tour::TourStep;
 pub use utility::HelpOverlayCursorHint;
 pub(crate) use utility::default_step_marker_size;
