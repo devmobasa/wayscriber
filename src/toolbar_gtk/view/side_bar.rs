@@ -112,7 +112,6 @@ impl SideBar {
     pub(in crate::toolbar_gtk) fn apply(
         &mut self,
         update: &super::super::GtkToolbarUpdate,
-        defer_capture_input: bool,
     ) -> bool {
         let snapshot = &update.snapshot;
         let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
@@ -180,10 +179,7 @@ impl SideBar {
             GtkToolbarKind::Side,
             presentation.visual_hidden,
         );
-        super::set_surface_input_enabled(
-            &self.window,
-            presentation.input_enabled || defer_capture_input,
-        );
+        super::set_surface_input_enabled(&self.window, presentation.input_enabled);
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,

@@ -54,11 +54,7 @@ impl TopBar {
     /// opacity does not affect them. Keep any open popover mapped and replace
     /// its content with the same transparent proof node as the toolbar rather
     /// than starting a popup close animation during capture.
-    pub(super) fn set_popovers_capture_transparent(
-        &self,
-        transparent: bool,
-        defer_capture_input: bool,
-    ) {
+    pub(super) fn set_popovers_capture_transparent(&self, transparent: bool) {
         for (popover, capture_surface) in [
             (
                 self.shapes_popover.as_ref(),
@@ -75,21 +71,7 @@ impl TopBar {
             if transparent && !popover.is_visible() {
                 continue;
             }
-            set_popover_capture_transparent(
-                popover,
-                capture_surface,
-                transparent,
-                !transparent || defer_capture_input,
-            );
-        }
-    }
-
-    pub(in crate::toolbar_gtk::view) fn set_popovers_capture_input_enabled(&self, enabled: bool) {
-        for popover in [self.shapes_popover.as_ref(), self.overflow_popover.as_ref()]
-            .into_iter()
-            .flatten()
-        {
-            set_popover_input_enabled(popover, enabled);
+            set_popover_capture_transparent(popover, capture_surface, transparent, !transparent);
         }
     }
 

@@ -3,11 +3,39 @@
 use log::{debug, info};
 use smithay_client_toolkit::compositor::CompositorHandler;
 use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_output, wl_surface},
+    Connection, Dispatch, QueueHandle,
+    protocol::{wl_callback, wl_output, wl_surface},
 };
 
 use super::super::state::{FullDamageReason, WaylandState};
+use super::super::surface::MainSurfaceFrameCallback;
+
+impl Dispatch<wl_callback::WlCallback, MainSurfaceFrameCallback> for WaylandState {
+    fn event(
+        state: &mut Self,
+        _callback: &wl_callback::WlCallback,
+        event: wl_callback::Event,
+        data: &MainSurfaceFrameCallback,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        let wl_callback::Event::Done { callback_data } = event else {
+            unreachable!("wl_callback has no event other than done");
+        };
+        if !state.surface.is_surface(&data.surface) {
+            return;
+        }
+
+        let cleared_throttle = state.surface.complete_frame_callback(data.token);
+        debug!(
+            "Frame callback received (time: {callback_data}ms, token: {}, current: {cleared_throttle})",
+            data.token
+        );
+        if let Some(generation) = data.capture_generation {
+            state.mark_overlay_capture_frame_ready(generation, qh);
+        }
+    }
+}
 
 impl CompositorHandler for WaylandState {
     fn scale_factor_changed(
@@ -55,7 +83,7 @@ impl CompositorHandler for WaylandState {
     fn frame(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         surface: &wl_surface::WlSurface,
         time: u32,
     ) {
@@ -63,13 +91,7 @@ impl CompositorHandler for WaylandState {
             return;
         }
 
-        debug!(
-            "Frame callback received (time: {}ms), clearing frame_callback_pending",
-            time
-        );
-        self.surface.set_frame_callback_pending(false);
-
-        self.mark_overlay_capture_frame_ready(qh);
+        debug!("Legacy untagged frame callback received (time: {time}ms)");
 
         if self.input_state.needs_redraw {
             debug!(

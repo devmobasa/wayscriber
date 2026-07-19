@@ -24,6 +24,43 @@ pub enum SurfaceKind {
     },
 }
 
+#[derive(Debug, Default)]
+struct FrameCallbackTracker {
+    next_token: u64,
+    pending_token: Option<u64>,
+}
+
+impl FrameCallbackTracker {
+    fn begin(&mut self) -> u64 {
+        self.next_token = self.next_token.wrapping_add(1).max(1);
+        self.pending_token = Some(self.next_token);
+        self.next_token
+    }
+
+    fn complete(&mut self, token: u64) -> bool {
+        if self.pending_token != Some(token) {
+            return false;
+        }
+        self.pending_token = None;
+        true
+    }
+
+    fn clear(&mut self) {
+        self.pending_token = None;
+    }
+
+    fn is_pending(&self) -> bool {
+        self.pending_token.is_some()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct MainSurfaceFrameCallback {
+    pub(super) surface: wl_surface::WlSurface,
+    pub(super) token: u64,
+    pub(super) capture_generation: Option<u64>,
+}
+
 /// Tracks the active layer surface, buffer pool, and associated sizing state.
 pub struct SurfaceState {
     kind: Option<SurfaceKind>,
@@ -39,7 +76,7 @@ pub struct SurfaceState {
     height: u32,
     scale: i32,
     configured: bool,
-    frame_callback_pending: bool,
+    frame_callbacks: FrameCallbackTracker,
 }
 
 impl SurfaceState {
@@ -56,7 +93,7 @@ impl SurfaceState {
             height: 0,
             scale: 1,
             configured: false,
-            frame_callback_pending: false,
+            frame_callbacks: FrameCallbackTracker::default(),
         }
     }
 
@@ -69,7 +106,7 @@ impl SurfaceState {
         self.pool_size = 0;
         self.current_output = None;
         self.configured = false;
-        self.frame_callback_pending = false;
+        self.frame_callbacks.clear();
     }
 
     /// Assigns an xdg-shell window produced during startup.
@@ -81,7 +118,7 @@ impl SurfaceState {
         self.pool_size = 0;
         self.current_output = None;
         self.configured = false;
-        self.frame_callback_pending = false;
+        self.frame_callbacks.clear();
     }
 
     /// Returns the active wl_surface, if initialized.
@@ -197,14 +234,32 @@ impl SurfaceState {
         self.configured
     }
 
-    /// Sets the frame callback pending flag.
-    pub fn set_frame_callback_pending(&mut self, pending: bool) {
-        self.frame_callback_pending = pending;
+    /// Creates the identity carried by a newly requested main-surface callback.
+    pub(super) fn begin_frame_callback(
+        &mut self,
+        surface: wl_surface::WlSurface,
+        capture_generation: Option<u64>,
+    ) -> MainSurfaceFrameCallback {
+        MainSurfaceFrameCallback {
+            surface,
+            token: self.frame_callbacks.begin(),
+            capture_generation,
+        }
+    }
+
+    /// Clears the render throttle only when this is still the newest callback.
+    pub(super) fn complete_frame_callback(&mut self, token: u64) -> bool {
+        self.frame_callbacks.complete(token)
+    }
+
+    /// Retires the current throttle token without assuming its callback vanished.
+    pub(super) fn clear_frame_callback_pending(&mut self) {
+        self.frame_callbacks.clear();
     }
 
     /// Returns whether a frame callback is currently outstanding.
     pub fn frame_callback_pending(&self) -> bool {
-        self.frame_callback_pending
+        self.frame_callbacks.is_pending()
     }
 
     /// Returns the current pool generation counter.
@@ -259,5 +314,23 @@ impl SurfaceState {
             .as_mut()
             .map(|p| (p, generation))
             .context("Buffer pool not initialized despite previous check")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FrameCallbackTracker;
+
+    #[test]
+    fn retired_callback_cannot_clear_a_newer_render_throttle() {
+        let mut callbacks = FrameCallbackTracker::default();
+        let timed_out = callbacks.begin();
+        callbacks.clear();
+        let recovery = callbacks.begin();
+
+        assert!(!callbacks.complete(timed_out));
+        assert!(callbacks.is_pending());
+        assert!(callbacks.complete(recovery));
+        assert!(!callbacks.is_pending());
     }
 }

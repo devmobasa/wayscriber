@@ -367,17 +367,22 @@ impl WaylandState {
                 wl_surface.damage_buffer(region.x, region.y, region.width, region.height);
             }
 
-            let force_frame_callback = self
+            let capture_generation = self
                 .data
                 .overlay_capture_barrier
                 .begin_main_surface_submission();
             if self.config.performance.enable_vsync {
                 debug!("Requesting frame callback (vsync enabled)");
-                wl_surface.frame(qh, wl_surface.clone());
-            } else if force_frame_callback {
+                let callback = self
+                    .surface
+                    .begin_frame_callback(wl_surface.clone(), capture_generation);
+                wl_surface.frame(qh, callback);
+            } else if capture_generation.is_some() {
                 debug!("Requesting frame callback (preflight)");
-                wl_surface.frame(qh, wl_surface.clone());
-                self.surface.set_frame_callback_pending(true);
+                let callback = self
+                    .surface
+                    .begin_frame_callback(wl_surface.clone(), capture_generation);
+                wl_surface.frame(qh, callback);
             } else {
                 debug!("Skipping frame callback (vsync disabled - allows back-to-back renders)");
             }

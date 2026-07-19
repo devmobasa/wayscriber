@@ -1,4 +1,7 @@
 use super::super::*;
+use std::time::{Duration, Instant};
+
+const MAIN_SURFACE_FRAME_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MainSurfaceCapturePhase {
@@ -12,8 +15,16 @@ struct ActiveOverlayCaptureBarrier {
     generation: u64,
     reason: OverlaySuppression,
     main_surface_phase: MainSurfaceCapturePhase,
+    main_surface_frame_deadline: Option<Instant>,
     gtk_paint_generation: Option<u64>,
-    started_at: std::time::Instant,
+    started_at: Instant,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OverlayCaptureBarrierTimeout {
+    generation: u64,
+    reason: OverlaySuppression,
+    elapsed: Duration,
 }
 
 /// Coordinates capture preflight across the main Wayland surface and the
@@ -37,8 +48,9 @@ impl OverlayCaptureBarrier {
             generation,
             reason,
             main_surface_phase: MainSurfaceCapturePhase::AwaitingRender,
+            main_surface_frame_deadline: None,
             gtk_paint_generation,
-            started_at: std::time::Instant::now(),
+            started_at: Instant::now(),
         });
         log::info!(
             "capture.preflight id={generation} component=barrier reason={reason:?} phase=begin gtk_wait={wait_for_gtk}"
@@ -52,30 +64,37 @@ impl OverlayCaptureBarrier {
 
     /// Records the fresh main-surface commit that follows any required GTK
     /// transparent-paint acknowledgement.
-    pub(in crate::backend::wayland::state) fn begin_main_surface_submission(&mut self) -> bool {
-        let Some(active) = self.active.as_mut() else {
-            return false;
-        };
+    pub(in crate::backend::wayland::state) fn begin_main_surface_submission(
+        &mut self,
+    ) -> Option<u64> {
+        self.begin_main_surface_submission_at(Instant::now())
+    }
+
+    fn begin_main_surface_submission_at(&mut self, now: Instant) -> Option<u64> {
+        let active = self.active.as_mut()?;
         if active.gtk_paint_generation.is_some()
             || active.main_surface_phase != MainSurfaceCapturePhase::AwaitingRender
         {
-            return false;
+            return None;
         }
         active.main_surface_phase = MainSurfaceCapturePhase::AwaitingFrame;
+        active.main_surface_frame_deadline = Some(now + MAIN_SURFACE_FRAME_TIMEOUT);
         log::info!(
             "capture.preflight id={} component=main-surface reason={:?} phase=submitted-hidden-frame elapsed_ms={}",
             active.generation,
             active.reason,
             active.started_at.elapsed().as_millis()
         );
-        true
+        Some(active.generation)
     }
 
-    fn mark_main_surface_frame_ready(&mut self) {
+    fn mark_main_surface_frame_ready(&mut self, generation: u64) {
         if let Some(active) = self.active.as_mut()
+            && active.generation == generation
             && active.main_surface_phase == MainSurfaceCapturePhase::AwaitingFrame
         {
             active.main_surface_phase = MainSurfaceCapturePhase::Ready;
+            active.main_surface_frame_deadline = None;
             log::info!(
                 "capture.preflight id={} component=main-surface reason={:?} phase=frame-callback elapsed_ms={}",
                 active.generation,
@@ -105,6 +124,7 @@ impl OverlayCaptureBarrier {
         // have been composed while the bars still had visible buffers. Only a
         // fresh hidden commit can unlock capture.
         active.main_surface_phase = MainSurfaceCapturePhase::AwaitingRender;
+        active.main_surface_frame_deadline = None;
         log::info!(
             "capture.preflight id={generation} component=gtk reason={:?} phase=ack-accepted elapsed_ms={}",
             active.reason,
@@ -135,6 +155,30 @@ impl OverlayCaptureBarrier {
         Some(active.reason)
     }
 
+    fn frame_timeout(&self, now: Instant) -> Option<Duration> {
+        let active = self.active?;
+        if active.main_surface_phase != MainSurfaceCapturePhase::AwaitingFrame {
+            return None;
+        }
+        active
+            .main_surface_frame_deadline
+            .map(|deadline| deadline.saturating_duration_since(now))
+    }
+
+    fn take_frame_timeout(&mut self, now: Instant) -> Option<OverlayCaptureBarrierTimeout> {
+        let active = self.active?;
+        let deadline = active.main_surface_frame_deadline?;
+        if active.main_surface_phase != MainSurfaceCapturePhase::AwaitingFrame || now < deadline {
+            return None;
+        }
+        self.active = None;
+        Some(OverlayCaptureBarrierTimeout {
+            generation: active.generation,
+            reason: active.reason,
+            elapsed: now.saturating_duration_since(active.started_at),
+        })
+    }
+
     pub(in crate::backend::wayland::state) fn cancel(&mut self, reason: OverlaySuppression) {
         if self.active.is_some_and(|active| active.reason == reason) {
             if let Some(active) = self.active {
@@ -156,14 +200,47 @@ impl OverlayCaptureBarrier {
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn overlay_capture_barrier_timeout(
+        &self,
+        now: Instant,
+    ) -> Option<Duration> {
+        self.data.overlay_capture_barrier.frame_timeout(now)
+    }
+
+    pub(in crate::backend::wayland) fn poll_overlay_capture_barrier_timeout(
+        &mut self,
+        now: Instant,
+    ) {
+        let Some(timeout) = self.data.overlay_capture_barrier.take_frame_timeout(now) else {
+            return;
+        };
+        log::warn!(
+            "capture.preflight id={} component=main-surface reason={:?} phase=frame-timeout elapsed_ms={}",
+            timeout.generation,
+            timeout.reason,
+            timeout.elapsed.as_millis()
+        );
+
+        // The missing callback leaves the render throttle armed. Release it
+        // before restoring suppression state so the recovery frame is allowed
+        // to commit even if the original callback never arrives.
+        self.surface.clear_frame_callback_pending();
+        self.cancel_overlay_capture_preflight(timeout.reason);
+        self.input_state.set_ui_toast(
+            crate::input::state::UiToastKind::Warning,
+            "Screen capture cancelled because the compositor did not confirm the hidden overlay frame.",
+        );
+    }
+
     /// Records the frame callback for the fresh hidden main-surface commit.
     pub(in crate::backend::wayland) fn mark_overlay_capture_frame_ready(
         &mut self,
+        generation: u64,
         qh: &QueueHandle<Self>,
     ) {
         self.data
             .overlay_capture_barrier
-            .mark_main_surface_frame_ready();
+            .mark_main_surface_frame_ready(generation);
         self.begin_ready_overlay_capture(qh);
     }
 
@@ -325,20 +402,98 @@ mod tests {
     use super::*;
 
     #[test]
+    fn main_surface_frame_deadline_starts_only_after_submission() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        assert_eq!(barrier.begin(OverlaySuppression::Zoom, false), None);
+        let submitted_at = Instant::now();
+
+        assert_eq!(barrier.frame_timeout(submitted_at), None);
+        assert!(
+            barrier
+                .begin_main_surface_submission_at(submitted_at)
+                .is_some()
+        );
+        assert_eq!(
+            barrier.frame_timeout(submitted_at),
+            Some(MAIN_SURFACE_FRAME_TIMEOUT)
+        );
+        assert_eq!(
+            barrier.frame_timeout(submitted_at + MAIN_SURFACE_FRAME_TIMEOUT / 2),
+            Some(MAIN_SURFACE_FRAME_TIMEOUT / 2)
+        );
+        assert_eq!(
+            barrier
+                .frame_timeout(submitted_at + MAIN_SURFACE_FRAME_TIMEOUT - Duration::from_nanos(1)),
+            Some(Duration::from_nanos(1))
+        );
+    }
+
+    #[test]
+    fn expired_main_surface_frame_wait_is_terminal() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        assert_eq!(barrier.begin(OverlaySuppression::Frozen, false), None);
+        let submitted_at = Instant::now();
+        assert!(
+            barrier
+                .begin_main_surface_submission_at(submitted_at)
+                .is_some()
+        );
+        let deadline = submitted_at + MAIN_SURFACE_FRAME_TIMEOUT;
+
+        assert_eq!(
+            barrier.take_frame_timeout(deadline - Duration::from_nanos(1)),
+            None
+        );
+        let timeout = barrier
+            .take_frame_timeout(deadline)
+            .expect("deadline must terminate the active barrier");
+        assert_eq!(timeout.reason, OverlaySuppression::Frozen);
+        assert_eq!(barrier.frame_timeout(deadline), None);
+        assert_eq!(barrier.take_frame_timeout(deadline), None);
+
+        barrier.mark_main_surface_frame_ready(timeout.generation);
+        assert_eq!(barrier.take_ready(), None);
+    }
+
+    #[test]
+    fn timed_out_callback_cannot_complete_a_retry() {
+        let mut barrier = OverlayCaptureBarrier::default();
+        assert_eq!(barrier.begin(OverlaySuppression::Frozen, false), None);
+        let submitted_at = Instant::now();
+        let timed_out_generation = barrier
+            .begin_main_surface_submission_at(submitted_at)
+            .expect("first capture generation");
+        barrier
+            .take_frame_timeout(submitted_at + MAIN_SURFACE_FRAME_TIMEOUT)
+            .expect("first capture times out");
+
+        assert_eq!(barrier.begin(OverlaySuppression::Frozen, false), None);
+        let retry_submitted_at = submitted_at + MAIN_SURFACE_FRAME_TIMEOUT;
+        let retry_generation = barrier
+            .begin_main_surface_submission_at(retry_submitted_at)
+            .expect("retry generation");
+
+        barrier.mark_main_surface_frame_ready(timed_out_generation);
+        assert_eq!(barrier.take_ready(), None);
+        barrier.mark_main_surface_frame_ready(retry_generation);
+        assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
+    }
+
+    #[test]
     fn requires_a_fresh_submission_after_gtk_ack() {
         let mut barrier = OverlayCaptureBarrier::default();
         let generation = barrier
             .begin(OverlaySuppression::Zoom, true)
             .expect("GTK paint generation");
 
-        assert!(!barrier.begin_main_surface_submission());
-        barrier.mark_main_surface_frame_ready();
+        assert_eq!(barrier.begin_main_surface_submission(), None);
+        barrier.mark_main_surface_frame_ready(generation);
         assert_eq!(barrier.take_ready(), None);
 
         assert!(barrier.acknowledge_gtk_paint(generation));
         assert_eq!(barrier.take_ready(), None);
-        assert!(barrier.begin_main_surface_submission());
-        barrier.mark_main_surface_frame_ready();
+        assert_eq!(barrier.begin_main_surface_submission(), Some(generation));
+        barrier.mark_main_surface_frame_ready(generation);
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Zoom));
     }
 
@@ -350,8 +505,8 @@ mod tests {
             .expect("GTK paint generation");
 
         assert!(barrier.acknowledge_gtk_paint(generation));
-        assert!(barrier.begin_main_surface_submission());
-        barrier.mark_main_surface_frame_ready();
+        assert_eq!(barrier.begin_main_surface_submission(), Some(generation));
+        barrier.mark_main_surface_frame_ready(generation);
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
     }
 
@@ -363,10 +518,10 @@ mod tests {
             .expect("GTK paint generation");
 
         assert!(!barrier.acknowledge_gtk_paint(generation.wrapping_add(1)));
-        assert!(!barrier.begin_main_surface_submission());
+        assert_eq!(barrier.begin_main_surface_submission(), None);
         assert!(barrier.acknowledge_gtk_paint(generation));
-        assert!(barrier.begin_main_surface_submission());
-        barrier.mark_main_surface_frame_ready();
+        assert_eq!(barrier.begin_main_surface_submission(), Some(generation));
+        barrier.mark_main_surface_frame_ready(generation);
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Capture));
     }
 
@@ -375,8 +530,10 @@ mod tests {
         let mut barrier = OverlayCaptureBarrier::default();
         assert_eq!(barrier.begin(OverlaySuppression::Zoom, false), None);
 
-        assert!(barrier.begin_main_surface_submission());
-        barrier.mark_main_surface_frame_ready();
+        let generation = barrier
+            .begin_main_surface_submission()
+            .expect("main-surface generation");
+        barrier.mark_main_surface_frame_ready(generation);
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Zoom));
     }
 
@@ -385,10 +542,12 @@ mod tests {
         let mut barrier = OverlayCaptureBarrier::default();
         assert_eq!(barrier.begin(OverlaySuppression::Frozen, false), None);
 
-        barrier.mark_main_surface_frame_ready();
+        barrier.mark_main_surface_frame_ready(barrier.next_generation);
         assert_eq!(barrier.take_ready(), None);
-        assert!(barrier.begin_main_surface_submission());
-        barrier.mark_main_surface_frame_ready();
+        let generation = barrier
+            .begin_main_surface_submission()
+            .expect("main-surface generation");
+        barrier.mark_main_surface_frame_ready(generation);
         assert_eq!(barrier.take_ready(), Some(OverlaySuppression::Frozen));
     }
 
