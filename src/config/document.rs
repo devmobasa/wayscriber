@@ -268,7 +268,21 @@ impl ConfigDocument {
         &self.diagnostics
     }
 
-    pub fn save_with_backup(&self, mut config: Config) -> Result<ConfigDocumentSaveOutcome> {
+    /// Saves an updated configuration while preserving the source document's
+    /// comments, ordering, unknown settings, and compatible TOML formatting.
+    pub(crate) fn save(&self, config: Config) -> Result<ConfigDocumentSaveOutcome> {
+        self.save_document(config, false)
+    }
+
+    pub fn save_with_backup(&self, config: Config) -> Result<ConfigDocumentSaveOutcome> {
+        self.save_document(config, true)
+    }
+
+    fn save_document(
+        &self,
+        mut config: Config,
+        create_backup: bool,
+    ) -> Result<ConfigDocumentSaveOutcome> {
         config.validate_and_clamp();
         let repair_source = self
             .repair_mode
@@ -301,11 +315,12 @@ impl ConfigDocument {
 
         self.ensure_source_unchanged()?;
         prepare_config_parent(self.revision.destination_path(&self.source_path))?;
-        let backup_path = if matches!(self.revision, SourceRevision::Present { .. }) {
-            Some(create_config_backup(&self.source_path)?)
-        } else {
-            None
-        };
+        let backup_path =
+            if create_backup && matches!(self.revision, SourceRevision::Present { .. }) {
+                Some(create_config_backup(&self.source_path)?)
+            } else {
+                None
+            };
         self.ensure_source_unchanged()?;
         write_config_text_atomic(&self.source_path, &output, self.revision.overwrite_mode())?;
         let revision = self.revision.after_write(output.as_bytes());

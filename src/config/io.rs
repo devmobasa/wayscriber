@@ -1,5 +1,5 @@
-use super::Config;
 use super::paths::primary_config_dir;
+use super::{Config, ConfigDocument};
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
@@ -95,14 +95,13 @@ impl Config {
 
     fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
         let config_path = Self::get_config_path()?;
-        prepare_config_parent(&config_path)?;
-        let backup_path = if create_backup && config_path.exists() {
-            Some(create_config_backup(&config_path)?)
+        let document = ConfigDocument::load_from_path(&config_path)?;
+        let outcome = if create_backup {
+            document.save_with_backup(self.clone())?
         } else {
-            None
+            document.save(self.clone())?
         };
-        let config_str = toml::to_string_pretty(self).context("Failed to serialize config")?;
-        write_config_text_atomic(&config_path, &config_str, OverwriteMode::Replace)?;
+        let (_, backup_path) = outcome.into_parts();
 
         if let Some(path) = &backup_path {
             info!(
