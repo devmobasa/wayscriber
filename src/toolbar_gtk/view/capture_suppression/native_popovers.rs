@@ -54,7 +54,7 @@ impl NativePopoverCapture {
         captures.push(capture);
     }
 
-    pub(super) fn set_suppressed(&self, suppressed: bool, defer_input: bool) {
+    pub(super) fn set_suppressed(&self, suppressed: bool) {
         if !suppressed {
             for capture in self.captures.take() {
                 capture.restore();
@@ -72,7 +72,7 @@ impl NativePopoverCapture {
             // Once enrolled, keep the last buffer transparent even while the
             // popup is unmapped. A later remap is then safe while its fresh
             // proof is being enrolled and presented.
-            capture.set_capture_state(true, defer_input);
+            capture.set_capture_state(true, false);
         }
     }
 

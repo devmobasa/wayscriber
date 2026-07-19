@@ -463,32 +463,27 @@ impl Windows {
         }
         self.refresh_css(update);
         self.pin_to_output(update);
-        let defer_capture_input = matches!(capture_plan, CaptureUpdatePlan::ApplyAndAcknowledge(_));
         self.tooltip_capture
-            .set_suppressed(update.capture_suppressed, defer_capture_input);
-        let top_mapped = self.top.apply(update, defer_capture_input);
-        let side_mapped = self.side.apply(update, defer_capture_input);
+            .set_suppressed(update.capture_suppressed);
+        let top_mapped = self.top.apply(update);
+        let side_mapped = self.side.apply(update);
         self.refresh_popup_capture_sources();
         if let CaptureUpdatePlan::ApplyAndAcknowledge(generation) = capture_plan {
             let proof = async {
+                // Suppression applies transparent content and empty input
+                // regions together. Confirming this first presentation proves
+                // both changes reached the compositor before the GTK main
+                // context is allowed to settle queued popup work.
                 self.wait_for_capture_paints(generation, top_mapped, side_mapped)
                     .await?;
 
-                // Once every surface known at entry is transparent, close
-                // compositor input admission. GDK defers input-region changes
-                // until a surface commit, so force and presentation-confirm a
-                // fresh transparent frame before the display roundtrip and
-                // low-priority GTK-main-context settle loop.
                 let display = gtk4::gdk::Display::default().ok_or_else(|| {
                     "GTK display disappeared during capture suppression".to_string()
                 })?;
-                capture_suppression::commit_input_regions_before_popup_quiescence(
-                    generation,
-                    || self.disable_capture_input(top_mapped, side_mapped),
-                    || self.wait_for_capture_paints(generation, top_mapped, side_mapped),
-                    || display.sync(),
-                )
-                .await?;
+                display.sync();
+                log::info!(
+                    "capture.preflight id={generation} component=gtk phase=input-region-commit-confirmed"
+                );
 
                 let roots = self.popup_capture_roots();
                 self.tooltip_capture
@@ -581,17 +576,6 @@ impl Windows {
         ];
         roots.extend(self.top.tooltip_roots());
         roots
-    }
-
-    fn disable_capture_input(&self, top_mapped: bool, side_mapped: bool) {
-        if top_mapped {
-            set_surface_input_enabled(&self.top.window, false);
-        }
-        if side_mapped {
-            set_surface_input_enabled(&self.side.window, false);
-        }
-        self.top.set_popovers_capture_input_enabled(false);
-        self.tooltip_capture.set_input_enabled(false);
     }
 
     /// Regenerate the stylesheet when the toolbar scale changes.
