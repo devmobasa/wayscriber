@@ -350,6 +350,10 @@ fn merge_value(
     known: Option<&Value>,
     path: &str,
 ) {
+    if merge_inline_board_rgb(raw, previous, updated, known, path) {
+        return;
+    }
+
     match (raw, updated) {
         (Value::InlineTable(raw), Value::InlineTable(updated)) => merge_table_like(
             raw,
@@ -400,11 +404,44 @@ fn merge_value(
     }
 }
 
-fn known_alternate_representation_is_equal(raw: &Value, updated: &Value, path: &str) -> bool {
-    if !matches!(
+fn merge_inline_board_rgb(
+    raw: &mut Value,
+    previous: Option<&Value>,
+    updated: &Value,
+    known: Option<&Value>,
+    path: &str,
+) -> bool {
+    if !is_board_color_path(path) || !matches!(updated, Value::Array(_)) {
+        return false;
+    }
+
+    let Value::InlineTable(raw) = raw else {
+        return false;
+    };
+    let Some(raw_rgb) = raw.get_mut("rgb") else {
+        return false;
+    };
+
+    merge_value(
+        raw_rgb,
+        previous.and_then(board_rgb_value),
+        updated,
+        known.and_then(board_rgb_value),
         path,
-        "boards.items.background" | "boards.items.default_pen_color"
-    ) {
+    );
+    true
+}
+
+fn board_rgb_value(value: &Value) -> Option<&Value> {
+    match value {
+        Value::Array(_) => Some(value),
+        Value::InlineTable(map) => map.get("rgb"),
+        _ => None,
+    }
+}
+
+fn known_alternate_representation_is_equal(raw: &Value, updated: &Value, path: &str) -> bool {
+    if !is_board_color_path(path) {
         return false;
     }
 
@@ -419,6 +456,13 @@ fn known_alternate_representation_is_equal(raw: &Value, updated: &Value, path: &
             .iter()
             .zip(updated_rgb.iter())
             .all(|(raw, updated)| values_semantically_equal(raw, updated))
+}
+
+fn is_board_color_path(path: &str) -> bool {
+    matches!(
+        path,
+        "boards.items.background" | "boards.items.default_pen_color"
+    )
 }
 
 fn board_rgb_array(value: &Value) -> Option<&Array> {
