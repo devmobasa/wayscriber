@@ -22,12 +22,19 @@ pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
     state.apply_capture_completion();
 }
 
+pub(super) fn poll_capture_deadlines(state: &mut WaylandState, now: Instant) {
+    state.poll_overlay_capture_barrier_timeout(now);
+}
+
 pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
     super::min_timeout(
-        state.frozen.portal_timeout(now),
+        state.overlay_capture_barrier_timeout(now),
         super::min_timeout(
-            state.zoom.portal_timeout(now),
-            state.xdg_frozen_fullscreen_timeout(now),
+            state.frozen.portal_timeout(now),
+            super::min_timeout(
+                state.zoom.portal_timeout(now),
+                state.xdg_frozen_fullscreen_timeout(now),
+            ),
         ),
     )
 }

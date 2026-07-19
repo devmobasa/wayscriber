@@ -242,7 +242,6 @@ impl TopBar {
     pub(in crate::toolbar_gtk) fn apply(
         &mut self,
         update: &super::super::GtkToolbarUpdate,
-        defer_capture_input: bool,
     ) -> bool {
         let snapshot = &update.snapshot;
         let entering_capture_suppression = update.capture_suppressed && !self.capture_suppressed;
@@ -274,7 +273,7 @@ impl TopBar {
             // would send, so an open picker survives a hide/show cycle
             // like the built-in bars.
             if update.capture_suppressed {
-                self.set_popovers_capture_transparent(true, defer_capture_input);
+                self.set_popovers_capture_transparent(true);
             } else {
                 self.hide_popovers_for_window_hide();
             }
@@ -311,9 +310,9 @@ impl TopBar {
             updater(snapshot);
         }
         if update.capture_suppressed {
-            self.set_popovers_capture_transparent(true, defer_capture_input);
+            self.set_popovers_capture_transparent(true);
         } else {
-            self.set_popovers_capture_transparent(false, false);
+            self.set_popovers_capture_transparent(false);
             self.sync_popovers(snapshot, &plan);
         }
         self.window.set_visible(true);
@@ -325,10 +324,7 @@ impl TopBar {
             GtkToolbarKind::Top,
             presentation.visual_hidden,
         );
-        super::set_surface_input_enabled(
-            &self.window,
-            presentation.input_enabled || defer_capture_input,
-        );
+        super::set_surface_input_enabled(&self.window, presentation.input_enabled);
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,

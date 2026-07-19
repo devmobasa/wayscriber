@@ -9,13 +9,14 @@ wayscriber supports customization through a TOML configuration file located at:
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
 
-When the graphical configurator edits an existing file, it preserves TOML comments, section order,
-and unrecognized settings. Unrecognized paths produce a warning but remain in the file for forward
-compatibility. Known values are still validated and migrations are written under their canonical
-names. The configurator tracks the exact loaded contents rather than relying on modification time;
-if the file is created, deleted, retargeted through a symlink, or changed by another editor, reload
-it before saving. A save does not expand omitted, unchanged defaults; when a setting that was
-omitted is edited, only that changed setting and its required table path are added.
+When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
+section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
+a configurator warning but remain in the file for forward compatibility. Known values are still
+validated and migrations are written under their canonical names. The configurator tracks the
+exact loaded contents rather than relying on modification time; if the file is created, deleted,
+retargeted through a symlink, or changed by another editor, reload it before saving. A save does not
+expand omitted, unchanged defaults; when a setting that was omitted is edited, only that changed
+setting and its required table path are added.
 The first save for a missing file is sparse as well: it writes the migration revision marker and
 only values changed from the built-in defaults.
 
@@ -789,7 +790,7 @@ side_sections = [
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that always appears when width pressure moves visible controls into it. The icon/text mode toggle lives in the side palette's Settings pane.
-- **Per-tool options**: the Shapes popover hosts the options for the tool it owns — the Fill checkbox (`top.utility.fill`) and the polygon side count — instead of a permanently reserved mini-checkbox lane under the bar; the bar is 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
+- **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
 **Defaults:** all set as above.
@@ -1465,7 +1466,12 @@ image data and local image files copied from a file manager.
 Settings are loaded in this order:
 1. Built-in defaults (hardcoded)
 2. Configuration file values (override defaults)
-3. Runtime changes via keybindings (temporary, not saved)
+3. Runtime drawing/tool changes via keybindings (temporary, not saved)
+
+Explicit preference actions—such as toolbar pinning, minimization, pane selection, item visibility
+and order, board customization, shortcut editing, preset management, and tray session-resume
+settings—are saved back to `config.toml` without reformatting unrelated settings or removing user
+comments.
 
 **Note:** Changes to the config file require restarting wayscriber daemon to take effect.
 
