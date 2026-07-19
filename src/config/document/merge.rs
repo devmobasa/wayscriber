@@ -388,7 +388,8 @@ fn merge_value(
         }
         (raw, updated) => {
             if previous.is_some_and(|previous| values_semantically_equal(previous, updated))
-                && values_semantically_equal(raw, updated)
+                && (values_semantically_equal(raw, updated)
+                    || known_alternate_representation_is_equal(raw, updated, path))
             {
                 return;
             }
@@ -396,6 +397,35 @@ fn merge_value(
             *raw = updated.clone();
             *raw.decor_mut() = decor;
         }
+    }
+}
+
+fn known_alternate_representation_is_equal(raw: &Value, updated: &Value, path: &str) -> bool {
+    if !matches!(
+        path,
+        "boards.items.background" | "boards.items.default_pen_color"
+    ) {
+        return false;
+    }
+
+    let Some(raw_rgb) = board_rgb_array(raw) else {
+        return false;
+    };
+    let Some(updated_rgb) = board_rgb_array(updated) else {
+        return false;
+    };
+    raw_rgb.len() == updated_rgb.len()
+        && raw_rgb
+            .iter()
+            .zip(updated_rgb.iter())
+            .all(|(raw, updated)| values_semantically_equal(raw, updated))
+}
+
+fn board_rgb_array(value: &Value) -> Option<&Array> {
+    match value {
+        Value::Array(rgb) => Some(rgb),
+        Value::InlineTable(map) => map.get("rgb").and_then(Value::as_array),
+        _ => None,
     }
 }
 

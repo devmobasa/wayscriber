@@ -9,13 +9,14 @@ wayscriber supports customization through a TOML configuration file located at:
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
 
-When the graphical configurator edits an existing file, it preserves TOML comments, section order,
-and unrecognized settings. Unrecognized paths produce a warning but remain in the file for forward
-compatibility. Known values are still validated and migrations are written under their canonical
-names. The configurator tracks the exact loaded contents rather than relying on modification time;
-if the file is created, deleted, retargeted through a symlink, or changed by another editor, reload
-it before saving. A save does not expand omitted, unchanged defaults; when a setting that was
-omitted is edited, only that changed setting and its required table path are added.
+When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
+section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
+a configurator warning but remain in the file for forward compatibility. Known values are still
+validated and migrations are written under their canonical names. The configurator tracks the
+exact loaded contents rather than relying on modification time; if the file is created, deleted,
+retargeted through a symlink, or changed by another editor, reload it before saving. A save does not
+expand omitted, unchanged defaults; when a setting that was omitted is edited, only that changed
+setting and its required table path are added.
 The first save for a missing file is sparse as well: it writes the migration revision marker and
 only values changed from the built-in defaults.
 
@@ -1441,7 +1442,12 @@ image data and local image files copied from a file manager.
 Settings are loaded in this order:
 1. Built-in defaults (hardcoded)
 2. Configuration file values (override defaults)
-3. Runtime changes via keybindings (temporary, not saved)
+3. Runtime drawing/tool changes via keybindings (temporary, not saved)
+
+Explicit preference actions—such as toolbar pinning, minimization, pane selection, item visibility
+and order, board customization, shortcut editing, preset management, and tray session-resume
+settings—are saved back to `config.toml` without reformatting unrelated settings or removing user
+comments.
 
 **Note:** Changes to the config file require restarting wayscriber daemon to take effect.
 

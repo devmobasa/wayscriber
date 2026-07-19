@@ -189,8 +189,10 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   interface. Guarded saves merge known fields while retaining comments and unsupported settings,
   then reuse the normal backup and durable atomic-write policy. Its editor load path can expose a
   backup-protected defaults-based repair document for readable but invalid config, while true I/O
-  failures leave the configurator's last good document untouched. Runtime callers can continue
-  using the typed `Config::load()` and `Config::save*()` interfaces.
+  failures leave the configurator's last good document untouched. Runtime callers continue using
+  the typed `Config::load()` and `Config::save*()` interfaces; both save variants delegate to the
+  same lossless merge path so persisted toolbar, board, tray, preset, and shortcut changes do not
+  rewrite unrelated TOML or discard comments.
 - The Performance section is the first bounded scalar-metadata slice: core config owns its field
   IDs, paths, labels, help/search terms, and numeric constraints while the configurator keeps typed
   draft fields and messages.
