@@ -106,11 +106,9 @@ pub(super) fn maybe_render(
                     state.config.performance.max_fps_no_vsync,
                     keep_rendering,
                 );
-                // Only set frame_callback_pending if vsync is enabled.
                 if vsync_enabled {
-                    state.surface.set_frame_callback_pending(true);
                     debug!(
-                        "Main loop: render complete, frame_callback_pending set to true (vsync enabled)"
+                        "Main loop: render complete, frame callback tracked by the committed frame (vsync enabled)"
                     );
                 } else {
                     debug!(

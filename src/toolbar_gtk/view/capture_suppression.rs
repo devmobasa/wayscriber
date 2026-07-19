@@ -1,4 +1,3 @@
-mod input_fence;
 mod native_popovers;
 mod quiescence;
 
@@ -13,7 +12,6 @@ use super::{
     widget_native_is_mapped,
 };
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
-pub(super) use input_fence::commit_input_regions_before_popup_quiescence;
 use native_popovers::NativePopoverCapture;
 
 const CAPTURE_PAINT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -165,26 +163,22 @@ impl TooltipCapture {
     /// Enter or leave capture mode without unmapping a tooltip that is
     /// already visible. Pending tooltip timers are rejected by the query
     /// handler while suppression is active.
-    pub(super) fn set_suppressed(&self, suppressed: bool, defer_input: bool) {
+    pub(super) fn set_suppressed(&self, suppressed: bool) {
         if suppressed && !self.inner.suppressed.get() {
             self.inner
                 .mapped_before_capture
                 .set(self.active_native_widget().is_some());
         }
         self.inner.suppressed.set(suppressed);
-        self.inner
-            .popup_input_enabled
-            .set(!suppressed || defer_input);
+        self.inner.popup_input_enabled.set(!suppressed);
         self.inner.content.set_transparent(suppressed);
         self.sync_native_chrome();
-        self.inner
-            .native_popovers
-            .set_suppressed(suppressed, defer_input);
+        self.inner.native_popovers.set_suppressed(suppressed);
 
         if !suppressed {
             self.set_input_enabled(true);
             self.inner.mapped_before_capture.set(false);
-        } else if !defer_input {
+        } else {
             self.set_input_enabled(false);
         }
     }
@@ -575,7 +569,7 @@ mod tests {
         assert_eq!(capture.inner.label.text().as_str(), "Zoom");
         assert_eq!(capture.transparent_content_state(), (Some(1.0), false));
 
-        capture.set_suppressed(true, true);
+        capture.set_suppressed(true);
         capture.install_tree(root.upcast_ref());
         // A hidden realized toplevel cannot map its popup, so explicitly mark
         // and map the real GtkText-owned surface for this structural test. The
@@ -614,8 +608,6 @@ mod tests {
         );
         capture.mark_capture_popovers_proven();
         assert!(capture.pending_capture_popover_targets().is_empty());
-        assert!(context_popover.can_target());
-        capture.set_input_enabled(false);
         assert!(!context_popover.can_target());
 
         // A popup discovered by the final post-input rescan must receive its
@@ -655,7 +647,7 @@ mod tests {
         capture.inner.mapped_before_capture.set(true);
         assert!(capture.query_tooltip(button.upcast_ref(), &tooltip));
 
-        capture.set_suppressed(false, false);
+        capture.set_suppressed(false);
         assert_eq!(capture.transparent_content_state(), (Some(1.0), false));
         assert!(!context_popover.has_css_class(CAPTURE_TRANSPARENT_CLASS));
         assert_eq!(popover_content.content_opacity(), None);
@@ -710,9 +702,8 @@ mod tests {
             .and_then(|child| child.downcast::<gtk4::Text>().ok())
             .expect("second asynchronous GtkEntry text delegate");
         let asynchronous_capture = TooltipCapture::new();
-        asynchronous_capture.set_suppressed(true, true);
+        asynchronous_capture.set_suppressed(true);
         asynchronous_capture.install_tree(asynchronous_root.upcast_ref());
-        asynchronous_capture.set_input_enabled(false);
 
         let created_popovers = Rc::new(RefCell::new(Vec::<(gtk4::Popover, gtk4::Widget)>::new()));
         let created_popovers_callback = Rc::clone(&created_popovers);
@@ -766,7 +757,7 @@ mod tests {
                 .pending_capture_popover_targets()
                 .is_empty()
         );
-        asynchronous_capture.set_suppressed(false, false);
+        asynchronous_capture.set_suppressed(false);
         for (popover, original_child) in created_popovers.borrow().iter() {
             assert!(!popover.has_css_class(CAPTURE_TRANSPARENT_CLASS));
             assert!(popover.can_target());

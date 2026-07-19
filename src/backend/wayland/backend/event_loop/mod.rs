@@ -151,6 +151,11 @@ pub(super) fn run_event_loop(
             break;
         }
 
+        // A capture-barrier deadline may be what woke dispatch. Apply its
+        // recovery before this iteration reaches toolbar synchronization and
+        // rendering so the restored frame is not delayed by another block.
+        capture::poll_capture_deadlines(state, Instant::now());
+
         if !state.input_state.should_exit {
             state.reconcile_live_source_interaction_if_idle(
                 "post-dispatch interaction reconciliation",
