@@ -100,7 +100,7 @@ pub(crate) fn route_pointer_release(
         return RoutingOutcome::Consumed(ConsumedBy::StatusHud);
     }
 
-    if let Some(outcome) = adapters::handle_radial_menu_release(state) {
+    if let Some(outcome) = adapters::handle_radial_menu_release(state, event.button(), points) {
         return outcome;
     }
 

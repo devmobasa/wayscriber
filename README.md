@@ -123,7 +123,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
 - Render color profiles for print/projector/light-theme preview
-- Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection plus scroll size adjust
+- Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection with recent colors, press-flick-release tool commits, plus a draggable outer size ring and scroll size adjust
 
 ### Boards
 - Named boards with transparent overlay or custom backgrounds
@@ -738,7 +738,7 @@ pick_screen_color = ["I"]
 | Configurator | <kbd>F11</kbd> |
 | Command palette | <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd> |
 | Screen eyedropper | <kbd>I</kbd>, toolbar/color picker, or <kbd>Ctrl+K</kbd> → **Pick screen color** |
-| Radial menu | <kbd>Middle-click</kbd> (idle) open/close; <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; scroll adjusts active tool size |
+| Radial menu | <kbd>Middle-click</kbd> (idle) open/close; hold + flick toward a wedge to commit instantly (release in the center cancels); <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; drag the outer ring or scroll to adjust active tool size |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |

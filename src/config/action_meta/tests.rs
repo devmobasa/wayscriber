@@ -320,6 +320,109 @@ fn command_palette_actions_match_expected_contract() {
     );
 }
 
+/// The actions the radial compass renders as icons: every tool/mode wedge
+/// and sub-ring child. Everything else stays icon-free until an icon
+/// surface needs it.
+const EXPECTED_ICON_ACTIONS: &[Action] = &[
+    Action::SelectPenTool,
+    Action::SelectMarkerTool,
+    Action::SelectLineTool,
+    Action::SelectRectTool,
+    Action::SelectEllipseTool,
+    Action::SelectRegularPolygonTool,
+    Action::SelectBlurTool,
+    Action::SelectArrowTool,
+    Action::SelectSelectionTool,
+    Action::SelectEraserTool,
+    Action::SelectStepMarkerTool,
+    Action::EnterTextMode,
+    Action::EnterStickyNoteMode,
+];
+
+#[test]
+fn icon_coverage_matches_the_radial_contract() {
+    for meta in action_meta_iter() {
+        let expected = EXPECTED_ICON_ACTIONS.contains(&meta.action);
+        assert_eq!(
+            meta.icon.is_some(),
+            expected,
+            "icon presence contract changed for {:?}",
+            meta.action
+        );
+    }
+}
+
+#[test]
+fn icons_reuse_the_shared_semantic_tool_painters() {
+    use crate::input::Tool;
+    use crate::toolbar_icons::top_toolbar_icon_painter;
+    use crate::ui::toolbar::model::{TopToolbarIcon, semantic_icon_for_tool};
+
+    for action in EXPECTED_ICON_ACTIONS {
+        let icon = action_meta(*action)
+            .and_then(|meta| meta.icon)
+            .unwrap_or_else(|| panic!("missing icon for {:?}", action));
+        let expected = match action {
+            Action::EnterTextMode => top_toolbar_icon_painter(TopToolbarIcon::Text),
+            Action::EnterStickyNoteMode => top_toolbar_icon_painter(TopToolbarIcon::StickyNote),
+            _ => {
+                let tool = Tool::from_select_action(*action)
+                    .unwrap_or_else(|| panic!("{:?} should select a tool", action));
+                top_toolbar_icon_painter(TopToolbarIcon::Tool(semantic_icon_for_tool(tool)))
+            }
+        };
+        assert!(
+            std::ptr::fn_addr_eq(icon, expected),
+            "icon painter for {:?} drifted from the shared semantic painter",
+            action
+        );
+    }
+}
+
+#[test]
+fn meta_macro_arms_default_aliases_and_icon() {
+    const PLAIN: ActionMeta = meta!(Undo, "Undo", None, "d", History, false, false, false);
+    const ALIASED: ActionMeta = meta!(
+        Undo,
+        "Undo",
+        None,
+        "d",
+        History,
+        false,
+        false,
+        false,
+        &["back"]
+    );
+    const WITH_ICON: ActionMeta = meta!(
+        Undo,
+        "Undo",
+        None,
+        "d",
+        History,
+        false,
+        false,
+        false,
+        icon: crate::toolbar_icons::draw_icon_undo
+    );
+    const FULL: ActionMeta = meta!(
+        Undo,
+        "Undo",
+        None,
+        "d",
+        History,
+        false,
+        false,
+        false,
+        &["back"],
+        icon: crate::toolbar_icons::draw_icon_undo
+    );
+
+    assert!(PLAIN.icon.is_none() && PLAIN.search_aliases.is_empty());
+    assert!(ALIASED.icon.is_none() && ALIASED.search_aliases == ["back"]);
+    assert!(WITH_ICON.icon.is_some() && WITH_ICON.search_aliases.is_empty());
+    assert!(FULL.icon.is_some() && FULL.search_aliases == ["back"]);
+}
+
 #[test]
 fn action_display_label_strips_toggle_prefix() {
     assert_eq!(action_display_label(Action::ToggleStatusBar), "Status Bar");

@@ -192,8 +192,16 @@ impl WaylandState {
             self.render_eyedropper_loupe(ctx, width, height);
 
             if self.input_state.is_radial_menu_open() {
+                // Layout (and with it hit-testing) is live from the moment
+                // of opening so pre-paint flicks resolve correctly; painting
+                // waits out the flick window (RADIAL_PAINT_DELAY).
                 self.input_state.update_radial_menu_layout(width, height);
-                crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
+                if self
+                    .input_state
+                    .radial_menu_mark_painted_if_due(std::time::Instant::now())
+                {
+                    crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
+                }
             } else {
                 self.input_state.clear_radial_menu_layout();
             }

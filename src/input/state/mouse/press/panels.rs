@@ -51,7 +51,13 @@ impl InputState {
             MouseButton::Left => {
                 // Update hover at exact click position before selecting
                 self.update_radial_menu_hover(screen_x as f64, screen_y as f64);
-                self.radial_menu_select_hovered();
+                if self.radial_menu_hover_is_size_ring() {
+                    // Pressing the size gauge starts a drag-capture along the
+                    // arc instead of selecting.
+                    self.radial_menu_begin_size_drag(screen_x as f64, screen_y as f64);
+                } else {
+                    self.radial_menu_select_hovered();
+                }
             }
             MouseButton::Right => {
                 self.close_radial_menu();

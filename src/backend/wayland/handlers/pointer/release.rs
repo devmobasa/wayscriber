@@ -80,6 +80,36 @@ impl WaylandState {
                 self.pointer_over_toolbar()
             );
         }
+        // An open radial menu owns pointer releases everywhere on screen: a
+        // press-flick-release whose release lands over a toolbar region must
+        // still commit (or cancel) instead of being swallowed by the toolbar
+        // gates below. The radial release router consumes every button while
+        // the menu is open, so nothing leaks through to canvas handling.
+        if self.input_state.is_radial_menu_open()
+            && !self.is_move_dragging()
+            && !self.toolbar_dragging()
+        {
+            let mb = match button {
+                BTN_LEFT => Some(MouseButton::Left),
+                BTN_MIDDLE => Some(MouseButton::Middle),
+                BTN_RIGHT => Some(MouseButton::Right),
+                _ => None,
+            };
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let (Some(mb), Some((sx, sy))) = (mb, screen_position) {
+                let screen_x = sx.round() as i32;
+                let screen_y = sy.round() as i32;
+                let (wx, wy) = self.zoomed_world_coords(sx, sy);
+                self.input_state
+                    .on_mouse_release_with_canvas(mb, screen_x, screen_y, wx, wy);
+                self.input_state.needs_redraw = true;
+                return;
+            }
+        }
         if inline_active {
             if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
                 drag_log(format!(

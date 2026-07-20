@@ -75,6 +75,10 @@ pub struct InputState {
     pub current_color: Color,
     /// Colors selected by quick color actions and palette UI.
     pub(crate) quick_colors: QuickColorPalette,
+    /// Session-only recently applied colors, most-recent-first, deduped and
+    /// capped (like `board_recent`, never persisted). Shown as the radial
+    /// color ring's appended recents arc.
+    pub(crate) recent_colors: Vec<Color>,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
     /// Independent color/thickness values for drawing tools.

@@ -286,7 +286,16 @@ pub(crate) fn handle_radial_menu_motion(
         return None;
     }
     let screen = points.screen();
-    state.update_radial_menu_hover(screen.x() as f64, screen.y() as f64);
+    let x = screen.x() as f64;
+    let y = screen.y() as f64;
+    if state.radial_menu_is_size_dragging() {
+        // Drag capture: while the size gauge is held, every motion adjusts
+        // thickness, even outside the band.
+        state.radial_menu_drag_size_to(x, y);
+    } else {
+        state.update_radial_menu_hover(x, y);
+        state.radial_menu_sample_flick(x, y);
+    }
     Some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 
@@ -378,9 +387,14 @@ pub(crate) fn handle_release_overlays(
     None
 }
 
-pub(crate) fn handle_radial_menu_release(state: &InputState) -> Option<RoutingOutcome> {
+pub(crate) fn handle_radial_menu_release(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    let screen = points.screen();
     state
-        .is_radial_menu_open()
+        .radial_menu_handle_release(button, screen.x() as f64, screen.y() as f64)
         .then_some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 

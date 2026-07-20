@@ -170,6 +170,7 @@ impl InputState {
             || self.board_picker_is_dragging()
             || self.board_picker_is_page_dragging()
             || self.color_picker_popup_is_dragging()
+            || self.radial_menu_is_size_dragging()
     }
 
     fn has_cancelable_session_capture_interaction(&self) -> bool {

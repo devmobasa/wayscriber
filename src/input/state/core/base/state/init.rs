@@ -77,6 +77,7 @@ impl InputState {
             boards: BoardManager::from_config(boards_config),
             current_color: color,
             quick_colors: QuickColorPalette::default(),
+            recent_colors: Vec::new(),
             current_thickness: thickness,
             tool_settings,
             pressure_variation_threshold: 0.1,

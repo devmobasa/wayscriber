@@ -149,6 +149,9 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
         let timeout = min_timeout(timeout, durable_action_timeout);
+        // A radial menu waiting out its paint delay must appear without
+        // further input events.
+        let timeout = min_timeout(timeout, state.input_state.radial_menu_paint_timeout(now));
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -239,6 +242,12 @@ pub(super) fn run_event_loop(
         if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
             state.input_state.needs_redraw = true;
         }
+
+        // When the radial paint deadline passes, this requests the redraw
+        // that paints the menu (no-op before the deadline and after paint).
+        state
+            .input_state
+            .tick_radial_menu_paint(std::time::Instant::now());
 
         capture::handle_pending_actions(state, qh);
         state.sync_overlay_interactivity();

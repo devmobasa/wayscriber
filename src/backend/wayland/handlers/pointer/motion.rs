@@ -62,6 +62,35 @@ impl WaylandState {
             }
             return;
         }
+        // An open radial menu owns pointer motion everywhere on screen:
+        // flick sampling and wedge hover must keep working when the pointer
+        // crosses a toolbar region, so bypass the toolbar gates below until
+        // the menu closes.
+        if self.input_state.is_radial_menu_open() && !self.is_move_dragging() {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let Some((sx, sy)) = screen_position {
+                self.set_current_mouse(sx.round() as i32, sy.round() as i32);
+                let (wx, wy) = self.zoomed_world_coords(sx, sy);
+                self.input_state.update_pointer_positions(
+                    sx.round() as i32,
+                    sy.round() as i32,
+                    wx,
+                    wy,
+                );
+                self.input_state.on_mouse_motion_with_canvas(
+                    sx.round() as i32,
+                    sy.round() as i32,
+                    wx,
+                    wy,
+                );
+                self.update_pointer_cursor(false, conn);
+                return;
+            }
+        }
         if inline_active && self.inline_toolbar_motion(event.position) {
             self.update_pointer_cursor(true, conn);
             return;

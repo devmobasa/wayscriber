@@ -100,10 +100,36 @@ pub(crate) fn draw_pill(
     let _ = ctx.stroke();
 }
 
+/// Keycap chip interior padding, as fractions of the label font size.
+/// Shared by [`keycap_size`] and [`draw_keycap`] so pre-measured centering
+/// can never drift from the drawn chip.
+const KEYCAP_PAD_X_FACTOR: f64 = 0.5;
+const KEYCAP_PAD_Y_FACTOR: f64 = 0.3;
+
+/// Measured (width, height) the [`draw_keycap`] chip occupies for `label` at
+/// `font_size`, for callers that need to center the chip before drawing it.
+pub(crate) fn keycap_size(ctx: &cairo::Context, label: &str, font_size: f64) -> (f64, f64) {
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        label,
+        None,
+    );
+    let extents = layout.ink_extents();
+    (
+        extents.width() + font_size * KEYCAP_PAD_X_FACTOR * 2.0,
+        extents.height() + font_size * KEYCAP_PAD_Y_FACTOR * 2.0,
+    )
+}
+
 /// Draw a flat keycap chip (rounded rect + centered label) and return its
 /// (width, height). The single keycap language that replaces the per-surface
 /// badge renderings as surfaces migrate (M2+).
-#[allow(dead_code)] // consumed by help/palette keycap unification (M2+)
 pub(crate) fn draw_keycap(
     ctx: &cairo::Context,
     x: f64,
@@ -125,8 +151,8 @@ pub(crate) fn draw_keycap(
         None,
     );
     let extents = layout.ink_extents();
-    let pad_x = font_size * 0.5;
-    let pad_y = font_size * 0.3;
+    let pad_x = font_size * KEYCAP_PAD_X_FACTOR;
+    let pad_y = font_size * KEYCAP_PAD_Y_FACTOR;
     let width = extents.width() + pad_x * 2.0;
     let height = extents.height() + pad_y * 2.0;
 

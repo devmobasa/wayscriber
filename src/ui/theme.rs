@@ -125,6 +125,9 @@ pub mod overlay {
     // ---- Interactive states ----
     /// Hover state background (mouse hover)
     pub const BG_HOVER: Rgba = (0.25, 0.32, 0.45, 0.9);
+    /// State-ladder hover wash: white at 8% painted over the resting
+    /// surface. Sits below the accent-filled selected state.
+    pub const BG_HOVER_WASH: Rgba = (1.0, 1.0, 1.0, 0.08);
     /// Keyboard focus border color (lighter tint of the accent)
     pub const BORDER_FOCUS: Rgba = rgba(ACCENT_BRIGHT_RGB, 0.9);
     /// Selection/highlight background
@@ -233,6 +236,30 @@ pub mod overlay {
     pub const FOCUS_RING_WIDTH: f64 = 2.0;
     /// Focus ring offset from element
     pub const FOCUS_RING_OFFSET: f64 = 2.0;
+
+    // ---- Radial menu (Cairo overlay only; no GTK CSS rows) ----
+    /// Wedge glyph size on the radial compass ring.
+    pub const RADIAL_WEDGE_ICON_SIZE: f64 = 17.0;
+    /// Lift of the wedge glyph center above the wedge midpoint.
+    pub const RADIAL_WEDGE_ICON_LIFT: f64 = 15.0;
+    /// Drop of the wedge label center below the wedge midpoint when a glyph
+    /// sits above it.
+    pub const RADIAL_WEDGE_LABEL_DROP: f64 = 5.0;
+    /// Drop of the keycap hint's top edge below the wedge midpoint when a
+    /// glyph/label stack sits above it.
+    pub const RADIAL_WEDGE_HINT_DROP: f64 = 13.0;
+    /// Sub-ring wedges whose mid-radius arc is narrower than this render
+    /// their glyph only (no label/keycap).
+    pub const RADIAL_SUB_LABEL_MIN_ARC: f64 = 34.0;
+    /// Drop of the thickness numeral keycap center below the center-well
+    /// midpoint.
+    pub const RADIAL_CENTER_NUMERAL_DROP: f64 = 16.0;
+    /// Radial inset of the size-ring track stroke inside its band (both
+    /// edges), keeping the gauge visually thinner than its hit band.
+    pub const RADIAL_SIZE_TRACK_INSET: f64 = 3.0;
+    /// Outer-radius inset of the recent-color swatches on the radial color
+    /// ring, visually separating the recents arc from the quick palette.
+    pub const RADIAL_RECENT_OUTER_INSET: f64 = 5.0;
 
     // ---- Keyboard navigation hint text ----
     /// Context menu navigation hint
