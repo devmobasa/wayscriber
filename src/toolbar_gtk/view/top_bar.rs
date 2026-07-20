@@ -39,7 +39,7 @@ use super::super::icons::IconWidget;
 use super::super::widgets::{
     FeedbackSender, SliderRow, SwatchButton, add_button_shortcut_hint, icon_button,
     install_click_modifier_capture, install_shortcut_focus_policy, send_event, set_active_class,
-    sized_button, swatch_with_shortcut, text_button,
+    sized_button, text_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 
@@ -79,6 +79,9 @@ const STYLE_SEL_VALUE_W: f64 = 64.0;
 const STYLE_STEP_W: f64 = 20.0;
 /// Segment tab height (matches the Settings pane's segmented tabs).
 const STYLE_TAB_H: f64 = 22.0;
+/// Extra clear gap before a segmented control in the pill (M7-C3), on top of
+/// the standard control gap, sharing `theme::toolbar::SEGMENT_LEADING_GAP`.
+const STYLE_SEGMENT_LEAD: f64 = crate::ui::theme::toolbar::SEGMENT_LEADING_GAP;
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
@@ -197,6 +200,12 @@ struct StructureKey {
     /// (including swatch count, reset presence, and segment kind) so a
     /// tool change rebuilds the pill while value churn stays in updaters.
     style_pill: Vec<String>,
+    /// Presets-island structure: the display toggle, slot count, and the
+    /// saved slots. A change here (toggled visibility, a saved/cleared slot)
+    /// rebuilds the island; the applied-slot highlight rides an updater.
+    show_presets: bool,
+    preset_slot_count: usize,
+    presets: Vec<Option<crate::ui::toolbar::PresetSlotSnapshot>>,
 }
 
 impl StructureKey {
@@ -217,6 +226,9 @@ impl StructureKey {
                 .iter()
                 .map(|control| control.id().into_owned())
                 .collect(),
+            show_presets: snapshot.show_presets,
+            preset_slot_count: snapshot.preset_slot_count,
+            presets: snapshot.presets.clone(),
         }
     }
 }

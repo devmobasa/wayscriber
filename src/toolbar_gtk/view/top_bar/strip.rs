@@ -15,19 +15,6 @@ pub(super) fn top_toolbar_spec(
     model::TopToolbarSpec::build(snapshot, plan)
 }
 
-pub(super) fn quick_color_badge_row_visible(
-    snapshot: &ToolbarSnapshot,
-    spec: &model::TopToolbarSpec,
-) -> bool {
-    spec.strip().iter().any(|node| {
-        matches!(
-            node,
-            model::TopToolbarNode::Control(model::TopToolbarControl::QuickColor(index))
-                if snapshot.binding_hints.quick_color_badge(*index).is_some()
-        )
-    })
-}
-
 impl TopBar {
     pub(super) fn build_minimized(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         let spec = top_toolbar_spec(snapshot, plan);
@@ -225,9 +212,9 @@ impl TopBar {
         let sz = |value: f64| value * scale;
         let px = |value: f64| (value * scale).round() as i32;
 
-        // Three detached pill islands (spec-derived membership) inside a
-        // transparent outer row: tools | history | chrome. Compact plans
-        // tighten the pill's inner padding via the `.compact` CSS variant
+        // Detached pill islands (spec-derived membership) inside a
+        // transparent outer row: tools | presets | history | chrome. Compact
+        // plans tighten the pill's inner padding via the `.compact` CSS variant
         // (mirrors the builtin TOP_COMPACT_ISLAND_PAD).
         let style_pill = |widget: &gtk4::Widget| {
             widget.add_css_class("pill");
@@ -239,6 +226,9 @@ impl TopBar {
         let island_tools = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         style_pill(island_tools.upcast_ref());
         set_island_widget_id(&island_tools, model::TopToolbarIsland::Tools);
+        let island_presets = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        style_pill(island_presets.upcast_ref());
+        set_island_widget_id(&island_presets, model::TopToolbarIsland::Presets);
         let island_history = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         style_pill(island_history.upcast_ref());
         set_island_widget_id(&island_history, model::TopToolbarIsland::History);
@@ -282,22 +272,10 @@ impl TopBar {
             *x += span + gap;
         };
 
-        let quick_color_count = spec
-            .strip()
-            .iter()
-            .filter(|node| {
-                matches!(
-                    node,
-                    model::TopToolbarNode::Control(model::TopToolbarControl::QuickColor(_))
-                )
-            })
-            .count();
-        let show_swatch_badge_row = quick_color_badge_row_visible(snapshot, &spec);
-        let mut quick_color_seen = 0usize;
-
         for node in spec.strip() {
             let bar = match node.island() {
                 model::TopToolbarIsland::History => &island_history,
+                model::TopToolbarIsland::Presets => &island_presets,
                 _ => &island_tools,
             };
             match *node {
@@ -365,68 +343,11 @@ impl TopBar {
                             x += btn_w + gap;
                         }
                     }
-                    model::TopToolbarControl::QuickColor(index) => {
-                        let entry_color = snapshot.quick_colors.rendered_entries()[index].color;
-                        let swatch = SwatchButton::new(
-                            entry_color,
-                            control.active(snapshot),
-                            sz(SWATCH_SIZE),
-                            &control.tooltip(snapshot),
-                        );
-                        let accessible_label = control.accessible_label(snapshot);
-                        swatch
-                            .button
-                            .update_property(&[gtk4::accessible::Property::Label(
-                                &accessible_label,
-                            )]);
-                        let sender = self.feedback.clone();
-                        let event = control.event(snapshot);
-                        swatch.button.connect_clicked(move |_| {
-                            send_event(&sender, event.clone());
-                        });
-                        quick_color_seen += 1;
-                        let is_last = quick_color_seen == quick_color_count;
-                        let badge = control.shortcut_badge(snapshot);
-                        let swatch_root = if !show_swatch_badge_row {
-                            swatch.button.clone().upcast()
-                        } else {
-                            swatch_with_shortcut(
-                                &swatch.button,
-                                badge.as_deref(),
-                                sz(SWATCH_SIZE),
-                                sz(10.0),
-                            )
-                        };
-                        set_control_widget_id(&swatch_root, control);
-                        append_gap(bar, &swatch_root, if is_last { gap } else { SWATCH_GAP });
-                        x += SWATCH_SIZE + if is_last { gap } else { SWATCH_GAP };
-                        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                            swatch.set_selected(entry_color == snapshot.color);
-                        }));
-                    }
-                    model::TopToolbarControl::CurrentColor => {
-                        let chip = SwatchButton::new(
-                            snapshot.color,
-                            control.active(snapshot),
-                            sz(CHIP_SIZE),
-                            &control.tooltip(snapshot),
-                        );
-                        set_control_widget_id(&chip.button, control);
-                        let accessible_label = control.accessible_label(snapshot);
-                        chip.button
-                            .update_property(&[gtk4::accessible::Property::Label(
-                                &accessible_label,
-                            )]);
-                        let sender = self.feedback.clone();
-                        let event = control.event(snapshot);
-                        chip.button.connect_clicked(move |_| {
-                            send_event(&sender, event.clone());
-                        });
-                        append_gap(bar, chip.button.as_ref(), gap);
-                        x += CHIP_SIZE + gap;
-                        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                            chip.set_color(snapshot.color);
-                        }));
+                    model::TopToolbarControl::Preset(index) => {
+                        let button =
+                            self.preset_button(snapshot, control, index, (sz(btn_w), sz(btn_h)));
+                        append_gap(bar, button.as_ref(), gap);
+                        x += btn_w + gap;
                     }
                     model::TopToolbarControl::Undo | model::TopToolbarControl::Redo => {
                         let button = self.history_button(
@@ -487,7 +408,12 @@ impl TopBar {
 
         // Assemble only the populated pills; every pill after the first is
         // separated by the shared inter-island gap.
-        for island in [&island_tools, &island_history, &island_chrome] {
+        for island in [
+            &island_tools,
+            &island_presets,
+            &island_history,
+            &island_chrome,
+        ] {
             if island.first_child().is_none() {
                 continue;
             }

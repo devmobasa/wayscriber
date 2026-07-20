@@ -12,8 +12,10 @@ use crate::ui_text::UiTextStyle;
 
 use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
-    COLOR_SWATCH_HAIRLINE, COLOR_TEXT_DISABLED, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB,
-    FONT_FAMILY_DEFAULT, set_color,
+    COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED, COLOR_TEXT_SECONDARY,
+    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL,
+    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
+    PRESET_SLOT_SWATCH_RATIO, set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
@@ -70,6 +72,40 @@ fn paint_button_body(
     }
 }
 
+/// Draw a filled preset slot's color as a small rounded swatch tucked in the
+/// bottom-right corner. A luminance-driven hairline keeps the swatch defined
+/// against the slot body regardless of the preset color (a black swatch on
+/// the dark body, a white swatch on the accent body). Mirrors the built-in
+/// side-palette swatch treatment and the GTK preset slot so black and white
+/// presets both stay legible.
+fn paint_preset_color_swatch(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    color: (f64, f64, f64, f64),
+) {
+    let size = (w.min(h) * PRESET_SLOT_SWATCH_RATIO).round();
+    let sx = x + w - size - PRESET_SLOT_SWATCH_INSET;
+    let sy = y + h - size - PRESET_SLOT_SWATCH_INSET;
+    ctx.set_source_rgba(color.0, color.1, color.2, 1.0);
+    draw_round_rect(ctx, sx, sy, size, size, PRESET_SLOT_SWATCH_RADIUS);
+    let _ = ctx.fill();
+    let luminance = 0.299 * color.0 + 0.587 * color.1 + 0.114 * color.2;
+    set_color(
+        ctx,
+        if luminance < 0.3 {
+            COLOR_SWATCH_HAIRLINE_DARK
+        } else {
+            COLOR_SWATCH_HAIRLINE
+        },
+    );
+    ctx.set_line_width(1.0);
+    draw_round_rect(ctx, sx, sy, size, size, PRESET_SLOT_SWATCH_RADIUS);
+    let _ = ctx.stroke();
+}
+
 fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
     let Some(badge) = &node.shortcut_badge else {
         return;
@@ -81,11 +117,10 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
         .min(w.max(10.0));
     let badge_x = match badge.placement {
         ShortcutBadgePlacement::Corner => x + w - badge_w - 2.0,
-        ShortcutBadgePlacement::Above | ShortcutBadgePlacement::Below => x + (w - badge_w) / 2.0,
+        ShortcutBadgePlacement::Below => x + (w - badge_w) / 2.0,
     };
     let badge_y = match badge.placement {
         ShortcutBadgePlacement::Corner => y + 2.0,
-        ShortcutBadgePlacement::Above => (y - badge_h - 1.0).max(1.0),
         ShortcutBadgePlacement::Below => y + h - badge_h - 2.0,
     };
 
@@ -98,11 +133,11 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
         draw_round_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
         let _ = ctx.stroke();
     }
-    // Above/Below key letters read as unboxed 9px captions in the secondary
-    // text color; corner badges keep the boxed 8px icon-color treatment.
+    // Below key letters read as unboxed 9px captions in the secondary text
+    // color; corner badges keep the boxed 8px icon-color treatment.
     let (font_size, label_color) = match badge.placement {
         ShortcutBadgePlacement::Corner => (8.0, COLOR_ICON_DEFAULT),
-        ShortcutBadgePlacement::Above | ShortcutBadgePlacement::Below => (9.0, COLOR_LABEL_HINT),
+        ShortcutBadgePlacement::Below => (9.0, COLOR_LABEL_HINT),
     };
     draw_label_center_color(
         ctx,
@@ -273,6 +308,45 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 ctx.set_line_width(1.5);
                 draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
                 let _ = ctx.stroke();
+            }
+        }
+        WidgetKind::PresetSlot {
+            glyph,
+            color,
+            label,
+            active,
+        } => {
+            paint_button_body(ctx, node.rect, ButtonStyle::active(*active), is_hover);
+            match glyph {
+                // Filled slot: the saved tool glyph in the neutral foreground
+                // so a dark preset color never renders it invisible against
+                // the slot body; the preset color rides along as a separate
+                // corner swatch instead (the side-palette convention).
+                Some(glyph) => {
+                    let icon_size = (w.min(h) * PRESET_SLOT_ICON_RATIO).round();
+                    set_color(ctx, COLOR_TEXT_SECONDARY);
+                    (glyph.0)(
+                        ctx,
+                        x + (w - icon_size) / 2.0,
+                        y + (h - icon_size) / 2.0,
+                        icon_size,
+                    );
+                    paint_preset_color_swatch(ctx, x, y, w, h, *color);
+                }
+                // Empty slot: the 1-based slot number in the secondary text
+                // color, inviting a save.
+                None => {
+                    draw_label_center_color(
+                        ctx,
+                        label_style(FONT_SIZE_LABEL, true),
+                        x,
+                        y,
+                        w,
+                        h,
+                        label,
+                        COLOR_TEXT_SECONDARY,
+                    );
+                }
             }
         }
         WidgetKind::MicroChip {

@@ -176,6 +176,18 @@ pub enum WidgetKind {
         color: (f64, f64, f64, f64),
         selected: bool,
     },
+    /// A presets-island slot. Filled slots draw the saved tool glyph in the
+    /// neutral foreground and carry the preset `color` as a separate corner
+    /// swatch, so a dark preset color never renders the glyph invisible
+    /// against the slot body (the side-palette convention). Empty slots
+    /// (`glyph` is `None`) draw the 1-based slot number carried in `label`.
+    /// `active` marks the slot whose preset is currently applied.
+    PresetSlot {
+        glyph: Option<IconFn>,
+        color: (f64, f64, f64, f64),
+        label: String,
+        active: bool,
+    },
     /// Micro-mode chip: the top strip collapsed to one round chip with the
     /// active tool's glyph inside a ring stroked in the current color.
     MicroChip {
@@ -199,8 +211,6 @@ pub enum WidgetKind {
 pub enum ShortcutBadgePlacement {
     /// Boxed micro-badge in the button's top-right corner (text buttons).
     Corner,
-    /// Unboxed caption centered above the widget (quick-color swatches).
-    Above,
     /// Unboxed caption centered under the icon, inside the button rect
     /// (icon buttons, Excalidraw-style).
     Below,

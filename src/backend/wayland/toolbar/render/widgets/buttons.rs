@@ -5,7 +5,8 @@ use super::constants::{
     COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
     COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
     COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY,
-    COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, set_color,
+    COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, SEGMENT_PADDING, SEGMENT_RADIUS,
+    SEGMENT_SELECTED_RADIUS, set_color,
 };
 use super::draw_round_rect;
 use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba};
@@ -293,9 +294,12 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
     label_style: UiTextStyle<'_>,
 ) {
     let segment_w = w / 2.0;
-    let radius = 6.0;
-    let inner_radius = 4.0;
-    let padding = 2.0;
+    // Metrics come from theme tokens (M7-C3): a rounded container, a rounded
+    // selected pill inset by SEGMENT_PADDING so it reads as a proper pill
+    // with breathing room rather than crowding the seam.
+    let radius = SEGMENT_RADIUS;
+    let inner_radius = SEGMENT_SELECTED_RADIUS;
+    let padding = SEGMENT_PADDING;
 
     // Draw outer container
     draw_round_rect(ctx, x, y, w, h, radius);

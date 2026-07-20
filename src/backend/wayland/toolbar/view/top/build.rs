@@ -70,18 +70,6 @@ pub(super) fn build_top_view_planned(
     let mut picker_anchor: Option<(f64, f64, f64, f64)> = None;
     let mut overflow_anchor: Option<(f64, f64, f64, f64)> = None;
     let contextual_ring = spec.contextual().first().copied();
-    let swatches_have_badges = spec.strip().iter().any(|node| {
-        matches!(
-            node,
-            model::TopToolbarNode::Control(model::TopToolbarControl::QuickColor(index))
-                if snapshot.binding_hints.quick_color_badge(*index).is_some()
-        )
-    });
-    let swatch_y = if swatches_have_badges {
-        y + (btn_h - (10.0 + 1.0 + TOP_SWATCH_SIZE)) / 2.0 + 11.0
-    } else {
-        y + (btn_h - TOP_SWATCH_SIZE) / 2.0
-    };
 
     for node in spec.strip() {
         // Island transitions close the current pill (its content right edge
@@ -174,47 +162,14 @@ pub(super) fn build_top_view_planned(
                     ));
                     x += btn_w + gap;
                 }
-                model::TopToolbarControl::QuickColor(index) => {
-                    let entry = &snapshot.quick_colors.rendered_entries()[index];
-                    let badge = control.shortcut_badge(snapshot);
-                    strip_nodes.push(
-                        WidgetNode::new(
-                            control.id().render_id().into_owned(),
-                            (x, swatch_y, TOP_SWATCH_SIZE, TOP_SWATCH_SIZE),
-                            WidgetKind::Swatch {
-                                color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
-                                selected: control.active(snapshot),
-                            },
-                            Some(Interaction::click(
-                                control.event(snapshot),
-                                Some(control.tooltip(snapshot)),
-                            )),
-                        )
-                        .with_shortcut_badge(badge.as_deref(), ShortcutBadgePlacement::Above),
-                    );
-                    x += TOP_SWATCH_SIZE + TOP_SWATCH_GAP;
-                }
-                model::TopToolbarControl::CurrentColor => {
-                    let chip_y = y + (btn_h - TOP_CHIP_SIZE) / 2.0;
-                    x += gap - TOP_SWATCH_GAP;
-                    strip_nodes.push(WidgetNode::new(
-                        control.id().render_id().into_owned(),
-                        (x, chip_y, TOP_CHIP_SIZE, TOP_CHIP_SIZE),
-                        WidgetKind::Swatch {
-                            color: (
-                                snapshot.color.r,
-                                snapshot.color.g,
-                                snapshot.color.b,
-                                snapshot.color.a,
-                            ),
-                            selected: control.active(snapshot),
-                        },
-                        Some(Interaction::click(
-                            control.event(snapshot),
-                            Some(control.tooltip(snapshot)),
-                        )),
+                model::TopToolbarControl::Preset(index) => {
+                    strip_nodes.push(preset_slot_node(
+                        snapshot,
+                        control,
+                        index,
+                        (x, y, btn_w, btn_h),
                     ));
-                    x += TOP_CHIP_SIZE + gap;
+                    x += btn_w + gap;
                 }
                 model::TopToolbarControl::Restore
                 | model::TopToolbarControl::MicroChip
@@ -882,6 +837,9 @@ fn push_style_pill(
             model::StylePillControl::FontFamilySegment
             | model::StylePillControl::EraserModeSegment => {
                 let segments = control.segments(snapshot).expect("segment halves");
+                // A clear gap before the segment so Sans│Mono never crowd the
+                // preceding numeral ("72pt") to its left (M7-C3).
+                x += ToolbarLayoutSpec::TOP_STYLE_SEGMENT_LEAD;
                 let rect = (
                     x,
                     center(row_h),
@@ -1021,6 +979,48 @@ fn control_button_node(
 ) -> WidgetNode {
     let tooltip = control.tooltip(snapshot);
     control_button_node_with_tooltip(snapshot, control, id, rect, use_icons, tooltip)
+}
+
+/// A presets-island slot: a compact button showing the saved tool glyph in
+/// the neutral foreground with the preset color as a separate corner swatch,
+/// or the 1-based slot number when empty. Structure comes from the shared
+/// spec; this only owns the geometry.
+fn preset_slot_node(
+    snapshot: &ToolbarSnapshot,
+    control: model::TopToolbarControl,
+    index: usize,
+    rect: (f64, f64, f64, f64),
+) -> WidgetNode {
+    let preset = model::preset_slot(snapshot, index);
+    let glyph = preset.map(|preset| {
+        IconFn(toolbar_icons::top_toolbar_icon_painter(
+            model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(preset.tool)),
+        ))
+    });
+    let color = preset
+        .map(|preset| {
+            (
+                preset.color.r,
+                preset.color.g,
+                preset.color.b,
+                preset.color.a,
+            )
+        })
+        .unwrap_or((0.0, 0.0, 0.0, 0.0));
+    WidgetNode::new(
+        control.id().render_id().into_owned(),
+        rect,
+        WidgetKind::PresetSlot {
+            glyph,
+            color,
+            label: control.label(snapshot).into_owned(),
+            active: control.active(snapshot),
+        },
+        Some(Interaction::click(
+            control.event(snapshot),
+            Some(control.tooltip(snapshot)),
+        )),
+    )
 }
 
 fn overflow_control_button_node(

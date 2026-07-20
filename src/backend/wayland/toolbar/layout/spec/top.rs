@@ -59,6 +59,11 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_RESET_W: f64 = 56.0;
     /// Two-segment control width.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_W: f64 = 120.0;
+    /// Extra clear gap before a segmented control in the pill, on top of the
+    /// standard control gap, so the segment does not crowd the numeral to its
+    /// left (M7-C3). Shares `theme::toolbar::SEGMENT_LEADING_GAP`.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_LEAD: f64 =
+        crate::ui::theme::toolbar::SEGMENT_LEADING_GAP;
     /// Docked selection-property value button width (cycle buttons and
     /// the readout between stepper halves).
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEL_VALUE_W: f64 = 64.0;

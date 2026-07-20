@@ -15,13 +15,15 @@
 
 use std::borrow::Cow;
 
-use crate::config::{Action, QuickColorPalette, action_label, action_short_label};
+use crate::config::{
+    Action, QuickColorPalette, action_label, action_short_label, toolbar_item_ids as ids,
+};
 use crate::draw::FontDescriptor;
 use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
 use crate::label_format::format_binding_label;
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
-use super::{ToolbarSliderSpec, TopStripPlan};
+use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};
 
 /// Morph state of the style pill, derived from the active tool's options
 /// kind. `Hidden` covers Select without a selection plus the
@@ -214,15 +216,22 @@ impl StylePillSpec {
         let mut controls = Vec::new();
         if context.needs_color {
             controls.push(StylePillControl::ColorChip);
-            // Swatches follow the strip's width-degradation plan (8→6→4→0)
-            // so the pill narrows with the islands above it.
-            let count = snapshot
-                .quick_colors
-                .rendered_entries()
-                .len()
-                .min(Self::MAX_SWATCHES)
-                .min(plan.swatch_count);
-            controls.extend((0..count).map(StylePillControl::QuickSwatch));
+            // The quick-color swatch row is the on-strip home of the
+            // "Quick colors" customization toggle: M7 moved colors off the
+            // strip into this pill (M7-C1), so the toggle now gates these
+            // swatches (the color chip stays either way). Hiding the item
+            // hides the swatch row.
+            if toolbar_item_visible(snapshot, ids::TOP_GROUP_QUICK_COLORS) {
+                // Swatches follow the strip's width-degradation plan (8→6→4→0)
+                // so the pill narrows with the islands above it.
+                let count = snapshot
+                    .quick_colors
+                    .rendered_entries()
+                    .len()
+                    .min(Self::MAX_SWATCHES)
+                    .min(plan.swatch_count);
+                controls.extend((0..count).map(StylePillControl::QuickSwatch));
+            }
         }
         if context.needs_thickness {
             controls.push(StylePillControl::ThicknessSlider);
@@ -758,6 +767,49 @@ mod tests {
             Some(format!("{:.0}px", snapshot.thickness))
         );
         assert_eq!(numeral.tooltip(&snapshot).as_deref(), Some("Thickness"));
+    }
+
+    #[test]
+    fn hiding_quick_colors_hides_the_pill_swatches_but_keeps_the_chip() {
+        use crate::config::ToolbarItemsConfig;
+
+        let mut snapshot = snapshot_for_tool(Tool::Pen);
+        // Default (item visible): the swatch row renders after the color chip.
+        let visible = control_ids(&StylePillSpec::build(&snapshot, &plan()));
+        assert!(visible.contains(&"top.style.color-chip".to_string()));
+        assert!(visible.contains(&"top.style.swatch.0".to_string()));
+
+        // The "Quick colors" customization toggle is repointed to gate this
+        // swatch row (M7-C1): hiding the item drops the swatches while the
+        // color chip stays reachable.
+        let mut items = ToolbarItemsConfig::default();
+        items.set_hidden(ids::TOP_GROUP_QUICK_COLORS, true);
+        snapshot.resolved_toolbar_items = items.resolved();
+        let hidden = control_ids(&StylePillSpec::build(&snapshot, &plan()));
+        assert!(
+            hidden.contains(&"top.style.color-chip".to_string()),
+            "the color chip survives hiding Quick colors: {hidden:?}"
+        );
+        assert!(
+            !hidden.iter().any(|id| id.starts_with("top.style.swatch.")),
+            "hiding Quick colors hides the pill swatches: {hidden:?}"
+        );
+
+        // A Text-state pill (also color-bearing) honours the same gate.
+        let mut text = snapshot.clone();
+        text.text_active = true;
+        let text_ids = control_ids(&StylePillSpec::build(&text, &plan()));
+        assert_eq!(
+            StylePillSpec::build(&text, &plan()).state(),
+            StylePillState::Text
+        );
+        assert!(text_ids.contains(&"top.style.color-chip".to_string()));
+        assert!(
+            !text_ids
+                .iter()
+                .any(|id| id.starts_with("top.style.swatch.")),
+            "hiding Quick colors also hides the Text-state swatches: {text_ids:?}"
+        );
     }
 
     #[test]

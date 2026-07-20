@@ -1,16 +1,16 @@
 //! Top-strip tree builder.
 //!
-//! The strip reads left to right as three detached pill islands. Island A
-//! (tools): drag grip, pens (Select/Pen/Marker/Step/Eraser), shapes
-//! (Line/Arrow/Shapes picker), annotations (Text/Note/Screenshot/Highlight),
-//! and quick colors + the current color chip, with thin dividers between the
-//! groups. Island B (history): Undo/Redo plus the overflow toggle whose menu
-//! anchors the destructive Clear (red on hover) and any width-dropped items.
-//! Island C (chrome): the quieter right-aligned pin and minimize buttons.
-//! Island D (style pill): a fourth detached pill under the band carrying
-//! the active tool's contextual properties (`model::StylePillSpec`).
-//! Blue is reserved for the active tool; disabled history buttons are dimmed
-//! and not interactive.
+//! The strip reads left to right as detached pill islands. The Tools island:
+//! drag grip, pens (Select/Pen/Marker/Step/Eraser), shapes (Line/Arrow/Shapes
+//! picker), annotations (Text/Note/Screenshot/Highlight), with thin dividers
+//! between the groups — colors no longer sit here (M7 moved them into the
+//! style pill). The Presets island: the saved tool+color slots. The History
+//! island: Undo/Redo plus the overflow toggle whose menu anchors the
+//! destructive Clear (red on hover) and any width-dropped items. The Chrome
+//! island: the quieter right-aligned pin and minimize buttons. Under the band,
+//! the style pill carries the active tool's contextual properties (colors, the
+//! color chip, sizes; `model::StylePillSpec`). Blue is reserved for the active
+//! tool; disabled history buttons are dimmed and not interactive.
 
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::Tool;
@@ -32,9 +32,6 @@ pub(crate) const TOP_SWATCH_SIZE: f64 = 22.0;
 pub(crate) const TOP_SWATCH_GAP: f64 = 4.0;
 /// Current-color chip size (opens the full picker; never collapses).
 pub(crate) const TOP_CHIP_SIZE: f64 = 28.0;
-/// Maximum quick-color swatches when width allows.
-#[cfg(test)]
-pub(crate) const TOP_MAX_QUICK_COLORS: usize = TopStripPlan::MAX_QUICK_COLORS;
 const TOP_COMPACT_BUTTON: f64 = 26.0;
 const TOP_COMPACT_GAP: f64 = 1.0;
 const TOP_COMPACT_CHROME: f64 = 18.0;
@@ -58,6 +55,12 @@ pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
         return plan;
     };
     let fits = |plan: &TopStripPlan| natural_width_planned(snapshot, plan) <= budget;
+    if fits(&plan) {
+        return plan;
+    }
+    // Presets are a non-essential island: yield the whole island first,
+    // before narrowing swatches or dropping any tool/utility (M7-C2).
+    plan.drop_presets = true;
     if fits(&plan) {
         return plan;
     }

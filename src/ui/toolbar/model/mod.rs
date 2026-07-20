@@ -59,7 +59,7 @@ pub(crate) use tools::{
 pub(crate) use top_spec::{
     TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole, TopToolbarDivider,
     TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec, TopToolbarUtility,
-    action_tooltip, micro_ring_width,
+    action_tooltip, micro_ring_width, preset_slot,
 };
 
 #[cfg(test)]

@@ -264,6 +264,17 @@ window.wayscriber-toolbar {{
     background-color: {segment_active};
     box-shadow: none;
 }}
+/* The style pill's Sans│Mono segment gets horizontal breathing room and a
+   rounded pill (M7-C3). Scoped to `.pill` so the Settings-pane and
+   side-palette tabs keep their prior flush styling (M7-C5) and the builtin —
+   whose segmented-control metrics are pill-only — stays matched. */
+.wayscriber-toolbar .pill button.tab {{
+    padding: {spacing_xs}px {segment_pad_h}px;
+    border-radius: {radius_button}px;
+}}
+.wayscriber-toolbar .pill button.tab.active {{
+    border-radius: {radius_button}px;
+}}
 .wayscriber-toolbar button.board-chip {{
     background-color: {field_bg};
     border: {hairline}px solid {field_border};
@@ -371,6 +382,7 @@ tooltip.{capture_transparent_class} {{
         pad_island = v.pad_island,
         pad_island_compact = v.pad_island_compact,
         pad_popover = v.pad_popover,
+        segment_pad_h = v.segment_pad_h,
         check_size = v.check_size,
         font_label = v.font_label,
         font_badge = v.font_badge,

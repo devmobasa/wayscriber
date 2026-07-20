@@ -410,6 +410,39 @@ pub mod toolbar {
     /// Center divider between segments
     pub const COLOR_SEGMENT_DIVIDER: Rgba = (0.35, 0.38, 0.45, 0.5);
 
+    // ---- Segmented control metrics (M7-C3) ----
+    /// Outer container corner radius of a segmented control.
+    pub const SEGMENT_RADIUS: f64 = RADIUS_LG;
+    /// Selected-segment pill corner radius (the rounded highlight inset
+    /// inside the container).
+    pub const SEGMENT_SELECTED_RADIUS: f64 = RADIUS_STD;
+    /// Inset of the selected/hovered segment pill from the container edge, so
+    /// the highlight reads as a rounded pill with breathing room rather than
+    /// filling the whole half.
+    pub const SEGMENT_PADDING: f64 = SPACING_SM;
+    /// Horizontal breathing room between a segment label and its edge (the
+    /// GTK `.tab` horizontal padding), so "Sans│Mono" never crowd the seam.
+    pub const SEGMENT_LABEL_PAD_H: f64 = SPACING_STD;
+    /// Extra clear gap before a segmented control in the style pill, on top of
+    /// the standard control gap, so the segment does not crowd the numeral
+    /// ("72pt") to its left.
+    pub const SEGMENT_LEADING_GAP: f64 = SPACING_MD;
+
+    // ---- Preset slot (M7-C2) ----
+    /// Tool-glyph size inside a presets-island slot, as a fraction of the
+    /// slot's shorter side (mirrors the side-palette preset icon ratio).
+    pub const PRESET_SLOT_ICON_RATIO: f64 = 0.5;
+    /// Corner color-swatch size inside a filled presets-island slot, as a
+    /// fraction of the slot's shorter side. The saved preset color rides here
+    /// as a separate accent so the tool glyph can stay a neutral, always-legible
+    /// foreground rather than being tinted invisible by a dark preset color
+    /// (the side-palette convention, M7-C2 legibility fix).
+    pub const PRESET_SLOT_SWATCH_RATIO: f64 = 0.4;
+    /// Inset of the corner color swatch from the slot's bottom-right edge.
+    pub const PRESET_SLOT_SWATCH_INSET: f64 = SPACING_XS;
+    /// Corner radius of the preset slot's color swatch.
+    pub const PRESET_SLOT_SWATCH_RADIUS: f64 = RADIUS_SM;
+
     // ---- Slider/track ----
     /// Slider track background
     pub const COLOR_TRACK_BACKGROUND: Rgba = (0.5, 0.5, 0.6, 0.6);

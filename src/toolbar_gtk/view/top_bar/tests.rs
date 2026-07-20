@@ -106,6 +106,7 @@ fn degraded_layout_requests_the_selected_plan_width() {
 
     let plan = plan_top_strip(&snapshot);
     let degraded = plan.compact
+        || plan.drop_presets
         || !plan.dropped_tools.is_empty()
         || !plan.dropped_utilities.is_empty()
         || plan.swatch_count < 8;
@@ -113,30 +114,35 @@ fn degraded_layout_requests_the_selected_plan_width() {
     assert!(top_default_width(&snapshot) <= 700);
 }
 
+/// Colors left the strip for the pill (M7-C1); the presets island is the new
+/// non-essential island there, and it is the first thing to yield under the
+/// compact plan (M7-C2).
 #[test]
-fn compact_adapter_keeps_quick_color_shortcut_badges() {
+fn compact_plan_drops_the_presets_island() {
     let state = make_test_input_state();
     let snapshot = ToolbarSnapshot::from_input_with_bindings(
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let mut plan = TopStripPlan::unconstrained();
-    plan.compact = true;
-    plan.swatch_count = 2;
-    let spec = super::strip::top_toolbar_spec(&snapshot, &plan);
+    let has_preset = |spec: &model::TopToolbarSpec| {
+        spec.strip().iter().any(|node| {
+            matches!(
+                node,
+                model::TopToolbarNode::Control(model::TopToolbarControl::Preset(_))
+            )
+        })
+    };
 
-    assert!(super::strip::quick_color_badge_row_visible(
-        &snapshot, &spec
-    ));
-    assert!(spec.strip().iter().any(|node| {
-        matches!(
-            node,
-            model::TopToolbarNode::Control(model::TopToolbarControl::QuickColor(index))
-                if model::TopToolbarControl::QuickColor(*index)
-                    .shortcut_badge(&snapshot)
-                    .is_some()
-        )
-    }));
+    // The default state shows presets, so the unconstrained plan lists them.
+    let full = super::strip::top_toolbar_spec(&snapshot, &TopStripPlan::unconstrained());
+    assert!(has_preset(&full));
+
+    // A compact plan drops the whole non-essential presets island.
+    let mut compact = TopStripPlan::unconstrained();
+    compact.compact = true;
+    assert!(!has_preset(&super::strip::top_toolbar_spec(
+        &snapshot, &compact
+    )));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,8 +213,9 @@ fn expected_semantic_records(
                 records.push(SemanticAdapterRecord::Divider(divider.id()));
             }
             model::TopToolbarNode::Control(control) => {
-                let show_badge =
-                    matches!(control, model::TopToolbarControl::QuickColor(_)) || !plan.compact;
+                // Colors left the strip (M7-C1); badges now ride tool and
+                // utility buttons only, which drop to icons under compact.
+                let show_badge = !plan.compact;
                 records.push(SemanticAdapterRecord::Control(control_record(
                     snapshot,
                     SemanticLane::Strip,
@@ -516,7 +523,7 @@ fn assert_gtk_control_widget(widget: &gtk4::Widget, expected: &SemanticControlRe
         );
     } else if let Ok(check) = surface.clone().downcast::<gtk4::CheckButton>() {
         assert_eq!(check.is_active(), expected.active, "{} state", expected.id);
-    } else if expected.role != model::TopToolbarControlRole::Swatch {
+    } else {
         assert_eq!(
             surface.has_css_class("active"),
             expected.active,
@@ -780,6 +787,29 @@ fn assert_builtin_node(
             );
         }
         W::Swatch { selected, .. } => assert_eq!(*selected, expected.active),
+        W::PresetSlot {
+            glyph,
+            label,
+            active,
+            ..
+        } => {
+            assert_eq!(*active, expected.active);
+            match expected.icon {
+                // A filled slot carries the saved tool glyph; an empty slot
+                // has no glyph and shows its 1-based number label.
+                Some(icon) => {
+                    let glyph = glyph.as_ref().expect("filled preset slot has a glyph");
+                    assert!(std::ptr::fn_addr_eq(
+                        glyph.0,
+                        crate::toolbar_icons::top_toolbar_icon_painter(icon)
+                    ));
+                }
+                None => {
+                    assert!(glyph.is_none(), "empty preset slot has no glyph");
+                    assert_eq!(*label, expected.label);
+                }
+            }
+        }
         W::MicroChip { glyph, .. } => {
             let icon = expected.icon.expect("semantic icon for micro chip");
             assert!(std::ptr::fn_addr_eq(
@@ -1347,32 +1377,40 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     // Compact plans normally drop quick colors before reaching the last
     // degradation step. Keep a direct adapter case so the presentation
     // contract cannot silently diverge if that planner policy changes.
+    // Colors left the strip (M7-C1) and the presets island yields under the
+    // compact plan (M7-C2): assert neither renders in a compact build.
     let mut compact_plan = TopStripPlan::unconstrained();
     compact_plan.compact = true;
-    compact_plan.swatch_count = 2;
-    let compact_spec = super::strip::top_toolbar_spec(&regular, &compact_plan);
-    let compact_expected = expected_semantic_records(&regular, &compact_spec, &compact_plan);
     let (tx, _rx) = std::sync::mpsc::channel();
     let mut compact_top = TopBar::new_for_test(FeedbackSender::new(tx));
     compact_top.build_strip(&regular, &compact_plan);
     let compact_widgets = collect_semantic_widgets(compact_top.root.upcast_ref());
-    for control in compact_expected.iter().filter_map(|record| match record {
-        SemanticAdapterRecord::Control(control) if control.id.starts_with("top.quick-color.") => {
-            Some(control)
-        }
-        _ => None,
-    }) {
-        let widget = compact_widgets
-            .iter()
-            .find(|widget| widget.widget_name() == control.id)
-            .expect("compact quick-color widget");
-        assert_gtk_control_widget(widget, control);
-        assert_eq!(
-            nearest_island_key(widget).as_deref(),
-            Some(model::TopToolbarIsland::Tools.key()),
-            "compact quick colors live in the tools island"
-        );
-    }
+    let compact_ids = compact_widgets
+        .iter()
+        .map(|widget| widget.widget_name().to_string())
+        .collect::<Vec<_>>();
+    // Positive presence first, so the absence check below can never pass
+    // vacuously on an empty strip: the compact build must materialize exactly
+    // the shared spec's protected widget set (tools/history/chrome).
+    let compact_spec = super::strip::top_toolbar_spec(&regular, &compact_plan);
+    let expected_compact_ids = expected_main_widget_ids(&compact_spec, &regular, &compact_plan);
+    assert!(
+        !expected_compact_ids.is_empty(),
+        "the compact strip still builds its protected core"
+    );
+    assert_eq!(
+        compact_ids, expected_compact_ids,
+        "the compact strip builds exactly the shared spec's widget set"
+    );
+    // Then the contract of this case: no colors or presets survive compaction.
+    assert!(
+        compact_ids.iter().all(|name| {
+            !name.starts_with("top.quick-color.")
+                && name.as_str() != "top.group.quick-colors"
+                && !name.starts_with("top.preset.")
+        }),
+        "the compact strip carries no colors or presets: {compact_ids:?}"
+    );
     detach_test_popovers(&mut compact_top);
 
     let mut shapes = regular.clone();

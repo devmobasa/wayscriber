@@ -37,7 +37,10 @@ fn strip_reads_as_divider_chunked_groups() {
         "top.utility.text",
         "top.utility.sticky-note",
         "top.utility.highlight",
-        "top.group.quick-colors",
+        // Colors left the strip for the pill (M7-C1); the presets island now
+        // occupies the seam between the tools and history islands (M7-C2).
+        "top.preset.0",
+        "top.preset.4",
         "top.utility.undo",
         "top.utility.redo",
         "top.chrome.overflow",
@@ -61,16 +64,22 @@ fn strip_reads_as_divider_chunked_groups() {
     // Clear moved into the overflow menu; the strip carries no Clear tile.
     assert!(!ids.contains(&"top.utility.clear-canvas"));
 
-    // Divider-chunked groups exist inside the tools island; the old
-    // history divider became the tools|history island gap.
+    // Colors moved to the pill: no swatches or current-color chip remain.
+    assert!(!ids.iter().any(|id| id.starts_with("top.quick-color.")));
+    assert!(!ids.contains(&"top.group.quick-colors"));
+
+    // Divider-chunked groups exist inside the tools island; the colors
+    // divider left with the colors, the old history divider became the
+    // tools|history island gap.
     assert!(ids.contains(&"top.divider.tools"));
     assert!(ids.contains(&"top.divider.annotations"));
-    assert!(ids.contains(&"top.divider.colors"));
+    assert!(!ids.contains(&"top.divider.colors"));
     assert!(!ids.contains(&"top.divider.history"));
 
-    // The four pill islands back the strip: the band's three plus the
-    // contextual style pill underneath.
+    // The five pill islands back the strip: the band's four (tools, presets,
+    // history, chrome) plus the contextual style pill underneath.
     assert!(ids.contains(&"top.island.tools"));
+    assert!(ids.contains(&"top.island.presets"));
     assert!(ids.contains(&"top.island.history"));
     assert!(ids.contains(&"top.island.chrome"));
     assert!(ids.contains(&"top.island.style"));
@@ -85,20 +94,23 @@ fn islands_are_detached_pills_in_reading_order() {
             .unwrap_or_else(|| panic!("{key} island"))
     };
     let tools = island("tools");
+    let presets = island("presets");
     let history = island("history");
     let chrome = island("chrome");
 
     let style = island("style");
 
-    // Pills read left to right with clear gaps between their edges.
+    // Pills read left to right with clear gaps between their edges: tools,
+    // presets, history, then the right-aligned chrome.
     let gap = ToolbarLayoutSpec::TOP_ISLAND_GAP;
-    assert!((history.rect.0 - (tools.rect.0 + tools.rect.2) - gap).abs() < 1e-9);
+    assert!((presets.rect.0 - (tools.rect.0 + tools.rect.2) - gap).abs() < 1e-9);
+    assert!((history.rect.0 - (presets.rect.0 + presets.rect.2) - gap).abs() < 1e-9);
     assert!(chrome.rect.0 >= history.rect.0 + history.rect.2 + gap - 1e-9);
     // Pills hug the surface edges and paint the panel treatment.
     assert_eq!(tools.rect.0, 0.0);
     let (w, _) = tree.size();
     assert!((chrome.rect.0 + chrome.rect.2 - w).abs() < 1e-9);
-    for node in [&tools, &history, &chrome, &style] {
+    for node in [&tools, &presets, &history, &chrome, &style] {
         assert!(matches!(node.kind, WidgetKind::Panel));
         assert!(node.interact.is_none());
     }
@@ -135,43 +147,98 @@ fn islands_are_detached_pills_in_reading_order() {
 }
 
 #[test]
-fn quick_colors_render_in_slot_order_with_a_chip() {
-    let snapshot = snapshot();
+fn presets_render_as_slot_buttons_in_the_presets_island() {
+    use crate::input::Tool;
+
+    let mut snapshot = snapshot();
+    snapshot.presets = vec![None; 5];
+    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+        name: Some("Red pen".to_string()),
+        tool: Tool::Pen,
+        color: crate::draw::Color::new(1.0, 0.0, 0.0, 1.0),
+        size: 4.0,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+    });
+    snapshot.active_preset_slot = Some(1);
     let tree = build(&snapshot);
 
-    let expected: Vec<_> = snapshot
-        .quick_colors
-        .rendered_entries()
-        .iter()
-        .take(TOP_MAX_QUICK_COLORS)
-        .map(|entry| entry.color)
-        .collect();
-    assert!(!expected.is_empty());
-    for (index, color) in expected.iter().enumerate() {
+    // No color swatch survives in the strip; five preset slots take the seam
+    // and all sit inside the presets island.
+    assert!(tree.node_by_id(&"top.quick-color.0".into()).is_none());
+    assert!(tree.node_by_id(&"top.group.quick-colors".into()).is_none());
+    let island = tree
+        .node_by_id(&"top.island.presets".into())
+        .expect("presets island");
+    for index in 0..5 {
         let node = tree
-            .node_by_id(&format!("top.quick-color.{index}").into())
-            .expect("swatch node");
-        match node.kind {
-            WidgetKind::Swatch { color: c, .. } => {
-                assert_eq!(c, (color.r, color.g, color.b, color.a), "slot {index}");
-            }
-            ref other => panic!("swatch kind, got {other:?}"),
-        }
-        assert!(matches!(
-            node.interact.as_ref().unwrap().event,
-            ToolbarEvent::SetQuickColor { color: c, action }
-                if c == *color
-                    && action == crate::config::QuickColorPalette::action_for_index(index)
-        ));
+            .node_by_id(&format!("top.preset.{index}").into())
+            .expect("preset slot node");
+        assert!(
+            node.rect.0 >= island.rect.0 - 1e-9
+                && node.rect.0 + node.rect.2 <= island.rect.0 + island.rect.2 + 1e-9
+                && node.rect.1 >= island.rect.1 - 1e-9
+                && node.rect.1 + node.rect.3 <= island.rect.1 + island.rect.3 + 1e-9,
+            "slot {index} stays inside the presets island"
+        );
     }
 
-    let chip = tree
-        .node_by_id(&"top.group.quick-colors".into())
-        .expect("current color chip");
+    // The filled slot draws the saved tool glyph in the neutral foreground and
+    // carries the preset color as a separate corner swatch; it reads active
+    // (it is the applied slot); clicking applies it.
+    let filled = tree
+        .node_by_id(&"top.preset.0".into())
+        .expect("filled slot");
+    match &filled.kind {
+        WidgetKind::PresetSlot {
+            glyph,
+            color,
+            active,
+            ..
+        } => {
+            assert!(glyph.is_some(), "filled slot carries a glyph");
+            assert_eq!(*color, (1.0, 0.0, 0.0, 1.0));
+            assert!(*active);
+        }
+        other => panic!("preset slot kind, got {other:?}"),
+    }
     assert!(matches!(
-        chip.interact.as_ref().unwrap().event,
-        ToolbarEvent::OpenColorPickerPopup
+        filled.interact.as_ref().unwrap().event,
+        ToolbarEvent::ApplyPreset(1)
     ));
+
+    // The empty slot shows its 1-based number and saves the setup on click.
+    let empty = tree.node_by_id(&"top.preset.1".into()).expect("empty slot");
+    match &empty.kind {
+        WidgetKind::PresetSlot {
+            glyph,
+            label,
+            active,
+            ..
+        } => {
+            assert!(glyph.is_none(), "empty slot has no glyph");
+            assert_eq!(label, "2");
+            assert!(!*active);
+        }
+        other => panic!("preset slot kind, got {other:?}"),
+    }
+    assert!(matches!(
+        empty.interact.as_ref().unwrap().event,
+        ToolbarEvent::SavePreset(2)
+    ));
+
+    // The presets island joins the surface input region as its own rect.
+    let (w, h) = top_size(&snapshot);
+    let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("input rects");
+    assert!(rects.contains(&island.rect));
 }
 
 #[test]
@@ -196,27 +263,8 @@ fn shortcut_badges_follow_the_snapshot_bindings() {
         Some(ShortcutBadgePlacement::Below)
     );
 
-    let red = tree
-        .node_by_id(&"top.quick-color.0".into())
-        .expect("red swatch");
-    assert_eq!(
-        red.shortcut_badge
-            .as_ref()
-            .map(|badge| badge.label.as_str()),
-        Some("R")
-    );
-    assert_eq!(
-        red.shortcut_badge.as_ref().map(|badge| badge.placement),
-        Some(ShortcutBadgePlacement::Above)
-    );
-    assert!(
-        red.interact
-            .as_ref()
-            .unwrap()
-            .tooltip
-            .as_deref()
-            .is_some_and(|text| text.contains("(R)"))
-    );
+    // Colors left the strip (M7-C1), so no swatch badges remain there.
+    assert!(tree.node_by_id(&"top.quick-color.0".into()).is_none());
 
     // Text-label buttons keep the boxed corner micro-badge.
     let mut text_snapshot = ToolbarSnapshot::from_input_with_bindings(
@@ -360,22 +408,23 @@ fn input_rects_cover_islands_and_open_popovers_only() {
         .expect("no popover: the islands still restrict input");
     assert_eq!(
         rects.len(),
-        4,
-        "band pills plus the style pill only: {rects:?}"
+        5,
+        "band pills (tools/presets/history/chrome) plus the style pill: {rects:?}"
     );
     // The gaps between the band islands click through to the canvas even in
     // the common no-popover state: consecutive island rects do not touch.
     assert!(rects[0].0 + rects[0].2 < rects[1].0);
     assert!(rects[1].0 + rects[1].2 < rects[2].0);
-    // The style pill is the fourth rect, detached below the band.
-    assert!(rects[3].1 > rects[0].1 + rects[0].3);
+    assert!(rects[2].0 + rects[2].2 < rects[3].0);
+    // The style pill is the fifth rect, detached below the band.
+    assert!(rects[4].1 > rects[0].1 + rects[0].3);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
     let islands: Vec<_> = tree
         .nodes()
         .iter()
         .filter(|node| node.id.as_str().starts_with("top.island."))
         .collect();
-    assert_eq!(islands.len(), 4);
+    assert_eq!(islands.len(), 5);
     for (island, input_rect) in islands.iter().zip(&rects) {
         assert_eq!(island.rect, *input_rect, "{}", island.id);
     }
@@ -385,10 +434,10 @@ fn input_rects_cover_islands_and_open_popovers_only() {
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
     let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("partial input region");
-    assert_eq!(rects.len(), 5, "four islands + shapes panel: {rects:?}");
+    assert_eq!(rects.len(), 6, "five islands + shapes panel: {rects:?}");
     assert_eq!(rects[0].0, 0.0);
     assert_eq!(rects[0].1, 0.0);
-    for island in &rects[..4] {
+    for island in &rects[..5] {
         assert!(
             island.1 + island.3 < h as f64,
             "islands end above the popover"
@@ -398,11 +447,12 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     // island rects do not touch.
     assert!(rects[0].0 + rects[0].2 < rects[1].0);
     assert!(rects[1].0 + rects[1].2 < rects[2].0);
+    assert!(rects[2].0 + rects[2].2 < rects[3].0);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
     let panel = tree
         .node_by_id(&"top.shapes.panel".into())
         .expect("panel node");
-    assert!(rects[4].1 <= panel.rect.1 && rects[4].3 >= panel.rect.3);
+    assert!(rects[5].1 <= panel.rect.1 && rects[5].3 >= panel.rect.3);
     // The popover opens below the style pill, never over it.
     let style = tree
         .node_by_id(&"top.island.style".into())
@@ -425,8 +475,8 @@ fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
         .iter()
         .filter(|node| node.id.as_str().starts_with("top.island."))
         .collect();
-    assert_eq!(islands.len(), 4, "tools/history/chrome/style pills");
-    for (island, input_rect) in islands.iter().zip(&input_rects[..4]) {
+    assert_eq!(islands.len(), 5, "tools/presets/history/chrome/style pills");
+    for (island, input_rect) in islands.iter().zip(&input_rects[..5]) {
         assert_eq!(island.rect, *input_rect, "{}", island.id);
         assert!(
             island.rect.1 + island.rect.3 < h as f64,
@@ -862,7 +912,11 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
     assert!(tree.node_by_id(&"top.island.style".into()).is_none());
     assert!(style_ids(&tree).is_empty());
     let rects = top_input_rects(&select, w as f64, h as f64).expect("island input rects");
-    assert_eq!(rects.len(), 3, "no pill rect for Select: {rects:?}");
+    assert_eq!(
+        rects.len(),
+        4,
+        "no pill rect for Select (tools/presets/history/chrome): {rects:?}"
+    );
 
     // Select with a selection: the docked properties bring the pill (and
     // its fourth input rect) back, with the same geometry contract.
@@ -901,8 +955,8 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
         ]
     );
     let rects = top_input_rects(&selection, w as f64, h as f64).expect("island input rects");
-    assert_eq!(rects.len(), 4, "selection pill rect: {rects:?}");
-    let pill_rect = rects[3];
+    assert_eq!(rects.len(), 5, "selection pill rect: {rects:?}");
+    let pill_rect = rects[4];
     assert_eq!(
         (pill_rect.0, pill_rect.1, pill_rect.2, pill_rect.3),
         style.rect,
@@ -958,10 +1012,11 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
             }
         }
 
-        // The pill joins the surface input region as the fourth rect.
+        // The pill joins the surface input region as the fifth rect (after
+        // the tools, presets, history, and chrome band islands).
         let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("island input rects");
-        assert_eq!(rects.len(), 4, "{tool:?} rects: {rects:?}");
-        assert_eq!(rects[3], style.rect, "{tool:?} pill input rect");
+        assert_eq!(rects.len(), 5, "{tool:?} rects: {rects:?}");
+        assert_eq!(rects[4], style.rect, "{tool:?} pill input rect");
     }
 }
 

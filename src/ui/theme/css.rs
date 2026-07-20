@@ -143,6 +143,9 @@ pub struct GtkStylesheetValues {
     pub pad_island: i32,
     pub pad_island_compact: i32,
     pub pad_popover: i32,
+    /// Horizontal padding of a segmented-control `.tab` label (M7-C3), so
+    /// "Sans│Mono" are not crammed against the tab edges.
+    pub segment_pad_h: i32,
     pub check_size: i32,
     pub font_label: i32,
     pub font_small: i32,
@@ -238,6 +241,7 @@ impl GtkStylesheetValues {
             pad_island: px(t::ISLAND_PAD),
             pad_island_compact: px(t::COMPACT_ISLAND_PAD),
             pad_popover: px(t::SPACING_LG),
+            segment_pad_h: px(t::SEGMENT_LABEL_PAD_H),
             check_size: px(t::CHECKBOX_SIZE),
             font_label: px(t::FONT_SIZE_LABEL),
             font_small: px(t::FONT_SIZE_SMALL),

@@ -5,6 +5,15 @@
 use super::popovers::attach_escape_dismiss;
 use super::*;
 
+use crate::ui::theme::set_color;
+use crate::ui::theme::toolbar::{
+    COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_SECONDARY,
+    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
+    PRESET_SLOT_SWATCH_RATIO,
+};
+
+use super::super::super::widgets::rounded_rect_path;
+
 pub(super) fn event_for_toggle_state(
     control: model::TopToolbarControl,
     next_active: bool,
@@ -209,6 +218,93 @@ impl TopBar {
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
             set_active_class(&handle, control.active(snapshot));
             handle.set_sensitive(control.enabled(snapshot));
+        }));
+        button
+    }
+
+    /// A presets-island slot button: a filled slot draws the saved tool
+    /// glyph in the neutral foreground with the preset color as a separate
+    /// corner swatch in a DrawingArea child, so a dark preset color never
+    /// renders the glyph invisible against the slot body (the side-palette
+    /// convention). An empty slot shows its 1-based number as a plain label.
+    /// Clicking applies a filled slot or saves the current setup into an empty
+    /// one (the shared spec owns the event).
+    pub(super) fn preset_button(
+        &mut self,
+        snapshot: &ToolbarSnapshot,
+        control: model::TopToolbarControl,
+        index: usize,
+        button_size: (f64, f64),
+    ) -> gtk4::Button {
+        assert!(matches!(control, model::TopToolbarControl::Preset(_)));
+        let button = sized_button(button_size.0, button_size.1);
+        set_control_widget_id(&button, control);
+        button.add_css_class("preset");
+        let accessible_label = control.accessible_label(snapshot);
+        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.set_tooltip_text(Some(&control.tooltip(snapshot)));
+        set_active_class(&button, control.active(snapshot));
+
+        if let Some(preset) = model::preset_slot(snapshot, index) {
+            // Filled slot: the saved tool glyph in the neutral foreground plus
+            // the preset color as a separate corner swatch (a DrawingArea
+            // painting the shared Cairo icon painter over the full slot face).
+            let painter = top_toolbar_icon_painter(model::TopToolbarIcon::Tool(
+                model::semantic_icon_for_tool(preset.tool),
+            ));
+            let (r, g, b) = (preset.color.r, preset.color.g, preset.color.b);
+            let scale = effective_scale(snapshot);
+            let area = gtk4::DrawingArea::new();
+            area.set_content_width(button_size.0.round().max(1.0) as i32);
+            area.set_content_height(button_size.1.round().max(1.0) as i32);
+            area.set_halign(gtk4::Align::Fill);
+            area.set_valign(gtk4::Align::Fill);
+            area.set_can_target(false);
+            area.set_draw_func(move |_, ctx, width, height| {
+                let (fw, fh) = (width as f64, height as f64);
+                let short = fw.min(fh).max(1.0);
+                // Neutral glyph, centered.
+                set_color(ctx, COLOR_TEXT_SECONDARY);
+                let icon = (short * PRESET_SLOT_ICON_RATIO).round();
+                painter(ctx, (fw - icon) / 2.0, (fh - icon) / 2.0, icon);
+                // Preset color as a separate bottom-right corner swatch, with a
+                // luminance-driven hairline so black and white presets both
+                // stay defined against the slot body.
+                let sw = (short * PRESET_SLOT_SWATCH_RATIO).round();
+                let inset = PRESET_SLOT_SWATCH_INSET * scale;
+                let radius = PRESET_SLOT_SWATCH_RADIUS * scale;
+                let sx = fw - sw - inset;
+                let sy = fh - sw - inset;
+                ctx.set_source_rgba(r, g, b, 1.0);
+                rounded_rect_path(ctx, sx, sy, sw, sw, radius);
+                let _ = ctx.fill();
+                let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+                set_color(
+                    ctx,
+                    if luminance < 0.3 {
+                        COLOR_SWATCH_HAIRLINE_DARK
+                    } else {
+                        COLOR_SWATCH_HAIRLINE
+                    },
+                );
+                ctx.set_line_width(1.0);
+                rounded_rect_path(ctx, sx, sy, sw, sw, radius);
+                let _ = ctx.stroke();
+            });
+            button.set_child(Some(&area));
+        } else {
+            // Empty slot: the 1-based slot number.
+            button.set_label(&control.label(snapshot));
+        }
+
+        let sender = self.feedback.clone();
+        let event = control.event(snapshot);
+        button.connect_clicked(move |_| {
+            send_event(&sender, event.clone());
+        });
+        let handle = button.clone();
+        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            set_active_class(&handle, control.active(snapshot));
         }));
         button
     }

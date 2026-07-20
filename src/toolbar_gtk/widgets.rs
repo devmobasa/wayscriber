@@ -395,28 +395,6 @@ pub(super) fn add_button_shortcut_hint(
     }
 }
 
-/// Put a quick-color shortcut above its swatch without changing the swatch's
-/// horizontal footprint or click target.
-pub(super) fn swatch_with_shortcut(
-    button: &gtk4::Button,
-    badge: Option<&str>,
-    width: f64,
-    badge_height: f64,
-) -> gtk4::Widget {
-    let column = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    column.set_size_request(width.round() as i32, -1);
-    column.set_valign(gtk4::Align::Center);
-    let label = gtk4::Label::new(Some(badge.unwrap_or("")));
-    label.set_size_request(-1, badge_height.round() as i32);
-    label.add_css_class("shortcut-badge");
-    label.add_css_class("above-swatch");
-    label.set_can_target(false);
-    label.set_halign(gtk4::Align::Center);
-    column.append(&label);
-    column.append(button);
-    column.upcast()
-}
-
 /// Toggle the CSS class marking the active tool / selected value.
 pub(super) fn set_active_class(widget: &impl IsA<gtk4::Widget>, active: bool) {
     let widget = widget.as_ref();

@@ -315,6 +315,9 @@ impl TopBar {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
                     set_semantic_widget_id(&row, control.id().as_ref());
                     row.set_valign(gtk4::Align::Center);
+                    // A clear gap before the segment so Sans│Mono never crowd
+                    // the preceding numeral ("72pt") to its left (M7-C3).
+                    row.set_margin_start(px(STYLE_SEGMENT_LEAD));
                     let segments = control.segments(snapshot).expect("segment halves");
                     let mut handles: Vec<(gtk4::Button, &'static str)> = Vec::new();
                     for segment in &segments {
