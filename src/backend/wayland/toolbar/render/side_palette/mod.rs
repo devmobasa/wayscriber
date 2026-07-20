@@ -32,7 +32,7 @@ use crate::ui::theme::Rgba;
 /// Scrollbar track tint: a white wash with no theme token (value-coincides
 /// with COLOR_DIVIDER but is a control surface, not a separator). The thumb
 /// shares the GTK scrollbar slider token. Shared with the top strip's
-/// Session/Settings popover scrollbar so both scroll surfaces match.
+/// Canvas/Session/Settings popover scrollbar so both scroll surfaces match.
 pub(in crate::backend::wayland::toolbar) const COLOR_SCROLLBAR_TRACK: Rgba = (1.0, 1.0, 1.0, 0.08);
 use crate::ui::theme::toolbar::COLOR_SCROLLBAR_SLIDER as COLOR_SCROLLBAR_THUMB;
 

@@ -20,6 +20,7 @@ mod status_hud;
 mod tool_controls;
 mod tour;
 mod utility;
+mod zoom_chip;
 
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,

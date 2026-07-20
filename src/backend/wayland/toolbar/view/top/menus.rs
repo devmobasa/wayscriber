@@ -1,12 +1,10 @@
-//! Session/Settings popovers anchored to the top strip's overflow toggle.
+//! Canvas/Session/Settings popovers anchored to the top strip's overflow toggle.
 //!
 //! With `[ui.toolbar] side_layout = "pill"` the side palette is retired, so
-//! the Session and Settings panes are re-hosted here as popovers opened from
-//! the overflow menu's "Session..." / "Settings..." entries. The content
-//! reuses the same renderer-neutral models the side panes render
-//! (`ToolbarSessionModel` / `ToolbarSettingsModel`), so both surfaces expose
-//! the same controls emitting the same events — minus the side palette's
-//! chrome (pane tabs, collapsible section headers).
+//! the Canvas, Session, and Settings panes are re-hosted here as popovers
+//! opened from the matching overflow-menu entries. Their content reuses the
+//! renderer-neutral models and events the side panes render, minus the side
+//! palette's chrome (pane tabs, collapsible section headers).
 //!
 //! Content taller than [`MENU_MAX_CONTENT_H`] scrolls internally behind a
 //! proportional scrollbar (the side palette's scroll pattern): the tree
@@ -28,7 +26,7 @@ use super::super::tree::WidgetTree;
 /// Content width inside the popover padding (mirrors the side palette's
 /// content column). Shared with the GTK popover viewport via the theme
 /// token so the frontends cannot drift.
-const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
+pub(super) const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
 const MENU_PAD: f64 = 10.0;
 const MENU_GAP: f64 = 5.0;
 const MENU_BUTTON_H: f64 = 24.0;
@@ -44,8 +42,8 @@ const MENU_CONFIRM_LABEL_H: f64 = 18.0;
 /// Shared with the GTK `ScrolledWindow` cap via the theme token.
 pub(super) const MENU_MAX_CONTENT_H: f64 = crate::ui::theme::toolbar::MENU_MAX_CONTENT_H;
 const MENU_SCROLLBAR_W: f64 = 6.0;
-const MENU_LABEL_FONT: f64 = 12.0;
-const MENU_META_FONT: f64 = 11.0;
+pub(super) const MENU_LABEL_FONT: f64 = 12.0;
+pub(super) const MENU_META_FONT: f64 = 11.0;
 const MENU_PATH_FONT: f64 = 9.5;
 const MENU_ITEM_HANDLE_W: f64 = 24.0;
 const MENU_ITEM_MOVE_W: f64 = 28.0;
@@ -54,12 +52,23 @@ const MENU_ITEM_GAP: f64 = 4.0;
 /// under it (mirrors `overflow_height`'s trailing margins).
 const MENU_ANCHOR_GAP: f64 = 6.0;
 const MENU_BOTTOM_MARGIN: f64 = 4.0;
+/// Gap between two Canvas-popover sections (Boards/Pages/Advanced/Zoom/Step).
+const CANVAS_SECTION_GAP: f64 = 8.0;
+const CANVAS_STEP_ROW_H: f64 = 24.0;
+const CANVAS_STEP_BTN_W: f64 = 66.0;
+const CANVAS_STEPPER_W: f64 = 24.0;
+const CANVAS_STEPS_LABEL_W: f64 = 56.0;
+const CANVAS_SLIDER_H: f64 = 18.0;
 
 /// Content nodes for whichever popover is open, in content-local
 /// coordinates (origin at the top-left of the content column), plus the
-/// natural (unclamped) content height. Session wins if both flags are
-/// somehow set — the apply layer keeps them mutually exclusive.
+/// natural (unclamped) content height. Canvas wins over Session over
+/// Settings if several flags are somehow set — the apply layer keeps them
+/// mutually exclusive.
 fn open_menu_content(snapshot: &ToolbarSnapshot) -> Option<(&'static str, Vec<WidgetNode>)> {
+    if snapshot.canvas_popover_open {
+        return canvas_menu_content(snapshot).map(|nodes| ("canvas", nodes));
+    }
     if snapshot.session_popover_open {
         return session_menu_content(snapshot).map(|nodes| ("session", nodes));
     }
@@ -76,16 +85,16 @@ fn content_height(nodes: &[WidgetNode]) -> f64 {
         .fold(0.0, f64::max)
 }
 
-/// Scroll bounds for the open Session/Settings popover as
+/// Scroll bounds for the open Canvas/Session/Settings popover as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
-/// while neither popover is open. Max scroll = (natural - viewport).max(0).
+/// while no menu popover is open. Max scroll = (natural - viewport).max(0).
 pub(super) fn menu_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
     let (_, nodes) = open_menu_content(snapshot)?;
     let natural = content_height(&nodes);
     Some((natural, natural.min(MENU_MAX_CONTENT_H)))
 }
 
-/// Extra surface height the open Session/Settings popover needs below the
+/// Extra surface height the open Canvas/Session/Settings popover needs below the
 /// band (mirrors `overflow_height`).
 pub(super) fn menu_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
     let Some((_, nodes)) = open_menu_content(snapshot) else {
@@ -565,4 +574,369 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
     }
 
     Some(nodes)
+}
+
+/// Stable id suffix for a Canvas-popover command button; the row set comes
+/// from the shared command-group models.
+fn canvas_button_suffix(event: &ToolbarEvent) -> &'static str {
+    match event {
+        ToolbarEvent::BoardPrev => "board-prev",
+        ToolbarEvent::BoardNext => "board-next",
+        ToolbarEvent::BoardNew => "board-new",
+        ToolbarEvent::BoardDuplicate => "board-duplicate",
+        ToolbarEvent::BoardDelete => "board-delete",
+        ToolbarEvent::PagePrev => "page-prev",
+        ToolbarEvent::PageNext => "page-next",
+        ToolbarEvent::PageNew => "page-new",
+        ToolbarEvent::PageDuplicate => "page-duplicate",
+        ToolbarEvent::PageDelete => "page-delete",
+        ToolbarEvent::ZoomIn => "zoom-in",
+        ToolbarEvent::ZoomOut => "zoom-out",
+        ToolbarEvent::ResetZoom => "reset-zoom",
+        ToolbarEvent::ToggleZoomLock => "zoom-lock",
+        ToolbarEvent::UndoAll => "undo-all",
+        ToolbarEvent::RedoAll => "redo-all",
+        ToolbarEvent::UndoAllDelayed => "undo-all-delay",
+        ToolbarEvent::RedoAllDelayed => "redo-all-delay",
+        ToolbarEvent::ToggleFreeze => "freeze",
+        _ => "button",
+    }
+}
+
+/// One Canvas-popover command section: a bold section header over a single
+/// row of the group's buttons, laid out edge-to-edge like the side pane's
+/// command rows. Advances `y` past the rendered rows.
+fn push_canvas_command_section(
+    nodes: &mut Vec<WidgetNode>,
+    y: &mut f64,
+    snapshot: &ToolbarSnapshot,
+    key: &str,
+    title: &str,
+    noun: &'static str,
+    group: &model::ToolbarCommandGroup,
+) {
+    nodes.push(WidgetNode::decor(
+        format!("top.menu.canvas.{key}.header"),
+        (0.0, *y, MENU_CONTENT_W, MENU_HEADER_H),
+        WidgetKind::Label(LabelSpec::new(title, MENU_LABEL_FONT, true)),
+    ));
+    *y += MENU_HEADER_H + MENU_ITEM_GAP;
+
+    let columns = group.buttons.len().clamp(1, 5);
+    let button_w = row_item_width(MENU_CONTENT_W, columns, MENU_GAP);
+    let grid = grid_layout(
+        0.0,
+        *y,
+        button_w,
+        MENU_BUTTON_H,
+        MENU_GAP,
+        MENU_GAP,
+        columns,
+        group.buttons.len(),
+    );
+    for (item, button) in grid.items.iter().zip(group.buttons.iter()) {
+        let label = button.short_label(snapshot, noun);
+        let style = if !button.enabled {
+            ButtonStyle::disabled()
+        } else if button.event.is_destructive() {
+            ButtonStyle::destructive()
+        } else {
+            ButtonStyle::plain()
+        };
+        let tooltip = format_binding_label(
+            button.tooltip_label(snapshot, noun),
+            button.binding_hint(snapshot),
+        );
+        nodes.push(text_button(
+            format!(
+                "top.menu.canvas.{key}.{}",
+                canvas_button_suffix(&button.event)
+            ),
+            (item.x, item.y, item.w, item.h),
+            LabelSpec::new(label, MENU_LABEL_FONT, true),
+            style,
+            button
+                .enabled
+                .then(|| Interaction::click(button.event.clone(), Some(tooltip))),
+        ));
+    }
+    *y += grid.height;
+}
+
+/// One Step Undo/Redo row: the multi-step button, the −/count/+ stepper
+/// cluster, and the per-direction delay slider beneath it.
+fn push_canvas_step_row(
+    nodes: &mut Vec<WidgetNode>,
+    y: &mut f64,
+    snapshot: &ToolbarSnapshot,
+    is_undo: bool,
+) {
+    let side = if is_undo { "undo" } else { "redo" };
+    let steps = if is_undo {
+        snapshot.custom_undo_steps
+    } else {
+        snapshot.custom_redo_steps
+    };
+    let delay_ms = if is_undo {
+        snapshot.custom_undo_delay_ms
+    } else {
+        snapshot.custom_redo_delay_ms
+    };
+
+    let row_y = *y;
+    // Multi-step button.
+    nodes.push(text_button(
+        format!("top.menu.canvas.step.{side}.apply"),
+        (0.0, row_y, CANVAS_STEP_BTN_W, CANVAS_STEP_ROW_H),
+        LabelSpec::new(
+            if is_undo { "Step Undo" } else { "Step Redo" },
+            MENU_META_FONT,
+            true,
+        ),
+        ButtonStyle::plain(),
+        Some(Interaction::click(
+            if is_undo {
+                ToolbarEvent::CustomUndo
+            } else {
+                ToolbarEvent::CustomRedo
+            },
+            Some(if is_undo { "Step undo" } else { "Step redo" }.to_string()),
+        )),
+    ));
+
+    let minus_x = CANVAS_STEP_BTN_W + MENU_GAP;
+    nodes.push(text_button(
+        format!("top.menu.canvas.step.{side}.minus"),
+        (minus_x, row_y, CANVAS_STEPPER_W, CANVAS_STEP_ROW_H),
+        LabelSpec::new("−", MENU_META_FONT, true),
+        ButtonStyle::plain(),
+        Some(Interaction::click(
+            set_custom_steps_event(is_undo, steps.saturating_sub(1).max(1)),
+            Some(format!("Decrease {side} steps")),
+        )),
+    ));
+
+    let label_x = minus_x + CANVAS_STEPPER_W + MENU_ITEM_GAP;
+    nodes.push(WidgetNode::decor(
+        format!("top.menu.canvas.step.{side}.count"),
+        (label_x, row_y, CANVAS_STEPS_LABEL_W, CANVAS_STEP_ROW_H),
+        WidgetKind::Label(LabelSpec::new(
+            format!("{steps} steps"),
+            MENU_META_FONT,
+            true,
+        )),
+    ));
+
+    let plus_x = label_x + CANVAS_STEPS_LABEL_W + MENU_ITEM_GAP;
+    nodes.push(text_button(
+        format!("top.menu.canvas.step.{side}.plus"),
+        (plus_x, row_y, CANVAS_STEPPER_W, CANVAS_STEP_ROW_H),
+        LabelSpec::new("+", MENU_META_FONT, true),
+        ButtonStyle::plain(),
+        Some(Interaction::click(
+            set_custom_steps_event(is_undo, steps.saturating_add(1)),
+            Some(format!("Increase {side} steps")),
+        )),
+    ));
+    *y += CANVAS_STEP_ROW_H + MENU_GAP;
+
+    // Per-direction delay slider.
+    push_canvas_delay_slider(
+        nodes,
+        y,
+        format!("top.menu.canvas.step.{side}.delay"),
+        delay_ms,
+        if is_undo {
+            ToolbarEvent::SetCustomUndoDelay(delay_ms as f64 / 1000.0)
+        } else {
+            ToolbarEvent::SetCustomRedoDelay(delay_ms as f64 / 1000.0)
+        },
+        if is_undo {
+            HitKind::DragCustomUndoDelay
+        } else {
+            HitKind::DragCustomRedoDelay
+        },
+        format!(
+            "{} step delay: {:.1}s (drag)",
+            if is_undo { "Undo" } else { "Redo" },
+            delay_ms as f64 / 1000.0
+        ),
+    );
+}
+
+fn set_custom_steps_event(is_undo: bool, steps: usize) -> ToolbarEvent {
+    if is_undo {
+        ToolbarEvent::SetCustomUndoSteps(steps)
+    } else {
+        ToolbarEvent::SetCustomRedoSteps(steps)
+    }
+}
+
+/// A full-width delay slider node whose drag maps pointer x → seconds via the
+/// shared `DELAY_SECONDS` spec (the tree hit-tester reads the node rect).
+fn push_canvas_delay_slider(
+    nodes: &mut Vec<WidgetNode>,
+    y: &mut f64,
+    id: String,
+    delay_ms: u64,
+    event: ToolbarEvent,
+    kind: HitKind,
+    tooltip: String,
+) {
+    let t = model::delay_t_from_ms(delay_ms);
+    nodes.push(WidgetNode::new(
+        id,
+        (0.0, *y, MENU_CONTENT_W, CANVAS_SLIDER_H),
+        WidgetKind::Slider { t },
+        Some(Interaction {
+            event,
+            kind,
+            tooltip: Some(tooltip),
+        }),
+    ));
+    *y += CANVAS_SLIDER_H + MENU_GAP;
+}
+
+/// Step Undo/Redo configuration section: the "Step buttons" / "Delay
+/// sliders" toggles, the per-direction step rows (when Step buttons are on),
+/// and the global undo/redo delay sliders (when Delay sliders are on).
+fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: &ToolbarSnapshot) {
+    nodes.push(WidgetNode::decor(
+        "top.menu.canvas.step.header",
+        (0.0, *y, MENU_CONTENT_W, MENU_HEADER_H),
+        WidgetKind::Label(LabelSpec::new("Step Undo/Redo", MENU_LABEL_FONT, true)),
+    ));
+    *y += MENU_HEADER_H + MENU_ITEM_GAP;
+
+    nodes.push(WidgetNode::new(
+        "top.menu.canvas.step.toggle.buttons",
+        (0.0, *y, MENU_CONTENT_W, MENU_TOGGLE_H),
+        WidgetKind::Checkbox {
+            checked: snapshot.custom_section_enabled,
+            label: LabelSpec::new("Step buttons", MENU_META_FONT, true),
+        },
+        Some(Interaction::click(
+            ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
+            Some("Step buttons: undo/redo several strokes at once.".to_string()),
+        )),
+    ));
+    *y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
+
+    nodes.push(WidgetNode::new(
+        "top.menu.canvas.step.toggle.delays",
+        (0.0, *y, MENU_CONTENT_W, MENU_TOGGLE_H),
+        WidgetKind::Checkbox {
+            checked: snapshot.show_delay_sliders,
+            label: LabelSpec::new("Delay sliders", MENU_META_FONT, true),
+        },
+        Some(Interaction::click(
+            ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
+            Some("Delay sliders: undo/redo delays.".to_string()),
+        )),
+    ));
+    *y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
+
+    if snapshot.custom_section_enabled {
+        push_canvas_step_row(nodes, y, snapshot, true);
+        push_canvas_step_row(nodes, y, snapshot, false);
+    }
+
+    if snapshot.show_delay_sliders {
+        for (is_undo, delay_ms) in [
+            (true, snapshot.undo_all_delay_ms),
+            (false, snapshot.redo_all_delay_ms),
+        ] {
+            let side = if is_undo { "undo" } else { "redo" };
+            nodes.push(WidgetNode::decor(
+                format!("top.menu.canvas.step.global.{side}.label"),
+                (0.0, *y, MENU_CONTENT_W, MENU_PATH_H),
+                WidgetKind::Label(LabelSpec::new(
+                    format!(
+                        "{} delay: {:.1}s",
+                        if is_undo { "Undo" } else { "Redo" },
+                        delay_ms as f64 / 1000.0
+                    ),
+                    MENU_META_FONT,
+                    false,
+                )),
+            ));
+            *y += MENU_PATH_H + MENU_ITEM_GAP;
+            push_canvas_delay_slider(
+                nodes,
+                y,
+                format!("top.menu.canvas.step.global.{side}.slider"),
+                delay_ms,
+                if is_undo {
+                    ToolbarEvent::SetUndoDelay(delay_ms as f64 / 1000.0)
+                } else {
+                    ToolbarEvent::SetRedoDelay(delay_ms as f64 / 1000.0)
+                },
+                if is_undo {
+                    HitKind::DragUndoDelay
+                } else {
+                    HitKind::DragRedoDelay
+                },
+                format!(
+                    "{}-all delay: {:.1}s (drag)",
+                    if is_undo { "Undo" } else { "Redo" },
+                    delay_ms as f64 / 1000.0
+                ),
+            );
+        }
+    }
+}
+
+/// Canvas popover content: the re-homed side Canvas pane minus its
+/// collapsible-card chrome — the Boards, Pages, Advanced, and Zoom command
+/// sections (each gated on its display toggle) followed by the Step
+/// Undo/Redo configuration. `None` when every section is toggled off.
+fn canvas_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
+    let mut nodes = Vec::new();
+    let mut y = 0.0;
+    let mut rendered = false;
+
+    let sections = [
+        (
+            "boards",
+            "Boards",
+            "Board",
+            model::toolbar_boards_model_for_popover(snapshot),
+        ),
+        (
+            "pages",
+            "Pages",
+            "Page",
+            model::toolbar_pages_model_for_popover(snapshot),
+        ),
+        (
+            "advanced",
+            "Advanced",
+            "Action",
+            model::toolbar_advanced_group_for_popover(snapshot),
+        ),
+        (
+            "zoom",
+            "Zoom",
+            "Zoom",
+            model::toolbar_zoom_group_for_popover(snapshot),
+        ),
+    ];
+    for (key, title, noun, group) in sections {
+        let Some(group) = group else { continue };
+        if rendered {
+            y += CANVAS_SECTION_GAP;
+        }
+        push_canvas_command_section(&mut nodes, &mut y, snapshot, key, title, noun, &group);
+        rendered = true;
+    }
+
+    if snapshot.show_step_section {
+        if rendered {
+            y += CANVAS_SECTION_GAP;
+        }
+        push_canvas_step_section(&mut nodes, &mut y, snapshot);
+        rendered = true;
+    }
+
+    rendered.then_some(nodes)
 }

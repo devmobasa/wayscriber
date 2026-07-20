@@ -154,6 +154,107 @@ pub fn draw_icon_save(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a stacked-boards / layers icon (the Canvas popover entry): a diamond
+/// top plate above two nested chevron lines standing in for the layers below.
+pub fn draw_icon_layers(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    let cx = x + s * 0.5;
+    let half_w = s * 0.35;
+    let half_h = s * 0.18;
+
+    // Top plate: a rhombus (rotated square).
+    let top_y = y + s * 0.14;
+    ctx.move_to(cx, top_y);
+    ctx.line_to(cx + half_w, top_y + half_h);
+    ctx.line_to(cx, top_y + half_h * 2.0);
+    ctx.line_to(cx - half_w, top_y + half_h);
+    ctx.close_path();
+    let _ = ctx.stroke();
+
+    // Two chevron lines beneath, tracing where lower plates would sit.
+    for offset in [s * 0.28, s * 0.46] {
+        ctx.move_to(cx - half_w, top_y + half_h + offset);
+        ctx.line_to(cx, top_y + half_h * 2.0 + offset);
+        ctx.line_to(cx + half_w, top_y + half_h + offset);
+        let _ = ctx.stroke();
+    }
+}
+
+/// Draw a session icon (the Session popover entry): a floppy-disk save body
+/// with a small clock overlaid in the lower-right corner (save + recent).
+pub fn draw_icon_session(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.09).max(1.4);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    // Floppy-disk body occupying the upper-left, leaving room for the clock.
+    let pad = s * 0.14;
+    let body_x = x + pad;
+    let body_y = y + pad;
+    let body_w = s * 0.56;
+    let body_h = s * 0.56;
+    let notch = s * 0.16;
+    ctx.move_to(body_x, body_y);
+    ctx.line_to(body_x + body_w - notch, body_y);
+    ctx.line_to(body_x + body_w, body_y + notch);
+    ctx.line_to(body_x + body_w, body_y + body_h);
+    ctx.line_to(body_x, body_y + body_h);
+    ctx.close_path();
+    let _ = ctx.stroke();
+    // Shutter tab near the top edge.
+    ctx.rectangle(
+        body_x + body_w * 0.14,
+        body_y + body_h * 0.1,
+        body_w * 0.4,
+        body_h * 0.18,
+    );
+    let _ = ctx.stroke();
+
+    // Clock badge in the lower-right corner.
+    let clock_cx = x + s * 0.72;
+    let clock_cy = y + s * 0.72;
+    let clock_r = s * 0.22;
+    ctx.arc(clock_cx, clock_cy, clock_r, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+    ctx.move_to(clock_cx, clock_cy);
+    ctx.line_to(clock_cx, clock_cy - clock_r * 0.6);
+    let _ = ctx.stroke();
+    ctx.move_to(clock_cx, clock_cy);
+    ctx.line_to(clock_cx + clock_r * 0.55, clock_cy);
+    let _ = ctx.stroke();
+}
+
+/// Draw a sliders / "tune" icon (the Settings popover entry): three
+/// horizontal tracks each carrying a knob at a distinct position. Distinct
+/// from the gear `draw_icon_settings` used for the session manager elsewhere.
+pub fn draw_icon_sliders(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    let left = x + s * 0.18;
+    let right = x + s * 0.82;
+    let knob_r = s * 0.09;
+    // (row y-fraction, knob x-fraction along the track)
+    for (row, knob_t) in [(0.28_f64, 0.65_f64), (0.5, 0.35), (0.72, 0.6)] {
+        let ly = y + s * row;
+        ctx.set_line_width(stroke);
+        ctx.move_to(left, ly);
+        ctx.line_to(right, ly);
+        let _ = ctx.stroke();
+        let knob_x = left + (right - left) * knob_t;
+        ctx.arc(knob_x, ly, knob_r, 0.0, PI * 2.0);
+        let _ = ctx.fill();
+    }
+}
+
 /// Draw a clock/delay icon
 #[allow(dead_code)]
 pub fn draw_icon_delay(ctx: &Context, x: f64, y: f64, size: f64) {

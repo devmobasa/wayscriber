@@ -44,7 +44,10 @@ impl InputState {
     /// pill re-firing as chip activations). The command palette and tour are
     /// already intercepted earlier in the backend chain; they are included
     /// as belt-and-braces for paths that route presses directly.
-    fn status_hud_eclipsed_by_overlay(&self) -> bool {
+    ///
+    /// Shared with the bottom-right zoom chip: the same overlays render above
+    /// both bottom-anchored interactive chrome surfaces.
+    pub(in crate::input::state) fn status_hud_eclipsed_by_overlay(&self) -> bool {
         self.is_radial_menu_open()
             || self.is_color_picker_popup_open()
             || self.is_board_picker_open()

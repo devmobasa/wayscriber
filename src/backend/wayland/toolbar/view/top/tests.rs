@@ -1021,11 +1021,18 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 }
 
 #[test]
-fn overflow_menu_always_carries_the_session_and_settings_entries() {
+fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
     let mut snapshot = snapshot();
     snapshot.top_overflow_open = true;
     let tree = build(&snapshot);
 
+    let canvas = tree
+        .node_by_id(&"top.overflow.top.menu.canvas".into())
+        .expect("Canvas... entry");
+    assert!(matches!(
+        canvas.interact.as_ref().unwrap().event,
+        ToolbarEvent::ToggleCanvasPopover(true)
+    ));
     let session = tree
         .node_by_id(&"top.overflow.top.menu.session".into())
         .expect("Session... entry");
@@ -1040,6 +1047,225 @@ fn overflow_menu_always_carries_the_session_and_settings_entries() {
         settings.interact.as_ref().unwrap().event,
         ToolbarEvent::ToggleSettingsPopover(true)
     ));
+}
+
+fn canvas_tree_has_event(tree: &WidgetTree, event: &ToolbarEvent) -> bool {
+    tree.nodes().iter().any(|node| {
+        node.id.as_str().starts_with("top.menu.canvas.")
+            && node
+                .interact
+                .as_ref()
+                .is_some_and(|interact| &interact.event == event)
+    })
+}
+
+#[test]
+fn canvas_popover_sections_are_gated_by_their_display_toggles() {
+    // Every section starts off; a mutator enables just what it needs, so the
+    // content stays short of the scroll viewport and nothing is withheld.
+    let build_open = |mutate: &dyn Fn(&mut ToolbarSnapshot)| {
+        let mut s = snapshot();
+        s.canvas_popover_open = true;
+        s.show_boards_section = false;
+        s.show_pages_section = false;
+        s.show_zoom_actions = false;
+        s.show_actions_advanced = false;
+        s.show_step_section = false;
+        mutate(&mut s);
+        build(&s)
+    };
+
+    let boards = build_open(&|s| s.show_boards_section = true);
+    assert!(
+        boards
+            .node_by_id(&"top.menu.canvas.panel".into())
+            .is_some_and(|node| matches!(node.kind, WidgetKind::Popover { .. }))
+    );
+    assert!(canvas_tree_has_event(&boards, &ToolbarEvent::BoardNew));
+    assert!(!canvas_tree_has_event(&boards, &ToolbarEvent::PageNew));
+
+    let pages = build_open(&|s| s.show_pages_section = true);
+    assert!(canvas_tree_has_event(&pages, &ToolbarEvent::PageNew));
+    assert!(!canvas_tree_has_event(&pages, &ToolbarEvent::BoardNew));
+
+    let zoom = build_open(&|s| {
+        s.show_zoom_actions = true;
+        // Reset/Lock are enabled (and thus carry interactions) only while a
+        // zoom is active.
+        s.zoom_active = true;
+    });
+    assert!(canvas_tree_has_event(&zoom, &ToolbarEvent::ZoomIn));
+    assert!(canvas_tree_has_event(&zoom, &ToolbarEvent::ToggleZoomLock));
+
+    // UndoAll/RedoAll carry interactions only while history is available.
+    let advanced = build_open(&|s| {
+        s.show_actions_advanced = true;
+        s.delay_actions_enabled = true;
+        s.undo_available = true;
+        s.redo_available = true;
+    });
+    assert!(canvas_tree_has_event(&advanced, &ToolbarEvent::UndoAll));
+    assert!(canvas_tree_has_event(&advanced, &ToolbarEvent::RedoAll));
+    assert!(
+        canvas_tree_has_event(&advanced, &ToolbarEvent::UndoAllDelayed),
+        "timed advanced actions show when delay actions are enabled"
+    );
+    assert!(canvas_tree_has_event(
+        &advanced,
+        &ToolbarEvent::ToggleFreeze
+    ));
+
+    // Advanced without delay actions drops only the timed variants. Freeze is
+    // always enabled, so it is the stable membership probe here.
+    let advanced_no_delay = build_open(&|s| {
+        s.show_actions_advanced = true;
+        s.delay_actions_enabled = false;
+    });
+    assert!(canvas_tree_has_event(
+        &advanced_no_delay,
+        &ToolbarEvent::ToggleFreeze
+    ));
+    assert!(!canvas_tree_has_event(
+        &advanced_no_delay,
+        &ToolbarEvent::UndoAllDelayed
+    ));
+
+    // Empty popover: with every section off the popover has no panel.
+    let empty = build_open(&|_| {});
+    assert!(
+        empty.node_by_id(&"top.menu.canvas.panel".into()).is_none(),
+        "an all-off Canvas popover renders nothing"
+    );
+}
+
+#[test]
+fn canvas_popover_step_section_carries_toggles_steppers_and_delay_sliders() {
+    let mut snapshot = snapshot();
+    snapshot.canvas_popover_open = true;
+    snapshot.show_boards_section = false;
+    snapshot.show_pages_section = false;
+    snapshot.show_zoom_actions = false;
+    snapshot.show_actions_advanced = false;
+    snapshot.show_step_section = true;
+    snapshot.custom_section_enabled = true;
+    snapshot.show_delay_sliders = true;
+
+    let tree = build(&snapshot);
+    let panel = tree
+        .node_by_id(&"top.menu.canvas.panel".into())
+        .expect("canvas popover panel");
+
+    // Both step config toggles are present.
+    assert!(
+        tree.node_by_id(&"top.menu.canvas.step.toggle.buttons".into())
+            .is_some()
+    );
+    assert!(
+        tree.node_by_id(&"top.menu.canvas.step.toggle.delays".into())
+            .is_some()
+    );
+    // Step-count steppers reuse the custom-steps events.
+    assert!(canvas_tree_has_event(&tree, &ToolbarEvent::CustomUndo));
+    assert!(
+        tree.node_by_id(&"top.menu.canvas.step.undo.plus".into())
+            .is_some()
+    );
+
+    // The per-direction and global delay sliders are draggable Slider nodes
+    // wired to the shared delay drag kinds.
+    use crate::backend::wayland::toolbar::events::HitKind;
+    let undo_row = tree
+        .node_by_id(&"top.menu.canvas.step.undo.delay".into())
+        .expect("per-direction undo delay slider");
+    assert!(matches!(undo_row.kind, WidgetKind::Slider { .. }));
+    assert!(matches!(
+        undo_row.interact.as_ref().unwrap().kind,
+        HitKind::DragCustomUndoDelay
+    ));
+    let global_undo = tree
+        .node_by_id(&"top.menu.canvas.step.global.undo.slider".into())
+        .expect("global undo delay slider");
+    assert!(matches!(
+        global_undo.interact.as_ref().unwrap().kind,
+        HitKind::DragUndoDelay
+    ));
+
+    // The step rows and global sliders vanish when their toggles are off.
+    let mut collapsed = snapshot.clone();
+    collapsed.custom_section_enabled = false;
+    collapsed.show_delay_sliders = false;
+    let collapsed_tree = build(&collapsed);
+    assert!(
+        collapsed_tree
+            .node_by_id(&"top.menu.canvas.step.undo.delay".into())
+            .is_none(),
+        "custom rows hide when Step buttons is off"
+    );
+    assert!(
+        collapsed_tree
+            .node_by_id(&"top.menu.canvas.step.global.undo.slider".into())
+            .is_none(),
+        "global sliders hide when Delay sliders is off"
+    );
+
+    // Rendered nodes paint inside the panel.
+    for node in tree.nodes() {
+        if node.id.as_str().starts_with("top.menu.canvas.")
+            && node.id.as_str() != "top.menu.canvas.panel"
+            && node.id.as_str() != "top.menu.canvas.scrollbar"
+        {
+            assert!(
+                node.rect.0 >= panel.rect.0 - 1e-9
+                    && node.rect.1 >= panel.rect.1 - 1e-9
+                    && node.rect.0 + node.rect.2 <= panel.rect.0 + panel.rect.2 + 1e-9
+                    && node.rect.1 + node.rect.3 <= panel.rect.1 + panel.rect.3 + 1e-9,
+                "{} escapes the popover panel",
+                node.id
+            );
+        }
+    }
+}
+
+#[test]
+fn canvas_popover_scrolls_when_all_sections_exceed_the_viewport() {
+    let mut snapshot = snapshot();
+    snapshot.canvas_popover_open = true;
+    snapshot.show_boards_section = true;
+    snapshot.show_pages_section = true;
+    snapshot.show_zoom_actions = true;
+    snapshot.show_actions_advanced = true;
+    snapshot.show_step_section = true;
+    snapshot.custom_section_enabled = true;
+    snapshot.show_delay_sliders = true;
+    snapshot.delay_actions_enabled = true;
+
+    let bounds = top_popover_scroll_bounds(&snapshot).expect("canvas scroll bounds");
+    assert!(
+        bounds.0 > bounds.1,
+        "the full section set is taller than the viewport: {bounds:?}"
+    );
+
+    let tree = build(&snapshot);
+    assert!(
+        tree.node_by_id(&"top.menu.canvas.scrollbar".into())
+            .is_some(),
+        "content taller than the viewport gets a scrollbar"
+    );
+
+    // The Canvas popover joins the input region as an extra rect.
+    let (w, h) = top_size(&snapshot);
+    let panel = tree
+        .node_by_id(&"top.menu.canvas.panel".into())
+        .expect("canvas panel");
+    let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("input rects");
+    assert!(
+        rects
+            .iter()
+            .any(|rect| rect.1 + rect.3 >= panel.rect.1 + panel.rect.3
+                && rect.0 <= panel.rect.0
+                && rect.0 + rect.2 >= panel.rect.0 + panel.rect.2),
+        "canvas popover rect missing from {rects:?}"
+    );
 }
 
 #[test]
@@ -1370,7 +1596,7 @@ fn top_popover_scroll_bounds_serve_the_wheel_path() {
     let mut snapshot = snapshot();
     assert!(
         top_popover_scroll_bounds(&snapshot).is_none(),
-        "no bounds while neither popover is open"
+        "no bounds while no menu popover is open"
     );
 
     snapshot.settings_popover_open = true;

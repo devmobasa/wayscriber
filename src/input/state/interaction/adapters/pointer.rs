@@ -121,6 +121,33 @@ pub(crate) fn handle_status_hud_press(
     Some(RoutingOutcome::Consumed(ConsumedBy::StatusHud))
 }
 
+/// Swallow left presses on the interactive bottom-right zoom chip so button
+/// clicks never start a stroke. Mirrors [`handle_status_hud_press`]: no
+/// activation on press — the pending flag set here makes the matching release
+/// activate the button in `route_pointer_release`. Covers input paths that
+/// route presses directly (tablet, touch fallbacks); the pointer/touch
+/// backends consume chip presses earlier via their own press→release contract.
+pub(crate) fn handle_zoom_chip_press(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if button != MouseButton::Left {
+        return None;
+    }
+    let screen = points.screen();
+    if !state.zoom_chip_contains(screen.x(), screen.y()) {
+        return None;
+    }
+    // Record the press as `Button(kind)` or `Passive` (the `NN%` readout /
+    // inter-piece gap) so the matching release stays consumed either way, firing
+    // an action only on the same button. The press is consumed regardless, so no
+    // stroke starts under the chip.
+    let pressed = state.zoom_chip_press_at(screen.x(), screen.y());
+    state.set_zoom_chip_press_pending(pressed);
+    Some(RoutingOutcome::Consumed(ConsumedBy::ZoomChip))
+}
+
 pub(crate) fn close_properties_panel_before_tool_routing(state: &mut InputState) {
     state.close_properties_panel();
 }

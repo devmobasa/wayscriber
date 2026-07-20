@@ -190,6 +190,7 @@ impl ToolbarSnapshot {
             top_overflow_open: state.toolbar_top_overflow_open,
             session_popover_open: state.toolbar_session_popover_open,
             settings_popover_open: state.toolbar_settings_popover_open,
+            canvas_popover_open: state.toolbar_canvas_popover_open,
             top_popover_scroll: state.toolbar_top_popover_scroll,
             top_minimized: state.toolbar_top_minimized,
             top_display_mode: state.toolbar_top_display_mode,

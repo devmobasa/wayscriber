@@ -26,6 +26,7 @@ pub(crate) enum ConsumedBy {
     RightClickContextMenu,
     RadialMenuToggle,
     StatusHud,
+    ZoomChip,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,7 +47,7 @@ pub(crate) enum CancelTarget {
     PendingBoardDelete,
     PendingPageDelete,
     Selection,
-    /// The top strip's Session/Settings popover (Escape dismissal).
+    /// The top strip's Canvas/Session/Settings popover (Escape dismissal).
     TopPopover,
 }
 

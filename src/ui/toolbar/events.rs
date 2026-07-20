@@ -312,8 +312,13 @@ pub enum ToolbarEvent {
     /// Open/close the Settings popover anchored to the top strip's overflow
     /// toggle. Opening it closes the Session popover and the overflow menu.
     ToggleSettingsPopover(bool),
-    /// Set the internal scroll offset of the open Session/Settings popover
-    /// (absolute, logical pixels; emitted by the popover scrollbar drag).
+    /// Open/close the Canvas popover anchored to the top strip's overflow
+    /// toggle. Opening it closes the Session/Settings popovers and the
+    /// overflow menu.
+    ToggleCanvasPopover(bool),
+    /// Set the internal scroll offset of the open Canvas/Session/Settings
+    /// popover (absolute, logical pixels; emitted by the popover scrollbar
+    /// drag).
     ScrollTopPopover(f64),
     /// Minimize the top strip to a small edge tab (click restores), or
     /// restore it. Replaces closing: there is always a way back on screen.

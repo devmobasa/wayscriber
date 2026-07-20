@@ -55,6 +55,7 @@ impl WaylandState {
         blocked_feedback_active: bool,
         text_edit_entry_active: bool,
         status_hud_active: bool,
+        zoom_chip_active: bool,
         tool_preview_active: bool,
         width: u32,
         height: u32,
@@ -126,6 +127,29 @@ impl WaylandState {
             status_hud_rect,
         );
         self.data.prev_status_hud_damage = status_hud_rect;
+
+        // The zoom chip follows the same once-per-frame layout refresh as the
+        // status HUD, so damage geometry, rendering, and pointer hit-testing
+        // all read the same cache for the frame; the appear → move → disappear
+        // union keeps stale pixels cleaned up when the percentage changes.
+        let zoom_chip_rect = if zoom_chip_active {
+            self.input_state.update_zoom_chip_layout(
+                &self.config.ui.status_bar_style,
+                width,
+                height,
+            );
+            crate::ui::zoom_chip_geometry(&self.input_state, width, height)
+                .and_then(|bounds| effect_rect(bounds, width, height))
+        } else {
+            self.input_state.clear_zoom_chip_layout();
+            None
+        };
+        push_effect_damage(
+            &mut regions,
+            self.data.prev_zoom_chip_damage,
+            zoom_chip_rect,
+        );
+        self.data.prev_zoom_chip_damage = zoom_chip_rect;
 
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
             let (x, y) = self.current_mouse();
@@ -228,5 +252,33 @@ mod tests {
         let mut vanish = Vec::new();
         push_effect_damage(&mut vanish, moved, None);
         assert_eq!(vanish, vec![moved.unwrap()]);
+    }
+
+    /// The bottom-right zoom chip uses the same appear → move → disappear union
+    /// as the status HUD/toasts: a percentage change (which resizes the pill
+    /// and shifts its left edge, since it stays right-anchored) damages both
+    /// the old and new footprint so stale digits are always cleaned up.
+    #[test]
+    fn zoom_chip_damage_lifecycle_unions_prev_and_current_footprints() {
+        // Right-anchored footprints: a wider "250%" pill starts further left
+        // than a "100%" pill while both share the same right/bottom edge.
+        let narrow = effect_rect((1780.0, 1032.0, 132.0, 40.0), 1920, 1080);
+        let wide = effect_rect((1770.0, 1032.0, 142.0, 40.0), 1920, 1080);
+        assert!(narrow.is_some() && wide.is_some());
+
+        // Appear (cursor enters overlay / zoom actions enabled): new only.
+        let mut appear = Vec::new();
+        push_effect_damage(&mut appear, None, narrow);
+        assert_eq!(appear, vec![narrow.unwrap()]);
+
+        // Percentage change: old + new footprints.
+        let mut relayout = Vec::new();
+        push_effect_damage(&mut relayout, narrow, wide);
+        assert_eq!(relayout, vec![narrow.unwrap(), wide.unwrap()]);
+
+        // Disappear (cursor leaves / zoom actions disabled): old only.
+        let mut vanish = Vec::new();
+        push_effect_damage(&mut vanish, wide, None);
+        assert_eq!(vanish, vec![wide.unwrap()]);
     }
 }

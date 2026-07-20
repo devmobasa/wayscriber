@@ -245,7 +245,11 @@ pub struct InputState {
     /// Whether the Settings popover (anchored to the top overflow toggle)
     /// is open. Mutually exclusive with the Session popover and the overflow.
     pub toolbar_settings_popover_open: bool,
-    /// Internal scroll offset of the open Session/Settings popover
+    /// Whether the Canvas popover (anchored to the top overflow toggle) is
+    /// open. Mutually exclusive with the Session/Settings popovers and the
+    /// overflow.
+    pub toolbar_canvas_popover_open: bool,
+    /// Internal scroll offset of the open Canvas/Session/Settings popover
     /// (logical pixels, clamped at render; reset when a popover opens).
     pub toolbar_top_popover_scroll: f64,
     /// Whether the top strip is minimized to its edge restore tab.
@@ -438,6 +442,16 @@ pub struct InputState {
     /// the status HUD (tablet and other paths that bypass the backend's own
     /// press→release flag); the matching release activates the chip.
     pub(in crate::input::state) status_hud_press_pending: bool,
+    /// Cached layout details for the interactive bottom-right zoom chip
+    pub zoom_chip_layout: Option<crate::ui::ZoomChipLayout>,
+    /// The chip press a left press recorded, set when the internal
+    /// pointer-routing chain consumed that press (tablet and other paths that
+    /// bypass the backend's own press→release flag). `Button(kind)` records the
+    /// pressed button so the matching release fires only when it lands on the
+    /// SAME button; `Passive` marks a press on the passive `NN%` readout (or an
+    /// inter-piece gap) so its release is still consumed but fires nothing;
+    /// `None` means no chip press is pending.
+    pub(in crate::input::state) zoom_chip_press_pending: crate::ui::ZoomChipPress,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
     pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)

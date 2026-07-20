@@ -74,6 +74,7 @@ impl WaylandState {
 fn top_menus_open(input: &crate::input::state::InputState) -> bool {
     input.toolbar_shapes_expanded
         || input.toolbar_top_overflow_open
+        || input.toolbar_canvas_popover_open
         || input.toolbar_session_popover_open
         || input.toolbar_settings_popover_open
         || input.is_color_picker_popup_open()
@@ -84,8 +85,10 @@ mod tests {
     use super::top_menus_open;
     use crate::input::state::test_support::make_test_input_state;
 
-    /// Every top-strip menu — including the Session/Settings popovers the
-    /// overflow anchors — holds the idle fade while open.
+    /// Every top-strip menu — including the Canvas popover and the
+    /// Session/Settings popovers the overflow anchors — holds the idle fade
+    /// while open, so the strip (and the popover hosted on its surface) never
+    /// dims out from under an open menu.
     #[test]
     fn every_open_top_menu_holds_the_idle_fade() {
         let mut input = make_test_input_state();
@@ -98,6 +101,10 @@ mod tests {
         input.toolbar_top_overflow_open = true;
         assert!(top_menus_open(&input));
         input.toolbar_top_overflow_open = false;
+
+        input.toolbar_canvas_popover_open = true;
+        assert!(top_menus_open(&input));
+        input.toolbar_canvas_popover_open = false;
 
         input.toolbar_session_popover_open = true;
         assert!(top_menus_open(&input));

@@ -162,6 +162,11 @@ pub struct StateData {
     pub(super) pending_toast_press: bool,
     /// True when a left press began inside the interactive status HUD.
     pub(super) pending_status_hud_press: bool,
+    /// The chip press a left press began (`None` when no chip press is pending;
+    /// `Passive` for the passive `NN%` readout / inter-piece gap; `Button(kind)`
+    /// for an actionable button). Any pending press keeps its release consumed;
+    /// a `Button` release fires only when it lands on the SAME button.
+    pub(super) pending_zoom_chip_press: crate::ui::ZoomChipPress,
     /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
     pub(super) suppress_focus_exit_until: Option<Instant>,
     /// Short guard window after xdg focus loss where compositor close requests are ignored
@@ -178,6 +183,7 @@ pub struct StateData {
     pub(super) blocked_feedback_was_active: bool,
     pub(super) prev_text_edit_entry_damage: Option<crate::util::Rect>,
     pub(super) prev_status_hud_damage: Option<crate::util::Rect>,
+    pub(super) prev_zoom_chip_damage: Option<crate::util::Rect>,
     pub(super) prev_tool_preview_damage: Option<crate::util::Rect>,
     /// Idle-fade engine for the top-strip islands; its value is published
     /// on every toolbar snapshot as `top_fade`.
@@ -261,6 +267,7 @@ impl StateData {
             suppress_next_release: false,
             pending_toast_press: false,
             pending_status_hud_press: false,
+            pending_zoom_chip_press: crate::ui::ZoomChipPress::None,
             suppress_focus_exit_until: None,
             xdg_close_guard_until: None,
             xdg_explicit_close_requested: false,
@@ -270,6 +277,7 @@ impl StateData {
             blocked_feedback_was_active: false,
             prev_text_edit_entry_damage: None,
             prev_status_hud_damage: None,
+            prev_zoom_chip_damage: None,
             prev_tool_preview_damage: None,
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),

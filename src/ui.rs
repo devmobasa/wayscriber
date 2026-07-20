@@ -35,9 +35,10 @@ pub use precision_entry::render_precision_entry_popup;
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub use status::{
-    StatusHudLayout, StatusHudSegmentKind, compute_status_hud_layout, render_editing_badge,
-    render_frozen_badge, render_page_badge, render_pan_badge, render_status_bar, render_zoom_badge,
-    status_hud_geometry,
+    StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
+    compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,
+    render_page_badge, render_pan_badge, render_status_bar, render_zoom_badge, render_zoom_chip,
+    status_hud_geometry, zoom_chip_geometry,
 };
 pub use toasts::{
     blocked_feedback_rects, preset_toast_geometry, render_blocked_feedback, render_preset_toast,

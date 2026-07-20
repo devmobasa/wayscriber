@@ -116,4 +116,20 @@ impl WaylandState {
         self.data.pending_status_hud_press = false;
         value
     }
+
+    pub(in crate::backend::wayland) fn set_pending_zoom_chip_press(
+        &mut self,
+        value: crate::ui::ZoomChipPress,
+    ) {
+        self.data.pending_zoom_chip_press = value;
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_zoom_chip_press(
+        &mut self,
+    ) -> crate::ui::ZoomChipPress {
+        std::mem::replace(
+            &mut self.data.pending_zoom_chip_press,
+            crate::ui::ZoomChipPress::None,
+        )
+    }
 }

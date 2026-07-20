@@ -242,13 +242,13 @@ impl TopToolbarSpec {
 
     /// Overflow menu content, in menu order: the destructive Clear first,
     /// then the width-dropped tools and utilities in configured order, then
-    /// the Session/Settings popover entries. The two menu entries appear in
-    /// every layout (`side_layout = "panel"` included): under `pill` they
-    /// are the only surface hosting those functions, and under `panel` the
-    /// popovers are transient quick surfaces that cannot be confused with
-    /// the pinned side panes — so they are unconditional rather than
-    /// pill-gated. Like the restore controls they are not hideable items:
-    /// under `pill` they must always be reachable.
+    /// the Canvas/Session/Settings popover entries. The three menu entries
+    /// appear in every layout (`side_layout = "panel"` included): under
+    /// `pill` they are the only surface hosting those functions, and under
+    /// `panel` the popovers are transient quick surfaces that cannot be
+    /// confused with the pinned side panes — so they are unconditional rather
+    /// than pill-gated. Like the restore controls they are not hideable
+    /// items: under `pill` they must always be reachable.
     fn overflow_controls(
         clear_visible: bool,
         plan: &TopStripPlan,
@@ -270,6 +270,7 @@ impl TopToolbarSpec {
                     .map(TopToolbarControl::Utility),
             )
             .chain([
+                TopToolbarControl::CanvasMenu,
                 TopToolbarControl::SessionMenu,
                 TopToolbarControl::SettingsMenu,
             ])
@@ -358,6 +359,9 @@ pub(crate) enum TopToolbarControl {
     Overflow,
     Minimize,
     HighlightRing,
+    /// Overflow menu entry opening the Canvas popover (boards, pages, zoom,
+    /// history/advanced actions, step undo/redo).
+    CanvasMenu,
     /// Overflow menu entry opening the Session popover (open/save/recent).
     SessionMenu,
     /// Overflow menu entry opening the Settings popover (toolbar options
@@ -370,6 +374,7 @@ impl TopToolbarControl {
         let id = match self {
             Self::Restore => return TopToolbarControlId::Restore,
             Self::MicroChip => return TopToolbarControlId::MicroChip,
+            Self::CanvasMenu => return TopToolbarControlId::CanvasMenu,
             Self::SessionMenu => return TopToolbarControlId::SessionMenu,
             Self::SettingsMenu => return TopToolbarControlId::SettingsMenu,
             Self::DragHandle => ids::TOP_CHROME_DRAG,
@@ -418,6 +423,7 @@ impl TopToolbarControl {
             Self::ClearCanvas => ToolbarEvent::ClearCanvas { instant: false },
             Self::Pin => ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
             Self::Overflow => ToolbarEvent::ToggleTopOverflow(!snapshot.top_overflow_open),
+            Self::CanvasMenu => ToolbarEvent::ToggleCanvasPopover(!snapshot.canvas_popover_open),
             Self::SessionMenu => ToolbarEvent::ToggleSessionPopover(!snapshot.session_popover_open),
             Self::SettingsMenu => {
                 ToolbarEvent::ToggleSettingsPopover(!snapshot.settings_popover_open)
@@ -458,6 +464,7 @@ impl TopToolbarControl {
             Self::Preset(index) => snapshot.active_preset_slot == Some(index + 1),
             Self::Pin => snapshot.top_pinned,
             Self::Overflow => snapshot.top_overflow_open,
+            Self::CanvasMenu => snapshot.canvas_popover_open,
             Self::SessionMenu => snapshot.session_popover_open,
             Self::SettingsMenu => snapshot.settings_popover_open,
             Self::HighlightRing => snapshot.highlight_tool_ring_enabled,
@@ -475,6 +482,7 @@ impl TopToolbarControl {
             Self::ShapePicker
             | Self::Utility(TopToolbarUtility::Highlight)
             | Self::Overflow
+            | Self::CanvasMenu
             | Self::SessionMenu
             | Self::SettingsMenu
             | Self::HighlightRing => TopToolbarControlRole::Toggle,
@@ -493,6 +501,7 @@ impl TopToolbarControl {
             | Self::Redo
             | Self::Overflow
             | Self::ClearCanvas
+            | Self::CanvasMenu
             | Self::SessionMenu
             | Self::SettingsMenu => TopToolbarIsland::History,
             Self::Pin | Self::Minimize | Self::Restore | Self::MicroChip => {
@@ -522,6 +531,7 @@ impl TopToolbarControl {
             Self::Pin if snapshot.top_pinned => TopToolbarIcon::Pin,
             Self::Pin => TopToolbarIcon::Unpin,
             Self::Overflow => TopToolbarIcon::Overflow,
+            Self::CanvasMenu => TopToolbarIcon::Canvas,
             Self::SessionMenu => TopToolbarIcon::Session,
             Self::SettingsMenu => TopToolbarIcon::Settings,
             Self::Minimize => TopToolbarIcon::Minimize,
@@ -553,6 +563,7 @@ impl TopToolbarControl {
             Self::Pin if snapshot.top_pinned => Cow::Borrowed("Unpin top toolbar"),
             Self::Pin => Cow::Borrowed("Pin top toolbar"),
             Self::Overflow => Cow::Borrowed("More tools"),
+            Self::CanvasMenu => Cow::Borrowed("Canvas..."),
             Self::SessionMenu => Cow::Borrowed("Session..."),
             Self::SettingsMenu => Cow::Borrowed("Settings..."),
             Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
@@ -568,6 +579,7 @@ impl TopToolbarControl {
             Self::Redo => Cow::Borrowed(action_label(Action::Redo)),
             Self::ClearCanvas => Cow::Borrowed(action_label(Action::ClearCanvas)),
             Self::Preset(index) => Cow::Owned(preset_accessible_label(snapshot, index)),
+            Self::CanvasMenu => Cow::Borrowed("Canvas menu"),
             Self::SessionMenu => Cow::Borrowed("Session menu"),
             Self::SettingsMenu => Cow::Borrowed("Settings menu"),
             _ => self.label(snapshot),
@@ -588,6 +600,7 @@ impl TopToolbarControl {
             Self::Pin => "Pin: click to open at startup".to_string(),
             Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
             Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
+            Self::CanvasMenu => "Canvas: boards, pages, zoom, history, steps".to_string(),
             Self::SessionMenu => "Session: open, save, recent files".to_string(),
             Self::SettingsMenu => "Settings: toolbar options and customization".to_string(),
             Self::HighlightRing => "Highlight ring".to_string(),
@@ -625,6 +638,7 @@ pub(crate) enum TopToolbarControlId {
     Preset(usize),
     Restore,
     MicroChip,
+    CanvasMenu,
     SessionMenu,
     SettingsMenu,
 }
@@ -656,6 +670,7 @@ impl TopToolbarControlId {
             Self::Preset(index) => Cow::Owned(format!("top.preset.{index}")),
             Self::Restore => Cow::Borrowed("top.chrome.restore"),
             Self::MicroChip => Cow::Borrowed("top.chrome.micro"),
+            Self::CanvasMenu => Cow::Borrowed("top.menu.canvas"),
             Self::SessionMenu => Cow::Borrowed("top.menu.session"),
             Self::SettingsMenu => Cow::Borrowed("top.menu.settings"),
         }
@@ -689,9 +704,11 @@ pub(crate) enum TopToolbarIcon {
     Unpin,
     Overflow,
     Minimize,
-    /// Session popover entry (file glyph).
+    /// Canvas popover entry (stacked-boards/layers glyph).
+    Canvas,
+    /// Session popover entry (save-with-clock glyph).
     Session,
-    /// Settings popover entry (gear glyph).
+    /// Settings popover entry (sliders glyph).
     Settings,
 }
 
@@ -894,10 +911,11 @@ mod tests {
             spec.overflow(),
             [
                 TopToolbarControl::ClearCanvas,
+                TopToolbarControl::CanvasMenu,
                 TopToolbarControl::SessionMenu,
                 TopToolbarControl::SettingsMenu,
             ],
-            "an unconstrained plan still anchors Clear plus the Session/Settings entries"
+            "an unconstrained plan still anchors Clear plus the Canvas/Session/Settings entries"
         );
 
         assert_eq!(chrome_ids(&spec), ["top.chrome.pin", "top.chrome.close"]);
@@ -1065,11 +1083,12 @@ mod tests {
                 "top.utility.text",
                 "top.utility.sticky-note",
                 "top.utility.highlight",
+                "top.menu.canvas",
                 "top.menu.session",
                 "top.menu.settings",
             ],
             "Clear leads the overflow menu; dropped items follow in order; \
-             the Session/Settings entries close it"
+             the Canvas/Session/Settings entries close it"
         );
         assert!(
             strip_ids.contains(&ids::TOP_CHROME_OVERFLOW.as_str().to_string()),
@@ -1091,11 +1110,11 @@ mod tests {
     }
 
     #[test]
-    fn overflow_hosts_session_and_settings_entries_in_every_layout() {
-        // Decision (M4-B3): the two popover entries are unconditional —
-        // they show under both `side_layout` values and are not hideable
-        // items, because under `pill` they are the only surface hosting
-        // Session/Settings.
+    fn overflow_hosts_canvas_session_and_settings_entries_in_every_layout() {
+        // Decision (M4-B3, extended in M8): the three popover entries are
+        // unconditional — they show under both `side_layout` values and are
+        // not hideable items, because under `pill` they are the only surface
+        // hosting Canvas/Session/Settings.
         for layout_mode in [ToolbarLayoutMode::Regular, ToolbarLayoutMode::Simple] {
             let mut snapshot = snapshot();
             snapshot.layout_mode = layout_mode;
@@ -1104,17 +1123,18 @@ mod tests {
                 .overflow()
                 .iter()
                 .rev()
-                .take(2)
+                .take(3)
                 .rev()
                 .copied()
                 .collect();
             assert_eq!(
                 tail,
                 [
+                    TopToolbarControl::CanvasMenu,
                     TopToolbarControl::SessionMenu,
                     TopToolbarControl::SettingsMenu,
                 ],
-                "{layout_mode:?}: the menu entries close the overflow"
+                "{layout_mode:?}: the menu entries close the overflow, Canvas first"
             );
             assert!(
                 !spec.overflow().is_empty(),
@@ -1127,22 +1147,38 @@ mod tests {
         }
 
         let mut snapshot = snapshot();
+        let canvas = TopToolbarControl::CanvasMenu;
         let session = TopToolbarControl::SessionMenu;
         let settings = TopToolbarControl::SettingsMenu;
 
+        assert_eq!(canvas.id().render_id(), "top.menu.canvas");
         assert_eq!(session.id().render_id(), "top.menu.session");
         assert_eq!(settings.id().render_id(), "top.menu.settings");
+        assert_eq!(canvas.label(&snapshot), "Canvas...");
         assert_eq!(session.label(&snapshot), "Session...");
         assert_eq!(settings.label(&snapshot), "Settings...");
+        assert_eq!(canvas.icon(&snapshot), Some(TopToolbarIcon::Canvas));
         assert_eq!(session.icon(&snapshot), Some(TopToolbarIcon::Session));
         assert_eq!(settings.icon(&snapshot), Some(TopToolbarIcon::Settings));
+        // The three entries carry distinct icons.
+        assert_ne!(canvas.icon(&snapshot), session.icon(&snapshot));
+        assert_ne!(canvas.icon(&snapshot), settings.icon(&snapshot));
+        assert_ne!(session.icon(&snapshot), settings.icon(&snapshot));
+        assert_eq!(canvas.role(), TopToolbarControlRole::Toggle);
         assert_eq!(session.role(), TopToolbarControlRole::Toggle);
         assert_eq!(settings.role(), TopToolbarControlRole::Toggle);
+        assert_eq!(canvas.island(), TopToolbarIsland::History);
         assert_eq!(session.island(), TopToolbarIsland::History);
         assert_eq!(settings.island(), TopToolbarIsland::History);
-        assert!(session.enabled(&snapshot) && settings.enabled(&snapshot));
+        assert!(
+            canvas.enabled(&snapshot) && session.enabled(&snapshot) && settings.enabled(&snapshot)
+        );
 
         // Entries toggle their popover open state and report it as active.
+        assert_eq!(
+            canvas.event(&snapshot),
+            ToolbarEvent::ToggleCanvasPopover(true)
+        );
         assert_eq!(
             session.event(&snapshot),
             ToolbarEvent::ToggleSessionPopover(true)
@@ -1151,7 +1187,16 @@ mod tests {
             settings.event(&snapshot),
             ToolbarEvent::ToggleSettingsPopover(true)
         );
-        assert!(!session.active(&snapshot) && !settings.active(&snapshot));
+        assert!(
+            !canvas.active(&snapshot) && !session.active(&snapshot) && !settings.active(&snapshot)
+        );
+        snapshot.canvas_popover_open = true;
+        assert!(canvas.active(&snapshot));
+        assert_eq!(
+            canvas.event(&snapshot),
+            ToolbarEvent::ToggleCanvasPopover(false)
+        );
+        snapshot.canvas_popover_open = false;
         snapshot.session_popover_open = true;
         assert!(session.active(&snapshot));
         assert_eq!(

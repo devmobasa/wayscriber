@@ -12,7 +12,8 @@ mod top_spec;
 #[allow(unused_imports)]
 pub(crate) use actions::{
     ToolbarActionsModel, ToolbarButtonModel, ToolbarCommandGroup, ToolbarCommandGroupKind,
-    toolbar_boards_model, toolbar_pages_model,
+    toolbar_advanced_group_for_popover, toolbar_boards_model, toolbar_boards_model_for_popover,
+    toolbar_pages_model, toolbar_pages_model_for_popover, toolbar_zoom_group_for_popover,
 };
 #[allow(unused_imports)]
 pub(crate) use activation::{

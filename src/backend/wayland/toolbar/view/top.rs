@@ -230,6 +230,7 @@ pub fn top_input_rects(
     for id in [
         "top.shapes.panel",
         "top.overflow.panel",
+        "top.menu.canvas.panel",
         "top.menu.session.panel",
         "top.menu.settings.panel",
     ] {
@@ -244,7 +245,7 @@ pub fn top_input_rects(
 
 /// Everything that grows the surface below the base bar: the shapes/options
 /// popover, the contextual highlight-ring row, the style pill, the overflow
-/// popover, and the Session/Settings popovers.
+/// popover, and the Canvas/Session/Settings popovers.
 pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
@@ -256,9 +257,9 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
         + menus::menu_popover_height(snapshot)
 }
 
-/// Scroll bounds for the open Session/Settings popover as
+/// Scroll bounds for the open Canvas/Session/Settings popover as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
-/// while neither popover is open. The wheel path scrolls against these the
+/// while no menu popover is open. The wheel path scrolls against these the
 /// way `side_scroll_bounds` served the retired side palette.
 pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
     menus::menu_scroll_bounds(snapshot)

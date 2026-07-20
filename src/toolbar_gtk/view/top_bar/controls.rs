@@ -404,9 +404,16 @@ impl TopBar {
         self.overflow_popover = Some(popover);
         self.overflow_capture_surface = Some(capture_surface);
 
-        // The Session/Settings popovers anchor to the same ⋯ toggle their
-        // menu entries live in; the entries themselves render inside the
-        // overflow popover from the shared spec.
+        // The Canvas/Session/Settings popovers anchor to the same ⋯ toggle
+        // their menu entries live in; the entries themselves render inside
+        // the overflow popover from the shared spec.
+        let (canvas_popover, canvas_capture) = self.menu_popover(
+            &button,
+            self.canvas_expected_open.clone(),
+            ToolbarEvent::ToggleCanvasPopover(false),
+        );
+        self.canvas_popover = Some(canvas_popover);
+        self.canvas_capture_surface = Some(canvas_capture);
         let (session_popover, session_capture) = self.menu_popover(
             &button,
             self.session_expected_open.clone(),
@@ -424,7 +431,7 @@ impl TopBar {
         button
     }
 
-    /// One overflow-anchored Session/Settings popover following the shapes/
+    /// One overflow-anchored Canvas/Session/Settings popover following the shapes/
     /// overflow pattern: no autohide grab (the backend dismissal policy owns
     /// click-away), Escape wired explicitly, `closed` echoing user dismissal.
     fn menu_popover(

@@ -222,6 +222,10 @@ pub mod overlay {
     pub const RADIUS_PANEL: f64 = 12.0;
     /// XL corner radius (16px) - for large overlays
     pub const RADIUS_XL: f64 = 16.0;
+    /// Corner radius of the bottom-anchored status pills — the status HUD bar
+    /// and the interactive zoom chip. Shared so the two chrome siblings read as
+    /// one family and can never drift.
+    pub const STATUS_PILL_RADIUS: f64 = 11.0;
 
     // ---- Animation timing (ms) ----
     /// Fast animation (100ms) - quick feedback

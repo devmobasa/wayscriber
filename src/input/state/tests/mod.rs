@@ -35,3 +35,4 @@ mod tool_controls;
 mod toolbar_display;
 mod transform;
 mod zoom_actions;
+mod zoom_chip;

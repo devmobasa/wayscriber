@@ -4,7 +4,7 @@ use super::*;
 use crate::backend::wayland::toolbar::ToolbarFocusTarget;
 use crate::backend::wayland::toolbar::layout::{side_scroll_bounds, top_popover_scroll_bounds};
 
-/// Wheel step for the side palette and the top-strip Session/Settings
+/// Wheel step for the side palette and the top-strip Canvas/Session/Settings
 /// popovers, in pre-scale spec units.
 const WHEEL_SCROLL_STEP: f64 = 48.0;
 
@@ -27,9 +27,9 @@ impl WaylandState {
 
     /// True when a wheel event landed on the top strip: the pointer is over
     /// the top toolbar surface, or over the inline top strip. With a
-    /// Session/Settings popover open the wheel scrolls its content (the
-    /// re-hosted side panes were wheel-scrollable, and the GTK popover
-    /// scrolls via its `ScrolledWindow`).
+    /// Canvas/Session/Settings popover open the wheel scrolls its content (the
+    /// re-hosted side panes were wheel-scrollable, and the GTK popovers scroll
+    /// via their `ScrolledWindow`).
     pub(in crate::backend::wayland) fn wheel_over_top_toolbar(
         &self,
         surface: &wl_surface::WlSurface,
@@ -71,7 +71,7 @@ impl WaylandState {
         true
     }
 
-    /// Scrolls the open Session/Settings popover by wheel notches when its
+    /// Scrolls the open Canvas/Session/Settings popover by wheel notches when its
     /// content overflows the capped viewport. Returns true when the scroll
     /// offset changed. `ScrollTopPopover` is on the popovers' spared-event
     /// list, so routing it never dismisses them.

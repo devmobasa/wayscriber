@@ -94,7 +94,75 @@ type ShapesContentKey = (Tool, Option<Tool>, bool, u8);
 /// Snapshot inputs the overflow grid renders from: active tool, override,
 /// text/note/highlight active flags, and the popover open flags (entry
 /// active states).
-type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool);
+type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, bool);
+
+/// Snapshot inputs the Canvas popover content renders from — the Boards /
+/// Pages / Advanced / Zoom command sections plus the Step Undo/Redo config
+/// are a pure function of these (per-button hidden overrides live in
+/// `StructureKey.items`, which rebuilds the whole bar). Enabled states and
+/// glyph faces that shift without a structure rebuild are captured so the
+/// popover stays fresh.
+///
+/// The four delay-slider *values* (`custom_undo_delay_ms`,
+/// `custom_redo_delay_ms`, `undo_all_delay_ms`, `redo_all_delay_ms`) are
+/// deliberately NOT in this key: each slider emits continuously during a drag,
+/// so keying the content on its value would rebuild the popover subtree on the
+/// first backend echo, destroying the live gesture and resetting the scroll
+/// position. They ride the persistent `canvas_updaters` instead (like the
+/// strip's thickness/opacity/font-size sliders), which set the value in place
+/// and are a no-op while the slider is mid-drag. The step *counts* stay in the
+/// key: they change through discrete −/+ clicks, never a drag, so a rebuild is
+/// harmless there.
+#[derive(PartialEq)]
+struct CanvasMenuContentKey {
+    use_icons: bool,
+    show_boards_section: bool,
+    show_pages_section: bool,
+    show_zoom_actions: bool,
+    show_actions_advanced: bool,
+    show_step_section: bool,
+    board_count: usize,
+    is_transparent: bool,
+    page_index: usize,
+    page_count: usize,
+    zoom_active: bool,
+    zoom_locked: bool,
+    frozen_active: bool,
+    undo_available: bool,
+    redo_available: bool,
+    delay_actions_enabled: bool,
+    custom_section_enabled: bool,
+    show_delay_sliders: bool,
+    custom_undo_steps: usize,
+    custom_redo_steps: usize,
+}
+
+impl CanvasMenuContentKey {
+    fn of(snapshot: &ToolbarSnapshot) -> Self {
+        Self {
+            use_icons: snapshot.use_icons,
+            show_boards_section: snapshot.show_boards_section,
+            show_pages_section: snapshot.show_pages_section,
+            show_zoom_actions: snapshot.show_zoom_actions,
+            show_actions_advanced: snapshot.show_actions_advanced,
+            show_step_section: snapshot.show_step_section,
+            board_count: snapshot.board_count,
+            is_transparent: snapshot.is_transparent,
+            page_index: snapshot.page_index,
+            page_count: snapshot.page_count,
+            zoom_active: snapshot.zoom_active,
+            zoom_locked: snapshot.zoom_locked,
+            frozen_active: snapshot.frozen_active,
+            undo_available: snapshot.undo_available,
+            redo_available: snapshot.redo_available,
+            delay_actions_enabled: snapshot.delay_actions_enabled,
+            custom_section_enabled: snapshot.custom_section_enabled,
+            show_delay_sliders: snapshot.show_delay_sliders,
+            custom_undo_steps: snapshot.custom_undo_steps,
+            custom_redo_steps: snapshot.custom_redo_steps,
+        }
+    }
+}
 
 /// Snapshot inputs the Session popover content renders from — the session
 /// model is a pure function of these (plus structural inputs already in
@@ -177,7 +245,7 @@ impl SettingsMenuContentKey {
     }
 }
 
-/// Session/Settings popover content width and internal-scroll cap, in spec
+/// Canvas/Session/Settings popover content width and internal-scroll cap, in spec
 /// units — the same theme tokens the builtin `view/top/menus.rs` popovers
 /// build from, so the frontends cannot drift.
 const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
@@ -288,10 +356,19 @@ pub(in crate::toolbar_gtk) struct TopBar {
     capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     updaters: Rc<RefCell<Vec<Updater>>>,
+    /// Persistent value-updaters for the open Canvas popover's content. Unlike
+    /// the Session/Settings popovers (whose whole subtree rebuilds on any
+    /// modelled change), the Canvas popover hosts the continuously-dragged
+    /// delay sliders: their live values ride these updaters so a drag never
+    /// triggers a subtree rebuild. Repopulated whenever the popover content is
+    /// (re)built; run every `apply`.
+    canvas_updaters: Rc<RefCell<Vec<Updater>>>,
     shapes_popover: Option<gtk4::Popover>,
     shapes_capture_surface: Option<CaptureSurfaceContent>,
     overflow_popover: Option<gtk4::Popover>,
     overflow_capture_surface: Option<CaptureSurfaceContent>,
+    canvas_popover: Option<gtk4::Popover>,
+    canvas_capture_surface: Option<CaptureSurfaceContent>,
     session_popover: Option<gtk4::Popover>,
     session_capture_surface: Option<CaptureSurfaceContent>,
     settings_popover: Option<gtk4::Popover>,
@@ -300,12 +377,14 @@ pub(in crate::toolbar_gtk) struct TopBar {
     /// `closed` handlers distinguish user dismissal from state sync.
     shapes_expected_open: Rc<Cell<bool>>,
     overflow_expected_open: Rc<Cell<bool>>,
+    canvas_expected_open: Rc<Cell<bool>>,
     session_expected_open: Rc<Cell<bool>>,
     settings_expected_open: Rc<Cell<bool>>,
     /// Discriminants of the currently built popover contents; skips the
     /// per-snapshot rebuild that would reset hover and in-flight presses.
     shapes_content_key: Cell<Option<ShapesContentKey>>,
     overflow_content_key: Cell<Option<OverflowContentKey>>,
+    canvas_content_key: RefCell<Option<CanvasMenuContentKey>>,
     session_content_key: RefCell<Option<SessionMenuContentKey>>,
     settings_content_key: RefCell<Option<SettingsMenuContentKey>>,
     drag_active: Rc<Cell<bool>>,
@@ -386,20 +465,25 @@ impl TopBar {
             capture_surface,
             structure: None,
             updaters: Rc::new(RefCell::new(Vec::new())),
+            canvas_updaters: Rc::new(RefCell::new(Vec::new())),
             shapes_popover: None,
             shapes_capture_surface: None,
             overflow_popover: None,
             overflow_capture_surface: None,
+            canvas_popover: None,
+            canvas_capture_surface: None,
             session_popover: None,
             session_capture_surface: None,
             settings_popover: None,
             settings_capture_surface: None,
             shapes_expected_open: Rc::new(Cell::new(false)),
             overflow_expected_open: Rc::new(Cell::new(false)),
+            canvas_expected_open: Rc::new(Cell::new(false)),
             session_expected_open: Rc::new(Cell::new(false)),
             settings_expected_open: Rc::new(Cell::new(false)),
             shapes_content_key: Cell::new(None),
             overflow_content_key: Cell::new(None),
+            canvas_content_key: RefCell::new(None),
             session_content_key: RefCell::new(None),
             settings_content_key: RefCell::new(None),
             drag_active: Rc::new(Cell::new(false)),
@@ -490,6 +574,14 @@ impl TopBar {
             self.set_popovers_capture_transparent(false);
             self.sync_popovers(snapshot, &plan);
         }
+        // The Canvas popover's delay sliders live off the content key, so a
+        // delay drag drives them through these persistent updaters instead of
+        // a subtree rebuild (set_value is a no-op mid-drag, so an in-flight
+        // gesture survives). Run after `sync_popovers` so a fresh rebuild's
+        // updaters are the ones invoked.
+        for updater in self.canvas_updaters.borrow().iter() {
+            updater(snapshot);
+        }
         self.window.set_visible(true);
         self.capture_surface
             .set_transparent(presentation.capture_transparent);
@@ -555,6 +647,7 @@ impl TopBar {
         // buttons go away or GTK complains and leaks the popover widgets.
         self.shapes_expected_open.set(false);
         self.overflow_expected_open.set(false);
+        self.canvas_expected_open.set(false);
         self.session_expected_open.set(false);
         self.settings_expected_open.set(false);
         if let Some(popover) = self.shapes_popover.take() {
@@ -565,6 +658,10 @@ impl TopBar {
             popover.unparent();
         }
         self.overflow_capture_surface = None;
+        if let Some(popover) = self.canvas_popover.take() {
+            popover.unparent();
+        }
+        self.canvas_capture_surface = None;
         if let Some(popover) = self.session_popover.take() {
             popover.unparent();
         }
@@ -575,12 +672,17 @@ impl TopBar {
         self.settings_capture_surface = None;
         self.shapes_content_key.set(None);
         self.overflow_content_key.set(None);
+        *self.canvas_content_key.borrow_mut() = None;
         *self.session_content_key.borrow_mut() = None;
         *self.settings_content_key.borrow_mut() = None;
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }
         self.updaters.borrow_mut().clear();
+        // The Canvas popover was just unparented above, so its persistent
+        // value-updaters (which capture those now-dead widgets) must go too;
+        // a fresh open repopulates them.
+        self.canvas_updaters.borrow_mut().clear();
 
         if snapshot.top_minimized {
             self.build_minimized(snapshot, plan);

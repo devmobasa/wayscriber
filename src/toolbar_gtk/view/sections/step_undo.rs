@@ -24,17 +24,32 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
         ToolbarSideSection::StepUndo,
         ToolbarSideSection::StepUndo.label(),
     );
+    populate(ctx, &card.body);
+    Some(card.root.upcast())
+}
 
-    // Both flags live in the structure key, so a toggle rebuilds the
+/// The section's controls for the top strip's Canvas popover: the same
+/// toggles, step rows, and delay sliders without the collapsible-card
+/// chrome. Callers gate on `show_step_section`; liveness comes from the
+/// popover host's content-key rebuild, so the updaters go to a scratch list.
+pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk4::Box {
+    let body = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
+    populate(ctx, &body);
+    body
+}
+
+fn populate(ctx: &mut SectionCtx, body: &gtk4::Box) {
+    let snapshot = ctx.snapshot;
+    // Both flags live in the structure/content key, so a toggle rebuilds the
     // section; the checkbox state never needs an updater.
-    card.body.append(&toggle_checkbox(
+    body.append(&toggle_checkbox(
         ctx,
         "Step buttons",
         "Step buttons: undo/redo several strokes at once.",
         snapshot.custom_section_enabled,
         ToolbarEvent::ToggleCustomSection,
     ));
-    card.body.append(&toggle_checkbox(
+    body.append(&toggle_checkbox(
         ctx,
         "Delay sliders",
         "Delay sliders: undo/redo delays.",
@@ -43,13 +58,12 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
     ));
 
     if snapshot.custom_section_enabled {
-        custom_row(ctx, &card.body, true);
-        custom_row(ctx, &card.body, false);
+        custom_row(ctx, body, true);
+        custom_row(ctx, body, false);
     }
     if snapshot.show_delay_sliders {
-        delay_sliders(ctx, &card.body);
+        delay_sliders(ctx, body);
     }
-    Some(card.root.upcast())
 }
 
 fn toggle_checkbox(

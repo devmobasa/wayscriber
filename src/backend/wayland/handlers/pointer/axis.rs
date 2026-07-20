@@ -70,7 +70,7 @@ impl WaylandState {
                 if self.wheel_over_side_toolbar(&event.surface, event.position) {
                     self.scroll_side_pane_by_wheel(scroll_direction);
                 } else if self.wheel_over_top_toolbar(&event.surface, event.position) {
-                    // With a Session/Settings popover open, the wheel scrolls
+                    // With a Canvas/Session/Settings popover open, the wheel scrolls
                     // its capped viewport; otherwise a top-strip wheel stays a
                     // no-op (it never falls through to thickness/zoom).
                     self.scroll_top_popover_by_wheel(scroll_direction);

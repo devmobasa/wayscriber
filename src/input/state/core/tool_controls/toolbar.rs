@@ -222,6 +222,7 @@ impl InputState {
                 self.toolbar_top_overflow_open = false;
                 self.toolbar_session_popover_open = false;
                 self.toolbar_settings_popover_open = false;
+                self.toolbar_canvas_popover_open = false;
                 self.show_top_strip_surface();
             }
             TopDisplayMode::Hidden => {
@@ -229,6 +230,7 @@ impl InputState {
                 self.toolbar_top_overflow_open = false;
                 self.toolbar_session_popover_open = false;
                 self.toolbar_settings_popover_open = false;
+                self.toolbar_canvas_popover_open = false;
             }
         }
         self.needs_redraw = true;

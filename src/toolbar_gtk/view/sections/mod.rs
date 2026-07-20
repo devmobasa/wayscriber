@@ -5,6 +5,7 @@
 mod actions;
 mod arrow;
 mod boards;
+pub(in crate::toolbar_gtk) mod canvas_pane;
 mod colors;
 mod marker;
 mod pages;

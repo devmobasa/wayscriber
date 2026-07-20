@@ -1,7 +1,7 @@
 //! GTK top-strip popover lifecycle and content.
 //!
-//! Keeps shapes and overflow popovers synchronized without rebuilding content
-//! on unrelated snapshot changes.
+//! Keeps shapes, overflow, and Canvas/Session/Settings popovers synchronized
+//! without rebuilding content on unrelated snapshot changes.
 
 use super::*;
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
@@ -38,11 +38,13 @@ impl TopBar {
     pub(super) fn hide_popovers_for_window_hide(&self) {
         self.shapes_expected_open.set(false);
         self.overflow_expected_open.set(false);
+        self.canvas_expected_open.set(false);
         self.session_expected_open.set(false);
         self.settings_expected_open.set(false);
         for popover in [
             self.shapes_popover.as_ref(),
             self.overflow_popover.as_ref(),
+            self.canvas_popover.as_ref(),
             self.session_popover.as_ref(),
             self.settings_popover.as_ref(),
         ]
@@ -70,6 +72,10 @@ impl TopBar {
                 self.overflow_capture_surface.as_ref(),
             ),
             (
+                self.canvas_popover.as_ref(),
+                self.canvas_capture_surface.as_ref(),
+            ),
+            (
                 self.session_popover.as_ref(),
                 self.session_capture_surface.as_ref(),
             ),
@@ -92,6 +98,7 @@ impl TopBar {
         [
             self.shapes_popover.as_ref(),
             self.overflow_popover.as_ref(),
+            self.canvas_popover.as_ref(),
             self.session_popover.as_ref(),
             self.settings_popover.as_ref(),
         ]
@@ -112,6 +119,11 @@ impl TopBar {
                 "top-overflow-popover",
                 self.overflow_popover.as_ref(),
                 self.overflow_capture_surface.as_ref(),
+            ),
+            (
+                "top-canvas-popover",
+                self.canvas_popover.as_ref(),
+                self.canvas_capture_surface.as_ref(),
             ),
             (
                 "top-session-popover",
@@ -193,6 +205,7 @@ impl TopBar {
                     snapshot.text_active,
                     snapshot.note_active,
                     snapshot.any_highlight_active,
+                    snapshot.canvas_popover_open,
                     snapshot.session_popover_open,
                     snapshot.settings_popover_open,
                 );
@@ -222,13 +235,41 @@ impl TopBar {
             self.overflow_expected_open.set(false);
         }
 
-        self.sync_session_settings_popovers(snapshot, scale);
+        self.sync_menu_popovers(snapshot, scale);
     }
 
-    /// Keep the Session/Settings popovers' contents and open state in line
-    /// with the snapshot, mirroring the shapes/overflow pattern: content
+    /// Keep the Canvas/Session/Settings popovers' contents and open state in
+    /// line with the snapshot, mirroring the shapes/overflow pattern: content
     /// rebuilds only when the model's snapshot inputs change.
-    fn sync_session_settings_popovers(&mut self, snapshot: &ToolbarSnapshot, scale: f64) {
+    fn sync_menu_popovers(&mut self, snapshot: &ToolbarSnapshot, scale: f64) {
+        if let Some(popover) = self.canvas_popover.clone() {
+            let open = snapshot.canvas_popover_open;
+            if open {
+                let content_key = CanvasMenuContentKey::of(snapshot);
+                if self.canvas_content_key.borrow().as_ref() != Some(&content_key) {
+                    let (content, updaters) = self.build_canvas_popover_content(snapshot, scale);
+                    self.canvas_capture_surface
+                        .as_ref()
+                        .expect("canvas popover capture surface")
+                        .set_content(&content);
+                    // Delay-slider values ride these persistent updaters (the
+                    // content key omits them), so a delay drag never rebuilds
+                    // the subtree. Replace the old set — it captured the now
+                    // dead widgets this rebuild just discarded.
+                    *self.canvas_updaters.borrow_mut() = updaters;
+                    *self.canvas_content_key.borrow_mut() = Some(content_key);
+                }
+            }
+            self.canvas_expected_open.set(open);
+            if open && !popover.is_visible() {
+                popover.popup();
+            } else if !open && popover.is_visible() {
+                popover.popdown();
+            }
+        } else {
+            self.canvas_expected_open.set(false);
+        }
+
         if let Some(popover) = self.session_popover.clone() {
             let open = snapshot.session_popover_open;
             if open {
@@ -272,6 +313,34 @@ impl TopBar {
         } else {
             self.settings_expected_open.set(false);
         }
+    }
+
+    /// Canvas popover content: the Canvas pane's Boards / Pages / Advanced /
+    /// Zoom command sections and the Step Undo/Redo configuration inside a
+    /// scrollable viewport. Returns the built widget together with the
+    /// section's value-updaters, which the host keeps in `canvas_updaters` and
+    /// runs every `apply` — the delay sliders read their live value from these
+    /// (the content key omits the delay values) so a delay drag never rebuilds
+    /// the subtree. Most state (sections, step counts, enabled/glyph faces)
+    /// still rides content-key rebuilds; only the continuously-dragged slider
+    /// values need the persistent path.
+    pub(super) fn build_canvas_popover_content(
+        &self,
+        snapshot: &ToolbarSnapshot,
+        scale: f64,
+    ) -> (gtk4::Widget, Vec<Updater>) {
+        let mut updaters = Vec::new();
+        let mut ctx = super::super::sections::SectionCtx {
+            snapshot,
+            feedback: self.feedback.clone(),
+            scale,
+            use_icons: snapshot.use_icons,
+            updaters: &mut updaters,
+        };
+        let content = super::super::sections::canvas_pane::build_popover_content(&mut ctx);
+        let widget =
+            menu_popover_viewport(&content, "top.menu.canvas.panel", scale, &self.feedback);
+        (widget, updaters)
     }
 
     /// Session popover content: the Session pane's rows (meta labels,
@@ -484,7 +553,7 @@ impl TopBar {
     }
 }
 
-/// Wrap Session/Settings popover content in a capped, scrollable viewport
+/// Wrap Canvas/Session/Settings popover content in a capped, scrollable viewport
 /// (the GTK counterpart of the builtin popovers' internal scrollbar) and
 /// install the click-time modifier capture the popover's own GTK native
 /// needs for the rebind chord.

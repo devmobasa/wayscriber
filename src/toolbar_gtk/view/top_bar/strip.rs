@@ -379,6 +379,7 @@ impl TopBar {
                     | model::TopToolbarControl::Pin
                     | model::TopToolbarControl::Minimize
                     | model::TopToolbarControl::ClearCanvas
+                    | model::TopToolbarControl::CanvasMenu
                     | model::TopToolbarControl::SessionMenu
                     | model::TopToolbarControl::SettingsMenu
                     | model::TopToolbarControl::HighlightRing => {

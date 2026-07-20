@@ -156,6 +156,63 @@ impl ToolbarActionsModel {
     }
 }
 
+fn pages_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarButtonModel> {
+    vec![
+        ToolbarButtonModel::new(ToolbarEvent::PagePrev, snapshot.page_index > 0),
+        ToolbarButtonModel::new(
+            ToolbarEvent::PageNext,
+            snapshot.page_index + 1 < snapshot.page_count,
+        ),
+        ToolbarButtonModel::new(ToolbarEvent::PageNew, true),
+        ToolbarButtonModel::new(ToolbarEvent::PageDuplicate, true),
+        ToolbarButtonModel::new(ToolbarEvent::PageDelete, true),
+    ]
+}
+
+fn boards_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarButtonModel> {
+    let can_cycle = snapshot.board_count > 1;
+    vec![
+        ToolbarButtonModel::new(ToolbarEvent::BoardPrev, can_cycle),
+        ToolbarButtonModel::new(ToolbarEvent::BoardNext, can_cycle),
+        ToolbarButtonModel::new(ToolbarEvent::BoardNew, true),
+        ToolbarButtonModel::new(ToolbarEvent::BoardDuplicate, !snapshot.is_transparent),
+        ToolbarButtonModel::new(ToolbarEvent::BoardDelete, true),
+    ]
+}
+
+fn zoom_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarButtonModel> {
+    vec![
+        ToolbarButtonModel::new(ToolbarEvent::ZoomIn, true),
+        ToolbarButtonModel::new(ToolbarEvent::ZoomOut, true),
+        ToolbarButtonModel::new(ToolbarEvent::ResetZoom, snapshot.zoom_active),
+        ToolbarButtonModel::new(ToolbarEvent::ToggleZoomLock, snapshot.zoom_active),
+    ]
+}
+
+fn advanced_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarButtonModel> {
+    let mut buttons = Vec::with_capacity(5);
+    buttons.push(ToolbarButtonModel::new(
+        ToolbarEvent::UndoAll,
+        snapshot.undo_available,
+    ));
+    buttons.push(ToolbarButtonModel::new(
+        ToolbarEvent::RedoAll,
+        snapshot.redo_available,
+    ));
+    if snapshot.delay_actions_enabled {
+        buttons.push(ToolbarButtonModel::new(
+            ToolbarEvent::UndoAllDelayed,
+            snapshot.undo_available,
+        ));
+        buttons.push(ToolbarButtonModel::new(
+            ToolbarEvent::RedoAllDelayed,
+            snapshot.redo_available,
+        ));
+    }
+    buttons.push(ToolbarButtonModel::new(ToolbarEvent::ToggleFreeze, true));
+    buttons
+}
+
 pub(crate) fn toolbar_pages_model(snapshot: &ToolbarSnapshot) -> Option<ToolbarCommandGroup> {
     if snapshot.side_section_hidden(ToolbarSideSection::Pages)
         || !snapshot.show_pages_section
@@ -167,16 +224,7 @@ pub(crate) fn toolbar_pages_model(snapshot: &ToolbarSnapshot) -> Option<ToolbarC
     visible_group(
         snapshot,
         ToolbarCommandGroupKind::Pages,
-        vec![
-            ToolbarButtonModel::new(ToolbarEvent::PagePrev, snapshot.page_index > 0),
-            ToolbarButtonModel::new(
-                ToolbarEvent::PageNext,
-                snapshot.page_index + 1 < snapshot.page_count,
-            ),
-            ToolbarButtonModel::new(ToolbarEvent::PageNew, true),
-            ToolbarButtonModel::new(ToolbarEvent::PageDuplicate, true),
-            ToolbarButtonModel::new(ToolbarEvent::PageDelete, true),
-        ],
+        pages_buttons(snapshot),
     )
 }
 
@@ -188,17 +236,73 @@ pub(crate) fn toolbar_boards_model(snapshot: &ToolbarSnapshot) -> Option<Toolbar
         return None;
     }
 
-    let can_cycle = snapshot.board_count > 1;
     visible_group(
         snapshot,
         ToolbarCommandGroupKind::Boards,
-        vec![
-            ToolbarButtonModel::new(ToolbarEvent::BoardPrev, can_cycle),
-            ToolbarButtonModel::new(ToolbarEvent::BoardNext, can_cycle),
-            ToolbarButtonModel::new(ToolbarEvent::BoardNew, true),
-            ToolbarButtonModel::new(ToolbarEvent::BoardDuplicate, !snapshot.is_transparent),
-            ToolbarButtonModel::new(ToolbarEvent::BoardDelete, true),
-        ],
+        boards_buttons(snapshot),
+    )
+}
+
+/// Boards command group for the top strip's Canvas popover: gated on the
+/// Boards display toggle and per-button hidden overrides only. Like the
+/// Session/Settings popovers it ignores the side palette's pane selection,
+/// so it renders under `side_layout = "pill"` where no Canvas pane exists.
+pub(crate) fn toolbar_boards_model_for_popover(
+    snapshot: &ToolbarSnapshot,
+) -> Option<ToolbarCommandGroup> {
+    if !snapshot.show_boards_section {
+        return None;
+    }
+    visible_group(
+        snapshot,
+        ToolbarCommandGroupKind::Boards,
+        boards_buttons(snapshot),
+    )
+}
+
+/// Pages command group for the Canvas popover; see
+/// [`toolbar_boards_model_for_popover`] for the gating rationale.
+pub(crate) fn toolbar_pages_model_for_popover(
+    snapshot: &ToolbarSnapshot,
+) -> Option<ToolbarCommandGroup> {
+    if !snapshot.show_pages_section {
+        return None;
+    }
+    visible_group(
+        snapshot,
+        ToolbarCommandGroupKind::Pages,
+        pages_buttons(snapshot),
+    )
+}
+
+/// Zoom command group for the Canvas popover, gated on the Zoom display
+/// toggle only (the popover splits it out from the side pane's Actions card).
+pub(crate) fn toolbar_zoom_group_for_popover(
+    snapshot: &ToolbarSnapshot,
+) -> Option<ToolbarCommandGroup> {
+    if !snapshot.show_zoom_actions {
+        return None;
+    }
+    visible_group(
+        snapshot,
+        ToolbarCommandGroupKind::Zoom,
+        zoom_buttons(snapshot),
+    )
+}
+
+/// Advanced-actions command group for the Canvas popover (undo-all,
+/// redo-all, their timed variants when delay actions are enabled, and
+/// Freeze), gated on the "Advanced actions" display toggle only.
+pub(crate) fn toolbar_advanced_group_for_popover(
+    snapshot: &ToolbarSnapshot,
+) -> Option<ToolbarCommandGroup> {
+    if !snapshot.show_actions_advanced {
+        return None;
+    }
+    visible_group(
+        snapshot,
+        ToolbarCommandGroupKind::AdvancedActions,
+        advanced_buttons(snapshot),
     )
 }
 

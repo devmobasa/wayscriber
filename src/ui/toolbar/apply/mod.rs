@@ -134,6 +134,9 @@ impl InputState {
             ToolbarEvent::ToggleSettingsPopover(open) => {
                 self.apply_toolbar_toggle_settings_popover(open)
             }
+            ToolbarEvent::ToggleCanvasPopover(open) => {
+                self.apply_toolbar_toggle_canvas_popover(open)
+            }
             ToolbarEvent::ScrollTopPopover(offset) => self.apply_toolbar_scroll_top_popover(offset),
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)

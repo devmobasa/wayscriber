@@ -30,7 +30,7 @@ pub struct TopStripFadeInputs {
     pub idle_for: Duration,
     /// Pointer over/approaching the top toolbar (hover or focus).
     pub pointer_near: bool,
-    /// Any top menu/popover open (shapes picker, overflow, color picker).
+    /// Any top menu/popover open (shapes, overflow, Canvas/Session/Settings).
     pub menus_open: bool,
     /// Minimized restore tab, micro chip, or hidden strip: minimal chrome
     /// never fades.

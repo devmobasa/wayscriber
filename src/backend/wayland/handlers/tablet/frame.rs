@@ -145,6 +145,15 @@ impl WaylandState {
             return;
         }
 
+        // Canvas click-away: a pen-down on the canvas with a top popover open
+        // (Canvas/Session/Settings) dismisses it and swallows the pen-down,
+        // matching the mouse and touch paths — otherwise the pen-down would
+        // start a stray stroke instead of closing the popover.
+        if self.dismiss_top_toolbar_menus() {
+            self.input_state.needs_redraw = true;
+            return;
+        }
+
         let hover_cursor_pos = self.stylus_hover_cursor_position();
         let (x, y) = self.current_stylus_position();
         self.set_current_mouse(x as i32, y as i32);

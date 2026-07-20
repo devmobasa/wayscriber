@@ -84,23 +84,63 @@ fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
         )
 }
 
-/// Events shared by both overflow-anchored popovers that never dismiss
-/// them: their own open/close toggles (mutual exclusion lives in the apply
-/// layer) and the internal scrollbar.
-fn event_spared_by_session_settings_popovers(event: &ToolbarEvent) -> bool {
+/// Events shared by the overflow-anchored popovers that never dismiss them:
+/// their own open/close toggles (mutual exclusion lives in the apply layer)
+/// and the internal scrollbar.
+fn event_spared_by_top_menu_popovers(event: &ToolbarEvent) -> bool {
     matches!(
         event,
         ToolbarEvent::ToggleSessionPopover(_)
             | ToolbarEvent::ToggleSettingsPopover(_)
+            | ToolbarEvent::ToggleCanvasPopover(_)
             | ToolbarEvent::ScrollTopPopover(_)
     )
+}
+
+/// The Canvas popover hosts the board/page/zoom/advanced/step controls, so
+/// those events must not close it out from under the pointer; everything
+/// else dismisses it like the overflow flyout.
+fn event_dismisses_canvas_popover(event: &ToolbarEvent) -> bool {
+    !event_spared_by_top_menu_popovers(event)
+        && !matches!(
+            event,
+            ToolbarEvent::BoardPrev
+                | ToolbarEvent::BoardNext
+                | ToolbarEvent::BoardNew
+                | ToolbarEvent::BoardDuplicate
+                | ToolbarEvent::BoardDelete
+                | ToolbarEvent::PagePrev
+                | ToolbarEvent::PageNext
+                | ToolbarEvent::PageNew
+                | ToolbarEvent::PageDuplicate
+                | ToolbarEvent::PageDelete
+                | ToolbarEvent::ZoomIn
+                | ToolbarEvent::ZoomOut
+                | ToolbarEvent::ResetZoom
+                | ToolbarEvent::ToggleZoomLock
+                | ToolbarEvent::UndoAll
+                | ToolbarEvent::RedoAll
+                | ToolbarEvent::UndoAllDelayed
+                | ToolbarEvent::RedoAllDelayed
+                | ToolbarEvent::ToggleFreeze
+                | ToolbarEvent::ToggleCustomSection(_)
+                | ToolbarEvent::ToggleDelaySliders(_)
+                | ToolbarEvent::SetCustomUndoSteps(_)
+                | ToolbarEvent::SetCustomRedoSteps(_)
+                | ToolbarEvent::CustomUndo
+                | ToolbarEvent::CustomRedo
+                | ToolbarEvent::SetCustomUndoDelay(_)
+                | ToolbarEvent::SetCustomRedoDelay(_)
+                | ToolbarEvent::SetUndoDelay(_)
+                | ToolbarEvent::SetRedoDelay(_)
+        )
 }
 
 /// The Session popover hosts the session controls, so those events must not
 /// close it out from under the pointer; everything else dismisses it like
 /// the overflow flyout.
 fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
-    !event_spared_by_session_settings_popovers(event)
+    !event_spared_by_top_menu_popovers(event)
         && !matches!(
             event,
             ToolbarEvent::OpenSession
@@ -118,7 +158,7 @@ fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
 /// mode, toggles, buttons, and the customization sub-panel), so all of
 /// those events keep it open; everything else dismisses it.
 fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
-    !event_spared_by_session_settings_popovers(event)
+    !event_spared_by_top_menu_popovers(event)
         && !matches!(
             event,
             ToolbarEvent::SetToolbarLayoutMode(_)
@@ -285,7 +325,14 @@ impl WaylandState {
             && event_dismisses_session_popover(&event);
         let dismiss_settings = self.input_state.toolbar_settings_popover_open
             && event_dismisses_settings_popover(&event);
-        if dismiss_overflow || dismiss_shapes || dismiss_session || dismiss_settings {
+        let dismiss_canvas =
+            self.input_state.toolbar_canvas_popover_open && event_dismisses_canvas_popover(&event);
+        if dismiss_overflow
+            || dismiss_shapes
+            || dismiss_session
+            || dismiss_settings
+            || dismiss_canvas
+        {
             if dismiss_overflow {
                 self.input_state.toolbar_top_overflow_open = false;
             }
@@ -297,6 +344,9 @@ impl WaylandState {
             }
             if dismiss_settings {
                 self.input_state.toolbar_settings_popover_open = false;
+            }
+            if dismiss_canvas {
+                self.input_state.toolbar_canvas_popover_open = false;
             }
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;

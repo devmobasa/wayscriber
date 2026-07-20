@@ -322,7 +322,9 @@ pub struct ToolbarSnapshot {
     pub session_popover_open: bool,
     /// Whether the Settings popover (anchored to the overflow toggle) is open
     pub settings_popover_open: bool,
-    /// Internal scroll offset of the open Session/Settings popover
+    /// Whether the Canvas popover (anchored to the overflow toggle) is open
+    pub canvas_popover_open: bool,
+    /// Internal scroll offset of the open Canvas/Session/Settings popover
     /// (logical pixels, clamped at render)
     pub top_popover_scroll: f64,
     /// Whether the top strip is minimized to its edge restore tab

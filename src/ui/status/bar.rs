@@ -19,8 +19,9 @@ use crate::ui_text::{UiTextExtents, UiTextStyle, measure_text, text_layout};
 
 /// Inset between the pill background and the screen edges
 const STATUS_BAR_EDGE_INSET: f64 = overlay::SPACING_MD;
-/// Corner radius of the pill background
-const STATUS_BAR_CORNER_RADIUS: f64 = 11.0;
+/// Corner radius of the pill background (shared with the zoom chip so the two
+/// bottom-anchored status pills can never drift apart).
+const STATUS_BAR_CORNER_RADIUS: f64 = overlay::STATUS_PILL_RADIUS;
 /// Maximum fraction of the screen width the whole pill (background including
 /// padding) may occupy
 const STATUS_BAR_MAX_WIDTH_FRACTION: f64 = 0.8;
@@ -700,7 +701,12 @@ fn layout_mode_badges(
             tint: FROZEN_BADGE_TINT,
         });
     }
-    if input_state.zoom_active() {
+    // Reconciliation (M8): when zoom actions are enabled the bottom-right zoom
+    // chip is the canonical zoom indicator/control, so the HUD-stacked ZOOM
+    // badge is suppressed to avoid showing the zoom percentage twice. With zoom
+    // actions off (chip absent) the badge remains the HUD's zoom indicator, as
+    // before M8.
+    if input_state.zoom_active() && !input_state.show_zoom_actions {
         specs.push(StatusHudBadgeSpec {
             label: zoom_badge_label(input_state.zoom_scale(), input_state.zoom_locked()),
             hint: None,
@@ -1367,6 +1373,9 @@ mod tests {
         let mut state = make_state();
         state.set_frozen_active(true);
         state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
+        // Zoom actions off: the HUD-stacked ZOOM badge is the zoom indicator
+        // here (with zoom actions on the bottom-right chip owns it instead).
+        state.show_zoom_actions = false;
         let style = StatusBarStyle::default();
 
         let bottom =
@@ -1392,6 +1401,44 @@ mod tests {
         for badge in &top.badges {
             assert!((badge.x + badge.width - (top.pill_x + top.pill_width)).abs() < 1e-6);
         }
+    }
+
+    /// Reconciliation (M8): with zoom actions enabled the HUD-stacked ZOOM
+    /// badge is suppressed (the bottom-right zoom chip is the canonical zoom
+    /// indicator), so the percentage never shows in two places at once. Other
+    /// mode badges are unaffected.
+    #[test]
+    fn zoom_badge_suppressed_when_zoom_actions_enabled() {
+        let mut state = make_state();
+        state.set_frozen_active(true);
+        state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
+        assert!(state.show_zoom_actions, "default enables zoom actions");
+        let style = StatusBarStyle::default();
+
+        let layout =
+            compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
+                .expect("layout");
+        assert!(
+            !layout
+                .badges
+                .iter()
+                .any(|badge| badge.label.contains("ZOOM")),
+            "ZOOM badge must be suppressed when the zoom chip owns the display"
+        );
+        // The unrelated FROZEN badge still stacks normally.
+        assert!(layout.badges.iter().any(|badge| badge.label == "FROZEN"));
+
+        // With zoom actions off the badge returns.
+        state.show_zoom_actions = false;
+        let restored =
+            compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
+                .expect("layout");
+        assert!(
+            restored
+                .badges
+                .iter()
+                .any(|badge| badge.label == "ZOOM 250%")
+        );
     }
 
     #[test]

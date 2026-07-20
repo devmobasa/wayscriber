@@ -72,6 +72,79 @@ fn popover_content_keys_track_icon_mode_even_when_the_compact_plan_masks_it() {
         SessionMenuContentKey::of(&text_mode) != SessionMenuContentKey::of(&icon_mode),
         "session popover content key tracks icon mode"
     );
+    assert!(
+        CanvasMenuContentKey::of(&text_mode) != CanvasMenuContentKey::of(&icon_mode),
+        "canvas popover content key tracks icon mode"
+    );
+}
+
+#[test]
+fn canvas_popover_content_key_rebuilds_on_section_and_value_changes() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+
+    // A section display toggle drives a content rebuild.
+    let mut toggled = base.clone();
+    toggled.show_boards_section = !base.show_boards_section;
+    assert!(
+        CanvasMenuContentKey::of(&base) != CanvasMenuContentKey::of(&toggled),
+        "toggling a section rebuilds the canvas popover content"
+    );
+
+    // A step-count change (no structural change) still rebuilds the content.
+    let mut stepped = base.clone();
+    stepped.custom_undo_steps = base.custom_undo_steps + 1;
+    assert!(
+        CanvasMenuContentKey::of(&base) != CanvasMenuContentKey::of(&stepped),
+        "a step-count change rebuilds the canvas popover content"
+    );
+
+    // A no-op change leaves the key stable, so hover/press survive.
+    assert!(
+        CanvasMenuContentKey::of(&base) == CanvasMenuContentKey::of(&base.clone()),
+        "an unchanged snapshot keeps the content key stable"
+    );
+}
+
+/// Each delay slider emits continuously during a drag: if its value were part
+/// of the content key, the first backend echo would rebuild the whole popover
+/// subtree, destroying the live gesture and resetting the scroll. So a
+/// delay-value change must leave the content key stable — the values ride the
+/// persistent `canvas_updaters` instead (set in place, a no-op mid-drag).
+#[test]
+fn canvas_popover_content_key_ignores_delay_slider_values() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+
+    let mutations: [fn(&mut ToolbarSnapshot); 4] = [
+        |s| s.custom_undo_delay_ms += 250,
+        |s| s.custom_redo_delay_ms += 250,
+        |s| s.undo_all_delay_ms += 250,
+        |s| s.redo_all_delay_ms += 250,
+    ];
+    for mutate in mutations {
+        let mut changed = base.clone();
+        mutate(&mut changed);
+        assert!(
+            CanvasMenuContentKey::of(&base) == CanvasMenuContentKey::of(&changed),
+            "a delay-slider value change must not rebuild the canvas popover content"
+        );
+    }
+
+    // Guard: the step counts (changed by discrete −/+ clicks, never a drag)
+    // stay in the key, so they still rebuild — no drag hazard there.
+    let mut stepped = base.clone();
+    stepped.custom_undo_steps += 1;
+    assert!(
+        CanvasMenuContentKey::of(&base) != CanvasMenuContentKey::of(&stepped),
+        "a step-count change still rebuilds the canvas popover content"
+    );
 }
 
 #[test]
@@ -728,6 +801,10 @@ fn detach_test_popovers(top: &mut TopBar) {
         popover.unparent();
     }
     top.overflow_capture_surface = None;
+    if let Some(popover) = top.canvas_popover.take() {
+        popover.unparent();
+    }
+    top.canvas_capture_surface = None;
     if let Some(popover) = top.session_popover.take() {
         popover.unparent();
     }
@@ -1959,6 +2036,114 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             event: settings_model.buttons()[0].event.clone(),
             rebind_requested: false,
         }
+    );
+
+    // Canvas popover parity: the command sections render buttons, the Step
+    // config renders its two toggles, and toggling every section off leaves
+    // the popover empty.
+    assert!(menu_top.canvas_popover.is_some(), "canvas popover exists");
+    let mut canvas_snapshot = regular.clone();
+    canvas_snapshot.canvas_popover_open = true;
+    canvas_snapshot.show_boards_section = true;
+    canvas_snapshot.show_pages_section = true;
+    canvas_snapshot.show_zoom_actions = true;
+    canvas_snapshot.show_actions_advanced = true;
+    canvas_snapshot.show_step_section = true;
+    let (canvas_content, _canvas_updaters) =
+        menu_top.build_canvas_popover_content(&canvas_snapshot, 1.0);
+    let canvas_panel = find_widget_named(&canvas_content, "top.menu.canvas.panel")
+        .expect("canvas popover panel box");
+    let mut canvas_buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&canvas_panel, &mut canvas_buttons);
+    assert!(
+        canvas_buttons.len() >= 4,
+        "the canvas popover exposes the command-section buttons"
+    );
+    // The Step config exposes exactly its two toggles; toggling the first
+    // emits ToggleCustomSection with the live state.
+    let mut canvas_checks: Vec<gtk4::CheckButton> = Vec::new();
+    collect_descendants(&canvas_panel, &mut canvas_checks);
+    assert_eq!(
+        canvas_checks.len(),
+        2,
+        "Step buttons + Delay sliders toggles"
+    );
+    canvas_checks[0].set_active(!canvas_snapshot.custom_section_enabled);
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("GTK canvas step toggle event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::ToggleCustomSection(!canvas_snapshot.custom_section_enabled),
+            rebind_requested: false,
+        }
+    );
+
+    // Delay-slider live update WITHOUT a subtree rebuild: the Canvas popover's
+    // delay sliders ride the persistent value-updaters this builder returns
+    // (the content key omits their values), so an external delay change flows
+    // through an updater, not a rebuild. Build with the delay sliders shown,
+    // then run the returned updaters with a bumped delay and confirm the slider
+    // reflects it in place.
+    let mut delay_snapshot = regular.clone();
+    delay_snapshot.canvas_popover_open = true;
+    delay_snapshot.show_step_section = true;
+    delay_snapshot.show_delay_sliders = true;
+    delay_snapshot.custom_section_enabled = false;
+    delay_snapshot.undo_all_delay_ms = 1000;
+    let (delay_content, delay_updaters) =
+        menu_top.build_canvas_popover_content(&delay_snapshot, 1.0);
+    assert!(
+        !delay_updaters.is_empty(),
+        "the delay sliders register persistent value-updaters"
+    );
+    let delay_panel = find_widget_named(&delay_content, "top.menu.canvas.panel")
+        .expect("delay canvas popover panel box");
+    let mut delay_boxes: Vec<gtk4::Box> = Vec::new();
+    collect_descendants(&delay_panel, &mut delay_boxes);
+    let undo_all_slider_tooltip = |boxes: &[gtk4::Box]| -> String {
+        boxes
+            .iter()
+            .find_map(|widget| {
+                widget
+                    .tooltip_text()
+                    .filter(|tooltip| tooltip.contains("Undo-all delay"))
+                    .map(|tooltip| tooltip.to_string())
+            })
+            .expect("undo-all delay slider tooltip")
+    };
+    assert!(
+        undo_all_slider_tooltip(&delay_boxes).contains("1.0s"),
+        "the delay slider starts at the built value"
+    );
+    // A backend echo of a new delay flows through the persistent updater —
+    // never a rebuild — and the same slider widget updates in place.
+    let mut bumped_delay = delay_snapshot.clone();
+    bumped_delay.undo_all_delay_ms = 2500;
+    for updater in &delay_updaters {
+        updater(&bumped_delay);
+    }
+    assert!(
+        undo_all_slider_tooltip(&delay_boxes).contains("2.5s"),
+        "the persistent updater sets the new delay in place (no subtree rebuild)"
+    );
+
+    let mut empty_canvas = regular.clone();
+    empty_canvas.canvas_popover_open = true;
+    empty_canvas.show_boards_section = false;
+    empty_canvas.show_pages_section = false;
+    empty_canvas.show_zoom_actions = false;
+    empty_canvas.show_actions_advanced = false;
+    empty_canvas.show_step_section = false;
+    let (empty_content, _empty_updaters) =
+        menu_top.build_canvas_popover_content(&empty_canvas, 1.0);
+    let empty_panel = find_widget_named(&empty_content, "top.menu.canvas.panel")
+        .expect("empty canvas popover panel box");
+    let mut empty_buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&empty_panel, &mut empty_buttons);
+    assert!(
+        empty_buttons.is_empty(),
+        "every section toggled off leaves no canvas command buttons"
     );
 
     detach_test_popovers(&mut menu_top);

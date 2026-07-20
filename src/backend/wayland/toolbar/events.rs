@@ -33,7 +33,7 @@ pub enum HitKind {
     DragScrollSide {
         max_scroll: f64,
     },
-    /// Internal scrollbar of the top strip's Session/Settings popover.
+    /// Internal scrollbar of the top strip's Canvas/Session/Settings popover.
     DragScrollTopPopover {
         max_scroll: f64,
     },

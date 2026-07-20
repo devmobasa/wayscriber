@@ -3,6 +3,7 @@ use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, Poi
 
 use crate::backend::wayland::state::drag_log;
 use crate::input::{HelpOverlayReleaseOutcome, MouseButton};
+use crate::ui::ZoomChipPress;
 
 use super::*;
 
@@ -22,6 +23,7 @@ impl WaylandState {
         if self.take_suppress_next_release() {
             self.set_pending_toast_press(false);
             self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
@@ -47,6 +49,7 @@ impl WaylandState {
             }
             self.set_pending_toast_press(false);
             self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
@@ -55,6 +58,7 @@ impl WaylandState {
             // For command palette, press handles the click - release is a no-op
             self.set_pending_toast_press(false);
             self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
@@ -92,6 +96,34 @@ impl WaylandState {
                 }
             }
             return;
+        }
+
+        if button == BTN_LEFT {
+            let pressed = self.take_pending_zoom_chip_press();
+            if pressed.is_pending() {
+                // Any pending chip press (`Passive` or `Button`) consumes its
+                // release here. Only a `Button` resolves to a zoom action; the
+                // action fires only when the release lands on the SAME button.
+                // dispatch_input_action drains the resulting pending zoom action.
+                if let ZoomChipPress::Button(kind) = pressed {
+                    let screen_position = if on_toolbar {
+                        self.toolbar_surface_screen_coords(&event.surface, event.position)
+                    } else {
+                        Some(event.position)
+                    };
+                    if let Some((screen_x, screen_y)) = screen_position {
+                        let (_, action) = self.input_state.check_zoom_chip_click(
+                            kind,
+                            screen_x.round() as i32,
+                            screen_y.round() as i32,
+                        );
+                        if let Some(action) = action {
+                            self.dispatch_input_action(action);
+                        }
+                    }
+                }
+                return;
+            }
         }
 
         if debug_toolbar_drag_logging_enabled() {
