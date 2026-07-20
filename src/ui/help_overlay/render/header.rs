@@ -7,8 +7,8 @@ use super::super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::super::keycaps::{KeyComboStyle, draw_key_combo, measure_key_combo};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
-/// Vertical padding a keycap chip adds above and below the text baseline.
-/// Mirrors `padding_y` in [`super::super::keycaps`].
+/// Vertical headroom the subtitle keycap chips need above the text baseline,
+/// so the subtitle row reserves space for the [`super::super::keycaps`] chips.
 pub(super) const KEYCAP_PAD_Y: f64 = 4.0;
 
 const SEP_GAP: f64 = 12.0;
@@ -19,7 +19,9 @@ const BULLET: &str = "\u{2022}";
 
 const PILL_PADDING_X: f64 = 9.0;
 const PILL_PADDING_Y: f64 = 3.0;
-const PILL_RADIUS: f64 = 6.0;
+/// Corner radius shared by the overlay's rounded chips (version pill and the
+/// "Replay tour" footer pill) so they render with identical corners.
+pub(super) const PILL_RADIUS: f64 = 6.0;
 const TITLE_PILL_GAP: f64 = 12.0;
 
 /// A single "keys → action" hint shown in the header.

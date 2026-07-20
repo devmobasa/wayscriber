@@ -1,3 +1,4 @@
+use crate::input::state::{Toast, ToastPriority};
 use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
@@ -9,7 +10,6 @@ use crate::backend::wayland::portal_capture::{
 use crate::backend::wayland::portal_task::{PortalPoll, PortalTask};
 use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::input::InputState;
-use crate::input::state::UiToastKind;
 
 use super::state::FrozenState;
 
@@ -76,9 +76,10 @@ impl FrozenState {
             .is_some_and(|task| task.timed_out(now))
         {
             warn!("Portal frozen capture timed out; restoring overlay");
-            input_state.set_ui_toast(
-                UiToastKind::Error,
-                "Freeze timed out while waiting for screen capture.",
+            input_state.push_toast(
+                ToastPriority::Critical,
+                "freeze",
+                Toast::error("Freeze timed out while waiting for screen capture."),
             );
             input_state.set_frozen_active(false);
             self.finish_portal_task();
@@ -106,8 +107,11 @@ impl FrozenState {
             }
             PortalPoll::Ready(Err(err)) | PortalPoll::Failed(err) => {
                 warn!("Portal frozen capture failed: {err}");
-                input_state
-                    .set_ui_toast(UiToastKind::Error, "Freeze could not capture the screen.");
+                input_state.push_toast(
+                    ToastPriority::Critical,
+                    "freeze",
+                    Toast::error("Freeze could not capture the screen."),
+                );
                 input_state.set_frozen_active(false);
                 self.finish_portal_task();
                 self.capture_done = true;
@@ -115,10 +119,7 @@ impl FrozenState {
             PortalPoll::Pending => {}
             PortalPoll::Disconnected => {
                 warn!("Portal frozen capture channel disconnected");
-                input_state.set_ui_toast(
-                    UiToastKind::Error,
-                    "Freeze could not capture the screen because the system capture service stopped responding.",
-                );
+                input_state.push_toast(ToastPriority::Critical, "freeze", Toast::error("Freeze could not capture the screen because the system capture service stopped responding."));
                 input_state.set_frozen_active(false);
                 self.finish_portal_task();
                 self.capture_done = true;

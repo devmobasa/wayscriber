@@ -253,6 +253,17 @@ pub(super) fn run_event_loop(
         state.sync_overlay_interactivity();
         state.apply_onboarding_hints();
 
+        // Hand changed palette recents to the dedicated persistence worker.
+        // The event loop only replaces a bounded in-memory snapshot and wakes
+        // the worker; directory creation, atomic replacement, and fsync happen
+        // off-dispatch. Retain the dirty flag if the worker is unavailable.
+        if state.input_state.command_palette_recents_dirty() {
+            let recents = state.input_state.command_palette_recent.clone();
+            if state.palette_recents.request(&recents) {
+                state.input_state.clear_command_palette_recents_dirty();
+            }
+        }
+
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
             warn!("Failed to autosave session state: {}", err);
         }

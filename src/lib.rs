@@ -25,6 +25,7 @@ mod label_format;
 mod logger;
 mod notification;
 mod onboarding;
+pub mod palette_recents;
 pub mod paths;
 mod process_broker;
 pub mod render_profiles;

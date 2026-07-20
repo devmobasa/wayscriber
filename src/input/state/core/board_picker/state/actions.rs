@@ -1,6 +1,7 @@
-use super::super::super::base::{InputState, UiToastKind};
+use super::super::super::base::InputState;
 use super::super::{BoardPickerEditMode, BoardPickerState};
 use crate::draw::PageDeleteOutcome;
+use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(crate) fn board_picker_row_count(&self) -> usize {
@@ -97,7 +98,11 @@ impl InputState {
             self.board_picker_promote_to_full();
         }
         if !self.create_board() {
-            self.set_ui_toast(UiToastKind::Warning, "Board limit reached.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board_picker",
+                Toast::warning("Board limit reached."),
+            );
             return;
         }
         let index = self.boards.active_index();

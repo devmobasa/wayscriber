@@ -11,6 +11,34 @@ pub enum HelpOverlayCursorHint {
     Default,
     /// Text editing cursor (I-beam) for search input.
     Text,
+    /// Pointer / hand cursor over a clickable help row or footer action.
+    Pointer,
+}
+
+/// Outcome of a left-click inside the (open) help overlay, resolved against the
+/// real rendered layout via the overlay's pointer hit map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelpOverlayClick {
+    /// A clickable row (or the "Replay tour" footer) was hit; run this action.
+    Run(crate::config::Action),
+    /// Inside the overlay chrome but not on an interactive element (no-op).
+    Inside,
+    /// Outside the overlay box entirely — treated as a dismiss click.
+    Outside,
+}
+
+/// What a completed left press+release gesture over the help overlay should do,
+/// after enforcing the same-target contract between the press and the release
+/// (see [`InputState::resolve_help_overlay_release`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelpOverlayReleaseOutcome {
+    /// Press and release landed on the SAME clickable row; run its action.
+    Run(crate::config::Action),
+    /// Press and release both landed outside the overlay box; dismiss it.
+    Dismiss,
+    /// Anything else (mismatched targets, bare chrome, no recorded press):
+    /// leave the overlay untouched.
+    None,
 }
 
 impl InputState {
@@ -19,6 +47,11 @@ impl InputState {
         self.help_overlay_quick_mode = quick_mode;
         self.help_overlay_scroll = 0.0;
         self.help_overlay_scroll_max = 0.0;
+        // Defensively drop any geometry left from a previous open. The hit map
+        // is normally cleared on close, but re-opening should never expose the
+        // prior layout to a click before the first fresh render repopulates it.
+        self.help_overlay_pending_press = None;
+        crate::ui::clear_help_overlay_hit_map();
         if track_usage {
             self.pending_onboarding_usage.used_help_overlay = true;
         }
@@ -29,12 +62,7 @@ impl InputState {
 
     pub(crate) fn toggle_help_overlay(&mut self) {
         if self.show_help {
-            self.show_help = false;
-            self.help_overlay_quick_mode = false;
-            self.help_overlay_scroll = 0.0;
-            self.help_overlay_scroll_max = 0.0;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
+            self.close_help_overlay();
             return;
         }
         self.open_help_overlay_internal(false, true);
@@ -42,15 +70,74 @@ impl InputState {
 
     pub(crate) fn toggle_quick_help(&mut self) {
         if self.show_help && self.help_overlay_quick_mode {
-            self.show_help = false;
-            self.help_overlay_quick_mode = false;
-            self.help_overlay_scroll = 0.0;
-            self.help_overlay_scroll_max = 0.0;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
+            self.close_help_overlay();
             return;
         }
         self.open_help_overlay_internal(true, true);
+    }
+
+    /// Close the help overlay and drop the stale pointer hit map so a later
+    /// click can never act on the previous frame's rectangles.
+    pub(crate) fn close_help_overlay(&mut self) {
+        if !self.show_help {
+            return;
+        }
+        self.show_help = false;
+        self.help_overlay_quick_mode = false;
+        self.help_overlay_scroll = 0.0;
+        self.help_overlay_scroll_max = 0.0;
+        self.help_overlay_pending_press = None;
+        crate::ui::clear_help_overlay_hit_map();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    /// Resolve a left-click at `(x, y)` (screen space) against the real rendered
+    /// help layout: a clickable row/footer action, inside chrome, or a dismiss.
+    pub fn help_overlay_click_at(&self, x: i32, y: i32) -> HelpOverlayClick {
+        match crate::ui::help_overlay_region_at(x as f64, y as f64) {
+            Some(crate::ui::HelpOverlayRegion::Row(action)) => HelpOverlayClick::Run(action),
+            Some(_) => HelpOverlayClick::Inside,
+            None => HelpOverlayClick::Outside,
+        }
+    }
+
+    /// Record the help target under a left press (screen space) so the matching
+    /// release can enforce a same-target contract. Mirrors the toast press
+    /// guard: the press only *marks* intent, never acts.
+    pub fn note_help_overlay_press(&mut self, x: i32, y: i32) {
+        self.help_overlay_pending_press = Some(self.help_overlay_click_at(x, y));
+    }
+
+    /// Forget any recorded help press without acting (e.g. a release whose
+    /// screen coordinates could not be resolved), so a later release can never
+    /// consume stale intent.
+    pub fn clear_help_overlay_press(&mut self) {
+        self.help_overlay_pending_press = None;
+    }
+
+    /// Resolve a left release at `(x, y)` (screen space) against the target
+    /// recorded by [`Self::note_help_overlay_press`], enforcing a same-target
+    /// contract before acting. A row runs only when the release lands on the
+    /// SAME row as the press, so pressing on bare chrome (or outside) and
+    /// dragging onto a clickable row — e.g. the destructive Clear row — never
+    /// fires it. A dismiss requires the press and release to both fall outside
+    /// the box. Consumes the recorded press.
+    pub fn resolve_help_overlay_release(&mut self, x: i32, y: i32) -> HelpOverlayReleaseOutcome {
+        let pressed = self.help_overlay_pending_press.take();
+        let released = self.help_overlay_click_at(x, y);
+        match (pressed, released) {
+            (
+                Some(HelpOverlayClick::Run(pressed_action)),
+                HelpOverlayClick::Run(released_action),
+            ) if pressed_action == released_action => {
+                HelpOverlayReleaseOutcome::Run(released_action)
+            }
+            (Some(HelpOverlayClick::Outside), HelpOverlayClick::Outside) => {
+                HelpOverlayReleaseOutcome::Dismiss
+            }
+            _ => HelpOverlayReleaseOutcome::None,
+        }
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {
@@ -161,44 +248,22 @@ impl InputState {
     }
 
     /// Determine the cursor type for the help overlay.
-    /// Returns `None` if the help overlay is not open.
-    /// The help overlay search accepts keyboard input, so we show Text cursor
-    /// in the top navigation/search area.
-    pub fn help_overlay_cursor_hint_at(
-        &self,
-        x: i32,
-        y: i32,
-        screen_width: u32,
-        screen_height: u32,
-    ) -> Option<HelpOverlayCursorHint> {
+    /// Returns `None` if the help overlay is not open, or the point is outside
+    /// the overlay box.
+    ///
+    /// Resolved against the real rendered layout (the overlay's pointer hit
+    /// map): the search well shows a text cursor, clickable rows and the
+    /// "Replay tour" footer show a pointer, everything else the default.
+    pub fn help_overlay_cursor_hint_at(&self, x: i32, y: i32) -> Option<HelpOverlayCursorHint> {
         if !self.show_help {
             return None;
         }
 
-        // Calculate approximate overlay bounds (centered, ~80% of screen)
-        let margin_x = screen_width as f64 * 0.1;
-        let margin_y = screen_height as f64 * 0.05;
-        let box_x = margin_x;
-        let box_y = margin_y;
-        let box_width = screen_width as f64 - margin_x * 2.0;
-        let box_height = screen_height as f64 - margin_y * 2.0;
-
-        let local_x = x as f64 - box_x;
-        let local_y = y as f64 - box_y;
-
-        // Check if outside overlay bounds
-        if local_x < 0.0 || local_x > box_width || local_y < 0.0 || local_y > box_height {
-            return None;
+        match crate::ui::help_overlay_region_at(x as f64, y as f64)? {
+            crate::ui::HelpOverlayRegion::Search => Some(HelpOverlayCursorHint::Text),
+            crate::ui::HelpOverlayRegion::Row(_) => Some(HelpOverlayCursorHint::Pointer),
+            crate::ui::HelpOverlayRegion::Inside => Some(HelpOverlayCursorHint::Default),
         }
-
-        // The search box is in the top ~80px of the overlay (nav area)
-        // Show text cursor there since typing goes to search
-        let nav_height = 80.0;
-        if local_y <= nav_height {
-            return Some(HelpOverlayCursorHint::Text);
-        }
-
-        Some(HelpOverlayCursorHint::Default)
     }
 }
 
@@ -312,18 +377,261 @@ mod tests {
     }
 
     #[test]
-    fn help_overlay_cursor_hint_uses_nav_region_and_overlay_bounds() {
+    fn help_overlay_cursor_hint_maps_real_layout_regions() {
         let mut state = make_state();
+        // A closed overlay never reports a hint, whatever the hit map holds.
+        assert_eq!(state.help_overlay_cursor_hint_at(150, 215), None);
+
         state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            Some((110.0, 130.0, 180.0, 24.0)),
+            &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        );
 
         assert_eq!(
-            state.help_overlay_cursor_hint_at(200, 60, 1000, 800),
+            state.help_overlay_cursor_hint_at(150, 215),
+            Some(HelpOverlayCursorHint::Pointer)
+        );
+        assert_eq!(
+            state.help_overlay_cursor_hint_at(150, 140),
             Some(HelpOverlayCursorHint::Text)
         );
         assert_eq!(
-            state.help_overlay_cursor_hint_at(200, 200, 1000, 800),
+            state.help_overlay_cursor_hint_at(150, 280),
             Some(HelpOverlayCursorHint::Default)
         );
-        assert_eq!(state.help_overlay_cursor_hint_at(5, 5, 1000, 800), None);
+        assert_eq!(state.help_overlay_cursor_hint_at(10, 10), None);
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_overlay_click_runs_rows_and_dismisses_outside() {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            Some((110.0, 130.0, 180.0, 24.0)),
+            &[(
+                120.0,
+                200.0,
+                160.0,
+                30.0,
+                crate::config::Action::ToggleStatusBar,
+            )],
+        );
+
+        assert_eq!(
+            state.help_overlay_click_at(150, 215),
+            HelpOverlayClick::Run(crate::config::Action::ToggleStatusBar)
+        );
+        assert_eq!(
+            state.help_overlay_click_at(150, 140),
+            HelpOverlayClick::Inside
+        );
+        assert_eq!(
+            state.help_overlay_click_at(150, 280),
+            HelpOverlayClick::Inside
+        );
+        assert_eq!(
+            state.help_overlay_click_at(10, 10),
+            HelpOverlayClick::Outside
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn close_help_overlay_resets_state_and_clears_hit_map() {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+        state.help_overlay_scroll = 42.0;
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        );
+
+        state.close_help_overlay();
+
+        assert!(!state.show_help);
+        assert_eq!(state.help_overlay_scroll, 0.0);
+        // Closing dropped the stale hit map, so a later click resolves outside.
+        assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+        assert_eq!(
+            state.help_overlay_click_at(150, 215),
+            HelpOverlayClick::Outside
+        );
+    }
+
+    /// Install a hit map with a single clickable row at (120..280, 200..230)
+    /// inside the box (100..300, 100..400) and a search well at (110..290,
+    /// 130..154). The overlay is opened first so the install survives the
+    /// open-time defensive clear, mirroring a real render pass populating the
+    /// map while help is visible.
+    fn state_with_help_row(action: crate::config::Action) -> InputState {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            Some((110.0, 130.0, 180.0, 24.0)),
+            &[(120.0, 200.0, 160.0, 30.0, action)],
+        );
+        state
+    }
+
+    #[test]
+    fn help_release_runs_row_only_when_press_and_release_share_the_row() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+
+        // Press and release both on the row -> the row's action runs.
+        state.note_help_overlay_press(150, 215);
+        assert_eq!(
+            state.resolve_help_overlay_release(150, 215),
+            HelpOverlayReleaseOutcome::Run(crate::config::Action::ClearCanvas)
+        );
+        // The recorded press was consumed.
+        assert!(state.help_overlay_pending_press.is_none());
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_press_on_chrome_then_drag_onto_row_does_not_run() {
+        // The destructive-action hazard: a press that starts on bare chrome and
+        // is dragged onto a clickable row (here the ClearCanvas row) must never
+        // execute it.
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+
+        // (150, 280) is inside the box but below the row and search well: chrome.
+        state.note_help_overlay_press(150, 280);
+        assert_eq!(
+            state.help_overlay_pending_press,
+            Some(HelpOverlayClick::Inside)
+        );
+        assert_eq!(
+            state.resolve_help_overlay_release(150, 215),
+            HelpOverlayReleaseOutcome::None
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_press_outside_then_release_on_row_does_not_run() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+
+        state.note_help_overlay_press(10, 10);
+        assert_eq!(
+            state.help_overlay_pending_press,
+            Some(HelpOverlayClick::Outside)
+        );
+        assert_eq!(
+            state.resolve_help_overlay_release(150, 215),
+            HelpOverlayReleaseOutcome::None
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_press_and_release_outside_dismisses() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+
+        state.note_help_overlay_press(10, 10);
+        assert_eq!(
+            state.resolve_help_overlay_release(20, 20),
+            HelpOverlayReleaseOutcome::Dismiss
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_press_on_row_then_release_on_chrome_does_not_run() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+
+        state.note_help_overlay_press(150, 215);
+        assert_eq!(
+            state.resolve_help_overlay_release(150, 280),
+            HelpOverlayReleaseOutcome::None
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_release_without_a_recorded_press_is_inert() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+
+        // No note_help_overlay_press call: a release cannot fabricate intent.
+        assert!(state.help_overlay_pending_press.is_none());
+        assert_eq!(
+            state.resolve_help_overlay_release(150, 215),
+            HelpOverlayReleaseOutcome::None
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn opening_help_drops_stale_hit_map_geometry() {
+        let mut state = make_state();
+        // Simulate geometry left over from a previous open.
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        );
+
+        // Opening must drop it so a click can never act on the previous layout
+        // before the first fresh render repopulates the map.
+        state.toggle_help_overlay();
+
+        assert!(state.show_help);
+        assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+        assert!(state.help_overlay_pending_press.is_none());
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn starting_the_tour_routes_help_close_through_the_canonical_closer() {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        );
+
+        state.start_tour();
+
+        assert!(!state.show_help);
+        // Routing through close_help_overlay dropped the cached hit map, so a
+        // click after help reopens can never act on this stale layout.
+        assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn opening_the_command_palette_routes_help_close_through_the_canonical_closer() {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
+        );
+
+        state.toggle_command_palette();
+
+        assert!(!state.show_help);
+        assert!(state.command_palette_open);
+        assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+
+        crate::ui::clear_help_overlay_hit_map();
     }
 }

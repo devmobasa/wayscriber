@@ -4,7 +4,7 @@ use crate::input::InputState;
 use crate::input::state::COMMAND_PALETTE_ITEM_HEIGHT;
 use crate::input::state::{
     COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
-    COMMAND_PALETTE_ROW_ACTION_SIZE,
+    COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP, COMMAND_PALETTE_ROW_ICON_SIZE,
 };
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -69,8 +69,23 @@ pub(super) fn render_command_row(
 
     let text_alpha = if is_selected { 1.0 } else { 0.85 };
     let label_y = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + styles.label.size / 3.0;
+
+    // Leading icon gutter: every row reserves the slot so labels align
+    // whether or not the action has a glyph.
+    if let Some(icon) = cmd.icon {
+        let icon_alpha = if is_selected { 0.95 } else { 0.7 };
+        constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, icon_alpha));
+        icon(
+            ctx,
+            inner_x + 10.0,
+            item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ICON_SIZE) / 2.0,
+            COMMAND_PALETTE_ROW_ICON_SIZE,
+        );
+    }
+    let label_x = inner_x + 10.0 + COMMAND_PALETTE_ROW_ICON_SIZE + COMMAND_PALETTE_ROW_ICON_GAP;
+
     constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
-    render_command_row_label(ctx, cmd.label, inner_x + 10.0, label_y, styles);
+    render_command_row_label(ctx, cmd.label, label_x, label_y, styles);
 
     let label_extents = text_extents_for(
         ctx,
@@ -80,7 +95,7 @@ pub(super) fn render_command_row(
         styles.label.size,
         cmd.label,
     );
-    let desc_x = inner_x + 10.0 + label_extents.width() + 12.0;
+    let desc_x = label_x + label_extents.width() + 12.0;
     let configurable = KeybindingsConfig::default()
         .bindings_for_action(cmd.action)
         .is_some();

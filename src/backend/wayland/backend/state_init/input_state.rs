@@ -99,6 +99,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     );
     input_state.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
     input_state.init_toolbar_side_layout_from_config(config.ui.toolbar.side_layout);
+    input_state.init_toolbar_rebind_modifier_from_config(config.ui.toolbar.rebind_modifier);
     input_state.init_toolbar_side_panes_from_config(
         &config.ui.toolbar.side_active_pane,
         &config.ui.toolbar.collapsed_sections,

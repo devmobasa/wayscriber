@@ -1,9 +1,10 @@
 use crate::draw::Shape;
-use crate::input::state::core::base::{InputState, UiToastKind};
+use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
     MAX_ARROW_ANGLE, MAX_ARROW_LENGTH, MIN_ARROW_ANGLE, MIN_ARROW_LENGTH,
     SELECTION_ARROW_ANGLE_STEP, SELECTION_ARROW_LENGTH_STEP,
 };
+use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_head(
@@ -20,7 +21,11 @@ impl InputState {
         };
 
         let Some(target) = target else {
-            self.set_ui_toast(UiToastKind::Warning, "No arrows selected.");
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.apply",
+                Toast::warning("No arrows selected."),
+            );
             return false;
         };
 

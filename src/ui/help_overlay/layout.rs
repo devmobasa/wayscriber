@@ -136,13 +136,9 @@ pub(crate) fn build_grid(
     column_gap: f64,
     row_gap: f64,
 ) -> GridLayout {
-    let max_columns = if screen_width < 1200 {
-        1
-    } else if screen_width > 1920 {
-        3
-    } else {
-        2
-    };
+    // M6: at most two columns (the plan caps the reference card at two so it
+    // never sprawls into a wall-to-wall sheet on ultrawide displays).
+    let max_columns = if screen_width < 1200 { 1 } else { 2 };
     let max_columns = max_columns.min(measured_sections.len().max(1));
 
     let mut rows: Vec<Vec<MeasuredSection>> = Vec::new();

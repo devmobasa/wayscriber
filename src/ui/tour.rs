@@ -18,6 +18,10 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
     let width = width as f64;
     let height = height as f64;
 
+    // Build the step copy dynamically for the current bindings so every key
+    // mention reflects the user's actual configuration (no hardcoded strings).
+    let description = input_state.tour_step_description(step);
+
     // Semi-transparent backdrop
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_HEAVY);
     ctx.rectangle(0.0, 0.0, width, height);
@@ -32,7 +36,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
     // Calculate dialog height based on content
     let title_height = 36.0;
     let desc_line_height = 24.0;
-    let desc_lines = step.description().lines().count() as f64;
+    let desc_lines = description.lines().count() as f64;
     let nav_height = 24.0;
     let progress_height = 20.0;
     let dialog_height = dialog_padding * 2.0
@@ -97,7 +101,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     // Description
     constants::set_color(ctx, TEXT_DESCRIPTION);
-    for line in step.description().lines() {
+    for line in description.lines() {
         draw_text_baseline(ctx, desc_style, line, content_x, y + 18.0, None);
         y += desc_line_height;
     }

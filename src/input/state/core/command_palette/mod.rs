@@ -9,9 +9,12 @@ pub use layout::COMMAND_PALETTE_MAX_VISIBLE;
 pub(crate) use layout::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
-    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_TOP_RATIO,
+    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO,
 };
 pub use registry::{CommandEntry, command_palette_entries};
+pub use search::CommandPaletteListRow;
+pub(crate) use search::{action_meta_token_score, fuzzy_score, query_tokens};
 
 /// Cursor hint for different regions of the command palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,8 +34,29 @@ mod tests {
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+    use search::command_palette_display_index;
     use std::collections::HashSet;
     use std::time::{Duration, Instant};
+
+    /// Screen-space centre of the row that renders `command_index`, accounting
+    /// for the group headers interleaved into the display list. Callers click
+    /// here to exercise a specific command through the real hit geometry.
+    fn command_row_click_point(
+        state: &InputState,
+        command_index: usize,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> (i32, i32) {
+        let rows = state.command_palette_rows();
+        let display_index = command_palette_display_index(&rows, command_index);
+        let geometry = state.command_palette_geometry(screen_width, screen_height, rows.len());
+        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
+        let y = (geometry.y
+            + geometry.items_top
+            + (display_index - state.command_palette_scroll) as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+            + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+        (x, y)
+    }
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -410,17 +434,32 @@ mod tests {
     }
 
     #[test]
-    fn down_key_scrolls_once_selection_moves_past_visible_window() {
+    fn down_key_keeps_selection_visible_while_scrolling_past_headers() {
         let mut state = make_state();
         state.toggle_command_palette();
-        assert!(state.filtered_commands().len() > COMMAND_PALETTE_MAX_VISIBLE);
+        // Enough commands that walking twice the window is always valid.
+        assert!(state.filtered_commands().len() > COMMAND_PALETTE_MAX_VISIBLE * 2);
+        assert!(state.command_palette_rows().len() > COMMAND_PALETTE_MAX_VISIBLE);
 
-        for _ in 0..COMMAND_PALETTE_MAX_VISIBLE {
+        let mut scrolled = false;
+        for step in 0..COMMAND_PALETTE_MAX_VISIBLE * 2 {
             assert!(state.handle_command_palette_key(crate::input::Key::Down));
+            // Selection advances one command per press.
+            assert_eq!(state.command_palette_selected, step + 1);
+            // The selected command's display row stays inside the visible window
+            // even though interleaved group headers consume display rows.
+            let rows = state.command_palette_rows();
+            let display = command_palette_display_index(&rows, state.command_palette_selected);
+            assert!(display >= state.command_palette_scroll);
+            assert!(display < state.command_palette_scroll + COMMAND_PALETTE_MAX_VISIBLE);
+            if state.command_palette_scroll > 0 {
+                scrolled = true;
+            }
         }
-
-        assert_eq!(state.command_palette_selected, COMMAND_PALETTE_MAX_VISIBLE);
-        assert_eq!(state.command_palette_scroll, 1);
+        assert!(
+            scrolled,
+            "list must scroll once the selection leaves the first window"
+        );
     }
 
     #[test]
@@ -446,10 +485,17 @@ mod tests {
         assert!(state.handle_command_palette_key(crate::input::Key::End));
 
         assert_eq!(state.command_palette_selected, filtered_len - 1);
+        // Scroll is measured in display rows (headers included), so the bottom of
+        // the list aligns to the display length, not the command count.
+        let rows = state.command_palette_rows();
         assert_eq!(
             state.command_palette_scroll,
-            filtered_len - COMMAND_PALETTE_MAX_VISIBLE
+            rows.len() - COMMAND_PALETTE_MAX_VISIBLE
         );
+        // The last command sits inside the visible window.
+        let display = command_palette_display_index(&rows, state.command_palette_selected);
+        assert!(display >= state.command_palette_scroll);
+        assert!(display < state.command_palette_scroll + COMMAND_PALETTE_MAX_VISIBLE);
     }
 
     #[test]
@@ -476,6 +522,28 @@ mod tests {
         );
         assert!(!state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
         assert_eq!(state.command_palette_selected, 2);
+    }
+
+    #[test]
+    fn record_command_palette_action_notes_shortcut_coach_slow_path() {
+        let mut state = make_state();
+        let action = crate::config::keybindings::Action::Undo;
+        assert!(
+            state.shortcut_for_action(action).is_some(),
+            "test relies on Undo having a default shortcut"
+        );
+
+        state.record_command_palette_action(action);
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            Some(action),
+            "palette run of a shortcut-bound action feeds the coach slow path"
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+
+        // Repeated slow-path runs accumulate the streak.
+        state.record_command_palette_action(action);
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 2);
     }
 
     #[test]
@@ -658,9 +726,7 @@ mod tests {
             selected.action,
             crate::config::keybindings::Action::ToggleStatusBar
         );
-        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
-        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
-        let y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+        let (x, y) = command_row_click_point(&state, 0, 1920, 1000);
 
         assert!(state.show_status_bar);
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
@@ -685,9 +751,7 @@ mod tests {
             filtered.first().expect("selected command").action,
             crate::config::keybindings::Action::ExportCanvasFile
         );
-        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
-        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
-        let y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+        let (x, y) = command_row_click_point(&state, 0, 1920, 1000);
 
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
 
@@ -710,9 +774,7 @@ mod tests {
             filtered.first().expect("selected command").action,
             crate::config::keybindings::Action::ExportBoardPdfFile
         );
-        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
-        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
-        let y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+        let (x, y) = command_row_click_point(&state, 0, 1920, 1000);
 
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
 
@@ -735,9 +797,7 @@ mod tests {
             filtered.first().expect("selected command").action,
             crate::config::keybindings::Action::ExportAllBoardsPdfFile
         );
-        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
-        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
-        let y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+        let (x, y) = command_row_click_point(&state, 0, 1920, 1000);
 
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
 
@@ -753,11 +813,26 @@ mod tests {
     fn cursor_hint_rejects_strip_below_clamped_panel_height() {
         let mut state = make_state();
         state.toggle_command_palette();
-        assert!(state.filtered_commands().len() > COMMAND_PALETTE_MAX_VISIBLE);
+        let rows = state.command_palette_rows();
+        assert!(rows.len() > COMMAND_PALETTE_MAX_VISIBLE);
 
-        // screen_height=1000 -> panel y=200; clamped panel height=420 => bottom=620.
-        // y=623 is below the rendered panel and must be treated as outside.
-        let hint = state.command_palette_cursor_hint_at(960, 623, 1920, 1000);
-        assert!(hint.is_none());
+        // A point just below the clamped panel bottom is outside the overlay.
+        let geometry = state.command_palette_geometry(1920, 1000, rows.len());
+        let inside_x = (geometry.x + geometry.width / 2.0) as i32;
+        let below_y = (geometry.y + geometry.height + 3.0) as i32;
+        assert!(
+            state
+                .command_palette_cursor_hint_at(inside_x, below_y, 1920, 1000)
+                .is_none()
+        );
+
+        // A point on the first visible row still reports a hint, so the
+        // rejection above is about the height clamp, not a blanket None.
+        let within_y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+        assert!(
+            state
+                .command_palette_cursor_hint_at(inside_x, within_y, 1920, 1000)
+                .is_some()
+        );
     }
 }

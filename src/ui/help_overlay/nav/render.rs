@@ -20,6 +20,13 @@ pub(crate) struct NavDrawStyle<'a> {
     pub(crate) extra_line_bottom_spacing: f64,
 }
 
+/// Result of drawing the nav block: where the following content starts, and the
+/// screen-space rectangle of the search input well (for the Text cursor hint).
+pub(crate) struct NavRender {
+    pub(crate) next_y: f64,
+    pub(crate) search_rect: (f64, f64, f64, f64),
+}
+
 pub(crate) fn draw_nav(
     ctx: &cairo::Context,
     inner_x: f64,
@@ -27,7 +34,7 @@ pub(crate) fn draw_nav(
     inner_width: f64,
     nav: &NavState,
     style: &NavDrawStyle<'_>,
-) -> f64 {
+) -> NavRender {
     let nav_style = UiTextStyle {
         family: style.font_family,
         slant: cairo::FontSlant::Normal,
@@ -82,6 +89,7 @@ pub(crate) fn draw_nav(
         inner_width.min(250.0)
     };
     let search_box_radius = 6.0;
+    let search_box_y = cursor_y;
 
     // Search box background.
     draw_rounded_rect(
@@ -150,5 +158,8 @@ pub(crate) fn draw_nav(
     }
     cursor_y += search_box_height + style.extra_line_bottom_spacing;
 
-    cursor_y
+    NavRender {
+        next_y: cursor_y,
+        search_rect: (inner_x, search_box_y, search_box_width, search_box_height),
+    }
 }

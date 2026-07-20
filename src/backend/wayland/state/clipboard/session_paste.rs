@@ -5,7 +5,8 @@ use crate::draw::{EmbeddedImage, Shape};
 use crate::env_vars::HOME_ENV;
 use crate::input::InputState;
 use crate::input::boards::BoardState;
-use crate::input::state::{ClipboardPasteRequest, UiToastKind};
+use crate::input::state::ClipboardPasteRequest;
+use crate::input::state::{Toast, ToastPriority};
 use crate::{notification, session};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -116,12 +117,12 @@ impl WaylandState {
     }
 
     pub(super) fn show_session_paste_warning(&mut self, warning: SessionPasteWarning) {
-        self.input_state.set_ui_toast_with_action_and_duration(
-            UiToastKind::Warning,
-            warning.toast,
-            "Settings",
-            Action::OpenConfigurator,
-            SESSION_PASTE_WARNING_TOAST_MS,
+        self.input_state.push_toast(
+            ToastPriority::Action,
+            "clipboard",
+            Toast::warning(warning.toast)
+                .action("Settings", Action::OpenConfigurator)
+                .duration_ms(SESSION_PASTE_WARNING_TOAST_MS),
         );
         if let Some((summary, body)) = warning.notification {
             notification::send_notification_with_timeout_async(

@@ -14,6 +14,37 @@ impl InputState {
     ///
     /// Returns true if the event resulted in a state change.
     pub fn apply_toolbar_event(&mut self, event: ToolbarEvent) -> bool {
+        // Resolve the keyboard-action equivalent before the event is consumed
+        // so the shortcut coach can learn from toolbar use (the slow path the
+        // palette also feeds).
+        let coach_action = event.action();
+        let changed = self.apply_toolbar_event_inner(event);
+        self.note_toolbar_shortcut_slow_path(coach_action, changed);
+        changed
+    }
+
+    /// Shortcut-coach slow-path signal for toolbar use: invoking a
+    /// shortcut-bound action from the toolbar is the same "you could have
+    /// pressed the key" case the command palette records. Only genuine state
+    /// changes for actions that resolve to a shortcut count, so the coach can
+    /// always name the key and no-op clicks never build a streak.
+    fn note_toolbar_shortcut_slow_path(
+        &mut self,
+        coach_action: Option<crate::config::Action>,
+        changed: bool,
+    ) {
+        if !changed {
+            return;
+        }
+        if let Some(action) = coach_action
+            && self.shortcut_for_action(action).is_some()
+        {
+            self.pending_onboarding_usage
+                .note_shortcut_slow_path(action);
+        }
+    }
+
+    fn apply_toolbar_event_inner(&mut self, event: ToolbarEvent) -> bool {
         match event {
             ToolbarEvent::SelectTool(tool) => self.apply_toolbar_select_tool(tool),
             ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
@@ -210,5 +241,95 @@ impl InputState {
             | ToolbarEvent::ClearSession => false,
             ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod coach_tests {
+    use crate::config::{Action, KeyBinding};
+    use crate::draw::{Color, Shape};
+    use crate::input::InputState;
+    use crate::input::state::test_support::{
+        make_test_input_state, make_test_input_state_with_action_bindings,
+    };
+    use crate::ui::toolbar::ToolbarEvent;
+    use std::collections::HashMap;
+
+    fn add_test_shape(state: &mut InputState) {
+        state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 10,
+            y: 10,
+            w: 5,
+            h: 5,
+            fill: false,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 1.0,
+        });
+    }
+
+    #[test]
+    fn toolbar_action_with_shortcut_records_coach_slow_path() {
+        let mut state = make_test_input_state();
+        add_test_shape(&mut state);
+        assert!(
+            state.shortcut_for_action(Action::Undo).is_some(),
+            "test relies on Undo having a default shortcut"
+        );
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::Undo));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            Some(Action::Undo),
+            "toolbar-invoked shortcut-bound action feeds the coach slow path"
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+
+        // A second toolbar Undo accumulates the slow-path streak.
+        add_test_shape(&mut state);
+        assert!(state.apply_toolbar_event(ToolbarEvent::Undo));
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 2);
+    }
+
+    #[test]
+    fn toolbar_action_without_shortcut_does_not_coach() {
+        // Undo explicitly bound to nothing: it resolves to no shortcut, so
+        // there is nothing to coach — the coach must not record a slow path it
+        // cannot name. (An empty map would fall back to the default action map,
+        // which still binds Undo, so the override must be an explicit empty
+        // binding list.)
+        let bindings: HashMap<Action, Vec<KeyBinding>> =
+            HashMap::from([(Action::Undo, Vec::new())]);
+        let mut state = make_test_input_state_with_action_bindings(bindings);
+        add_test_shape(&mut state);
+        assert!(state.shortcut_for_action(Action::Undo).is_none());
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::Undo));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            None
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 0);
+    }
+
+    #[test]
+    fn toolbar_layout_event_without_action_mapping_does_not_coach() {
+        // A layout-only event has no keyboard-action equivalent, so it is never
+        // a shortcut slow path regardless of whether it changed state.
+        let mut state = make_test_input_state();
+        assert_eq!(ToolbarEvent::ToggleStatusBar(false).action(), None);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleStatusBar(false));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            None
+        );
     }
 }

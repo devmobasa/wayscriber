@@ -1,6 +1,7 @@
-use super::super::base::{InputState, UiToastKind};
+use super::super::base::InputState;
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, TopDisplayMode};
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 
 /// How long the "Cleared — Undo?" toast stays up after a mouse-path clear.
 pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
@@ -65,6 +66,15 @@ impl InputState {
         layout: crate::config::ToolbarSideLayout,
     ) {
         self.toolbar_side_layout = layout;
+    }
+
+    /// Store the configured toolbar shortcut-rebind modifier (called at
+    /// startup) so onboarding copy can name the chord without hardcoding keys.
+    pub fn init_toolbar_rebind_modifier_from_config(
+        &mut self,
+        modifier: crate::config::ToolbarRebindModifier,
+    ) {
+        self.toolbar_rebind_modifier = modifier;
     }
 
     /// Initialize toolbar visibility from config (called at startup).
@@ -383,12 +393,12 @@ impl InputState {
         // The locked-shape paths already raise their own warning toasts in
         // `handle_action`; only the silent success path gets the undo offer.
         if has_unlocked && !has_locked {
-            self.set_ui_toast_with_action_and_duration(
-                UiToastKind::Info,
-                "Cleared",
-                "Undo?",
-                Action::Undo,
-                CLEAR_UNDO_TOAST_MS,
+            self.push_toast(
+                ToastPriority::Action,
+                "canvas.clear",
+                Toast::info("Cleared")
+                    .action("Undo?", Action::Undo)
+                    .duration_ms(CLEAR_UNDO_TOAST_MS),
             );
         }
     }

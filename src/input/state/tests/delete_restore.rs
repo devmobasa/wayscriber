@@ -147,6 +147,38 @@ fn cancel_pending_board_delete_clears_confirmation_state() {
 }
 
 #[test]
+fn cancel_pending_board_delete_dedups_confirmation_over_queued_toast() {
+    use crate::input::state::{Toast, ToastPriority};
+
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    state.delete_active_board();
+    assert!(state.has_pending_board_delete());
+    assert_eq!(
+        state
+            .ui_toast
+            .as_ref()
+            .map(|toast| toast.message.contains("confirm")),
+        Some(true),
+        "the delete confirmation is the visible toast"
+    );
+
+    // A routine info toast queues behind the Action-priority confirmation.
+    state.push_toast(ToastPriority::Info, "page.nav", Toast::info("Page 2/3"));
+
+    state.cancel_pending_board_delete();
+
+    // The cancellation dedups the confirmation in place under the shared key;
+    // the unrelated queued toast must not jump ahead and steal the slot.
+    assert!(!state.has_pending_board_delete());
+    assert_eq!(
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Board deletion cancelled."),
+        "cancellation replaces the confirmation, not the queued page.nav toast"
+    );
+}
+
+#[test]
 fn page_delete_requires_confirmation_and_restore_recovers_deleted_page() {
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);

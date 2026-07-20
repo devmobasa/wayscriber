@@ -100,14 +100,10 @@ impl WaylandState {
         // Check help overlay
         if self.input_state.show_help {
             let (mx, my) = self.current_mouse();
-            let screen_width = self.surface.width();
-            let screen_height = self.surface.height();
-            if let Some(hint) =
-                self.input_state
-                    .help_overlay_cursor_hint_at(mx, my, screen_width, screen_height)
-            {
+            if let Some(hint) = self.input_state.help_overlay_cursor_hint_at(mx, my) {
                 return match hint {
                     HelpOverlayCursorHint::Text => CursorIcon::Text,
+                    HelpOverlayCursorHint::Pointer => CursorIcon::Pointer,
                     HelpOverlayCursorHint::Default => CursorIcon::Default,
                 };
             }

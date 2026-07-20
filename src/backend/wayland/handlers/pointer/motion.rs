@@ -200,7 +200,11 @@ impl WaylandState {
             );
             return;
         }
-        self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+        // Capture the pre-motion pointer so the idle tool-preview bubble can
+        // damage its old position; the new position is the incoming event.
+        let prev_mouse = self.current_mouse();
+        let next_mouse = (event.position.0 as i32, event.position.1 as i32);
+        self.set_current_mouse(next_mouse.0, next_mouse.1);
         // The command palette owns hover rendering (including shortcut-action
         // tooltips), so keep its screen-space pointer cache and redraw current
         // even though normal canvas motion remains blocked by the modal.
@@ -233,6 +237,13 @@ impl WaylandState {
             wx,
             wy,
         );
+        // Idle pointer motion otherwise only refreshes cached coordinates, so
+        // the trailing tool-preview bubble would freeze at its previous spot
+        // (stroke/eraser hover redraws are handled above). Damage the old and
+        // new bubble footprints so it follows the cursor. Evaluated after the
+        // motion so a drag that started a stroke (state -> Drawing) is not
+        // treated as an eligible preview.
+        self.mark_mouse_tool_preview_dirty(prev_mouse, next_mouse);
         self.record_perf_input_sample(
             PerfInputSource::Pointer,
             event.position.0.round() as i32,

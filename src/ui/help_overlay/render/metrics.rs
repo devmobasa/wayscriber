@@ -7,6 +7,11 @@ use crate::config::HelpOverlayStyle;
 /// design-time values below readable at their 1x sizes.
 const HELP_OVERLAY_TYPE_SCALE: f64 = 0.8;
 
+/// M6: the help overlay reflows as a balanced grid of at most two columns
+/// capped at ~60% of the screen width, so it reads as a focused reference
+/// card instead of a wall-to-wall sheet.
+pub(in crate::ui::help_overlay) const HELP_OVERLAY_MAX_WIDTH_RATIO: f64 = 0.60;
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RenderMetrics {
     pub(super) body_font_size: f64,
@@ -44,6 +49,10 @@ pub(super) struct RenderMetrics {
     pub(super) note_font_size: f64,
     pub(super) nav_font_size: f64,
     pub(super) note_to_close_gap: f64,
+    /// Height of the clickable "Replay tour" footer pill.
+    pub(super) footer_action_height: f64,
+    /// Gap below the "Replay tour" footer pill before the note line.
+    pub(super) footer_action_gap: f64,
     pub(super) padding: f64,
 }
 
@@ -91,11 +100,13 @@ impl RenderMetrics {
         let extra_line_gap = 30.0 * scale;
         let extra_line_bottom_spacing = 18.0 * scale;
         let columns_bottom_spacing = 28.0 * scale;
-        let max_box_width = screen_width as f64 * 0.92;
+        let max_box_width = screen_width as f64 * HELP_OVERLAY_MAX_WIDTH_RATIO;
         let max_box_height = screen_height as f64 * 0.92;
         let note_font_size = (body_font_size - 2.0 * scale).max(min_font_size);
         let nav_font_size = (body_font_size - 1.0 * scale).max(min_font_size);
         let note_to_close_gap = 12.0 * scale;
+        let footer_action_height = note_font_size + 12.0 * scale;
+        let footer_action_gap = 14.0 * scale;
         let padding = style.padding * scale;
 
         Self {
@@ -134,6 +145,8 @@ impl RenderMetrics {
             note_font_size,
             nav_font_size,
             note_to_close_gap,
+            footer_action_height,
+            footer_action_gap,
             padding,
         }
     }

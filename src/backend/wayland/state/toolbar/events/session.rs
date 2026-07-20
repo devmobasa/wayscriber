@@ -1,4 +1,5 @@
 use super::*;
+use crate::input::state::{Toast, ToastPriority};
 use crate::session::catalog;
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
@@ -417,7 +418,7 @@ impl WaylandState {
 
     fn set_session_toolbar_info(&mut self, message: impl Into<String>) {
         self.input_state
-            .set_ui_toast(crate::input::state::UiToastKind::Info, message);
+            .push_toast(ToastPriority::Info, "session", Toast::info(message));
         self.mark_session_toolbar_changed();
     }
 
@@ -425,7 +426,7 @@ impl WaylandState {
         let message = message.into();
         log::warn!("{message}");
         self.input_state
-            .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+            .push_toast(ToastPriority::Critical, "session", Toast::error(message));
         self.mark_session_toolbar_changed();
     }
 

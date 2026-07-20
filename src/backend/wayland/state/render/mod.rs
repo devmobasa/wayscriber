@@ -87,12 +87,14 @@ impl WaylandState {
             // instead of forcing full-surface redraws. Collect on every frame so the
             // previous-bounds tracking stays in sync even when full damage is forced
             // for other reasons.
+            let tool_preview_active = render_ui && self.mouse_tool_preview_eligible();
             let ui_effect_damage = self.collect_ui_effect_damage(
                 ui_toast_active,
                 preset_feedback_active,
                 blocked_feedback_active,
                 text_edit_entry_active,
                 render_ui && self.input_state.show_status_bar,
+                tool_preview_active,
                 width,
                 height,
             );

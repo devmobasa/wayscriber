@@ -1,8 +1,9 @@
 use crate::draw::Shape;
-use crate::input::state::core::base::{InputState, UiToastKind};
+use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
     MAX_FONT_SIZE, MIN_FONT_SIZE, SELECTION_FONT_SIZE_STEP,
 };
+use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_font_size(
@@ -45,7 +46,11 @@ impl InputState {
         };
 
         let Some(target) = target else {
-            self.set_ui_toast(UiToastKind::Warning, "No text shapes selected.");
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.apply",
+                Toast::warning("No text shapes selected."),
+            );
             return false;
         };
 

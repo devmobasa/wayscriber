@@ -1,6 +1,6 @@
 use super::super::base::{
     BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
-    TEXT_EDIT_ENTRY_DURATION_MS, ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
+    TEXT_EDIT_ENTRY_DURATION_MS, Toast, ToastPriority, ToastPushOutcome,
 };
 use crate::capture::{
     ImageOperationKind,
@@ -11,69 +11,30 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 impl InputState {
-    pub(crate) fn set_ui_toast(&mut self, kind: UiToastKind, message: impl Into<String>) {
-        self.set_ui_toast_with_duration(kind, message, UI_TOAST_DURATION_MS);
+    /// Push a toast into the priority queue. Higher priorities preempt the
+    /// visible toast, equal priorities queue FIFO, and a push with the key of
+    /// an active/queued toast updates it in place (see
+    /// [`crate::input::state::ToastQueue`]).
+    pub(crate) fn push_toast(
+        &mut self,
+        priority: ToastPriority,
+        key: &'static str,
+        toast: Toast,
+    ) -> ToastPushOutcome {
+        let outcome =
+            self.toast_queue
+                .push(&mut self.ui_toast, priority, key, toast, Instant::now());
+        if outcome.changed_active() {
+            self.ui_toast_bounds = None;
+            self.needs_redraw = true;
+        }
+        outcome
     }
 
-    pub(crate) fn set_ui_toast_with_duration(
-        &mut self,
-        kind: UiToastKind,
-        message: impl Into<String>,
-        duration_ms: u64,
-    ) {
-        self.ui_toast_bounds = None;
-        self.ui_toast = Some(UiToastState {
-            kind,
-            message: message.into(),
-            started: Instant::now(),
-            duration_ms,
-            action: None,
-        });
-        self.needs_redraw = true;
-    }
-
-    /// Set a toast with a clickable action. Clicking the toast triggers the action.
-    pub(crate) fn set_ui_toast_with_action(
-        &mut self,
-        kind: UiToastKind,
-        message: impl Into<String>,
-        action_label: impl Into<String>,
-        action: Action,
-    ) {
-        self.ui_toast_bounds = None;
-        self.ui_toast = Some(UiToastState {
-            kind,
-            message: message.into(),
-            started: Instant::now(),
-            duration_ms: UI_TOAST_DURATION_MS,
-            action: Some(ToastAction {
-                label: action_label.into(),
-                action,
-            }),
-        });
-        self.needs_redraw = true;
-    }
-
-    pub(crate) fn set_ui_toast_with_action_and_duration(
-        &mut self,
-        kind: UiToastKind,
-        message: impl Into<String>,
-        action_label: impl Into<String>,
-        action: Action,
-        duration_ms: u64,
-    ) {
-        self.ui_toast_bounds = None;
-        self.ui_toast = Some(UiToastState {
-            kind,
-            message: message.into(),
-            started: Instant::now(),
-            duration_ms,
-            action: Some(ToastAction {
-                label: action_label.into(),
-                action,
-            }),
-        });
-        self.needs_redraw = true;
+    /// Whether no toast is visible and nothing is queued. Hint producers use
+    /// this to defer instead of competing with real feedback.
+    pub(crate) fn toasts_idle(&self) -> bool {
+        self.ui_toast.is_none() && self.toast_queue.is_empty()
     }
 
     #[allow(dead_code)]
@@ -104,20 +65,22 @@ impl InputState {
             parts.push("Screenshot captured".to_string());
         }
 
-        self.set_ui_toast(UiToastKind::Info, parts.join(" | "));
+        self.push_toast(
+            ToastPriority::Info,
+            "capture.feedback",
+            Toast::info(parts.join(" | ")),
+        );
     }
 
     pub fn advance_ui_toast(&mut self, now: Instant) -> bool {
-        let Some(toast) = &self.ui_toast else {
-            return false;
-        };
-        let duration = Duration::from_millis(toast.duration_ms);
-        if now.saturating_duration_since(toast.started) >= duration {
-            self.ui_toast = None;
+        let had_toast = self.ui_toast.is_some();
+        let (still_showing, activated) = self.toast_queue.advance(&mut self.ui_toast, now);
+        if activated || (had_toast && !still_showing) {
+            // The visible toast changed (expired or a queued one replaced it).
             self.ui_toast_bounds = None;
-            return false;
+            self.needs_redraw = true;
         }
-        true
+        still_showing
     }
 
     /// Check if a click at (x, y) hits the toast. If so, dismisses it and returns
@@ -131,8 +94,9 @@ impl InputState {
         if self.toast_contains(x, y) {
             // Click is within toast
             let action = toast.action.as_ref().map(|action| action.action);
-            // Dismiss the toast
-            self.ui_toast = None;
+            // Dismiss the toast and promote the next queued one, if any.
+            self.toast_queue
+                .on_dismissed(&mut self.ui_toast, Instant::now());
             self.ui_toast_bounds = None;
             self.needs_redraw = true;
             return (true, action);
@@ -203,7 +167,11 @@ impl InputState {
     /// On error, retains it for retry.
     pub(crate) fn save_pending_clipboard_to_file(&mut self) {
         let Some(fallback) = self.pending_clipboard_fallback.take() else {
-            self.set_ui_toast(UiToastKind::Warning, "No pending image to save");
+            self.push_toast(
+                ToastPriority::Info,
+                "capture.save",
+                Toast::warning("No pending image to save"),
+            );
             self.trigger_blocked_feedback();
             return;
         };
@@ -217,19 +185,21 @@ impl InputState {
                 );
                 self.last_capture_path = Some(path.clone());
                 if let Some(filename) = path.file_name() {
-                    self.set_ui_toast(
-                        UiToastKind::Info,
-                        format!("Saved to {}", filename.to_string_lossy()),
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "capture.save",
+                        Toast::info(format!("Saved to {}", filename.to_string_lossy())),
                     );
                 } else {
-                    self.set_ui_toast(
-                        UiToastKind::Info,
-                        match fallback.operation {
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "capture.save",
+                        Toast::info(match fallback.operation {
                             ImageOperationKind::Screenshot => "Screenshot saved",
                             ImageOperationKind::CanvasExport => "Canvas exported",
                             ImageOperationKind::BoardPdfExport => "Board exported",
                             ImageOperationKind::AllBoardsPdfExport => "Boards exported",
-                        },
+                        }),
                     );
                 }
                 // Exit if exit-after-capture was originally enabled
@@ -246,11 +216,11 @@ impl InputState {
                 );
                 // Restore fallback so user can retry
                 self.pending_clipboard_fallback = Some(fallback);
-                self.set_ui_toast_with_action(
-                    UiToastKind::Error,
-                    format!("Save failed: {message}"),
-                    "Retry",
-                    Action::SavePendingToFile,
+                self.push_toast(
+                    ToastPriority::Critical,
+                    "capture.save",
+                    Toast::error(format!("Save failed: {message}"))
+                        .action("Retry", Action::SavePendingToFile),
                 );
                 self.trigger_blocked_feedback();
             }
@@ -286,7 +256,7 @@ mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor, Shape};
-    use crate::input::state::core::base::TextEditEntryFeedback;
+    use crate::input::state::core::base::{TextEditEntryFeedback, UiToastKind};
     use crate::input::{ClickHighlightSettings, EraserMode};
     use crate::ui::toolbar::ToolbarEvent;
 
@@ -333,7 +303,11 @@ mod tests {
     #[test]
     fn advance_ui_toast_clears_expired_toast_and_bounds() {
         let mut state = make_state();
-        state.set_ui_toast_with_duration(UiToastKind::Info, "Hello", 10);
+        state.push_toast(
+            ToastPriority::Info,
+            "test",
+            Toast::info("Hello").duration_ms(10),
+        );
         state.ui_toast_bounds = Some((1.0, 2.0, 3.0, 4.0));
         let now = state.ui_toast.as_ref().unwrap().started + Duration::from_millis(10);
 
@@ -343,13 +317,29 @@ mod tests {
     }
 
     #[test]
+    fn advance_ui_toast_promotes_queued_toast_when_active_expires() {
+        let mut state = make_state();
+        state.push_toast(ToastPriority::Info, "first", Toast::info("First"));
+        state.push_toast(ToastPriority::Info, "second", Toast::info("Second"));
+        state.ui_toast_bounds = Some((1.0, 2.0, 3.0, 4.0));
+        state.needs_redraw = false;
+        let now = state.ui_toast.as_ref().unwrap().started
+            + Duration::from_millis(state.ui_toast.as_ref().unwrap().duration_ms);
+
+        assert!(state.advance_ui_toast(now), "queued toast keeps showing");
+        let toast = state.ui_toast.as_ref().expect("promoted toast");
+        assert_eq!(toast.message, "Second");
+        assert!(state.ui_toast_bounds.is_none(), "stale bounds cleared");
+        assert!(state.needs_redraw);
+    }
+
+    #[test]
     fn check_toast_click_returns_action_and_dismisses_inside_bounds() {
         let mut state = make_state();
-        state.set_ui_toast_with_action(
-            UiToastKind::Info,
-            "Saved",
-            "Open",
-            Action::OpenCaptureFolder,
+        state.push_toast(
+            ToastPriority::Action,
+            "test",
+            Toast::info("Saved").action("Open", Action::OpenCaptureFolder),
         );
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
@@ -358,6 +348,26 @@ mod tests {
         assert!(hit);
         assert_eq!(action, Some(Action::OpenCaptureFolder));
         assert!(state.ui_toast.is_none());
+        assert!(state.ui_toast_bounds.is_none());
+    }
+
+    #[test]
+    fn check_toast_click_promotes_next_queued_toast() {
+        let mut state = make_state();
+        state.push_toast(
+            ToastPriority::Action,
+            "confirm",
+            Toast::info("Delete page?").action("Confirm", Action::PageDelete),
+        );
+        state.push_toast(ToastPriority::Info, "info", Toast::info("Later"));
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+        let (hit, action) = state.check_toast_click(50, 40);
+
+        assert!(hit);
+        assert_eq!(action, Some(Action::PageDelete));
+        let promoted = state.ui_toast.as_ref().expect("queued toast promoted");
+        assert_eq!(promoted.message, "Later");
         assert!(state.ui_toast_bounds.is_none());
     }
 
@@ -429,7 +439,7 @@ mod tests {
     #[test]
     fn toast_contains_reports_hit_without_dismissing() {
         let mut state = make_state();
-        state.set_ui_toast(UiToastKind::Info, "Saved");
+        state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
         assert!(state.toast_contains(50, 40));
@@ -438,28 +448,65 @@ mod tests {
     }
 
     #[test]
-    fn replacing_toast_clears_stale_click_bounds() {
+    fn preempting_toast_clears_stale_click_bounds() {
         let mut state = make_state();
-        state.set_ui_toast(UiToastKind::Info, "Saved");
+        state.push_toast(ToastPriority::Info, "info", Toast::info("Saved"));
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
-        state.set_ui_toast_with_action(
-            UiToastKind::Warning,
-            "Delete page?",
-            "Confirm",
-            Action::PageDelete,
+        // Action priority preempts the plain info toast.
+        let outcome = state.push_toast(
+            ToastPriority::Action,
+            "confirm",
+            Toast::warning("Delete page?").action("Confirm", Action::PageDelete),
         );
 
-        assert!(state.ui_toast.is_some());
+        assert_eq!(outcome, ToastPushOutcome::Displayed);
+        let toast = state.ui_toast.as_ref().expect("preempting toast visible");
+        assert_eq!(toast.message, "Delete page?");
         assert!(state.ui_toast_bounds.is_none());
         assert!(!state.toast_contains(50, 40));
         assert_eq!(state.check_toast_click(50, 40), (false, None));
     }
 
     #[test]
+    fn same_key_update_keeps_single_toast() {
+        let mut state = make_state();
+        state.push_toast(ToastPriority::Info, "board.switch", Toast::info("Board 2"));
+        let outcome = state.push_toast(ToastPriority::Info, "board.switch", Toast::info("Board 3"));
+
+        assert_eq!(outcome, ToastPushOutcome::UpdatedActive);
+        assert_eq!(state.ui_toast.as_ref().unwrap().message, "Board 3");
+        assert!(state.toasts_idle() || state.ui_toast.is_some());
+        assert!(
+            state.toast_queue.is_empty(),
+            "no stacking for spam producers"
+        );
+    }
+
+    #[test]
+    fn hints_only_show_when_toasts_idle() {
+        let mut state = make_state();
+        state.push_toast(ToastPriority::Info, "info", Toast::info("Busy"));
+        assert!(!state.toasts_idle());
+
+        let outcome = state.push_toast(ToastPriority::Hint, "hint", Toast::info("Press F1"));
+        assert_eq!(outcome, ToastPushOutcome::HintYielded);
+        assert!(!outcome.accepted());
+        assert_eq!(state.ui_toast.as_ref().unwrap().message, "Busy");
+
+        // Once idle again, the hint is accepted.
+        let now = state.ui_toast.as_ref().unwrap().started
+            + Duration::from_millis(state.ui_toast.as_ref().unwrap().duration_ms);
+        state.advance_ui_toast(now);
+        assert!(state.toasts_idle());
+        let outcome = state.push_toast(ToastPriority::Hint, "hint", Toast::info("Press F1"));
+        assert_eq!(outcome, ToastPushOutcome::Displayed);
+    }
+
+    #[test]
     fn check_toast_click_ignores_clicks_outside_bounds() {
         let mut state = make_state();
-        state.set_ui_toast(UiToastKind::Info, "Saved");
+        state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
         let (hit, action) = state.check_toast_click(5, 5);
@@ -515,6 +562,51 @@ mod tests {
         );
         assert!(state.pending_clipboard_fallback.is_some());
         assert!(state.blocked_action_feedback.is_some());
+    }
+
+    /// Producer-migration completeness: every toast producer goes through
+    /// `push_toast(priority, key, toast)`. The legacy `set_ui_toast*` shims
+    /// have been removed; no module may reintroduce them.
+    #[test]
+    fn all_toast_producers_use_the_priority_queue_api() {
+        let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let allowlist = [
+            // This file names the retired shims in the assertion string below.
+            "input/state/core/utility/toasts.rs",
+        ];
+
+        let mut offenders = Vec::new();
+        let mut stack = vec![src_root.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("read src dir") {
+                let entry = entry.expect("dir entry");
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let rel = path
+                    .strip_prefix(&src_root)
+                    .expect("path under src")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if allowlist.contains(&rel.as_str()) {
+                    continue;
+                }
+                let contents = std::fs::read_to_string(&path).expect("read source file");
+                if contents.contains(".set_ui_toast") {
+                    offenders.push(rel);
+                }
+            }
+        }
+
+        assert!(
+            offenders.is_empty(),
+            "files still using legacy set_ui_toast* instead of push_toast: {offenders:?}"
+        );
     }
 
     #[test]

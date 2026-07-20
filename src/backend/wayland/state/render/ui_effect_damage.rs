@@ -7,6 +7,7 @@
 //! changes, and disappearance are cleaned up correctly.
 
 use super::super::*;
+use super::tool_preview::mouse_tool_preview_damage_update;
 use crate::util::Rect;
 
 /// Safety margin around effect bounds for anti-aliasing bleed.
@@ -15,7 +16,7 @@ const UI_EFFECT_DAMAGE_MARGIN: i32 = 2;
 /// (see `render_text_edit_entry_animation`: 30.0 + progress * 20.0).
 const TEXT_EDIT_ENTRY_MAX_RADIUS: i32 = 50;
 
-fn effect_rect(bounds: (f64, f64, f64, f64), width: u32, height: u32) -> Option<Rect> {
+pub(super) fn effect_rect(bounds: (f64, f64, f64, f64), width: u32, height: u32) -> Option<Rect> {
     let (x, y, w, h) = bounds;
     let min_x = (x.floor() as i32 - UI_EFFECT_DAMAGE_MARGIN).max(0);
     let min_y = (y.floor() as i32 - UI_EFFECT_DAMAGE_MARGIN).max(0);
@@ -54,6 +55,7 @@ impl WaylandState {
         blocked_feedback_active: bool,
         text_edit_entry_active: bool,
         status_hud_active: bool,
+        tool_preview_active: bool,
         width: u32,
         height: u32,
     ) -> Vec<Rect> {
@@ -124,6 +126,21 @@ impl WaylandState {
             status_hud_rect,
         );
         self.data.prev_status_hud_damage = status_hud_rect;
+
+        let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
+            let (x, y) = self.current_mouse();
+            (x as f64, y as f64)
+        });
+        let preview_update = mouse_tool_preview_damage_update(
+            self.data.prev_tool_preview_damage,
+            tool_preview_active,
+            self.input_state.thickness_for_active_tool(),
+            preview_position,
+            width,
+            height,
+        );
+        regions.extend(preview_update.rects);
+        self.data.prev_tool_preview_damage = preview_update.current;
 
         regions
     }

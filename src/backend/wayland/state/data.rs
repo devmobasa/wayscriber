@@ -178,9 +178,14 @@ pub struct StateData {
     pub(super) blocked_feedback_was_active: bool,
     pub(super) prev_text_edit_entry_damage: Option<crate::util::Rect>,
     pub(super) prev_status_hud_damage: Option<crate::util::Rect>,
+    pub(super) prev_tool_preview_damage: Option<crate::util::Rect>,
     /// Idle-fade engine for the top-strip islands; its value is published
     /// on every toolbar snapshot as `top_fade`.
     pub(super) top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade,
+    /// Per-session shortcut-coach accumulator (slow-path streak, cooldown, and
+    /// per-session cap). Session-only; the across-session cap and learned
+    /// suppression live in the persisted onboarding state.
+    pub(super) shortcut_coach: super::onboarding::ShortcutCoachSession,
 }
 
 impl StateData {
@@ -265,7 +270,9 @@ impl StateData {
             blocked_feedback_was_active: false,
             prev_text_edit_entry_damage: None,
             prev_status_hud_damage: None,
+            prev_tool_preview_damage: None,
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
+            shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
         }
     }
 }

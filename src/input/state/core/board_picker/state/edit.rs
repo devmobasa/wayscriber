@@ -1,7 +1,8 @@
 use crate::draw::Color;
 use crate::input::BoardBackground;
+use crate::input::state::{Toast, ToastPriority};
 
-use super::super::super::base::{InputState, UiToastKind};
+use super::super::super::base::InputState;
 use super::super::{
     BOARD_PICKER_RECENT_LABEL_MAX_CHARS, BOARD_PICKER_RECENT_MAX_NAMES,
     BOARD_PICKER_SEARCH_MAX_LEN, BoardPickerEdit, BoardPickerEditMode, BoardPickerFocus,
@@ -287,7 +288,11 @@ impl InputState {
             return;
         };
         if board.spec.background.is_transparent() {
-            self.set_ui_toast(UiToastKind::Info, "Overlay board has no background color.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board_picker",
+                Toast::info("Overlay board has no background color."),
+            );
             return;
         }
         let buffer = match &board.spec.background {
@@ -321,9 +326,10 @@ impl InputState {
             }
             BoardPickerEditMode::Color => {
                 let Some(color) = parse_hex_color(trimmed) else {
-                    self.set_ui_toast(
-                        UiToastKind::Warning,
-                        "Invalid color. Use #RRGGBB or RRGGBB.",
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "board_picker",
+                        Toast::warning("Invalid color. Use #RRGGBB or RRGGBB."),
                     );
                     return false;
                 };

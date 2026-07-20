@@ -145,6 +145,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub config: Config,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
+    pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
     pub persistence: crate::backend::wayland::session::PersistenceController,
@@ -199,6 +200,8 @@ pub(super) struct WaylandState {
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
     pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,
+    /// Background persistence worker for command-palette recents.
+    pub(super) palette_recents: crate::palette_recents::PaletteRecentsWriter,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,
     // Animation interval; None means uncapped (render every frame while active).

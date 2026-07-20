@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
 const MAIN_SURFACE_FRAME_TIMEOUT: Duration = Duration::from_secs(1);
@@ -226,10 +227,7 @@ impl WaylandState {
         // to commit even if the original callback never arrives.
         self.surface.clear_frame_callback_pending();
         self.cancel_overlay_capture_preflight(timeout.reason);
-        self.input_state.set_ui_toast(
-            crate::input::state::UiToastKind::Warning,
-            "Screen capture cancelled because the compositor did not confirm the hidden overlay frame.",
-        );
+        self.input_state.push_toast(ToastPriority::Critical, "capture", Toast::warning("Screen capture cancelled because the compositor did not confirm the hidden overlay frame."));
     }
 
     /// Records the frame callback for the fresh hidden main-surface commit.
@@ -284,9 +282,12 @@ impl WaylandState {
             "capture.preflight id={generation} component=gtk reason={reason:?} phase=capture-cancelled error={error}"
         );
         self.cancel_overlay_capture_preflight(reason);
-        self.input_state.set_ui_toast(
-            crate::input::state::UiToastKind::Warning,
-            "Screen capture cancelled because GTK toolbar transparency was not confirmed.",
+        self.input_state.push_toast(
+            ToastPriority::Critical,
+            "capture",
+            Toast::warning(
+                "Screen capture cancelled because GTK toolbar transparency was not confirmed.",
+            ),
         );
     }
 
@@ -300,10 +301,7 @@ impl WaylandState {
             "Cancelling {reason:?} because the GTK toolbars could not confirm capture suppression"
         );
         self.cancel_overlay_capture_preflight(reason);
-        self.input_state.set_ui_toast(
-            crate::input::state::UiToastKind::Warning,
-            "Screen capture cancelled because the GTK toolbar could not become transparent safely.",
-        );
+        self.input_state.push_toast(ToastPriority::Critical, "capture", Toast::warning("Screen capture cancelled because the GTK toolbar could not become transparent safely."));
     }
 
     fn begin_ready_overlay_capture(&mut self, qh: &QueueHandle<Self>) {

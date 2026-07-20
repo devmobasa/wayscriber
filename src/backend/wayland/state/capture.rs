@@ -1,5 +1,6 @@
 use super::*;
 use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
+use crate::input::state::{Toast, ToastPriority};
 
 mod backdrop;
 mod barrier;
@@ -159,9 +160,10 @@ impl WaylandState {
                 action
             );
             self.capture.clear_exit_on_success();
-            self.input_state.set_ui_toast(
-                crate::input::state::UiToastKind::Warning,
-                "Capture is already preparing another overlay operation.",
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "capture",
+                Toast::warning("Capture is already preparing another overlay operation."),
             );
             return;
         }
@@ -209,8 +211,11 @@ impl WaylandState {
             Err(err) => {
                 let message = ImageOperationKind::CanvasExport.format_error(&err);
                 log::error!("Canvas export failed: {}", message);
-                self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture",
+                    Toast::error(message),
+                );
                 return;
             }
         };
@@ -325,9 +330,10 @@ impl WaylandState {
                     "{} submission rejected while capture operation {active_id} is active",
                     operation.saved_log_label()
                 );
-                self.input_state.set_ui_toast(
-                    crate::input::state::UiToastKind::Warning,
-                    "Another capture operation is still in progress.",
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "capture",
+                    Toast::warning("Another capture operation is still in progress."),
                 );
                 false
             }
@@ -345,9 +351,10 @@ impl WaylandState {
         self.show_overlay();
         self.capture.clear_in_progress();
         self.capture.clear_exit_on_success();
-        self.input_state.set_ui_toast(
-            crate::input::state::UiToastKind::Error,
-            format!("{} failed: {error}", operation.saved_log_label()),
+        self.input_state.push_toast(
+            ToastPriority::Critical,
+            "capture",
+            Toast::error(format!("{} failed: {error}", operation.saved_log_label())),
         );
     }
 }

@@ -1,6 +1,7 @@
 use crate::input::events::Key;
+use crate::input::state::{Toast, ToastPriority};
 
-use super::super::super::base::{InputState, UiToastKind};
+use super::super::super::base::InputState;
 use super::super::{
     BOARD_PICKER_PAGE_JUMP_MAX_LEN, BOARD_PICKER_PAGE_SEARCH_MAX_LEN, BoardPickerPageNavMode,
     BoardPickerState,
@@ -169,7 +170,11 @@ impl InputState {
         };
         let page_count = self.board_picker_selected_board_page_count();
         if page_number == 0 || page_number > page_count {
-            self.set_ui_toast(UiToastKind::Warning, "Page number out of range.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board_picker",
+                Toast::warning("Page number out of range."),
+            );
             self.needs_redraw = true;
             return;
         }

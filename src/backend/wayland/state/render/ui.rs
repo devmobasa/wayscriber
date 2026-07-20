@@ -1,4 +1,4 @@
-use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview};
+use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview, mouse_tool_preview_redraw};
 use super::*;
 
 impl WaylandState {
@@ -20,14 +20,7 @@ impl WaylandState {
 
     fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
         if render_ui {
-            if self.input_state.show_tool_preview
-                && self.has_cursor_focus()
-                && !self.cursor_blocked_by_toolbar()
-                && matches!(
-                    self.input_state.state,
-                    DrawingState::Idle | DrawingState::PendingTextClick { .. }
-                )
-            {
+            if self.mouse_tool_preview_eligible() {
                 let (cursor_x, cursor_y) =
                     self.stylus_hover_cursor_position().unwrap_or_else(|| {
                         let (x, y) = self.current_mouse();
@@ -38,6 +31,7 @@ impl WaylandState {
                     self.input_state.active_tool(),
                     self.input_state
                         .color_for_tool(self.input_state.active_tool()),
+                    self.input_state.thickness_for_active_tool(),
                     cursor_x,
                     cursor_y,
                     width as f64,
@@ -252,5 +246,56 @@ impl WaylandState {
         } else {
             self.input_state.clear_context_menu_layout();
         }
+    }
+
+    /// The render-time gate for the mouse-anchored tool-preview bubble: it is
+    /// drawn only for eligible idle states, with cursor focus and no toolbar
+    /// blocking. Shared by the render pass (above) and the pointer handler so
+    /// idle-motion damage and the actual draw can never disagree about whether
+    /// the bubble is visible.
+    pub(in crate::backend::wayland) fn mouse_tool_preview_eligible(&self) -> bool {
+        self.input_state.show_tool_preview
+            && self.has_cursor_focus()
+            && !self.cursor_blocked_by_toolbar()
+            && matches!(
+                self.input_state.state,
+                DrawingState::Idle | DrawingState::PendingTextClick { .. }
+            )
+    }
+
+    /// Damage the previous and current preview-bubble footprints and request a
+    /// redraw so the bubble tracks idle pointer motion from `prev` to `next`
+    /// (screen-space, matching [`Self::current_mouse`]).
+    ///
+    /// Only the mouse-anchored bubble is handled here: when a stylus is
+    /// hovering the preview follows the stylus position instead, and the tablet
+    /// frame handler owns that damage via `mark_stylus_hover_cursor_dirty`.
+    pub(in crate::backend::wayland) fn mark_mouse_tool_preview_dirty(
+        &mut self,
+        prev: (i32, i32),
+        next: (i32, i32),
+    ) {
+        if self.stylus_hover_cursor_position().is_some() {
+            return;
+        }
+        let redraw = mouse_tool_preview_redraw(
+            self.mouse_tool_preview_eligible(),
+            self.input_state.thickness_for_active_tool(),
+            (prev.0 as f64, prev.1 as f64),
+            (next.0 as f64, next.1 as f64),
+            self.surface.width(),
+            self.surface.height(),
+        );
+        if !redraw.redraw {
+            return;
+        }
+        if redraw.rects.is_empty() {
+            self.input_state.dirty_tracker.mark_full();
+        } else {
+            for rect in redraw.rects {
+                self.input_state.dirty_tracker.mark_rect(rect);
+            }
+        }
+        self.input_state.needs_redraw = true;
     }
 }

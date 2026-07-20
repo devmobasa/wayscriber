@@ -1,6 +1,7 @@
-use super::{InputState, UiToastKind};
+use super::InputState;
 use crate::domain::Action;
 use crate::input::Key;
+use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EyedropperCaptureSource {
@@ -148,7 +149,11 @@ impl InputState {
 
     pub(crate) fn report_eyedropper_capture_failure_if_unreported(&mut self) {
         if self.ui_toast.is_none() {
-            self.set_ui_toast(UiToastKind::Error, "Screen eyedropper capture failed.");
+            self.push_toast(
+                ToastPriority::Critical,
+                "eyedropper",
+                Toast::error("Screen eyedropper capture failed."),
+            );
         }
     }
 }
@@ -181,9 +186,10 @@ mod tests {
     #[test]
     fn capture_failure_preserves_a_more_specific_existing_error() {
         let mut state = make_test_input_state();
-        state.set_ui_toast(
-            UiToastKind::Error,
-            "Freeze failed after the display changed size",
+        state.push_toast(
+            ToastPriority::Critical,
+            "eyedropper",
+            Toast::error("Freeze failed after the display changed size"),
         );
 
         state.report_eyedropper_capture_failure_if_unreported();

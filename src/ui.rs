@@ -23,8 +23,13 @@ pub use command_palette::render_command_palette;
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]
 pub use help_overlay::HelpOverlayBindings;
+#[cfg(test)]
+pub use help_overlay::install_help_hit_map_for_test;
 #[allow(unused_imports)]
-pub use help_overlay::{invalidate_help_overlay_cache, render_help_overlay};
+pub use help_overlay::{
+    HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at,
+    invalidate_help_overlay_cache, render_help_overlay,
+};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
 pub use properties_panel::render_properties_panel;

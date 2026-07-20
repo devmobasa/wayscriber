@@ -1,5 +1,5 @@
 use super::super::super::base::{
-    InputState, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS, PendingPageDelete, UiToastKind,
+    InputState, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS, PendingPageDelete,
 };
 use crate::domain::Action;
 use crate::draw::PageDeleteOutcome as CanvasPageDeleteOutcome;
@@ -8,6 +8,7 @@ use crate::input::boards::{
     PageOperationRejection, PageRestoreOutcome, PageRestorePlacement, PageRestoreRejection,
     PageRestoreRequest,
 };
+use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
 impl InputState {
@@ -72,23 +73,20 @@ impl InputState {
                     confirmation,
                     expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
                 });
-                self.set_ui_toast_with_duration(
-                    UiToastKind::Warning,
-                    format!(
+                self.push_toast(ToastPriority::Info, "page.delete", Toast::warning(format!(
                         "Delete page {}/{} on '{board_name}' ({board_id})? Click delete again to confirm.",
                         page_index + 1,
                         page_count
-                    ),
-                    PAGE_DELETE_CONFIRM_MS,
-                );
+                    )).duration_ms(PAGE_DELETE_CONFIRM_MS));
                 CanvasPageDeleteOutcome::Pending
             }
             PageDeleteOutcome::ClearedLastPage { .. } => {
                 self.pending_page_delete = None;
                 self.finish_page_delete_surface_change(is_active_board);
-                self.set_ui_toast(
-                    UiToastKind::Info,
-                    format!("Page cleared on '{board_name}' ({board_id})"),
+                self.push_toast(
+                    ToastPriority::Info,
+                    "page.delete",
+                    Toast::info(format!("Page cleared on '{board_name}' ({board_id})")),
                 );
                 CanvasPageDeleteOutcome::Cleared
             }
@@ -99,13 +97,14 @@ impl InputState {
             } => {
                 self.pending_page_delete = None;
                 self.finish_page_delete_surface_change(is_active_board);
-                self.set_ui_toast(
-                    UiToastKind::Info,
-                    format!(
+                self.push_toast(
+                    ToastPriority::Info,
+                    "page.delete",
+                    Toast::info(format!(
                         "Page deleted on '{board_name}' ({board_id}) ({}/{})",
                         new_page_index + 1,
                         new_page_count
-                    ),
+                    )),
                 );
                 CanvasPageDeleteOutcome::Removed
             }
@@ -163,23 +162,27 @@ impl InputState {
                     confirmation,
                     expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
                 });
-                self.set_ui_toast_with_action_and_duration(
-                    UiToastKind::Warning,
-                    format!(
+                self.push_toast(
+                    ToastPriority::Action,
+                    "page.delete",
+                    Toast::warning(format!(
                         "Delete page {}/{}? Click to confirm.",
                         page_index + 1,
                         page_count
-                    ),
-                    "Delete",
-                    Action::PageDelete,
-                    PAGE_DELETE_CONFIRM_MS,
+                    ))
+                    .action("Delete", Action::PageDelete)
+                    .duration_ms(PAGE_DELETE_CONFIRM_MS),
                 );
                 CanvasPageDeleteOutcome::Pending
             }
             PageDeleteOutcome::ClearedLastPage { .. } => {
                 self.pending_page_delete = None;
                 self.finish_page_delete_surface_change(active_target);
-                self.set_ui_toast(UiToastKind::Info, "Page cleared (last page)");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "page.delete",
+                    Toast::info("Page cleared (last page)"),
+                );
                 CanvasPageDeleteOutcome::Cleared
             }
             PageDeleteOutcome::Removed {
@@ -199,11 +202,14 @@ impl InputState {
                     },
                     now,
                 ));
-                self.set_ui_toast_with_action(
-                    UiToastKind::Info,
-                    format!("Page deleted ({}/{new_page_count})", new_page_index + 1),
-                    "Undo",
-                    Action::PageRestoreDeleted,
+                self.push_toast(
+                    ToastPriority::Action,
+                    "page.delete",
+                    Toast::info(format!(
+                        "Page deleted ({}/{new_page_count})",
+                        new_page_index + 1
+                    ))
+                    .action("Undo", Action::PageRestoreDeleted),
                 );
                 CanvasPageDeleteOutcome::Removed
             }
@@ -247,7 +253,11 @@ impl InputState {
 
     fn set_page_delete_rejection_toast(&mut self, rejection: PageOperationRejection) {
         if matches!(rejection, PageOperationRejection::StaleConfirmation) {
-            self.set_ui_toast(UiToastKind::Warning, "Page deletion changed; try again.");
+            self.push_toast(
+                ToastPriority::Info,
+                "page.delete",
+                Toast::warning("Page deletion changed; try again."),
+            );
         }
     }
 
@@ -278,18 +288,27 @@ impl InputState {
                     } else {
                         self.mark_board_surface_changed();
                     }
-                    self.set_ui_toast(
-                        UiToastKind::Info,
-                        format!("Page restored ({}/{page_count})", page_index + 1),
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "page.delete",
+                        Toast::info(format!("Page restored ({}/{page_count})", page_index + 1)),
                     );
                 }
                 PageRestoreOutcome::Rejected(PageRestoreRejection::MissingBoard { request }) => {
                     self.deleted_pages.push((request, deleted_at));
-                    self.set_ui_toast(UiToastKind::Warning, "Board missing; cannot restore page.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "page.delete",
+                        Toast::warning("Board missing; cannot restore page."),
+                    );
                 }
             }
         } else {
-            self.set_ui_toast(UiToastKind::Info, "No deleted page to restore.");
+            self.push_toast(
+                ToastPriority::Info,
+                "page.delete",
+                Toast::info("No deleted page to restore."),
+            );
         }
     }
 }

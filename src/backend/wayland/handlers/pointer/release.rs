@@ -2,7 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 
 use crate::backend::wayland::state::drag_log;
-use crate::input::MouseButton;
+use crate::input::{HelpOverlayReleaseOutcome, MouseButton};
 
 use super::*;
 
@@ -20,6 +20,31 @@ impl WaylandState {
 
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self.take_suppress_next_release() {
+            self.set_pending_toast_press(false);
+            self.set_pending_status_hud_press(false);
+            return;
+        }
+
+        // The help overlay owns pointer releases while open: a release that
+        // lands on the SAME clickable row the press recorded runs its action, a
+        // press+release both outside the box dismisses it, and anything else is
+        // inert. The matching press was swallowed so nothing started a stroke
+        // underneath. Toolbar surfaces report toolbar-local coordinates, so
+        // convert to screen space (matching the press guard) before resolving.
+        if self.input_state.show_help {
+            if button == BTN_LEFT {
+                let screen_position = if on_toolbar {
+                    self.toolbar_surface_screen_coords(&event.surface, event.position)
+                } else {
+                    Some(event.position)
+                };
+                match screen_position {
+                    Some((sx, sy)) => {
+                        self.handle_help_overlay_release(sx.round() as i32, sy.round() as i32)
+                    }
+                    None => self.input_state.clear_help_overlay_press(),
+                }
+            }
             self.set_pending_toast_press(false);
             self.set_pending_status_hud_press(false);
             return;
@@ -189,5 +214,31 @@ impl WaylandState {
         self.input_state
             .on_mouse_release_with_canvas(mb, screen_x, screen_y, wx, wy);
         self.input_state.needs_redraw = true;
+    }
+
+    /// Resolve a left release inside the open help overlay against the target
+    /// recorded on press, enforcing the same-target contract: run a row only
+    /// when press and release land on the SAME row, dismiss only when both fall
+    /// outside the box, and otherwise leave the overlay untouched.
+    fn handle_help_overlay_release(&mut self, screen_x: i32, screen_y: i32) {
+        match self
+            .input_state
+            .resolve_help_overlay_release(screen_x, screen_y)
+        {
+            HelpOverlayReleaseOutcome::Run(action) => {
+                self.dispatch_input_action(action);
+                // Most actions leave the overlay up; close it so the effect is
+                // visible. Actions that already closed it (ToggleHelp,
+                // ReplayTour) leave `show_help` false, so this is a no-op.
+                if self.input_state.show_help {
+                    self.input_state.close_help_overlay();
+                }
+                self.input_state.needs_redraw = true;
+            }
+            HelpOverlayReleaseOutcome::Dismiss => {
+                self.input_state.close_help_overlay();
+            }
+            HelpOverlayReleaseOutcome::None => {}
+        }
     }
 }

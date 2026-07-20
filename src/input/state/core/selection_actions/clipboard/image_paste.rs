@@ -1,6 +1,7 @@
-use super::super::super::base::{ClipboardPasteRequest, InputState, UiToastKind};
+use super::super::super::base::{ClipboardPasteRequest, InputState};
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
+use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(crate) fn paste_external_image_from_request(
@@ -38,9 +39,10 @@ impl InputState {
                 request.target_page_index,
                 request.target_page_generation
             );
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                "Paste target changed; image paste was cancelled.",
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.clipboard",
+                Toast::warning("Paste target changed; image paste was cancelled."),
             );
             self.trigger_blocked_feedback();
             return false;
@@ -63,9 +65,10 @@ impl InputState {
                 max_shapes,
                 image_bytes
             );
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                "Shape limit reached; image not pasted.",
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.clipboard",
+                Toast::warning("Shape limit reached; image not pasted."),
             );
             self.trigger_blocked_feedback();
             return false;

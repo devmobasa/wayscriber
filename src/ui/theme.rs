@@ -261,6 +261,36 @@ pub mod overlay {
     /// ring, visually separating the recents arc from the quick palette.
     pub const RADIAL_RECENT_OUTER_INSET: f64 = 5.0;
 
+    // ---- Tool-preview cursor (Cairo overlay only; no GTK CSS rows) ----
+    // The bubble that trails the pointer showing the active tool, its draw
+    // color, and its width. Builtin overlay with no GTK equivalent, so these
+    // carry no CSS rows / equality tests.
+    /// Background fill of the tool-preview bubble.
+    pub const CURSOR_PREVIEW_BG: Rgba = (0.08, 0.08, 0.10, 0.6);
+    /// Hairline border of the tool-preview bubble.
+    pub const CURSOR_PREVIEW_BORDER: Rgba = (1.0, 1.0, 1.0, 0.10);
+    /// Neutral foreground for the tool glyph and for tools without a meaningful
+    /// draw color (eraser, select).
+    pub const CURSOR_PREVIEW_NEUTRAL: Rgba = (0.95, 0.95, 0.98, 0.95);
+    /// Auto-contrast outline around the width dot when the dot color is dark
+    /// (see [`super::cursor_preview_outline`]).
+    pub const CURSOR_PREVIEW_OUTLINE_LIGHT: Rgba = (1.0, 1.0, 1.0, 0.92);
+    /// Auto-contrast outline around the width dot when the dot color is light.
+    pub const CURSOR_PREVIEW_OUTLINE_DARK: Rgba = (0.0, 0.0, 0.0, 0.72);
+    /// Tool glyph size inside the preview bubble (px).
+    pub const CURSOR_PREVIEW_GLYPH_SIZE: f64 = 12.0;
+    /// Smallest rendered diameter of the width dot (px).
+    pub const CURSOR_PREVIEW_DOT_MIN: f64 = 3.0;
+    /// Largest rendered diameter of the width dot (px), keeping the bubble
+    /// within the cursor damage radius.
+    pub const CURSOR_PREVIEW_DOT_MAX: f64 = 14.0;
+    /// Interior padding of the preview bubble (px).
+    pub const CURSOR_PREVIEW_PAD: f64 = 6.0;
+    /// Gap between the tool glyph and the width dot (px).
+    pub const CURSOR_PREVIEW_GAP: f64 = 4.0;
+    /// Offset of the bubble from the pointer hotspot (px).
+    pub const CURSOR_PREVIEW_OFFSET: f64 = 16.0;
+
     // ---- Keyboard navigation hint text ----
     /// Context menu navigation hint
     pub const NAV_HINT_MENU: &str = "↑↓ to navigate • Enter to select • Esc to close";
@@ -699,10 +729,25 @@ pub fn current() -> &'static Theme {
 /// Backgrounds brighter than this luminance get dark status chrome.
 const STATUS_PALETTE_LUMINANCE_THRESHOLD: f64 = 0.5;
 
+/// Width-dot colors brighter than this luminance take the dark outline; darker
+/// dots take the light one, keeping the dot edge legible on the dark bubble.
+const CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD: f64 = 0.6;
+
 /// Rec. 709 relative luminance of an RGB color (0.0–1.0 channels).
 #[inline]
 pub fn relative_luminance(r: f64, g: f64, b: f64) -> f64 {
     0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/// Auto-contrast outline for the tool-preview width dot: a dark ring on light
+/// dot colors, a light ring on dark ones (by Rec. 709 luminance).
+#[inline]
+pub fn cursor_preview_outline(r: f64, g: f64, b: f64) -> Rgba {
+    if relative_luminance(r, g, b) > CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD {
+        overlay::CURSOR_PREVIEW_OUTLINE_DARK
+    } else {
+        overlay::CURSOR_PREVIEW_OUTLINE_LIGHT
+    }
 }
 
 /// Apply an RGBA color tuple to a Cairo context
@@ -809,6 +854,57 @@ mod tests {
         assert!((relative_luminance(0.0, 0.0, 1.0) - 0.0722).abs() < 1e-9);
         assert!((relative_luminance(1.0, 1.0, 1.0) - 1.0).abs() < 1e-9);
         assert_eq!(relative_luminance(0.0, 0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn cursor_preview_outline_is_dark_on_bright_dot_colors() {
+        // White / yellow / green dots are bright: a dark ring separates them.
+        assert_eq!(
+            cursor_preview_outline(1.0, 1.0, 1.0),
+            overlay::CURSOR_PREVIEW_OUTLINE_DARK
+        );
+        assert_eq!(
+            cursor_preview_outline(1.0, 1.0, 0.0),
+            overlay::CURSOR_PREVIEW_OUTLINE_DARK
+        );
+        assert_eq!(
+            cursor_preview_outline(0.0, 1.0, 0.0),
+            overlay::CURSOR_PREVIEW_OUTLINE_DARK
+        );
+    }
+
+    #[test]
+    fn cursor_preview_outline_is_light_on_dark_dot_colors() {
+        // Black / red / blue dots are dark: a light ring keeps them legible on
+        // the dark bubble.
+        assert_eq!(
+            cursor_preview_outline(0.0, 0.0, 0.0),
+            overlay::CURSOR_PREVIEW_OUTLINE_LIGHT
+        );
+        assert_eq!(
+            cursor_preview_outline(1.0, 0.0, 0.0),
+            overlay::CURSOR_PREVIEW_OUTLINE_LIGHT
+        );
+        assert_eq!(
+            cursor_preview_outline(0.0, 0.0, 1.0),
+            overlay::CURSOR_PREVIEW_OUTLINE_LIGHT
+        );
+    }
+
+    #[test]
+    fn cursor_preview_outline_tracks_the_luminance_threshold() {
+        // The decision follows Rec. 709 luminance against the documented
+        // threshold, not any single channel.
+        let below = CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD - 0.05;
+        let above = CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD + 0.05;
+        assert_eq!(
+            cursor_preview_outline(below, below, below),
+            overlay::CURSOR_PREVIEW_OUTLINE_LIGHT
+        );
+        assert_eq!(
+            cursor_preview_outline(above, above, above),
+            overlay::CURSOR_PREVIEW_OUTLINE_DARK
+        );
     }
 
     #[test]

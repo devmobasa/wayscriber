@@ -1,5 +1,5 @@
 use crate::input::InputState;
-use crate::input::state::UiToastKind;
+use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(super) fn apply_toolbar_board_prev(&mut self) -> bool {
@@ -16,7 +16,11 @@ impl InputState {
         if self.create_board() {
             true
         } else {
-            self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info("Board limit reached."),
+            );
             false
         }
     }

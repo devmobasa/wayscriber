@@ -1,11 +1,12 @@
 use super::super::base::{
-    BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete, UiToastKind,
+    BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete,
 };
 use crate::domain::Action;
 use crate::input::boards::{
     BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
     BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
 };
+use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
 mod page;
@@ -20,8 +21,14 @@ impl InputState {
     pub fn cancel_pending_board_delete(&mut self) {
         if self.pending_board_delete.is_some() {
             self.pending_board_delete = None;
-            self.ui_toast = None;
-            self.set_ui_toast(UiToastKind::Info, "Board deletion cancelled.");
+            // Push under the confirmation's key so the queue dedups the active
+            // "board.delete" prompt in place; clearing `ui_toast` here would
+            // bypass the queue and let an unrelated queued toast surface.
+            self.push_toast(
+                ToastPriority::Info,
+                "board.delete",
+                Toast::info("Board deletion cancelled."),
+            );
         }
     }
 
@@ -34,8 +41,14 @@ impl InputState {
     pub fn cancel_pending_page_delete(&mut self) {
         if self.pending_page_delete.is_some() {
             self.pending_page_delete = None;
-            self.ui_toast = None;
-            self.set_ui_toast(UiToastKind::Info, "Page deletion cancelled.");
+            // Push under the page-delete key (matching the confirmation prompt)
+            // so the queue dedups it in place instead of clearing `ui_toast`
+            // directly and letting an unrelated queued toast surface.
+            self.push_toast(
+                ToastPriority::Info,
+                "page.delete",
+                Toast::info("Page deletion cancelled."),
+            );
         }
     }
 
@@ -54,20 +67,27 @@ impl InputState {
     }
 
     fn clear_delete_action_toast(&mut self, include_restore_actions: bool) {
-        let has_delete_action = self.ui_toast.as_ref().is_some_and(|toast| {
-            toast
-                .action
-                .as_ref()
-                .is_some_and(|action| match action.action {
-                    Action::BoardDelete | Action::PageDelete => true,
-                    Action::BoardRestoreDeleted | Action::PageRestoreDeleted => {
+        // Retract the delete/restore toasts across BOTH the active slot and the
+        // pending queue, then let the queue promote the next valid entry. A
+        // Critical toast (e.g. a capability warning) can hold a confirm/undo
+        // toast queued behind it; scanning only `ui_toast` would leave that
+        // queued action alive to surface later against a session that no longer
+        // backs it (delete/restore state is being discarded here).
+        let changed = self
+            .toast_queue
+            .remove_matching(&mut self.ui_toast, |key, action| {
+                if !matches!(key, "board.delete" | "page.delete") {
+                    return false;
+                }
+                match action {
+                    Some(Action::BoardDelete) | Some(Action::PageDelete) => true,
+                    Some(Action::BoardRestoreDeleted) | Some(Action::PageRestoreDeleted) => {
                         include_restore_actions
                     }
                     _ => false,
-                })
-        });
-        if has_delete_action {
-            self.ui_toast = None;
+                }
+            });
+        if changed {
             self.ui_toast_bounds = None;
             self.needs_redraw = true;
         }
@@ -126,12 +146,12 @@ impl InputState {
                     confirmation,
                     expires_at: now + Duration::from_millis(BOARD_DELETE_CONFIRM_MS),
                 });
-                self.set_ui_toast_with_action_and_duration(
-                    UiToastKind::Warning,
-                    format!("Delete board '{name}'? Click to confirm."),
-                    "Delete",
-                    Action::BoardDelete,
-                    BOARD_DELETE_CONFIRM_MS,
+                self.push_toast(
+                    ToastPriority::Action,
+                    "board.delete",
+                    Toast::warning(format!("Delete board '{name}'? Click to confirm."))
+                        .action("Delete", Action::BoardDelete)
+                        .duration_ms(BOARD_DELETE_CONFIRM_MS),
                 );
             }
             BoardDeleteOutcome::Deleted {
@@ -151,11 +171,11 @@ impl InputState {
                     },
                     now,
                 ));
-                self.set_ui_toast_with_action(
-                    UiToastKind::Info,
-                    format!("Board deleted: {deleted_name}"),
-                    "Undo",
-                    Action::BoardRestoreDeleted,
+                self.push_toast(
+                    ToastPriority::Action,
+                    "board.delete",
+                    Toast::info(format!("Board deleted: {deleted_name}"))
+                        .action("Undo", Action::BoardRestoreDeleted),
                 );
 
                 if self.boards.active_board_id() != active_id_before {
@@ -174,13 +194,25 @@ impl InputState {
     fn set_board_delete_rejection_toast(&mut self, rejection: BoardDeleteRejection) {
         match rejection {
             BoardDeleteRejection::MissingBoard | BoardDeleteRejection::StaleConfirmation => {
-                self.set_ui_toast(UiToastKind::Warning, "Board deletion changed; try again.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "board.delete",
+                    Toast::warning("Board deletion changed; try again."),
+                );
             }
             BoardDeleteRejection::TransparentBoard => {
-                self.set_ui_toast(UiToastKind::Info, "Overlay board cannot be deleted.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "board.delete",
+                    Toast::info("Overlay board cannot be deleted."),
+                );
             }
             BoardDeleteRejection::LastBoard => {
-                self.set_ui_toast(UiToastKind::Info, "At least one board must remain.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "board.delete",
+                    Toast::info("At least one board must remain."),
+                );
             }
         }
     }
@@ -204,7 +236,11 @@ impl InputState {
         self.expire_deleted_boards_at(now);
 
         let Some((request, timestamp)) = self.deleted_boards.pop() else {
-            self.set_ui_toast(UiToastKind::Info, "No deleted board to restore.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board.delete",
+                Toast::info("No deleted board to restore."),
+            );
             return;
         };
 
@@ -217,14 +253,19 @@ impl InputState {
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
                 self.queue_board_config_save();
                 self.finish_board_transition_from(current_spec, &current_id, false);
-                self.set_ui_toast(
-                    UiToastKind::Info,
-                    format!("Board restored: {restored_name}"),
+                self.push_toast(
+                    ToastPriority::Info,
+                    "board.delete",
+                    Toast::info(format!("Board restored: {restored_name}")),
                 );
             }
             BoardRestoreOutcome::Rejected(BoardRestoreRejection::MaxCountReached { request }) => {
                 self.deleted_boards.push((request, timestamp));
-                self.set_ui_toast(UiToastKind::Warning, "Board limit reached; cannot restore.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "board.delete",
+                    Toast::warning("Board limit reached; cannot restore."),
+                );
             }
         }
     }

@@ -1,5 +1,6 @@
-use super::super::base::{InputState, UiToastKind};
+use super::super::base::InputState;
 use crate::draw::Color;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BoardBackground, runtime_contrast_pen_color};
 
 impl InputState {
@@ -12,7 +13,11 @@ impl InputState {
         }
         self.sync_canvas_pointer_to_current_transform();
         self.mark_board_surface_changed();
-        self.set_ui_toast(UiToastKind::Info, "Canvas position reset.");
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info("Canvas position reset."),
+        );
         true
     }
 
@@ -22,7 +27,11 @@ impl InputState {
         };
         let trimmed = name.trim();
         if trimmed.is_empty() {
-            self.set_ui_toast(UiToastKind::Warning, "Board name cannot be empty.");
+            self.push_toast(
+                ToastPriority::Info,
+                "page.nav",
+                Toast::warning("Board name cannot be empty."),
+            );
             return false;
         }
         if board.spec.name == trimmed {
@@ -40,7 +49,11 @@ impl InputState {
             return false;
         };
         if board.spec.background.is_transparent() {
-            self.set_ui_toast(UiToastKind::Info, "Overlay board has no background color.");
+            self.push_toast(
+                ToastPriority::Info,
+                "page.nav",
+                Toast::info("Overlay board has no background color."),
+            );
             return false;
         }
         if matches!(board.spec.background, BoardBackground::Solid(existing) if existing == color) {
@@ -124,9 +137,12 @@ impl InputState {
         let board_name = board.spec.name.clone();
         let board_id = board.spec.id.clone();
         self.finish_board_page_content_change(board_index);
-        self.set_ui_toast(
-            UiToastKind::Info,
-            format!("Page added on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info(format!(
+                "Page added on '{board_name}' ({board_id}) ({page_num}/{page_count})"
+            )),
         );
         true
     }
@@ -160,9 +176,12 @@ impl InputState {
         let board_name = board.spec.name.clone();
         let board_id = board.spec.id.clone();
         self.finish_board_page_content_change(board_index);
-        self.set_ui_toast(
-            UiToastKind::Info,
-            format!("Page duplicated on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info(format!(
+                "Page duplicated on '{board_name}' ({board_id}) ({page_num}/{page_count})"
+            )),
         );
         true
     }
@@ -190,7 +209,11 @@ impl InputState {
             return false;
         }
         self.finish_board_page_content_change(board_index);
-        self.set_ui_toast(UiToastKind::Info, "Page renamed.");
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info("Page renamed."),
+        );
         true
     }
 
@@ -260,13 +283,14 @@ impl InputState {
         }
 
         let action = if copy { "copied" } else { "moved" };
-        self.set_ui_toast(
-            UiToastKind::Info,
-            format!(
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info(format!(
                 "Page {action} to '{target_name}' ({target_id}) ({}/{})",
                 new_index + 1,
                 target_count
-            ),
+            )),
         );
         self.mark_session_dirty();
         if activate_target {
@@ -317,9 +341,10 @@ impl InputState {
         self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;
         let page_count = self.boards.page_count();
-        self.set_ui_toast(
-            UiToastKind::Info,
-            format!("Page created ({page_num}/{page_count})"),
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info(format!("Page created ({page_num}/{page_count})")),
         );
     }
 
@@ -333,9 +358,10 @@ impl InputState {
         self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;
         let page_count = self.boards.page_count();
-        self.set_ui_toast(
-            UiToastKind::Info,
-            format!("Page duplicated ({page_num}/{page_count})"),
+        self.push_toast(
+            ToastPriority::Info,
+            "page.nav",
+            Toast::info(format!("Page duplicated ({page_num}/{page_count})")),
         );
     }
 }

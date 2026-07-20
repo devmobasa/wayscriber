@@ -4,8 +4,8 @@ use crate::toolbar_icons;
 
 use super::super::super::types::{Badge, Section, row};
 use super::super::bindings::{
-    HelpOverlayBindings, binding_or_fallback, bindings_compact_or_fallback, bindings_or_fallback,
-    joined_labels, primary_or_fallback,
+    HelpOverlayBindings, action_row, binding_or_fallback, bindings_compact_or_fallback,
+    bindings_or_fallback, joined_labels, primary_or_fallback,
 };
 
 pub(super) struct MainSections {
@@ -37,18 +37,9 @@ pub(super) fn build_main_sections(
     let board_modes = (!context_filter || board_enabled).then(|| Section {
         title: "Boards",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::ToggleWhiteboard, NOT_BOUND_LABEL),
-                action_label(Action::ToggleWhiteboard),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ToggleBlackboard, NOT_BOUND_LABEL),
-                action_label(Action::ToggleBlackboard),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ReturnToTransparent, NOT_BOUND_LABEL),
-                action_label(Action::ReturnToTransparent),
-            ),
+            action_row(bindings, Action::ToggleWhiteboard, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ToggleBlackboard, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ReturnToTransparent, NOT_BOUND_LABEL),
             row(
                 bindings_compact_or_fallback(
                     bindings,
@@ -83,18 +74,9 @@ pub(super) fn build_main_sections(
                 ),
                 "Previous/next output",
             ),
-            row(
-                binding_or_fallback(bindings, Action::BoardNew, NOT_BOUND_LABEL),
-                action_label(Action::BoardNew),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::BoardDelete, NOT_BOUND_LABEL),
-                action_label(Action::BoardDelete),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::BoardPicker, NOT_BOUND_LABEL),
-                action_label(Action::BoardPicker),
-            ),
+            action_row(bindings, Action::BoardNew, NOT_BOUND_LABEL),
+            action_row(bindings, Action::BoardDelete, NOT_BOUND_LABEL),
+            action_row(bindings, Action::BoardPicker, NOT_BOUND_LABEL),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_settings),
@@ -103,26 +85,11 @@ pub(super) fn build_main_sections(
     let pages = Section {
         title: "Pages",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::PagePrev, NOT_BOUND_LABEL),
-                action_label(Action::PagePrev),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::PageNext, NOT_BOUND_LABEL),
-                action_label(Action::PageNext),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::PageNew, NOT_BOUND_LABEL),
-                action_label(Action::PageNew),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::PageDuplicate, NOT_BOUND_LABEL),
-                action_label(Action::PageDuplicate),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::PageDelete, NOT_BOUND_LABEL),
-                action_label(Action::PageDelete),
-            ),
+            action_row(bindings, Action::PagePrev, NOT_BOUND_LABEL),
+            action_row(bindings, Action::PageNext, NOT_BOUND_LABEL),
+            action_row(bindings, Action::PageNew, NOT_BOUND_LABEL),
+            action_row(bindings, Action::PageDuplicate, NOT_BOUND_LABEL),
+            action_row(bindings, Action::PageDelete, NOT_BOUND_LABEL),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_file),
@@ -135,46 +102,16 @@ pub(super) fn build_main_sections(
     let drawing = Section {
         title: "Drawing",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectPenTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectLineTool, "Shift+Drag"),
-                action_label(Action::SelectLineTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectRectTool, "Ctrl+Drag"),
-                action_label(Action::SelectRectTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectEllipseTool, "Tab+Drag"),
-                action_label(Action::SelectEllipseTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectArrowTool, "Ctrl+Shift+Drag"),
-                action_label(Action::SelectArrowTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectBlurTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectBlurTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ToggleHighlightTool, NOT_BOUND_LABEL),
-                action_label(Action::ToggleHighlightTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectMarkerTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectMarkerTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectStepMarkerTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectStepMarkerTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectEraserTool),
-            ),
+            action_row(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectLineTool, "Shift+Drag"),
+            action_row(bindings, Action::SelectRectTool, "Ctrl+Drag"),
+            action_row(bindings, Action::SelectEllipseTool, "Tab+Drag"),
+            action_row(bindings, Action::SelectArrowTool, "Ctrl+Shift+Drag"),
+            action_row(bindings, Action::SelectBlurTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ToggleHighlightTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectMarkerTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectStepMarkerTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
             row(
                 bindings_or_fallback(
                     bindings,
@@ -191,43 +128,16 @@ pub(super) fn build_main_sections(
     let selection = Section {
         title: "Selection",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::SelectSelectionTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectSelectionTool),
-            ),
+            action_row(bindings, Action::SelectSelectionTool, NOT_BOUND_LABEL),
             row("Drag", "Selection tool"),
-            row(
-                binding_or_fallback(bindings, Action::SelectAll, NOT_BOUND_LABEL),
-                action_label(Action::SelectAll),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::DuplicateSelection, NOT_BOUND_LABEL),
-                action_label(Action::DuplicateSelection),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::CopySelection, NOT_BOUND_LABEL),
-                action_label(Action::CopySelection),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::PasteSelection, NOT_BOUND_LABEL),
-                action_label(Action::PasteSelection),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::DeleteSelection, NOT_BOUND_LABEL),
-                action_label(Action::DeleteSelection),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ToggleSelectionProperties, NOT_BOUND_LABEL),
-                action_label(Action::ToggleSelectionProperties),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
-                action_label(Action::IncreaseFontSize),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
-                action_label(Action::DecreaseFontSize),
-            ),
+            action_row(bindings, Action::SelectAll, NOT_BOUND_LABEL),
+            action_row(bindings, Action::DuplicateSelection, NOT_BOUND_LABEL),
+            action_row(bindings, Action::CopySelection, NOT_BOUND_LABEL),
+            action_row(bindings, Action::PasteSelection, NOT_BOUND_LABEL),
+            action_row(bindings, Action::DeleteSelection, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ToggleSelectionProperties, NOT_BOUND_LABEL),
+            action_row(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
+            action_row(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
         ],
         badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_select),
@@ -236,26 +146,11 @@ pub(super) fn build_main_sections(
     let pen_text = Section {
         title: "Pen & Text",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
-                action_label(Action::EnterTextMode),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::EnterStickyNoteMode, NOT_BOUND_LABEL),
-                action_label(Action::EnterStickyNoteMode),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
-                action_label(Action::IncreaseFontSize),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
-                action_label(Action::DecreaseFontSize),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
-                action_label(Action::ToggleFill),
-            ),
+            action_row(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
+            action_row(bindings, Action::EnterStickyNoteMode, NOT_BOUND_LABEL),
+            action_row(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
+            action_row(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
             row("Selection properties panel", "Text background"),
         ],
         badges: Vec::new(),
@@ -265,52 +160,29 @@ pub(super) fn build_main_sections(
     let zoom = Section {
         title: "Zoom",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::ZoomIn, NOT_BOUND_LABEL),
-                action_label(Action::ZoomIn),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ZoomOut, NOT_BOUND_LABEL),
-                action_label(Action::ZoomOut),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ResetZoom, NOT_BOUND_LABEL),
-                action_label(Action::ResetZoom),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ToggleZoomLock, NOT_BOUND_LABEL),
-                action_label(Action::ToggleZoomLock),
-            ),
+            action_row(bindings, Action::ZoomIn, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ZoomOut, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ResetZoom, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ToggleZoomLock, NOT_BOUND_LABEL),
             row("Middle drag / arrow keys", "Pan view"),
-            row(
-                binding_or_fallback(bindings, Action::RefreshZoomCapture, NOT_BOUND_LABEL),
-                action_label(Action::RefreshZoomCapture),
-            ),
+            action_row(bindings, Action::RefreshZoomCapture, NOT_BOUND_LABEL),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_zoom_in),
     };
 
     let mut action_rows = vec![
-        row(
-            binding_or_fallback(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
-            action_label(Action::ClearCanvas),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::Undo, NOT_BOUND_LABEL),
-            action_label(Action::Undo),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleClickHighlight, NOT_BOUND_LABEL),
-            action_label(Action::ToggleClickHighlight),
-        ),
+        action_row(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
+        action_row(bindings, Action::Undo, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleClickHighlight, NOT_BOUND_LABEL),
         row(
             match joined_labels(bindings, &[Action::OpenContextMenu]) {
                 Some(label) => format!("Right Click / {label}"),
                 None => "Right Click".to_string(),
             },
             action_label(Action::OpenContextMenu),
-        ),
+        )
+        .with_action(Action::OpenContextMenu),
         row(
             match (
                 bindings.radial_menu_mouse_label(),
@@ -322,52 +194,24 @@ pub(super) fn build_main_sections(
                 (None, None) => NOT_BOUND_LABEL.to_string(),
             },
             action_label(Action::ToggleRadialMenu),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::Exit, NOT_BOUND_LABEL),
-            action_label(Action::Exit),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
-            action_label(Action::ToggleHelp),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleCommandPalette, NOT_BOUND_LABEL),
-            action_label(Action::ToggleCommandPalette),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleToolbar, NOT_BOUND_LABEL),
-            action_label(Action::ToggleToolbar),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::CycleToolbarDisplay, NOT_BOUND_LABEL),
-            action_label(Action::CycleToolbarDisplay),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::TogglePresenterMode, NOT_BOUND_LABEL),
-            action_label(Action::TogglePresenterMode),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleLightMode, NOT_BOUND_LABEL),
-            action_label(Action::ToggleLightMode),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleLightModeDrawing, NOT_BOUND_LABEL),
-            action_label(Action::ToggleLightModeDrawing),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::OpenConfigurator, NOT_BOUND_LABEL),
-            action_label(Action::OpenConfigurator),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ToggleStatusBar, NOT_BOUND_LABEL),
-            action_label(Action::ToggleStatusBar),
-        ),
+        )
+        .with_action(Action::ToggleRadialMenu),
+        action_row(bindings, Action::Exit, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleCommandPalette, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleToolbar, NOT_BOUND_LABEL),
+        action_row(bindings, Action::CycleToolbarDisplay, NOT_BOUND_LABEL),
+        action_row(bindings, Action::TogglePresenterMode, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleLightMode, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleLightModeDrawing, NOT_BOUND_LABEL),
+        action_row(bindings, Action::OpenConfigurator, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleStatusBar, NOT_BOUND_LABEL),
     ];
     if frozen_enabled {
-        action_rows.push(row(
-            binding_or_fallback(bindings, Action::ToggleFrozenMode, NOT_BOUND_LABEL),
-            action_label(Action::ToggleFrozenMode),
+        action_rows.push(action_row(
+            bindings,
+            Action::ToggleFrozenMode,
+            NOT_BOUND_LABEL,
         ));
     }
     let actions = Section {
@@ -383,58 +227,46 @@ pub(super) fn build_main_sections(
             row(
                 binding_or_fallback(bindings, Action::CaptureClipboardFull, NOT_BOUND_LABEL),
                 "Full screen → clipboard",
-            ),
+            )
+            .with_action(Action::CaptureClipboardFull),
             row(
                 binding_or_fallback(bindings, Action::CaptureFileFull, NOT_BOUND_LABEL),
                 "Full screen → file",
-            ),
+            )
+            .with_action(Action::CaptureFileFull),
             row(
                 binding_or_fallback(bindings, Action::CaptureClipboardSelection, NOT_BOUND_LABEL),
                 "Region → clipboard",
-            ),
+            )
+            .with_action(Action::CaptureClipboardSelection),
             row(
                 binding_or_fallback(bindings, Action::CaptureFileSelection, NOT_BOUND_LABEL),
                 "Region → file",
-            ),
+            )
+            .with_action(Action::CaptureFileSelection),
             row(
                 binding_or_fallback(bindings, Action::CaptureActiveWindow, NOT_BOUND_LABEL),
                 "Active window (Hyprland)",
-            ),
+            )
+            .with_action(Action::CaptureActiveWindow),
             row(
                 binding_or_fallback(bindings, Action::CaptureSelection, NOT_BOUND_LABEL),
                 "Selection (capture defaults)",
-            ),
+            )
+            .with_action(Action::CaptureSelection),
         ]);
     }
     screenshot_rows.extend([
-        row(
-            binding_or_fallback(bindings, Action::ExportCanvasClipboard, NOT_BOUND_LABEL),
-            action_label(Action::ExportCanvasClipboard),
+        action_row(bindings, Action::ExportCanvasClipboard, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ExportCanvasFile, NOT_BOUND_LABEL),
+        action_row(
+            bindings,
+            Action::ExportCanvasClipboardAndFile,
+            NOT_BOUND_LABEL,
         ),
-        row(
-            binding_or_fallback(bindings, Action::ExportCanvasFile, NOT_BOUND_LABEL),
-            action_label(Action::ExportCanvasFile),
-        ),
-        row(
-            binding_or_fallback(
-                bindings,
-                Action::ExportCanvasClipboardAndFile,
-                NOT_BOUND_LABEL,
-            ),
-            action_label(Action::ExportCanvasClipboardAndFile),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ExportBoardPdfFile, NOT_BOUND_LABEL),
-            action_label(Action::ExportBoardPdfFile),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::ExportAllBoardsPdfFile, NOT_BOUND_LABEL),
-            action_label(Action::ExportAllBoardsPdfFile),
-        ),
-        row(
-            binding_or_fallback(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
-            action_label(Action::OpenCaptureFolder),
-        ),
+        action_row(bindings, Action::ExportBoardPdfFile, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ExportAllBoardsPdfFile, NOT_BOUND_LABEL),
+        action_row(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
     ]);
     let screenshots = Some(Section {
         title: "Screenshots & Export",

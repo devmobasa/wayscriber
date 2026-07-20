@@ -26,7 +26,8 @@ pub use base::{
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionHandle,
-    ShellMode, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
+    UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState};
 pub(crate) use base::{
@@ -43,9 +44,13 @@ pub use color_picker_popup::{
 pub(crate) use command_palette::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
-    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_TOP_RATIO,
+    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score, fuzzy_score,
+    query_tokens,
 };
-pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint};
+pub use command_palette::{
+    COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint, CommandPaletteListRow,
+};
 pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
 #[allow(unused_imports)]
 pub use menus::{
@@ -62,5 +67,5 @@ pub use radial_menu::{
 pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::TourStep;
-pub use utility::HelpOverlayCursorHint;
 pub(crate) use utility::default_step_marker_size;
+pub use utility::{HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome};

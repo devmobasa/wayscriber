@@ -1,3 +1,4 @@
+use crate::input::state::{Toast, ToastPriority};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -276,13 +277,16 @@ impl WaylandState {
                 let message = clear_tool_state_runtime_message(&report);
                 log::info!("{message}");
                 self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Info, message);
+                    .push_toast(ToastPriority::Info, "session", Toast::info(message));
             }
             Err(err) => {
                 let message = format!("Failed to reset tool defaults: {err:#}");
                 log::warn!("{message}");
-                self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "session",
+                    Toast::error(message),
+                );
             }
         }
     }

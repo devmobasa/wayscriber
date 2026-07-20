@@ -1,8 +1,10 @@
 mod state;
+mod toast_queue;
 mod types;
 
 pub use state::InputState;
 pub(crate) use state::{LightModeRestore, PresenterRestore};
+pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome, ToastQueue};
 pub use types::{
     BLOCKED_ACTION_DURATION_MS, BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS,
     CompositorCapabilities, DesktopEnvironment, DrawingState, MAX_STROKE_THICKNESS,
@@ -17,7 +19,6 @@ pub(crate) use types::{
     DelayedHistory, HistoryMode, PasteAnchor, PendingBackendAction, PendingBoardDelete,
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PolygonClickState, PresetFeedbackState,
-    SelectionPublishState, TextClickState, TextEditEntryFeedback, ToastAction, UiToastState,
-    WayscriberClipboardSelection,
+    SelectionPublishState, TextClickState, TextEditEntryFeedback, WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};

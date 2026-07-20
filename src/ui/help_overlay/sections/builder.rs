@@ -1,7 +1,7 @@
 mod quick;
 mod sections;
 
-use super::super::search::{find_match_range, row_matches};
+use super::super::search::{row_matches, title_matches};
 use super::super::types::{Section, row};
 use super::bindings::HelpOverlayBindings;
 use quick::build_quick_sections;
@@ -72,7 +72,7 @@ pub(crate) fn filter_sections_for_search(
 ) -> Vec<Section> {
     let mut filtered = Vec::new();
     for mut section in all_sections {
-        let title_match = find_match_range(section.title, search_lower).is_some();
+        let title_match = title_matches(section.title, search_lower);
         if !title_match {
             section.rows.retain(|row| row_matches(row, search_lower));
         }

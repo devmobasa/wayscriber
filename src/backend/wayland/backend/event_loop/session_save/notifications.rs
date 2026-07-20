@@ -1,7 +1,7 @@
 use super::*;
+use crate::input::state::{Toast, ToastPriority};
 use crate::{
     config::{Action, Config},
-    input::state::UiToastKind,
     notification,
     session::SaveSnapshotOutcome,
 };
@@ -52,12 +52,12 @@ pub(super) fn notify_session_save_report(
     for notification in pending_save_notifications(&mut state.session, report) {
         let (summary, body) = session_save_notification_text(notification, report);
         let toast = session_save_toast_text(notification, report);
-        state.input_state.set_ui_toast_with_action_and_duration(
-            UiToastKind::Warning,
-            toast,
-            "Settings",
-            Action::OpenConfigurator,
-            SESSION_SAVE_WARNING_TOAST_MS,
+        state.input_state.push_toast(
+            ToastPriority::Action,
+            "session.save",
+            Toast::warning(toast)
+                .action("Settings", Action::OpenConfigurator)
+                .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
         );
         notification::send_notification_with_timeout_async(
             &state.tokio_handle,
@@ -178,22 +178,24 @@ pub(super) fn notify_persistence_worker_failure(state: &WaylandState, err: &anyh
 }
 
 pub(super) fn show_session_failure_toast(state: &mut WaylandState) {
-    state.input_state.set_ui_toast_with_action_and_duration(
-        UiToastKind::Warning,
-        "Session save failed; drawings may not restore. Check max_file_size_mb.",
-        "Settings",
-        Action::OpenConfigurator,
-        SESSION_SAVE_WARNING_TOAST_MS,
+    state.input_state.push_toast(
+        ToastPriority::Action,
+        "session.save",
+        Toast::warning("Session save failed; drawings may not restore. Check max_file_size_mb.")
+            .action("Settings", Action::OpenConfigurator)
+            .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
     );
 }
 
 pub(super) fn show_persistence_worker_failure_toast(state: &mut WaylandState) {
-    state.input_state.set_ui_toast_with_action_and_duration(
-        UiToastKind::Warning,
-        "Automatic session persistence stopped; final save will be retried on exit.",
-        "Settings",
-        Action::OpenConfigurator,
-        SESSION_SAVE_WARNING_TOAST_MS,
+    state.input_state.push_toast(
+        ToastPriority::Action,
+        "session.save",
+        Toast::warning(
+            "Automatic session persistence stopped; final save will be retried on exit.",
+        )
+        .action("Settings", Action::OpenConfigurator)
+        .duration_ms(SESSION_SAVE_WARNING_TOAST_MS),
     );
 }
 

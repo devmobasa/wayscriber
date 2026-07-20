@@ -1,7 +1,9 @@
 use super::super::base::{
-    InputState, KeybindingEditOperation, KeybindingEditRequest, PendingBackendAction, UiToastKind,
+    InputState, KeybindingEditOperation, KeybindingEditRequest, PendingBackendAction, Toast,
+    ToastPriority,
 };
 use super::layout;
+use super::search::{CommandPaletteListRow, command_palette_display_index};
 use super::{
     CommandPaletteCursorHint,
     layout::{CommandPaletteGeometry, CommandPaletteRowAction},
@@ -25,12 +27,13 @@ impl InputState {
             .bindings_for_action(action)
             .is_none()
         {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                format!(
+            self.push_toast(
+                ToastPriority::Info,
+                "palette.shortcut",
+                Toast::warning(format!(
                     "{} has no configurable keyboard shortcut.",
                     action_label(action)
-                ),
+                )),
             );
             return false;
         }
@@ -50,12 +53,13 @@ impl InputState {
             .bindings_for_action(action)
             .is_none()
         {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                format!(
+            self.push_toast(
+                ToastPriority::Info,
+                "palette.shortcut",
+                Toast::warning(format!(
                     "{} has no configurable keyboard shortcut.",
                     action_label(action)
-                ),
+                )),
             );
             return false;
         }
@@ -74,9 +78,11 @@ impl InputState {
         self.command_palette_query.clear();
         self.command_palette_selected = 0;
         self.command_palette_scroll = 0;
-        // Close other overlays
+        // Close other overlays. Route help through the canonical closer so the
+        // cached pointer hit map is dropped; setting `show_help = false` alone
+        // would leave the previous layout hittable until the next render.
         if self.show_help {
-            self.show_help = false;
+            self.close_help_overlay();
         }
         if self.tour_active {
             self.tour_active = false;
@@ -159,7 +165,9 @@ impl InputState {
                     && self.command_palette_selected != last_index
                 {
                     self.command_palette_selected = last_index;
-                    self.command_palette_scroll = filtered
+                    // Scroll is in display-row space (headers included).
+                    self.command_palette_scroll = self
+                        .command_palette_rows()
                         .len()
                         .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
                     self.needs_redraw = true;
@@ -262,8 +270,22 @@ impl InputState {
                     return false;
                 }
                 self.command_palette_selected -= 1;
-                if self.command_palette_selected < self.command_palette_scroll {
-                    self.command_palette_scroll = self.command_palette_selected;
+                let rows = self.command_palette_rows();
+                let display_index =
+                    command_palette_display_index(&rows, self.command_palette_selected);
+                // Keep the group header visible when the selection sits
+                // directly beneath it.
+                let target_top = if display_index > 0
+                    && matches!(
+                        rows.get(display_index - 1),
+                        Some(CommandPaletteListRow::Header(_))
+                    ) {
+                    display_index - 1
+                } else {
+                    display_index
+                };
+                if target_top < self.command_palette_scroll {
+                    self.command_palette_scroll = target_top;
                 }
             }
             Key::Down => {
@@ -272,17 +294,63 @@ impl InputState {
                     return false;
                 }
                 self.command_palette_selected += 1;
-                if self.command_palette_selected
+                let rows = self.command_palette_rows();
+                let display_index =
+                    command_palette_display_index(&rows, self.command_palette_selected);
+                if display_index
                     >= self.command_palette_scroll + layout::COMMAND_PALETTE_MAX_VISIBLE
                 {
                     self.command_palette_scroll =
-                        self.command_palette_selected - layout::COMMAND_PALETTE_MAX_VISIBLE + 1;
+                        display_index - layout::COMMAND_PALETTE_MAX_VISIBLE + 1;
                 }
             }
             _ => return false,
         }
         self.needs_redraw = true;
         true
+    }
+
+    /// Scroll the palette list by one display row (mouse wheel). Keeps the
+    /// selection inside the visible window, skipping header rows.
+    pub fn command_palette_wheel_scroll(&mut self, direction: i32) {
+        if direction == 0 || !self.command_palette_open {
+            return;
+        }
+        let rows = self.command_palette_rows();
+        let max_scroll = rows
+            .len()
+            .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
+        if direction > 0 {
+            if self.command_palette_scroll >= max_scroll {
+                return;
+            }
+            self.command_palette_scroll += 1;
+        } else {
+            if self.command_palette_scroll == 0 {
+                return;
+            }
+            self.command_palette_scroll -= 1;
+        }
+
+        let window_start = self.command_palette_scroll;
+        let window_end = window_start + layout::COMMAND_PALETTE_MAX_VISIBLE;
+        let selected_display = command_palette_display_index(&rows, self.command_palette_selected);
+        if selected_display < window_start {
+            if let Some(command_index) = rows[window_start..window_end.min(rows.len())]
+                .iter()
+                .find_map(|row| row.command_index())
+            {
+                self.command_palette_selected = command_index;
+            }
+        } else if selected_display >= window_end
+            && let Some(command_index) = rows[window_start..window_end.min(rows.len())]
+                .iter()
+                .rev()
+                .find_map(|row| row.command_index())
+        {
+            self.command_palette_selected = command_index;
+        }
+        self.needs_redraw = true;
     }
 
     pub(crate) fn release_command_palette_repeat_key(&mut self, key: Key) {
@@ -376,8 +444,8 @@ impl InputState {
             return true;
         }
 
-        let filtered = self.filtered_commands();
-        let geometry = self.command_palette_geometry(screen_width, screen_height, filtered.len());
+        let rows = self.command_palette_rows();
+        let geometry = self.command_palette_geometry(screen_width, screen_height, rows.len());
         let (local_x, local_y) = geometry.local_point(x, y);
 
         // Check if click is outside palette bounds - close it.
@@ -390,12 +458,22 @@ impl InputState {
 
         // Check command items region.
         if let Some(visible_index) = geometry.visible_item_at(local_x, local_y) {
-            // Clicked on item at visible index, actual index accounts for scroll.
-            let actual_index = self.command_palette_scroll + visible_index;
+            // Clicked on row at visible index, actual index accounts for scroll.
+            let display_index = self.command_palette_scroll + visible_index;
+            let Some(command_entry) = rows.get(display_index).and_then(|row| match row {
+                CommandPaletteListRow::Header(_) => None,
+                CommandPaletteListRow::Command {
+                    command,
+                    command_index,
+                } => Some((*command, *command_index)),
+            }) else {
+                // Group headers consume the click without acting.
+                return true;
+            };
+            let (command, actual_index) = command_entry;
             self.command_palette_selected = actual_index;
 
             if let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
-                && let Some(command) = filtered.get(actual_index).copied()
                 && KeybindingsConfig::default()
                     .bindings_for_action(command.action)
                     .is_some()
@@ -421,27 +499,20 @@ impl InputState {
                 return true;
             }
 
-            // Get the command label for feedback before executing.
-            let label = filtered
-                .get(actual_index)
-                .map_or("Command", |command| command.label);
-
             // Execute the command.
-            if let Some(command) = filtered.get(actual_index).copied() {
-                self.command_palette_open = false;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.record_command_palette_action(command.action);
+            self.command_palette_open = false;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.record_command_palette_action(command.action);
 
-                // Show brief toast feedback.
-                self.set_ui_toast_with_duration(
-                    UiToastKind::Info,
-                    label,
-                    self.command_palette_toast_duration_ms,
-                );
+            // Show brief toast feedback.
+            self.push_toast(
+                ToastPriority::Info,
+                "palette.feedback",
+                Toast::info(command.label).duration_ms(self.command_palette_toast_duration_ms),
+            );
 
-                self.handle_action(command.action);
-            }
+            self.handle_action(command.action);
             return true;
         }
 
@@ -462,9 +533,9 @@ impl InputState {
             return None;
         }
 
-        let filtered = self.filtered_commands();
-        let geometry = self.command_palette_geometry(screen_width, screen_height, filtered.len());
-        command_palette_cursor_hint_from_local(geometry, x, y)
+        let rows = self.command_palette_rows();
+        let geometry = self.command_palette_geometry(screen_width, screen_height, rows.len());
+        command_palette_cursor_hint_from_local(geometry, &rows, self.command_palette_scroll, x, y)
     }
 
     pub(crate) fn command_palette_action_tooltip(
@@ -475,13 +546,16 @@ impl InputState {
         if !self.command_palette_open {
             return None;
         }
-        let filtered = self.filtered_commands();
-        let geometry = self.command_palette_geometry(screen_width, screen_height, filtered.len());
+        let rows = self.command_palette_rows();
+        let geometry = self.command_palette_geometry(screen_width, screen_height, rows.len());
         let (x, y) = self.pointer_position();
         let (local_x, local_y) = geometry.local_point(x, y);
         let (visible_index, action) = geometry.row_action_at(local_x, local_y)?;
-        let actual_index = self.command_palette_scroll + visible_index;
-        let command = filtered.get(actual_index)?;
+        let display_index = self.command_palette_scroll + visible_index;
+        let command = match rows.get(display_index)? {
+            CommandPaletteListRow::Header(_) => return None,
+            CommandPaletteListRow::Command { command, .. } => command,
+        };
         KeybindingsConfig::default().bindings_for_action(command.action)?;
         Some((action.tooltip(), x, y))
     }
@@ -493,6 +567,8 @@ fn command_palette_token_separator(ch: char) -> bool {
 
 fn command_palette_cursor_hint_from_local(
     geometry: CommandPaletteGeometry,
+    rows: &[CommandPaletteListRow],
+    scroll: usize,
     x: i32,
     y: i32,
 ) -> Option<CommandPaletteCursorHint> {
@@ -506,6 +582,16 @@ fn command_palette_cursor_hint_from_local(
     // Check input field region.
     if geometry.local_in_input(local_x, local_y) {
         return Some(CommandPaletteCursorHint::Text);
+    }
+
+    // Group headers are not interactive.
+    if let Some(visible_index) = geometry.visible_item_at(local_x, local_y)
+        && matches!(
+            rows.get(scroll + visible_index),
+            Some(CommandPaletteListRow::Header(_))
+        )
+    {
+        return Some(CommandPaletteCursorHint::Default);
     }
 
     // Check command items region.

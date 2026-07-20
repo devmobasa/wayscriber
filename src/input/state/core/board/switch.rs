@@ -1,4 +1,5 @@
-use super::super::base::{InputState, UiToastKind};
+use super::super::base::InputState;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
 impl InputState {
@@ -64,7 +65,11 @@ impl InputState {
         if created {
             let name = self.boards.active_board_name().to_string();
             self.queue_board_config_save();
-            self.set_ui_toast(UiToastKind::Info, format!("Board created: {name}"));
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info(format!("Board created: {name}")),
+            );
         }
         created
     }
@@ -99,13 +104,21 @@ impl InputState {
     /// Duplicate the active board.
     pub fn duplicate_board(&mut self) {
         if self.board_is_transparent() {
-            self.set_ui_toast(UiToastKind::Info, "Overlay board cannot be duplicated.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info("Overlay board cannot be duplicated."),
+            );
             return;
         }
 
         let current_id = self.boards.active_board_id().to_string();
         if self.boards.board_count() >= self.boards.max_count() {
-            self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info("Board limit reached."),
+            );
             return;
         }
         if !self.session_allows_board_duplicate() {
@@ -119,7 +132,11 @@ impl InputState {
             self.record_board_recent(&new_id);
             self.queue_board_config_save();
             let name = self.boards.active_board_name();
-            self.set_ui_toast(UiToastKind::Info, format!("Board duplicated: {name}"));
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info(format!("Board duplicated: {name}")),
+            );
 
             // Handle color auto-adjustment for the duplicated board
             let current_spec = self.boards.active_board().spec.clone();
@@ -133,7 +150,11 @@ impl InputState {
 
             log::info!("Duplicated board '{}' to '{}'", current_id, new_id);
         } else {
-            self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info("Board limit reached."),
+            );
         }
     }
 
@@ -150,7 +171,11 @@ impl InputState {
         if let Some(target_id) = target {
             self.switch_board_force(&target_id);
         } else {
-            self.set_ui_toast(UiToastKind::Info, "No recent board to switch to.");
+            self.push_toast(
+                ToastPriority::Info,
+                "board.switch",
+                Toast::info("No recent board to switch to."),
+            );
         }
     }
 

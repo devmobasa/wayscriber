@@ -231,6 +231,10 @@ pub(crate) struct UiToastState {
     pub duration_ms: u64,
     /// Optional action that triggers when the toast is clicked.
     pub action: Option<ToastAction>,
+    /// Queue priority this toast was pushed with (drives preemption).
+    pub priority: super::toast_queue::ToastPriority,
+    /// Dedup/rate-limit key this toast was pushed with.
+    pub key: &'static str,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -271,7 +275,7 @@ pub(crate) enum HistoryMode {
 }
 
 /// Tracks which compositor features are available.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CompositorCapabilities {
     pub layer_shell: bool,
     pub screencopy: bool,
@@ -474,6 +478,33 @@ pub(crate) struct PendingOnboardingUsage {
     pub used_context_menu_keyboard: bool,
     pub used_help_overlay: bool,
     pub used_command_palette: bool,
+    /// A drawing color was applied (any path). Drives the colors/thickness
+    /// first-run teaching step.
+    pub used_color_change: bool,
+    /// Stroke thickness / eraser size was adjusted (any path). Drives the
+    /// colors/thickness first-run teaching step.
+    pub used_thickness_change: bool,
+    /// A radial-menu flick committed a tool/color (press-flick-release).
+    /// Drives the radial-flick first-run teaching step.
+    pub used_radial_flick: bool,
+    /// The last shortcut-bound action invoked via a "slow path" this tick —
+    /// the command palette or the toolbar — that the shortcut coach nudges
+    /// away from. Source-agnostic: the coach resolves and names this action's
+    /// keyboard shortcut regardless of which surface triggered it.
+    pub shortcut_slow_path_action: Option<Action>,
+    /// Number of shortcut-bound slow-path invocations this tick (palette or
+    /// toolbar). Folded into the coach's per-session slow-path streak.
+    pub shortcut_slow_path_repeats: u32,
+}
+
+impl PendingOnboardingUsage {
+    /// Record that a shortcut-bound action ran via a slow path (command palette
+    /// or toolbar) when the user could have pressed the key. Called only when
+    /// the action has a resolvable shortcut so the coach can always name it.
+    pub(crate) fn note_shortcut_slow_path(&mut self, action: Action) {
+        self.shortcut_slow_path_action = Some(action);
+        self.shortcut_slow_path_repeats = self.shortcut_slow_path_repeats.saturating_add(1);
+    }
 }
 
 #[cfg(test)]

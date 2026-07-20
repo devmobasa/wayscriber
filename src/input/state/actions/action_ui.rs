@@ -1,7 +1,8 @@
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
-use super::super::{DrawingState, InputState, PendingBackendAction, UiToastKind};
+use super::super::{DrawingState, InputState, PendingBackendAction};
 
 impl InputState {
     pub(in crate::input::state) fn handle_ui_action(&mut self, action: Action) -> bool {
@@ -60,13 +61,14 @@ impl InputState {
                 }
                 let mode = self.cycle_top_toolbar_display();
                 self.pending_onboarding_usage.used_toolbar_toggle = true;
-                self.set_ui_toast(
-                    UiToastKind::Info,
-                    match mode {
+                self.push_toast(
+                    ToastPriority::Info,
+                    "ui",
+                    Toast::info(match mode {
                         crate::config::TopDisplayMode::Full => "Toolbar: full",
                         crate::config::TopDisplayMode::Micro => "Toolbar: micro",
                         crate::config::TopDisplayMode::Hidden => "Toolbar: hidden",
-                    },
+                    }),
                 );
                 self.set_pending_backend_action(PendingBackendAction::PersistToolbarConfig);
                 self.dirty_tracker.mark_full();
@@ -151,7 +153,11 @@ impl InputState {
                     } else if self.show_properties_panel() {
                         self.close_context_menu();
                     } else {
-                        self.set_ui_toast(UiToastKind::Warning, "No selection to edit.");
+                        self.push_toast(
+                            ToastPriority::Info,
+                            "ui",
+                            Toast::warning("No selection to edit."),
+                        );
                     }
                 }
                 true
@@ -169,7 +175,7 @@ impl InputState {
                 true
             }
             Action::ReplayTour => {
-                self.start_tour();
+                self.start_tour_replay();
                 true
             }
             Action::ToggleCommandPalette => {

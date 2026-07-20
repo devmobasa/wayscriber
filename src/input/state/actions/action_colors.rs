@@ -27,6 +27,9 @@ impl InputState {
 
     pub(crate) fn apply_color_from_ui(&mut self, color: Color) -> bool {
         self.note_recent_color(color);
+        // First-run teaching signal: any color application (quick-color key,
+        // radial swatch, picker, eyedropper) counts as "changed a color".
+        self.pending_onboarding_usage.used_color_change = true;
         let mut changed = self.set_color(color);
         if self.active_tool() == Tool::Select && !self.selected_shape_ids().is_empty() {
             let selection_changed = self.apply_selection_color_value(color);

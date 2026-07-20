@@ -2,6 +2,7 @@ use super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::keycaps::{KeyComboStyle, draw_key_combo, draw_key_combo_highlight, measure_key_combo};
 use super::layout::GridLayout;
 use super::search::{HighlightStyle, draw_highlight, find_match_range};
+use super::types::HelpRowHit;
 use crate::ui::theme::{self, Rgba};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -55,10 +56,16 @@ pub(crate) fn draw_sections_grid(
     style: &GridStyle<'_>,
     colors: &GridColors,
     key_combo_style: &KeyComboStyle<'_>,
+    hits: &mut Vec<HelpRowHit>,
 ) {
     if grid_view_height <= 0.0 {
         return;
     }
+
+    // Vertical clip band of the scrolling grid; row hit rects are clipped to
+    // this so a partially-scrolled row never reports a click outside the view.
+    let clip_top = grid_start_y;
+    let clip_bottom = grid_start_y + grid_view_height;
 
     let heading_style = UiTextStyle {
         family: style.help_font_family,
@@ -169,6 +176,22 @@ pub(crate) fn draw_sections_grid(
                 section_y += style.row_gap_after_heading;
                 for row_data in &section.rows {
                     let baseline = section_y + style.body_font_size;
+
+                    // Register the clickable band for rows that carry an action;
+                    // clip it to the visible grid so scrolled-out rows drop out.
+                    if let Some(action) = row_data.action_id {
+                        let top = section_y.max(clip_top);
+                        let bottom = (section_y + style.row_line_height).min(clip_bottom);
+                        if bottom > top {
+                            hits.push(HelpRowHit {
+                                x: section_x,
+                                y: top,
+                                w: measured.width,
+                                h: bottom - top,
+                                action,
+                            });
+                        }
+                    }
 
                     let key_match =
                         search_active && find_match_range(&row_data.key, search_lower).is_some();

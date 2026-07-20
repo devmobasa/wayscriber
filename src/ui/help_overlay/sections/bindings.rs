@@ -137,6 +137,21 @@ pub(super) fn bindings_compact_or_fallback(
     join_binding_labels(&labels).unwrap_or_else(|| fallback.to_string())
 }
 
+/// A standard clickable help row for a single action: shortcut label(s) on
+/// the left, the action's registry label as description, and the action id
+/// attached so clicking the row executes it.
+pub(super) fn action_row(
+    bindings: &HelpOverlayBindings,
+    action: Action,
+    fallback: &str,
+) -> super::super::types::Row {
+    super::super::types::row(
+        binding_or_fallback(bindings, action, fallback),
+        crate::config::action_label(action),
+    )
+    .with_action(action)
+}
+
 pub(super) fn primary_or_fallback(
     bindings: &HelpOverlayBindings,
     action: Action,

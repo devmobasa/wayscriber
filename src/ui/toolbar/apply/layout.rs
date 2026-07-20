@@ -1,5 +1,6 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
 use crate::input::InputState;
+use crate::input::state::{Toast, ToastPriority};
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
@@ -96,11 +97,18 @@ impl InputState {
         if self.toolbar_top_pinned != pin {
             self.toolbar_top_pinned = pin;
             // Show toast explaining what pinning does
-            use crate::input::state::UiToastKind;
             if pin {
-                self.set_ui_toast(UiToastKind::Info, "Top toolbar will open at startup");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "toolbar",
+                    Toast::info("Top toolbar will open at startup"),
+                );
             } else {
-                self.set_ui_toast(UiToastKind::Info, "Top toolbar will be hidden at startup");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "toolbar",
+                    Toast::info("Top toolbar will be hidden at startup"),
+                );
             }
             true
         } else {
@@ -112,11 +120,18 @@ impl InputState {
         if self.toolbar_side_pinned != pin {
             self.toolbar_side_pinned = pin;
             // Show toast explaining what pinning does
-            use crate::input::state::UiToastKind;
             if pin {
-                self.set_ui_toast(UiToastKind::Info, "Side toolbar will open at startup");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "toolbar",
+                    Toast::info("Side toolbar will open at startup"),
+                );
             } else {
-                self.set_ui_toast(UiToastKind::Info, "Side toolbar will be hidden at startup");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "toolbar",
+                    Toast::info("Side toolbar will be hidden at startup"),
+                );
             }
             true
         } else {

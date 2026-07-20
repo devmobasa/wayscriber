@@ -1,5 +1,6 @@
-use super::super::base::{InputState, PresenterRestore, UiToastKind};
+use super::super::base::{InputState, PresenterRestore};
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -43,7 +44,11 @@ impl InputState {
                 }
             }
             if config.show_toast {
-                self.set_ui_toast(UiToastKind::Info, "Stopping Presenter Mode");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "presenter",
+                    Toast::info("Stopping Presenter Mode"),
+                );
             }
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -123,11 +128,10 @@ impl InputState {
         self.presenter_restore = Some(restore);
         self.presenter_mode = true;
         if config.show_toast {
-            self.set_ui_toast_with_action(
-                UiToastKind::Info,
-                "Presenter Mode active",
-                "Exit",
-                Action::TogglePresenterMode,
+            self.push_toast(
+                ToastPriority::Action,
+                "presenter",
+                Toast::info("Presenter Mode active").action("Exit", Action::TogglePresenterMode),
             );
         }
         self.dirty_tracker.mark_full();

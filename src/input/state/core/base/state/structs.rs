@@ -10,6 +10,7 @@ use super::super::super::{
     radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
 };
+use super::super::toast_queue::ToastQueue;
 use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
     DelayedHistory, DrawingState, OutputFocusAction, PendingBackendAction, PendingBoardDelete,
@@ -151,6 +152,12 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
+    /// Help target resolved under the last help-overlay left press, recorded so
+    /// the matching release only runs a row when press and release land on the
+    /// SAME target. Mirrors the toast press/release contract and guards
+    /// destructive rows (e.g. Clear) against a press-drag-release that starts
+    /// off-row and ends on the row.
+    pub(crate) help_overlay_pending_press: Option<crate::input::state::HelpOverlayClick>,
     /// Board picker quick search query
     pub board_picker_search: String,
     /// Time of last board picker search input
@@ -169,6 +176,8 @@ pub struct InputState {
     pub(crate) command_palette_repeat_next_tick: Option<Instant>,
     /// Most recently executed command palette actions (most recent first)
     pub command_palette_recent: Vec<Action>,
+    /// Whether the recents changed since the backend last persisted them.
+    pub(crate) command_palette_recents_dirty: bool,
     /// Action whose next keyboard chord is being captured for rebinding.
     pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
@@ -257,6 +266,10 @@ pub struct InputState {
     /// the config value; this struct field deliberately defaults to
     /// `Panel` so side-palette tests exercise the panel without setup.
     pub toolbar_side_layout: crate::config::ToolbarSideLayout,
+    /// Modifier chord that turns a toolbar click into shortcut rebinding.
+    /// Used to generate onboarding copy (the tour's rebind hint) without
+    /// hardcoding key strings. Startup init applies the config value.
+    pub toolbar_rebind_modifier: crate::config::ToolbarRebindModifier,
     /// Last HSV triple committed from the side palette's color picker;
     /// preserves hue/saturation across gray colors where RGB loses them.
     pub toolbar_picker_hsv: Option<(f64, f64, f64)>,
@@ -377,8 +390,10 @@ pub struct InputState {
     pub show_preset_toasts: bool,
     /// Whether to show the cursor tool preview bubble
     pub show_tool_preview: bool,
-    /// Pending UI toast (errors/warnings/info)
+    /// Active (visible) UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Pending toasts waiting behind the active one, plus rate-limit memory
+    pub(crate) toast_queue: ToastQueue,
     /// Cached bounds of the rendered toast for click detection (x, y, w, h)
     pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
     /// Copied selection shapes for paste operations
@@ -500,9 +515,10 @@ pub struct InputState {
     pub tour_step: usize,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
-    /// Whether the capability warning toast has been shown (used by wayland backend)
-    #[allow(dead_code)]
-    pub(crate) capability_toast_shown: bool,
+    /// Capabilities snapshot the capability warning toast last evaluated;
+    /// `None` until first evaluated, re-evaluated whenever capabilities change
+    /// (read/written each tick by the wayland backend's capability toast).
+    pub(crate) capability_toast_caps: Option<CompositorCapabilities>,
     /// Blocked action visual feedback state (red flash)
     pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
     /// Pending clipboard fallback for failed copy operations

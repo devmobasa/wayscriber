@@ -1,3 +1,4 @@
+use crate::input::state::{Toast, ToastPriority};
 use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
 
 use super::super::*;
@@ -323,7 +324,7 @@ impl WaylandState {
             Err(err) => {
                 log::warn!("Frozen pending image activation failed: {}", err);
                 self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Error, err);
+                    .push_toast(ToastPriority::Critical, "freeze", Toast::error(err));
                 self.restore_xdg_after_frozen();
             }
         }

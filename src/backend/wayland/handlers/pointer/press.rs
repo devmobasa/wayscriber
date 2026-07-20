@@ -43,6 +43,31 @@ impl WaylandState {
             return;
         }
 
+        // The help overlay is modal for pointer input: swallow the press so a
+        // click never starts a stroke on the canvas beneath it, but record the
+        // help target under the press. The release enforces a same-target
+        // contract before it runs a row (or dismisses), so a press that starts
+        // on bare chrome (or outside) and drags onto a clickable row — notably
+        // the destructive Clear row — never executes it. Toolbar surfaces report
+        // toolbar-local coordinates, so convert to screen space just like the
+        // toast/status-HUD press guards below.
+        if self.input_state.show_help {
+            if button == BTN_LEFT {
+                let screen_position = if on_toolbar {
+                    self.toolbar_surface_screen_coords(&event.surface, event.position)
+                } else {
+                    Some(event.position)
+                };
+                match screen_position {
+                    Some((sx, sy)) => self
+                        .input_state
+                        .note_help_overlay_press(sx.round() as i32, sy.round() as i32),
+                    None => self.input_state.clear_help_overlay_press(),
+                }
+            }
+            return;
+        }
+
         // Handle command palette clicks
         if self.input_state.command_palette_is_engaged() {
             if button == BTN_LEFT {

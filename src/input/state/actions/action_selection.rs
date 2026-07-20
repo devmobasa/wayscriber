@@ -1,7 +1,8 @@
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
-use super::super::{InputState, SelectionAxis, UiToastKind};
+use super::super::{InputState, SelectionAxis};
 
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
@@ -14,14 +15,16 @@ impl InputState {
                 if copied > 0 {
                     info!("Copied selection ({} shape(s))", copied);
                 } else if self.has_selection() {
-                    self.set_ui_toast(
-                        UiToastKind::Warning,
-                        "No unlocked shapes to copy; clipboard unchanged.",
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "selection",
+                        Toast::warning("No unlocked shapes to copy; clipboard unchanged."),
                     );
                 } else {
-                    self.set_ui_toast(
-                        UiToastKind::Warning,
-                        "No selection to copy; clipboard unchanged.",
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "selection",
+                        Toast::warning("No selection to copy; clipboard unchanged."),
                     );
                 }
                 true
@@ -41,7 +44,11 @@ impl InputState {
                     .map(|shape| shape.id)
                     .collect();
                 if ids.is_empty() {
-                    self.set_ui_toast(UiToastKind::Warning, "No shapes to select.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "selection",
+                        Toast::warning("No shapes to select."),
+                    );
                 } else {
                     self.set_selection(ids);
                     self.mark_selection_dirty_region(previous_bounds);

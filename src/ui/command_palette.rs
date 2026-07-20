@@ -1,11 +1,11 @@
 //! Command palette UI rendering.
 
-use crate::config::{action_label, action_meta::ActionMeta};
+use crate::config::action_label;
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
-    COMMAND_PALETTE_TOP_RATIO,
+    COMMAND_PALETTE_TOP_RATIO, CommandPaletteListRow,
 };
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -25,6 +25,7 @@ const HINT_BASELINE_BOTTOM_OFFSET: f64 = 12.0;
 const ELLIPSIS: &str = "\u{2026}";
 const COMMAND_PALETTE_FONT_FAMILY: &str = "Sans";
 const COMMAND_PALETTE_LABEL_TEXT_SIZE: f64 = 14.0;
+const COMMAND_PALETTE_HEADER_TEXT_SIZE: f64 = 10.0;
 const COMMAND_PALETTE_DESC_TEXT_SIZE: f64 = 12.0;
 const COMMAND_PALETTE_SHORTCUT_TEXT_SIZE: f64 = 10.0;
 const COMMAND_PALETTE_HINT_TEXT_SIZE: f64 = 11.0;
@@ -62,9 +63,8 @@ pub fn render_command_palette(
         return;
     }
 
-    let filtered = input_state.filtered_commands();
-    let geometry =
-        input_state.command_palette_geometry(screen_width, screen_height, filtered.len());
+    let rows = input_state.command_palette_rows();
+    let geometry = input_state.command_palette_geometry(screen_width, screen_height, rows.len());
     let palette_width = geometry.width;
     let height = geometry.height;
 
@@ -93,9 +93,9 @@ pub fn render_command_palette(
         &input_state.command_palette_query,
     );
 
-    render_command_palette_rows(ctx, input_state, &filtered, inner_x, inner_width, cursor_y);
+    render_command_palette_rows(ctx, input_state, &rows, inner_x, inner_width, cursor_y);
 
-    if filtered.is_empty() && !input_state.command_palette_query.is_empty() {
+    if rows.is_empty() && !input_state.command_palette_query.is_empty() {
         draw_command_palette_empty_state(
             ctx,
             inner_x,
@@ -110,7 +110,7 @@ pub fn render_command_palette(
         y,
         palette_width,
         cursor_y,
-        filtered.len(),
+        rows.len(),
         input_state.command_palette_scroll,
     );
 
@@ -334,7 +334,7 @@ fn draw_command_palette_input(
 fn render_command_palette_rows(
     ctx: &cairo::Context,
     input_state: &InputState,
-    filtered: &[&'static ActionMeta],
+    rows: &[CommandPaletteListRow],
     inner_x: f64,
     inner_width: f64,
     start_y: f64,
@@ -342,25 +342,64 @@ fn render_command_palette_rows(
     let styles = command_palette_row_styles();
 
     let scroll = input_state.command_palette_scroll;
-    for (visible_idx, cmd) in filtered
+    for (visible_idx, row) in rows
         .iter()
         .skip(scroll)
         .take(COMMAND_PALETTE_MAX_VISIBLE)
         .enumerate()
     {
-        let actual_idx = scroll + visible_idx;
-        let is_selected = actual_idx == input_state.command_palette_selected;
         let item_y = start_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
-        render_command_row(
-            ctx,
-            input_state,
-            cmd,
-            &styles,
-            inner_x,
-            inner_width,
-            item_y,
-            is_selected,
-        );
+        match row {
+            CommandPaletteListRow::Header(label) => {
+                render_command_group_header(ctx, label, inner_x, inner_width, item_y);
+            }
+            CommandPaletteListRow::Command {
+                command,
+                command_index,
+            } => {
+                let is_selected = *command_index == input_state.command_palette_selected;
+                render_command_row(
+                    ctx,
+                    input_state,
+                    command,
+                    &styles,
+                    inner_x,
+                    inner_width,
+                    item_y,
+                    is_selected,
+                );
+            }
+        }
+    }
+}
+
+/// Group header row: small uppercase label with a hairline rule filling the
+/// remaining width. Occupies a full item row so hit-testing stays uniform.
+fn render_command_group_header(
+    ctx: &cairo::Context,
+    label: &str,
+    inner_x: f64,
+    inner_width: f64,
+    item_y: f64,
+) {
+    let style = command_palette_text_style(
+        COMMAND_PALETTE_HEADER_TEXT_SIZE,
+        cairo::FontWeight::Bold,
+        cairo::FontSlant::Normal,
+    );
+    let text = label.to_uppercase();
+    let baseline = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + style.size / 3.0;
+    constants::set_color(ctx, constants::TEXT_HINT);
+    let extents = draw_text_baseline(ctx, style, &text, inner_x + 10.0, baseline, None);
+
+    let rule_start = inner_x + 10.0 + extents.width() + 10.0;
+    let rule_end = inner_x + inner_width - 8.0;
+    if rule_end > rule_start {
+        constants::set_color(ctx, constants::DIVIDER_LIGHT);
+        ctx.set_line_width(1.0);
+        ctx.move_to(rule_start, baseline - style.size / 3.0);
+        ctx.line_to(rule_end, baseline - style.size / 3.0);
+        let _ = ctx.stroke();
     }
 }
 

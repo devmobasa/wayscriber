@@ -1,30 +1,20 @@
-use crate::config::{Action, action_label};
+use crate::config::Action;
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::toolbar_icons;
 
 use super::super::super::types::{Section, row};
-use super::super::bindings::{HelpOverlayBindings, binding_or_fallback, bindings_or_fallback};
+use super::super::bindings::{
+    HelpOverlayBindings, action_row, binding_or_fallback, bindings_or_fallback,
+};
 
 pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Section> {
     let quick_drawing = Section {
         title: "Drawing",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectPenTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
-                action_label(Action::SelectEraserTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectLineTool, "Shift+Drag"),
-                action_label(Action::SelectLineTool),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::SelectRectTool, "Ctrl+Drag"),
-                action_label(Action::SelectRectTool),
-            ),
+            action_row(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::SelectLineTool, "Shift+Drag"),
+            action_row(bindings, Action::SelectRectTool, "Ctrl+Drag"),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_pen),
@@ -32,22 +22,10 @@ pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Sectio
     let quick_actions = Section {
         title: "Actions",
         rows: vec![
-            row(
-                binding_or_fallback(bindings, Action::Undo, NOT_BOUND_LABEL),
-                action_label(Action::Undo),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
-                action_label(Action::ClearCanvas),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
-                action_label(Action::EnterTextMode),
-            ),
-            row(
-                binding_or_fallback(bindings, Action::Exit, NOT_BOUND_LABEL),
-                action_label(Action::Exit),
-            ),
+            action_row(bindings, Action::Undo, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
+            action_row(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
+            action_row(bindings, Action::Exit, NOT_BOUND_LABEL),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_undo),
@@ -74,7 +52,8 @@ pub(super) fn build_quick_sections(bindings: &HelpOverlayBindings) -> Vec<Sectio
             row(
                 binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
                 "Full help",
-            ),
+            )
+            .with_action(Action::ToggleHelp),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_file),

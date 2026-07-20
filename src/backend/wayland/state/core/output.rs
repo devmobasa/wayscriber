@@ -1,3 +1,4 @@
+use crate::input::state::{Toast, ToastPriority};
 use log::{debug, info, warn};
 use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Anchor};
 use std::time::{Duration, Instant};
@@ -10,7 +11,7 @@ use crate::{
             self as runtime_session, PersistenceOperation, PersistenceOutcome, SaveStrategy,
         },
     },
-    input::state::{OutputFocusAction, UiToastKind},
+    input::state::OutputFocusAction,
     notification,
     session::{self, SessionSnapshot},
 };
@@ -488,10 +489,7 @@ impl WaylandState {
         if !self.session.mark_output_transition_notified() {
             return;
         }
-        self.input_state.set_ui_toast(
-            UiToastKind::Warning,
-            "Session switch deferred until the active drawing is committed and the current session is saved.",
-        );
+        self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Session switch deferred until the active drawing is committed and the current session is saved."));
         self.input_state.needs_redraw = true;
     }
 
@@ -524,10 +522,7 @@ impl WaylandState {
                     options.backup_file_path().display()
                 );
                 replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
-                self.input_state.set_ui_toast(
-                    UiToastKind::Warning,
-                    "Restored drawings from the session backup; the primary session had no board data.",
-                );
+                self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored drawings from the session backup; the primary session had no board data."));
             }
             session::LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => {
                 debug!(
@@ -536,10 +531,7 @@ impl WaylandState {
                     options.recovery_file_path().display()
                 );
                 replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
-                self.input_state.set_ui_toast(
-                    UiToastKind::Warning,
-                    "Restored session from recovery file; normal save previously exceeded the size limit.",
-                );
+                self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored session from recovery file; normal save previously exceeded the size limit."));
             }
             session::LoadSnapshotOutcome::Empty => {
                 debug!(
@@ -649,9 +641,10 @@ impl WaylandState {
         action: OutputFocusAction,
     ) {
         if !self.config.ui.multi_monitor_enabled {
-            self.input_state.set_ui_toast(
-                UiToastKind::Info,
-                "Multi-monitor focus is disabled (ui.multi_monitor_enabled=false)",
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "output",
+                Toast::info("Multi-monitor focus is disabled (ui.multi_monitor_enabled=false)"),
             );
             self.input_state.trigger_blocked_feedback();
             return;
@@ -662,9 +655,12 @@ impl WaylandState {
             || self.input_state.frozen_active()
             || self.input_state.zoom_active()
         {
-            self.input_state.set_ui_toast(
-                UiToastKind::Info,
-                "Cannot switch outputs while capture, frozen mode, or zoom mode is active",
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "output",
+                Toast::info(
+                    "Cannot switch outputs while capture, frozen mode, or zoom mode is active",
+                ),
             );
             self.input_state.trigger_blocked_feedback();
             return;
@@ -672,8 +668,11 @@ impl WaylandState {
 
         let outputs = self.sorted_known_outputs();
         if outputs.len() <= 1 {
-            self.input_state
-                .set_ui_toast(UiToastKind::Info, "Only one output is available");
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "output",
+                Toast::info("Only one output is available"),
+            );
             self.input_state.trigger_blocked_feedback();
             return;
         }
@@ -704,9 +703,10 @@ impl WaylandState {
 
         if self.surface.is_xdg_window() {
             if !self.xdg_fullscreen() {
-                self.input_state.set_ui_toast(
-                    UiToastKind::Info,
-                    "Enable fullscreen mode before switching outputs in this session.",
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "output",
+                    Toast::info("Enable fullscreen mode before switching outputs in this session."),
                 );
                 self.input_state.trigger_blocked_feedback();
                 return;

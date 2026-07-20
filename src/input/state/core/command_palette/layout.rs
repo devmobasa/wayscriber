@@ -1,12 +1,16 @@
 use super::super::base::InputState;
 use crate::config::KeybindingsConfig;
 
-pub const COMMAND_PALETTE_MAX_VISIBLE: usize = 10;
+/// Visible rows (commands + group headers) before the list scrolls. Dropped
+/// from 10 when rows grew to the 44px comfort height so the clamped panel
+/// still contains every visible row.
+pub const COMMAND_PALETTE_MAX_VISIBLE: usize = 8;
 
 pub(crate) const COMMAND_PALETTE_MIN_WIDTH: f64 = 400.0;
 pub(crate) const COMMAND_PALETTE_MAX_WIDTH: f64 = 820.0;
 pub(crate) const COMMAND_PALETTE_HORIZONTAL_MARGIN: f64 = 12.0;
-pub(crate) const COMMAND_PALETTE_ITEM_HEIGHT: f64 = 32.0;
+/// Logical row height (M6 target: 44px touch-comfortable rows).
+pub(crate) const COMMAND_PALETTE_ITEM_HEIGHT: f64 = 44.0;
 pub(crate) const COMMAND_PALETTE_PADDING: f64 = 12.0;
 pub(crate) const COMMAND_PALETTE_PADDING_BOTTOM: f64 = 48.0;
 pub(crate) const COMMAND_PALETTE_INPUT_HEIGHT: f64 = 36.0;
@@ -14,7 +18,17 @@ pub(crate) const COMMAND_PALETTE_LIST_GAP: f64 = 8.0;
 pub(crate) const COMMAND_PALETTE_ROW_ACTION_SIZE: f64 = 22.0;
 pub(crate) const COMMAND_PALETTE_ROW_ACTION_GAP: f64 = 4.0;
 pub(crate) const COMMAND_PALETTE_ROW_ACTION_COUNT: usize = 3;
-pub(crate) const COMMAND_PALETTE_MAX_HEIGHT: f64 = 420.0;
+/// Leading action-icon gutter: every command row reserves this slot so
+/// labels stay aligned whether or not the action has a glyph.
+pub(crate) const COMMAND_PALETTE_ROW_ICON_SIZE: f64 = 18.0;
+pub(crate) const COMMAND_PALETTE_ROW_ICON_GAP: f64 = 10.0;
+/// Exact height of a full panel: padding + input + gap + max visible rows +
+/// bottom padding, so the clamp never truncates rendered rows.
+pub(crate) const COMMAND_PALETTE_MAX_HEIGHT: f64 = COMMAND_PALETTE_PADDING
+    + COMMAND_PALETTE_INPUT_HEIGHT
+    + COMMAND_PALETTE_LIST_GAP
+    + COMMAND_PALETTE_MAX_VISIBLE as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+    + COMMAND_PALETTE_PADDING_BOTTOM;
 pub(crate) const COMMAND_PALETTE_TOP_RATIO: f64 = 0.2;
 pub(crate) const COMMAND_PALETTE_QUERY_PLACEHOLDER: &str = "Type to search commands...";
 
@@ -155,7 +169,10 @@ impl InputState {
                 .action_binding_primary_label(command.action)
                 .map_or(0.0, |label| label.chars().count() as f64);
 
-            let mut row_inner = LABEL_LEFT_PAD + label_chars * APPROX_LABEL_CHAR_WIDTH;
+            let mut row_inner = LABEL_LEFT_PAD
+                + COMMAND_PALETTE_ROW_ICON_SIZE
+                + COMMAND_PALETTE_ROW_ICON_GAP
+                + label_chars * APPROX_LABEL_CHAR_WIDTH;
             if desc_chars > 0.0 {
                 row_inner += LABEL_DESC_GAP + desc_chars * APPROX_DESC_CHAR_WIDTH;
             }
