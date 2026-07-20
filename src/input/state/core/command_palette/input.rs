@@ -445,7 +445,7 @@ impl InputState {
         }
 
         let rows = self.command_palette_rows();
-        let geometry = self.command_palette_geometry(screen_width, screen_height, rows.len());
+        let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
         let (local_x, local_y) = geometry.local_point(x, y);
 
         // Check if click is outside palette bounds - close it.
@@ -534,10 +534,11 @@ impl InputState {
         }
 
         let rows = self.command_palette_rows();
-        let geometry = self.command_palette_geometry(screen_width, screen_height, rows.len());
+        let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
         command_palette_cursor_hint_from_local(geometry, &rows, self.command_palette_scroll, x, y)
     }
 
+    #[cfg(test)]
     pub(crate) fn command_palette_action_tooltip(
         &self,
         screen_width: u32,
@@ -547,7 +548,18 @@ impl InputState {
             return None;
         }
         let rows = self.command_palette_rows();
-        let geometry = self.command_palette_geometry(screen_width, screen_height, rows.len());
+        let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
+        self.command_palette_action_tooltip_for_layout(&rows, geometry)
+    }
+
+    pub(crate) fn command_palette_action_tooltip_for_layout(
+        &self,
+        rows: &[CommandPaletteListRow],
+        geometry: CommandPaletteGeometry,
+    ) -> Option<(&'static str, i32, i32)> {
+        if !self.command_palette_open {
+            return None;
+        }
         let (x, y) = self.pointer_position();
         let (local_x, local_y) = geometry.local_point(x, y);
         let (visible_index, action) = geometry.row_action_at(local_x, local_y)?;

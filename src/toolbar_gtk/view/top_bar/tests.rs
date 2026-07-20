@@ -2053,12 +2053,69 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         menu_top.build_canvas_popover_content(&canvas_snapshot, 1.0);
     let canvas_panel = find_widget_named(&canvas_content, "top.menu.canvas.panel")
         .expect("canvas popover panel box");
+    assert_eq!(
+        canvas_panel.width_request(),
+        crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W as i32,
+        "GTK Canvas popover uses the shared roomy content width"
+    );
+    assert_eq!(canvas_panel.margin_start(), 10, "Canvas left content inset");
+    assert_eq!(canvas_panel.margin_end(), 10, "Canvas right content inset");
     let mut canvas_buttons: Vec<gtk4::Button> = Vec::new();
     collect_descendants(&canvas_panel, &mut canvas_buttons);
     assert!(
         canvas_buttons.len() >= 4,
         "the canvas popover exposes the command-section buttons"
     );
+    for noun in ["Board", "Page"] {
+        let button_with_tooltip = |prefix: &str| {
+            canvas_buttons
+                .iter()
+                .find(|button| {
+                    button
+                        .tooltip_text()
+                        .is_some_and(|tooltip| tooltip.starts_with(prefix))
+                })
+                .unwrap_or_else(|| panic!("{prefix} Canvas button"))
+        };
+        let duplicate = button_with_tooltip(&format!("Duplicate {noun}"));
+        let delete = button_with_tooltip(&format!("Delete {noun}"));
+        for button in [duplicate, delete] {
+            assert_eq!(
+                button.width_request(),
+                32,
+                "{noun} icon buttons stay compact instead of filling their slots"
+            );
+            assert_eq!(
+                button.halign(),
+                gtk4::Align::Center,
+                "{noun} icon buttons are centered in their allocated slots"
+            );
+            assert!(!button.hexpands(), "{noun} icon buttons do not stretch");
+        }
+        assert_eq!(
+            delete.margin_end(),
+            6,
+            "{noun} delete stays clear of the overlay scrollbar"
+        );
+        let safe_parent = duplicate.parent().expect("safe-action group");
+        let destructive_parent = delete.parent().expect("destructive-action row");
+        assert_ne!(
+            safe_parent, destructive_parent,
+            "{noun} delete stays outside the homogeneous safe-action group"
+        );
+        let safe_group = safe_parent
+            .downcast::<gtk4::Box>()
+            .expect("homogeneous safe-action box");
+        assert!(safe_group.is_homogeneous());
+        let command_row = destructive_parent
+            .downcast::<gtk4::Box>()
+            .expect("guarded command row");
+        assert_eq!(
+            command_row.spacing(),
+            12,
+            "{noun} delete keeps the explicit safety gap"
+        );
+    }
     // The Step config exposes exactly its two toggles; toggling the first
     // emits ToggleCustomSection with the live state.
     let mut canvas_checks: Vec<gtk4::CheckButton> = Vec::new();

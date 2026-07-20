@@ -338,8 +338,13 @@ impl TopBar {
             updaters: &mut updaters,
         };
         let content = super::super::sections::canvas_pane::build_popover_content(&mut ctx);
-        let widget =
-            menu_popover_viewport(&content, "top.menu.canvas.panel", scale, &self.feedback);
+        let widget = menu_popover_viewport(
+            &content,
+            "top.menu.canvas.panel",
+            CANVAS_MENU_CONTENT_W,
+            scale,
+            &self.feedback,
+        );
         (widget, updaters)
     }
 
@@ -366,7 +371,13 @@ impl TopBar {
             }
             None => gtk4::Box::new(gtk4::Orientation::Vertical, 0),
         };
-        menu_popover_viewport(&content, "top.menu.session.panel", scale, &self.feedback)
+        menu_popover_viewport(
+            &content,
+            "top.menu.session.panel",
+            MENU_CONTENT_W,
+            scale,
+            &self.feedback,
+        )
     }
 
     /// Settings popover content: the Settings pane's control set (layout
@@ -391,7 +402,13 @@ impl TopBar {
             }
             None => gtk4::Box::new(gtk4::Orientation::Vertical, 0),
         };
-        menu_popover_viewport(&content, "top.menu.settings.panel", scale, &self.feedback)
+        menu_popover_viewport(
+            &content,
+            "top.menu.settings.panel",
+            MENU_CONTENT_W,
+            scale,
+            &self.feedback,
+        )
     }
 
     pub(super) fn build_shapes_popover_content(
@@ -560,11 +577,12 @@ impl TopBar {
 fn menu_popover_viewport(
     content: &gtk4::Box,
     semantic_id: &str,
+    content_w: f64,
     scale: f64,
     feedback: &FeedbackSender,
 ) -> gtk4::Widget {
     set_semantic_widget_id(content, semantic_id);
-    content.set_size_request((MENU_CONTENT_W * scale).round() as i32, -1);
+    content.set_size_request((content_w * scale).round() as i32, -1);
     install_click_modifier_capture(content, feedback);
     let scroller = gtk4::ScrolledWindow::new();
     scroller.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);

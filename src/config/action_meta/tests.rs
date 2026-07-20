@@ -260,6 +260,11 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::ApplyPreset3,
     Action::ApplyPreset4,
     Action::ApplyPreset5,
+    Action::SavePreset1,
+    Action::SavePreset2,
+    Action::SavePreset3,
+    Action::SavePreset4,
+    Action::SavePreset5,
 ];
 
 fn assert_actions_have_flag(

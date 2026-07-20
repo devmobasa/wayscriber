@@ -19,7 +19,7 @@ mod tour;
 
 pub use board_picker::render_board_picker;
 pub use color_picker_popup::render_color_picker_popup;
-pub use command_palette::render_command_palette;
+pub use command_palette::{command_palette_visual_geometry, render_command_palette};
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]
 pub use help_overlay::HelpOverlayBindings;

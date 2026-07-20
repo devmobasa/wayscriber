@@ -249,6 +249,10 @@ impl SettingsMenuContentKey {
 /// units — the same theme tokens the builtin `view/top/menus.rs` popovers
 /// build from, so the frontends cannot drift.
 const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
+/// The Canvas popover content column, shared with the builtin canvas nodes via
+/// the theme token. It is wider than [`MENU_CONTENT_W`] so the five-action rows
+/// and Step Undo/Redo controls have breathing room.
+const CANVAS_MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W;
 const MENU_MAX_CONTENT_H: f64 = crate::ui::theme::toolbar::MENU_MAX_CONTENT_H;
 
 /// Inputs that force a rebuild of the bar's widget structure.

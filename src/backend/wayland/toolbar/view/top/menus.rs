@@ -27,6 +27,10 @@ use super::super::tree::WidgetTree;
 /// content column). Shared with the GTK popover viewport via the theme
 /// token so the frontends cannot drift.
 pub(super) const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
+/// Content column for the Canvas popover. It matches the text-menu width so
+/// the Step Undo/Redo cluster has comfortable spacing, and is shared with the
+/// GTK canvas viewport via the theme token so the frontends cannot drift.
+pub(super) const CANVAS_MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W;
 const MENU_PAD: f64 = 10.0;
 const MENU_GAP: f64 = 5.0;
 const MENU_BUTTON_H: f64 = 24.0;
@@ -123,9 +127,16 @@ pub(super) fn push_menu_popover(
         0.0
     };
 
+    // The Canvas popover builds its nodes at its shared canvas-column width;
+    // the panel must size to match so its rows fill the width without a gap.
+    let content_w = if key == "canvas" {
+        CANVAS_MENU_CONTENT_W
+    } else {
+        MENU_CONTENT_W
+    };
     let placement = popover::place_popover(popover::PopoverSpec {
         anchor,
-        content: (MENU_CONTENT_W + MENU_PAD * 2.0, viewport + MENU_PAD * 2.0),
+        content: (content_w + MENU_PAD * 2.0, viewport + MENU_PAD * 2.0),
         bounds,
         gap: MENU_ANCHOR_GAP,
         margin: 4.0,
@@ -617,13 +628,13 @@ fn push_canvas_command_section(
 ) {
     nodes.push(WidgetNode::decor(
         format!("top.menu.canvas.{key}.header"),
-        (0.0, *y, MENU_CONTENT_W, MENU_HEADER_H),
+        (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_HEADER_H),
         WidgetKind::Label(LabelSpec::new(title, MENU_LABEL_FONT, true)),
     ));
     *y += MENU_HEADER_H + MENU_ITEM_GAP;
 
     let columns = group.buttons.len().clamp(1, 5);
-    let button_w = row_item_width(MENU_CONTENT_W, columns, MENU_GAP);
+    let button_w = row_item_width(CANVAS_MENU_CONTENT_W, columns, MENU_GAP);
     let grid = grid_layout(
         0.0,
         *y,
@@ -786,7 +797,7 @@ fn push_canvas_delay_slider(
     let t = model::delay_t_from_ms(delay_ms);
     nodes.push(WidgetNode::new(
         id,
-        (0.0, *y, MENU_CONTENT_W, CANVAS_SLIDER_H),
+        (0.0, *y, CANVAS_MENU_CONTENT_W, CANVAS_SLIDER_H),
         WidgetKind::Slider { t },
         Some(Interaction {
             event,
@@ -803,14 +814,14 @@ fn push_canvas_delay_slider(
 fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: &ToolbarSnapshot) {
     nodes.push(WidgetNode::decor(
         "top.menu.canvas.step.header",
-        (0.0, *y, MENU_CONTENT_W, MENU_HEADER_H),
+        (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_HEADER_H),
         WidgetKind::Label(LabelSpec::new("Step Undo/Redo", MENU_LABEL_FONT, true)),
     ));
     *y += MENU_HEADER_H + MENU_ITEM_GAP;
 
     nodes.push(WidgetNode::new(
         "top.menu.canvas.step.toggle.buttons",
-        (0.0, *y, MENU_CONTENT_W, MENU_TOGGLE_H),
+        (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_TOGGLE_H),
         WidgetKind::Checkbox {
             checked: snapshot.custom_section_enabled,
             label: LabelSpec::new("Step buttons", MENU_META_FONT, true),
@@ -824,7 +835,7 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
 
     nodes.push(WidgetNode::new(
         "top.menu.canvas.step.toggle.delays",
-        (0.0, *y, MENU_CONTENT_W, MENU_TOGGLE_H),
+        (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_TOGGLE_H),
         WidgetKind::Checkbox {
             checked: snapshot.show_delay_sliders,
             label: LabelSpec::new("Delay sliders", MENU_META_FONT, true),
@@ -849,7 +860,7 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
             let side = if is_undo { "undo" } else { "redo" };
             nodes.push(WidgetNode::decor(
                 format!("top.menu.canvas.step.global.{side}.label"),
-                (0.0, *y, MENU_CONTENT_W, MENU_PATH_H),
+                (0.0, *y, CANVAS_MENU_CONTENT_W, MENU_PATH_H),
                 WidgetKind::Label(LabelSpec::new(
                     format!(
                         "{} delay: {:.1}s",

@@ -18,8 +18,20 @@ use super::super::super::icons::{IconPainter, IconWidget};
 use super::super::super::widgets::{send_event, sized_button};
 use super::{SectionCtx, step_undo};
 
+/// Extra separation between the evenly distributed safe actions and a
+/// destructive action at the right edge of a Canvas command row.
+const DESTRUCTIVE_GUARD_GAP: f64 = 12.0;
+
+/// Horizontal inset of the Canvas popover content from the popover frame, so
+/// the evenly distributed icon rows don't touch the edge. Mirrors the builtin
+/// popover's `MENU_PAD` around the shared Canvas content area.
+const CANVAS_CONTENT_PAD_H: f64 = 10.0;
+
 pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk4::Box {
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(10.0));
+    let pad_h = ctx.px(CANVAS_CONTENT_PAD_H);
+    column.set_margin_start(pad_h);
+    column.set_margin_end(pad_h);
 
     if let Some(group) = model::toolbar_boards_model_for_popover(ctx.snapshot) {
         command_section(ctx, &column, "Boards", "Board", &group, board_icon);
@@ -50,10 +62,10 @@ fn section_title(ctx: &SectionCtx, title: &str) -> gtk4::Label {
     label
 }
 
-/// One command section: a header over a single row of the group's buttons.
-/// Icon mode packs plain buttons left and destructive ones right; text mode
-/// uses an equal-width row. Enabled/glyph state is baked in at build time
-/// (the popover host rebuilds on the inputs that change them).
+/// One command section: a header over evenly distributed safe actions, with
+/// any destructive action isolated at the right edge by a deliberate guard
+/// gap. Enabled/glyph state is baked in at build time (the popover host
+/// rebuilds on the inputs that change them).
 fn command_section(
     ctx: &SectionCtx,
     column: &gtk4::Box,
@@ -63,47 +75,54 @@ fn command_section(
     icon_for: fn(&ToolbarSnapshot, &ToolbarEvent) -> IconPainter,
 ) {
     column.append(&section_title(ctx, title));
-    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(6.0));
-    row.set_homogeneous(!ctx.use_icons);
+    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(DESTRUCTIVE_GUARD_GAP));
+    let safe_actions = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(6.0));
+    safe_actions.set_homogeneous(true);
+    safe_actions.set_hexpand(true);
+    row.append(&safe_actions);
     let btn_h = if ctx.use_icons {
         ctx.sz(32.0)
     } else {
         ctx.sz(24.0)
     };
-    let mut spacer_added = false;
     for button_model in &group.buttons {
+        let is_destructive = button_model.event.is_destructive();
         let button = if ctx.use_icons {
             let handle = sized_button(btn_h, btn_h);
+            // Keep the icon itself square and center it in the homogeneous
+            // safe-action slot. Stretching the button would turn each slot
+            // into an oversized tap target and crowd the isolated Delete.
+            handle.set_halign(gtk4::Align::Center);
             let icon = IconWidget::new(icon_for(ctx.snapshot, &button_model.event), ctx.sz(18.0));
             handle.set_child(Some(&icon.area));
             handle
         } else {
             let handle = gtk4::Button::with_label(button_model.short_label(ctx.snapshot, noun));
             handle.set_size_request(-1, btn_h.round() as i32);
-            handle.set_hexpand(true);
             handle
         };
+        button.set_hexpand(!ctx.use_icons && !is_destructive);
         button.set_tooltip_text(Some(&format_binding_label(
             button_model.tooltip_label(ctx.snapshot, noun),
             button_model.binding_hint(ctx.snapshot),
         )));
         button.set_sensitive(button_model.enabled);
-        if button_model.event.is_destructive() {
+        if is_destructive {
             button.add_css_class("destructive");
-            if ctx.use_icons && !spacer_added {
-                // Guard gap: destructive buttons sit apart on the right.
-                let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-                spacer.set_hexpand(true);
-                row.append(&spacer);
-                spacer_added = true;
-            }
+            // The Canvas viewport uses an overlay scrollbar. Leave a small
+            // trailing gutter so it never paints over the destructive target.
+            button.set_margin_end(ctx.px(6.0));
         }
         let sender = ctx.feedback.clone();
         let event = button_model.event.clone();
         button.connect_clicked(move |_| {
             send_event(&sender, event.clone());
         });
-        row.append(&button);
+        if is_destructive {
+            row.append(&button);
+        } else {
+            safe_actions.append(&button);
+        }
     }
     column.append(&row);
 }

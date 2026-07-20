@@ -598,6 +598,13 @@ pub mod toolbar {
     /// both frontends: the builtin popover tree builds its rows at this
     /// width and the GTK popover sizes its viewport from it.
     pub const MENU_CONTENT_W: f64 = 232.0;
+    /// Canvas popover content-column width, in spec units. It is wider than
+    /// the Session/Settings column, leaving comfortable space for five-button
+    /// command rows and the Step Undo/Redo steppers, values, and delay sliders.
+    /// One source for both frontends:
+    /// the builtin canvas nodes and popover placement build at this width and
+    /// the GTK canvas popover sizes its viewport from it, so they cannot drift.
+    pub const CANVAS_MENU_CONTENT_W: f64 = 292.0;
     /// Cap on the Session/Settings popover's visible content height, in
     /// spec units; taller content scrolls internally. Shared by the builtin
     /// scroll viewport and the GTK `ScrolledWindow` max content height.

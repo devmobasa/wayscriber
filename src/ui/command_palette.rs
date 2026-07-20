@@ -7,7 +7,7 @@ use crate::input::state::{
     COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
     COMMAND_PALETTE_TOP_RATIO, CommandPaletteListRow,
 };
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
     self, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG,
@@ -38,6 +38,9 @@ const COMMAND_PALETTE_INPUT_HINT: &str =
     "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
 /// Offset of the frame drop shadow below/right of the palette.
 const FRAME_SHADOW_OFFSET: f64 = 4.0;
+const TOOLTIP_PADDING_X: f64 = 8.0;
+const TOOLTIP_PADDING_Y: f64 = 5.0;
+const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
 /// Action tooltip surface: darker than PANEL_BG_COMMAND_PALETTE so the
 /// tooltip reads above the palette (no matching theme token; kept).
 const TOOLTIP_BG: Rgba = (0.04, 0.05, 0.07, 0.98);
@@ -64,7 +67,8 @@ pub fn render_command_palette(
     }
 
     let rows = input_state.command_palette_rows();
-    let geometry = input_state.command_palette_geometry(screen_width, screen_height, rows.len());
+    let geometry =
+        input_state.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
     let palette_width = geometry.width;
     let height = geometry.height;
 
@@ -115,7 +119,7 @@ pub fn render_command_palette(
     );
 
     if let Some((tooltip, pointer_x, pointer_y)) =
-        input_state.command_palette_action_tooltip(screen_width, screen_height)
+        input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
     {
         draw_command_palette_action_tooltip(
             ctx,
@@ -130,6 +134,88 @@ pub fn render_command_palette(
     draw_command_palette_escape_hint(ctx, x, y, palette_width, height);
 }
 
+/// Bounds of every pixel the command palette may change this frame, excluding
+/// the full-screen dimmer whose content is stable between open and close.
+/// Open/close already force full damage; query, selection, scroll, and tooltip
+/// updates can therefore redraw only this compact footprint.
+pub fn command_palette_visual_geometry(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    if !input_state.command_palette_is_engaged() {
+        return None;
+    }
+
+    if input_state.keybinding_capture_action.is_some() {
+        let width = 520.0_f64.min(screen_width as f64 - 24.0);
+        let height = 170.0;
+        let x = (screen_width as f64 - width) / 2.0;
+        let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+        return Some((
+            x,
+            y,
+            width + FRAME_SHADOW_OFFSET,
+            height + FRAME_SHADOW_OFFSET,
+        ));
+    }
+
+    let rows = input_state.command_palette_rows();
+    let geometry =
+        input_state.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
+    let mut bounds = (
+        geometry.x,
+        geometry.y,
+        geometry.width + FRAME_SHADOW_OFFSET,
+        geometry.height + FRAME_SHADOW_OFFSET,
+    );
+
+    if let Some((tooltip, pointer_x, pointer_y)) =
+        input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
+        && let Some(tooltip_bounds) = command_palette_action_tooltip_geometry(
+            tooltip,
+            pointer_x as f64,
+            pointer_y as f64,
+            screen_width as f64,
+            screen_height as f64,
+        )
+    {
+        bounds = union_bounds(bounds, tooltip_bounds);
+    }
+
+    Some(bounds)
+}
+
+fn union_bounds(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    let min_x = a.0.min(b.0);
+    let min_y = a.1.min(b.1);
+    let max_x = (a.0 + a.2).max(b.0 + b.2);
+    let max_y = (a.1 + a.3).max(b.1 + b.3);
+    (min_x, min_y, max_x - min_x, max_y - min_y)
+}
+
+fn command_palette_action_tooltip_geometry(
+    text: &str,
+    pointer_x: f64,
+    pointer_y: f64,
+    screen_width: f64,
+    screen_height: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let style = command_palette_text_style(
+        COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Normal,
+    );
+    let extents = measure_text(style, text, None)?;
+    let width = extents.width() + TOOLTIP_PADDING_X * 2.0;
+    let height = style.size + TOOLTIP_PADDING_Y * 2.0;
+    let x = (pointer_x + TOOLTIP_POINTER_OFFSET)
+        .min((screen_width - width - FRAME_SHADOW_OFFSET).max(FRAME_SHADOW_OFFSET));
+    let y = (pointer_y + TOOLTIP_POINTER_OFFSET)
+        .min((screen_height - height - FRAME_SHADOW_OFFSET).max(FRAME_SHADOW_OFFSET));
+    Some((x, y, width, height))
+}
+
 fn draw_command_palette_action_tooltip(
     ctx: &cairo::Context,
     text: &str,
@@ -138,32 +224,33 @@ fn draw_command_palette_action_tooltip(
     screen_width: f64,
     screen_height: f64,
 ) {
-    const PAD_X: f64 = 8.0;
-    const PAD_Y: f64 = 5.0;
-    const OFFSET: f64 = 12.0;
     let style = command_palette_text_style(
         COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
         cairo::FontWeight::Normal,
         cairo::FontSlant::Normal,
     );
-    let extents = text_extents_for(
-        ctx,
-        COMMAND_PALETTE_FONT_FAMILY,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        style.size,
+    let Some((x, y, width, height)) = command_palette_action_tooltip_geometry(
         text,
-    );
-    let width = extents.width() + PAD_X * 2.0;
-    let height = style.size + PAD_Y * 2.0;
-    let x = (pointer_x + OFFSET).min((screen_width - width - 4.0).max(4.0));
-    let y = (pointer_y + OFFSET).min((screen_height - height - 4.0).max(4.0));
+        pointer_x,
+        pointer_y,
+        screen_width,
+        screen_height,
+    ) else {
+        return;
+    };
 
     constants::set_color(ctx, TOOLTIP_BG);
     draw_rounded_rect(ctx, x, y, width, height, 5.0);
     let _ = ctx.fill();
     constants::set_color(ctx, TEXT_WHITE);
-    draw_text_baseline(ctx, style, text, x + PAD_X, y + PAD_Y + style.size, None);
+    draw_text_baseline(
+        ctx,
+        style,
+        text,
+        x + TOOLTIP_PADDING_X,
+        y + TOOLTIP_PADDING_Y + style.size,
+        None,
+    );
 }
 
 fn render_keybinding_capture(
@@ -556,19 +643,83 @@ fn ellipsize_to_width(
         return String::new();
     }
 
-    let mut end = text.len();
-    while end > 0 {
-        if !text.is_char_boundary(end) {
-            end -= 1;
-            continue;
-        }
-        let candidate = format!("{}{}", &text[..end], ELLIPSIS);
+    let boundaries: Vec<usize> = text
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain(std::iter::once(text.len()))
+        .collect();
+    let mut low = 0;
+    let mut high = boundaries.len() - 1;
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        let candidate = format!("{}{}", &text[..boundaries[mid]], ELLIPSIS);
         let candidate_extents = text_extents_for(ctx, family, slant, weight, size, &candidate);
         if candidate_extents.width() <= max_width {
-            return candidate;
+            low = mid;
+        } else {
+            high = mid - 1;
         }
-        end -= 1;
     }
 
-    ELLIPSIS.to_string()
+    format!("{}{}", &text[..boundaries[low]], ELLIPSIS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_context() -> cairo::Context {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 320, 80).expect("surface");
+        cairo::Context::new(&surface).expect("context")
+    }
+
+    fn text_width(ctx: &cairo::Context, text: &str) -> f64 {
+        text_extents_for(
+            ctx,
+            COMMAND_PALETTE_FONT_FAMILY,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            COMMAND_PALETTE_DESC_TEXT_SIZE,
+            text,
+        )
+        .width()
+    }
+
+    #[test]
+    fn ellipsize_keeps_full_text_when_it_fits() {
+        let ctx = test_context();
+        let text = "Short label";
+        assert_eq!(
+            ellipsize_to_width(
+                &ctx,
+                text,
+                COMMAND_PALETTE_FONT_FAMILY,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+                COMMAND_PALETTE_DESC_TEXT_SIZE,
+                text_width(&ctx, text),
+            ),
+            text
+        );
+    }
+
+    #[test]
+    fn ellipsize_binary_search_respects_width_and_unicode_boundaries() {
+        let ctx = test_context();
+        let text = "Capture 🖌️ annotation history safely";
+        let max_width = text_width(&ctx, "Capture 🖌️…");
+        let result = ellipsize_to_width(
+            &ctx,
+            text,
+            COMMAND_PALETTE_FONT_FAMILY,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            COMMAND_PALETTE_DESC_TEXT_SIZE,
+            max_width,
+        );
+
+        assert!(result.ends_with(ELLIPSIS));
+        assert!(text_width(&ctx, &result) <= max_width);
+        assert!(result.is_char_boundary(result.len()));
+    }
 }

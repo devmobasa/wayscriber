@@ -1,10 +1,10 @@
 //! Targeted damage regions for transient UI effects.
 //!
-//! Toasts and feedback flashes used to force full-surface damage for every
-//! animation tick because they emit no damage of their own. Instead, compute
-//! each effect's on-screen footprint before rendering and damage only that,
-//! unioned with the footprint from the previous frame so moves, content
-//! changes, and disappearance are cleaned up correctly.
+//! Toasts, feedback flashes, and modal UI updates used to force full-surface
+//! damage because they emit no damage of their own. Instead, compute each
+//! effect's on-screen footprint before rendering and damage only that, unioned
+//! with the footprint from the previous frame so moves, content changes, and
+//! disappearance are cleaned up correctly.
 
 use super::super::*;
 use super::tool_preview::mouse_tool_preview_damage_update;
@@ -56,6 +56,7 @@ impl WaylandState {
         text_edit_entry_active: bool,
         status_hud_active: bool,
         zoom_chip_active: bool,
+        command_palette_active: bool,
         tool_preview_active: bool,
         width: u32,
         height: u32,
@@ -150,6 +151,23 @@ impl WaylandState {
             zoom_chip_rect,
         );
         self.data.prev_zoom_chip_damage = zoom_chip_rect;
+
+        // Opening and closing the palette force full damage because the
+        // backdrop dimmer changes. While it remains open, only the panel and
+        // optional action tooltip change, so typing and selection no longer
+        // fall through to the full-surface empty-damage fallback.
+        let command_palette_rect = if command_palette_active {
+            crate::ui::command_palette_visual_geometry(&self.input_state, width, height)
+                .and_then(|bounds| effect_rect(bounds, width, height))
+        } else {
+            None
+        };
+        push_effect_damage(
+            &mut regions,
+            self.data.prev_command_palette_damage,
+            command_palette_rect,
+        );
+        self.data.prev_command_palette_damage = command_palette_rect;
 
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
             let (x, y) = self.current_mouse();
@@ -280,5 +298,29 @@ mod tests {
         let mut vanish = Vec::new();
         push_effect_damage(&mut vanish, wide, None);
         assert_eq!(vanish, vec![wide.unwrap()]);
+    }
+
+    /// Palette query changes can resize the panel, and hover tooltips can
+    /// extend its footprint. Both old and new bounds must be redrawn without
+    /// escalating a keystroke to the full screen.
+    #[test]
+    fn command_palette_damage_lifecycle_stays_targeted_and_cleans_old_bounds() {
+        let compact = effect_rect((550.0, 216.0, 820.0, 300.0), 1920, 1080);
+        let expanded = effect_rect((550.0, 216.0, 960.0, 420.0), 1920, 1080);
+        let compact = compact.expect("compact palette bounds");
+        let expanded = expanded.expect("palette plus tooltip bounds");
+
+        assert!(compact.width < 1920);
+        assert!(compact.height < 1080);
+        assert!(expanded.width < 1920);
+        assert!(expanded.height < 1080);
+
+        let mut query_change = Vec::new();
+        push_effect_damage(&mut query_change, Some(compact), Some(expanded));
+        assert_eq!(query_change, vec![compact, expanded]);
+
+        let mut close = Vec::new();
+        push_effect_damage(&mut close, Some(expanded), None);
+        assert_eq!(close, vec![expanded]);
     }
 }

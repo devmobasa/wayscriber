@@ -206,6 +206,11 @@ mod tests {
                 Some(expected)
             );
         }
+
+        let (_, _, visual_width, _) =
+            crate::ui::command_palette_visual_geometry(&state, 1920, 1000)
+                .expect("palette plus tooltip geometry");
+        assert!(visual_width > geometry.width + 4.0);
     }
 
     fn assert_palette_finds(query: &str, action: Action) {
@@ -238,6 +243,24 @@ mod tests {
         assert_palette_finds("selection properties", Action::ToggleSelectionProperties);
         assert_palette_finds("context menu", Action::OpenContextMenu);
         assert_palette_finds("refresh zoom", Action::RefreshZoomCapture);
+    }
+
+    #[test]
+    fn save_preset_commands_are_searchable_by_label_and_shortcut() {
+        for (slot, action) in [
+            Action::SavePreset1,
+            Action::SavePreset2,
+            Action::SavePreset3,
+            Action::SavePreset4,
+            Action::SavePreset5,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let slot = slot + 1;
+            assert_palette_finds(&format!("save preset {slot}"), action);
+            assert_palette_finds(&format!("shift+{slot}"), action);
+        }
     }
 
     #[test]
@@ -834,5 +857,20 @@ mod tests {
                 .command_palette_cursor_hint_at(inside_x, within_y, 1920, 1000)
                 .is_some()
         );
+    }
+
+    #[test]
+    fn visual_damage_bounds_cover_palette_without_covering_the_screen() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+
+        let (x, y, width, height) = crate::ui::command_palette_visual_geometry(&state, 3840, 2160)
+            .expect("open palette geometry");
+
+        assert!(x > 0.0 && y > 0.0);
+        assert!(width > 0.0 && width < 3840.0);
+        assert!(height > 0.0 && height < 2160.0);
+        assert!(x + width <= 3840.0);
+        assert!(y + height <= 2160.0);
     }
 }

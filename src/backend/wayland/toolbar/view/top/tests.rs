@@ -1154,6 +1154,11 @@ fn canvas_popover_step_section_carries_toggles_steppers_and_delay_sliders() {
     let panel = tree
         .node_by_id(&"top.menu.canvas.panel".into())
         .expect("canvas popover panel");
+    assert_eq!(
+        panel.rect.2,
+        super::menus::CANVAS_MENU_CONTENT_W + 20.0,
+        "builtin Canvas popover uses the shared content width plus panel padding"
+    );
 
     // Both step config toggles are present.
     assert!(
