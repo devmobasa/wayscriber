@@ -13,6 +13,7 @@ pub enum TourStep {
     ToolbarIntro,
     CommandPalette,
     ContextMenu,
+    StatusBar,
     HelpOverlay,
     Presets,
     Complete,
@@ -20,7 +21,7 @@ pub enum TourStep {
 
 impl TourStep {
     /// Total number of tour steps.
-    pub const COUNT: usize = 8;
+    pub const COUNT: usize = 9;
 
     /// Get step from index.
     pub fn from_index(index: usize) -> Option<Self> {
@@ -30,9 +31,10 @@ impl TourStep {
             2 => Some(Self::ToolbarIntro),
             3 => Some(Self::CommandPalette),
             4 => Some(Self::ContextMenu),
-            5 => Some(Self::HelpOverlay),
-            6 => Some(Self::Presets),
-            7 => Some(Self::Complete),
+            5 => Some(Self::StatusBar),
+            6 => Some(Self::HelpOverlay),
+            7 => Some(Self::Presets),
+            8 => Some(Self::Complete),
             _ => None,
         }
     }
@@ -45,6 +47,7 @@ impl TourStep {
             Self::ToolbarIntro => "Toolbar Access",
             Self::CommandPalette => "Command Palette",
             Self::ContextMenu => "Context Menu",
+            Self::StatusBar => "Boards & Pages",
             Self::HelpOverlay => "Help & Shortcuts",
             Self::Presets => "Quick Presets",
             Self::Complete => "Tour Complete",
@@ -140,6 +143,40 @@ impl InputState {
                  Access boards, pages, and common commands.\n\
                  Shape-specific options when clicking on shapes."
                 .to_string(),
+            TourStep::StatusBar => {
+                let board = self.show_status_board_badge && self.boards.show_badge();
+                let page = self.show_status_page_badge;
+                let entry = match (board, page) {
+                    (true, true) => Some("Board or Page"),
+                    (true, false) => Some("Board"),
+                    (false, true) => Some("Page"),
+                    (false, false) => None,
+                };
+                let mut lines = match entry {
+                    Some(entry) => vec![format!(
+                        "Click the {entry} segment in the status bar to open the board picker."
+                    )],
+                    None => vec![
+                        "Board/Page status-bar segments are hidden in your configuration."
+                            .to_string(),
+                    ],
+                };
+                match (entry, self.shortcut_for_action(Action::BoardPicker)) {
+                    (Some(_), Some(key)) => lines.push(format!(
+                        "Switch between boards and pages there, or press {key}."
+                    )),
+                    (Some(_), None) => {
+                        lines.push("Switch between boards and pages there.".to_string())
+                    }
+                    (None, Some(key)) => {
+                        lines.push(format!("Press {key} to open the board picker."))
+                    }
+                    (None, None) => {
+                        lines.push("Open the board picker from an action menu.".to_string())
+                    }
+                }
+                lines.join("\n")
+            }
             TourStep::HelpOverlay => match self.shortcut_for_action(Action::ToggleHelp) {
                 Some(key) => format!(
                     "Press {key} to see all keyboard shortcuts.\n\
@@ -371,5 +408,55 @@ mod tests {
             palette.contains("Ctrl+Shift+P"),
             "palette copy did not follow the rebind: {palette:?}"
         );
+    }
+
+    #[test]
+    fn status_bar_step_teaches_board_picker_and_tracks_binding() {
+        use crate::config::{KeyBinding, KeybindingsConfig};
+
+        // The M9 board-picker beat always names the on-screen entry point (the
+        // status bar) position-neutrally and resolves the board-picker key through
+        // `shortcut_for_action` — never a hardcoded literal.
+        let mut bindings = KeybindingsConfig::default()
+            .build_action_bindings()
+            .expect("default bindings");
+        bindings.insert(
+            Action::BoardPicker,
+            vec![KeyBinding::parse("Ctrl+Shift+B").expect("binding")],
+        );
+        let mut state = make_test_input_state();
+        state.set_action_bindings(bindings);
+
+        let copy = state.tour_step_description(TourStep::StatusBar);
+        assert!(copy.contains("status bar"), "status bar copy: {copy:?}");
+        assert!(
+            copy.contains("Board or Page segment"),
+            "tour must name the actual clickable segments: {copy:?}"
+        );
+        assert!(
+            copy.contains("Ctrl+Shift+B"),
+            "board-picker copy did not follow the rebind: {copy:?}"
+        );
+
+        // Unbinding the board picker drops the key mention without hardcoding.
+        let mut bindings = KeybindingsConfig::default()
+            .build_action_bindings()
+            .expect("default bindings");
+        bindings.insert(Action::BoardPicker, Vec::new());
+        state.set_action_bindings(bindings);
+        let copy = state.tour_step_description(TourStep::StatusBar);
+        assert!(copy.contains("status bar"), "status bar copy: {copy:?}");
+        assert!(
+            !copy.contains("press"),
+            "unbound board picker must not name a key: {copy:?}"
+        );
+
+        // If both configurable picker segments are hidden, never imply that
+        // clicking an arbitrary part of the status bar opens the picker.
+        state.show_status_board_badge = false;
+        state.show_status_page_badge = false;
+        let copy = state.tour_step_description(TourStep::StatusBar);
+        assert!(copy.contains("segments are hidden"), "copy: {copy:?}");
+        assert!(!copy.contains("Click the status bar"), "copy: {copy:?}");
     }
 }

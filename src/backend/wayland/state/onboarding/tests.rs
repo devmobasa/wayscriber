@@ -3,7 +3,10 @@ use super::first_run::{
     color_thickness_completed, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
     first_run_step_eyebrow, quick_access_completed, radial_flick_completed, shortcut_rebind_footer,
 };
-use super::{capability_toast_message, shortcut_coach_should_fire};
+use super::{
+    PANEL_DEPRECATION_MESSAGE, canvas_popover_hint_relevant, capability_toast_message,
+    shortcut_coach_should_fire, status_bar_board_picker_entry,
+};
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
 use crate::input::state::CompositorCapabilities;
 use crate::input::{Key, state::PendingOnboardingUsage};
@@ -189,6 +192,64 @@ fn shortcut_coach_suppressed_once_learned_or_capped() {
         None,
         now
     ));
+}
+
+#[test]
+fn canvas_hint_requires_reachable_full_top_strip() {
+    let mut input = crate::input::state::test_support::make_test_input_state();
+    input.toolbar_top_visible = true;
+    input.toolbar_top_display_mode = crate::config::TopDisplayMode::Full;
+    input.toolbar_top_minimized = false;
+    assert!(canvas_popover_hint_relevant(&input));
+
+    input.toolbar_top_minimized = true;
+    assert!(
+        !canvas_popover_hint_relevant(&input),
+        "the minimized restore tab has no Canvas overflow entry"
+    );
+    input.toolbar_top_minimized = false;
+    input.toolbar_top_display_mode = crate::config::TopDisplayMode::Micro;
+    assert!(!canvas_popover_hint_relevant(&input));
+}
+
+#[test]
+fn status_bar_hint_requires_a_visible_board_picker_segment() {
+    let mut input = crate::input::state::test_support::make_test_input_state();
+    assert!(input.boards.create_board(), "test needs multiple boards");
+    input.show_status_bar = true;
+    input.status_bar_interactive = true;
+    input.show_status_board_badge = true;
+    input.show_status_page_badge = true;
+    assert_eq!(status_bar_board_picker_entry(&input), Some("Board or Page"));
+
+    input.show_status_board_badge = false;
+    input.show_status_page_badge = false;
+    assert_eq!(status_bar_board_picker_entry(&input), None);
+}
+
+#[test]
+fn panel_deprecation_notice_is_multiline_and_names_every_new_home() {
+    assert!(PANEL_DEPRECATION_MESSAGE.lines().count() >= 3);
+    for expected in [
+        "style pill",
+        "Canvas\u{2026}",
+        "zoom chip",
+        "status bar",
+        "top strip",
+        "Session/Settings",
+        "overflow",
+    ] {
+        assert!(
+            PANEL_DEPRECATION_MESSAGE.contains(expected),
+            "missing {expected:?}: {PANEL_DEPRECATION_MESSAGE:?}"
+        );
+    }
+    assert!(
+        PANEL_DEPRECATION_MESSAGE
+            .lines()
+            .all(|line| line.chars().count() <= 80),
+        "keep each unwrapped toast line within ordinary screen widths"
+    );
 }
 
 #[test]

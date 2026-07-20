@@ -152,6 +152,18 @@ impl InputState {
             ZoomChipButtonKind::Fit => Action::ResetZoom,
             ZoomChipButtonKind::Lock => Action::ToggleZoomLock,
         };
+        // Shortcut-coach slow-path signal: activating a zoom action from the
+        // chip is the same "you could have pressed the key" case the toolbar
+        // (`apply_toolbar_event`) and command palette record. The chip resolves
+        // to an `Action` the backend dispatches through the shared action path
+        // (`handle_action`) — the fast/keyboard path, which never feeds the
+        // coach — so this InputState-level seam is where the nudge is recorded.
+        // Only actions that resolve to a shortcut count, so the coach can always
+        // name the key.
+        if self.shortcut_for_action(action).is_some() {
+            self.pending_onboarding_usage
+                .note_shortcut_slow_path(action);
+        }
         (true, Some(action))
     }
 }

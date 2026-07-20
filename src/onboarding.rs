@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const ONBOARDING_VERSION: u32 = 4;
+const ONBOARDING_VERSION: u32 = 5;
 pub(crate) const DRAWER_HINT_MAX: u32 = 2;
 pub(crate) const DEFERRED_HINT_REPEAT_MAX: u32 = 3;
 const ONBOARDING_FILE: &str = "onboarding.toml";
@@ -133,6 +133,27 @@ pub struct OnboardingState {
     /// Number of shortcut-coach hints shown across sessions (across-session cap)
     #[serde(default)]
     pub coach_hint_count: u32,
+    /// Whether the deferred status-bar/board-picker hint has been shown this
+    /// session (re-armed at session start until the across-session cap).
+    #[serde(default)]
+    pub hint_status_bar_shown: bool,
+    /// Number of deferred status-bar hints shown across sessions (M9).
+    #[serde(default)]
+    pub hint_status_bar_count: u32,
+    /// Whether the deferred bottom-right zoom-chip hint has been shown this
+    /// session (re-armed at session start until the across-session cap).
+    #[serde(default)]
+    pub hint_zoom_chip_shown: bool,
+    /// Number of deferred zoom-chip hints shown across sessions (M9).
+    #[serde(default)]
+    pub hint_zoom_chip_count: u32,
+    /// Whether the deferred "Canvas…" overflow-popover hint has been shown this
+    /// session (re-armed at session start until the across-session cap).
+    #[serde(default)]
+    pub hint_canvas_popover_shown: bool,
+    /// Number of deferred Canvas-popover hints shown across sessions (M9).
+    #[serde(default)]
+    pub hint_canvas_popover_count: u32,
 }
 
 impl Default for OnboardingState {
@@ -174,6 +195,12 @@ impl Default for OnboardingState {
             hint_quick_access_count: 0,
             coach_hint_shown: false,
             coach_hint_count: 0,
+            hint_status_bar_shown: false,
+            hint_status_bar_count: 0,
+            hint_zoom_chip_shown: false,
+            hint_zoom_chip_count: 0,
+            hint_canvas_popover_shown: false,
+            hint_canvas_popover_count: 0,
         }
     }
 }
@@ -374,6 +401,21 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
         state.coach_hint_shown = true;
         needs_save = true;
     }
+    // M9 deferred surface hints: keep the per-session `*_shown` flag and the
+    // across-session `*_count` consistent for hand-edited or partially-written
+    // files, mirroring the help/palette/quick-access bookkeeping above.
+    if state.hint_status_bar_shown && state.hint_status_bar_count == 0 {
+        state.hint_status_bar_count = 1;
+        needs_save = true;
+    }
+    if state.hint_zoom_chip_shown && state.hint_zoom_chip_count == 0 {
+        state.hint_zoom_chip_count = 1;
+        needs_save = true;
+    }
+    if state.hint_canvas_popover_shown && state.hint_canvas_popover_count == 0 {
+        state.hint_canvas_popover_count = 1;
+        needs_save = true;
+    }
 
     needs_save
 }
@@ -430,6 +472,12 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         hint_quick_access_count: DEFERRED_HINT_REPEAT_MAX,
         coach_hint_shown: true,
         coach_hint_count: DEFERRED_HINT_REPEAT_MAX,
+        hint_status_bar_shown: true,
+        hint_status_bar_count: DEFERRED_HINT_REPEAT_MAX,
+        hint_zoom_chip_shown: true,
+        hint_zoom_chip_count: DEFERRED_HINT_REPEAT_MAX,
+        hint_canvas_popover_shown: true,
+        hint_canvas_popover_count: DEFERRED_HINT_REPEAT_MAX,
     };
     let store = OnboardingStore {
         state: state.clone(),

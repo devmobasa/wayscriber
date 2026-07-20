@@ -15,6 +15,35 @@ const SHORTCUT_COACH_COOLDOWN: Duration = Duration::from_secs(90);
 /// Maximum coach hints shown per session.
 const SHORTCUT_COACH_SESSION_CAP: u32 = 2;
 
+const PANEL_DEPRECATION_MESSAGE: &str = "Side panel deprecated \u{2014} use the new homes:\n\
+     Drawing \u{2192} style pill \u{b7} Canvas \u{2192} \u{201c}Canvas\u{2026}\u{201d} / zoom chip / status bar\n\
+     Presets \u{2192} top strip \u{b7} Session/Settings \u{2192} overflow";
+
+/// The visible status-HUD entry that can open the board picker. The hint must
+/// not advertise the pill when both configurable Board/Page segments are
+/// absent: the remaining color/tool/help segments perform different actions.
+fn status_bar_board_picker_entry(input: &crate::input::InputState) -> Option<&'static str> {
+    if !input.show_status_bar || !input.status_bar_interactive || input.boards.board_count() <= 1 {
+        return None;
+    }
+
+    let board = input.show_status_board_badge && input.boards.show_badge();
+    let page = input.show_status_page_badge;
+    match (board, page) {
+        (true, true) => Some("Board or Page"),
+        (true, false) => Some("Board"),
+        (false, true) => Some("Page"),
+        (false, false) => None,
+    }
+}
+
+/// Whether the top-strip overflow that owns the Canvas popover is reachable.
+fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
+    input.toolbar_top_visible()
+        && !input.toolbar_top_minimized
+        && input.toolbar_top_display_mode == crate::config::TopDisplayMode::Full
+}
+
 /// Per-session shortcut-coach accumulator. Session-only (never persisted): the
 /// across-session cap and learned-suppression live in `OnboardingState`.
 #[derive(Debug, Default)]
@@ -84,6 +113,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn apply_onboarding_hints(&mut self) {
         // Show capability warning toast first if applicable.
         self.apply_capability_toast();
+        // Honest legacy notice: nudge panel-mode users toward the new homes.
+        self.apply_panel_deprecation_notice();
         // Capture the coach's slow-path signal before apply_first_run_progress
         // drains pending_onboarding_usage.
         let coach_slow_path = self
@@ -204,6 +235,18 @@ impl WaylandState {
             return;
         }
 
+        // Read the on-screen presence of each new surface before borrowing the
+        // onboarding state mutably: a surface hint must only fire when that
+        // surface is actually visible. The board-picker entry point (the status
+        // bar) is only meaningful when the bar is interactive and there is more
+        // than one board to switch between.
+        let status_bar_entry = status_bar_board_picker_entry(&self.input_state);
+        let zoom_chip_present = self.input_state.show_zoom_actions;
+        // The Canvas popover opens from the top-strip "…" overflow, which is
+        // only reachable when the top strip is shown (not toggled off via
+        // ToggleToolbar) and in full display (not collapsed to the micro chip).
+        let canvas_hint_relevant = canvas_popover_hint_relevant(&self.input_state);
+
         let mut changed = false;
         let mut hint_kind: Option<&'static str> = None;
         {
@@ -240,6 +283,39 @@ impl WaylandState {
                 state.hint_quick_access_count = state.hint_quick_access_count.saturating_add(1);
                 changed = true;
                 hint_kind = Some("quick_access");
+            // M9 surface hints, staggered across sessions so they never all
+            // fire at once (the else-if chain already limits it to one per tick,
+            // and the no-active-toast gate keeps them from clobbering). The
+            // status bar is the most important of the three — the board picker's
+            // on-screen entry point is easy to miss — so it comes first and at
+            // the earliest threshold among the new surfaces.
+            } else if status_bar_entry.is_some()
+                && state.sessions_seen >= 3
+                && !state.hint_status_bar_shown
+                && state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX
+            {
+                state.hint_status_bar_shown = true;
+                state.hint_status_bar_count = state.hint_status_bar_count.saturating_add(1);
+                changed = true;
+                hint_kind = Some("status_bar");
+            } else if canvas_hint_relevant
+                && state.sessions_seen >= 5
+                && !state.hint_canvas_popover_shown
+                && state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX
+            {
+                state.hint_canvas_popover_shown = true;
+                state.hint_canvas_popover_count = state.hint_canvas_popover_count.saturating_add(1);
+                changed = true;
+                hint_kind = Some("canvas_popover");
+            } else if zoom_chip_present
+                && state.sessions_seen >= 7
+                && !state.hint_zoom_chip_shown
+                && state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX
+            {
+                state.hint_zoom_chip_shown = true;
+                state.hint_zoom_chip_count = state.hint_zoom_chip_count.saturating_add(1);
+                changed = true;
+                hint_kind = Some("zoom_chip");
             }
         }
 
@@ -256,6 +332,21 @@ impl WaylandState {
                     "Press {} to search actions.",
                     self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
                 ),
+                "status_bar" => format!(
+                    "Click the {} segment in the status bar to switch boards and pages.",
+                    status_bar_entry.expect("status-bar hint requires a visible picker entry")
+                ),
+                "canvas_popover" => {
+                    "Open \u{201c}Canvas\u{2026}\u{201d} from the \u{2026} overflow for boards, \
+                     pages, zoom, and advanced controls."
+                        .to_string()
+                }
+                "zoom_chip" => match self.shortcut_label_opt(Action::ZoomIn) {
+                    Some(key) => {
+                        format!("Zoom from the chip in the bottom-right corner, or press {key}.")
+                    }
+                    None => "Zoom from the chip in the bottom-right corner.".to_string(),
+                },
                 _ => {
                     let context = self.shortcut_label_opt(Action::OpenContextMenu);
                     let radial = self.shortcut_label_opt(Action::ToggleRadialMenu);
@@ -337,6 +428,52 @@ impl WaylandState {
                 "capability.limitations",
                 Toast::warning(message).once_per_content(),
             );
+        }
+    }
+
+    /// Left-panel deprecation, made honest: when the user is running the
+    /// deprecated legacy side palette (`side_layout = "panel"`), show a
+    /// once-per-session notice pointing at the concrete new homes for each
+    /// retired pane. Reuses the capability-toast once-per-session pattern: the
+    /// session-only `*_shown` flag prevents repeats within one launch. No config
+    /// key gates it: the notice only appears at all under the deprecated layout
+    /// the user opted into.
+    fn apply_panel_deprecation_notice(&mut self) {
+        // Only the deprecated legacy side palette; the pill default already
+        // re-homed everything, so there is nothing to explain there.
+        if self.input_state.toolbar_side_layout != crate::config::ToolbarSideLayout::Panel {
+            return;
+        }
+        if self.data.panel_deprecation_notice_shown {
+            return; // once per session
+        }
+        if !self.surface.is_configured() || self.overlay_suppressed() {
+            return;
+        }
+        if self.input_state.presenter_mode
+            || self.input_state.show_help
+            || self.input_state.command_palette_open
+            || self.input_state.tour_active
+        {
+            return;
+        }
+        // Don't nag during first-run onboarding; wait until it is finished or
+        // skipped.
+        if self.onboarding.state().first_run_active() {
+            return;
+        }
+        // Never clobber real feedback: only when the toast queue is idle.
+        if !self.input_state.toasts_idle() {
+            return;
+        }
+
+        let outcome = self.input_state.push_toast(
+            ToastPriority::Info,
+            "onboarding.panel_deprecation",
+            Toast::info(PANEL_DEPRECATION_MESSAGE).once_per_content(),
+        );
+        if outcome.accepted() {
+            self.data.panel_deprecation_notice_shown = true;
         }
     }
 }

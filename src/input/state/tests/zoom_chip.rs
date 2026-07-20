@@ -119,6 +119,52 @@ fn zoom_chip_click_lock_returns_toggle_lock_when_zoomed() {
 }
 
 #[test]
+fn zoom_chip_activation_records_coach_slow_path() {
+    // Activating a shortcut-bound zoom action from the chip feeds the shortcut
+    // coach the same "you could have pressed the key" slow-path signal the
+    // toolbar and command palette record. The chip dispatches through the
+    // shared action path (handle_action) — the fast/keyboard path — so without
+    // this seam the coach would never learn from chip use. Recorded at the
+    // InputState level in check_zoom_chip_click.
+    let mut input = create_test_input_state();
+    assert!(
+        input.shortcut_for_action(Action::ZoomIn).is_some(),
+        "test relies on ZoomIn having a default shortcut"
+    );
+    update_chip_layout(&mut input, 1280, 720);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::In);
+
+    let (hit, action) = input.check_zoom_chip_click(ZoomChipButtonKind::In, x, y);
+    assert!(hit);
+    assert_eq!(action, Some(Action::ZoomIn));
+    assert_eq!(
+        input.pending_onboarding_usage.shortcut_slow_path_action,
+        Some(Action::ZoomIn),
+        "zoom-chip activation must feed the coach slow path"
+    );
+    assert_eq!(input.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+}
+
+#[test]
+fn zoom_chip_same_button_mismatch_does_not_coach() {
+    // A release that lands off the pressed button fires no action, so there is
+    // nothing to coach and no slow-path signal is recorded.
+    let mut input = create_test_input_state();
+    update_chip_layout(&mut input, 1280, 720);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::In);
+
+    // Pressed ⊖ but released over ⊕: the same-button contract consumes the
+    // release without an action.
+    let (hit, action) = input.check_zoom_chip_click(ZoomChipButtonKind::Out, x, y);
+    assert!(hit);
+    assert_eq!(action, None);
+    assert_eq!(
+        input.pending_onboarding_usage.shortcut_slow_path_action, None,
+        "a no-op chip release must not build a coach streak"
+    );
+}
+
+#[test]
 fn zoom_chip_release_on_a_different_button_fires_nothing() {
     let mut input = create_test_input_state();
     update_chip_layout(&mut input, 1280, 720);

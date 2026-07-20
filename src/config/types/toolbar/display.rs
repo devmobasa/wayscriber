@@ -35,21 +35,26 @@ impl TopDisplayMode {
 
 /// Where the side-palette functions live.
 ///
-/// `Pill` (the default) retires the standalone side palette: the Draw pane
-/// lives in the top strip's contextual style pill, the Canvas pane in the
-/// status HUD and board picker, and the Session/Settings panes in popovers
-/// opened from the top strip's overflow menu. `Panel` is the legacy escape
-/// hatch that restores the classic four-pane side palette
-/// (`side_active_pane`, `collapsed_sections`, `side_pinned`,
-/// `side_minimized` all apply); it is deprecated and planned for removal
-/// one release after the pill default lands.
+/// `Pill` (the default) is the supported layout: the standalone side palette is
+/// fully retired and every pane has a concrete new home in the top toolbar. The
+/// Draw pane's drawing properties live in the top strip's contextual style pill
+/// (colors included); canvas management lives in the "Canvas…" overflow popover,
+/// the bottom-right zoom chip, and the status-bar board picker (boards & pages);
+/// presets live in the top-strip presets island; and the Session/Settings panes
+/// live in popovers opened from the top strip's overflow menu. `Panel` is the
+/// deprecated legacy escape hatch that restores the classic four-pane side
+/// palette (`side_active_pane`, `collapsed_sections`, `side_pinned`,
+/// `side_minimized` all apply); it is deprecated and planned for removal one
+/// release after the pill default lands. Panel-mode users see a once-per-session
+/// notice pointing at these new homes.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToolbarSideLayout {
     /// No side palette surface; its functions live in the style pill, the
-    /// status HUD/board picker, and the top strip's Session/Settings
-    /// popovers (default).
+    /// "Canvas…" overflow popover, the bottom-right zoom chip, the status-bar
+    /// board picker, the top-strip presets island, and the Session/Settings
+    /// overflow popovers (default; the supported layout).
     #[default]
     Pill,
     /// The classic side palette (legacy escape hatch, deprecated; removal

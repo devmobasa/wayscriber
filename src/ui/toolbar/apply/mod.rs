@@ -300,6 +300,34 @@ mod coach_tests {
     }
 
     #[test]
+    fn canvas_popover_action_with_shortcut_records_coach_slow_path() {
+        // The M8 "Canvas…" overflow popover dispatches its boards/pages/zoom/
+        // undo-all/freeze controls as ToolbarEvents, so they route through
+        // apply_toolbar_event and feed the shortcut coach the same slow-path
+        // signal as any other toolbar use. Zoom In is a canvas-popover control
+        // with a default shortcut, so activating it must nudge toward the key.
+        let mut state = make_test_input_state();
+        assert!(
+            state.shortcut_for_action(Action::ZoomIn).is_some(),
+            "test relies on ZoomIn having a default shortcut"
+        );
+        assert_eq!(
+            ToolbarEvent::ZoomIn.action(),
+            Some(Action::ZoomIn),
+            "the canvas-popover Zoom In maps to the ZoomIn action"
+        );
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ZoomIn));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            Some(Action::ZoomIn),
+            "canvas-popover Zoom In feeds the coach slow path"
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+    }
+
+    #[test]
     fn toolbar_action_without_shortcut_does_not_coach() {
         // Undo explicitly bound to nothing: it resolves to no shortcut, so
         // there is nothing to coach — the coach must not record a slow path it

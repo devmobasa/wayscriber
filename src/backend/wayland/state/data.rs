@@ -192,6 +192,9 @@ pub struct StateData {
     /// per-session cap). Session-only; the across-session cap and learned
     /// suppression live in the persisted onboarding state.
     pub(super) shortcut_coach: super::onboarding::ShortcutCoachSession,
+    /// Once-per-session guard for the legacy side-panel deprecation notice
+    /// (M9).
+    pub(super) panel_deprecation_notice_shown: bool,
 }
 
 impl StateData {
@@ -281,6 +284,7 @@ impl StateData {
             prev_tool_preview_damage: None,
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
+            panel_deprecation_notice_shown: false,
         }
     }
 }
