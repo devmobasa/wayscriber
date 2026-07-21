@@ -1,4 +1,4 @@
-use wayscriber::config::PresenterToolBehavior;
+use wayscriber::config::{PresenterToolBehavior, PresenterToolbarMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresenterToolBehaviorOption {
@@ -46,6 +46,48 @@ impl PresenterToolBehaviorOption {
 }
 
 impl std::fmt::Display for PresenterToolBehaviorOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresenterToolbarModeOption {
+    Hidden,
+    Micro,
+}
+
+impl PresenterToolbarModeOption {
+    pub fn list() -> Vec<Self> {
+        vec![
+            PresenterToolbarModeOption::Hidden,
+            PresenterToolbarModeOption::Micro,
+        ]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            PresenterToolbarModeOption::Hidden => "Hide completely",
+            PresenterToolbarModeOption::Micro => "Micro chip (top toolbar)",
+        }
+    }
+
+    pub fn to_mode(self) -> PresenterToolbarMode {
+        match self {
+            PresenterToolbarModeOption::Hidden => PresenterToolbarMode::Hidden,
+            PresenterToolbarModeOption::Micro => PresenterToolbarMode::Micro,
+        }
+    }
+
+    pub fn from_mode(mode: PresenterToolbarMode) -> Self {
+        match mode {
+            PresenterToolbarMode::Hidden => PresenterToolbarModeOption::Hidden,
+            PresenterToolbarMode::Micro => PresenterToolbarModeOption::Micro,
+        }
+    }
+}
+
+impl std::fmt::Display for PresenterToolbarModeOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

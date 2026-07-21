@@ -5,13 +5,15 @@ pub(crate) mod event_policy;
 pub(crate) mod header;
 pub(crate) mod session;
 pub(crate) mod settings;
+mod style_pill;
 pub(crate) mod tools;
 mod top_spec;
 
 #[allow(unused_imports)]
 pub(crate) use actions::{
     ToolbarActionsModel, ToolbarButtonModel, ToolbarCommandGroup, ToolbarCommandGroupKind,
-    toolbar_boards_model, toolbar_pages_model,
+    toolbar_advanced_group_for_popover, toolbar_boards_model, toolbar_boards_model_for_popover,
+    toolbar_pages_model, toolbar_pages_model_for_popover, toolbar_zoom_group_for_popover,
 };
 #[allow(unused_imports)]
 pub(crate) use activation::{
@@ -38,6 +40,11 @@ pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessi
 #[allow(unused_imports)]
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
 #[allow(unused_imports)]
+pub(crate) use style_pill::{
+    StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSpec,
+    StylePillState,
+};
+#[allow(unused_imports)]
 pub(crate) use tools::{
     SemanticToolIcon, TopToolGroup, TopUtilityButton, current_shape_tool, default_drag_hint,
     default_polygon_tool, default_shape_tool, is_fill_tool, is_polygon_tool, ordered_pane_sections,
@@ -52,7 +59,8 @@ pub(crate) use tools::{
 #[allow(unused_imports)]
 pub(crate) use top_spec::{
     TopStripPlan, TopToolbarControl, TopToolbarControlId, TopToolbarControlRole, TopToolbarDivider,
-    TopToolbarIcon, TopToolbarNode, TopToolbarSpec, TopToolbarUtility, action_tooltip,
+    TopToolbarIcon, TopToolbarIsland, TopToolbarNode, TopToolbarSpec, TopToolbarUtility,
+    action_tooltip, micro_ring_width, preset_slot,
 };
 
 #[cfg(test)]

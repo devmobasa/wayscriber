@@ -1,6 +1,18 @@
+use super::constants::{
+    COLOR_ACCENT, COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, set_color,
+};
 use super::draw_round_rect;
 use crate::draw::Color;
+use crate::ui::theme::{Rgba, SHADOW_RGBA};
+/// Outline around the gradient picker areas (sat/val square, hue bar).
+const COLOR_PICKER_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.4);
+/// Outer white ring of the picker's position indicator dot.
+const COLOR_INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.9);
 
+/// Rounded-square quick-color swatch: the fill sits one pixel inside the
+/// hit rect, a subtle inner hairline keeps every fill defined against the
+/// panel (boosted for dark colors), and the active state draws a 2px accent
+/// ring with a ~2px gap around the fill.
 pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     ctx: &cairo::Context,
     x: f64,
@@ -10,21 +22,23 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     active: bool,
 ) {
     ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
-    draw_round_rect(ctx, x, y, size, size, 4.0);
+    draw_round_rect(ctx, x + 1.0, y + 1.0, size - 2.0, size - 2.0, 5.0);
     let _ = ctx.fill();
 
     let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
     if luminance < 0.3 {
-        ctx.set_source_rgba(0.5, 0.5, 0.5, 0.8);
-        ctx.set_line_width(1.5);
-        draw_round_rect(ctx, x, y, size, size, 4.0);
-        let _ = ctx.stroke();
+        set_color(ctx, COLOR_SWATCH_HAIRLINE_DARK);
+    } else {
+        set_color(ctx, COLOR_SWATCH_HAIRLINE);
     }
+    ctx.set_line_width(1.0);
+    draw_round_rect(ctx, x + 1.5, y + 1.5, size - 3.0, size - 3.0, 4.5);
+    let _ = ctx.stroke();
 
     if active {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        set_color(ctx, COLOR_ACCENT);
         ctx.set_line_width(2.0);
-        draw_round_rect(ctx, x - 2.0, y - 2.0, size + 4.0, size + 4.0, 5.0);
+        draw_round_rect(ctx, x - 2.0, y - 2.0, size + 4.0, size + 4.0, 7.0);
         let _ = ctx.stroke();
     }
 }
@@ -67,7 +81,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_sat_val_area(
     let _ = ctx.set_source(&val_grad);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+    set_color(ctx, COLOR_PICKER_OUTLINE);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
@@ -85,7 +99,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_hue_bar(
     set_hue_gradient(ctx, x, y, w);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+    set_color(ctx, COLOR_PICKER_OUTLINE);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
@@ -101,7 +115,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_color_indicator(
     let radius = 5.0;
 
     // Draw outer white ring
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    set_color(ctx, COLOR_INDICATOR_RING);
     ctx.arc(x, y, radius + 1.5, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
 
@@ -111,7 +125,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_color_indicator(
     let _ = ctx.fill();
 
     // Draw dark outline for visibility
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+    set_color(ctx, SHADOW_RGBA);
     ctx.set_line_width(1.0);
     ctx.arc(x, y, radius + 1.5, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.stroke();

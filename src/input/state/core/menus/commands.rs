@@ -1,7 +1,8 @@
-use super::super::base::{InputState, PasteAnchor, UiToastKind};
+use super::super::base::{InputState, PasteAnchor};
 use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
 use crate::domain::Action;
 use crate::draw::ShapeId;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;
 
@@ -226,7 +227,11 @@ impl InputState {
             }
             MenuCommand::PageDelete => {
                 if matches!(self.page_delete(), crate::draw::PageDeleteOutcome::Cleared) {
-                    self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "ui",
+                        Toast::info("Cleared the last page."),
+                    );
                 }
                 self.close_context_menu();
             }

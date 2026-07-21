@@ -97,13 +97,42 @@ impl WaylandState {
         value
     }
 
-    pub(in crate::backend::wayland) fn set_pending_toast_press(&mut self, value: bool) {
+    pub(in crate::backend::wayland) fn set_pending_toast_press(
+        &mut self,
+        value: Option<crate::input::state::ToastPress>,
+    ) {
         self.data.pending_toast_press = value;
     }
 
-    pub(in crate::backend::wayland) fn take_pending_toast_press(&mut self) -> bool {
-        let value = self.data.pending_toast_press;
-        self.data.pending_toast_press = false;
+    pub(in crate::backend::wayland) fn take_pending_toast_press(
+        &mut self,
+    ) -> Option<crate::input::state::ToastPress> {
+        self.data.pending_toast_press.take()
+    }
+
+    pub(in crate::backend::wayland) fn set_pending_status_hud_press(&mut self, value: bool) {
+        self.data.pending_status_hud_press = value;
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_status_hud_press(&mut self) -> bool {
+        let value = self.data.pending_status_hud_press;
+        self.data.pending_status_hud_press = false;
         value
+    }
+
+    pub(in crate::backend::wayland) fn set_pending_zoom_chip_press(
+        &mut self,
+        value: crate::ui::ZoomChipPress,
+    ) {
+        self.data.pending_zoom_chip_press = value;
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_zoom_chip_press(
+        &mut self,
+    ) -> crate::ui::ZoomChipPress {
+        std::mem::replace(
+            &mut self.data.pending_zoom_chip_press,
+            crate::ui::ZoomChipPress::None,
+        )
     }
 }

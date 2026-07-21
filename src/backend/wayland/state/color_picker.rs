@@ -2,17 +2,15 @@
 
 use super::{ClipboardOperationController, WaylandState};
 use crate::backend::wayland::clipboard::ClipboardPoll;
-use crate::input::state::UiToastKind;
+use crate::draw::Color;
+use crate::input::state::{HexPasteTarget, Toast, ToastPriority};
 use crate::input::state::{color_to_hex, parse_hex_color};
 use std::ffi::OsStr;
 use std::time::Duration;
 
 impl WaylandState {
-    /// Copies the current color as hex to the clipboard.
-    pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self) {
-        let color = self
-            .input_state
-            .color_for_tool(self.input_state.active_tool());
+    /// Copies the color captured when the request was made as hex.
+    pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self, color: Color) {
         let hex = color_to_hex(color);
         log::info!("Hex copy requested: {}", hex);
         self.suppress_focus_exit_for(Duration::from_millis(1500));
@@ -24,8 +22,11 @@ impl WaylandState {
             copy_hex_via_command,
         ) {
             log::warn!("Failed to start hex clipboard copy: {err}");
-            self.input_state
-                .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "color_picker",
+                Toast::warning("Failed to copy to clipboard"),
+            );
         }
     }
 
@@ -37,8 +38,11 @@ impl WaylandState {
                 outcome: Ok(()),
                 ..
             } => {
-                self.input_state
-                    .set_ui_toast(UiToastKind::Info, format!("Copied {hex}"));
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::info(format!("Copied {hex}")),
+                );
             }
             ClipboardPoll::Ready {
                 context: hex,
@@ -46,8 +50,11 @@ impl WaylandState {
                 ..
             } => {
                 log::warn!("wl-copy failed for hex copy {hex}: {err}");
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Failed to copy to clipboard"),
+                );
             }
             ClipboardPoll::ProducerFailed {
                 context: hex,
@@ -55,13 +62,19 @@ impl WaylandState {
                 ..
             } => {
                 log::error!("Hex copy producer failed for {hex}: {reason}");
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Failed to copy to clipboard"),
+                );
             }
             ClipboardPoll::Disconnected { context: hex, .. } => {
                 log::error!("Hex copy producer disconnected for {hex}");
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Failed to copy to clipboard"),
+                );
             }
         }
         self.start_pending_hex_copy_if_idle();
@@ -74,48 +87,82 @@ impl WaylandState {
             copy_hex_via_command,
         ) {
             log::warn!("Failed to start pending hex clipboard copy: {err}");
-            self.input_state
-                .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "color_picker",
+                Toast::warning("Failed to copy to clipboard"),
+            );
         }
     }
 
     /// Pastes a hex color from the clipboard.
-    pub(in crate::backend::wayland) fn handle_paste_hex_color(&mut self) {
+    pub(in crate::backend::wayland) fn handle_paste_hex_color(&mut self, target: HexPasteTarget) {
+        if !self.input_state.hex_paste_target_is_current(target) {
+            log::debug!("Discarding stale color-picker hex paste request");
+            return;
+        }
         log::info!("Hex paste requested");
         self.suppress_focus_exit_for(Duration::from_millis(1500));
         let clipboard = match std::panic::catch_unwind(read_clipboard_text_via_command) {
             Ok(Ok(text)) => text,
             Ok(Err(ClipboardTextError::Empty)) => {
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, "Clipboard empty");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Clipboard empty"),
+                );
                 return;
             }
             Ok(Err(ClipboardTextError::Other(err))) => {
                 log::warn!("wl-paste failed for hex paste: {}", err);
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, "Failed to paste from clipboard");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Failed to paste from clipboard"),
+                );
                 return;
             }
             Err(_) => {
                 log::error!("Hex paste panicked");
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, "Failed to paste from clipboard");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Failed to paste from clipboard"),
+                );
                 return;
             }
         };
 
         if let Some(color) = parse_hex_color(clipboard.trim()) {
-            let _ = self.input_state.apply_color_from_ui(color);
+            match target {
+                HexPasteTarget::ActiveTool => {
+                    let _ = self.input_state.apply_color_from_ui(color);
+                }
+                HexPasteTarget::ColorPickerPopup { generation } => {
+                    if !self
+                        .input_state
+                        .color_picker_popup_generation_is_current(generation)
+                    {
+                        log::debug!("Discarding stale color-picker hex paste completion");
+                        return;
+                    }
+                    self.input_state.color_picker_popup_set_color(color);
+                }
+            }
             let hex = color_to_hex(color);
-            self.input_state
-                .set_ui_toast(UiToastKind::Info, format!("Pasted {}", hex));
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "color_picker",
+                Toast::info(format!("Pasted {}", hex)),
+            );
         } else {
-            self.input_state.set_ui_toast(
-                UiToastKind::Warning,
-                format!(
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "color_picker",
+                Toast::warning(format!(
                     "Invalid hex: {}",
                     clipboard.chars().take(20).collect::<String>()
-                ),
+                )),
             );
         }
     }

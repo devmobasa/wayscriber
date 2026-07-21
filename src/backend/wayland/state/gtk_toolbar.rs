@@ -27,6 +27,7 @@ fn acknowledge_blocked_gtk_drag_feedback(
             *side_seq = (*side_seq).max(*seq);
         }
         GtkToolbarFeedback::Event { .. }
+        | GtkToolbarFeedback::TopHover { .. }
         | GtkToolbarFeedback::CaptureSuppressionReady { .. }
         | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => {}
     }
@@ -41,6 +42,8 @@ fn gtk_toolbar_feedback_is_blocked(
     match feedback {
         GtkToolbarFeedback::CaptureSuppressionReady { .. }
         | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => false,
+        // Hover is passive state, not a user action; never gate it.
+        GtkToolbarFeedback::TopHover { .. } => false,
         GtkToolbarFeedback::Event { .. } => modal_engaged,
         GtkToolbarFeedback::SetTopOffset { phase, .. } => {
             let blocked = modal_engaged || *top_drag_blocked;
@@ -186,6 +189,9 @@ impl WaylandState {
                         Some(qh),
                     );
                 }
+                GtkToolbarFeedback::TopHover { hovered } => {
+                    self.data.gtk_top_hover = hovered;
+                }
                 GtkToolbarFeedback::SetTopOffset {
                     x,
                     y,
@@ -222,6 +228,7 @@ impl WaylandState {
         if failed {
             self.cancel_overlay_capture_waiting_for_gtk();
             self.cancel_gtk_toolbar_drag_lifecycle();
+            self.data.gtk_top_hover = false;
             self.gtk_toolbar = None;
         }
     }

@@ -97,6 +97,18 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         {
             state.hint_quick_access_shown = false;
         }
+        // M9 surface hints have no per-feature "used" signal, so they re-arm
+        // purely on the across-session count cap (up to DEFERRED_HINT_REPEAT_MAX
+        // gentle reminders each).
+        if state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX {
+            state.hint_status_bar_shown = false;
+        }
+        if state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX {
+            state.hint_zoom_chip_shown = false;
+        }
+        if state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX {
+            state.hint_canvas_popover_shown = false;
+        }
         if !state.first_run_completed && !state.first_run_skipped {
             state
                 .active_step
@@ -110,6 +122,12 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         state.tour_shown = true;
     }
     onboarding.save();
+
+    // Seed the palette's recent-commands history from its persisted store.
+    let palette_recents_store = crate::palette_recents::PaletteRecentsStore::load();
+    input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
+    let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
+
     apply_initial_mode(backend, &config, &mut input_state);
 
     let capture_wake = runtime_wake.handle();
@@ -135,6 +153,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         config,
         input_state,
         onboarding,
+        palette_recents,
         capture_manager,
         session_options,
         persistence,

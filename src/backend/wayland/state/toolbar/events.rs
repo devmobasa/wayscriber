@@ -18,6 +18,27 @@ fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) 
     presenter_restore.unwrap_or(current)
 }
 
+/// While presenter mode owns the top strip (`[presenter_mode] toolbar_mode =
+/// "micro"`), the live display mode and minimized flag hold presenter-mapped
+/// values (`Micro`, force-cleared `false`), not user preferences. Any
+/// `Persist(Toolbar)` event fired during presenter mode — a pin toggle, an
+/// icon-mode switch, ... — must therefore write the saved pre-presenter
+/// values from `PresenterRestore`. Outside presenter mode (and under the
+/// `"hidden"` mapping, which leaves both fields untouched) the restore slots
+/// are `None` and the live values persist as usual.
+fn persisted_top_minimized_value(current: bool, presenter_restore: Option<bool>) -> bool {
+    presenter_restore.unwrap_or(current)
+}
+
+fn persisted_top_display_mode_value(
+    current: crate::config::TopDisplayMode,
+    presenter_restore: Option<crate::config::TopDisplayMode>,
+) -> crate::config::TopDisplayMode {
+    // Hidden persists as Full: like the F9 visibility toggle, a hidden
+    // strip is runtime-only and `top_pinned` governs startup.
+    presenter_restore.unwrap_or(current).persisted()
+}
+
 fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
     if state.drawer_hint_count >= crate::onboarding::DRAWER_HINT_MAX {
         return false;
@@ -41,6 +62,17 @@ fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
     )
 }
 
+/// The precise-entry popup dismisses on any toolbar interaction other
+/// than its own open/commit/cancel events (mirroring the overflow flyout).
+fn event_dismisses_precision_entry(event: &ToolbarEvent) -> bool {
+    !matches!(
+        event,
+        ToolbarEvent::OpenPrecisionEntry(_)
+            | ToolbarEvent::CommitPrecisionEntry { .. }
+            | ToolbarEvent::CancelPrecisionEntry
+    )
+}
+
 /// The Shapes popover dismisses on everything the overflow does *except* its own
 /// inline options: the Fill checkbox and the polygon-sides stepper live inside
 /// the popover, so using them must not close it out from under the pointer.
@@ -49,6 +81,113 @@ fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
         && !matches!(
             event,
             ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_)
+        )
+}
+
+/// Events shared by the overflow-anchored popovers that never dismiss them:
+/// their own open/close toggles (mutual exclusion lives in the apply layer)
+/// and the internal scrollbar.
+fn event_spared_by_top_menu_popovers(event: &ToolbarEvent) -> bool {
+    matches!(
+        event,
+        ToolbarEvent::ToggleSessionPopover(_)
+            | ToolbarEvent::ToggleSettingsPopover(_)
+            | ToolbarEvent::ToggleCanvasPopover(_)
+            | ToolbarEvent::ScrollTopPopover(_)
+    )
+}
+
+/// The Canvas popover hosts the board/page/zoom/advanced/step controls, so
+/// those events must not close it out from under the pointer; everything
+/// else dismisses it like the overflow flyout.
+fn event_dismisses_canvas_popover(event: &ToolbarEvent) -> bool {
+    !event_spared_by_top_menu_popovers(event)
+        && !matches!(
+            event,
+            ToolbarEvent::BoardPrev
+                | ToolbarEvent::BoardNext
+                | ToolbarEvent::BoardNew
+                | ToolbarEvent::BoardDuplicate
+                | ToolbarEvent::BoardDelete
+                | ToolbarEvent::PagePrev
+                | ToolbarEvent::PageNext
+                | ToolbarEvent::PageNew
+                | ToolbarEvent::PageDuplicate
+                | ToolbarEvent::PageDelete
+                | ToolbarEvent::ZoomIn
+                | ToolbarEvent::ZoomOut
+                | ToolbarEvent::ResetZoom
+                | ToolbarEvent::ToggleZoomLock
+                | ToolbarEvent::UndoAll
+                | ToolbarEvent::RedoAll
+                | ToolbarEvent::UndoAllDelayed
+                | ToolbarEvent::RedoAllDelayed
+                | ToolbarEvent::ToggleFreeze
+                | ToolbarEvent::ToggleCustomSection(_)
+                | ToolbarEvent::ToggleDelaySliders(_)
+                | ToolbarEvent::SetCustomUndoSteps(_)
+                | ToolbarEvent::SetCustomRedoSteps(_)
+                | ToolbarEvent::CustomUndo
+                | ToolbarEvent::CustomRedo
+                | ToolbarEvent::SetCustomUndoDelay(_)
+                | ToolbarEvent::SetCustomRedoDelay(_)
+                | ToolbarEvent::SetUndoDelay(_)
+                | ToolbarEvent::SetRedoDelay(_)
+        )
+}
+
+/// The Session popover hosts the session controls, so those events must not
+/// close it out from under the pointer; everything else dismisses it like
+/// the overflow flyout.
+fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
+    !event_spared_by_top_menu_popovers(event)
+        && !matches!(
+            event,
+            ToolbarEvent::OpenSession
+                | ToolbarEvent::OpenRecentSession(_)
+                | ToolbarEvent::SaveSessionAs
+                | ToolbarEvent::SaveSessionAsConfirm(_)
+                | ToolbarEvent::SaveSessionAsCancel
+                | ToolbarEvent::SessionInfo
+                | ToolbarEvent::ClearSession
+                | ToolbarEvent::OpenConfigurator
+        )
+}
+
+/// The Settings popover hosts the full Settings-pane control set (layout
+/// mode, toggles, buttons, and the customization sub-panel), so all of
+/// those events keep it open; everything else dismisses it.
+fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
+    !event_spared_by_top_menu_popovers(event)
+        && !matches!(
+            event,
+            ToolbarEvent::SetToolbarLayoutMode(_)
+                | ToolbarEvent::ToggleContextAwareUi(_)
+                | ToolbarEvent::ToggleIconMode(_)
+                | ToolbarEvent::ToggleTextControls(_)
+                | ToolbarEvent::ToggleStatusBar(_)
+                | ToolbarEvent::ToggleStatusBoardBadge(_)
+                | ToolbarEvent::ToggleStatusPageBadge(_)
+                | ToolbarEvent::ToggleFloatingBadgeAlways(_)
+                | ToolbarEvent::TogglePresetToasts(_)
+                | ToolbarEvent::TogglePresets(_)
+                | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::ToggleZoomActions(_)
+                | ToolbarEvent::ToggleActionsAdvanced(_)
+                | ToolbarEvent::ToggleBoardsSection(_)
+                | ToolbarEvent::TogglePagesSection(_)
+                | ToolbarEvent::ToggleStepSection(_)
+                | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
+                | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
+                | ToolbarEvent::SetToolbarItemHidden(_, _)
+                | ToolbarEvent::MoveToolbarItem { .. }
+                | ToolbarEvent::StartToolbarItemDrag { .. }
+                | ToolbarEvent::DragToolbarItemOver { .. }
+                | ToolbarEvent::ResetToolbarItemOrder(_)
+                | ToolbarEvent::ResetToolbarItemHiddenOverrides
+                | ToolbarEvent::OpenCommandPalette
+                | ToolbarEvent::OpenConfigurator
+                | ToolbarEvent::OpenConfigFile
         )
 }
 
@@ -85,6 +224,7 @@ impl WaylandState {
         populate_session_snapshot(&mut snapshot, self.session.options());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
+        snapshot.top_fade = self.data.top_strip_fade.value();
         snapshot
     }
 
@@ -134,6 +274,15 @@ impl WaylandState {
             self.input_state.modifiers.shift,
             self.input_state.modifiers.alt,
         );
+        // Built-in press resolution: Shift+click on Clear skips the undo
+        // toast. (GTK resolves the same upgrade from its own click-time
+        // modifier capture before the event reaches the bridge.)
+        let event = match event {
+            ToolbarEvent::ClearCanvas { instant } => ToolbarEvent::ClearCanvas {
+                instant: instant || self.input_state.modifiers.shift,
+            },
+            other => other,
+        };
         self.handle_toolbar_event_with_rebind(event, rebind_requested, conn, qh);
     }
 
@@ -162,16 +311,42 @@ impl WaylandState {
         }
         // Toolbar actions win over the modal sampler: cancel without sampling,
         // then apply the requested toolbar event normally.
+        if self.input_state.is_precision_entry_open()
+            && event_dismisses_precision_entry(&event)
+            && self.input_state.cancel_precision_entry()
+        {
+            self.toolbar.mark_dirty();
+        }
         let dismiss_overflow =
             self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
         let dismiss_shapes =
             self.input_state.toolbar_shapes_expanded && event_dismisses_shape_picker(&event);
-        if dismiss_overflow || dismiss_shapes {
+        let dismiss_session = self.input_state.toolbar_session_popover_open
+            && event_dismisses_session_popover(&event);
+        let dismiss_settings = self.input_state.toolbar_settings_popover_open
+            && event_dismisses_settings_popover(&event);
+        let dismiss_canvas =
+            self.input_state.toolbar_canvas_popover_open && event_dismisses_canvas_popover(&event);
+        if dismiss_overflow
+            || dismiss_shapes
+            || dismiss_session
+            || dismiss_settings
+            || dismiss_canvas
+        {
             if dismiss_overflow {
                 self.input_state.toolbar_top_overflow_open = false;
             }
             if dismiss_shapes {
                 self.input_state.toolbar_shapes_expanded = false;
+            }
+            if dismiss_session {
+                self.input_state.toolbar_session_popover_open = false;
+            }
+            if dismiss_settings {
+                self.input_state.toolbar_settings_popover_open = false;
+            }
+            if dismiss_canvas {
+                self.input_state.toolbar_canvas_popover_open = false;
             }
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
@@ -269,11 +444,11 @@ impl WaylandState {
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
-        if self.input_state.take_pending_copy_hex() {
-            self.handle_copy_hex_color();
+        if let Some(color) = self.input_state.take_pending_copy_hex_request() {
+            self.handle_copy_hex_color(color);
         }
-        if self.input_state.take_pending_paste_hex() {
-            self.handle_paste_hex_color();
+        if let Some(target) = self.input_state.take_pending_paste_hex_request() {
+            self.handle_paste_hex_color(target);
         }
         self.drain_clipboard_requests();
         self.refresh_keyboard_interactivity();
@@ -305,12 +480,25 @@ impl WaylandState {
     }
 
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
-    pub(super) fn save_toolbar_pin_config(&mut self) {
+    pub(in crate::backend::wayland) fn save_toolbar_pin_config(&mut self) {
         self.config.ui.toolbar.layout_mode = self.input_state.toolbar_layout_mode;
         self.config.ui.toolbar.items = self.input_state.toolbar_items.clone();
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
-        self.config.ui.toolbar.top_minimized = self.input_state.toolbar_top_minimized;
+        self.config.ui.toolbar.top_minimized = persisted_top_minimized_value(
+            self.input_state.toolbar_top_minimized,
+            self.input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.toolbar_top_minimized),
+        );
+        self.config.ui.toolbar.top_display_mode = persisted_top_display_mode_value(
+            self.input_state.toolbar_top_display_mode,
+            self.input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.toolbar_top_display_mode),
+        );
         self.config.ui.toolbar.side_minimized = self.input_state.toolbar_side_minimized;
         self.config.ui.toolbar.side_active_pane =
             self.input_state.toolbar_side_pane.config_id().to_string();

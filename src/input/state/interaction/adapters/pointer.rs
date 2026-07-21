@@ -99,6 +99,55 @@ pub(crate) fn handle_left_context_menu_press(
     Some(RoutingOutcome::Consumed(ConsumedBy::ContextMenu))
 }
 
+/// Swallow left presses on the interactive status HUD so chip clicks never
+/// start a stroke. The pointer backend consumes HUD presses earlier via its
+/// press→release contract; this guard covers input paths that route presses
+/// directly (tablet, touch fallbacks). No activation happens on press: the
+/// pending flag set here makes the matching release activate the chip in
+/// `route_pointer_release`.
+pub(crate) fn handle_status_hud_press(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if button != MouseButton::Left {
+        return None;
+    }
+    let screen = points.screen();
+    if !state.status_hud_contains(screen.x(), screen.y()) {
+        return None;
+    }
+    state.set_status_hud_press_pending();
+    Some(RoutingOutcome::Consumed(ConsumedBy::StatusHud))
+}
+
+/// Swallow left presses on the interactive bottom-right zoom chip so button
+/// clicks never start a stroke. Mirrors [`handle_status_hud_press`]: no
+/// activation on press — the pending flag set here makes the matching release
+/// activate the button in `route_pointer_release`. Covers input paths that
+/// route presses directly (tablet, touch fallbacks); the pointer/touch
+/// backends consume chip presses earlier via their own press→release contract.
+pub(crate) fn handle_zoom_chip_press(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if button != MouseButton::Left {
+        return None;
+    }
+    let screen = points.screen();
+    if !state.zoom_chip_contains(screen.x(), screen.y()) {
+        return None;
+    }
+    // Record the press as `Button(kind)` or `Passive` (the `NN%` readout /
+    // inter-piece gap) so the matching release stays consumed either way, firing
+    // an action only on the same button. The press is consumed regardless, so no
+    // stroke starts under the chip.
+    let pressed = state.zoom_chip_press_at(screen.x(), screen.y());
+    state.set_zoom_chip_press_pending(pressed);
+    Some(RoutingOutcome::Consumed(ConsumedBy::ZoomChip))
+}
+
 pub(crate) fn close_properties_panel_before_tool_routing(state: &mut InputState) {
     state.close_properties_panel();
 }
@@ -264,7 +313,16 @@ pub(crate) fn handle_radial_menu_motion(
         return None;
     }
     let screen = points.screen();
-    state.update_radial_menu_hover(screen.x() as f64, screen.y() as f64);
+    let x = screen.x() as f64;
+    let y = screen.y() as f64;
+    if state.radial_menu_is_size_dragging() {
+        // Drag capture: while the size gauge is held, every motion adjusts
+        // thickness, even outside the band.
+        state.radial_menu_drag_size_to(x, y);
+    } else {
+        state.update_radial_menu_hover(x, y);
+        state.radial_menu_sample_flick(x, y);
+    }
     Some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 
@@ -275,15 +333,18 @@ pub(crate) fn handle_color_picker_motion(
     if !state.is_color_picker_popup_open() {
         return None;
     }
+    let screen = points.screen();
     if state.color_picker_popup_is_dragging()
         && let Some(layout) = state.color_picker_popup_layout()
     {
-        let screen = points.screen();
         let fx = screen.x() as f64;
         let fy = screen.y() as f64;
         let norm_x = ((fx - layout.gradient_x) / layout.gradient_w).clamp(0.0, 1.0);
         let norm_y = ((fy - layout.gradient_y) / layout.gradient_h).clamp(0.0, 1.0);
         state.color_picker_popup_set_from_gradient(norm_x, norm_y);
+        state.color_picker_popup_set_hover(None);
+    } else {
+        state.color_picker_popup_set_hover(Some((screen.x() as f64, screen.y() as f64)));
     }
     Some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup))
 }
@@ -356,9 +417,14 @@ pub(crate) fn handle_release_overlays(
     None
 }
 
-pub(crate) fn handle_radial_menu_release(state: &InputState) -> Option<RoutingOutcome> {
+pub(crate) fn handle_radial_menu_release(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    let screen = points.screen();
     state
-        .is_radial_menu_open()
+        .radial_menu_handle_release(button, screen.x() as f64, screen.y() as f64)
         .then_some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 

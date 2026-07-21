@@ -1,9 +1,10 @@
 use crate::domain::Action;
 use crate::draw::PageDeleteOutcome;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;
 
-use super::super::{InputState, UiToastKind};
+use super::super::InputState;
 
 impl InputState {
     pub(in crate::input::state) fn handle_board_pages_action(&mut self, action: Action) -> bool {
@@ -33,7 +34,11 @@ impl InputState {
                 if self.page_prev() {
                     info!("Switched to previous page");
                 } else {
-                    self.set_ui_toast(UiToastKind::Info, "Already on the first page.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "page.nav",
+                        Toast::info("Already on the first page."),
+                    );
                 }
                 true
             }
@@ -41,7 +46,11 @@ impl InputState {
                 if self.page_next() {
                     info!("Switched to next page");
                 } else {
-                    self.set_ui_toast(UiToastKind::Info, "Already on the last page.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "page.nav",
+                        Toast::info("Already on the last page."),
+                    );
                 }
                 true
             }
@@ -112,7 +121,11 @@ impl InputState {
             }
             Action::BoardNew => {
                 if !self.create_board() {
-                    self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "page.nav",
+                        Toast::info("Board limit reached."),
+                    );
                 }
                 true
             }

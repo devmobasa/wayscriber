@@ -35,7 +35,9 @@ pub use core::{CURRENT_CONFIG_REVISION, Config};
 pub use document::{
     ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
 };
-pub use enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
+pub use enums::{
+    RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
+};
 pub use field_metadata::{
     PERFORMANCE_BUFFER_COUNT_MAX, PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_BUFFER_COUNTS,
     PERFORMANCE_FIELD_METADATA, PERFORMANCE_UI_ANIMATION_FPS_MAX, PerformanceFieldGroup,
@@ -55,15 +57,16 @@ pub use types::{
     PDF_LABEL_PLACEHOLDERS, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PdfExportConfig, PdfFitMode,
     PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
     PdfTransparentBackground, PerformanceConfig, PresenterModeConfig, PresenterToolBehavior,
-    PresetSlotsConfig, PresetToolSettingConfig, PresetToolStatesConfig, QUICK_COLOR_RENDER_LIMIT,
-    QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorsConfig,
-    RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig,
-    ResolvedToolbarItems, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
-    ToolPresetConfig, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
-    ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
-    ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
-    ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionFlag, ToolbarSectionVisibility,
-    TrayConfig, TrayIconStyle, UiConfig, fold_legacy_section_flags, resolve_section_visibility,
+    PresenterToolbarMode, PresetSlotsConfig, PresetToolSettingConfig, PresetToolStatesConfig,
+    QUICK_COLOR_RENDER_LIMIT, QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry,
+    QuickColorSlot, QuickColorsConfig, RenderColorMappingConfig, RenderProfileConfig,
+    RenderProfileExportMode, RenderProfilesConfig, ResolvedToolbarItems, SessionCompression,
+    SessionConfig, SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarBackendKind,
+    ToolbarConfig, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
+    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarItemsConfig,
+    ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, ToolbarRebindModifier,
+    ToolbarSectionFlag, ToolbarSectionVisibility, ToolbarSideLayout, TopDisplayMode, TrayConfig,
+    TrayIconStyle, UiConfig, fold_legacy_section_flags, resolve_section_visibility,
     section_flag_for_item, set_section_visibility, toolbar_item_definitions, toolbar_item_ids,
     toolbar_item_order_group, validate_pdf_label_template,
 };

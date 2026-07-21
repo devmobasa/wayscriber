@@ -7,7 +7,7 @@ mod marker;
 mod pages;
 mod presets;
 mod section_header;
-mod session;
+pub(in crate::backend::wayland::toolbar) mod session;
 mod settings;
 mod step;
 mod step_marker;
@@ -25,7 +25,16 @@ use crate::ui::toolbar::{SidePane, ToolbarEvent, ToolbarSideSection, ToolbarSnap
 
 use std::time::Instant;
 
+use super::widgets::constants::set_color;
 use super::widgets::{draw_panel_background, draw_round_rect, draw_tooltip_with_delay};
+use crate::ui::theme::Rgba;
+
+/// Scrollbar track tint: a white wash with no theme token (value-coincides
+/// with COLOR_DIVIDER but is a control surface, not a separator). The thumb
+/// shares the GTK scrollbar slider token. Shared with the top strip's
+/// Canvas/Session/Settings popover scrollbar so both scroll surfaces match.
+pub(in crate::backend::wayland::toolbar) const COLOR_SCROLLBAR_TRACK: Rgba = (1.0, 1.0, 1.0, 0.08);
+use crate::ui::theme::toolbar::COLOR_SCROLLBAR_SLIDER as COLOR_SCROLLBAR_THUMB;
 
 pub(super) struct SidePaletteLayout<'a> {
     pub(super) ctx: &'a cairo::Context,
@@ -153,7 +162,7 @@ pub fn render_side_palette(
     hover: Option<(f64, f64)>,
     hover_start: Option<Instant>,
 ) -> Result<()> {
-    draw_panel_background(ctx, width, height);
+    draw_panel_background(ctx, 0.0, 0.0, width, height);
 
     if snapshot.side_minimized {
         draw_side_minimized_tab(ctx, width, height, hits, hover, hover_start);
@@ -363,7 +372,7 @@ fn draw_scrollbar(
         return;
     }
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+    set_color(ctx, COLOR_SCROLLBAR_TRACK);
     draw_round_rect(ctx, track_x, track_y, track_w, track_h, 2.0);
     let _ = ctx.fill();
 
@@ -371,7 +380,7 @@ fn draw_scrollbar(
     let thumb_h = (track_h * (viewport / natural)).max(20.0);
     let max_scroll = natural - height;
     let thumb_y = track_y + (track_h - thumb_h) * (scroll / max_scroll).clamp(0.0, 1.0);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+    set_color(ctx, COLOR_SCROLLBAR_THUMB);
     draw_round_rect(ctx, track_x, thumb_y, track_w, thumb_h, 2.0);
     let _ = ctx.fill();
 

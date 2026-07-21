@@ -21,13 +21,20 @@ use crate::input::EraserMode;
 use crate::input::state::PresetFeedbackKind;
 use crate::label_format::format_binding_label;
 use crate::toolbar_icons;
+use crate::ui::theme::toolbar::{
+    COLOR_CARD_BACKGROUND, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, FONT_FAMILY_DEFAULT,
+    FONT_SIZE_SECONDARY,
+};
+use crate::ui::theme::{Rgb, Rgba, set_color, set_color_alpha, with_alpha};
 use crate::ui::toolbar::bindings::{action_for_clear_preset, action_for_save_preset, tool_label};
 use crate::ui::toolbar::{PresetSlotSnapshot, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 use crate::ui_text::{UiTextStyle, text_layout};
 use crate::util::color_to_name;
 
 use super::super::super::icons::{IconPainter, tool_icon_painter};
-use super::super::super::widgets::{rounded_rect_path, send_event, set_active_class, sized_button};
+use super::super::super::widgets::{
+    COLOR_SWATCH_HAIRLINE_DARK, rounded_rect_path, send_event, set_active_class, sized_button,
+};
 use super::{SectionCard, SectionCtx, section_card};
 
 /// Built-in slot geometry (spec units, multiplied by the toolbar scale).
@@ -35,6 +42,37 @@ const SLOT_SIZE: f64 = 40.0;
 const SLOT_GAP: f64 = 8.0;
 /// Size of the hover-revealed clear (✕) badge in a filled slot's corner.
 const CLEAR_BADGE_SIZE: f64 = 14.0;
+
+// Slot chrome tints mirroring the built-in `side_palette::presets::slot`;
+// specific values with no theme token, kept to avoid a visible shift.
+// TODO(theme-consolidation): every const below is a name-for-name copy of a
+// built-in side_palette const — hoist the pairs into `theme::toolbar` so the
+// two frontends cannot drift.
+/// Empty slot well: near-black tint one step darker than
+/// COLOR_PANEL_BACKGROUND (alpha varies with hover).
+const EMPTY_SLOT_BG_RGB: Rgb = (0.05, 0.05, 0.07);
+/// Dashed outline marking an empty slot.
+const COLOR_EMPTY_SLOT_DASH: Rgba = (1.0, 1.0, 1.0, 0.35);
+/// Dim save-hint plus glyph in an idle empty slot.
+const COLOR_EMPTY_SLOT_PLUS: Rgba = (1.0, 1.0, 1.0, 0.45);
+/// Clear badge fill: muted destructive red, quieter than the destructive
+/// root. TODO(theme-consolidation): near COLOR_CLOSE_HOVER.
+const COLOR_CLEAR_BADGE: Rgba = (0.75, 0.2, 0.2, 0.9);
+/// Thickness preview line across a filled slot's bottom edge.
+const COLOR_PREVIEW_LINE: Rgba = (1.0, 1.0, 1.0, 0.8);
+/// Outline around the mini color swatch in a filled slot.
+const COLOR_SWATCH_OUTLINE: Rgba = (1.0, 1.0, 1.0, 0.75);
+/// Preset color tint over a filled slot's face (fill and outline alphas).
+const PRESET_TINT_FILL_ALPHA: f64 = 0.12;
+const PRESET_TINT_BORDER_ALPHA: f64 = 0.35;
+/// White root for the keycap's border/text alpha ladder.
+const WHITE_RGB: Rgb = (1.0, 1.0, 1.0);
+/// Per-kind feedback flash tints (apply/save/clear); mirror the built-in
+/// `presets::slot::feedback`. TODO(theme-consolidation): near the overlay
+/// toast palette but not equal.
+const FEEDBACK_APPLY_RGB: Rgb = (0.35, 0.55, 0.95);
+const FEEDBACK_SAVE_RGB: Rgb = (0.25, 0.75, 0.4);
+const FEEDBACK_CLEAR_RGB: Rgb = (0.9, 0.3, 0.3);
 
 pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget> {
     let snapshot = ctx.snapshot;
@@ -175,17 +213,24 @@ fn empty_slot(ctx: &mut SectionCtx, slot_index: usize) -> gtk4::Widget {
         let k = s / SLOT_SIZE;
         let hover = draw_hovered.get();
         // Dark backing + dashed outline the built-in empty slot draws.
-        ctx.set_source_rgba(0.05, 0.05, 0.07, if hover { 0.45 } else { 0.35 });
+        set_color_alpha(ctx, EMPTY_SLOT_BG_RGB, if hover { 0.45 } else { 0.35 });
         rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
         let _ = ctx.fill();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+        set_color(ctx, COLOR_EMPTY_SLOT_DASH);
         ctx.set_line_width(1.0);
         ctx.set_dash(&[3.0 * k, 2.0 * k], 0.0);
         rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
         let _ = ctx.stroke();
         ctx.set_dash(&[], 0.0);
         let plus = (s * 0.45).round().min(14.0 * k);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, if hover { 0.9 } else { 0.45 });
+        set_color(
+            ctx,
+            if hover {
+                COLOR_TEXT_SECONDARY
+            } else {
+                COLOR_EMPTY_SLOT_PLUS
+            },
+        );
         toolbar_icons::draw_icon_plus(ctx, (s - plus) / 2.0, (s - plus) / 2.0, plus);
         draw_keycap(ctx, s, &label, false);
         draw_feedback(ctx, s, draw_feedback_cell.get());
@@ -242,7 +287,7 @@ fn clear_badge(ctx: &SectionCtx, slot: usize) -> gtk4::Button {
     let area = slot_area(size);
     area.set_draw_func(|_, ctx, width, height| {
         let size = width.min(height) as f64;
-        ctx.set_source_rgba(0.75, 0.2, 0.2, 0.9);
+        set_color(ctx, COLOR_CLEAR_BADGE);
         ctx.arc(
             size / 2.0,
             size / 2.0,
@@ -251,7 +296,7 @@ fn clear_badge(ctx: &SectionCtx, slot: usize) -> gtk4::Button {
             std::f64::consts::PI * 2.0,
         );
         let _ = ctx.fill();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        set_color(ctx, COLOR_TEXT_PRIMARY);
         let inset = size * 0.3;
         ctx.set_line_width(1.6 * size / CLEAR_BADGE_SIZE);
         ctx.set_line_cap(cairo::LineCap::Round);
@@ -297,20 +342,20 @@ impl FilledFace {
             let k = s / SLOT_SIZE;
             let (r, g, b) = draw_color.get();
             // Preset color tint over the button base.
-            ctx.set_source_rgba(r, g, b, 0.12);
+            set_color_alpha(ctx, (r, g, b), PRESET_TINT_FILL_ALPHA);
             rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
             let _ = ctx.fill();
-            ctx.set_source_rgba(r, g, b, 0.35);
+            set_color_alpha(ctx, (r, g, b), PRESET_TINT_BORDER_ALPHA);
             ctx.set_line_width(1.0);
             rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
             let _ = ctx.stroke();
             // Centered tool icon.
             let icon = (s * 0.45).round();
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+            set_color(ctx, COLOR_TEXT_SECONDARY);
             (draw_painter.get())(ctx, (s - icon) / 2.0, (s - icon) / 2.0, icon);
             // Thickness preview line along the bottom.
             let preview = (draw_thickness.get() / 50.0 * 6.0).clamp(1.0, 6.0) * k;
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8);
+            set_color(ctx, COLOR_PREVIEW_LINE);
             ctx.set_line_width(preview);
             ctx.move_to(4.0 * k, s - 6.0 * k);
             ctx.line_to(s - 4.0 * k, s - 6.0 * k);
@@ -323,12 +368,12 @@ impl FilledFace {
             let _ = ctx.fill();
             let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
             if luminance < 0.3 {
-                ctx.set_source_rgba(0.5, 0.5, 0.5, 0.8);
+                set_color(ctx, COLOR_SWATCH_HAIRLINE_DARK);
                 ctx.set_line_width(1.5);
                 rounded_rect_path(ctx, sx, sy, sw, sw, 4.0 * k);
                 let _ = ctx.stroke();
             }
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.75);
+            set_color(ctx, COLOR_SWATCH_OUTLINE);
             ctx.set_line_width(1.0);
             rounded_rect_path(ctx, sx, sy, sw, sw, 4.0 * k);
             let _ = ctx.stroke();
@@ -382,32 +427,32 @@ fn draw_keycap(ctx: &cairo::Context, s: f64, label: &str, active: bool) {
     } else {
         (0.30, 0.25, 0.55)
     };
-    ctx.set_source_rgba(0.12, 0.12, 0.18, bg_alpha);
+    set_color(ctx, with_alpha(COLOR_CARD_BACKGROUND, bg_alpha));
     rounded_rect_path(ctx, pad, pad, number_box, number_box, radius);
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, border_alpha);
+    set_color_alpha(ctx, WHITE_RGB, border_alpha);
     ctx.set_line_width(1.0);
     rounded_rect_path(ctx, pad, pad, number_box, number_box, radius);
     let _ = ctx.stroke();
     let style = UiTextStyle {
-        family: "Sans",
+        family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Bold,
-        size: 11.0 * k,
+        size: FONT_SIZE_SECONDARY * k,
     };
     let layout = text_layout(ctx, style, label, None);
     let ext = layout.ink_extents();
     let tx = pad + (number_box - ext.width()) / 2.0 - ext.x_bearing();
     let ty = pad + (number_box - ext.height()) / 2.0 - ext.y_bearing();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, text_alpha);
+    set_color_alpha(ctx, WHITE_RGB, text_alpha);
     layout.show_at_baseline(ctx, tx, ty);
 }
 
 /// The transient apply/save/clear flash the built-in palette fades out.
 fn draw_feedback(ctx: &cairo::Context, s: f64, overlay: Option<(f64, f64, f64, f64)>) {
-    if let Some((r, g, b, a)) = overlay {
+    if let Some(tint) = overlay {
         let k = s / SLOT_SIZE;
-        ctx.set_source_rgba(r, g, b, a);
+        set_color(ctx, tint);
         rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
         let _ = ctx.fill();
     }
@@ -420,9 +465,9 @@ fn feedback_overlay(snapshot: &ToolbarSnapshot, slot_index: usize) -> Option<(f6
         return None;
     }
     let (r, g, b) = match feedback.kind {
-        PresetFeedbackKind::Apply => (0.35, 0.55, 0.95),
-        PresetFeedbackKind::Save => (0.25, 0.75, 0.4),
-        PresetFeedbackKind::Clear => (0.9, 0.3, 0.3),
+        PresetFeedbackKind::Apply => FEEDBACK_APPLY_RGB,
+        PresetFeedbackKind::Save => FEEDBACK_SAVE_RGB,
+        PresetFeedbackKind::Clear => FEEDBACK_CLEAR_RGB,
     };
     Some((r, g, b, 0.35 * fade))
 }

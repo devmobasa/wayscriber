@@ -16,7 +16,7 @@
 - Blue is reserved for the active tool/selected value; destructive actions are red and isolated; disabled buttons are dimmed and non-interactive.
 - Section visibility resolves through `config::resolve_section_visibility` (explicit `items.shown`/`items.hidden` overrides over the layout-mode baseline); the nine `show_*` booleans are derived mirrors — never write them directly.
 - Minimize leaves a restore tab; the restore controls are not customization item ids and must never become hideable.
-- Width pressure degrades quick-color swatches before dropping items to the overflow menu; Pen, Eraser, the color chip, Undo/Redo, Clear, and chrome are never dropped.
+- Colors live only in the contextual style pill; the top strip's islands read tools | presets | history | chrome. Width pressure drops the non-essential presets island first, then narrows the pill's swatches, then moves droppable tools/utilities into the overflow menu; Pen, Eraser, Undo/Redo, Clear, and chrome are never dropped.
 - Config keys and item ids are additive-only; unknown ids round-trip through saves.
 
 ## Coupled Changes

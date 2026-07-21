@@ -1,14 +1,25 @@
 use super::constants::{
     COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
-    COLOR_BUTTON_DESTRUCTIVE, COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED,
-    COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE,
-    COLOR_PIN_DEFAULT, COLOR_PIN_HOVER, COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG,
-    COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER, COLOR_SEGMENT_TEXT_ACTIVE,
-    COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, RADIUS_LG, RADIUS_STD, set_color,
+    COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
+    COLOR_CLOSE_HOVER, COLOR_DRAG_HANDLE, COLOR_DRAG_HANDLE_HOVER, COLOR_FOCUS_RING,
+    COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
+    COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
+    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY,
+    COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, SEGMENT_PADDING, SEGMENT_RADIUS,
+    SEGMENT_SELECTED_RADIUS, set_color,
 };
 use super::draw_round_rect;
+use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba};
 use crate::ui_text::{UiTextStyle, text_layout};
 use std::f64::consts::PI;
+
+/// Faint white glow behind a hovered flat button (quieter than
+/// COLOR_ICON_HOVER_BG; value-coincides with COLOR_DIVIDER but is a hover
+/// affordance, not a separator).
+const COLOR_BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.08);
+/// Warning-tinted glow behind a hovered destructive button (destructive
+/// root at a faint tint alpha).
+const COLOR_DESTRUCTIVE_GLOW: Rgba = rgba(DESTRUCTIVE_RGB, 0.15);
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
     ctx: &cairo::Context,
@@ -20,19 +31,31 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
 ) {
     draw_round_rect(ctx, x, y, w, h, RADIUS_STD);
     // Improved visibility: higher fill alpha
-    let fill_alpha = if hover { 0.75 } else { 0.45 };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, fill_alpha);
+    set_color(
+        ctx,
+        if hover {
+            COLOR_DRAG_HANDLE_HOVER
+        } else {
+            COLOR_DRAG_HANDLE
+        },
+    );
     let _ = ctx.fill();
 
     // Add subtle glow on hover
     if hover {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.15);
+        set_color(ctx, COLOR_ICON_HOVER_BG);
         draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_STD + 1.0);
         let _ = ctx.stroke();
     }
 
-    let bar_alpha = if hover { 1.0 } else { 0.85 };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, bar_alpha);
+    set_color(
+        ctx,
+        if hover {
+            COLOR_ICON_HOVER
+        } else {
+            COLOR_TEXT_TERTIARY
+        },
+    );
     let icon_size = w.min(h);
     crate::toolbar_icons::draw_icon_drag(
         ctx,
@@ -164,7 +187,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
 ) {
     // Add subtle glow on hover for better visibility
     if hover && !active {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+        set_color(ctx, COLOR_BUTTON_HOVER_GLOW);
         draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
         let _ = ctx.fill();
     }
@@ -231,7 +254,8 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_focus_ring(
 }
 
 /// Draw a button for destructive actions (e.g., Clear, board/page Delete):
-/// red-tinted body plus a red accent line so it never reads like navigation.
+/// a normal flat button at rest, with the destructive red fill appearing
+/// only on hover so the bar never carries a persistent red tile.
 pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     ctx: &cairo::Context,
     x: f64,
@@ -240,29 +264,18 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     h: f64,
     hover: bool,
 ) {
-    // Add warning-tinted glow on hover
-    if hover {
-        ctx.set_source_rgba(0.9, 0.4, 0.3, 0.15);
-        draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
-        let _ = ctx.fill();
+    if !hover {
+        draw_button(ctx, x, y, w, h, false, false);
+        return;
     }
 
-    let color = if hover {
-        COLOR_BUTTON_DESTRUCTIVE_HOVER
-    } else {
-        COLOR_BUTTON_DESTRUCTIVE
-    };
-    set_color(ctx, color);
-    draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
+    // Warning-tinted glow behind the hovered tile
+    set_color(ctx, COLOR_DESTRUCTIVE_GLOW);
+    draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
     let _ = ctx.fill();
 
-    // Red accent line at top edge
-    ctx.set_source_rgba(0.85, 0.35, 0.3, if hover { 0.9 } else { 0.7 });
-    let accent_w = w * 0.6;
-    let accent_h = 2.0;
-    let accent_x = x + (w - accent_w) / 2.0;
-    let accent_y = y + 2.0;
-    draw_round_rect(ctx, accent_x, accent_y, accent_w, accent_h, 1.0);
+    set_color(ctx, COLOR_BUTTON_DESTRUCTIVE_HOVER);
+    draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
     let _ = ctx.fill();
 }
 
@@ -281,9 +294,12 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
     label_style: UiTextStyle<'_>,
 ) {
     let segment_w = w / 2.0;
-    let radius = 6.0;
-    let inner_radius = 4.0;
-    let padding = 2.0;
+    // Metrics come from theme tokens (M7-C3): a rounded container, a rounded
+    // selected pill inset by SEGMENT_PADDING so it reads as a proper pill
+    // with breathing room rather than crowding the seam.
+    let radius = SEGMENT_RADIUS;
+    let inner_radius = SEGMENT_SELECTED_RADIUS;
+    let padding = SEGMENT_PADDING;
 
     // Draw outer container
     draw_round_rect(ctx, x, y, w, h, radius);

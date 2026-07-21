@@ -18,6 +18,7 @@ impl InputState {
     }
 
     pub(crate) fn open_board_picker(&mut self) {
+        self.close_radial_menu();
         if self.show_help {
             self.toggle_help_overlay();
         }
@@ -55,6 +56,7 @@ impl InputState {
     }
 
     pub(crate) fn open_board_picker_quick(&mut self) {
+        self.close_radial_menu();
         if self.show_help {
             self.toggle_help_overlay();
         }
@@ -421,5 +423,31 @@ impl InputState {
         } else {
             index.min(page_count.saturating_sub(1))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn board_picker_openers_close_radial_menu() {
+        let mut state = make_test_input_state();
+
+        state.open_radial_menu(320.0, 240.0);
+        state.open_board_picker();
+        assert!(state.is_board_picker_open());
+        assert!(!state.is_radial_menu_open());
+
+        state.close_board_picker();
+        state.open_radial_menu(320.0, 240.0);
+        state.open_board_picker_quick();
+        assert!(state.is_board_picker_open());
+        assert!(state.board_picker_is_quick());
+        assert!(!state.is_radial_menu_open());
+
+        state.open_radial_menu(320.0, 240.0);
+        assert!(state.is_radial_menu_open());
+        assert!(!state.is_board_picker_open());
     }
 }

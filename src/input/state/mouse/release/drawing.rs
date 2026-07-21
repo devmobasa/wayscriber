@@ -17,6 +17,7 @@ pub(super) struct DrawingRelease {
 }
 
 pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: DrawingRelease) {
+    state.mark_draw_activity();
     let drawing_color = state.active_drag_color_or_tool(tool);
     let drawing_thickness = state.thickness_for_tool(tool);
     let pressure_preview_exceeds_final_width = pressure_preview_exceeds_final_freehand_width(

@@ -5,12 +5,13 @@
 mod actions;
 mod arrow;
 mod boards;
+pub(in crate::toolbar_gtk) mod canvas_pane;
 mod colors;
 mod marker;
 mod pages;
 mod presets;
-mod session_pane;
-mod settings_pane;
+pub(in crate::toolbar_gtk) mod session_pane;
+pub(in crate::toolbar_gtk) mod settings_pane;
 mod step_marker;
 mod step_undo;
 mod text_controls;

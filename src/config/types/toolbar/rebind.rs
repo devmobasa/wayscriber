@@ -23,6 +23,20 @@ impl ToolbarRebindModifier {
             Self::CtrlShiftAlt => ctrl && shift && alt,
         }
     }
+
+    /// The `"<chord>+click"` gesture label, e.g. `"Ctrl+Shift+click"`.
+    /// `None` when rebind-by-click is disabled. The single source of truth for
+    /// shortcut-rebind copy across the onboarding surfaces (tour + first-run
+    /// cards), so no key strings are ever hardcoded.
+    pub fn click_label(self) -> Option<&'static str> {
+        match self {
+            Self::Disabled => None,
+            Self::CtrlShift => Some("Ctrl+Shift+click"),
+            Self::CtrlAlt => Some("Ctrl+Alt+click"),
+            Self::ShiftAlt => Some("Shift+Alt+click"),
+            Self::CtrlShiftAlt => Some("Ctrl+Shift+Alt+click"),
+        }
+    }
 }
 
 #[cfg(test)]

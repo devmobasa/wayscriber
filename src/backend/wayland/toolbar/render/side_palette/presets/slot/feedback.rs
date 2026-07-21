@@ -1,9 +1,17 @@
 use crate::draw::ORANGE;
 use crate::input::state::PresetFeedbackKind;
+use crate::ui::theme::{Rgb, set_color_alpha};
 use crate::ui::toolbar::ToolbarSnapshot;
 
 use super::super::super::super::widgets::draw_round_rect;
 use super::PresetSlotLayout;
+
+/// Per-kind feedback flash tints (apply/save/clear).
+/// TODO(theme-consolidation): near the overlay toast palette but not equal;
+/// kept to avoid a visible shift.
+const FEEDBACK_APPLY_RGB: Rgb = (0.35, 0.55, 0.95);
+const FEEDBACK_SAVE_RGB: Rgb = (0.25, 0.75, 0.4);
+const FEEDBACK_CLEAR_RGB: Rgb = (0.9, 0.3, 0.3);
 
 pub(super) fn draw_preset_feedback(
     ctx: &cairo::Context,
@@ -20,12 +28,12 @@ pub(super) fn draw_preset_feedback(
     {
         let fade = (1.0 - feedback.progress as f64).clamp(0.0, 1.0);
         if fade > 0.0 {
-            let (r, g, b) = match feedback.kind {
-                PresetFeedbackKind::Apply => (0.35, 0.55, 0.95),
-                PresetFeedbackKind::Save => (0.25, 0.75, 0.4),
-                PresetFeedbackKind::Clear => (0.9, 0.3, 0.3),
+            let tint = match feedback.kind {
+                PresetFeedbackKind::Apply => FEEDBACK_APPLY_RGB,
+                PresetFeedbackKind::Save => FEEDBACK_SAVE_RGB,
+                PresetFeedbackKind::Clear => FEEDBACK_CLEAR_RGB,
             };
-            ctx.set_source_rgba(r, g, b, 0.35 * fade);
+            set_color_alpha(ctx, tint, 0.35 * fade);
             draw_round_rect(
                 ctx,
                 slot_x + 1.0,

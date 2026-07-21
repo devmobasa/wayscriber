@@ -12,7 +12,7 @@ pub enum SelectionPropertyKind {
     TextBackground,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionPropertyEntry {
     pub label: String,
     pub value: String,

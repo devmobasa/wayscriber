@@ -1,3 +1,4 @@
+use crate::domain::color::PALETTE_BLACK;
 use serde::{Deserialize, Serialize};
 
 /// Board mode configuration for whiteboard/blackboard features.
@@ -67,7 +68,7 @@ fn default_blackboard_color() -> [f64; 3] {
 }
 
 fn default_whiteboard_pen_color() -> [f64; 3] {
-    [0.0, 0.0, 0.0] // Black
+    [PALETTE_BLACK.r, PALETTE_BLACK.g, PALETTE_BLACK.b] // Tuned black #241F31
 }
 
 fn default_blackboard_pen_color() -> [f64; 3] {

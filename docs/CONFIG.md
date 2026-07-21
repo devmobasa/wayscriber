@@ -48,6 +48,7 @@ Controls the default appearance of annotations.
 [drawing]
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
 # Or #RRGGBB hex: "#FFB3BA"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
@@ -100,38 +101,40 @@ tab_drag_tool = "ellipse"
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
 # to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays.
+# arrays. The hex values below are the tuned built-in defaults; named colors
+# ("red", "green", ...) resolve to these same tuned values, so named entries,
+# the default pen color, and board auto-adjust pens all match these swatches.
 [[drawing.quick_colors]]
 label = "Red"
-color = "red"
+color = "#F5333F"
 
 [[drawing.quick_colors]]
 label = "Green"
-color = "green"
+color = "#2EC27E"
 
 [[drawing.quick_colors]]
 label = "Blue"
-color = "blue"
+color = "#3584E4"
 
 [[drawing.quick_colors]]
 label = "Yellow"
-color = "yellow"
+color = "#F6D32D"
 
 [[drawing.quick_colors]]
 label = "Orange"
-color = "orange"
+color = "#FF7800"
 
 [[drawing.quick_colors]]
 label = "Pink"
-color = "pink"
+color = "#C061CB"
 
 [[drawing.quick_colors]]
 label = "White"
-color = "white"
+color = "#FFFFFF"
 
 [[drawing.quick_colors]]
 label = "Black"
-color = "black"
+color = "#241F31"
 
 [[drawing.quick_colors]]
 label = "Cyan"
@@ -166,13 +169,14 @@ drag_tool = "default"
 ```
 
 **Color Options:**
-- **Named colors**: `"red"`, `"green"`, `"blue"`, `"yellow"`, `"orange"`, `"pink"`, `"white"`, `"black"`
+- **Named colors**: `"red"` (`#F5333F`), `"green"` (`#2EC27E`), `"blue"` (`#3584E4`), `"yellow"` (`#F6D32D`), `"orange"` (`#FF7800`), `"pink"` (`#C061CB`), `"white"` (`#FFFFFF`), `"black"` (`#241F31`) — named colors resolve to the tuned quick color palette
 - **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
 
 **Quick Colors:**
 - `[[drawing.quick_colors]]` entries define an ordered palette.
 - The first eight entries are selected by <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd>; missing first-eight entries fall back to built-in defaults.
+- The built-in defaults use the tuned hex palette shown above (`#F5333F`, `#2EC27E`, `#3584E4`, `#F6D32D`, `#FF7800`, `#C061CB`, `#FFFFFF`, `#241F31`). Named colors resolve to the same tuned values, so `default_color = "red"`, named quick color entries, and board auto-adjust pen colors all select the matching swatch.
 - The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors, while the radial menu keeps the original first-eight color ring.
 - Extra entries have no quick-color action binding; explicit extra entries appear in toolbar and radial palette UIs, capped to the first 24 colors.
 - Help overlay badges are shown for the first eight shortcut-backed entries only.
@@ -403,8 +407,20 @@ Controls visual indicators, overlays, and UI styling.
 
 ```toml
 [ui]
+# Overlay chrome theme
+# Options: "auto", "dark", "light" ("auto" currently resolves to dark)
+theme = "auto"
+
+# Reduce UI motion (disable animations)
+# Options: "auto", "on", "off"
+reduced_motion = "auto"
+
 # Show status bar with current color/thickness/tool
 show_status_bar = true
+
+# Allow clicking status bar segments (board, page, color dot, tool, help)
+# to open their surfaces; set false for a display-only status bar
+status_bar_interactive = true
 
 # Show board label in the status bar
 show_status_board_badge = true
@@ -495,6 +511,10 @@ enabled = true
 - `"bottom-left"`: Lower left corner (default)
 - `"bottom-right"`: Lower right corner
 
+**Theme & Motion:**
+- **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome; `"light"` takes effect progressively as overlay surfaces adopt the runtime theme (until then it also renders dark).
+- **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
+
 **UI Styling:**
 - **Font sizes**: Customize text size for status bar and help overlay
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
@@ -515,7 +535,10 @@ enabled = true
 - For GNOME/xdg fallback, set `preferred_output` (or env override `WAYSCRIBER_XDG_OUTPUT`) to pin the overlay to a specific monitor.
 
 **Defaults:**
+- Theme: auto (currently dark)
+- Reduced motion: auto (full motion)
 - Show status bar: true
+- Interactive status bar segments: true
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle
@@ -531,12 +554,17 @@ Control which UI elements presenter mode hides and how tools behave when it is a
 [presenter_mode]
 hide_status_bar = true
 hide_toolbars = true
+toolbar_mode = "hidden"
 hide_tool_preview = true
 close_help_overlay = true
 enable_click_highlight = true
 tool_behavior = "force-highlight"
 show_toast = true
 ```
+
+**Toolbar mode options** (what `hide_toolbars` does to the top strip):
+- `"hidden"` (default): hide the top strip along with the side toolbars
+- `"micro"`: collapse the top strip to the 44px micro chip (active tool glyph in a ring of the current color); side toolbars still hide
 
 **Tool behavior options:**
 - `"keep"`: Leave the active tool unchanged
@@ -562,7 +590,7 @@ Use `--light-draw-on` on key/button press and `--light-draw-off` on release for 
 
 ### `[ui.toolbar]` - Floating Toolbars
 
-Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
+Controls the top and side toolbars (<kbd>F9</kbd> toggles both; <kbd>F2</kbd> cycles the top strip full → micro → hidden).
 
 ```toml
 [ui.toolbar]
@@ -617,7 +645,21 @@ side_pinned = true
 top_minimized = false
 side_minimized = false
 
+# Display form of the top strip restored at startup: "full" or "micro".
+# "hidden" is accepted but treated as "full" (startup visibility is
+# governed by top_pinned)
+top_display_mode = "full"
+
+# Where the side-palette functions live: "pill" (default, supported) or
+# "panel" ("pill" retires the side palette — drawing props live in the style
+# pill, canvas management in the "Canvas…" overflow popover + bottom-right zoom
+# chip + status-bar board picker, presets in the top presets island, and
+# Session/Settings in top-strip overflow popovers; "panel" is the deprecated
+# legacy escape hatch, scheduled for removal one release after the pill default)
+side_layout = "pill"
+
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
+# (legacy side_layout = "panel" only)
 side_active_pane = "draw"
 
 # Side-palette sections collapsed to their header row
@@ -759,14 +801,19 @@ side_sections = [
 - **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
-- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F2/F9 still toggle full visibility.
-- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves.
+- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F9 still toggles full visibility.
+- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists via `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
+- **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
+- **Side layout**: `side_layout` picks where the side-palette functions live, and the top-only re-homing is now complete. The default `"pill"` is the **supported layout**: the standalone side palette is fully retired — its surface is never created (layer-shell, inline fallback, or GTK) — and every pane has a concrete new home. Drawing properties (colors included) live in the top strip's contextual style pill; canvas management lives in the **"Canvas…" overflow popover** (opened from the top strip's `⋯` overflow — boards, pages, zoom, advanced, and step controls) plus the **bottom-right zoom chip** and the **status-bar board picker**; presets live in the **top-strip presets island**; and the Session/Settings panes live in popovers opened from the overflow menu (the "Session..." / "Settings..." entries; the popovers expose the same controls the panes did). `"panel"` is the **deprecated legacy escape hatch** restoring the classic four-pane side palette; it is deprecated and planned for removal one release after the pill default. Panel-mode users see a once-per-session notice pointing at these new homes. (The original plan document called this key `layout_mode = "panel"`, but `layout_mode` is an orthogonal complexity preset — Simple/Regular/Advanced — so the switch lives under its own `side_layout` key instead.)
+- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves. Both keys (and `side_pinned`/`side_minimized`) only take effect under the deprecated legacy `side_layout = "panel"`; under the default pill layout they are inert.
+- **Session/Settings popovers**: under the default pill layout the top strip's overflow menu always carries "Session..." and "Settings..." entries (they also appear under the legacy panel layout — the popovers are transient quick surfaces, not a second pinned pane). Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
 - **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
-- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that always appears when width pressure moves visible controls into it. The icon/text mode toggle lives in the side palette's Settings pane.
+- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings surface (the side palette's Settings pane under the legacy panel layout, the Settings popover under pill).
+- **Clear canvas**: Clear lives in the top strip's overflow (⋯) menu. A plain click clears and shows a short "Cleared — Undo?" toast; Shift+click clears instantly without the toast. The `clear_canvas` keyboard action is always instant and shows no toast.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
@@ -796,7 +843,8 @@ persist = true
 id = "whiteboard"
 name = "Whiteboard"
 background = { rgb = [0.992, 0.992, 0.992] }
-default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+# Tuned black #241F31; the built-in default bit-matches the "black" quick color
+default_pen_color = { rgb = [0.141, 0.122, 0.192] }
 auto_adjust_pen = true
 
 [[boards.items]]
@@ -1253,8 +1301,13 @@ toggle_quick_help = ["Shift+F1"]
 # Toggle status bar visibility
 toggle_status_bar = ["F12", "F4"]
 
-# Toggle toolbars
-toggle_toolbar = ["F2", "F9"]
+# Toggle toolbars (show/hide top and side together).
+# Note: F2 moved to cycle_toolbar_display; hiding is still reachable via
+# the cycle, and explicit user configs keep whatever they bound.
+toggle_toolbar = ["F9"]
+
+# Cycle the top toolbar's display: full strip -> micro chip -> hidden
+cycle_toolbar_display = ["F2"]
 
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+M"]

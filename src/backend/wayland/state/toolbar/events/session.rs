@@ -1,4 +1,5 @@
 use super::*;
+use crate::input::state::{Toast, ToastPriority};
 use crate::session::catalog;
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
@@ -11,8 +12,12 @@ pub(super) fn populate_session_snapshot(
     let active_path = options.map(|options| options.session_file_path());
     snapshot.active_session_name = active_path.as_deref().map(session_display_name);
     snapshot.active_session_path = active_path.clone();
-    snapshot.recent_sessions = if snapshot.active_side_pane == crate::ui::toolbar::SidePane::Session
-    {
+    // Recents are only read (from the catalog on disk) while a surface that
+    // shows them is up: the side palette's Session pane or the top strip's
+    // Session popover.
+    let session_surface_open = snapshot.active_side_pane == crate::ui::toolbar::SidePane::Session
+        || snapshot.session_popover_open;
+    snapshot.recent_sessions = if session_surface_open {
         recent_session_snapshots(active_path.as_deref())
     } else {
         Vec::new()
@@ -413,7 +418,7 @@ impl WaylandState {
 
     fn set_session_toolbar_info(&mut self, message: impl Into<String>) {
         self.input_state
-            .set_ui_toast(crate::input::state::UiToastKind::Info, message);
+            .push_toast(ToastPriority::Info, "session", Toast::info(message));
         self.mark_session_toolbar_changed();
     }
 
@@ -421,7 +426,7 @@ impl WaylandState {
         let message = message.into();
         log::warn!("{message}");
         self.input_state
-            .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+            .push_toast(ToastPriority::Critical, "session", Toast::error(message));
         self.mark_session_toolbar_changed();
     }
 

@@ -1,6 +1,7 @@
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::draw::Color;
-use crate::input::state::{EyedropperCaptureSource, UiToastKind};
+use crate::input::state::EyedropperCaptureSource;
+use crate::input::state::{Toast, ToastPriority};
 
 use super::WaylandState;
 
@@ -151,32 +152,30 @@ impl WaylandState {
                 self.input_state.request_frozen_toggle();
             }
             EyedropperEntryDecision::RefuseWhileZoomedOnSolidBoard => {
-                self.input_state.set_ui_toast_with_action(
-                    UiToastKind::Info,
-                    "Screen eyedropper isn't available while zoomed on a solid board.",
-                    "Switch to transparent",
-                    crate::config::Action::ReturnToTransparent,
+                self.input_state.push_toast(
+                    ToastPriority::Action,
+                    "eyedropper",
+                    Toast::info("Screen eyedropper isn't available while zoomed on a solid board.")
+                        .action(
+                            "Switch to transparent",
+                            crate::config::Action::ReturnToTransparent,
+                        ),
                 );
             }
             EyedropperEntryDecision::RefuseSolidBoard => {
-                self.input_state.set_ui_toast_with_action(
-                    UiToastKind::Info,
-                    "Screen eyedropper requires a transparent board or an active screen freeze.",
-                    "Switch to transparent",
-                    crate::config::Action::ReturnToTransparent,
-                );
+                self.input_state.push_toast(ToastPriority::Action, "eyedropper", Toast::info("Screen eyedropper requires a transparent board or an active screen freeze.").action("Switch to transparent", crate::config::Action::ReturnToTransparent));
             }
             EyedropperEntryDecision::CaptureUnavailable => {
-                self.input_state.set_ui_toast(
-                    UiToastKind::Warning,
-                    "Screen eyedropper is unavailable because screen capture is not available.",
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "eyedropper",
+                    Toast::warning(
+                        "Screen eyedropper is unavailable because screen capture is not available.",
+                    ),
                 );
             }
             EyedropperEntryDecision::ZoomImageUnavailable => {
-                self.input_state.set_ui_toast(
-                    UiToastKind::Warning,
-                    "Screen eyedropper is unavailable because zoom has no captured screen image.",
-                );
+                self.input_state.push_toast(ToastPriority::Info, "eyedropper", Toast::warning("Screen eyedropper is unavailable because zoom has no captured screen image."));
             }
         }
     }
@@ -231,8 +230,11 @@ impl WaylandState {
         if let Some(color) = color {
             self.input_state.apply_color_from_ui(color);
         } else {
-            self.input_state
-                .set_ui_toast(UiToastKind::Error, "Could not sample that screen pixel.");
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                "eyedropper",
+                Toast::error("Could not sample that screen pixel."),
+            );
         }
         self.cancel_eyedropper();
         true

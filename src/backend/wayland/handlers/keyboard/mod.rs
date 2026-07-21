@@ -170,7 +170,8 @@ impl KeyboardHandler for WaylandState {
         }
         debug!("Key pressed: {:?}", key);
         let modal_capture = self.input_state.command_palette_is_engaged()
-            || self.input_state.is_color_picker_popup_open();
+            || self.input_state.is_color_picker_popup_open()
+            || self.input_state.is_precision_entry_open();
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
@@ -276,7 +277,8 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let modal_capture = self.input_state.command_palette_is_engaged()
-            || self.input_state.is_color_picker_popup_open();
+            || self.input_state.is_color_picker_popup_open()
+            || self.input_state.is_precision_entry_open();
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {

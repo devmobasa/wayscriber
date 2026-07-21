@@ -1,8 +1,13 @@
 use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::theme::{self, Rgba};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::super::search::{draw_segmented_text, ellipsize_to_fit};
 use super::NavState;
+
+/// Dark inset fill behind the search input. Numerically equal to the theme
+/// shadow token, but semantically an input well, so it stays file-local.
+const SEARCH_BOX_BG: Rgba = (0.0, 0.0, 0.0, 0.3);
 
 pub(crate) struct NavDrawStyle<'a> {
     pub(crate) font_family: &'a str,
@@ -15,6 +20,13 @@ pub(crate) struct NavDrawStyle<'a> {
     pub(crate) extra_line_bottom_spacing: f64,
 }
 
+/// Result of drawing the nav block: where the following content starts, and the
+/// screen-space rectangle of the search input well (for the Text cursor hint).
+pub(crate) struct NavRender {
+    pub(crate) next_y: f64,
+    pub(crate) search_rect: (f64, f64, f64, f64),
+}
+
 pub(crate) fn draw_nav(
     ctx: &cairo::Context,
     inner_x: f64,
@@ -22,7 +34,7 @@ pub(crate) fn draw_nav(
     inner_width: f64,
     nav: &NavState,
     style: &NavDrawStyle<'_>,
-) -> f64 {
+) -> NavRender {
     let nav_style = UiTextStyle {
         family: style.font_family,
         slant: cairo::FontSlant::Normal,
@@ -77,6 +89,7 @@ pub(crate) fn draw_nav(
         inner_width.min(250.0)
     };
     let search_box_radius = 6.0;
+    let search_box_y = cursor_y;
 
     // Search box background.
     draw_rounded_rect(
@@ -87,7 +100,7 @@ pub(crate) fn draw_nav(
         search_box_height,
         search_box_radius,
     );
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+    theme::set_color(ctx, SEARCH_BOX_BG);
     let _ = ctx.fill_preserve();
     ctx.set_source_rgba(
         style.search_color[0],
@@ -145,5 +158,8 @@ pub(crate) fn draw_nav(
     }
     cursor_y += search_box_height + style.extra_line_bottom_spacing;
 
-    cursor_y
+    NavRender {
+        next_y: cursor_y,
+        search_rect: (inner_x, search_box_y, search_box_width, search_box_height),
+    }
 }

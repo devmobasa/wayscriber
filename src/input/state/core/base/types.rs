@@ -213,7 +213,6 @@ pub enum UiToastKind {
 #[derive(Debug, Clone)]
 pub struct ToastAction {
     pub label: String,
-    #[allow(dead_code)] // Used in check_toast_click via WaylandState
     pub action: Action,
 }
 
@@ -231,6 +230,31 @@ pub(crate) struct UiToastState {
     pub duration_ms: u64,
     /// Optional action that triggers when the toast is clicked.
     pub action: Option<ToastAction>,
+    /// Queue priority this toast was pushed with (drives preemption).
+    pub priority: super::toast_queue::ToastPriority,
+    /// Dedup/rate-limit key this toast was pushed with.
+    pub key: &'static str,
+    /// Monotonic identity for this exact visible activation. Press/release
+    /// handling uses it so a queue promotion or same-key update cannot retarget
+    /// a pending click to different toast content.
+    pub activation_id: u64,
+}
+
+/// Identity captured when an input press begins inside the visible toast.
+///
+/// The field stays opaque outside input state: callers can only return the
+/// token on release, where it is matched against the still-active toast.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToastPress(u64);
+
+impl ToastPress {
+    pub(crate) fn new(activation_id: u64) -> Self {
+        Self(activation_id)
+    }
+
+    pub(crate) fn matches(self, toast: &UiToastState) -> bool {
+        self.0 == toast.activation_id
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -271,7 +295,7 @@ pub(crate) enum HistoryMode {
 }
 
 /// Tracks which compositor features are available.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CompositorCapabilities {
     pub layer_shell: bool,
     pub screencopy: bool,
@@ -345,6 +369,9 @@ pub enum PendingBackendAction {
     BoardPdfExport(Action),
     ClearSavedToolState,
     EditKeybinding(KeybindingEditRequest),
+    /// Persist the toolbar configuration (used by keyboard-driven toolbar
+    /// state changes; toolbar-event paths persist via their event policy).
+    PersistToolbarConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -471,6 +498,33 @@ pub(crate) struct PendingOnboardingUsage {
     pub used_context_menu_keyboard: bool,
     pub used_help_overlay: bool,
     pub used_command_palette: bool,
+    /// A drawing color was applied (any path). Drives the colors/thickness
+    /// first-run teaching step.
+    pub used_color_change: bool,
+    /// Stroke thickness / eraser size was adjusted (any path). Drives the
+    /// colors/thickness first-run teaching step.
+    pub used_thickness_change: bool,
+    /// A radial-menu flick committed a tool/color (press-flick-release).
+    /// Drives the radial-flick first-run teaching step.
+    pub used_radial_flick: bool,
+    /// The last shortcut-bound action invoked via a "slow path" this tick —
+    /// the command palette or the toolbar — that the shortcut coach nudges
+    /// away from. Source-agnostic: the coach resolves and names this action's
+    /// keyboard shortcut regardless of which surface triggered it.
+    pub shortcut_slow_path_action: Option<Action>,
+    /// Number of shortcut-bound slow-path invocations this tick (palette or
+    /// toolbar). Folded into the coach's per-session slow-path streak.
+    pub shortcut_slow_path_repeats: u32,
+}
+
+impl PendingOnboardingUsage {
+    /// Record that a shortcut-bound action ran via a slow path (command palette
+    /// or toolbar) when the user could have pressed the key. Called only when
+    /// the action has a resolvable shortcut so the coach can always name it.
+    pub(crate) fn note_shortcut_slow_path(&mut self, action: Action) {
+        self.shortcut_slow_path_action = Some(action);
+        self.shortcut_slow_path_repeats = self.shortcut_slow_path_repeats.saturating_add(1);
+    }
 }
 
 #[cfg(test)]

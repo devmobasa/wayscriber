@@ -12,5 +12,6 @@ mod render_profiles;
 mod step_markers;
 mod toasts;
 
-pub use help_overlay::HelpOverlayCursorHint;
+pub(crate) use help_overlay::HelpOverlayPressSource;
+pub use help_overlay::{HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome};
 pub(crate) use step_markers::default_step_marker_size;

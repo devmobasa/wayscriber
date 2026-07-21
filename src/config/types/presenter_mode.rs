@@ -12,6 +12,12 @@ pub struct PresenterModeConfig {
     #[serde(default = "default_hide_toolbars")]
     pub hide_toolbars: bool,
 
+    /// What `hide_toolbars` does to the top strip: "hidden" removes it
+    /// entirely (default, today's behavior); "micro" collapses it to the
+    /// 44px micro chip instead. Side toolbars always hide.
+    #[serde(default)]
+    pub toolbar_mode: PresenterToolbarMode,
+
     /// Hide the tool preview while presenter mode is active.
     #[serde(default = "default_hide_tool_preview")]
     pub hide_tool_preview: bool,
@@ -38,6 +44,7 @@ impl Default for PresenterModeConfig {
         Self {
             hide_status_bar: default_hide_status_bar(),
             hide_toolbars: default_hide_toolbars(),
+            toolbar_mode: PresenterToolbarMode::default(),
             hide_tool_preview: default_hide_tool_preview(),
             close_help_overlay: default_close_help_overlay(),
             enable_click_highlight: default_enable_click_highlight(),
@@ -45,6 +52,18 @@ impl Default for PresenterModeConfig {
             show_toast: default_show_toast(),
         }
     }
+}
+
+/// How `hide_toolbars` treats the top strip while presenting.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum PresenterToolbarMode {
+    /// Hide the top strip along with the side toolbars.
+    #[default]
+    Hidden,
+    /// Collapse the top strip to the micro chip; side toolbars still hide.
+    Micro,
 }
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]

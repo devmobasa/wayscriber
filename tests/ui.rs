@@ -107,7 +107,8 @@ fn render_status_bar_draws_for_all_positions() {
 
     for position in positions {
         let (mut surface, ctx) = surface_with_context(400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, position, &style, 400, 200);
+        input.update_status_hud_layout(position, &style, 400, 200);
+        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -140,14 +141,8 @@ fn render_status_bar_draws_in_board_modes() {
     for board_id in board_ids {
         input.switch_board(board_id);
         let (mut surface, ctx) = surface_with_context(400, 200);
-        wayscriber::ui::render_status_bar(
-            &ctx,
-            &input,
-            StatusPosition::BottomLeft,
-            &style,
-            400,
-            200,
-        );
+        input.update_status_hud_layout(StatusPosition::BottomLeft, &style, 400, 200);
+        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),

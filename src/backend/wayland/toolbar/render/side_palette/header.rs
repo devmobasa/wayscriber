@@ -15,6 +15,20 @@ use super::super::widgets::constants::{
     set_color,
 };
 use super::super::widgets::*;
+use crate::ui::theme::Rgba;
+
+/// Board chip fill: cool slate tint (hover is one step lighter). Specific
+/// to the chip — no theme token.
+const COLOR_BOARD_CHIP_BG_HOVER: Rgba = (0.28, 0.30, 0.34, 0.95);
+const COLOR_BOARD_CHIP_BG: Rgba = (0.22, 0.24, 0.28, 0.95);
+/// Board chip outline (hover/idle), cool-tinted to match the fill.
+const COLOR_BOARD_CHIP_BORDER_HOVER: Rgba = (0.65, 0.7, 0.8, 0.7);
+const COLOR_BOARD_CHIP_BORDER: Rgba = (0.65, 0.7, 0.8, 0.45);
+/// Placeholder outline where the board color dot would sit.
+const COLOR_BOARD_CHIP_EMPTY_DOT: Rgba = (0.62, 0.68, 0.76, 0.7);
+/// Chip chevron glyph (hover/idle).
+const COLOR_CHEVRON_HOVER: Rgba = (0.7, 0.72, 0.78, 0.95);
+const COLOR_CHEVRON: Rgba = (0.7, 0.72, 0.78, 0.7);
 
 /// Fixed chrome: one header row (drag grip, board chip, pin, close) plus the
 /// pane navigation row. Returns the content start y — nothing above it
@@ -160,12 +174,24 @@ fn draw_board_chip(
         .map(|(hx, hy)| point_in_rect(hx, hy, chip_x, chip_y, chip_w, chip_h))
         .unwrap_or(false);
     let board_chip = board_chip_payload(header_model);
-    let chip_bg = if chip_hover { 0.28 } else { 0.22 };
     draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 6.0);
-    ctx.set_source_rgba(chip_bg, chip_bg + 0.02, chip_bg + 0.06, 0.95);
+    set_color(
+        ctx,
+        if chip_hover {
+            COLOR_BOARD_CHIP_BG_HOVER
+        } else {
+            COLOR_BOARD_CHIP_BG
+        },
+    );
     let _ = ctx.fill();
-    let border_alpha = if chip_hover { 0.7 } else { 0.45 };
-    ctx.set_source_rgba(0.65, 0.7, 0.8, border_alpha);
+    set_color(
+        ctx,
+        if chip_hover {
+            COLOR_BOARD_CHIP_BORDER_HOVER
+        } else {
+            COLOR_BOARD_CHIP_BORDER
+        },
+    );
     ctx.set_line_width(1.0);
     draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 6.0);
     let _ = ctx.stroke();
@@ -177,7 +203,7 @@ fn draw_board_chip(
     if let Some(color) = board_chip.and_then(|chip| chip.color) {
         draw_swatch(ctx, dot_x, dot_y, dot_size, color, false);
     } else {
-        ctx.set_source_rgba(0.62, 0.68, 0.76, 0.7);
+        set_color(ctx, COLOR_BOARD_CHIP_EMPTY_DOT);
         ctx.set_line_width(1.0);
         draw_round_rect(ctx, dot_x, dot_y, dot_size, dot_size, 3.0);
         let _ = ctx.stroke();
@@ -224,8 +250,14 @@ fn draw_board_chip(
 
 /// Draw a right-pointing chevron
 fn draw_chevron_right(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bool) {
-    let alpha = if hover { 0.95 } else { 0.7 };
-    ctx.set_source_rgba(0.7, 0.72, 0.78, alpha);
+    set_color(
+        ctx,
+        if hover {
+            COLOR_CHEVRON_HOVER
+        } else {
+            COLOR_CHEVRON
+        },
+    );
     ctx.set_line_width(1.5);
 
     let margin = size * 0.3;

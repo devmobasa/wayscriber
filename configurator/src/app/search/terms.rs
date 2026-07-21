@@ -155,6 +155,12 @@ pub(super) const HISTORY_CUSTOM_TERMS: &[&str] = &[
 ];
 pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "general ui",
+    "theme",
+    "dark mode",
+    "light mode",
+    "reduced motion",
+    "motion",
+    "disable animations",
     "preferred output",
     "gnome fallback",
     "use fullscreen xdg fallback",
@@ -168,6 +174,10 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "toolbar",
     "layout mode",
+    "side layout",
+    "side palette",
+    "style pill",
+    "panel",
     "shortcut edit click",
     "toolbar rebind modifier",
     "pin top toolbar",
@@ -221,6 +231,7 @@ pub(super) const UI_TOOLBAR_VISIBILITY_TERMS: &[&str] = &[
 pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
     "status bar",
     "show status bar",
+    "clickable status bar segments",
     "show board label",
     "show page counter",
     "show overlay badge with status bar",
@@ -263,6 +274,8 @@ pub(super) const UI_PRESENTER_MODE_TERMS: &[&str] = &[
     "presenter mode",
     "hide status bar",
     "hide toolbars",
+    "top toolbar while presenting",
+    "micro toolbar",
     "hide tool preview",
     "close help overlay on entry",
     "force click highlights on",

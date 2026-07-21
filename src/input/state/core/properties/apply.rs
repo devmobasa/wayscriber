@@ -29,7 +29,47 @@ impl InputState {
             entry.clone()
         };
 
-        let changed = match entry.kind {
+        let changed = self.dispatch_selection_property(entry.kind, direction);
+
+        if changed {
+            self.refresh_properties_panel();
+        }
+
+        changed
+    }
+
+    /// Style-pill path into the same apply machinery as the properties
+    /// popup: adjusts the selection property of `kind` when the current
+    /// selection exposes it and the entry is editable. Refreshes the
+    /// popup if it happens to be open.
+    pub(crate) fn adjust_selection_property_kind(
+        &mut self,
+        kind: SelectionPropertyKind,
+        direction: i32,
+    ) -> bool {
+        let ids = self.selected_shape_ids();
+        if ids.is_empty() {
+            return false;
+        }
+        let entries = self.build_selection_property_entries(ids);
+        let Some(entry) = entries.into_iter().find(|entry| entry.kind == kind) else {
+            return false;
+        };
+        if entry.disabled {
+            return false;
+        }
+
+        let changed = self.dispatch_selection_property(kind, direction);
+
+        if changed && self.is_properties_panel_open() {
+            self.refresh_properties_panel();
+        }
+
+        changed
+    }
+
+    fn dispatch_selection_property(&mut self, kind: SelectionPropertyKind, direction: i32) -> bool {
+        match kind {
             SelectionPropertyKind::Color => self.apply_selection_color(direction),
             SelectionPropertyKind::Thickness => {
                 self.apply_selection_thickness(direction_or_default(direction))
@@ -48,13 +88,7 @@ impl InputState {
             SelectionPropertyKind::TextBackground => {
                 self.apply_selection_text_background(direction)
             }
-        };
-
-        if changed {
-            self.refresh_properties_panel();
         }
-
-        changed
     }
 }
 

@@ -81,6 +81,7 @@ impl KeybindingField {
             Self::ToggleStatusBar => &config.ui.toggle_status_bar,
             Self::ToggleClickHighlight => &config.ui.toggle_click_highlight,
             Self::ToggleToolbar => &config.ui.toggle_toolbar,
+            Self::CycleToolbarDisplay => &config.ui.cycle_toolbar_display,
             Self::TogglePresenterMode => &config.ui.toggle_presenter_mode,
             Self::RenderProfileNext => &config.ui.render_profile_next,
             Self::RenderProfilePrevious => &config.ui.render_profile_previous,

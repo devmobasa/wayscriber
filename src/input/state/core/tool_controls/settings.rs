@@ -1,7 +1,6 @@
-use super::super::base::{
-    DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, UiToastKind,
-};
+use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::{Color, FontDescriptor, clamp_regular_sides};
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
     modifiers::DragToolBindings,
@@ -179,7 +178,11 @@ impl InputState {
 
         if tool == Some(Tool::Blur) && !self.frozen_active && !self.pending_frozen_toggle {
             self.request_frozen_toggle();
-            self.set_ui_toast(UiToastKind::Info, "Capturing background for blur...");
+            self.push_toast(
+                ToastPriority::Info,
+                "toolbar",
+                Toast::info("Capturing background for blur..."),
+            );
         }
 
         // Ensure we are not mid-drawing with a stale tool
@@ -258,21 +261,29 @@ impl InputState {
 
     /// Sets thickness or eraser size depending on the active tool.
     pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
-        if self.active_tool().uses_eraser_size() {
+        let changed = if self.active_tool().uses_eraser_size() {
             self.set_eraser_size(value)
         } else {
             self.set_thickness(value)
+        };
+        if changed {
+            self.pending_onboarding_usage.used_thickness_change = true;
         }
+        changed
     }
 
     /// Nudges thickness or eraser size depending on the active tool.
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
         let tool = self.active_tool();
-        if tool.uses_eraser_size() {
+        let changed = if tool.uses_eraser_size() {
             self.set_eraser_size(self.eraser_size + delta)
         } else {
             self.set_thickness(self.thickness_for_tool(tool) + delta)
+        };
+        if changed {
+            self.pending_onboarding_usage.used_thickness_change = true;
         }
+        changed
     }
 
     /// Returns the current size value for the active tool.

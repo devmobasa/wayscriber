@@ -1,12 +1,17 @@
 use super::super::base::InputState;
+use super::{CommandEntry, CommandPaletteListRow};
 use crate::config::KeybindingsConfig;
 
-pub const COMMAND_PALETTE_MAX_VISIBLE: usize = 10;
+/// Visible rows (commands + group headers) before the list scrolls. Dropped
+/// from 10 when rows grew to the 44px comfort height so the clamped panel
+/// still contains every visible row.
+pub const COMMAND_PALETTE_MAX_VISIBLE: usize = 8;
 
 pub(crate) const COMMAND_PALETTE_MIN_WIDTH: f64 = 400.0;
 pub(crate) const COMMAND_PALETTE_MAX_WIDTH: f64 = 820.0;
 pub(crate) const COMMAND_PALETTE_HORIZONTAL_MARGIN: f64 = 12.0;
-pub(crate) const COMMAND_PALETTE_ITEM_HEIGHT: f64 = 32.0;
+/// Logical row height (M6 target: 44px touch-comfortable rows).
+pub(crate) const COMMAND_PALETTE_ITEM_HEIGHT: f64 = 44.0;
 pub(crate) const COMMAND_PALETTE_PADDING: f64 = 12.0;
 pub(crate) const COMMAND_PALETTE_PADDING_BOTTOM: f64 = 48.0;
 pub(crate) const COMMAND_PALETTE_INPUT_HEIGHT: f64 = 36.0;
@@ -14,7 +19,17 @@ pub(crate) const COMMAND_PALETTE_LIST_GAP: f64 = 8.0;
 pub(crate) const COMMAND_PALETTE_ROW_ACTION_SIZE: f64 = 22.0;
 pub(crate) const COMMAND_PALETTE_ROW_ACTION_GAP: f64 = 4.0;
 pub(crate) const COMMAND_PALETTE_ROW_ACTION_COUNT: usize = 3;
-pub(crate) const COMMAND_PALETTE_MAX_HEIGHT: f64 = 420.0;
+/// Leading action-icon gutter: every command row reserves this slot so
+/// labels stay aligned whether or not the action has a glyph.
+pub(crate) const COMMAND_PALETTE_ROW_ICON_SIZE: f64 = 18.0;
+pub(crate) const COMMAND_PALETTE_ROW_ICON_GAP: f64 = 10.0;
+/// Exact height of a full panel: padding + input + gap + max visible rows +
+/// bottom padding, so the clamp never truncates rendered rows.
+pub(crate) const COMMAND_PALETTE_MAX_HEIGHT: f64 = COMMAND_PALETTE_PADDING
+    + COMMAND_PALETTE_INPUT_HEIGHT
+    + COMMAND_PALETTE_LIST_GAP
+    + COMMAND_PALETTE_MAX_VISIBLE as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+    + COMMAND_PALETTE_PADDING_BOTTOM;
 pub(crate) const COMMAND_PALETTE_TOP_RATIO: f64 = 0.2;
 pub(crate) const COMMAND_PALETTE_QUERY_PLACEHOLDER: &str = "Type to search commands...";
 
@@ -141,10 +156,18 @@ pub(crate) fn command_palette_height(visible_count: usize) -> f64 {
 impl InputState {
     pub fn command_palette_width(&self, screen_width: u32) -> f64 {
         let commands = self.filtered_commands();
+        self.command_palette_width_for_commands(screen_width, commands)
+    }
+
+    fn command_palette_width_for_commands<'a>(
+        &self,
+        screen_width: u32,
+        commands: impl IntoIterator<Item = &'a CommandEntry>,
+    ) -> f64 {
         let mut required_inner_width: f64 = 0.0;
         let default_bindings = KeybindingsConfig::default();
 
-        for command in &commands {
+        for command in commands {
             let label_chars = command.label.chars().count() as f64;
             let desc_chars = command
                 .description
@@ -155,7 +178,10 @@ impl InputState {
                 .action_binding_primary_label(command.action)
                 .map_or(0.0, |label| label.chars().count() as f64);
 
-            let mut row_inner = LABEL_LEFT_PAD + label_chars * APPROX_LABEL_CHAR_WIDTH;
+            let mut row_inner = LABEL_LEFT_PAD
+                + COMMAND_PALETTE_ROW_ICON_SIZE
+                + COMMAND_PALETTE_ROW_ICON_GAP
+                + label_chars * APPROX_LABEL_CHAR_WIDTH;
             if desc_chars > 0.0 {
                 row_inner += LABEL_DESC_GAP + desc_chars * APPROX_DESC_CHAR_WIDTH;
             }
@@ -192,6 +218,21 @@ impl InputState {
         )
     }
 
+    fn command_palette_width_for_rows(
+        &self,
+        screen_width: u32,
+        rows: &[CommandPaletteListRow],
+    ) -> f64 {
+        self.command_palette_width_for_commands(
+            screen_width,
+            rows.iter().filter_map(|row| match row {
+                CommandPaletteListRow::Header(_) => None,
+                CommandPaletteListRow::Command { command, .. } => Some(*command),
+            }),
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) fn command_palette_geometry(
         &self,
         screen_width: u32,
@@ -199,26 +240,48 @@ impl InputState {
         total_items: usize,
     ) -> CommandPaletteGeometry {
         let width = self.command_palette_width(screen_width);
-        let x = (screen_width as f64 - width) / 2.0;
-        let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
-        let visible_count = command_palette_visible_count(total_items);
+        command_palette_geometry_for_width(width, screen_width, screen_height, total_items)
+    }
 
-        let input_top = COMMAND_PALETTE_PADDING;
-        let input_bottom = input_top + COMMAND_PALETTE_INPUT_HEIGHT;
-        let items_top = input_bottom + COMMAND_PALETTE_LIST_GAP;
+    /// Compute geometry from rows the caller has already filtered. Rendering
+    /// and hit-testing use this path so one query change performs one fuzzy
+    /// search rather than filtering again just to estimate the panel width.
+    pub(crate) fn command_palette_geometry_for_rows(
+        &self,
+        screen_width: u32,
+        screen_height: u32,
+        rows: &[CommandPaletteListRow],
+    ) -> CommandPaletteGeometry {
+        let width = self.command_palette_width_for_rows(screen_width, rows);
+        command_palette_geometry_for_width(width, screen_width, screen_height, rows.len())
+    }
+}
 
-        CommandPaletteGeometry {
-            x,
-            y,
-            width,
-            height: command_palette_height(visible_count),
-            inner_x: COMMAND_PALETTE_PADDING,
-            inner_width: width - COMMAND_PALETTE_PADDING * 2.0,
-            input_top,
-            input_bottom,
-            items_top,
-            visible_count,
-        }
+fn command_palette_geometry_for_width(
+    width: f64,
+    screen_width: u32,
+    screen_height: u32,
+    total_items: usize,
+) -> CommandPaletteGeometry {
+    let x = (screen_width as f64 - width) / 2.0;
+    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+    let visible_count = command_palette_visible_count(total_items);
+
+    let input_top = COMMAND_PALETTE_PADDING;
+    let input_bottom = input_top + COMMAND_PALETTE_INPUT_HEIGHT;
+    let items_top = input_bottom + COMMAND_PALETTE_LIST_GAP;
+
+    CommandPaletteGeometry {
+        x,
+        y,
+        width,
+        height: command_palette_height(visible_count),
+        inner_x: COMMAND_PALETTE_PADDING,
+        inner_width: width - COMMAND_PALETTE_PADDING * 2.0,
+        input_top,
+        input_bottom,
+        items_top,
+        visible_count,
     }
 }
 

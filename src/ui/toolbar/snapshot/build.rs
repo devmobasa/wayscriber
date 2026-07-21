@@ -188,8 +188,21 @@ impl ToolbarSnapshot {
             preset_feedback,
             shape_picker_open: state.toolbar_shapes_expanded,
             top_overflow_open: state.toolbar_top_overflow_open,
+            session_popover_open: state.toolbar_session_popover_open,
+            settings_popover_open: state.toolbar_settings_popover_open,
+            canvas_popover_open: state.toolbar_canvas_popover_open,
+            top_popover_scroll: state.toolbar_top_popover_scroll,
             top_minimized: state.toolbar_top_minimized,
+            top_display_mode: state.toolbar_top_display_mode,
+            // Fade is owned by the backend engine; renderers see 1.0 until
+            // the backend publishes the animated value.
+            top_fade: 1.0,
             side_minimized: state.toolbar_side_minimized,
+            selection_properties: if active_tool == crate::input::Tool::Select {
+                state.selection_pill_entries()
+            } else {
+                Vec::new()
+            },
             top_viewport_max: None,
             active_side_pane,
             side_scroll,

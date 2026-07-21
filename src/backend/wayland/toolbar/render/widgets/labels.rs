@@ -33,7 +33,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_label_center_color(
     let ext = layout.ink_extents();
     let tx = x + (w - ext.width()) / 2.0 - ext.x_bearing();
     let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
-    ctx.set_source_rgba(color.0, color.1, color.2, color.3);
+    set_color(ctx, color);
     layout.show_at_baseline(ctx, tx, ty);
 }
 

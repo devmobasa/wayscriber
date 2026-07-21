@@ -345,11 +345,13 @@ impl InputState {
         match tool.press_behavior() {
             ToolPressBehavior::Selection | ToolPressBehavior::HighlightNoop => {}
             ToolPressBehavior::StartFreeformPolygon => {
+                self.mark_draw_activity();
                 self.start_building_polygon(x, y);
             }
             ToolPressBehavior::StartDrawing {
                 request_blur_capture,
             } => {
+                self.mark_draw_activity();
                 if request_blur_capture && !self.frozen_active() && !self.pending_frozen_toggle() {
                     self.request_frozen_toggle();
                 }

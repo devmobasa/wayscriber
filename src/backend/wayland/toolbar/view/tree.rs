@@ -205,7 +205,7 @@ mod tests {
         rebuilt.push(button(
             "clear",
             (0.0, 60.0, 40.0, 30.0),
-            ToolbarEvent::ClearCanvas,
+            ToolbarEvent::ClearCanvas { instant: false },
         ));
         for node in tree.nodes() {
             rebuilt.push(node.clone());

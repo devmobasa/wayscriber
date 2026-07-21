@@ -109,6 +109,47 @@ pub const TRANSPARENT: Color = Color {
     a: 0.0,
 };
 
+/// Converts 8-bit RGB components (as in `#RRGGBB` hex) to an opaque [`Color`].
+const fn rgb8(r: u8, g: u8, b: u8) -> Color {
+    Color {
+        r: r as f64 / 255.0,
+        g: g as f64 / 255.0,
+        b: b as f64 / 255.0,
+        a: 1.0,
+    }
+}
+
+// Tuned quick-color palette.
+//
+// These constants are the single source of truth for the named color table
+// (`util::name_to_color`), the built-in quick color slot defaults, and the
+// board auto-adjust pen colors. Deriving all of them from the same values
+// keeps exact color equality intact, which swatch selection relies on.
+
+/// Tuned palette red `#F5333F` (named color "red", quick color slot 0)
+pub const PALETTE_RED: Color = rgb8(0xF5, 0x33, 0x3F);
+
+/// Tuned palette green `#2EC27E` (named color "green", quick color slot 1)
+pub const PALETTE_GREEN: Color = rgb8(0x2E, 0xC2, 0x7E);
+
+/// Tuned palette blue `#3584E4` (named color "blue", quick color slot 2)
+pub const PALETTE_BLUE: Color = rgb8(0x35, 0x84, 0xE4);
+
+/// Tuned palette yellow `#F6D32D` (named color "yellow", quick color slot 3)
+pub const PALETTE_YELLOW: Color = rgb8(0xF6, 0xD3, 0x2D);
+
+/// Tuned palette orange `#FF7800` (named color "orange", quick color slot 4)
+pub const PALETTE_ORANGE: Color = rgb8(0xFF, 0x78, 0x00);
+
+/// Tuned palette pink `#C061CB` (named color "pink", quick color slot 5)
+pub const PALETTE_PINK: Color = rgb8(0xC0, 0x61, 0xCB);
+
+/// Tuned palette white `#FFFFFF` (named color "white", quick color slot 6)
+pub const PALETTE_WHITE: Color = WHITE;
+
+/// Tuned palette black `#241F31` (named color "black", quick color slot 7)
+pub const PALETTE_BLACK: Color = rgb8(0x24, 0x1F, 0x31);
+
 /// Convert an HSV triple (all components in 0.0–1.0) to an opaque RGB color.
 pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
     let h = (h - h.floor()).clamp(0.0, 1.0) * 6.0;

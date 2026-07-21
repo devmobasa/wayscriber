@@ -1,5 +1,6 @@
 use crate::draw::Shape;
-use crate::input::state::core::base::{InputState, UiToastKind};
+use crate::input::state::core::base::InputState;
+use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_fill(
@@ -18,7 +19,11 @@ impl InputState {
         };
 
         let Some(target) = target else {
-            self.set_ui_toast(UiToastKind::Warning, "No fill shapes selected.");
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.apply",
+                Toast::warning("No fill shapes selected."),
+            );
             return false;
         };
 

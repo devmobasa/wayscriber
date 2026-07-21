@@ -1,6 +1,7 @@
 use super::WaylandState;
 use crate::config::{Action, Config, KeyBinding, KeybindingsConfig, action_label};
-use crate::input::state::{KeybindingEditOperation, KeybindingEditRequest, UiToastKind};
+use crate::input::state::{KeybindingEditOperation, KeybindingEditRequest};
+use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Debug)]
 enum PrepareKeybindingEditError {
@@ -86,23 +87,31 @@ impl WaylandState {
             Ok(config) => config,
             Err(PrepareKeybindingEditError::Load(err)) => {
                 log::warn!("Failed to reload config before keybinding edit: {err}");
-                self.input_state.set_ui_toast(
-                    UiToastKind::Error,
-                    "Shortcut not changed because the current config could not be reloaded.",
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "keybindings",
+                    Toast::error(
+                        "Shortcut not changed because the current config could not be reloaded.",
+                    ),
                 );
                 return;
             }
             Err(PrepareKeybindingEditError::Edit(err)) => {
-                self.input_state.set_ui_toast(UiToastKind::Warning, err);
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "keybindings",
+                    Toast::warning(err),
+                );
                 return;
             }
             Err(PrepareKeybindingEditError::Conflict {
                 binding,
                 existing_action,
             }) => {
-                self.input_state.set_ui_toast(
-                    UiToastKind::Warning,
-                    shortcut_conflict_message(&binding, existing_action),
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "keybindings",
+                    Toast::warning(shortcut_conflict_message(&binding, existing_action)),
                 );
                 return;
             }
@@ -110,24 +119,31 @@ impl WaylandState {
         let action_map = match next.keybindings.build_action_map() {
             Ok(map) => map,
             Err(err) => {
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, format!("Shortcut not changed: {err}"));
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "keybindings",
+                    Toast::warning(format!("Shortcut not changed: {err}")),
+                );
                 return;
             }
         };
         let action_bindings = match next.keybindings.build_action_bindings() {
             Ok(bindings) => bindings,
             Err(err) => {
-                self.input_state
-                    .set_ui_toast(UiToastKind::Warning, format!("Shortcut not changed: {err}"));
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "keybindings",
+                    Toast::warning(format!("Shortcut not changed: {err}")),
+                );
                 return;
             }
         };
         if let Err(err) = next.save() {
             log::warn!("Failed to save keybinding edit: {err}");
-            self.input_state.set_ui_toast(
-                UiToastKind::Error,
-                "Shortcut could not be saved (see logs).",
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                "keybindings",
+                Toast::error("Shortcut could not be saved (see logs)."),
             );
             return;
         }
@@ -136,9 +152,13 @@ impl WaylandState {
         self.input_state
             .set_keybinding_maps(action_map, action_bindings);
         self.toolbar.mark_dirty();
-        self.input_state.set_ui_toast(
-            UiToastKind::Info,
-            format!("Updated shortcut for {}.", action_label(request.action)),
+        self.input_state.push_toast(
+            ToastPriority::Info,
+            "keybindings",
+            Toast::info(format!(
+                "Updated shortcut for {}.",
+                action_label(request.action)
+            )),
         );
     }
 }

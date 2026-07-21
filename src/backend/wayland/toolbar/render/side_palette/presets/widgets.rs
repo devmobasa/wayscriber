@@ -1,6 +1,13 @@
-use super::super::super::widgets::constants::FONT_FAMILY_DEFAULT;
+use super::super::super::widgets::constants::{
+    COLOR_CARD_BACKGROUND, COLOR_TEXT_PRIMARY, FONT_FAMILY_DEFAULT, FONT_SIZE_SECONDARY,
+    FONT_SIZE_SMALL, set_color,
+};
 use super::super::super::widgets::{draw_label_center_color, draw_round_rect};
+use crate::ui::theme::{Rgb, rgba, set_color_alpha, with_alpha};
 use crate::ui_text::{UiTextStyle, text_layout};
+
+/// White root for the keycap's border/text alpha ladder.
+const WHITE_RGB: Rgb = (1.0, 1.0, 1.0);
 
 pub(super) fn draw_keycap(
     ctx: &cairo::Context,
@@ -17,10 +24,10 @@ pub(super) fn draw_keycap(
     } else {
         (0.30, 0.25, 0.55)
     };
-    ctx.set_source_rgba(0.12, 0.12, 0.18, bg_alpha);
+    set_color(ctx, with_alpha(COLOR_CARD_BACKGROUND, bg_alpha));
     draw_round_rect(ctx, key_x, key_y, size, size, radius);
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, border_alpha);
+    set_color_alpha(ctx, WHITE_RGB, border_alpha);
     ctx.set_line_width(1.0);
     draw_round_rect(ctx, key_x, key_y, size, size, radius);
     let _ = ctx.stroke();
@@ -28,7 +35,7 @@ pub(super) fn draw_keycap(
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Bold,
-        size: 11.0,
+        size: FONT_SIZE_SECONDARY,
     };
     draw_label_center_color(
         ctx,
@@ -38,7 +45,7 @@ pub(super) fn draw_keycap(
         size,
         size,
         label,
-        (1.0, 1.0, 1.0, text_alpha),
+        rgba(WHITE_RGB, text_alpha),
     );
 }
 
@@ -57,7 +64,7 @@ pub(super) fn draw_preset_name_tag(
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 10.0,
+        size: FONT_SIZE_SMALL,
     };
     let layout = text_layout(ctx, tag_style, name, None);
     let extents = layout.ink_extents();
@@ -75,10 +82,11 @@ pub(super) fn draw_preset_name_tag(
     if label_x > max_x {
         label_x = max_x;
     }
-    ctx.set_source_rgba(0.12, 0.12, 0.18, 0.92);
+    // Near-opaque card tint so the tag reads over any slot content.
+    set_color(ctx, with_alpha(COLOR_CARD_BACKGROUND, 0.92));
     draw_round_rect(ctx, label_x, label_y, label_w, label_h, 4.0);
     let _ = ctx.fill();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     layout.show_at_baseline(
         ctx,
         label_x + pad_x - extents.x_bearing(),

@@ -14,6 +14,7 @@ impl WaylandState {
         on_toolbar: bool,
         inline_active: bool,
     ) {
+        let preview_was_eligible = self.mouse_tool_preview_eligible();
         debug!(
             "Pointer entered at ({}, {}), on_toolbar={}, is_move_dragging={}",
             event.position.0,
@@ -56,6 +57,9 @@ impl WaylandState {
         if inline_active {
             self.inline_toolbar_motion(event.position);
         }
+        if preview_was_eligible != self.mouse_tool_preview_eligible() {
+            self.input_state.needs_redraw = true;
+        }
     }
 
     pub(super) fn handle_pointer_leave(
@@ -64,6 +68,7 @@ impl WaylandState {
         on_toolbar: bool,
         inline_active: bool,
     ) {
+        let preview_was_eligible = self.mouse_tool_preview_eligible();
         debug!(
             "Pointer left surface: on_toolbar={}, is_move_dragging={}",
             on_toolbar,
@@ -98,6 +103,9 @@ impl WaylandState {
         }
         if (on_toolbar || inline_active) && !self.is_move_dragging() {
             self.end_toolbar_move_drag();
+        }
+        if preview_was_eligible != self.mouse_tool_preview_eligible() {
+            self.input_state.needs_redraw = true;
         }
         self.current_pointer_shape = None;
         self.cursor_hidden = false;

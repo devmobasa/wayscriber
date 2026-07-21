@@ -3,13 +3,16 @@ use super::super::super::{
         BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerPageEdit,
         BoardPickerPageTarget, BoardPickerState,
     },
-    color_picker_popup::{ColorPickerPopupLayout, ColorPickerPopupState},
+    color_picker_popup::{
+        ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
+    },
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
 };
+use super::super::toast_queue::ToastQueue;
 use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
     DelayedHistory, DrawingState, OutputFocusAction, PendingBackendAction, PendingBoardDelete,
@@ -49,6 +52,10 @@ pub(crate) struct PresenterRestore {
     pub(crate) toolbar_visible: Option<bool>,
     pub(crate) toolbar_top_visible: Option<bool>,
     pub(crate) toolbar_side_visible: Option<bool>,
+    /// Top-strip form/minimize state before presenter mapped the strip to
+    /// the micro chip (`[presenter_mode] toolbar_mode = "micro"`).
+    pub(crate) toolbar_top_display_mode: Option<crate::config::TopDisplayMode>,
+    pub(crate) toolbar_top_minimized: Option<bool>,
     pub(crate) click_highlight_enabled: Option<bool>,
     pub(crate) tool_override: Option<Option<Tool>>,
 }
@@ -71,6 +78,10 @@ pub struct InputState {
     pub current_color: Color,
     /// Colors selected by quick color actions and palette UI.
     pub(crate) quick_colors: QuickColorPalette,
+    /// Session-only recently applied colors, most-recent-first, deduped and
+    /// capped (like `board_recent`, never persisted). Shown as the radial
+    /// color ring's appended recents arc.
+    pub(crate) recent_colors: Vec<Color>,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
     /// Independent color/thickness values for drawing tools.
@@ -143,6 +154,20 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
+    /// Help targets resolved under pending help-overlay presses, keyed by input
+    /// modality so only the modality that owned a press can resolve it. Each
+    /// matching release only runs a row when press and release land on the SAME
+    /// target. Mirrors the toast press/release contract and guards destructive
+    /// rows (e.g. Clear) against a press-drag-release that starts off-row and
+    /// ends on the row.
+    pub(crate) help_overlay_pending_presses: Vec<(
+        crate::input::state::HelpOverlayPressSource,
+        crate::input::state::HelpOverlayClick,
+    )>,
+    /// Help-owned presses whose overlay generation ended before physical
+    /// release. Their eventual releases must still be swallowed, but can no
+    /// longer resolve an action against either the old or a reopened layout.
+    pub(crate) help_overlay_consume_only_presses: Vec<crate::input::state::HelpOverlayPressSource>,
     /// Board picker quick search query
     pub board_picker_search: String,
     /// Time of last board picker search input
@@ -161,12 +186,17 @@ pub struct InputState {
     pub(crate) command_palette_repeat_next_tick: Option<Instant>,
     /// Most recently executed command palette actions (most recent first)
     pub command_palette_recent: Vec<Action>,
+    /// Whether the recents changed since the backend last persisted them.
+    pub(crate) command_palette_recents_dirty: bool,
     /// Action whose next keyboard chord is being captured for rebinding.
     pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether status HUD segments consume clicks to open their surfaces
+    /// (`[ui] status_bar_interactive`); false keeps the bar display-only
+    pub status_bar_interactive: bool,
     /// Whether to show the board label in the status bar
     pub show_status_board_badge: bool,
     /// Whether to show the page counter in the status bar
@@ -219,10 +249,41 @@ pub struct InputState {
     pub toolbar_shapes_expanded: bool,
     /// Whether the top strip's overflow menu (width-dropped items) is open.
     pub toolbar_top_overflow_open: bool,
+    /// Whether the Session popover (anchored to the top overflow toggle) is
+    /// open. Mutually exclusive with the Settings popover and the overflow.
+    pub toolbar_session_popover_open: bool,
+    /// Whether the Settings popover (anchored to the top overflow toggle)
+    /// is open. Mutually exclusive with the Session popover and the overflow.
+    pub toolbar_settings_popover_open: bool,
+    /// Whether the Canvas popover (anchored to the top overflow toggle) is
+    /// open. Mutually exclusive with the Session/Settings popovers and the
+    /// overflow.
+    pub toolbar_canvas_popover_open: bool,
+    /// Internal scroll offset of the open Canvas/Session/Settings popover
+    /// (logical pixels, clamped at render; reset when a popover opens).
+    pub toolbar_top_popover_scroll: f64,
     /// Whether the top strip is minimized to its edge restore tab.
     pub toolbar_top_minimized: bool,
+    /// Display form of the top strip (full strip / micro chip / cycle-hidden).
+    /// Sibling of `toolbar_top_minimized`; minimized wins when both are set.
+    pub toolbar_top_display_mode: crate::config::TopDisplayMode,
+    /// When drawing input last started or committed a stroke; drives the
+    /// top-strip idle fade.
+    pub(crate) last_draw_activity: Instant,
+    /// Precise numeric entry popup opened from a pill numeral, when open.
+    pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
     /// Whether the side palette is minimized to its edge restore tab.
     pub toolbar_side_minimized: bool,
+    /// Where the side-palette functions live. Under the default `Pill`
+    /// layout the side surface never appears; the deprecated `Panel`
+    /// escape hatch keeps the classic side palette. Startup init applies
+    /// the config value; this struct field deliberately defaults to
+    /// `Panel` so side-palette tests exercise the panel without setup.
+    pub toolbar_side_layout: crate::config::ToolbarSideLayout,
+    /// Modifier chord that turns a toolbar click into shortcut rebinding.
+    /// Used to generate onboarding copy (the tour's rebind hint) without
+    /// hardcoding key strings. Startup init applies the config value.
+    pub toolbar_rebind_modifier: crate::config::ToolbarRebindModifier,
     /// Last HSV triple committed from the side palette's color picker;
     /// preserves hue/saturation across gray colors where RGB loses them.
     pub toolbar_picker_hsv: Option<(f64, f64, f64)>,
@@ -271,10 +332,10 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
-    /// Pending copy hex color to clipboard request
-    pub(crate) pending_copy_hex: bool,
-    /// Pending paste hex color from clipboard request
-    pub(crate) pending_paste_hex: bool,
+    /// Color snapshot for the newest pending copy-hex request.
+    pub(crate) pending_copy_hex: Option<Color>,
+    /// Destination owned by the newest pending paste-hex request.
+    pub(crate) pending_paste_hex: Option<HexPasteTarget>,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
@@ -303,6 +364,10 @@ pub struct InputState {
     pub color_picker_popup_state: ColorPickerPopupState,
     /// Cached layout details for the color picker popup
     pub color_picker_popup_layout: Option<ColorPickerPopupLayout>,
+    /// Identity of the currently open color picker popup.
+    pub(in crate::input::state) color_picker_popup_generation: u64,
+    /// Popup action button owned by the current left-button press.
+    pub(in crate::input::state) color_picker_popup_pressed_action: Option<ColorPickerPopupAction>,
     /// Current radial menu state
     pub radial_menu_state: RadialMenuState,
     /// Cached layout details for the radial menu
@@ -343,8 +408,10 @@ pub struct InputState {
     pub show_preset_toasts: bool,
     /// Whether to show the cursor tool preview bubble
     pub show_tool_preview: bool,
-    /// Pending UI toast (errors/warnings/info)
+    /// Active (visible) UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Pending toasts waiting behind the active one, plus rate-limit memory
+    pub(crate) toast_queue: ToastQueue,
     /// Cached bounds of the rendered toast for click detection (x, y, w, h)
     pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
     /// Copied selection shapes for paste operations
@@ -383,6 +450,22 @@ pub struct InputState {
     pub context_menu_layout: Option<ContextMenuLayout>,
     /// Cached layout details for the board picker overlay
     pub board_picker_layout: Option<BoardPickerLayout>,
+    /// Cached layout details for the status HUD (segmented status bar)
+    pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
+    /// Set when the internal pointer-routing chain consumed a left press on
+    /// the status HUD (tablet and other paths that bypass the backend's own
+    /// press→release flag); the matching release activates the chip.
+    pub(in crate::input::state) status_hud_press_pending: bool,
+    /// Cached layout details for the interactive bottom-right zoom chip
+    pub zoom_chip_layout: Option<crate::ui::ZoomChipLayout>,
+    /// The chip press a left press recorded, set when the internal
+    /// pointer-routing chain consumed that press (tablet and other paths that
+    /// bypass the backend's own press→release flag). `Button(kind)` records the
+    /// pressed button so the matching release fires only when it lands on the
+    /// SAME button; `Passive` marks a press on the passive `NN%` readout (or an
+    /// inter-piece gap) so its release is still consumed but fires nothing;
+    /// `None` means no chip press is pending.
+    pub(in crate::input::state) zoom_chip_press_pending: crate::ui::ZoomChipPress,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
     pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)
@@ -460,9 +543,10 @@ pub struct InputState {
     pub tour_step: usize,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
-    /// Whether the capability warning toast has been shown (used by wayland backend)
-    #[allow(dead_code)]
-    pub(crate) capability_toast_shown: bool,
+    /// Capabilities snapshot the capability warning toast last evaluated;
+    /// `None` until first evaluated, re-evaluated whenever capabilities change
+    /// (read/written each tick by the wayland backend's capability toast).
+    pub(crate) capability_toast_caps: Option<CompositorCapabilities>,
     /// Blocked action visual feedback state (red flash)
     pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
     /// Pending clipboard fallback for failed copy operations
@@ -477,4 +561,17 @@ pub struct InputState {
     /// Cursor position within the help overlay search input
     #[allow(dead_code)]
     pub help_overlay_search_cursor: usize,
+}
+
+impl InputState {
+    /// Record drawing activity (stroke start/commit); resets the top-strip
+    /// idle-fade clock.
+    pub(crate) fn mark_draw_activity(&mut self) {
+        self.last_draw_activity = Instant::now();
+    }
+
+    /// When drawing input last started or committed a stroke.
+    pub fn last_draw_activity(&self) -> Instant {
+        self.last_draw_activity
+    }
 }

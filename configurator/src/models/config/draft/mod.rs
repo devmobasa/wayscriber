@@ -1,12 +1,13 @@
 mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
+use super::super::fields::ToolbarSideLayoutOption;
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
-    ToolbarRebindModifierOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -62,7 +63,10 @@ pub struct ConfigDraft {
     pub performance_max_fps_no_vsync: String,
     pub performance_ui_animation_fps: String,
 
+    pub ui_theme: UiThemeOption,
+    pub ui_reduced_motion: ReducedMotionOption,
     pub ui_show_status_bar: bool,
+    pub ui_status_bar_interactive: bool,
     pub ui_show_status_board_badge: bool,
     pub ui_show_status_page_badge: bool,
     pub ui_show_page_badge_with_status_bar: bool,
@@ -79,6 +83,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
+    pub ui_toolbar_side_layout: ToolbarSideLayoutOption,
     pub ui_toolbar_rebind_modifier: ToolbarRebindModifierOption,
     pub ui_toolbar_items: ToolbarItemsConfig,
     pub ui_toolbar_show_presets: bool,
@@ -122,6 +127,7 @@ pub struct ConfigDraft {
     pub presenter_close_help_overlay: bool,
     pub presenter_enable_click_highlight: bool,
     pub presenter_tool_behavior: PresenterToolBehaviorOption,
+    pub presenter_toolbar_mode: PresenterToolbarModeOption,
     pub presenter_show_toast: bool,
 
     pub help_font_family: String,

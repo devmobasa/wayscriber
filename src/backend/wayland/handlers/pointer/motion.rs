@@ -62,6 +62,35 @@ impl WaylandState {
             }
             return;
         }
+        // An open radial menu owns pointer motion everywhere on screen:
+        // flick sampling and wedge hover must keep working when the pointer
+        // crosses a toolbar region, so bypass the toolbar gates below until
+        // the menu closes.
+        if self.input_state.is_radial_menu_open() && !self.is_move_dragging() {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let Some((sx, sy)) = screen_position {
+                self.set_current_mouse(sx.round() as i32, sy.round() as i32);
+                let (wx, wy) = self.zoomed_world_coords(sx, sy);
+                self.input_state.update_pointer_positions(
+                    sx.round() as i32,
+                    sy.round() as i32,
+                    wx,
+                    wy,
+                );
+                self.input_state.on_mouse_motion_with_canvas(
+                    sx.round() as i32,
+                    sy.round() as i32,
+                    wx,
+                    wy,
+                );
+                self.update_pointer_cursor(false, conn);
+                return;
+            }
+        }
         if inline_active && self.inline_toolbar_motion(event.position) {
             self.update_pointer_cursor(true, conn);
             return;
@@ -171,7 +200,11 @@ impl WaylandState {
             );
             return;
         }
-        self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+        // Capture the pre-motion pointer so the idle tool-preview bubble can
+        // damage its old position; the new position is the incoming event.
+        let prev_mouse = self.current_mouse();
+        let next_mouse = (event.position.0 as i32, event.position.1 as i32);
+        self.set_current_mouse(next_mouse.0, next_mouse.1);
         // The command palette owns hover rendering (including shortcut-action
         // tooltips), so keep its screen-space pointer cache and redraw current
         // even though normal canvas motion remains blocked by the modal.
@@ -204,6 +237,13 @@ impl WaylandState {
             wx,
             wy,
         );
+        // Idle pointer motion otherwise only refreshes cached coordinates, so
+        // the trailing tool-preview bubble would freeze at its previous spot
+        // (stroke/eraser hover redraws are handled above). Damage the old and
+        // new bubble footprints so it follows the cursor. Evaluated after the
+        // motion so a drag that started a stroke (state -> Drawing) is not
+        // treated as an eligible preview.
+        self.mark_mouse_tool_preview_dirty(prev_mouse, next_mouse);
         self.record_perf_input_sample(
             PerfInputSource::Pointer,
             event.position.0.round() as i32,

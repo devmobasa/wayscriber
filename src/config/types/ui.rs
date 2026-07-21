@@ -1,4 +1,6 @@
-use crate::config::enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
+use crate::config::enums::{
+    RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
+};
 use crate::env_vars::DESKTOP_ENV_KEYS;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -13,9 +15,27 @@ use super::{
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiConfig {
+    /// Overlay chrome theme: auto (default), dark, or light.
+    /// `auto` currently resolves to dark chrome.
+    #[serde(default)]
+    pub theme: UiTheme,
+
+    /// Reduced-motion preference: auto (default), on, or off.
+    ///
+    /// `on` disables UI animations. `auto` is reserved for a future
+    /// desktop-portal query and currently behaves like `off` (full motion).
+    #[serde(default)]
+    pub reduced_motion: ReducedMotion,
+
     /// Show the status bar displaying current color, thickness, and tool
     #[serde(default = "default_show_status")]
     pub show_status_bar: bool,
+
+    /// Allow clicking status bar segments (board, page, color, tool, help)
+    /// to open their surfaces. When false the status bar is display-only and
+    /// clicks pass through to the canvas.
+    #[serde(default = "default_status_bar_interactive")]
+    pub status_bar_interactive: bool,
 
     /// Show the board label in the status bar
     #[serde(default = "default_show_status_board_badge")]
@@ -108,7 +128,10 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
+            theme: UiTheme::default(),
+            reduced_motion: ReducedMotion::default(),
             show_status_bar: default_show_status(),
+            status_bar_interactive: default_status_bar_interactive(),
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),
             show_floating_badge_always: default_show_page_badge_with_status_bar(),
@@ -133,6 +156,10 @@ impl Default for UiConfig {
 }
 
 fn default_show_status() -> bool {
+    true
+}
+
+fn default_status_bar_interactive() -> bool {
     true
 }
 

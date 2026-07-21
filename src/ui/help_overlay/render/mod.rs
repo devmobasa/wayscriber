@@ -6,10 +6,13 @@ use super::sections::HelpOverlayBindings;
 mod cache;
 mod frame;
 mod header;
+mod hit;
 mod metrics;
 mod palette;
 mod state;
 
+use super::super::primitives::{draw_rounded_rect, text_extents_for};
+use super::types::HelpRowHit;
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
@@ -18,8 +21,17 @@ use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
 pub use cache::invalidate_help_overlay_cache;
+#[cfg(test)]
+pub use hit::install_help_hit_map_for_test;
+pub use hit::{HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at};
 
 const BULLET: &str = "\u{2022}";
+
+/// Horizontal padding inside the "Replay tour" footer pill, between its border
+/// and the icon/label content.
+const REPLAY_FOOTER_PAD_X: f64 = 12.0;
+/// Gap between the refresh icon and the "Replay tour" label inside the pill.
+const REPLAY_FOOTER_ICON_GAP: f64 = 7.0;
 
 /// Render help overlay showing all keybindings
 #[allow(clippy::too_many_arguments)]
@@ -239,7 +251,7 @@ pub fn render_help_overlay(
         extra_line_gap: metrics.extra_line_gap,
         extra_line_bottom_spacing: metrics.extra_line_bottom_spacing,
     };
-    cursor_y = draw_nav(
+    let nav_render = draw_nav(
         ctx,
         inner_x,
         cursor_y,
@@ -247,6 +259,8 @@ pub fn render_help_overlay(
         &layout.nav_state,
         &nav_draw_style,
     );
+    cursor_y = nav_render.next_y;
+    let search_rect = nav_render.search_rect;
 
     let grid_start_y = cursor_y;
 
@@ -280,6 +294,9 @@ pub fn render_help_overlay(
         section_card_border: palette.section_card_border,
     };
 
+    // Clickable rows collect their screen rects here as the grid draws, so the
+    // pointer hit map tests the real layout rather than an approximation.
+    let mut row_hits: Vec<HelpRowHit> = Vec::new();
     draw_sections_grid(
         ctx,
         &layout.grid,
@@ -293,9 +310,27 @@ pub fn render_help_overlay(
         &grid_style,
         &grid_colors,
         &key_combo_style,
+        &mut row_hits,
     );
 
     cursor_y = grid_start_y + layout.grid_view_height + metrics.columns_bottom_spacing;
+
+    // "Replay tour" footer entry: a centred, clickable pill that runs the
+    // ReplayTour action (resolved through the registry, never a hardcoded
+    // label). Registered in the hit map as a clickable row.
+    let replay_hit = draw_replay_footer(
+        ctx,
+        inner_x,
+        inner_width,
+        cursor_y,
+        metrics.footer_action_height,
+        metrics.note_font_size,
+        help_font_family,
+        palette.accent,
+        palette.accent_muted,
+    );
+    row_hits.push(replay_hit);
+    cursor_y += metrics.footer_action_height + metrics.footer_action_gap;
 
     // Note
     let note_style = UiTextStyle {
@@ -346,5 +381,113 @@ pub fn render_help_overlay(
         None,
     );
 
+    hit::store_help_hit_map(
+        (
+            layout.box_x,
+            layout.box_y,
+            layout.box_width,
+            layout.box_height,
+        ),
+        Some(search_rect),
+        &row_hits,
+    );
+
     layout.scroll_max
+}
+
+/// Draw the "Replay tour" footer pill centred on the overlay and return its
+/// clickable rect (tagged with [`Action::ReplayTour`]).
+#[allow(clippy::too_many_arguments)]
+fn draw_replay_footer(
+    ctx: &cairo::Context,
+    inner_x: f64,
+    inner_width: f64,
+    top_y: f64,
+    pill_height: f64,
+    font_size: f64,
+    font_family: &str,
+    accent: [f64; 4],
+    accent_muted: [f64; 4],
+) -> HelpRowHit {
+    let label = action_label(Action::ReplayTour);
+    let icon_size = font_size;
+    let icon_gap = REPLAY_FOOTER_ICON_GAP;
+    let pad_x = REPLAY_FOOTER_PAD_X;
+
+    let label_width = text_extents_for(
+        ctx,
+        font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+        label,
+    )
+    .width();
+    let content_width = icon_size + icon_gap + label_width;
+    let pill_width = content_width + pad_x * 2.0;
+    let pill_x = inner_x + (inner_width - pill_width) / 2.0;
+
+    draw_rounded_rect(
+        ctx,
+        pill_x,
+        top_y,
+        pill_width,
+        pill_height,
+        header::PILL_RADIUS,
+    );
+    ctx.set_source_rgba(accent[0], accent[1], accent[2], 0.14);
+    let _ = ctx.fill();
+    draw_rounded_rect(
+        ctx,
+        pill_x,
+        top_y,
+        pill_width,
+        pill_height,
+        header::PILL_RADIUS,
+    );
+    ctx.set_source_rgba(accent[0], accent[1], accent[2], 0.38);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    let content_x = pill_x + pad_x;
+    let icon_y = top_y + (pill_height - icon_size) / 2.0;
+    let _ = ctx.save();
+    ctx.set_source_rgba(
+        accent_muted[0],
+        accent_muted[1],
+        accent_muted[2],
+        accent_muted[3],
+    );
+    crate::toolbar_icons::draw_icon_refresh(ctx, content_x, icon_y, icon_size);
+    let _ = ctx.restore();
+
+    let label_style = UiTextStyle {
+        family: font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: font_size,
+    };
+    let label_baseline = top_y + pill_height / 2.0 + font_size * 0.35;
+    ctx.set_source_rgba(
+        accent_muted[0],
+        accent_muted[1],
+        accent_muted[2],
+        accent_muted[3],
+    );
+    draw_text_baseline(
+        ctx,
+        label_style,
+        label,
+        content_x + icon_size + icon_gap,
+        label_baseline,
+        None,
+    );
+
+    HelpRowHit {
+        x: pill_x,
+        y: top_y,
+        w: pill_width,
+        h: pill_height,
+        action: Action::ReplayTour,
+    }
 }

@@ -23,8 +23,9 @@ pub use events::{Key, MouseButton};
 #[allow(unused_imports)]
 pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
-    ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayCursorHint, InputState,
-    OutputFocusAction, SelectionHandle, TextInputMode, ZoomAction,
+    ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,
+    HelpOverlayCursorHint, HelpOverlayReleaseOutcome, InputState, OutputFocusAction,
+    SelectionHandle, SelectionPropertyEntry, SelectionPropertyKind, TextInputMode, ZoomAction,
 };
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]

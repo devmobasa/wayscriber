@@ -9,7 +9,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_text
     ),
     meta!(
         EnterStickyNoteMode,
@@ -19,7 +20,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_note
     ),
     meta!(
         SelectSelectionTool,
@@ -29,7 +31,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_select
     ),
     meta!(
         SelectPenTool,
@@ -39,7 +42,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_pen
     ),
     meta!(
         SelectLineTool,
@@ -49,7 +53,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_line
     ),
     meta!(
         SelectRectTool,
@@ -59,7 +64,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_rect
     ),
     meta!(
         SelectEllipseTool,
@@ -69,7 +75,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_circle
     ),
     meta!(
         SelectTriangleTool,
@@ -109,7 +116,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_polygon
     ),
     meta!(
         SelectFreeformPolygonTool,
@@ -129,7 +137,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_arrow
     ),
     meta!(
         SelectBlurTool,
@@ -139,7 +148,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_blur
     ),
     meta!(
         SelectHighlightTool,
@@ -169,7 +179,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_marker
     ),
     meta!(
         SelectStepMarkerTool,
@@ -179,7 +190,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_step_marker
     ),
     meta!(
         SelectEraserTool,
@@ -189,7 +201,8 @@ pub const ENTRIES: &[ActionMeta] = &[
         Tools,
         true,
         true,
-        true
+        true,
+        icon: crate::toolbar_icons::draw_icon_eraser
     ),
     meta!(
         ToggleEraserMode,

@@ -1,6 +1,10 @@
 use super::super::base::InputState;
-use crate::config::{ToolbarItemId, ToolbarItemOrderGroup};
+use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, TopDisplayMode};
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
+
+/// How long the "Cleared — Undo?" toast stays up after a mouse-path clear.
+pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 
 impl InputState {
     /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
@@ -16,23 +20,61 @@ impl InputState {
         self.toolbar_visible = visible;
         self.toolbar_top_visible = visible;
         self.toolbar_side_visible = visible;
+        // Showing toolbars always brings the top strip back: a cycle-hidden
+        // strip (F2) reverts to its full form when F9 shows the bars again.
+        if visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden {
+            self.toolbar_top_display_mode = TopDisplayMode::Full;
+        }
         self.needs_redraw = true;
         true
     }
 
-    /// Returns whether any toolbar is marked visible.
+    /// Returns whether any toolbar surface is effectively visible: the top
+    /// strip (not cycle-hidden) or the side palette (not retired by
+    /// `side_layout = "pill"`). Raw visibility flags that cannot produce a
+    /// surface do not count, so the F9 toggle always has a visible effect
+    /// on its first press.
     pub fn toolbar_visible(&self) -> bool {
-        self.toolbar_visible || self.toolbar_top_visible || self.toolbar_side_visible
+        self.toolbar_top_visible() || self.toolbar_side_visible()
     }
 
-    /// Returns whether the top toolbar is visible.
+    /// Returns whether the top toolbar surface is visible. The cycle
+    /// action's Hidden display mode hides the top strip without touching
+    /// the side toolbar.
     pub fn toolbar_top_visible(&self) -> bool {
-        self.toolbar_top_visible
+        self.toolbar_top_visible && self.toolbar_top_display_mode != TopDisplayMode::Hidden
     }
 
-    /// Returns whether the side toolbar is visible.
+    /// Returns whether the side toolbar is visible. Under the default
+    /// `side_layout = "pill"` the side palette is retired: its surface never
+    /// appears (layer-shell, inline fallback, or GTK), regardless of the
+    /// visibility toggles. The deprecated `"panel"` escape hatch keeps the
+    /// classic behavior.
+    ///
+    /// Invariant: the `InputState` struct-field default stays `Panel` (for
+    /// side-palette test ergonomics) while the *config* default is `Pill`;
+    /// startup init applies the config value via
+    /// [`Self::init_toolbar_side_layout_from_config`].
     pub fn toolbar_side_visible(&self) -> bool {
         self.toolbar_side_visible
+            && self.toolbar_side_layout == crate::config::ToolbarSideLayout::Panel
+    }
+
+    /// Restore the persisted side layout (called at startup).
+    pub fn init_toolbar_side_layout_from_config(
+        &mut self,
+        layout: crate::config::ToolbarSideLayout,
+    ) {
+        self.toolbar_side_layout = layout;
+    }
+
+    /// Store the configured toolbar shortcut-rebind modifier (called at
+    /// startup) so onboarding copy can name the chord without hardcoding keys.
+    pub fn init_toolbar_rebind_modifier_from_config(
+        &mut self,
+        modifier: crate::config::ToolbarRebindModifier,
+    ) {
+        self.toolbar_rebind_modifier = modifier;
     }
 
     /// Initialize toolbar visibility from config (called at startup).
@@ -139,6 +181,76 @@ impl InputState {
     pub fn init_toolbar_minimized_from_config(&mut self, top: bool, side: bool) {
         self.toolbar_top_minimized = top;
         self.toolbar_side_minimized = side;
+    }
+
+    /// Restore the persisted top-strip display form (called at startup).
+    /// `Hidden` sanitizes to `Full`: hidden is runtime-only, startup
+    /// visibility stays governed by `top_pinned`.
+    pub fn init_toolbar_display_mode_from_config(&mut self, mode: TopDisplayMode) {
+        self.toolbar_top_display_mode = mode.persisted();
+    }
+
+    /// Effective display state of the top strip: `Hidden` when the strip
+    /// surface is not visible (either via the cycle action or a plain
+    /// visibility toggle), otherwise the current form. A minimized strip
+    /// reports `Full` — minimize is a sibling feature and wins over micro.
+    pub fn top_display_state(&self) -> TopDisplayMode {
+        if !self.toolbar_top_visible() {
+            TopDisplayMode::Hidden
+        } else if self.toolbar_top_display_mode == TopDisplayMode::Micro
+            && !self.toolbar_top_minimized
+        {
+            TopDisplayMode::Micro
+        } else {
+            TopDisplayMode::Full
+        }
+    }
+
+    /// Put the top strip into `mode`. `Full` and `Micro` also make the top
+    /// strip visible; entering `Micro` un-minimizes the strip (micro and
+    /// minimized are mutually exclusive through the UI paths) and closes
+    /// the strip's menus, like minimize does.
+    pub(crate) fn set_top_display_mode(&mut self, mode: TopDisplayMode) {
+        self.toolbar_top_display_mode = mode;
+        match mode {
+            TopDisplayMode::Full => {
+                self.show_top_strip_surface();
+            }
+            TopDisplayMode::Micro => {
+                self.toolbar_top_minimized = false;
+                self.toolbar_shapes_expanded = false;
+                self.toolbar_top_overflow_open = false;
+                self.toolbar_session_popover_open = false;
+                self.toolbar_settings_popover_open = false;
+                self.toolbar_canvas_popover_open = false;
+                self.show_top_strip_surface();
+            }
+            TopDisplayMode::Hidden => {
+                self.toolbar_shapes_expanded = false;
+                self.toolbar_top_overflow_open = false;
+                self.toolbar_session_popover_open = false;
+                self.toolbar_settings_popover_open = false;
+                self.toolbar_canvas_popover_open = false;
+            }
+        }
+        self.needs_redraw = true;
+    }
+
+    fn show_top_strip_surface(&mut self) {
+        self.toolbar_top_visible = true;
+        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+    }
+
+    /// Advance the top strip through Full → Micro → Hidden → Full and
+    /// return the new state.
+    pub fn cycle_top_toolbar_display(&mut self) -> TopDisplayMode {
+        let next = match self.top_display_state() {
+            TopDisplayMode::Full => TopDisplayMode::Micro,
+            TopDisplayMode::Micro => TopDisplayMode::Hidden,
+            TopDisplayMode::Hidden => TopDisplayMode::Full,
+        };
+        self.set_top_display_mode(next);
+        next
     }
 
     /// Restore the persisted side-palette pane and collapsed sections
@@ -268,6 +380,31 @@ impl InputState {
         self.handle_action(Action::ClearCanvas);
     }
 
+    /// Mouse-path clear: clears like `Action::ClearCanvas` and, when shapes
+    /// were removed without a locked-shape warning, offers a short toast with
+    /// an "Undo?" chip. The keyboard action and Shift+click stay instant.
+    pub fn toolbar_clear_with_undo_toast(&mut self) {
+        let (has_locked, has_unlocked) = {
+            let frame = self.boards.active_frame();
+            (
+                frame.shapes.iter().any(|shape| shape.locked),
+                frame.shapes.iter().any(|shape| !shape.locked),
+            )
+        };
+        self.toolbar_clear();
+        // The locked-shape paths already raise their own warning toasts in
+        // `handle_action`; only the silent success path gets the undo offer.
+        if has_unlocked && !has_locked {
+            self.push_toast(
+                ToastPriority::Action,
+                "canvas.clear",
+                Toast::info("Cleared")
+                    .action("Undo?", Action::Undo)
+                    .duration_ms(CLEAR_UNDO_TOAST_MS),
+            );
+        }
+    }
+
     /// Wrapper for entering text mode.
     pub fn toolbar_enter_text_mode(&mut self) {
         self.handle_action(Action::EnterTextMode);
@@ -325,6 +462,37 @@ mod tests {
             crate::config::ToolbarLayoutMode::Advanced,
         ));
         assert!(!state.show_zoom_actions);
+    }
+
+    #[test]
+    fn pill_side_layout_retires_the_side_surface_and_panel_restores_it() {
+        let mut state = make_test_input_state();
+        // The struct-field default stays Panel for side-palette test
+        // ergonomics; the *config* default is Pill and startup init applies
+        // it via init_toolbar_side_layout_from_config.
+        assert_eq!(
+            state.toolbar_side_layout,
+            crate::config::ToolbarSideLayout::Panel
+        );
+        assert_eq!(
+            crate::config::ToolbarSideLayout::default(),
+            crate::config::ToolbarSideLayout::Pill,
+            "the config default is pill; the struct default is test ergonomics only"
+        );
+        assert!(state.toolbar_side_visible());
+
+        // The default Pill layout retires the side surface: it never
+        // reports visible, even through the plain visibility toggles.
+        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
+        assert!(!state.toolbar_side_visible());
+        state.set_toolbar_visible(true);
+        assert!(!state.toolbar_side_visible());
+        // The top strip is unaffected by the side retirement.
+        assert!(state.toolbar_top_visible());
+
+        // The deprecated escape hatch restores the classic behavior.
+        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
+        assert!(state.toolbar_side_visible());
     }
 
     #[test]

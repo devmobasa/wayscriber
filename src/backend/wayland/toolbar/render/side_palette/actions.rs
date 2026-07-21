@@ -12,9 +12,14 @@ use crate::ui::toolbar::model::{
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
-use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color};
 use super::super::widgets::draw_group_card;
 use super::section_header::draw_collapsible_header;
+use crate::ui::theme::Rgba;
+
+/// Muted cool-gray group sub-label ("History", "Zoom"). Slightly darker
+/// than COLOR_SEGMENT_TEXT_INACTIVE — kept to avoid a visible shift.
+const COLOR_GROUP_SUB_LABEL: Rgba = (0.62, 0.65, 0.72, 0.9);
 use helpers::{
     ActionButton, ActionIconFn, IconActionLayout, TextActionLayout, render_icon_action_group,
     render_icon_action_row_split, render_text_action_group,
@@ -158,7 +163,7 @@ fn draw_group_sub_label(
         size: FONT_SIZE_LABEL * 0.85,
     };
     let layout = crate::ui_text::text_layout(ctx, style, label, None);
-    ctx.set_source_rgba(0.62, 0.65, 0.72, 0.9);
+    set_color(ctx, COLOR_GROUP_SUB_LABEL);
     layout.show_at_baseline(ctx, x, y + 11.0);
     ToolbarLayoutSpec::SIDE_ACTION_GROUP_LABEL_HEIGHT
 }
@@ -271,7 +276,7 @@ fn icon_for_button(snapshot: &ToolbarSnapshot, button: &ToolbarButtonModel) -> A
     match &button.event {
         ToolbarEvent::Undo => toolbar_icons::draw_icon_undo as ActionIconFn,
         ToolbarEvent::Redo => toolbar_icons::draw_icon_redo as ActionIconFn,
-        ToolbarEvent::ClearCanvas => toolbar_icons::draw_icon_clear as ActionIconFn,
+        ToolbarEvent::ClearCanvas { .. } => toolbar_icons::draw_icon_clear as ActionIconFn,
         ToolbarEvent::ZoomIn => toolbar_icons::draw_icon_zoom_in as ActionIconFn,
         ToolbarEvent::ZoomOut => toolbar_icons::draw_icon_zoom_out as ActionIconFn,
         ToolbarEvent::ResetZoom => toolbar_icons::draw_icon_zoom_reset as ActionIconFn,

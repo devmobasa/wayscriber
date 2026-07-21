@@ -1,6 +1,7 @@
 use crate::config::QuickColorPalette;
 use crate::config::{
-    ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, toolbar_item_ids as ids,
+    ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode,
+    toolbar_item_ids as ids,
 };
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
@@ -317,8 +318,24 @@ pub struct ToolbarSnapshot {
     pub shape_picker_open: bool,
     /// Whether the top strip's overflow menu is open
     pub top_overflow_open: bool,
+    /// Whether the Session popover (anchored to the overflow toggle) is open
+    pub session_popover_open: bool,
+    /// Whether the Settings popover (anchored to the overflow toggle) is open
+    pub settings_popover_open: bool,
+    /// Whether the Canvas popover (anchored to the overflow toggle) is open
+    pub canvas_popover_open: bool,
+    /// Internal scroll offset of the open Canvas/Session/Settings popover
+    /// (logical pixels, clamped at render)
+    pub top_popover_scroll: f64,
     /// Whether the top strip is minimized to its edge restore tab
     pub top_minimized: bool,
+    /// Display form of the top strip (full strip vs. micro chip). `Hidden`
+    /// never reaches a renderer — hidden strips have no surface.
+    pub top_display_mode: TopDisplayMode,
+    /// Idle-fade opacity of the top-strip islands: 1.0 = full,
+    /// `fade::TOP_STRIP_DIM_LEVEL` = dimmed, values between while a fade
+    /// transition is in flight. Owned by the backend fade engine.
+    pub top_fade: f64,
     /// Whether the side palette is minimized to its edge restore tab
     pub side_minimized: bool,
     /// Width available to the top strip in pre-scale spec units, when
@@ -359,9 +376,20 @@ pub struct ToolbarSnapshot {
     pub recent_sessions: Vec<SessionRecentSnapshot>,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub pending_save_as_overwrite_path: Option<PathBuf>,
+    /// Selection-property entries docked into the style pill while the
+    /// select tool has an active selection (mirrors the overlay properties
+    /// popup's entry list; empty when nothing is selected).
+    pub selection_properties: Vec<crate::input::SelectionPropertyEntry>,
 }
 
 impl ToolbarSnapshot {
+    /// Whether the top strip renders as the micro chip. Minimized wins when
+    /// both states are somehow set (e.g. a hand-edited config): the restore
+    /// tab is the more explicit "bring me back" affordance.
+    pub fn top_micro_active(&self) -> bool {
+        self.top_display_mode == TopDisplayMode::Micro && !self.top_minimized
+    }
+
     pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {
         self.resolved_toolbar_items.is_hidden(item)
     }

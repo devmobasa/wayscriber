@@ -11,7 +11,14 @@ use super::bridge::FeedbackPublisher;
 use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
+use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
 use crate::ui::toolbar::ToolbarEvent;
+
+pub(super) use crate::ui::theme::toolbar::{COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK};
+/// Filled (dragged) portion of the slider track: the accent at reduced
+/// alpha so it stays quieter than the knob (same tint as
+/// COLOR_SEGMENT_ACTIVE).
+const COLOR_TRACK_FILL: Rgba = rgba(ACCENT_RGB, 0.55);
 
 /// Sender the view hands to every control closure. Clones share the configured
 /// rebind chord and modifier state captured from the actual GTK click.
@@ -22,6 +29,9 @@ pub(super) struct FeedbackSender {
     backend_rebind_active: Rc<Cell<bool>>,
     click_rebind_requested: Rc<Cell<bool>>,
     click_in_progress: Rc<Cell<bool>>,
+    /// Shift state captured from the current GTK click; consumed by
+    /// `send_event` to upgrade Clear to its instant (no-toast) variant.
+    click_shift: Rc<Cell<bool>>,
 }
 
 pub(super) trait FeedbackSink {
@@ -49,6 +59,7 @@ impl FeedbackSender {
             backend_rebind_active: Rc::new(Cell::new(false)),
             click_rebind_requested: Rc::new(Cell::new(false)),
             click_in_progress: Rc::new(Cell::new(false)),
+            click_shift: Rc::new(Cell::new(false)),
         }
     }
 
@@ -64,6 +75,8 @@ impl FeedbackSender {
 
     fn capture_click_modifiers(&self, state: gtk4::gdk::ModifierType) {
         self.click_in_progress.set(true);
+        self.click_shift
+            .set(state.contains(gtk4::gdk::ModifierType::SHIFT_MASK));
         if self.rebind_modifier.get().matches(
             state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
             state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
@@ -75,6 +88,7 @@ impl FeedbackSender {
 
     fn finish_pointer_click(&self) {
         self.click_in_progress.set(false);
+        self.click_shift.set(false);
         if !self.backend_rebind_active.get() {
             self.click_rebind_requested.set(false);
         }
@@ -87,11 +101,37 @@ impl FeedbackSender {
 
 pub(super) fn send_event(sender: &FeedbackSender, event: ToolbarEvent) {
     let rebind_requested = sender.click_rebind_requested.replace(false);
+    let shift_click = sender.click_shift.replace(false);
     sender.click_in_progress.set(false);
+    // GTK runs on its own Wayland connection, so the backend cannot read
+    // this click's modifiers; resolve the Shift = instant-clear upgrade at
+    // capture time and forward the resolved variant.
+    let event = match event {
+        ToolbarEvent::ClearCanvas { instant } => ToolbarEvent::ClearCanvas {
+            instant: instant || shift_click,
+        },
+        other => other,
+    };
     let _ = sender.send(GtkToolbarFeedback::Event {
         event,
         rebind_requested,
     });
+}
+
+/// Capture click modifiers on a widget subtree that lives outside the
+/// toolbar window's own capture controller (popovers are separate GTK
+/// natives, so the window-level gesture never sees their clicks).
+pub(super) fn install_click_modifier_capture(
+    widget: &impl IsA<gtk4::Widget>,
+    feedback: &FeedbackSender,
+) {
+    let click = gtk4::GestureClick::new();
+    click.set_propagation_phase(gtk4::PropagationPhase::Capture);
+    let feedback = feedback.clone();
+    click.connect_pressed(move |gesture, _, _, _| {
+        feedback.capture_click_modifiers(gesture.current_event_state());
+    });
+    widget.as_ref().add_controller(click);
 }
 
 /// Fixed-size button so GTK widths match the deterministic layout plan.
@@ -318,26 +358,41 @@ pub(super) fn add_shortcut_badge(button: &gtk4::Button, badge: Option<&str>) {
     button.set_child(Some(&overlay));
 }
 
-/// Put a quick-color shortcut above its swatch without changing the swatch's
-/// horizontal footprint or click target.
-pub(super) fn swatch_with_shortcut(
-    button: &gtk4::Button,
-    badge: Option<&str>,
-    width: f64,
-    badge_height: f64,
-) -> gtk4::Widget {
+/// Stack a small caption with the shortcut key under the button's icon
+/// (Excalidraw pattern), inside the unchanged button tile. Icon-mode
+/// counterpart of the boxed corner badge that text buttons keep.
+pub(super) fn add_shortcut_caption_below(button: &gtk4::Button, badge: Option<&str>) {
+    let Some(badge) = badge else {
+        return;
+    };
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    column.set_size_request(width.round() as i32, -1);
+    column.set_halign(gtk4::Align::Center);
     column.set_valign(gtk4::Align::Center);
-    let label = gtk4::Label::new(Some(badge.unwrap_or("")));
-    label.set_size_request(-1, badge_height.round() as i32);
+    if let Some(child) = button.child() {
+        button.set_child(None::<&gtk4::Widget>);
+        column.append(&child);
+    }
+    let label = gtk4::Label::new(Some(badge));
     label.add_css_class("shortcut-badge");
-    label.add_css_class("above-swatch");
+    label.add_css_class("below-icon");
     label.set_can_target(false);
     label.set_halign(gtk4::Align::Center);
     column.append(&label);
-    column.append(button);
-    column.upcast()
+    button.set_child(Some(&column));
+}
+
+/// Shortcut hint for a strip/popover button: icon buttons get the caption
+/// under the icon, text buttons keep the boxed corner badge.
+pub(super) fn add_button_shortcut_hint(
+    button: &gtk4::Button,
+    badge: Option<&str>,
+    use_icons: bool,
+) {
+    if use_icons {
+        add_shortcut_caption_below(button, badge);
+    } else {
+        add_shortcut_badge(button, badge);
+    }
 }
 
 /// Toggle the CSS class marking the active tool / selected value.
@@ -375,27 +430,23 @@ impl SwatchButton {
         let draw_selected = selected_cell.clone();
         area.set_draw_func(move |_, ctx, width, height| {
             let size = width.min(height) as f64;
-            let center = size / 2.0;
             let (r, g, b, a) = draw_color.get();
-            // Fill circle with a subtle outline; selected swatches get the
-            // white ring the built-in bars use.
-            ctx.arc(
-                center,
-                center,
-                center - 2.0,
-                0.0,
-                std::f64::consts::PI * 2.0,
-            );
+            // Rounded square with a subtle inner hairline, matching the
+            // built-in bars. The fill is inset so the selected accent ring
+            // (2px stroke, ~2px gap) fits inside the drawing area.
             ctx.set_source_rgba(r, g, b, a);
-            let _ = ctx.fill_preserve();
-            if draw_selected.get() {
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                ctx.set_line_width(2.0);
-            } else {
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.25);
-                ctx.set_line_width(1.0);
-            }
+            rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+            let _ = ctx.fill();
+            set_color(ctx, COLOR_SWATCH_HAIRLINE);
+            ctx.set_line_width(1.0);
+            rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
             let _ = ctx.stroke();
+            if draw_selected.get() {
+                set_color(ctx, super::css::ACCENT);
+                ctx.set_line_width(2.0);
+                rounded_rect_path(ctx, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
+                let _ = ctx.stroke();
+            }
         });
         button.set_child(Some(&area));
         Self {
@@ -472,17 +523,17 @@ impl SliderRow {
                 .clamp(0.0, 1.0);
             // Track
             rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
-            ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+            set_color(ctx, super::css::TRACK_BACKGROUND);
             let _ = ctx.fill();
-            // Filled portion
+            // Filled portion (accent at reduced alpha)
             rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
-            ctx.set_source_rgba(0.3, 0.55, 1.0, 0.55);
+            set_color(ctx, COLOR_TRACK_FILL);
             let _ = ctx.fill();
             // Knob
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = knob_r + t * (w - knob_r * 2.0);
             ctx.arc(knob_x, h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            ctx.set_source_rgba(0.3, 0.55, 1.0, 0.9);
+            set_color(ctx, super::css::TRACK_KNOB);
             let _ = ctx.fill();
         });
 
@@ -540,6 +591,12 @@ impl SliderRow {
             state,
             format,
         }
+    }
+
+    /// Hide the built-in readout when a separate numeral control shows the
+    /// value (the style pill pairs its sliders with distinct value buttons).
+    pub(super) fn set_value_label_visible(&self, visible: bool) {
+        self.value_label.set_visible(visible);
     }
 
     /// Applies a backend value unless the user is mid-drag.

@@ -163,6 +163,8 @@ pub(super) fn build_overlay_layout(
         + metrics.subtitle_bottom_spacing
         + nav_state.nav_block_height;
     let footer_height = metrics.columns_bottom_spacing
+        + metrics.footer_action_height
+        + metrics.footer_action_gap
         + metrics.note_font_size
         + note_to_close_gap
         + metrics.note_font_size;

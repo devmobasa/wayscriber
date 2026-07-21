@@ -1,5 +1,6 @@
 mod backend;
 mod config;
+mod display;
 pub mod ids;
 mod items;
 mod mode;
@@ -9,6 +10,7 @@ mod visibility;
 
 pub use backend::ToolbarBackendKind;
 pub use config::ToolbarConfig;
+pub use display::{ToolbarSideLayout, TopDisplayMode};
 pub use items::{
     ResolvedToolbarItems, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition,
     ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface,

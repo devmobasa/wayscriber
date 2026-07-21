@@ -12,7 +12,7 @@ use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
 use crate::models::{
     TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption,
 };
 
 use super::super::widgets::{labeled_control, labeled_input, override_row, toggle_row};
@@ -28,6 +28,11 @@ impl ConfiguratorApp {
             ToolbarLayoutModeOption::list(),
             Some(self.override_mode),
             Message::ToolbarOverrideModeChanged,
+        );
+        let side_layout = pick_list(
+            ToolbarSideLayoutOption::list(),
+            Some(self.draft.ui_toolbar_side_layout),
+            Message::ToolbarSideLayoutChanged,
         );
         let rebind_modifier = pick_list(
             ToolbarRebindModifierOption::ALL,
@@ -47,6 +52,13 @@ impl ConfiguratorApp {
                 self.defaults.ui_toolbar_layout_mode.label().to_string(),
                 self.draft.ui_toolbar_layout_mode != self.defaults.ui_toolbar_layout_mode,
             ),
+            labeled_control(
+                "Side layout",
+                side_layout.width(Length::Fill).into(),
+                self.defaults.ui_toolbar_side_layout.label().to_string(),
+                self.draft.ui_toolbar_side_layout != self.defaults.ui_toolbar_side_layout,
+            ),
+            text("Pill (the default) retires the side palette: drawing properties live in the top strip's style pill, canvas management in the status HUD and board picker, and Session/Settings in popovers on the top strip's overflow menu. Panel is the legacy escape hatch restoring the classic side palette; it is deprecated and planned for removal one release after the pill default.").size(12),
             labeled_control(
                 "Shortcut edit click",
                 rebind_modifier.width(Length::Fill).into(),

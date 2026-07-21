@@ -1,6 +1,7 @@
-use super::super::super::base::{InputState, UiToastKind};
+use super::super::super::base::InputState;
 use super::super::summary::shape_color;
 use crate::draw::{Color, Shape};
+use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Default)]
 pub(super) struct SelectionApplyResult {
@@ -148,29 +149,36 @@ impl InputState {
         label: &str,
     ) -> bool {
         if result.applicable == 0 {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                format!("No {label} to edit in selection."),
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.apply",
+                Toast::warning(format!("No {label} to edit in selection.")),
             );
             return false;
         }
 
         if result.changed == 0 {
             if result.locked == result.applicable {
-                self.set_ui_toast(
-                    UiToastKind::Warning,
-                    format!("All {label} shapes are locked."),
+                self.push_toast(
+                    ToastPriority::Info,
+                    "selection.apply",
+                    Toast::warning(format!("All {label} shapes are locked.")),
                 );
             } else {
-                self.set_ui_toast(UiToastKind::Info, "No changes applied.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "selection.apply",
+                    Toast::info("No changes applied."),
+                );
             }
             return false;
         }
 
         if result.locked > 0 {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                format!("{} locked shape(s) unchanged.", result.locked),
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.apply",
+                Toast::warning(format!("{} locked shape(s) unchanged.", result.locked)),
             );
         }
         true

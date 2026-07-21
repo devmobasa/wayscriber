@@ -1,4 +1,4 @@
-use wayscriber::config::{ToolbarLayoutMode, ToolbarRebindModifier};
+use wayscriber::config::{ToolbarLayoutMode, ToolbarRebindModifier, ToolbarSideLayout};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarRebindModifierOption {
@@ -97,6 +97,45 @@ impl ToolbarLayoutModeOption {
 }
 
 impl std::fmt::Display for ToolbarLayoutModeOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarSideLayoutOption {
+    Pill,
+    Panel,
+}
+
+impl ToolbarSideLayoutOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Pill, Self::Panel]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Pill => "Pill (default)",
+            Self::Panel => "Panel (legacy)",
+        }
+    }
+
+    pub fn to_config(self) -> ToolbarSideLayout {
+        match self {
+            Self::Pill => ToolbarSideLayout::Pill,
+            Self::Panel => ToolbarSideLayout::Panel,
+        }
+    }
+
+    pub fn from_config(value: ToolbarSideLayout) -> Self {
+        match value {
+            ToolbarSideLayout::Pill => Self::Pill,
+            ToolbarSideLayout::Panel => Self::Panel,
+        }
+    }
+}
+
+impl std::fmt::Display for ToolbarSideLayoutOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

@@ -9,6 +9,7 @@ impl ConfigDraft {
         config.presenter_mode.close_help_overlay = self.presenter_close_help_overlay;
         config.presenter_mode.enable_click_highlight = self.presenter_enable_click_highlight;
         config.presenter_mode.tool_behavior = self.presenter_tool_behavior.to_behavior();
+        config.presenter_mode.toolbar_mode = self.presenter_toolbar_mode.to_mode();
         config.presenter_mode.show_toast = self.presenter_show_toast;
     }
 }

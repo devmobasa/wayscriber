@@ -501,6 +501,326 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
 }
 
 #[test]
+fn color_picker_copy_button_requests_copy_and_keeps_popup_open() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.copy_btn_x + layout.action_btn_size / 2.0) as i32;
+    let y = (layout.copy_btn_y + layout.action_btn_size / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
+    assert!(state.handle_color_picker_popup_release_at(x, y));
+    // The request is queued for the backend and the popup stays open.
+    assert!(state.is_color_picker_popup_open());
+    assert!(state.take_pending_copy_hex());
+    assert!(!state.take_pending_paste_hex());
+}
+
+#[test]
+fn color_picker_paste_button_requests_paste_and_keeps_popup_open() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.paste_btn_x + layout.action_btn_size / 2.0) as i32;
+    let y = (layout.paste_btn_y + layout.action_btn_size / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
+    assert!(state.handle_color_picker_popup_release_at(x, y));
+    assert!(state.is_color_picker_popup_open());
+    assert!(state.take_pending_paste_hex());
+    assert!(!state.take_pending_copy_hex());
+}
+
+#[test]
+fn color_picker_action_release_requires_a_matching_press() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let copy_x = (layout.copy_btn_x + layout.action_btn_size / 2.0) as i32;
+    let copy_y = (layout.copy_btn_y + layout.action_btn_size / 2.0) as i32;
+    let paste_x = (layout.paste_btn_x + layout.action_btn_size / 2.0) as i32;
+    let paste_y = (layout.paste_btn_y + layout.action_btn_size / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, copy_x, copy_y));
+    assert!(state.handle_color_picker_popup_release_at(paste_x, paste_y));
+    assert!(!state.take_pending_copy_hex());
+    assert!(!state.take_pending_paste_hex());
+}
+
+#[test]
+fn closing_color_picker_discards_queued_popup_paste() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.request_paste_hex();
+
+    state.close_color_picker_popup(true);
+    state.open_color_picker_popup();
+
+    assert!(!state.take_pending_paste_hex());
+}
+
+#[test]
+fn reopening_color_picker_invalidates_the_previous_paste_target() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.request_paste_hex();
+    let target = state
+        .take_pending_paste_hex_request()
+        .expect("paste target");
+    assert!(state.hex_paste_target_is_current(target));
+
+    state.open_color_picker_popup();
+
+    assert!(!state.hex_paste_target_is_current(target));
+}
+
+#[test]
+fn color_picker_copy_request_keeps_the_pressed_color_after_close() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_from_gradient(0.3, 0.2);
+    let copied = state.color_picker_popup_current_color().unwrap();
+
+    state.request_copy_hex();
+    state.close_color_picker_popup(true);
+
+    assert_eq!(state.take_pending_copy_hex_request(), Some(copied));
+}
+
+#[test]
+fn color_picker_action_buttons_occupy_distinct_regions() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+
+    let copy = (
+        layout.copy_btn_x + layout.action_btn_size / 2.0,
+        layout.copy_btn_y + layout.action_btn_size / 2.0,
+    );
+    let paste = (
+        layout.paste_btn_x + layout.action_btn_size / 2.0,
+        layout.paste_btn_y + layout.action_btn_size / 2.0,
+    );
+    let eyedropper = (
+        layout.eyedropper_btn_x + layout.action_btn_size / 2.0,
+        layout.eyedropper_btn_y + layout.action_btn_size / 2.0,
+    );
+
+    // Each button's center hits only its own region, and none overlap the hex
+    // input to its left.
+    assert!(layout.point_in_copy_button(copy.0, copy.1));
+    assert!(!layout.point_in_paste_button(copy.0, copy.1));
+    assert!(!layout.point_in_hex_input(copy.0, copy.1));
+
+    assert!(layout.point_in_paste_button(paste.0, paste.1));
+    assert!(!layout.point_in_copy_button(paste.0, paste.1));
+    assert!(!layout.point_in_eyedropper_button(paste.0, paste.1));
+
+    assert!(layout.point_in_eyedropper_button(eyedropper.0, eyedropper.1));
+    assert!(!layout.point_in_paste_button(eyedropper.0, eyedropper.1));
+
+    // The cluster stays inside the panel's right edge.
+    assert!(layout.eyedropper_btn_x + layout.action_btn_size <= layout.origin_x + layout.width);
+}
+
+#[test]
+fn color_picker_action_buttons_expose_tooltips() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+
+    let center = |x: f64, y: f64| {
+        (
+            x + layout.action_btn_size / 2.0,
+            y + layout.action_btn_size / 2.0,
+        )
+    };
+    let copy = center(layout.copy_btn_x, layout.copy_btn_y);
+    let paste = center(layout.paste_btn_x, layout.paste_btn_y);
+    let eyedropper = center(layout.eyedropper_btn_x, layout.eyedropper_btn_y);
+
+    assert_eq!(
+        layout.action_tooltip_at(copy.0, copy.1),
+        Some("Copy hex color")
+    );
+    assert_eq!(
+        layout.action_tooltip_at(paste.0, paste.1),
+        Some("Paste hex color from clipboard")
+    );
+    assert_eq!(
+        layout.action_tooltip_at(eyedropper.0, eyedropper.1),
+        Some("Pick color from screen")
+    );
+    assert_eq!(
+        layout.action_tooltip_at(layout.origin_x, layout.origin_y),
+        None
+    );
+}
+
+#[test]
+fn color_picker_motion_tracks_action_hover_for_tooltips() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.copy_btn_x + layout.action_btn_size / 2.0) as i32;
+    let y = (layout.copy_btn_y + layout.action_btn_size / 2.0) as i32;
+    state.needs_redraw = false;
+
+    state.on_mouse_motion_with_canvas(x, y, x, y);
+
+    assert_eq!(state.color_picker_popup_hover(), Some((x as f64, y as f64)));
+    assert!(state.needs_redraw);
+}
+
+#[test]
+fn color_picker_motion_within_one_action_does_not_redraw_every_pixel() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.copy_btn_x + layout.action_btn_size / 2.0) as i32;
+    let y = (layout.copy_btn_y + layout.action_btn_size / 2.0) as i32;
+
+    state.on_mouse_motion_with_canvas(x, y, x, y);
+    state.needs_redraw = false;
+    state.on_mouse_motion_with_canvas(x + 1, y + 1, x + 1, y + 1);
+
+    assert_eq!(
+        state.color_picker_popup_hover(),
+        Some(((x + 1) as f64, (y + 1) as f64))
+    );
+    assert!(!state.needs_redraw);
+}
+
+#[test]
+fn color_picker_set_color_updates_live_preview_and_buffer() {
+    let mut state = create_test_input_state();
+    let original = state.color_for_tool(Tool::Pen);
+    state.open_color_picker_popup();
+
+    let pasted = Color {
+        r: 0.2,
+        g: 0.4,
+        b: 0.6,
+        a: 1.0,
+    };
+    state.color_picker_popup_set_color(pasted);
+
+    assert!(state.is_color_picker_popup_open());
+    assert_eq!(state.color_picker_popup_current_color(), Some(pasted));
+    assert_eq!(
+        state.color_picker_popup_hex_buffer(),
+        Some(crate::input::state::color_to_hex(pasted).as_str())
+    );
+    assert!(!state.color_picker_popup_is_hex_editing());
+    // Previews live on the editing tool, like a gradient drag.
+    assert_ne!(state.color_for_tool(Tool::Pen), original);
+}
+
+#[test]
+fn typing_a_hex_key_starts_manual_entry_without_a_click() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    assert!(!state.color_picker_popup_is_hex_editing());
+
+    // A hex key focuses the field (armed to replace) and enters the char —
+    // no click on the field, no select-all ceremony.
+    state.on_key_press(Key::Char('a'));
+    assert!(state.color_picker_popup_is_hex_editing());
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A"));
+
+    // Continued typing builds the value and previews live once it parses.
+    for ch in ['1', 'b', '2', 'c', '3'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B2C3"));
+    assert_eq!(
+        state.color_picker_popup_current_color(),
+        crate::input::state::parse_hex_color("A1B2C3")
+    );
+}
+
+#[test]
+fn hex_typing_defers_live_preview_until_six_digits() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    let original = state.color_picker_popup_current_color().unwrap();
+    state.color_picker_popup_set_hex_editing(true);
+
+    for ch in ['a', '1', 'b'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B"));
+    assert_eq!(state.color_picker_popup_current_color(), Some(original));
+
+    for ch in ['2', 'c', '3'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    let expected = crate::input::state::parse_hex_color("A1B2C3").unwrap();
+    assert_eq!(state.color_picker_popup_current_color(), Some(expected));
+}
+
+#[test]
+fn three_digit_hex_still_applies_when_committed() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_hex_editing(true);
+    for ch in ['a', '1', 'b'] {
+        state.on_key_press(Key::Char(ch));
+    }
+
+    state.on_key_press(Key::Return);
+
+    let expected = crate::input::state::parse_hex_color("A1B").unwrap();
+    assert_eq!(state.color_picker_popup_current_color(), Some(expected));
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("#AA11BB"));
+    assert!(!state.color_picker_popup_is_hex_editing());
+}
+
+#[test]
+fn color_picker_ok_button_commits_valid_three_digit_hex_before_apply() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    let original = state.color_for_tool(Tool::Pen);
+
+    for ch in ['a', '1', 'b'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B"));
+    assert_eq!(state.color_picker_popup_current_color(), Some(original));
+
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.ok_btn_x + layout.btn_width / 2.0) as i32;
+    let y = (layout.ok_btn_y + layout.btn_height / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
+    assert!(state.handle_color_picker_popup_release_at(x, y));
+
+    let expected = crate::input::state::parse_hex_color("A1B").unwrap();
+    assert!(!state.is_color_picker_popup_open());
+    assert_eq!(state.color_for_tool(Tool::Pen), expected);
+    assert_eq!(state.current_color, expected);
+}
+
+#[test]
+fn modified_hex_key_does_not_start_manual_entry() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.modifiers.ctrl = true;
+
+    // Ctrl+C is a shortcut, not manual entry: it must not type into the field.
+    state.on_key_press(Key::Char('c'));
+    assert!(!state.color_picker_popup_is_hex_editing());
+}
+
+#[test]
 fn color_picker_cancel_restores_opening_modifier_tool_after_modifier_release() {
     let mut state = create_test_input_state();
     let pen_color = state.color_for_tool(Tool::Pen);
@@ -671,6 +991,72 @@ fn save_preset_captures_all_tool_settings() {
     assert_eq!(tool_settings.step_marker.color, ColorSpec::from(step_color));
     assert_eq!(tool_settings.step_marker.size, 30.0);
     assert_eq!(tool_settings.eraser_size, 33.0);
+}
+
+#[test]
+fn save_preset_ignores_temporary_drag_modifier_tools() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 4;
+    let pen_color = Color {
+        r: 0.12,
+        g: 0.34,
+        b: 0.56,
+        a: 1.0,
+    };
+
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    assert!(state.set_color(pen_color));
+    assert!(state.set_thickness(7.0));
+
+    for (slot, modifiers, temporary_tool) in [
+        (1, vec![Key::Shift], Tool::Line),
+        (2, vec![Key::Ctrl], Tool::Rect),
+        (3, vec![Key::Ctrl, Key::Shift], Tool::Arrow),
+        (4, vec![Key::Tab], Tool::Ellipse),
+    ] {
+        for key in &modifiers {
+            state.on_key_press(*key);
+        }
+        assert_eq!(state.active_tool(), temporary_tool);
+
+        assert!(state.save_preset(slot));
+
+        for key in modifiers.iter().rev() {
+            state.on_key_release(*key);
+        }
+        let preset = state.presets[slot - 1].as_ref().expect("saved preset");
+        assert_eq!(preset.tool, Tool::Pen);
+        assert_eq!(preset.color, ColorSpec::from(pen_color));
+        assert_eq!(preset.size, 7.0);
+    }
+}
+
+#[test]
+fn save_preset_without_override_uses_unmodified_drag_tool() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 1;
+    let marker_color = Color {
+        r: 0.72,
+        g: 0.18,
+        b: 0.42,
+        a: 1.0,
+    };
+
+    state.drag_tool_bindings.left.drag = DragBinding::from_tool(Tool::Marker);
+    assert!(state.set_tool_override(Some(Tool::Marker)));
+    assert!(state.set_color(marker_color));
+    assert!(state.set_thickness(19.0));
+    assert!(state.set_tool_override(None));
+
+    state.on_key_press(Key::Shift);
+    assert_eq!(state.active_tool(), Tool::Line);
+    assert!(state.save_preset(1));
+    state.on_key_release(Key::Shift);
+
+    let preset = state.presets[0].as_ref().expect("saved preset");
+    assert_eq!(preset.tool, Tool::Marker);
+    assert_eq!(preset.color, ColorSpec::from(marker_color));
+    assert_eq!(preset.size, 19.0);
 }
 
 #[test]

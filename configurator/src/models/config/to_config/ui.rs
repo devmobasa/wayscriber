@@ -5,7 +5,10 @@ use wayscriber::config::{Config, XdgFocusLossBehavior};
 
 impl ConfigDraft {
     pub(super) fn apply_ui(&self, config: &mut Config, errors: &mut Vec<FormError>) {
+        config.ui.theme = self.ui_theme.to_theme();
+        config.ui.reduced_motion = self.ui_reduced_motion.to_reduced_motion();
         config.ui.show_status_bar = self.ui_show_status_bar;
+        config.ui.status_bar_interactive = self.ui_status_bar_interactive;
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;
         config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;
@@ -36,6 +39,7 @@ impl ConfigDraft {
         config.ui.toolbar.show_more_colors = self.ui_toolbar_show_more_colors;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
+        config.ui.toolbar.side_layout = self.ui_toolbar_side_layout.to_config();
         config.ui.toolbar.rebind_modifier = self.ui_toolbar_rebind_modifier.to_config();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.items = self.ui_toolbar_items.clone();

@@ -90,6 +90,11 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
         ToolbarEvent::SessionInfo,
         ToolbarEvent::ClearSession,
         ToolbarEvent::ScrollSidePane(24.0),
+        // The overflow-anchored Session/Settings popovers are runtime-only
+        // flyout state, like the overflow toggle itself.
+        ToolbarEvent::ToggleSessionPopover(true),
+        ToolbarEvent::ToggleSettingsPopover(true),
+        ToolbarEvent::ScrollTopPopover(24.0),
     ];
 
     for event in events {
@@ -506,6 +511,66 @@ fn tool_preview_config_preserves_presenter_mode_restore_value() {
 }
 
 #[test]
+fn toolbar_persist_during_presenter_micro_writes_the_pre_presenter_top_state() {
+    use crate::config::{PresenterToolbarMode, TopDisplayMode};
+
+    let mut state = make_test_input_state();
+    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    state.toolbar_top_minimized = true;
+    state.toolbar_top_display_mode = TopDisplayMode::Full;
+
+    state.toggle_presenter_mode();
+    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Micro);
+    assert!(
+        !state.toolbar_top_minimized,
+        "micro mapping clears minimized"
+    );
+
+    // A Persist(Toolbar) event during presenter mode (e.g. the pin toggle)
+    // runs `save_toolbar_pin_config`, which routes these two fields through
+    // the helpers below: the written config must keep the saved
+    // pre-presenter values, not the presenter mapping.
+    let restore = state.presenter_restore.as_ref().expect("presenter restore");
+    assert!(persisted_top_minimized_value(
+        state.toolbar_top_minimized,
+        restore.toolbar_top_minimized
+    ));
+    assert_eq!(
+        persisted_top_display_mode_value(
+            state.toolbar_top_display_mode,
+            restore.toolbar_top_display_mode
+        ),
+        TopDisplayMode::Full
+    );
+
+    // Exit restores the live values and drops the restore slots, so a
+    // post-exit persist writes live state again.
+    state.toggle_presenter_mode();
+    assert!(state.presenter_restore.is_none());
+    assert!(state.toolbar_top_minimized);
+    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert!(persisted_top_minimized_value(
+        state.toolbar_top_minimized,
+        None
+    ));
+    state.set_top_display_mode(TopDisplayMode::Micro);
+    assert_eq!(
+        persisted_top_display_mode_value(state.toolbar_top_display_mode, None),
+        TopDisplayMode::Micro
+    );
+    // The hidden step stays runtime-only even through the presenter path.
+    assert_eq!(
+        persisted_top_display_mode_value(TopDisplayMode::Hidden, None),
+        TopDisplayMode::Full
+    );
+    assert_eq!(
+        persisted_top_display_mode_value(TopDisplayMode::Micro, Some(TopDisplayMode::Hidden)),
+        TopDisplayMode::Full
+    );
+}
+
+#[test]
 fn shape_picker_survives_its_own_inline_options() {
     // The Shapes popover hosts the Fill checkbox and the polygon-sides stepper,
     // so using them must not dismiss the popover...
@@ -535,6 +600,22 @@ fn top_overflow_menu_closes_on_any_non_toggle_event() {
     assert!(event_dismisses_top_overflow(
         &ToolbarEvent::NudgePolygonSides(1)
     ));
+    assert!(event_dismisses_precision_entry(&ToolbarEvent::SelectTool(
+        crate::input::Tool::Pen
+    )));
+    assert!(event_dismisses_precision_entry(&ToolbarEvent::Undo));
+    assert!(!event_dismisses_precision_entry(
+        &ToolbarEvent::OpenPrecisionEntry(crate::ui::toolbar::PrecisionEntryTarget::Thickness)
+    ));
+    assert!(!event_dismisses_precision_entry(
+        &ToolbarEvent::CommitPrecisionEntry {
+            target: crate::ui::toolbar::PrecisionEntryTarget::Thickness,
+            value: 4.0,
+        }
+    ));
+    assert!(!event_dismisses_precision_entry(
+        &ToolbarEvent::CancelPrecisionEntry
+    ));
     assert!(event_dismisses_top_overflow(&ToolbarEvent::SelectTool(
         Tool::Line
     )));
@@ -545,4 +626,114 @@ fn top_overflow_menu_closes_on_any_non_toggle_event() {
     assert!(!event_dismisses_top_overflow(
         &ToolbarEvent::ToggleShapePicker(true)
     ));
+    // The Session/Settings entries close the menu they live in.
+    assert!(event_dismisses_top_overflow(
+        &ToolbarEvent::ToggleSessionPopover(true)
+    ));
+    assert!(event_dismisses_top_overflow(
+        &ToolbarEvent::ToggleSettingsPopover(true)
+    ));
+}
+
+#[test]
+fn session_popover_survives_its_own_controls_and_dismisses_on_everything_else() {
+    // Every event the Session popover's controls emit keeps it open...
+    for spared in [
+        ToolbarEvent::OpenSession,
+        ToolbarEvent::OpenRecentSession(PathBuf::from("/tmp/recent.wayscriber-session")),
+        ToolbarEvent::SaveSessionAs,
+        ToolbarEvent::SaveSessionAsConfirm(PathBuf::from("/tmp/existing.wayscriber-session")),
+        ToolbarEvent::SaveSessionAsCancel,
+        ToolbarEvent::SessionInfo,
+        ToolbarEvent::ClearSession,
+        ToolbarEvent::OpenConfigurator,
+        ToolbarEvent::ScrollTopPopover(12.0),
+        // Mutual exclusion is the apply layer's job, not a dismissal.
+        ToolbarEvent::ToggleSessionPopover(true),
+        ToolbarEvent::ToggleSettingsPopover(true),
+    ] {
+        assert!(
+            !event_dismisses_session_popover(&spared),
+            "{spared:?} must keep the Session popover open"
+        );
+    }
+    // ...while unrelated toolbar interactions dismiss it like a flyout.
+    for dismissing in [
+        ToolbarEvent::SelectTool(Tool::Line),
+        ToolbarEvent::Undo,
+        ToolbarEvent::ToggleFill(true),
+        ToolbarEvent::ToggleIconMode(true),
+        ToolbarEvent::ToggleTopOverflow(true),
+    ] {
+        assert!(
+            event_dismisses_session_popover(&dismissing),
+            "{dismissing:?} must dismiss the Session popover"
+        );
+    }
+}
+
+#[test]
+fn settings_popover_survives_its_own_controls_and_dismisses_on_everything_else() {
+    // The Settings popover hosts the full Settings-pane control set.
+    for spared in [
+        ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Simple),
+        ToolbarEvent::ToggleContextAwareUi(true),
+        ToolbarEvent::ToggleIconMode(true),
+        ToolbarEvent::ToggleTextControls(true),
+        ToolbarEvent::ToggleStatusBar(true),
+        ToolbarEvent::ToggleStatusBoardBadge(true),
+        ToolbarEvent::ToggleStatusPageBadge(true),
+        ToolbarEvent::ToggleFloatingBadgeAlways(true),
+        ToolbarEvent::TogglePresetToasts(true),
+        ToolbarEvent::TogglePresets(true),
+        ToolbarEvent::ToggleActionsSection(true),
+        ToolbarEvent::ToggleZoomActions(true),
+        ToolbarEvent::ToggleActionsAdvanced(true),
+        ToolbarEvent::ToggleBoardsSection(true),
+        ToolbarEvent::TogglePagesSection(true),
+        ToolbarEvent::ToggleStepSection(true),
+        ToolbarEvent::SetToolbarItemCustomizationOpen(true),
+        ToolbarEvent::SetToolbarItemCustomizationGroup(Some(
+            crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools,
+        )),
+        ToolbarEvent::SetToolbarItemHidden(crate::config::toolbar_item_ids::TOP_TOOL_PEN, true),
+        ToolbarEvent::MoveToolbarItem {
+            group: crate::config::ToolbarItemOrderGroup::TopTools,
+            id: crate::config::toolbar_item_ids::TOP_TOOL_PEN,
+            delta: 1,
+        },
+        ToolbarEvent::StartToolbarItemDrag {
+            group: crate::config::ToolbarItemOrderGroup::TopTools,
+            id: crate::config::toolbar_item_ids::TOP_TOOL_PEN,
+        },
+        ToolbarEvent::DragToolbarItemOver {
+            group: crate::config::ToolbarItemOrderGroup::TopTools,
+            target_index: 1,
+        },
+        ToolbarEvent::ResetToolbarItemOrder(crate::config::ToolbarItemOrderGroup::TopTools),
+        ToolbarEvent::ResetToolbarItemHiddenOverrides,
+        ToolbarEvent::OpenCommandPalette,
+        ToolbarEvent::OpenConfigurator,
+        ToolbarEvent::OpenConfigFile,
+        ToolbarEvent::ScrollTopPopover(12.0),
+        ToolbarEvent::ToggleSessionPopover(true),
+        ToolbarEvent::ToggleSettingsPopover(true),
+    ] {
+        assert!(
+            !event_dismisses_settings_popover(&spared),
+            "{spared:?} must keep the Settings popover open"
+        );
+    }
+    for dismissing in [
+        ToolbarEvent::SelectTool(Tool::Line),
+        ToolbarEvent::Undo,
+        ToolbarEvent::OpenSession,
+        ToolbarEvent::ToggleTopOverflow(true),
+        ToolbarEvent::ToggleShapePicker(true),
+    ] {
+        assert!(
+            event_dismisses_settings_popover(&dismissing),
+            "{dismissing:?} must dismiss the Settings popover"
+        );
+    }
 }

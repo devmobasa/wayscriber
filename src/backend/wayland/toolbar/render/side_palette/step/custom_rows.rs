@@ -6,8 +6,9 @@ use crate::ui::toolbar::model::{ToolbarSliderSpec, delay_secs_from_t, delay_t_fr
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui_text::UiTextStyle;
 
-use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color};
 use super::super::super::widgets::*;
+use super::{COLOR_DELAY_KNOB, COLOR_DELAY_TRACK};
 
 pub(super) fn draw_custom_rows(
     ctx: &cairo::Context,
@@ -199,7 +200,7 @@ impl<'a> CustomRowContext<'a> {
         let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
         let slider_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
         let slider_w = self.card_w - ToolbarLayoutSpec::SIDE_CARD_INSET * 2.0;
-        self.ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
+        set_color(self.ctx, COLOR_DELAY_TRACK);
         draw_round_rect(self.ctx, self.x, slider_y, slider_w, slider_h, 3.0);
         let _ = self.ctx.fill();
         let t = delay_t_from_ms(delay_ms);
@@ -209,7 +210,7 @@ impl<'a> CustomRowContext<'a> {
             slider_r,
             delay_ms as f64 / 1000.0,
         );
-        self.ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+        set_color(self.ctx, COLOR_DELAY_KNOB);
         self.ctx.arc(
             knob_x,
             slider_y + slider_h / 2.0,

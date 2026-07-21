@@ -1,5 +1,6 @@
-use super::super::{DrawingState, InputState, TextInputMode, UiToastKind};
+use super::super::{DrawingState, InputState, TextInputMode};
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
 impl InputState {
@@ -66,16 +67,21 @@ impl InputState {
 
                 if self.clear_all() {
                     if has_locked {
-                        self.set_ui_toast(
-                            UiToastKind::Warning,
-                            "Cleared unlocked shapes (locked shapes remain).",
+                        self.push_toast(
+                            ToastPriority::Info,
+                            "core",
+                            Toast::warning("Cleared unlocked shapes (locked shapes remain)."),
                         );
                         info!("Cleared unlocked shapes; locked shapes remain");
                     } else {
                         info!("Cleared canvas");
                     }
                 } else if has_locked && !has_unlocked {
-                    self.set_ui_toast(UiToastKind::Warning, "All shapes are locked.");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "core",
+                        Toast::warning("All shapes are locked."),
+                    );
                 }
                 true
             }

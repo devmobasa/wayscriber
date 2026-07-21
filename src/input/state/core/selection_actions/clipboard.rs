@@ -1,10 +1,10 @@
 use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputState, PasteAnchor,
-    PendingSelectionClipboardPublish, SelectionPublishState, UiToastKind,
-    WayscriberClipboardSelection,
+    PendingSelectionClipboardPublish, SelectionPublishState, WayscriberClipboardSelection,
 };
 use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
+use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;
 
 const PRIVATE_CLIPBOARD_SCHEMA_VERSION: u32 = 1;
@@ -119,7 +119,11 @@ impl InputState {
 
         if created.is_empty() {
             if limit_hit {
-                self.set_ui_toast(UiToastKind::Warning, "Shape limit reached; nothing pasted.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "selection.clipboard",
+                    Toast::warning("Shape limit reached; nothing pasted."),
+                );
             }
             return 0;
         }
@@ -133,9 +137,12 @@ impl InputState {
         self.needs_redraw = true;
         self.set_selection(new_ids);
         if limit_hit {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                format!("Shape limit reached; pasted {created_len} of {total}."),
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.clipboard",
+                Toast::warning(format!(
+                    "Shape limit reached; pasted {created_len} of {total}."
+                )),
             );
         }
         created_len
@@ -374,9 +381,10 @@ impl InputState {
             .and_then(|board| board.pages.frame_mut(request.target_page_index));
 
         let Some(frame) = target else {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                "Paste target changed; clipboard paste was cancelled.",
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.clipboard",
+                Toast::warning("Paste target changed; clipboard paste was cancelled."),
             );
             self.trigger_blocked_feedback();
             return 0;
@@ -402,7 +410,11 @@ impl InputState {
 
         if created.is_empty() {
             if limit_hit {
-                self.set_ui_toast(UiToastKind::Warning, "Shape limit reached; nothing pasted.");
+                self.push_toast(
+                    ToastPriority::Info,
+                    "selection.clipboard",
+                    Toast::warning("Shape limit reached; nothing pasted."),
+                );
             }
             return 0;
         }
@@ -421,9 +433,12 @@ impl InputState {
             self.needs_redraw = true;
         }
         if limit_hit {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                format!("Shape limit reached; pasted {created_len} of {total}."),
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.clipboard",
+                Toast::warning(format!(
+                    "Shape limit reached; pasted {created_len} of {total}."
+                )),
             );
         }
         created_len

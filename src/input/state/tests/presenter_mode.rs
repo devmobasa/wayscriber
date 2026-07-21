@@ -116,6 +116,55 @@ fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
 }
 
 #[test]
+fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
+    use crate::config::{PresenterToolbarMode, TopDisplayMode};
+
+    let mut state = create_test_input_state();
+    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    state.toolbar_visible = true;
+    state.toolbar_top_visible = true;
+    state.toolbar_side_visible = true;
+    state.toolbar_top_minimized = true;
+
+    state.toggle_presenter_mode();
+    assert!(state.presenter_mode);
+    assert!(
+        state.toolbar_top_visible(),
+        "micro mapping keeps the top strip surface mapped"
+    );
+    assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
+    assert!(
+        !state.toolbar_top_minimized,
+        "the chip replaces the restore tab"
+    );
+    assert!(!state.toolbar_side_visible(), "side toolbars still hide");
+
+    state.toggle_presenter_mode();
+    assert!(!state.presenter_mode);
+    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert!(
+        state.toolbar_top_minimized,
+        "minimize state restored on exit"
+    );
+    assert!(state.toolbar_side_visible());
+}
+
+#[test]
+fn presenter_hidden_mapping_keeps_todays_behavior() {
+    use crate::config::{PresenterToolbarMode, TopDisplayMode};
+
+    let mut state = create_test_input_state();
+    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Hidden;
+
+    state.toggle_presenter_mode();
+    assert!(!state.toolbar_top_visible());
+    assert!(!state.toolbar_side_visible());
+    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+}
+
+#[test]
 fn presenter_mode_emits_entry_and_exit_toasts() {
     let mut state = create_test_input_state();
 

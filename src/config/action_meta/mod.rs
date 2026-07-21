@@ -27,6 +27,11 @@ pub struct ActionMeta {
     pub in_command_palette: bool,
     pub in_help: bool,
     pub in_toolbar: bool,
+    /// Shared Cairo glyph painter for surfaces that render this action as an
+    /// icon (the radial compass). Reuses the toolbar's semantic painters so
+    /// the same action can never draw two different glyphs. `None` for
+    /// actions no icon surface needs.
+    pub icon: Option<crate::toolbar_icons::ToolbarIconPainter>,
 }
 
 impl ActionMeta {
@@ -36,6 +41,55 @@ impl ActionMeta {
 }
 
 macro_rules! meta {
+    (
+        $action:ident,
+        $label:expr,
+        $short:expr,
+        $desc:expr,
+        $category:ident,
+        $in_palette:expr,
+        $in_help:expr,
+        $in_toolbar:expr,
+        $aliases:expr,
+        icon: $icon:expr
+    ) => {
+        ActionMeta {
+            action: crate::config::Action::$action,
+            label: $label,
+            short_label: $short,
+            description: $desc,
+            search_aliases: $aliases,
+            category: crate::config::action_meta::ActionCategory::$category,
+            in_command_palette: $in_palette,
+            in_help: $in_help,
+            in_toolbar: $in_toolbar,
+            icon: Some($icon),
+        }
+    };
+    (
+        $action:ident,
+        $label:expr,
+        $short:expr,
+        $desc:expr,
+        $category:ident,
+        $in_palette:expr,
+        $in_help:expr,
+        $in_toolbar:expr,
+        icon: $icon:expr
+    ) => {
+        ActionMeta {
+            action: crate::config::Action::$action,
+            label: $label,
+            short_label: $short,
+            description: $desc,
+            search_aliases: &[],
+            category: crate::config::action_meta::ActionCategory::$category,
+            in_command_palette: $in_palette,
+            in_help: $in_help,
+            in_toolbar: $in_toolbar,
+            icon: Some($icon),
+        }
+    };
     (
         $action:ident,
         $label:expr,
@@ -57,6 +111,7 @@ macro_rules! meta {
             in_command_palette: $in_palette,
             in_help: $in_help,
             in_toolbar: $in_toolbar,
+            icon: None,
         }
     };
     (
@@ -79,6 +134,7 @@ macro_rules! meta {
             in_command_palette: $in_palette,
             in_help: $in_help,
             in_toolbar: $in_toolbar,
+            icon: None,
         }
     };
 }

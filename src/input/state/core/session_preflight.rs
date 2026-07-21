@@ -1,9 +1,10 @@
-use super::base::{InputState, UiToastKind};
+use super::base::InputState;
 use super::session_preflight_exact::{
     ClonePreflightAction, duplicate_board_id_for_preflight, exact_visible_save_allows,
 };
 use crate::draw::{BoardPages, Frame, Shape};
 use crate::input::boards::BoardState;
+use crate::input::state::{Toast, ToastPriority};
 use crate::session::{CompressionMode, DEFAULT_MAX_EXPANDED_SESSION_BYTES, SessionOptions};
 
 const SESSION_RAW_OVERHEAD_BYTES: u64 = 256;
@@ -227,6 +228,11 @@ impl InputState {
         action_label: &str,
         action_name: &str,
     ) -> bool {
+        // Block toasts share the blocked operation's own domain key so the block
+        // replaces that domain's active feedback in place (matching every other
+        // producer's one-key-per-domain dedup) instead of queueing behind a
+        // lingering success toast.
+        let toast_key = clone_action_toast_key(&action);
         let Some(options) = self.session_preflight_options.clone() else {
             return true;
         };
@@ -244,6 +250,7 @@ impl InputState {
                 Some(true) => return true,
                 Some(false) => {
                     return self.block_clone_heavy_action(
+                        toast_key,
                         action_label,
                         action_name,
                         "session would exceed save limits.".to_string(),
@@ -251,6 +258,7 @@ impl InputState {
                 }
                 None => {
                     return self.block_clone_heavy_action(
+                        toast_key,
                         action_label,
                         action_name,
                         "session size check failed.".to_string(),
@@ -274,6 +282,7 @@ impl InputState {
                 options.max_file_size_bytes
             );
             return self.block_clone_heavy_action(
+                toast_key,
                 action_label,
                 action_name,
                 format!(
@@ -298,6 +307,7 @@ impl InputState {
                 DEFAULT_MAX_EXPANDED_SESSION_BYTES
             );
             return self.block_clone_heavy_action(
+                toast_key,
                 action_label,
                 action_name,
                 format!("session would exceed the {limit} safety limit. Remove images or reduce duplicated content."),
@@ -308,16 +318,30 @@ impl InputState {
 
     fn block_clone_heavy_action(
         &mut self,
+        toast_key: &'static str,
         action_label: &str,
         action_name: &str,
         reason: String,
     ) -> bool {
-        self.set_ui_toast(
-            UiToastKind::Warning,
-            format!("{action_label} {action_name} blocked; {reason}"),
+        self.push_toast(
+            ToastPriority::Info,
+            toast_key,
+            Toast::warning(format!("{action_label} {action_name} blocked; {reason}")),
         );
         self.trigger_blocked_feedback();
         false
+    }
+}
+
+/// Domain key for a clone-preflight block toast: the same key the blocked
+/// operation uses for its own success/status feedback, so a block replaces that
+/// slot in place rather than queueing behind it.
+fn clone_action_toast_key(action: &ClonePreflightAction) -> &'static str {
+    match action {
+        ClonePreflightAction::BoardDuplicate => "board.switch",
+        ClonePreflightAction::PageDuplicate { .. } | ClonePreflightAction::PageCopy { .. } => {
+            "page.nav"
+        }
     }
 }
 

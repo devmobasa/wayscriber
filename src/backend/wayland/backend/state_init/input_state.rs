@@ -54,6 +54,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
     input_state.polygon_sides = clamp_regular_sides(config.drawing.polygon_sides);
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
+    input_state.status_bar_interactive = config.ui.status_bar_interactive;
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
@@ -96,6 +97,9 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.top_minimized,
         config.ui.toolbar.side_minimized,
     );
+    input_state.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
+    input_state.init_toolbar_side_layout_from_config(config.ui.toolbar.side_layout);
+    input_state.init_toolbar_rebind_modifier_from_config(config.ui.toolbar.rebind_modifier);
     input_state.init_toolbar_side_panes_from_config(
         &config.ui.toolbar.side_active_pane,
         &config.ui.toolbar.collapsed_sections,
@@ -188,6 +192,7 @@ mod tests {
     fn build_input_state_applies_selected_ui_flags() {
         let mut config = Config::default();
         config.ui.context_menu.enabled = false;
+        config.ui.status_bar_interactive = false;
         config.ui.show_status_board_badge = false;
         config.ui.show_status_page_badge = false;
         config.ui.show_floating_badge_always = true;
@@ -200,6 +205,7 @@ mod tests {
         let input = build_input_state(&config);
 
         assert!(!input.context_menu_enabled());
+        assert!(!input.status_bar_interactive);
         assert!(!input.show_status_board_badge);
         assert!(!input.show_status_page_badge);
         assert!(input.show_floating_badge_always);

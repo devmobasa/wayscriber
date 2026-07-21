@@ -67,11 +67,11 @@ impl WaylandState {
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
-        if self.input_state.take_pending_copy_hex() {
-            self.handle_copy_hex_color();
+        if let Some(color) = self.input_state.take_pending_copy_hex_request() {
+            self.handle_copy_hex_color(color);
         }
-        if self.input_state.take_pending_paste_hex() {
-            self.handle_paste_hex_color();
+        if let Some(target) = self.input_state.take_pending_paste_hex_request() {
+            self.handle_paste_hex_color(target);
         }
         self.drain_clipboard_requests();
     }

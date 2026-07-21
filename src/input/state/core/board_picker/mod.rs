@@ -360,7 +360,7 @@ mod tests {
             a: 1.0,
         });
 
-        assert_eq!(contrast, BLACK);
+        assert_eq!(contrast, crate::domain::color::PALETTE_BLACK);
     }
 
     #[test]
@@ -372,6 +372,6 @@ mod tests {
             a: 1.0,
         });
 
-        assert_eq!(contrast, WHITE);
+        assert_eq!(contrast, crate::domain::color::PALETTE_WHITE);
     }
 }

@@ -2,7 +2,9 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 
 use crate::backend::wayland::state::drag_log;
-use crate::input::MouseButton;
+use crate::input::state::HelpOverlayPressSource;
+use crate::input::{HelpOverlayReleaseOutcome, MouseButton};
+use crate::ui::ZoomChipPress;
 
 use super::*;
 
@@ -20,32 +22,115 @@ impl WaylandState {
 
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self.take_suppress_next_release() {
-            self.set_pending_toast_press(false);
+            self.set_pending_toast_press(None);
+            self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
+            return;
+        }
+
+        // Resolve help ownership even after the overlay has closed: a press
+        // swallowed by help must not leak its release into a newly opened
+        // popup. Conversely, a press that preceded help has no owner and falls
+        // through to finish its original gesture.
+        let source = HelpOverlayPressSource::Pointer(button);
+        let help_owned_release = if button == BTN_LEFT {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            match screen_position {
+                Some((sx, sy)) => {
+                    self.handle_help_overlay_release(source, sx.round() as i32, sy.round() as i32)
+                }
+                None => self.input_state.clear_help_overlay_press_for(source),
+            }
+        } else {
+            // Non-left help presses are modal-owned but never resolve rows.
+            self.input_state.clear_help_overlay_press_for(source)
+        };
+        if help_owned_release {
+            self.set_pending_toast_press(None);
+            self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
         // Block pointer input when modal overlays are active
         if self.input_state.command_palette_open || self.input_state.tour_active {
             // For command palette, press handles the click - release is a no-op
-            self.set_pending_toast_press(false);
+            self.set_pending_toast_press(None);
+            self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
-        if button == BTN_LEFT && self.take_pending_toast_press() {
+        if button == BTN_LEFT
+            && let Some(pressed) = self.take_pending_toast_press()
+        {
             let screen_position = if on_toolbar {
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             } else {
                 Some(event.position)
             };
             if let Some((screen_x, screen_y)) = screen_position {
-                let (hit, action) = self
-                    .input_state
-                    .check_toast_click(screen_x.round() as i32, screen_y.round() as i32);
+                let (hit, action) = self.input_state.resolve_toast_release(
+                    pressed,
+                    screen_x.round() as i32,
+                    screen_y.round() as i32,
+                );
                 if hit && let Some(action) = action {
                     self.dispatch_input_action(action);
                 }
             }
             return;
+        }
+
+        if button == BTN_LEFT && self.take_pending_status_hud_press() {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let Some((screen_x, screen_y)) = screen_position {
+                // Segment activations open their surfaces directly; help
+                // comes back as an action to dispatch.
+                let (hit, action) = self
+                    .input_state
+                    .check_status_hud_click(screen_x.round() as i32, screen_y.round() as i32);
+                if hit && let Some(action) = action {
+                    self.dispatch_input_action(action);
+                }
+            }
+            return;
+        }
+
+        if button == BTN_LEFT {
+            let pressed = self.take_pending_zoom_chip_press();
+            if pressed.is_pending() {
+                // Any pending chip press (`Passive` or `Button`) consumes its
+                // release here. Only a `Button` resolves to a zoom action; the
+                // action fires only when the release lands on the SAME button.
+                // dispatch_input_action drains the resulting pending zoom action.
+                if let ZoomChipPress::Button(kind) = pressed {
+                    let screen_position = if on_toolbar {
+                        self.toolbar_surface_screen_coords(&event.surface, event.position)
+                    } else {
+                        Some(event.position)
+                    };
+                    if let Some((screen_x, screen_y)) = screen_position {
+                        let (_, action) = self.input_state.check_zoom_chip_click(
+                            kind,
+                            screen_x.round() as i32,
+                            screen_y.round() as i32,
+                        );
+                        if let Some(action) = action {
+                            self.dispatch_input_action(action);
+                        }
+                    }
+                }
+                return;
+            }
         }
 
         if debug_toolbar_drag_logging_enabled() {
@@ -58,6 +143,36 @@ impl WaylandState {
                 self.toolbar_dragging(),
                 self.pointer_over_toolbar()
             );
+        }
+        // An open radial menu owns pointer releases everywhere on screen: a
+        // press-flick-release whose release lands over a toolbar region must
+        // still commit (or cancel) instead of being swallowed by the toolbar
+        // gates below. The radial release router consumes every button while
+        // the menu is open, so nothing leaks through to canvas handling.
+        if self.input_state.is_radial_menu_open()
+            && !self.is_move_dragging()
+            && !self.toolbar_dragging()
+        {
+            let mb = match button {
+                BTN_LEFT => Some(MouseButton::Left),
+                BTN_MIDDLE => Some(MouseButton::Middle),
+                BTN_RIGHT => Some(MouseButton::Right),
+                _ => None,
+            };
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let (Some(mb), Some((sx, sy))) = (mb, screen_position) {
+                let screen_x = sx.round() as i32;
+                let screen_y = sy.round() as i32;
+                let (wx, wy) = self.zoomed_world_coords(sx, sy);
+                self.input_state
+                    .on_mouse_release_with_canvas(mb, screen_x, screen_y, wx, wy);
+                self.input_state.needs_redraw = true;
+                return;
+            }
         }
         if inline_active {
             if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
@@ -138,5 +253,40 @@ impl WaylandState {
         self.input_state
             .on_mouse_release_with_canvas(mb, screen_x, screen_y, wx, wy);
         self.input_state.needs_redraw = true;
+    }
+
+    /// Resolve a left release inside the open help overlay against the target
+    /// recorded on press, enforcing the same-target contract: run a row only
+    /// when press and release land on the SAME row, dismiss only when both fall
+    /// outside the box, and otherwise leave the overlay untouched.
+    pub(in crate::backend::wayland) fn handle_help_overlay_release(
+        &mut self,
+        source: HelpOverlayPressSource,
+        screen_x: i32,
+        screen_y: i32,
+    ) -> bool {
+        let Some(outcome) = self
+            .input_state
+            .resolve_help_overlay_release(source, screen_x, screen_y)
+        else {
+            return false;
+        };
+        match outcome {
+            HelpOverlayReleaseOutcome::Run(action) => {
+                self.dispatch_input_action(action);
+                // Most actions leave the overlay up; close it so the effect is
+                // visible. Actions that already closed it (ToggleHelp,
+                // ReplayTour) leave `show_help` false, so this is a no-op.
+                if self.input_state.show_help {
+                    self.input_state.close_help_overlay();
+                }
+                self.input_state.needs_redraw = true;
+            }
+            HelpOverlayReleaseOutcome::Dismiss => {
+                self.input_state.close_help_overlay();
+            }
+            HelpOverlayReleaseOutcome::None => {}
+        }
+        true
     }
 }

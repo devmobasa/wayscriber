@@ -1,6 +1,7 @@
-use super::super::base::{InputState, UiToastKind};
+use super::super::base::InputState;
 use crate::config::Config;
 use crate::env_vars::CONFIGURATOR_ENV;
+use crate::input::state::{Toast, ToastPriority};
 use std::ffi::{OsStr, OsString};
 
 fn spawn_detached(
@@ -60,9 +61,10 @@ impl InputState {
                         "Opened config file with default application because wayscriber-configurator was unavailable"
                     );
                 } else {
-                    self.set_ui_toast(
-                        UiToastKind::Error,
-                        "Failed to launch configurator (see logs).",
+                    self.push_toast(
+                        ToastPriority::Critical,
+                        "launcher",
+                        Toast::error("Failed to launch configurator (see logs)."),
                     );
                 }
             }
@@ -72,7 +74,11 @@ impl InputState {
     /// Opens the most recent capture directory using the desktop default application.
     pub(crate) fn open_capture_folder(&mut self) {
         let Some(path) = self.last_capture_path.clone() else {
-            self.set_ui_toast(UiToastKind::Warning, "No saved capture to open.");
+            self.push_toast(
+                ToastPriority::Info,
+                "launcher",
+                Toast::warning("No saved capture to open."),
+            );
             return;
         };
 
@@ -81,7 +87,11 @@ impl InputState {
         } else if let Some(parent) = path.parent() {
             parent.to_path_buf()
         } else {
-            self.set_ui_toast(UiToastKind::Warning, "Capture folder is unavailable.");
+            self.push_toast(
+                ToastPriority::Info,
+                "launcher",
+                Toast::warning("Capture folder is unavailable."),
+            );
             return;
         };
 
@@ -105,7 +115,11 @@ impl InputState {
                     folder.display(),
                     err
                 );
-                self.set_ui_toast(UiToastKind::Error, "Failed to open capture folder.");
+                self.push_toast(
+                    ToastPriority::Critical,
+                    "launcher",
+                    Toast::error("Failed to open capture folder."),
+                );
             }
         }
     }
@@ -116,7 +130,11 @@ impl InputState {
             Ok(p) => p,
             Err(err) => {
                 log::error!("Unable to resolve config path: {}", err);
-                self.set_ui_toast(UiToastKind::Error, "Unable to resolve config path.");
+                self.push_toast(
+                    ToastPriority::Critical,
+                    "launcher",
+                    Toast::error("Unable to resolve config path."),
+                );
                 return false;
             }
         };
@@ -138,7 +156,11 @@ impl InputState {
             }
             Err(err) => {
                 log::error!("Failed to open config file at {}: {}", path.display(), err);
-                self.set_ui_toast(UiToastKind::Error, "Failed to open config file.");
+                self.push_toast(
+                    ToastPriority::Critical,
+                    "launcher",
+                    Toast::error("Failed to open config file."),
+                );
                 false
             }
         }

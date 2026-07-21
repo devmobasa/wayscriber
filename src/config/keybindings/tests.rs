@@ -173,6 +173,24 @@ fn command_palette_and_full_screen_capture_defaults_are_distinct_and_ordered() {
 }
 
 #[test]
+fn toolbar_display_cycle_owns_f2_and_toggle_toolbar_keeps_f9() {
+    let config = KeybindingsConfig::default();
+    assert_eq!(config.ui.cycle_toolbar_display, ["F2"]);
+    assert_eq!(config.ui.toggle_toolbar, ["F9"]);
+
+    // The split leaves no duplicate binding in the defaults.
+    let map = config.build_action_map().expect("default keymap is valid");
+    assert_eq!(
+        map.get(&KeyBinding::parse("F2").unwrap()),
+        Some(&Action::CycleToolbarDisplay)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("F9").unwrap()),
+        Some(&Action::ToggleToolbar)
+    );
+}
+
+#[test]
 fn test_duplicate_keybinding_detection() {
     // Create a config with duplicate keybindings
     let mut config = KeybindingsConfig::default();

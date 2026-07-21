@@ -161,6 +161,13 @@ pub enum GtkToolbarFeedback {
         event: ToolbarEvent,
         rebind_requested: bool,
     },
+    /// Pointer entered/left a GTK toolbar window (top strip or side
+    /// palette). GTK runs on its own Wayland connection, so the backend
+    /// cannot observe this hover itself; it drives the top-strip idle-fade
+    /// restore/hold. Both windows report through this one flag — the
+    /// pointer can only be over one of them, and leave precedes enter when
+    /// it crosses between them.
+    TopHover { hovered: bool },
     /// Drag-to-move lifecycle for the top bar. `End` is when the offsets get
     /// clamped and persisted; `seq` is the bar's monotonically increasing
     /// drag counter (see

@@ -51,7 +51,13 @@ impl InputState {
             MouseButton::Left => {
                 // Update hover at exact click position before selecting
                 self.update_radial_menu_hover(screen_x as f64, screen_y as f64);
-                self.radial_menu_select_hovered();
+                if self.radial_menu_hover_is_size_ring() {
+                    // Pressing the size gauge starts a drag-capture along the
+                    // arc instead of selecting.
+                    self.radial_menu_begin_size_drag(screen_x as f64, screen_y as f64);
+                } else {
+                    self.radial_menu_select_hovered();
+                }
             }
             MouseButton::Right => {
                 self.close_radial_menu();
@@ -80,7 +86,8 @@ impl InputState {
         self.update_pointer_position(x, y);
         match button {
             MouseButton::Left => {
-                if let Some(layout) = self.color_picker_popup_layout() {
+                let action_pressed = self.color_picker_popup_note_action_press(x, y);
+                if !action_pressed && let Some(layout) = self.color_picker_popup_layout() {
                     let fx = x as f64;
                     let fy = y as f64;
                     // Start dragging if clicking on gradient
@@ -94,9 +101,10 @@ impl InputState {
                 }
             }
             MouseButton::Right => {
+                self.color_picker_popup_clear_action_press();
                 self.close_color_picker_popup(true);
             }
-            MouseButton::Middle => {}
+            MouseButton::Middle => self.color_picker_popup_clear_action_press(),
         }
         true
     }

@@ -10,6 +10,16 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
 use super::section_header::draw_collapsible_header;
+use crate::ui::theme::Rgba;
+
+/// Delay-slider track fill, shared by the delay sliders and the custom
+/// step rows. Darker than COLOR_TRACK_BACKGROUND — snapping would visibly
+/// lighten these tracks.
+const COLOR_DELAY_TRACK: Rgba = (0.4, 0.4, 0.45, 0.7);
+/// Delay-slider knob: legacy pre-unification accent blue, kept to avoid a
+/// visible hue shift. TODO(theme-consolidation): converge on
+/// COLOR_TRACK_KNOB.
+const COLOR_DELAY_KNOB: Rgba = (0.25, 0.5, 0.95, 0.9);
 
 pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;

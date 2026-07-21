@@ -2,11 +2,16 @@ use log::{debug, info};
 
 use crate::backend::wayland::state::{PerfInputSource, WaylandState};
 use crate::input::MouseButton;
+use crate::input::state::HelpOverlayPressSource;
 
 /// Linux input event code for the primary stylus barrel button.
 const BTN_STYLUS: u32 = 331;
 /// Linux input event code for the secondary stylus barrel button.
 const BTN_STYLUS2: u32 = 332;
+
+fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) -> bool {
+    input_state.show_help || input_state.tour_active
+}
 
 impl WaylandState {
     /// Queue a tablet motion axis update until the enclosing tablet frame commits.
@@ -43,6 +48,10 @@ impl WaylandState {
         if pending.is_empty() {
             return;
         }
+        // Modal ownership is captured at frame entry. A tip-up action may
+        // close help during this same frame, but barrel presses queued while
+        // help was visible must still not dispatch behind it.
+        let modal_blocks_barrel_actions = modal_blocks_stylus_barrel_actions(&self.input_state);
 
         if let Some(pressure) = pending.pressure {
             self.apply_committed_stylus_pressure(pressure);
@@ -70,8 +79,10 @@ impl WaylandState {
 
         // Actions like radial menu toggling read the cached pointer position,
         // so button presses run after this frame's motion has been committed.
-        for button in pending.button_presses {
-            self.dispatch_stylus_button_press(button);
+        if !modal_blocks_barrel_actions {
+            for button in pending.button_presses {
+                self.dispatch_stylus_button_press(button);
+            }
         }
     }
 
@@ -139,9 +150,42 @@ impl WaylandState {
             return;
         }
 
+        if !self.input_state.show_help {
+            // A new tip-down supersedes any consume-only help ownership left
+            // by a sequence whose tip-up was not delivered.
+            self.input_state
+                .clear_help_overlay_press_for(HelpOverlayPressSource::Stylus);
+        }
+
         if self.input_state.eyedropper_is_active() {
             let (x, y) = self.current_stylus_position();
             self.sample_eyedropper(x, y);
+            return;
+        }
+
+        if self.input_state.tour_active {
+            return;
+        }
+
+        // Help owns stylus tip input just as it owns mouse and touch input.
+        // Record the press target but do not begin a canvas interaction.
+        if self.input_state.show_help {
+            let (x, y) = self.current_stylus_position();
+            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.input_state.note_help_overlay_press(
+                HelpOverlayPressSource::Stylus,
+                x.round() as i32,
+                y.round() as i32,
+            );
+            return;
+        }
+
+        // Canvas click-away: a pen-down on the canvas with a top popover open
+        // (Canvas/Session/Settings) dismisses it and swallows the pen-down,
+        // matching the mouse and touch paths — otherwise the pen-down would
+        // start a stray stroke instead of closing the popover.
+        if self.dismiss_top_toolbar_menus() {
+            self.input_state.needs_redraw = true;
             return;
         }
 
@@ -192,6 +236,12 @@ impl WaylandState {
         self.set_current_mouse(x as i32, y as i32);
         let screen_x = self.current_mouse().0;
         let screen_y = self.current_mouse().1;
+        if self.handle_help_overlay_release(HelpOverlayPressSource::Stylus, screen_x, screen_y) {
+            let hover_cursor_pos = self.stylus_hover_cursor_position();
+            self.mark_stylus_hover_cursor_dirty(None, hover_cursor_pos);
+            self.input_state.needs_redraw = true;
+            return;
+        }
         let (wx, wy) = self.zoomed_world_coords(x, y);
         self.input_state.on_mouse_release_with_canvas(
             MouseButton::Left,
@@ -236,5 +286,24 @@ impl WaylandState {
 
         self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
         self.record_stylus_peak(self.input_state.current_thickness);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::modal_blocks_stylus_barrel_actions;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn help_and_tour_block_stylus_barrel_actions() {
+        let mut state = make_test_input_state();
+        assert!(!modal_blocks_stylus_barrel_actions(&state));
+
+        state.show_help = true;
+        assert!(modal_blocks_stylus_barrel_actions(&state));
+
+        state.show_help = false;
+        state.tour_active = true;
+        assert!(modal_blocks_stylus_barrel_actions(&state));
     }
 }

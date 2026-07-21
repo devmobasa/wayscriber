@@ -34,6 +34,7 @@ impl WaylandState {
             self.layer_shell.is_some(),
             toolbar_visible,
             self.inline_toolbars_active(),
+            self.input_state.is_color_picker_popup_open(),
         )
     }
 

@@ -160,19 +160,40 @@ pub enum WidgetKind {
     Checkbox { checked: bool, label: LabelSpec },
     /// Two-segment control; the halves' interactions are separate
     /// [`WidgetKind::HitArea`] nodes layered on top.
-    #[allow(dead_code)] // Used by the staged side-palette tree port.
     SegmentedControl {
         left: LabelSpec,
         right: LabelSpec,
         active_right: bool,
     },
     /// Invisible interactive region (segment halves, full-row toggles).
-    #[allow(dead_code)] // Used by the staged side-palette tree port.
     HitArea,
+    /// Horizontal slider track with a round knob at normalized position
+    /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
+    /// (`HitKind::DragSet*`); the paint only shows the current value.
+    Slider { t: f64 },
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),
         selected: bool,
+    },
+    /// A presets-island slot. Filled slots draw the saved tool glyph in the
+    /// neutral foreground and carry the preset `color` as a separate corner
+    /// swatch, so a dark preset color never renders the glyph invisible
+    /// against the slot body (the side-palette convention). Empty slots
+    /// (`glyph` is `None`) draw the 1-based slot number carried in `label`.
+    /// `active` marks the slot whose preset is currently applied.
+    PresetSlot {
+        glyph: Option<IconFn>,
+        color: (f64, f64, f64, f64),
+        label: String,
+        active: bool,
+    },
+    /// Micro-mode chip: the top strip collapsed to one round chip with the
+    /// active tool's glyph inside a ring stroked in the current color.
+    MicroChip {
+        glyph: IconFn,
+        ring_color: (f64, f64, f64, f64),
+        ring_width: f64,
     },
     /// Pin (open-at-startup) toggle.
     PinButton { pinned: bool },
@@ -180,12 +201,19 @@ pub enum WidgetKind {
     MinimizeButton,
     /// Anchored popover panel (shadow, background, caret at `caret_x`).
     Popover { caret_x: f64, caret_up: bool },
+    /// Vertical scrollbar: proportional thumb (`thumb` fraction of the
+    /// track) at normalized position `t` in `[0, 1]`. The drag mapping
+    /// lives on the node's interaction (`HitKind::DragScrollTopPopover`).
+    VScrollbar { t: f64, thumb: f64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShortcutBadgePlacement {
+    /// Boxed micro-badge in the button's top-right corner (text buttons).
     Corner,
-    Above,
+    /// Unboxed caption centered under the icon, inside the button rect
+    /// (icon buttons, Excalidraw-style).
+    Below,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

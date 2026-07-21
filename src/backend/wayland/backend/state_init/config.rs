@@ -17,6 +17,13 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
             (Config::default(), ConfigSource::Default)
         }
     };
+
+    // Install process-wide UI preferences before any surface renders. The
+    // daemon spawns fresh overlay processes that re-enter this load path, so
+    // this single call site covers both direct and daemon-managed overlays.
+    crate::ui::theme::init(config.ui.theme.to_theme_mode());
+    crate::ui::anim::set_motion_enabled(config.ui.reduced_motion.motion_enabled());
+
     let exit_after_capture_mode = match backend_exit_mode {
         ExitAfterCaptureMode::Auto if config.capture.exit_after_capture => {
             ExitAfterCaptureMode::Always
@@ -35,6 +42,8 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
 }
 
 fn log_config(config: &Config) {
+    debug!("  Theme: {:?}", config.ui.theme);
+    debug!("  Reduced motion: {:?}", config.ui.reduced_motion);
     debug!("  Color: {:?}", config.drawing.default_color);
     debug!("  Thickness: {:.1}px", config.drawing.default_thickness);
     debug!("  Font size: {:.1}px", config.drawing.default_font_size);

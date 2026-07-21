@@ -125,6 +125,9 @@ pub struct StateData {
     /// blocked until its matching drag-end feedback arrives.
     pub(super) gtk_top_drag_blocked: bool,
     pub(super) gtk_side_drag_blocked: bool,
+    /// Pointer is over the GTK top toolbar window (reported via feedback;
+    /// GTK runs on its own connection). Restores the top-strip idle fade.
+    pub(super) gtk_top_hover: bool,
     pub(super) last_applied_top_margin: Option<i32>,
     pub(super) last_applied_side_margin: Option<i32>,
     pub(super) last_applied_top_margin_top: Option<i32>,
@@ -155,8 +158,16 @@ pub struct StateData {
     pub(super) overlay_ready: bool,
     /// Suppress the next pointer release after a modal click (e.g., command palette).
     pub(super) suppress_next_release: bool,
-    /// True when a left press began inside the main-surface toast.
-    pub(super) pending_toast_press: bool,
+    /// Exact toast activation a left press began inside. A release is accepted
+    /// only while this same activation remains visible.
+    pub(super) pending_toast_press: Option<crate::input::state::ToastPress>,
+    /// True when a left press began inside the interactive status HUD.
+    pub(super) pending_status_hud_press: bool,
+    /// The chip press a left press began (`None` when no chip press is pending;
+    /// `Passive` for the passive `NN%` readout / inter-piece gap; `Button(kind)`
+    /// for an actionable button). Any pending press keeps its release consumed;
+    /// a `Button` release fires only when it lands on the SAME button.
+    pub(super) pending_zoom_chip_press: crate::ui::ZoomChipPress,
     /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
     pub(super) suppress_focus_exit_until: Option<Instant>,
     /// Short guard window after xdg focus loss where compositor close requests are ignored
@@ -172,6 +183,21 @@ pub struct StateData {
     pub(super) prev_preset_toast_damage: Option<crate::util::Rect>,
     pub(super) blocked_feedback_was_active: bool,
     pub(super) prev_text_edit_entry_damage: Option<crate::util::Rect>,
+    pub(super) prev_status_hud_damage: Option<crate::util::Rect>,
+    pub(super) prev_zoom_chip_damage: Option<crate::util::Rect>,
+    pub(super) prev_command_palette_damage: Option<crate::util::Rect>,
+    pub(super) prev_color_picker_damage: Option<crate::util::Rect>,
+    pub(super) prev_tool_preview_damage: Option<crate::util::Rect>,
+    /// Idle-fade engine for the top-strip islands; its value is published
+    /// on every toolbar snapshot as `top_fade`.
+    pub(super) top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade,
+    /// Per-session shortcut-coach accumulator (slow-path streak, cooldown, and
+    /// per-session cap). Session-only; the across-session cap and learned
+    /// suppression live in the persisted onboarding state.
+    pub(super) shortcut_coach: super::onboarding::ShortcutCoachSession,
+    /// Once-per-session guard for the legacy side-panel deprecation notice
+    /// (M9).
+    pub(super) panel_deprecation_notice_shown: bool,
 }
 
 impl StateData {
@@ -215,6 +241,7 @@ impl StateData {
             gtk_side_offset_seq: 0,
             gtk_drag_preview: None,
             gtk_top_drag_blocked: false,
+            gtk_top_hover: false,
             gtk_side_drag_blocked: false,
             last_applied_top_margin: None,
             last_applied_side_margin: None,
@@ -244,7 +271,9 @@ impl StateData {
             overlay_clickthrough: false,
             overlay_ready: false,
             suppress_next_release: false,
-            pending_toast_press: false,
+            pending_toast_press: None,
+            pending_status_hud_press: false,
+            pending_zoom_chip_press: crate::ui::ZoomChipPress::None,
             suppress_focus_exit_until: None,
             xdg_close_guard_until: None,
             xdg_explicit_close_requested: false,
@@ -253,6 +282,14 @@ impl StateData {
             prev_preset_toast_damage: None,
             blocked_feedback_was_active: false,
             prev_text_edit_entry_damage: None,
+            prev_status_hud_damage: None,
+            prev_zoom_chip_damage: None,
+            prev_command_palette_damage: None,
+            prev_color_picker_damage: None,
+            prev_tool_preview_damage: None,
+            top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
+            shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
+            panel_deprecation_notice_shown: false,
         }
     }
 }

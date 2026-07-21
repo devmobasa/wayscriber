@@ -110,7 +110,13 @@ pub(super) fn run_event_loop(
             || !state.surface.is_configured()
             || (vsync_enabled && frame_callback_pending);
         let now = Instant::now();
-        let animation_timeout = state.ui_animation_timeout(now);
+        // Transient toolbar-fade animation shares the animation timeout slot:
+        // a fade in flight (or a pending 4s idle dim) wakes the loop, and a
+        // settled fade contributes nothing.
+        let animation_timeout = min_timeout(
+            state.ui_animation_timeout(now),
+            state.top_strip_fade_timeout(now),
+        );
         let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
@@ -143,6 +149,9 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
         let timeout = min_timeout(timeout, durable_action_timeout);
+        // A radial menu waiting out its paint delay must appear without
+        // further input events.
+        let timeout = min_timeout(timeout, state.input_state.radial_menu_paint_timeout(now));
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -234,13 +243,35 @@ pub(super) fn run_event_loop(
             state.input_state.needs_redraw = true;
         }
 
+        // When the radial paint deadline passes, this requests the redraw
+        // that paints the menu (no-op before the deadline and after paint).
+        state
+            .input_state
+            .tick_radial_menu_paint(std::time::Instant::now());
+
         capture::handle_pending_actions(state, qh);
         state.sync_overlay_interactivity();
         state.apply_onboarding_hints();
 
+        // Hand changed palette recents to the dedicated persistence worker.
+        // The event loop only replaces a bounded in-memory snapshot and wakes
+        // the worker; directory creation, atomic replacement, and fsync happen
+        // off-dispatch. Retain the dirty flag if the worker is unavailable.
+        if state.input_state.command_palette_recents_dirty() {
+            let recents = state.input_state.command_palette_recent.clone();
+            if state.palette_recents.request(&recents) {
+                state.input_state.clear_command_palette_recents_dirty();
+            }
+        }
+
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
             warn!("Failed to autosave session state: {}", err);
         }
+
+        // Advance the top-strip idle fade before the snapshot consumers
+        // (GTK bridge below, layer/inline toolbar rendering inside
+        // maybe_render) read `top_fade` for this pass.
+        state.update_top_strip_fade(Instant::now());
 
         state.push_gtk_toolbar_update();
 

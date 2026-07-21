@@ -1,6 +1,12 @@
 //! Side-palette header controls.
 
 use super::*;
+use crate::ui::theme::{Rgba, set_color};
+
+/// Empty board-dot outline: muted blue-gray with no theme token (mirrors
+/// the built-in `side_palette::header`).
+/// TODO(theme-consolidation): hoist the mirrored pair into `theme::toolbar`.
+const COLOR_BOARD_CHIP_EMPTY_DOT: Rgba = (0.62, 0.68, 0.76, 0.7);
 
 /// Board chip color dot, RGBA; `None` draws the empty outline.
 type BoardDotColor = Rc<Cell<Option<(f64, f64, f64, f64)>>>;
@@ -43,7 +49,7 @@ impl SideBar {
                         size - 1.0,
                         3.0,
                     );
-                    ctx.set_source_rgba(0.62, 0.68, 0.76, 0.7);
+                    set_color(ctx, COLOR_BOARD_CHIP_EMPTY_DOT);
                     ctx.set_line_width(1.0);
                     let _ = ctx.stroke();
                 }

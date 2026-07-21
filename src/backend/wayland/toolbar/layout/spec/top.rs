@@ -6,9 +6,19 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 58);
     /// Minimized top strip: the edge restore tab.
     pub(in crate::backend::wayland::toolbar) const TOP_MINIMIZED_SIZE: (u32, u32) = (64, 24);
+    /// Micro-mode top strip: one round tool/color chip.
+    pub(in crate::backend::wayland::toolbar) const TOP_MICRO_SIZE: (u32, u32) = (44, 44);
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_TEXT: (u32, u32) = (875, 60);
 
     pub(in crate::backend::wayland::toolbar) const TOP_GAP: f64 = 5.0;
+    /// Clear space between the detached top-strip islands (pill edges).
+    pub(in crate::backend::wayland::toolbar) const TOP_ISLAND_GAP: f64 = 10.0;
+    /// Inner horizontal padding between an island edge and its content.
+    /// The number lives in `theme::toolbar::ISLAND_PAD` so the GTK
+    /// stylesheet interpolates the same island padding — one source for
+    /// both frontends (theme must not depend on this backend module).
+    pub(in crate::backend::wayland::toolbar) const TOP_ISLAND_PAD: f64 =
+        crate::ui::theme::toolbar::ISLAND_PAD;
     pub(in crate::backend::wayland::toolbar) const TOP_START_X: f64 = 19.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_SIZE: f64 = 18.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_Y: f64 = 20.0;
@@ -27,12 +37,48 @@ impl ToolbarLayoutSpec {
     /// Height of one option row (Fill, polygon sides) inside the popover.
     pub(in crate::backend::wayland::toolbar) const TOP_OPTION_ROW_H: f64 = 24.0;
 
+    // ---- Style pill (island D): the contextual row under the islands ----
+    /// Vertical gap between the island band and the style pill.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PILL_GAP: f64 = 6.0;
+    /// Style pill height (one control row plus vertical padding).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PILL_H: f64 = 40.0;
+    /// Slider track width inside the pill.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SLIDER_W: f64 = 110.0;
+    /// Standard control-row height inside the pill (sliders, buttons,
+    /// segments, numerals).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_ROW_H: f64 = 24.0;
+    /// Live numeral button width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_VALUE_W: f64 = 44.0;
+    /// Mini-toggle height (Fill, Auto-number).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_TOGGLE_H: f64 = 18.0;
+    /// Fill toggle width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_FILL_W: f64 = 64.0;
+    /// Auto-number toggle width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_AUTO_NUMBER_W: f64 = 108.0;
+    /// Counter reset button width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_RESET_W: f64 = 56.0;
+    /// Two-segment control width.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_W: f64 = 120.0;
+    /// Extra clear gap before a segmented control in the pill, on top of the
+    /// standard control gap, so the segment does not crowd the numeral to its
+    /// left (M7-C3). Shares `theme::toolbar::SEGMENT_LEADING_GAP`.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_LEAD: f64 =
+        crate::ui::theme::toolbar::SEGMENT_LEADING_GAP;
+    /// Docked selection-property value button width (cycle buttons and
+    /// the readout between stepper halves).
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEL_VALUE_W: f64 = 64.0;
+    /// Stepper half (−/+) width for docked numeric selection properties.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_STEP_W: f64 = 20.0;
+
     pub(in crate::backend::wayland::toolbar) fn top_size(
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
         if snapshot.top_minimized {
             return Self::TOP_MINIMIZED_SIZE;
+        }
+        if snapshot.top_micro_active() {
+            return Self::TOP_MICRO_SIZE;
         }
         let base_height = if self.use_icons {
             Self::TOP_SIZE_ICONS.1

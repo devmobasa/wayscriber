@@ -29,10 +29,21 @@ impl ToolbarSettingsModel {
     pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
         // The Settings pane is navigation, not a hideable section: it is the
         // single customization surface, so it must always be reachable.
-        let customizing = snapshot.customize_items_open;
         if snapshot.active_side_pane != crate::ui::toolbar::SidePane::Settings {
             return None;
         }
+        Self::build(snapshot)
+    }
+
+    /// The same model for the top strip's Settings popover, which ignores
+    /// the side palette's pane selection (under `side_layout = "pill"` the
+    /// popover is the only Settings surface).
+    pub(crate) fn for_popover(snapshot: &ToolbarSnapshot) -> Option<Self> {
+        Self::build(snapshot)
+    }
+
+    fn build(snapshot: &ToolbarSnapshot) -> Option<Self> {
+        let customizing = snapshot.customize_items_open;
 
         let mut toggles = vec![
             ToolbarSettingsToggle::new(

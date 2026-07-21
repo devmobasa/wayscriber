@@ -1,11 +1,17 @@
 use super::adapters;
 use super::event::{PointerMotion, PointerPress, PointerRelease};
-use super::outcome::{NoRouteReason, RoutingOutcome};
+use super::outcome::{ConsumedBy, NoRouteReason, RoutingOutcome};
 use crate::input::MouseButton;
 use crate::input::state::InputState;
+use crate::ui::ZoomChipPress;
 
 pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -> RoutingOutcome {
     let points = event.points();
+    // A new press invalidates any HUD or zoom-chip press still awaiting its
+    // release, so a stale flag can never swallow the release of an unrelated
+    // interaction.
+    state.clear_status_hud_press_pending();
+    state.clear_zoom_chip_press_pending();
     if let Some(outcome) =
         adapters::handle_building_polygon_non_left_press(state, event.button(), points)
     {
@@ -14,6 +20,9 @@ pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -
     if let Some(outcome) = adapters::handle_radial_menu_press(state, event.button(), points) {
         return outcome;
     }
+    // The precise-entry popup is keyboard-only: any overlay press cancels
+    // it and the press then routes normally.
+    let _ = state.cancel_precision_entry();
     if let Some(outcome) = adapters::handle_color_picker_press(state, event.button(), points) {
         return outcome;
     }
@@ -26,6 +35,14 @@ pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -
     if event.button() == MouseButton::Left
         && let Some(outcome) = adapters::handle_left_context_menu_press(state, points)
     {
+        return outcome;
+    }
+
+    if let Some(outcome) = adapters::handle_status_hud_press(state, event.button(), points) {
+        return outcome;
+    }
+
+    if let Some(outcome) = adapters::handle_zoom_chip_press(state, event.button(), points) {
         return outcome;
     }
 
@@ -73,7 +90,47 @@ pub(crate) fn route_pointer_release(
     let points = event.points();
     adapters::update_pointer_positions(state, points);
 
-    if let Some(outcome) = adapters::handle_radial_menu_release(state) {
+    // Status HUD press→release contract for paths that route presses through
+    // this chain (tablet, touch fallbacks): a HUD press consumed by
+    // `handle_status_hud_press` activates its chip on release-inside. The
+    // pointer/touch backends consume HUD presses before routing and track
+    // their own pending flag, so the two flags are never both set for one
+    // press. Actions (help) dispatch through the same action routing the
+    // backend uses via `dispatch_input_action`.
+    if event.button() == MouseButton::Left && state.take_status_hud_press_pending() {
+        let screen = points.screen();
+        let (_, action) = state.check_status_hud_click(screen.x(), screen.y());
+        if let Some(action) = action {
+            state.handle_action(action);
+        }
+        state.needs_redraw = true;
+        return RoutingOutcome::Consumed(ConsumedBy::StatusHud);
+    }
+
+    // Zoom chip press→release contract for the same direct-routing paths. Any
+    // press that landed inside the pill (`Passive` or `Button`) consumes its
+    // release here, so it can never fall through to finish an unrelated
+    // interaction below. Only a `Button` release that lands on the SAME button
+    // dispatches a zoom action (ZoomIn/ZoomOut/ResetZoom/ToggleZoomLock) through
+    // the shared action routing; the resulting pending zoom action is drained by
+    // the event loop, just like a keyboard shortcut. A `Passive` press (the
+    // `NN%` readout / inter-piece gap) is consumed with no action.
+    if event.button() == MouseButton::Left {
+        let pressed = state.take_zoom_chip_press_pending();
+        if pressed.is_pending() {
+            if let ZoomChipPress::Button(kind) = pressed {
+                let screen = points.screen();
+                let (_, action) = state.check_zoom_chip_click(kind, screen.x(), screen.y());
+                if let Some(action) = action {
+                    state.handle_action(action);
+                }
+            }
+            state.needs_redraw = true;
+            return RoutingOutcome::Consumed(ConsumedBy::ZoomChip);
+        }
+    }
+
+    if let Some(outcome) = adapters::handle_radial_menu_release(state, event.button(), points) {
         return outcome;
     }
 

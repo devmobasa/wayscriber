@@ -1,10 +1,17 @@
 use crate::draw::{EraserReplayContext, render_eraser_stroke, render_shape};
 use crate::input::BoardBackground;
 use crate::input::state::{PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
-use crate::ui::constants::{TEXT_HINT, TEXT_TERTIARY};
+use crate::ui::constants::{self, RADIUS_STD, TEXT_HINT, TEXT_TERTIARY};
 use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::theme::Rgba;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::types::PageContentArgs;
+
+/// Transparent-board thumbnail backdrop: faint white tint plus a cross-hatch
+/// stroke (no matching theme token; kept from the pre-theme literals).
+const TRANSPARENT_TINT: Rgba = (1.0, 1.0, 1.0, 0.06);
+const TRANSPARENT_CROSS: Rgba = (1.0, 1.0, 1.0, 0.08);
 
 pub(super) fn render_page_content(args: PageContentArgs<'_>) {
     let PageContentArgs {
@@ -18,7 +25,7 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
         screen_width,
         screen_height,
     } = args;
-    let radius = 6.0;
+    let radius = RADIUS_STD;
     let _ = ctx.save();
     draw_rounded_rect(ctx, x, y, width, height, radius);
     ctx.clip();
@@ -30,10 +37,10 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
             let _ = ctx.fill();
         }
         BoardBackground::Transparent => {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.06);
+            constants::set_color(ctx, TRANSPARENT_TINT);
             ctx.rectangle(x, y, width, height);
             let _ = ctx.fill();
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+            constants::set_color(ctx, TRANSPARENT_CROSS);
             ctx.set_line_width(1.0);
             ctx.move_to(x, y);
             ctx.line_to(x + width, y + height);
@@ -102,8 +109,12 @@ pub(super) fn render_page_name_label(
         None => return,
     };
     let max_w = width - 4.0;
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(10.5);
+    let label_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 10.5,
+    };
     let label_x = x + 2.0;
     let label_y = y + height + PAGE_NAME_PADDING + PAGE_NAME_HEIGHT * 0.8;
     let color = if name.is_some() {
@@ -111,7 +122,7 @@ pub(super) fn render_page_name_label(
     } else {
         TEXT_HINT
     };
-    ctx.set_source_rgba(color.0, color.1, color.2, 0.85);
+    constants::set_color(ctx, constants::with_alpha(color, 0.85));
     let _ = ctx.save();
     ctx.rectangle(
         label_x,
@@ -120,7 +131,6 @@ pub(super) fn render_page_name_label(
         PAGE_NAME_HEIGHT,
     );
     ctx.clip();
-    ctx.move_to(label_x, label_y);
-    let _ = ctx.show_text(label);
+    draw_text_baseline(ctx, label_style, label, label_x, label_y, None);
     let _ = ctx.restore();
 }

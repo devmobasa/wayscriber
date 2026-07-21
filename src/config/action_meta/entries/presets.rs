@@ -57,7 +57,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Save preset 1",
         Presets,
-        false,
+        true,
         false,
         true
     ),
@@ -67,7 +67,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Save preset 2",
         Presets,
-        false,
+        true,
         false,
         true
     ),
@@ -77,7 +77,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Save preset 3",
         Presets,
-        false,
+        true,
         false,
         true
     ),
@@ -87,7 +87,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Save preset 4",
         Presets,
-        false,
+        true,
         false,
         true
     ),
@@ -97,7 +97,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Save preset 5",
         Presets,
-        false,
+        true,
         false,
         true
     ),

@@ -1,10 +1,8 @@
 use crate::backend::wayland::state::WaylandState;
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier, keybindings::Action};
 use crate::draw::DirtyFullReason;
-use crate::input::{
-    Key,
-    state::{PendingOnboardingUsage, UiToastKind},
-};
+use crate::input::state::{Toast, ToastPriority};
+use crate::input::{Key, state::PendingOnboardingUsage};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 use crate::ui::{OnboardingCard, OnboardingChecklistItem};
 
@@ -29,30 +27,31 @@ impl WaylandState {
                 Ok(summary) => {
                     mark_background_mode_prompt(self.onboarding.state_mut(), true);
                     self.onboarding.save();
-                    self.input_state.set_ui_toast(
-                        UiToastKind::Info,
-                        format!(
+                    self.input_state.push_toast(
+                        ToastPriority::Info,
+                        "onboarding.first_run",
+                        Toast::info(format!(
                             "Background mode enabled. Service file: {}",
                             summary.service_path.display()
-                        ),
+                        )),
                     );
                 }
                 Err(err) => {
                     mark_background_mode_prompt(self.onboarding.state_mut(), false);
                     self.onboarding.save();
-                    self.input_state.set_ui_toast(
-                        UiToastKind::Error,
-                        format!(
+                    self.input_state.push_toast(ToastPriority::Critical, "onboarding.first_run", Toast::error(format!(
                             "Background mode setup failed: {err}. You can set this up later in Background Mode settings."
-                        ),
-                    );
+                        )));
                 }
             }
         } else {
             mark_background_mode_prompt(self.onboarding.state_mut(), false);
             self.onboarding.save();
-            self.input_state
-                .set_ui_toast(UiToastKind::Info, "Skipped background mode setup for now.");
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "onboarding.first_run",
+                Toast::info("Skipped background mode setup for now."),
+            );
         }
 
         self.input_state
@@ -75,8 +74,11 @@ impl WaylandState {
         state.active_step = None;
         state.quick_access_requires_toolbar = false;
         self.onboarding.save();
-        self.input_state
-            .set_ui_toast(UiToastKind::Info, "Onboarding skipped.");
+        self.input_state.push_toast(
+            ToastPriority::Info,
+            "onboarding.first_run",
+            Toast::info("Onboarding skipped."),
+        );
         true
     }
 
@@ -129,6 +131,39 @@ impl WaylandState {
                 ],
                 footer,
             },
+            FirstRunStep::ColorThickness => {
+                let color_label = match self.join_shortcut_labels(&[
+                    Action::SetColorRed,
+                    Action::SetColorGreen,
+                    Action::SetColorBlue,
+                    Action::SetColorYellow,
+                ]) {
+                    Some(hint) => format!("Change color ({hint})"),
+                    None => "Change color".to_string(),
+                };
+                let thickness_label = match self
+                    .join_shortcut_labels(&[Action::IncreaseThickness, Action::DecreaseThickness])
+                {
+                    Some(hint) => format!("Adjust thickness ({hint})"),
+                    None => "Adjust thickness".to_string(),
+                };
+                OnboardingCard {
+                    eyebrow: eyebrow.to_string(),
+                    title: "Color and thickness".to_string(),
+                    body: "Recolor and resize your strokes without leaving the canvas.".to_string(),
+                    items: vec![
+                        OnboardingChecklistItem {
+                            label: color_label,
+                            done: state.first_color_done,
+                        },
+                        OnboardingChecklistItem {
+                            label: thickness_label,
+                            done: state.first_thickness_done,
+                        },
+                    ],
+                    footer,
+                }
+            }
             FirstRunStep::QuickAccess => {
                 let items = self.quick_access_checklist_items(state);
                 OnboardingCard {
@@ -136,6 +171,27 @@ impl WaylandState {
                     title: "Quick access at cursor".to_string(),
                     body: "Open quick actions near the pointer.".to_string(),
                     items,
+                    footer,
+                }
+            }
+            FirstRunStep::RadialFlick => {
+                let radial_label = self.shortcut_label_opt(Action::ToggleRadialMenu);
+                let radial_available = radial_label.is_some();
+                let item_label = match radial_label {
+                    Some(label) => format!("Flick-commit from the radial menu ({label})"),
+                    None => "Radial menu disabled in config".to_string(),
+                };
+                OnboardingCard {
+                    eyebrow: eyebrow.to_string(),
+                    title: "Flick to commit".to_string(),
+                    body: "Open the radial menu, then press-flick-release toward a slice: a \
+                           quick flick commits the tool before the menu even paints (about \
+                           220 ms)."
+                        .to_string(),
+                    items: vec![OnboardingChecklistItem {
+                        label: item_label,
+                        done: state.radial_flick_done || !radial_available,
+                    }],
                     footer,
                 }
             }
@@ -159,7 +215,7 @@ impl WaylandState {
                         done: state.used_command_palette,
                     },
                 ],
-                footer: shortcut_rebind_footer(self.config.ui.toolbar.rebind_modifier).to_string(),
+                footer: shortcut_rebind_footer(self.config.ui.toolbar.rebind_modifier),
             },
         };
 
@@ -218,6 +274,21 @@ impl WaylandState {
                     changed = true;
                     first_run_ui_changed = true;
                 }
+                if usage.used_color_change && !state.first_color_done {
+                    state.first_color_done = true;
+                    changed = true;
+                    first_run_ui_changed = true;
+                }
+                if usage.used_thickness_change && !state.first_thickness_done {
+                    state.first_thickness_done = true;
+                    changed = true;
+                    first_run_ui_changed = true;
+                }
+                if usage.used_radial_flick && !state.radial_flick_done {
+                    state.radial_flick_done = true;
+                    changed = true;
+                    first_run_ui_changed = true;
+                }
             }
 
             if !first_run_active {
@@ -255,6 +326,14 @@ impl WaylandState {
                         if !state.first_undo_done {
                             break;
                         }
+                        state.active_step = Some(FirstRunStep::ColorThickness);
+                        changed = true;
+                        first_run_ui_changed = true;
+                    }
+                    FirstRunStep::ColorThickness => {
+                        if !color_thickness_completed(state) {
+                            break;
+                        }
                         state.active_step = Some(FirstRunStep::QuickAccess);
                         state.quick_access_requires_toolbar = !toolbar_visible;
                         changed = true;
@@ -271,8 +350,16 @@ impl WaylandState {
                         ) {
                             break;
                         }
-                        state.active_step = Some(FirstRunStep::Reference);
+                        state.active_step = Some(FirstRunStep::RadialFlick);
                         state.quick_access_requires_toolbar = false;
+                        changed = true;
+                        first_run_ui_changed = true;
+                    }
+                    FirstRunStep::RadialFlick => {
+                        if !radial_flick_completed(state, radial_available) {
+                            break;
+                        }
+                        state.active_step = Some(FirstRunStep::Reference);
                         changed = true;
                         first_run_ui_changed = true;
                     }
@@ -303,10 +390,24 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         if completed_now && self.input_state.ui_toast.is_none() {
-            self.input_state
-                .set_ui_toast(UiToastKind::Info, "Nice work. Onboarding complete.");
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "onboarding.first_run",
+                Toast::info("Nice work. Onboarding complete."),
+            );
         }
     }
+    /// Join the resolved shortcut labels for `actions` with `" / "`, skipping
+    /// unbound actions. `None` when none resolve. Keeps onboarding copy free of
+    /// hardcoded key strings.
+    fn join_shortcut_labels(&self, actions: &[Action]) -> Option<String> {
+        let labels: Vec<String> = actions
+            .iter()
+            .filter_map(|action| self.shortcut_label_opt(*action))
+            .collect();
+        (!labels.is_empty()).then(|| labels.join(" / "))
+    }
+
     fn quick_access_checklist_items(
         &self,
         state: &OnboardingState,
@@ -412,6 +513,18 @@ fn quick_access_context_done(
     }
 }
 
+/// The colors/thickness teaching step completes once the user has both changed
+/// a color and adjusted stroke thickness.
+pub(super) fn color_thickness_completed(state: &OnboardingState) -> bool {
+    state.first_color_done && state.first_thickness_done
+}
+
+/// The radial-flick teaching step completes on a flick commit, or is waived
+/// when the radial menu is unbound so users without it are never stuck.
+pub(super) fn radial_flick_completed(state: &OnboardingState, radial_available: bool) -> bool {
+    state.radial_flick_done || !radial_available
+}
+
 pub(super) fn quick_access_completed(
     state: &OnboardingState,
     context_enabled: bool,
@@ -494,30 +607,21 @@ fn mark_background_mode_prompt(state: &mut OnboardingState, enabled: bool) {
 
 pub(super) fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
     match step {
-        FirstRunStep::BackgroundModeSetup => "Step 1 / 5",
-        FirstRunStep::WaitDraw => "Step 2 / 5",
-        FirstRunStep::DrawUndo => "Step 3 / 5",
-        FirstRunStep::QuickAccess => "Step 4 / 5",
-        FirstRunStep::Reference => "Step 5 / 5",
+        FirstRunStep::BackgroundModeSetup => "Step 1 / 7",
+        FirstRunStep::WaitDraw => "Step 2 / 7",
+        FirstRunStep::DrawUndo => "Step 3 / 7",
+        FirstRunStep::ColorThickness => "Step 4 / 7",
+        FirstRunStep::QuickAccess => "Step 5 / 7",
+        FirstRunStep::RadialFlick => "Step 6 / 7",
+        FirstRunStep::Reference => "Step 7 / 7",
     }
 }
 
-pub(super) fn shortcut_rebind_footer(modifier: ToolbarRebindModifier) -> &'static str {
-    match modifier {
-        ToolbarRebindModifier::Disabled => {
-            "Toolbar shortcut-click editing disabled • Shift+Escape to skip"
-        }
-        ToolbarRebindModifier::CtrlShift => {
-            "Ctrl+Shift+click a bindable toolbar control to rebind • Shift+Escape to skip"
-        }
-        ToolbarRebindModifier::CtrlAlt => {
-            "Ctrl+Alt+click a bindable toolbar control to rebind • Shift+Escape to skip"
-        }
-        ToolbarRebindModifier::ShiftAlt => {
-            "Shift+Alt+click a bindable toolbar control to rebind • Shift+Escape to skip"
-        }
-        ToolbarRebindModifier::CtrlShiftAlt => {
-            "Ctrl+Shift+Alt+click a bindable toolbar control to rebind • Shift+Escape to skip"
+pub(super) fn shortcut_rebind_footer(modifier: ToolbarRebindModifier) -> String {
+    match modifier.click_label() {
+        None => "Toolbar shortcut-click editing disabled • Shift+Escape to skip".to_string(),
+        Some(click) => {
+            format!("{click} a bindable toolbar control to rebind • Shift+Escape to skip")
         }
     }
 }

@@ -122,8 +122,15 @@ impl ConfiguratorApp {
                 self.handle_drawing_mouse_drag_color_changed(button, field, option)
             }
             Message::StatusPositionChanged(option) => self.handle_status_position_changed(option),
+            Message::UiThemeChanged(option) => self.handle_ui_theme_changed(option),
+            Message::UiReducedMotionChanged(option) => {
+                self.handle_ui_reduced_motion_changed(option)
+            }
             Message::ToolbarLayoutModeChanged(option) => {
                 self.handle_toolbar_layout_mode_changed(option)
+            }
+            Message::ToolbarSideLayoutChanged(option) => {
+                self.handle_toolbar_side_layout_changed(option)
             }
             Message::ToolbarRebindModifierChanged(option) => {
                 self.handle_toolbar_rebind_modifier_changed(option)
@@ -204,6 +211,9 @@ impl ConfiguratorApp {
             }
             Message::PresenterToolBehaviorChanged(option) => {
                 self.handle_presenter_tool_behavior_changed(option)
+            }
+            Message::PresenterToolbarModeChanged(option) => {
+                self.handle_presenter_toolbar_mode_changed(option)
             }
             Message::ExportPdfPageSizeChanged(option) => {
                 self.handle_export_pdf_page_size_changed(option)

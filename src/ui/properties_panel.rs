@@ -1,9 +1,11 @@
 use crate::input::InputState;
+use crate::ui::primitives::draw_rounded_rect;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
     self, BG_HOVER, BORDER_FOCUS, BORDER_PROPERTIES, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH,
-    PANEL_BG_PROPERTIES, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
+    PANEL_BG_PROPERTIES, RADIUS_PANEL, RADIUS_SM, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+    TEXT_SECONDARY, TEXT_TERTIARY,
 };
 
 pub fn render_properties_panel(
@@ -38,23 +40,20 @@ pub fn render_properties_panel(
     };
 
     let _ = ctx.save();
-    constants::set_color(ctx, PANEL_BG_PROPERTIES);
-    ctx.rectangle(
+    // Background and hairline border (popover radius, matching the other
+    // overlay popups)
+    draw_rounded_rect(
+        ctx,
         layout.origin_x,
         layout.origin_y,
         layout.width,
         layout.height,
+        RADIUS_PANEL,
     );
-    let _ = ctx.fill();
-
+    constants::set_color(ctx, PANEL_BG_PROPERTIES);
+    let _ = ctx.fill_preserve();
     constants::set_color(ctx, BORDER_PROPERTIES);
     ctx.set_line_width(1.0);
-    ctx.rectangle(
-        layout.origin_x,
-        layout.origin_y,
-        layout.width,
-        layout.height,
-    );
     let _ = ctx.stroke();
 
     if panel.multiple_selection {
@@ -119,11 +118,13 @@ pub fn render_properties_panel(
 
             if is_hovered {
                 constants::set_color(ctx, BG_HOVER);
-                ctx.rectangle(
-                    layout.origin_x,
+                draw_rounded_rect(
+                    ctx,
+                    layout.origin_x + 4.0,
                     row_top,
-                    layout.width,
+                    layout.width - 8.0,
                     layout.entry_row_height,
+                    RADIUS_SM,
                 );
                 let _ = ctx.fill();
             }
@@ -132,21 +133,24 @@ pub fn render_properties_panel(
                 // Draw focus ring for keyboard navigation
                 constants::set_color(ctx, BORDER_FOCUS);
                 ctx.set_line_width(FOCUS_RING_WIDTH);
-                ctx.rectangle(
+                draw_rounded_rect(
+                    ctx,
                     layout.origin_x + 2.0,
                     row_top + 1.0,
                     layout.width - 4.0,
                     layout.entry_row_height - 2.0,
+                    RADIUS_SM,
                 );
                 let _ = ctx.stroke();
             }
 
-            let (text_r, text_g, text_b, text_a) = if entry.disabled {
+            let text_color = if entry.disabled {
                 TEXT_DISABLED
             } else {
                 TEXT_PRIMARY
             };
-            ctx.set_source_rgba(text_r, text_g, text_b, text_a);
+            let text_a = text_color.3;
+            constants::set_color(ctx, text_color);
             draw_text_baseline(
                 ctx,
                 body_style,

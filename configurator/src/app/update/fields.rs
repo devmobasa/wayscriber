@@ -7,9 +7,10 @@ use crate::models::{
     EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField, NamedColorOption,
     OverrideOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
-    PresenterToolBehaviorOption, QuadField, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, TripletField,
+    PresenterToolBehaviorOption, PresenterToolbarModeOption, QuadField, ReducedMotionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
+    ToolbarSideLayoutOption, TripletField, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -215,12 +216,39 @@ impl ConfiguratorApp {
         Task::none()
     }
 
+    pub(super) fn handle_ui_theme_changed(&mut self, option: UiThemeOption) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_theme = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_ui_reduced_motion_changed(
+        &mut self,
+        option: ReducedMotionOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_reduced_motion = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
     pub(super) fn handle_toolbar_layout_mode_changed(
         &mut self,
         option: ToolbarLayoutModeOption,
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.apply_toolbar_layout_mode(option);
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_side_layout_changed(
+        &mut self,
+        option: ToolbarSideLayoutOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_toolbar_side_layout = option;
         self.refresh_dirty_flag();
         Task::none()
     }
@@ -314,6 +342,16 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.presenter_tool_behavior = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_presenter_toolbar_mode_changed(
+        &mut self,
+        option: PresenterToolbarModeOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.presenter_toolbar_mode = option;
         self.refresh_dirty_flag();
         Task::none()
     }
@@ -504,23 +542,19 @@ mod tests {
 
         let _ = app.handle_text_changed(TextField::QuickColorLabel(0), "RedNew".to_string());
 
+        // The built-in defaults are named colors resolving to the tuned
+        // palette, so the slots stay on their named values after a label edit.
+        assert_eq!(app.draft.drawing_quick_colors.entries[0].color.name, "red");
+        assert_eq!(
+            app.draft.drawing_quick_colors.entries[1].color.name,
+            "green"
+        );
+        assert_eq!(app.draft.drawing_quick_colors.entries[2].color.name, "blue");
         assert_eq!(
             app.draft.drawing_quick_colors.entries[0]
                 .color
                 .selected_named,
             NamedColorOption::Red
-        );
-        assert_eq!(
-            app.draft.drawing_quick_colors.entries[1]
-                .color
-                .selected_named,
-            NamedColorOption::Green
-        );
-        assert_eq!(
-            app.draft.drawing_quick_colors.entries[2]
-                .color
-                .selected_named,
-            NamedColorOption::Blue
         );
     }
 }

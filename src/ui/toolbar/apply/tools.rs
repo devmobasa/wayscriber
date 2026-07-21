@@ -1,7 +1,42 @@
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{DrawingState, EraserMode, InputState, Tool};
 
+use super::super::PrecisionEntryTarget;
+use super::super::model::ToolbarSliderSpec;
+
 impl InputState {
+    /// Open the precise-entry popup for a pill numeral.
+    pub(super) fn apply_toolbar_open_precision_entry(
+        &mut self,
+        target: PrecisionEntryTarget,
+    ) -> bool {
+        self.open_precision_entry(target);
+        true
+    }
+
+    /// Commit a typed precise-entry value, clamped to the target's shared
+    /// slider range, and close the popup if it is still open.
+    pub(super) fn apply_toolbar_commit_precision_entry(
+        &mut self,
+        target: PrecisionEntryTarget,
+        value: f64,
+    ) -> bool {
+        let _ = self.cancel_precision_entry();
+        if !value.is_finite() {
+            return false;
+        }
+        match target {
+            PrecisionEntryTarget::Thickness => {
+                let spec = ToolbarSliderSpec::THICKNESS;
+                self.apply_toolbar_set_thickness(value.clamp(spec.min, spec.max))
+            }
+            PrecisionEntryTarget::FontSize => {
+                let spec = ToolbarSliderSpec::FONT_SIZE;
+                self.apply_toolbar_set_font_size(value.clamp(spec.min, spec.max))
+            }
+        }
+    }
+
     pub(super) fn apply_toolbar_select_tool(&mut self, tool: Tool) -> bool {
         if matches!(self.state, DrawingState::TextInput { .. }) {
             self.cancel_text_input();
@@ -139,12 +174,12 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_copy_hex_color(&mut self) -> bool {
-        self.pending_copy_hex = true;
+        self.request_copy_hex();
         true
     }
 
     pub(super) fn apply_toolbar_paste_hex_color(&mut self) -> bool {
-        self.pending_paste_hex = true;
+        self.request_paste_hex();
         true
     }
 

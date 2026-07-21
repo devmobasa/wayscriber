@@ -101,6 +101,25 @@ mod tests {
     }
 
     #[test]
+    fn escape_dismisses_the_open_top_popover_with_named_outcome() {
+        let mut state = make_test_input_state();
+        state.toolbar_settings_popover_open = true;
+
+        assert_eq!(
+            route_key_press(&mut state, Key::Escape),
+            RoutingOutcome::Canceled(CancelTarget::TopPopover)
+        );
+        assert!(!state.toolbar_settings_popover_open);
+
+        state.toolbar_session_popover_open = true;
+        assert_eq!(
+            route_key_press(&mut state, Key::Escape),
+            RoutingOutcome::Canceled(CancelTarget::TopPopover)
+        );
+        assert!(!state.toolbar_session_popover_open);
+    }
+
+    #[test]
     fn escape_cancels_pending_board_delete_with_named_outcome() {
         let mut state = make_test_input_state();
         state.switch_board(BOARD_ID_BLACKBOARD);

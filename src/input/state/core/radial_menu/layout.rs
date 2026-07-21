@@ -2,7 +2,7 @@ use super::{RadialMenuLayout, RadialMenuState};
 use crate::input::state::InputState;
 
 /// Center circle radius.
-const CENTER_RADIUS: f64 = 30.0;
+pub(super) const CENTER_RADIUS: f64 = 30.0;
 /// Inner radius of the tool ring.
 const TOOL_INNER: f64 = 40.0;
 /// Outer radius of the tool ring.
@@ -13,8 +13,13 @@ const SUB_INNER: f64 = 100.0;
 const SUB_OUTER: f64 = 150.0;
 /// Inner radius of the color ring (flush with sub outer, no gap).
 const COLOR_INNER: f64 = 150.0;
-/// Outer radius of the color ring.
-const COLOR_OUTER: f64 = 184.0;
+/// Outer radius of the color ring (slightly shrunk from the pre-size-ring
+/// 184 to make room for the gauge band).
+const COLOR_OUTER: f64 = 176.0;
+/// Inner radius of the size ring (flush with color outer, no gap).
+const SIZE_INNER: f64 = 176.0;
+/// Outer radius of the size ring, the outermost band.
+const SIZE_OUTER: f64 = 190.0;
 
 impl InputState {
     /// Compute and cache the radial menu layout, clamping the center to keep it on screen.
@@ -23,7 +28,9 @@ impl InputState {
             center_x, center_y, ..
         } = &self.radial_menu_state
         {
-            let margin = COLOR_OUTER + 4.0;
+            // Track the outermost band so the whole menu (size ring included)
+            // still fits the screen edges.
+            let margin = SIZE_OUTER + 4.0;
             let cx = clamp_center_coordinate(*center_x, width as f64, margin);
             let cy = clamp_center_coordinate(*center_y, height as f64, margin);
 
@@ -37,6 +44,8 @@ impl InputState {
                 sub_outer: SUB_OUTER,
                 color_inner: COLOR_INNER,
                 color_outer: COLOR_OUTER,
+                size_inner: SIZE_INNER,
+                size_outer: SIZE_OUTER,
             });
         }
     }

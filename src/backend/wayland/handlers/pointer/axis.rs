@@ -2,7 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{AxisScroll, PointerEvent};
 
 use crate::input::Tool;
-use crate::input::state::{COMMAND_PALETTE_MAX_VISIBLE, InputState};
+use crate::input::state::InputState;
 
 use super::*;
 
@@ -29,41 +29,12 @@ impl WaylandState {
             return;
         }
 
-        // Handle command palette scrolling
+        // Handle command palette scrolling (display-row space; selection is
+        // kept inside the window, skipping group headers).
         if self.input_state.command_palette_open {
             if scroll_direction != 0 {
-                let filtered_count = self.input_state.filtered_commands().len();
-                let max_scroll = filtered_count.saturating_sub(COMMAND_PALETTE_MAX_VISIBLE);
-
-                if scroll_direction > 0 {
-                    // Scroll down
-                    if self.input_state.command_palette_scroll < max_scroll {
-                        self.input_state.command_palette_scroll += 1;
-                        // Also move selection if it's above the visible area
-                        if self.input_state.command_palette_selected
-                            < self.input_state.command_palette_scroll
-                        {
-                            self.input_state.command_palette_selected =
-                                self.input_state.command_palette_scroll;
-                        }
-                        self.input_state.needs_redraw = true;
-                    }
-                } else {
-                    // Scroll up
-                    if self.input_state.command_palette_scroll > 0 {
-                        self.input_state.command_palette_scroll -= 1;
-                        // Also move selection if it's below the visible area
-                        if self.input_state.command_palette_selected
-                            >= self.input_state.command_palette_scroll + COMMAND_PALETTE_MAX_VISIBLE
-                        {
-                            self.input_state.command_palette_selected =
-                                self.input_state.command_palette_scroll
-                                    + COMMAND_PALETTE_MAX_VISIBLE
-                                    - 1;
-                        }
-                        self.input_state.needs_redraw = true;
-                    }
-                }
+                self.input_state
+                    .command_palette_wheel_scroll(scroll_direction);
             }
             return;
         }
@@ -95,9 +66,15 @@ impl WaylandState {
             return;
         }
         if on_toolbar || self.pointer_over_toolbar() {
-            if scroll_direction != 0 && self.wheel_over_side_toolbar(&event.surface, event.position)
-            {
-                self.scroll_side_pane_by_wheel(scroll_direction);
+            if scroll_direction != 0 {
+                if self.wheel_over_side_toolbar(&event.surface, event.position) {
+                    self.scroll_side_pane_by_wheel(scroll_direction);
+                } else if self.wheel_over_top_toolbar(&event.surface, event.position) {
+                    // With a Canvas/Session/Settings popover open, the wheel scrolls
+                    // its capped viewport; otherwise a top-strip wheel stays a
+                    // no-op (it never falls through to thickness/zoom).
+                    self.scroll_top_popover_by_wheel(scroll_direction);
+                }
             }
             return;
         }

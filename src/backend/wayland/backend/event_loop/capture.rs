@@ -1,3 +1,4 @@
+use crate::input::state::{Toast, ToastPriority};
 use log::{info, warn};
 use std::time::{Duration, Instant};
 
@@ -6,7 +7,7 @@ use super::super::helpers::friendly_capture_error;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
 use crate::capture::{CaptureOutcome, CapturePoll, ImageOperationKind};
 use crate::config::Action;
-use crate::input::state::{PendingBackendAction, UiToastKind};
+use crate::input::state::PendingBackendAction;
 use crate::notification;
 
 pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
@@ -54,9 +55,10 @@ fn handle_pending_frozen_image(state: &mut WaylandState, now: Instant) {
         if state.xdg_frozen_fullscreen_pending_configure() {
             if state.xdg_frozen_fullscreen_timed_out(now) {
                 warn!("Frozen xdg fullscreen configure timed out; cancelling freeze");
-                state.input_state.set_ui_toast(
-                    UiToastKind::Error,
-                    "Freeze failed because fullscreen was not confirmed",
+                state.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture",
+                    Toast::error("Freeze failed because fullscreen was not confirmed"),
                 );
                 state.restore_xdg_after_frozen();
                 state.frozen.cancel(&mut state.input_state);
@@ -80,6 +82,15 @@ pub(super) fn handle_pending_actions(
     state.poll_session_file_dialog_completion(qh);
     state.drain_clipboard_requests();
     state.handle_pending_eyedropper_toggle();
+    // Copy/paste-hex requests from the color picker popup's pointer release are
+    // drained here: unlike the toolbar/key paths, that release has no other
+    // drain site.
+    if let Some(color) = state.input_state.take_pending_copy_hex_request() {
+        state.handle_copy_hex_color(color);
+    }
+    if let Some(target) = state.input_state.take_pending_paste_hex_request() {
+        state.handle_paste_hex_color(target);
+    }
     handle_frozen_toggle(state);
 
     if let Some(action) = state.input_state.take_pending_backend_action() {
@@ -94,6 +105,9 @@ pub(super) fn handle_pending_actions(
             }
             PendingBackendAction::EditKeybinding(request) => {
                 state.handle_keybinding_edit(request);
+            }
+            PendingBackendAction::PersistToolbarConfig => {
+                state.save_toolbar_pin_config();
             }
         }
     }
@@ -120,9 +134,10 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
         warn!(
             "Frozen mode unavailable: no screencopy backend and no screenshot portal backend; ignoring toggle"
         );
-        state.input_state.set_ui_toast(
-            UiToastKind::Warning,
-            "Freeze is unavailable because screen capture is not available.",
+        state.input_state.push_toast(
+            ToastPriority::Info,
+            "capture",
+            Toast::warning("Freeze is unavailable because screen capture is not available."),
         );
     } else if state.frozen.is_in_progress() {
         warn!("Frozen capture already in progress; ignoring toggle");
@@ -138,9 +153,10 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
         }
         if !state.enter_overlay_suppression(OverlaySuppression::Frozen) {
             warn!("Frozen mode requested while overlay is suppressed; ignoring toggle");
-            state.input_state.set_ui_toast(
-                UiToastKind::Warning,
-                "Freeze is already preparing another overlay operation.",
+            state.input_state.push_toast(
+                ToastPriority::Info,
+                "capture",
+                Toast::warning("Freeze is already preparing another overlay operation."),
             );
             return;
         }
@@ -243,11 +259,11 @@ fn handle_capture_results(state: &mut WaylandState) {
                     result.operation,
                     exit_after_capture,
                 );
-                state.input_state.set_ui_toast_with_action(
-                    UiToastKind::Error,
-                    result.operation.fallback_toast(),
-                    "Save to file",
-                    Action::SavePendingToFile,
+                state.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture",
+                    Toast::error(result.operation.fallback_toast())
+                        .action("Save to file", Action::SavePendingToFile),
                 );
 
                 notification::send_notification_async(
@@ -316,9 +332,11 @@ fn handle_capture_results(state: &mut WaylandState) {
 
             warn!("{} failed: {}", operation.saved_log_label(), message);
 
-            state
-                .input_state
-                .set_ui_toast(UiToastKind::Error, friendly_error.clone());
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture",
+                Toast::error(friendly_error.clone()),
+            );
             notification::send_notification_async(
                 &state.tokio_handle,
                 operation.failure_title().to_string(),
@@ -356,9 +374,11 @@ fn handle_capture_manager_failure(
         None => "Capture services stopped unexpectedly.".to_string(),
     };
     warn!("Capture manager failure: {error}");
-    state
-        .input_state
-        .set_ui_toast(UiToastKind::Error, message.clone());
+    state.input_state.push_toast(
+        ToastPriority::Critical,
+        "capture",
+        Toast::error(message.clone()),
+    );
     notification::send_notification_async(
         &state.tokio_handle,
         operation

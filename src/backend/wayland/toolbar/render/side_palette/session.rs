@@ -10,7 +10,8 @@ use crate::ui::toolbar::model::{ToolbarSessionButton, ToolbarSessionModel};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
 
 use super::super::widgets::constants::{
-    COLOR_TEXT_DISABLED, COLOR_TEXT_PRIMARY, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
+    COLOR_TEXT_DISABLED, COLOR_TEXT_PRIMARY, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL,
+    FONT_SIZE_SECONDARY, set_color,
 };
 use super::super::widgets::{
     draw_button, draw_destructive_button, draw_group_card, draw_label_center, point_in_rect,
@@ -21,7 +22,7 @@ use crate::ui::toolbar::ToolbarSideSection;
 
 const SESSION_BUTTON_ICON_SIZE: f64 = 12.0;
 const SESSION_BUTTON_ICON_GAP: f64 = 4.0;
-const SESSION_BUTTON_ICON_LABEL_SIZE: f64 = 11.0;
+const SESSION_BUTTON_ICON_LABEL_SIZE: f64 = FONT_SIZE_SECONDARY;
 const SESSION_RECENT_ICON_SIZE: f64 = 13.0;
 const SESSION_RECENT_ICON_GAP: f64 = 6.0;
 const SESSION_RECENT_PADDING_X: f64 = 7.0;
@@ -45,7 +46,7 @@ pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) 
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 11.0,
+        size: FONT_SIZE_SECONDARY,
     };
     let path_style = UiTextStyle {
         family: FONT_FAMILY_DEFAULT,
@@ -362,8 +363,12 @@ fn draw_recent_sessions(
 
 /// Middle-ellipsize so both the head and the distinguishing tail survive.
 /// Tail truncation made e.g. two different "lecture-05-…" files render
-/// identically in the recents list.
-fn truncate_middle(value: &str, max_chars: usize) -> String {
+/// identically in the recents list. Shared with the top strip's Session
+/// popover so both surfaces truncate identically.
+pub(in crate::backend::wayland::toolbar) fn truncate_middle(
+    value: &str,
+    max_chars: usize,
+) -> String {
     let count = value.chars().count();
     if count <= max_chars {
         return value.to_string();
@@ -379,7 +384,10 @@ fn truncate_middle(value: &str, max_chars: usize) -> String {
 
 /// Keep the tail of a path — the leading directories are the least
 /// informative part of a session path.
-fn truncate_start(value: &str, max_chars: usize) -> String {
+pub(in crate::backend::wayland::toolbar) fn truncate_start(
+    value: &str,
+    max_chars: usize,
+) -> String {
     let count = value.chars().count();
     if count <= max_chars {
         return value.to_string();
@@ -392,7 +400,7 @@ fn truncate_start(value: &str, max_chars: usize) -> String {
 
 /// Drop the constant session-file extension in list rows; it costs the
 /// characters that distinguish one session from another.
-fn strip_session_extension(value: &str) -> &str {
+pub(in crate::backend::wayland::toolbar) fn strip_session_extension(value: &str) -> &str {
     value
         .strip_suffix(".wayscriber-session")
         .or_else(|| value.strip_suffix(".wayscriber"))

@@ -2,9 +2,9 @@ use super::super::color::ColorInput;
 use super::super::fields::{
     DragMouseButton, DragToolField, DragToolOption, FontWeightOption, OverrideOption,
     PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, QuadField, SessionStorageModeOption, TextField, ToggleField,
-    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    TripletField,
+    PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, SessionStorageModeOption,
+    TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, TripletField, UiThemeOption,
 };
 
 #[test]
@@ -26,14 +26,27 @@ fn config_draft_round_trips_toolbar_rebind_modifier() {
         wayscriber::config::ToolbarRebindModifier::ShiftAlt
     );
 }
+
+#[test]
+fn config_draft_round_trips_status_bar_interactive() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(draft.ui_status_bar_interactive, "defaults to interactive");
+
+    draft.set_toggle(ToggleField::UiStatusBarInteractive, false);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("status bar interactive round trip");
+    assert!(!round_trip.ui.status_bar_interactive);
+}
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
     ColorSpec, Config, ConfigDocument, PdfFitMode, PdfLabelContentMode, PdfLabelPosition,
     PdfOrientation, PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig,
-    QuickColorConfig, RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode,
-    ToolPresetConfig, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemsConfig,
-    ToolbarSectionFlag, XdgFocusLossBehavior, toolbar_item_ids as ids,
+    QuickColorConfig, ReducedMotion, RenderColorMappingConfig, RenderProfileConfig,
+    RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
+    ToolbarItemsConfig, ToolbarSectionFlag, UiTheme, XdgFocusLossBehavior, toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -63,8 +76,11 @@ fn config_draft_to_config_reports_errors() {
 fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
     let temp = crate::test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
-    let original = "config_revision = 1\n# intentionally sparse\n";
-    std::fs::write(&path, original).expect("write sparse config");
+    let original = format!(
+        "config_revision = {}\n# intentionally sparse\n",
+        wayscriber::config::CURRENT_CONFIG_REVISION
+    );
+    std::fs::write(&path, &original).expect("write sparse config");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
     let draft = ConfigDraft::from_config(document.config());
     let updated = draft
@@ -197,12 +213,15 @@ fn config_draft_preserves_implicit_quick_color_defaults() {
 fn config_draft_preserves_sparse_explicit_quick_colors_without_padding_the_file() {
     let temp = crate::test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
-    let original = r#"config_revision = 1
+    let original = format!(
+        r#"config_revision = {}
 [[drawing.quick_colors]]
 label = "Only configured color"
 color = "blue"
-"#;
-    std::fs::write(&path, original).expect("write sparse quick colors");
+"#,
+        wayscriber::config::CURRENT_CONFIG_REVISION
+    );
+    std::fs::write(&path, &original).expect("write sparse quick colors");
     let document = ConfigDocument::load_from_path(&path).expect("load sparse quick colors");
     assert_eq!(
         document
@@ -826,6 +845,40 @@ fn section_toggle_replaces_overlay_item_override_on_save() {
 }
 
 #[test]
+fn config_draft_round_trips_toolbar_side_layout() {
+    use super::super::fields::ToolbarSideLayoutOption;
+    use wayscriber::config::ToolbarSideLayout;
+
+    // The default draft mirrors the config default: pill (the
+    // Session/Settings panes live in top-strip overflow popovers).
+    let default_draft = ConfigDraft::from_config(&Config::default());
+    assert_eq!(
+        default_draft.ui_toolbar_side_layout,
+        ToolbarSideLayoutOption::Pill
+    );
+    let saved = default_draft
+        .to_config(&Config::default())
+        .expect("default draft should convert");
+    assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Pill);
+
+    // The pick list leads with the default and the legacy escape hatch
+    // round-trips through the draft.
+    assert_eq!(
+        ToolbarSideLayoutOption::list(),
+        vec![
+            ToolbarSideLayoutOption::Pill,
+            ToolbarSideLayoutOption::Panel,
+        ]
+    );
+    let mut config = Config::default();
+    config.ui.toolbar.side_layout = ToolbarSideLayout::Panel;
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_toolbar_side_layout, ToolbarSideLayoutOption::Panel);
+    let saved = draft.to_config(&config).expect("draft should convert");
+    assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Panel);
+}
+
+#[test]
 fn config_draft_round_trips_presets_and_history() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 500;
@@ -1086,6 +1139,34 @@ fn config_draft_round_trips_xdg_focus_loss_behavior() {
         round_trip.ui.xdg_focus_loss_behavior,
         XdgFocusLossBehavior::Stay
     );
+}
+
+#[test]
+fn config_draft_round_trips_ui_theme() {
+    let mut config = Config::default();
+    config.ui.theme = UiTheme::Light;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_theme, UiThemeOption::Light);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(round_trip.ui.theme, UiTheme::Light);
+}
+
+#[test]
+fn config_draft_round_trips_ui_reduced_motion() {
+    let mut config = Config::default();
+    config.ui.reduced_motion = ReducedMotion::On;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_reduced_motion, ReducedMotionOption::On);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(round_trip.ui.reduced_motion, ReducedMotion::On);
 }
 
 #[test]

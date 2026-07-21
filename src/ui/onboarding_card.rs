@@ -1,3 +1,5 @@
+use super::primitives::draw_rounded_rect;
+use super::theme::{self, Rgba, overlay};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
 
 pub struct OnboardingChecklistItem {
@@ -16,17 +18,42 @@ pub struct OnboardingCard {
 const CARD_MARGIN: f64 = 20.0;
 const CARD_MAX_WIDTH: f64 = 460.0;
 const CARD_MIN_WIDTH: f64 = 300.0;
-const CARD_PADDING: f64 = 16.0;
-const CARD_RADIUS: f64 = 12.0;
+const CARD_PADDING: f64 = overlay::SPACING_LG;
+const CARD_RADIUS: f64 = overlay::RADIUS_PANEL;
 const ITEM_DOT_SIZE: f64 = 10.0;
 const ITEM_GAP_Y: f64 = 24.0;
 const TEXT_OFFSET_Y: f64 = 5.0;
 const EYEBROW_CONTENT_HEIGHT: f64 = 20.0;
 const TITLE_CONTENT_HEIGHT: f64 = 30.0;
-const BODY_BOTTOM_GAP: f64 = 12.0;
+const BODY_BOTTOM_GAP: f64 = overlay::SPACING_STD;
 const FOOTER_CONTENT_HEIGHT: f64 = 20.0;
-const CARD_SCALE: f64 = 1.3;
+/// Type-scale multiplier applied uniformly to every metric and font size on
+/// this card. The layout constants above are designed at 1x; the first-run
+/// card renders 1.3x larger so it stays legible from a distance on an
+/// otherwise empty overlay (there is no user-configurable scaling here).
+const CARD_TYPE_SCALE: f64 = 1.3;
 const ELLIPSIS: &str = "...";
+
+// ---- Colors ----
+// File-local values carry the card's slightly deeper, cooler look; only the
+// exact matches point at theme tokens (see `theme::overlay`).
+/// Card fill: deeper than the standard panel backgrounds so the card reads
+/// without a backdrop dim.
+const CARD_BG: Rgba = (0.07, 0.09, 0.12, 0.96);
+/// Card hairline border (cool steel; no matching theme token).
+const CARD_BORDER: Rgba = (0.36, 0.46, 0.58, 0.8);
+/// Eyebrow/kicker line above the title (desaturated accent tint).
+const TEXT_EYEBROW: Rgba = (0.65, 0.74, 0.88, 1.0);
+/// Body copy (sits between the overlay primary and secondary text tones).
+const TEXT_BODY: Rgba = (0.78, 0.84, 0.92, 1.0);
+/// Footer hint text.
+const TEXT_FOOTER: Rgba = (0.60, 0.68, 0.78, 1.0);
+/// Checklist dot for a completed item (success green).
+const DOT_DONE: Rgba = (0.30, 0.82, 0.52, 1.0);
+/// Checklist dot for a pending item.
+const DOT_PENDING: Rgba = (0.44, 0.52, 0.62, 1.0);
+/// Checkmark stroke drawn over a completed dot.
+const CHECKMARK: Rgba = (0.96, 1.0, 0.97, 1.0);
 
 pub fn render_onboarding_card(
     ctx: &cairo::Context,
@@ -34,14 +61,14 @@ pub fn render_onboarding_card(
     height: u32,
     card: &OnboardingCard,
 ) {
-    let margin = CARD_MARGIN * CARD_SCALE;
-    let card_max_width = CARD_MAX_WIDTH * CARD_SCALE;
-    let card_min_width = CARD_MIN_WIDTH * CARD_SCALE;
-    let card_padding = CARD_PADDING * CARD_SCALE;
-    let card_radius = CARD_RADIUS * CARD_SCALE;
-    let item_dot_size = ITEM_DOT_SIZE * CARD_SCALE;
-    let item_gap_y = ITEM_GAP_Y * CARD_SCALE;
-    let text_offset_y = TEXT_OFFSET_Y * CARD_SCALE;
+    let margin = CARD_MARGIN * CARD_TYPE_SCALE;
+    let card_max_width = CARD_MAX_WIDTH * CARD_TYPE_SCALE;
+    let card_min_width = CARD_MIN_WIDTH * CARD_TYPE_SCALE;
+    let card_padding = CARD_PADDING * CARD_TYPE_SCALE;
+    let card_radius = CARD_RADIUS * CARD_TYPE_SCALE;
+    let item_dot_size = ITEM_DOT_SIZE * CARD_TYPE_SCALE;
+    let item_gap_y = ITEM_GAP_Y * CARD_TYPE_SCALE;
+    let text_offset_y = TEXT_OFFSET_Y * CARD_TYPE_SCALE;
 
     let available_width = (width as f64 - margin * 2.0).max(1.0);
     let card_width = available_width
@@ -58,31 +85,31 @@ pub fn render_onboarding_card(
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 12.0 * CARD_SCALE,
+        size: 12.0 * CARD_TYPE_SCALE,
     };
     let title_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Bold,
-        size: 20.0 * CARD_SCALE,
+        size: 20.0 * CARD_TYPE_SCALE,
     };
     let body_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 13.0 * CARD_SCALE,
+        size: 13.0 * CARD_TYPE_SCALE,
     };
     let item_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 13.0 * CARD_SCALE,
+        size: 13.0 * CARD_TYPE_SCALE,
     };
     let footer_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: 11.0 * CARD_SCALE,
+        size: 11.0 * CARD_TYPE_SCALE,
     };
 
     let body_height = text_layout(ctx, body_style, &card.body, Some(content_w))
@@ -91,56 +118,56 @@ pub fn render_onboarding_card(
         .max(body_style.size);
     let content_height =
         (EYEBROW_CONTENT_HEIGHT + TITLE_CONTENT_HEIGHT + BODY_BOTTOM_GAP + FOOTER_CONTENT_HEIGHT)
-            * CARD_SCALE
+            * CARD_TYPE_SCALE
             + body_height
             + card.items.len() as f64 * item_gap_y;
     let card_height = content_height + card_padding * 2.0;
 
-    rounded_rect(ctx, x, y, card_width, card_height, card_radius);
-    ctx.set_source_rgba(0.07, 0.09, 0.12, 0.96);
+    draw_rounded_rect(ctx, x, y, card_width, card_height, card_radius);
+    theme::set_color(ctx, CARD_BG);
     let _ = ctx.fill_preserve();
-    ctx.set_source_rgba(0.36, 0.46, 0.58, 0.8);
+    theme::set_color(ctx, CARD_BORDER);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
     let mut cursor_y = y + card_padding;
 
-    ctx.set_source_rgba(0.65, 0.74, 0.88, 1.0);
+    theme::set_color(ctx, TEXT_EYEBROW);
     draw_text_baseline(
         ctx,
         eyebrow_style,
         &fit_text(ctx, &card.eyebrow, eyebrow_style, content_w),
         content_x,
-        cursor_y + 12.0 * CARD_SCALE,
+        cursor_y + 12.0 * CARD_TYPE_SCALE,
         None,
     );
-    cursor_y += EYEBROW_CONTENT_HEIGHT * CARD_SCALE;
+    cursor_y += EYEBROW_CONTENT_HEIGHT * CARD_TYPE_SCALE;
 
-    ctx.set_source_rgba(0.96, 0.98, 1.0, 1.0);
+    theme::set_color(ctx, overlay::TEXT_ACTIVE);
     draw_text_baseline(
         ctx,
         title_style,
         &fit_text(ctx, &card.title, title_style, content_w),
         content_x,
-        cursor_y + 20.0 * CARD_SCALE,
+        cursor_y + 20.0 * CARD_TYPE_SCALE,
         None,
     );
-    cursor_y += TITLE_CONTENT_HEIGHT * CARD_SCALE;
+    cursor_y += TITLE_CONTENT_HEIGHT * CARD_TYPE_SCALE;
 
-    ctx.set_source_rgba(0.78, 0.84, 0.92, 1.0);
+    theme::set_color(ctx, TEXT_BODY);
     draw_text_baseline(
         ctx,
         body_style,
         &card.body,
         content_x,
-        cursor_y + 13.0 * CARD_SCALE,
+        cursor_y + 13.0 * CARD_TYPE_SCALE,
         Some(content_w),
     );
-    cursor_y += body_height + BODY_BOTTOM_GAP * CARD_SCALE;
+    cursor_y += body_height + BODY_BOTTOM_GAP * CARD_TYPE_SCALE;
 
     for item in &card.items {
         let dot_x = content_x + item_dot_size * 0.5;
-        let dot_y = cursor_y + item_dot_size * 0.5 + 1.0 * CARD_SCALE;
+        let dot_y = cursor_y + item_dot_size * 0.5 + 1.0 * CARD_TYPE_SCALE;
         ctx.arc(
             dot_x,
             dot_y,
@@ -149,20 +176,20 @@ pub fn render_onboarding_card(
             std::f64::consts::TAU,
         );
         if item.done {
-            ctx.set_source_rgba(0.30, 0.82, 0.52, 1.0);
+            theme::set_color(ctx, DOT_DONE);
         } else {
-            ctx.set_source_rgba(0.44, 0.52, 0.62, 1.0);
+            theme::set_color(ctx, DOT_PENDING);
         }
         let _ = ctx.fill();
 
         if item.done {
-            ctx.set_source_rgba(0.96, 1.0, 0.97, 1.0);
+            theme::set_color(ctx, CHECKMARK);
             draw_checkmark(ctx, dot_x, dot_y, item_dot_size * 0.5);
         }
 
-        ctx.set_source_rgba(0.86, 0.90, 0.96, 1.0);
-        let item_x = content_x + item_dot_size + 8.0 * CARD_SCALE;
-        let item_w = content_w - item_dot_size - 8.0 * CARD_SCALE;
+        theme::set_color(ctx, overlay::TEXT_SECONDARY);
+        let item_x = content_x + item_dot_size + 8.0 * CARD_TYPE_SCALE;
+        let item_w = content_w - item_dot_size - 8.0 * CARD_TYPE_SCALE;
         draw_text_baseline(
             ctx,
             item_style,
@@ -174,13 +201,13 @@ pub fn render_onboarding_card(
         cursor_y += item_gap_y;
     }
 
-    ctx.set_source_rgba(0.60, 0.68, 0.78, 1.0);
+    theme::set_color(ctx, TEXT_FOOTER);
     draw_text_baseline(
         ctx,
         footer_style,
         &fit_text(ctx, &card.footer, footer_style, content_w),
         content_x,
-        y + card_height - card_padding + 2.0 * CARD_SCALE,
+        y + card_height - card_padding + 2.0 * CARD_TYPE_SCALE,
         None,
     );
 }
@@ -189,12 +216,8 @@ fn fit_text(ctx: &cairo::Context, text: &str, style: UiTextStyle<'_>, max_width:
     if text.is_empty() || max_width <= 0.0 {
         return String::new();
     }
-    ctx.select_font_face(style.family, style.slant, style.weight);
-    ctx.set_font_size(style.size);
-    let Ok(extents) = ctx.text_extents(text) else {
-        return text.to_string();
-    };
-    if extents.width() <= max_width {
+    let text_width = |s: &str| text_layout(ctx, style, s, None).ink_extents().width();
+    if text_width(text) <= max_width {
         return text.to_string();
     }
 
@@ -202,36 +225,11 @@ fn fit_text(ctx: &cairo::Context, text: &str, style: UiTextStyle<'_>, max_width:
     while !current.is_empty() {
         current.pop();
         let candidate = format!("{current}{ELLIPSIS}");
-        let Ok(candidate_extents) = ctx.text_extents(&candidate) else {
-            break;
-        };
-        if candidate_extents.width() <= max_width {
+        if text_width(&candidate) <= max_width {
             return candidate;
         }
     }
     ELLIPSIS.to_string()
-}
-
-fn rounded_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    ctx.new_sub_path();
-    ctx.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
-    ctx.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    ctx.arc(
-        x + r,
-        y + h - r,
-        r,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::PI,
-    );
-    ctx.arc(
-        x + r,
-        y + r,
-        r,
-        std::f64::consts::PI,
-        3.0 * std::f64::consts::FRAC_PI_2,
-    );
-    ctx.close_path();
 }
 
 fn draw_checkmark(ctx: &cairo::Context, cx: f64, cy: f64, radius: f64) {

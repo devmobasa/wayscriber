@@ -1,5 +1,6 @@
 use super::super::*;
 use super::backdrop::desktop_backdrop_output_geometry_from_info;
+use crate::input::state::{Toast, ToastPriority};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn handle_board_pdf_export_action(&mut self, action: Action) {
@@ -39,9 +40,12 @@ impl WaylandState {
                     "Board PDF export action {:?} requested while overlay is suppressed; ignoring",
                     action
                 );
-                self.input_state.set_ui_toast(
-                    crate::input::state::UiToastKind::Warning,
-                    "Board PDF export is already preparing another overlay operation.",
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "capture.pdf",
+                    Toast::warning(
+                        "Board PDF export is already preparing another overlay operation.",
+                    ),
                 );
                 return;
             }
@@ -66,8 +70,11 @@ impl WaylandState {
             Err(err) => {
                 let message = operation.format_error(&err);
                 log::error!("Board PDF export failed: {}", message);
-                self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture.pdf",
+                    Toast::error(message),
+                );
                 return;
             }
         };
@@ -85,8 +92,11 @@ impl WaylandState {
                 "Board PDF export failed: desktop backdrop completed without pending PDF export"
                     .to_string();
             log::error!("{message}");
-            self.input_state
-                .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.pdf",
+                Toast::error(message),
+            );
             return;
         };
 
@@ -105,8 +115,11 @@ impl WaylandState {
             Err(err) => {
                 let message = pending.operation.format_error(&err);
                 log::error!("Board PDF export failed after desktop capture: {}", message);
-                self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture.pdf",
+                    Toast::error(message),
+                );
                 return;
             }
         };
@@ -131,8 +144,11 @@ impl WaylandState {
             Err(err) => {
                 let message = operation.format_error(&err);
                 log::error!("Board PDF export failed: {}", message);
-                self.input_state
-                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture.pdf",
+                    Toast::error(message),
+                );
                 return;
             }
         };

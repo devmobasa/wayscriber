@@ -5,7 +5,7 @@
 # Delete this file to reset to defaults.
 
 # Internal migration provenance. Keep this value when editing the file.
-config_revision = 1
+config_revision = 2
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
@@ -154,8 +154,12 @@ toggle_quick_help = ["Shift+F1"]
 # Toggle status bar
 toggle_status_bar = ["F12", "F4"]
 
-# Toggle toolbars
-toggle_toolbar = ["F2", "F9"]
+# Toggle toolbars (show/hide top and side together)
+toggle_toolbar = ["F9"]
+
+# Cycle the top toolbar's display: full strip -> micro chip -> hidden
+# (F2 used to toggle the toolbars; the cycle still reaches hidden)
+cycle_toolbar_display = ["F2"]
 
 # Toggle click highlight
 toggle_click_highlight = ["Ctrl+Shift+H"]
@@ -294,8 +298,23 @@ icon_style = "auto"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [ui]
+# Overlay chrome theme
+# Options: "auto", "dark", "light" ("auto" currently resolves to dark;
+# "light" takes effect as overlay surfaces adopt the runtime theme)
+theme = "auto"
+
+# Reduce UI motion (disable animations)
+# Options: "auto", "on", "off". "on" disables UI animations. "auto" is
+# reserved for a future desktop-portal (system preference) query and
+# currently behaves like "off" (full motion).
+reduced_motion = "auto"
+
 # Show status bar with current color/thickness/tool
 show_status_bar = true
+
+# Allow clicking status bar segments (board, page, color dot, tool, help)
+# to open their surfaces; set false for a display-only status bar
+status_bar_interactive = true
 
 # Show board label in the status bar
 show_status_board_badge = true
@@ -344,7 +363,7 @@ active_output_badge = true
 radial_menu_mouse_binding = "middle"
 
 # ───────────────────────────────────────────────────────────────────────────────
-# Floating Toolbars (Press F2/F9 to toggle)
+# Floating Toolbars (F9 toggles; F2 cycles full -> micro -> hidden)
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]
@@ -405,8 +424,25 @@ side_pinned = true
 top_minimized = false
 side_minimized = false
 
+# Display form of the top strip restored at startup: "full" or "micro"
+# (one 44px round chip: active tool glyph + a ring in the current color).
+# The cycle keybinding updates this; a cycle-hidden strip is runtime-only
+# and comes back per top_pinned
+top_display_mode = "full"
+
+# Where the side-palette functions live: "pill" (default) or "panel".
+# "pill" retires the standalone side palette: drawing properties live in
+# the top strip's contextual style pill, canvas management in the status
+# HUD and board picker, and the Session/Settings panes in popovers opened
+# from the top strip's overflow menu ("Session..." / "Settings...").
+# "panel" is the legacy escape hatch restoring the classic four-pane side
+# palette (side_active_pane, collapsed_sections, side_pinned, and
+# side_minimized apply only under "panel"); it is deprecated and planned
+# for removal one release after the pill default
+side_layout = "pill"
+
 # Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
-# The overlay updates this as you switch panes
+# The overlay updates this as you switch panes (legacy side_layout = "panel" only)
 side_active_pane = "draw"
 
 # Side-palette sections collapsed to their header row
@@ -613,6 +649,10 @@ hide_status_bar = true
 hide_toolbars = true
 hide_tool_preview = true
 
+# What hide_toolbars does to the top strip: "hidden" removes it entirely,
+# "micro" collapses it to the 44px micro chip (side toolbars always hide)
+toolbar_mode = "hidden"
+
 # Close the help overlay when entering presenter mode
 close_help_overlay = true
 
@@ -701,7 +741,8 @@ persist = true
 id = "whiteboard"
 name = "Whiteboard"
 background = { rgb = [0.992, 0.992, 0.992] }
-default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+# Tuned black #241F31; the built-in default bit-matches the "black" quick color
+default_pen_color = { rgb = [0.141, 0.122, 0.192] }
 auto_adjust_pen = true
 
 [[boards.items]]
@@ -846,6 +887,7 @@ backup_retention = 1
 [drawing]
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
 # Or #RRGGBB hex: "#FFB3BA"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
@@ -953,38 +995,40 @@ text_background_enabled = false
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
 # to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays.
+# arrays. The hex values below are the tuned built-in defaults; named colors
+# ("red", "green", ...) resolve to these same tuned values, so named entries,
+# the default pen color, and board auto-adjust pens all match these swatches.
 [[drawing.quick_colors]]
 label = "Red"
-color = "red"
+color = "#F5333F"
 
 [[drawing.quick_colors]]
 label = "Green"
-color = "green"
+color = "#2EC27E"
 
 [[drawing.quick_colors]]
 label = "Blue"
-color = "blue"
+color = "#3584E4"
 
 [[drawing.quick_colors]]
 label = "Yellow"
-color = "yellow"
+color = "#F6D32D"
 
 [[drawing.quick_colors]]
 label = "Orange"
-color = "orange"
+color = "#FF7800"
 
 [[drawing.quick_colors]]
 label = "Pink"
-color = "pink"
+color = "#C061CB"
 
 [[drawing.quick_colors]]
 label = "White"
-color = "white"
+color = "#FFFFFF"
 
 [[drawing.quick_colors]]
 label = "Black"
-color = "black"
+color = "#241F31"
 
 [[drawing.quick_colors]]
 label = "Cyan"

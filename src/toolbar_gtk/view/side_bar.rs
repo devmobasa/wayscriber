@@ -88,6 +88,23 @@ impl SideBar {
         let capture_surface = CaptureSurfaceContent::new(&root);
         window.set_child(Some(capture_surface.widget()));
 
+        // Hovering the side palette holds the top-strip idle fade, matching
+        // the built-in bars where `pointer_over_toolbar` covers both bars.
+        // The same `TopHover` feedback is reused: GTK runs on its own
+        // Wayland connection, so the backend cannot observe this pointer
+        // itself, and leave/enter arrive in protocol order when the pointer
+        // crosses between the two toolbar windows.
+        let hover = gtk4::EventControllerMotion::new();
+        let enter_feedback = feedback.clone();
+        hover.connect_enter(move |_, _, _| {
+            let _ = enter_feedback.send(GtkToolbarFeedback::TopHover { hovered: true });
+        });
+        let leave_feedback = feedback.clone();
+        hover.connect_leave(move |_| {
+            let _ = leave_feedback.send(GtkToolbarFeedback::TopHover { hovered: false });
+        });
+        window.add_controller(hover);
+
         Self {
             window,
             feedback,

@@ -1,4 +1,5 @@
-use super::state::sub_ring_child_count;
+use super::compass::sub_ring_child_count;
+use super::size_ring::size_ring_angle_in_span;
 use super::{RadialMenuLayout, RadialSegmentId, TOOL_SEGMENT_COUNT};
 use std::f64::consts::PI;
 
@@ -21,8 +22,7 @@ pub fn hit_test_radial(
 
     // Compute tool angle: 0 at top, clockwise, in [0, 2*PI).
     // Add half-segment offset so boundaries align with rendered tool wedges.
-    let tool_half_seg = PI / TOOL_SEGMENT_COUNT as f64; // == tool_seg_angle / 2
-    let tool_angle = normalize_angle(dy.atan2(dx) + PI / 2.0 + tool_half_seg);
+    let tool_angle = tool_angle_for_offset(dx, dy);
 
     // Sub-ring band (checked before tool ring when a sub-ring is expanded)
     if let Some(parent_idx) = expanded_sub_ring
@@ -60,7 +60,33 @@ pub fn hit_test_radial(
         return Some(RadialSegmentId::Color(idx));
     }
 
+    // Size ring (outermost thin band; the bottom gap of the gauge arc is
+    // inert so its two ends never fight over one press)
+    if dist >= layout.size_inner
+        && dist <= layout.size_outer
+        && size_ring_angle_in_span(dy.atan2(dx))
+    {
+        return Some(RadialSegmentId::SizeRing);
+    }
+
     None
+}
+
+/// Primary compass segment for a pointer position, by direction alone
+/// (distance is ignored). This is the flick-commit map: the same angle math
+/// the tool-ring hit-test uses, so a flick and a hover can never disagree on
+/// which wedge a direction means.
+pub fn primary_segment_for_point(center_x: f64, center_y: f64, x: f64, y: f64) -> u8 {
+    let tool_angle = tool_angle_for_offset(x - center_x, y - center_y);
+    angle_to_segment(tool_angle, TOOL_SEGMENT_COUNT)
+}
+
+/// Tool-ring angle for a center-relative offset: 0 at top, clockwise, in
+/// [0, 2*PI), with the half-segment offset that aligns segment boundaries
+/// with the rendered wedges.
+fn tool_angle_for_offset(dx: f64, dy: f64) -> f64 {
+    let tool_half_seg = PI / TOOL_SEGMENT_COUNT as f64; // == tool_seg_angle / 2
+    normalize_angle(dy.atan2(dx) + PI / 2.0 + tool_half_seg)
 }
 
 /// Map an angle (0 at top, clockwise) to a segment index.

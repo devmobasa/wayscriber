@@ -2,10 +2,11 @@ use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
 use crate::draw::shape::{PolygonKind, has_minimum_distinct_points};
 use crate::input::Tool;
+use crate::input::state::{Toast, ToastPriority};
 use std::time::Instant;
 
 use super::super::super::core::PolygonClickState;
-use super::super::super::{DrawingState, InputState, UiToastKind};
+use super::super::super::{DrawingState, InputState};
 use super::super::{TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
 impl InputState {
@@ -28,9 +29,10 @@ impl InputState {
         };
         self.last_provisional_bounds = None;
         self.update_provisional_dirty(x, y);
-        self.set_ui_toast(
-            UiToastKind::Info,
-            "Click points. Enter/double-click to finish. Backspace undo. Esc cancel.",
+        self.push_toast(
+            ToastPriority::Info,
+            "draw.polygon",
+            Toast::info("Click points. Enter/double-click to finish. Backspace undo. Esc cancel."),
         );
         self.needs_redraw = true;
     }

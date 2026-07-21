@@ -125,6 +125,7 @@ define_action_binding_accessors! {
     ToggleStatusBar => ui.toggle_status_bar,
     ToggleClickHighlight => ui.toggle_click_highlight,
     ToggleToolbar => ui.toggle_toolbar,
+    CycleToolbarDisplay => ui.cycle_toolbar_display,
     TogglePresenterMode => ui.toggle_presenter_mode,
     ToggleLightMode => ui.toggle_light_mode,
     ToggleLightModeDrawing => ui.toggle_light_mode_drawing,

@@ -47,6 +47,57 @@ pub enum XdgFocusLossBehavior {
     Stay,
 }
 
+/// Overlay chrome theme (`[ui] theme`).
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiTheme {
+    /// Follow context. Currently resolves to dark chrome; context-aware
+    /// selection lands when surfaces consume the runtime theme.
+    #[default]
+    Auto,
+    /// Always dark chrome.
+    Dark,
+    /// Always light chrome.
+    Light,
+}
+
+impl UiTheme {
+    /// Maps the config value onto the runtime theme mode.
+    pub fn to_theme_mode(self) -> crate::ui::theme::ThemeMode {
+        match self {
+            UiTheme::Auto => crate::ui::theme::ThemeMode::Auto,
+            UiTheme::Dark => crate::ui::theme::ThemeMode::Dark,
+            UiTheme::Light => crate::ui::theme::ThemeMode::Light,
+        }
+    }
+}
+
+/// Reduced-motion preference (`[ui] reduced_motion`).
+///
+/// `on` disables UI animations. `auto` is reserved for a future desktop-portal
+/// (system preference) query and currently behaves like `off` (full motion).
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReducedMotion {
+    /// Follow the system preference once desktop-portal support lands;
+    /// full motion today.
+    #[default]
+    Auto,
+    /// Reduce motion: disable UI animations.
+    On,
+    /// Full motion.
+    Off,
+}
+
+impl ReducedMotion {
+    /// Whether UI animations should run.
+    pub fn motion_enabled(self) -> bool {
+        !matches!(self, ReducedMotion::On)
+    }
+}
+
 /// Color specification - either a named color, `#RRGGBB` hex string, or RGB values.
 ///
 /// # Examples
@@ -73,10 +124,10 @@ pub enum ColorSpec {
 impl ColorSpec {
     /// Converts the color specification to a [`Color`] struct.
     ///
-    /// Hex colors accept only `#RRGGBB`. Named colors are mapped to predefined RGBA
+    /// Hex colors accept only `#RRGGBB`. Named colors are mapped to the tuned palette
     /// values using `util::name_to_color()`. Unknown color names and invalid hex values
-    /// default to red with a warning. RGB arrays are converted from 0-255 range to
-    /// 0.0-1.0 range with full opacity.
+    /// default to the tuned palette red with a warning. RGB arrays are converted from
+    /// 0-255 range to 0.0-1.0 range with full opacity.
     pub fn to_color(&self) -> Color {
         match self {
             ColorSpec::Name(name) => match crate::util::parse_config_hex_color(name) {
@@ -84,11 +135,11 @@ impl ColorSpec {
                 Err(ConfigHexColorError::MissingHash) => crate::util::name_to_color(name)
                     .unwrap_or_else(|| {
                         warn!("Unknown color '{}', using red", name);
-                        RED
+                        PALETTE_RED
                     }),
                 Err(err) => {
                     warn!("Invalid hex color '{}': {:?}; using red", name, err);
-                    RED
+                    PALETTE_RED
                 }
             },
             ColorSpec::Rgb([r, g, b]) => Color {
@@ -134,7 +185,7 @@ mod tests {
     fn color_spec_to_color_falls_back_to_red_for_unknown_name() {
         let spec = ColorSpec::Name("chartreuse".to_string());
         let color = spec.to_color();
-        assert_eq!(color, RED);
+        assert_eq!(color, PALETTE_RED);
     }
 
     #[test]
@@ -157,7 +208,7 @@ mod tests {
         for value in ["#GG0000", "#12345", "0xFFB3BA"] {
             let spec = ColorSpec::Name(value.to_string());
             let color = spec.to_color();
-            assert_eq!(color, RED, "{value} should fall back to red");
+            assert_eq!(color, PALETTE_RED, "{value} should fall back to red");
         }
     }
 

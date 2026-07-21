@@ -1,5 +1,7 @@
-use super::super::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
+use super::super::primitives::{draw_rounded_rect, keycap_size, text_extents_for};
+use crate::ui::primitives::draw_keycap;
+use crate::ui::theme::toolbar;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 pub(crate) struct KeyComboStyle<'a> {
     pub(crate) font_family: &'a str,
@@ -29,73 +31,32 @@ fn for_each_key_token(combo: &str, mut emit: impl FnMut(&str)) {
     }
 }
 
-/// Draw a keyboard key with keycap styling
-fn draw_keycap(
+/// Draw a single keycap in the shared keycap language ([`crate::ui::primitives::draw_keycap`]),
+/// anchored on a text `baseline` so it lines up with the row's description
+/// text. Returns the drawn cap width.
+///
+/// The cap is centred vertically on the same point the previous bespoke 3D cap
+/// used (`baseline - font_size / 2`), so replacing the cap did not shift the
+/// rows or the highlight geometry in [`draw_key_combo_highlight`].
+fn draw_single_keycap(
     ctx: &cairo::Context,
     x: f64,
-    y: f64,
+    baseline: f64,
     text: &str,
-    font_family: &str,
     font_size: f64,
     text_color: [f64; 4],
 ) -> f64 {
-    let padding_x = 8.0;
-    let padding_y = 4.0;
-    let radius = 5.0;
-    let shadow_offset = 2.0;
-    let key_style = UiTextStyle {
-        family: font_family,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Bold,
-        size: font_size,
-    };
-    let layout = text_layout(ctx, key_style, text, None);
-    let extents = layout.ink_extents();
-
-    let cap_width = extents.width() + padding_x * 2.0;
-    let cap_height = font_size + padding_y * 2.0;
-    let cap_y = y - font_size - padding_y;
-
-    // Drop shadow for 3D depth effect
-    draw_rounded_rect(
+    let (_, cap_height) = keycap_size(ctx, text, font_size);
+    let top_y = baseline - font_size / 2.0 - cap_height / 2.0;
+    let (cap_width, _) = draw_keycap(
         ctx,
-        x + 1.0,
-        cap_y + shadow_offset,
-        cap_width,
-        cap_height,
-        radius,
+        x,
+        top_y,
+        text,
+        font_size,
+        toolbar::COLOR_BADGE_BACKGROUND,
+        (text_color[0], text_color[1], text_color[2], text_color[3]),
     );
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
-    let _ = ctx.fill();
-
-    // Keycap main background
-    draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
-    ctx.set_source_rgba(0.18, 0.22, 0.3, 1.0);
-    let _ = ctx.fill();
-
-    // Inner highlight for depth
-    draw_rounded_rect(
-        ctx,
-        x + 1.0,
-        cap_y + 1.0,
-        cap_width - 2.0,
-        cap_height - 2.0,
-        radius - 1.0,
-    );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.12);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-
-    // Outer border
-    draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.2);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-
-    // Text
-    ctx.set_source_rgba(text_color[0], text_color[1], text_color[2], text_color[3]);
-    layout.show_at_baseline(ctx, x + padding_x, y);
-
     cap_width
 }
 
@@ -106,7 +67,6 @@ pub(crate) fn measure_key_combo(
     font_family: &str,
     font_size: f64,
 ) -> f64 {
-    let keycap_padding_x = 8.0;
     let key_gap = 5.0;
     let separator_gap = 6.0;
 
@@ -145,15 +105,10 @@ pub(crate) fn measure_key_combo(
                 total_width += 6.0 + plus_ext.width();
             }
 
-            let ext = text_extents_for(
-                ctx,
-                font_family,
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Bold,
-                font_size,
-                key,
-            );
-            total_width += ext.width() + keycap_padding_x * 2.0 + key_gap;
+            // Cap width comes from the shared keycap sizer so measuring and
+            // drawing can never disagree about the chip footprint.
+            let (cap_width, _) = keycap_size(ctx, key, font_size);
+            total_width += cap_width + key_gap;
             key_idx += 1;
             any_key = true;
         });
@@ -223,12 +178,11 @@ pub(crate) fn draw_key_combo(
                 cursor_x += plus_ext.width() + 3.0;
             }
 
-            let cap_width = draw_keycap(
+            let cap_width = draw_single_keycap(
                 ctx,
                 cursor_x,
                 baseline,
                 key,
-                style.font_family,
                 style.font_size,
                 style.text_color,
             );

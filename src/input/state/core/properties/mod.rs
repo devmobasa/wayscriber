@@ -7,4 +7,6 @@ mod summary;
 mod types;
 mod utils;
 
-pub use types::{PropertiesPanelLayout, ShapePropertiesPanel};
+pub use types::{
+    PropertiesPanelLayout, SelectionPropertyEntry, SelectionPropertyKind, ShapePropertiesPanel,
+};

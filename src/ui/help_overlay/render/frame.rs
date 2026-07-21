@@ -1,8 +1,12 @@
 use crate::config::HelpOverlayStyle;
-use crate::ui::constants::OVERLAY_DIM_HELP;
+use crate::ui::constants::{self, OVERLAY_DIM_HELP, RADIUS_XL, SHADOW_DEEP};
 
 use super::palette::RenderPalette;
 use crate::ui::primitives::draw_rounded_rect;
+
+/// Outer, softer layer of the two-layer drop shadow (lighter than the
+/// `SHADOW_DEEP` inner layer; no matching theme token).
+const SHADOW_SOFT: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.25);
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_overlay_frame(
@@ -16,7 +20,7 @@ pub(super) fn draw_overlay_frame(
     box_width: f64,
     box_height: f64,
 ) {
-    let corner_radius = 16.0;
+    let corner_radius = RADIUS_XL;
 
     // Dim background behind overlay
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_HELP);
@@ -25,7 +29,7 @@ pub(super) fn draw_overlay_frame(
 
     // Drop shadow (layered for softer effect)
     let shadow_offset = 12.0;
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.25);
+    constants::set_color(ctx, SHADOW_SOFT);
     draw_rounded_rect(
         ctx,
         box_x + shadow_offset + 4.0,
@@ -35,7 +39,7 @@ pub(super) fn draw_overlay_frame(
         corner_radius,
     );
     let _ = ctx.fill();
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    constants::set_color(ctx, SHADOW_DEEP);
     draw_rounded_rect(
         ctx,
         box_x + shadow_offset,

@@ -38,6 +38,144 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
 }
 
 #[test]
+fn ui_theme_defaults_to_auto_and_parses_explicit_values() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(default_config.ui.theme, UiTheme::Auto);
+
+    for (value, expected) in [
+        ("auto", UiTheme::Auto),
+        ("dark", UiTheme::Dark),
+        ("light", UiTheme::Light),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui]\ntheme = '{value}'\n"))
+            .expect("supported ui theme should parse");
+        assert_eq!(config.ui.theme, expected);
+    }
+}
+
+#[test]
+fn presenter_toolbar_mode_defaults_to_hidden_and_round_trips() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(
+        default_config.presenter_mode.toolbar_mode,
+        crate::config::PresenterToolbarMode::Hidden
+    );
+
+    for (value, expected) in [
+        ("hidden", crate::config::PresenterToolbarMode::Hidden),
+        ("micro", crate::config::PresenterToolbarMode::Micro),
+    ] {
+        let config: Config =
+            toml::from_str(&format!("[presenter_mode]\ntoolbar_mode = '{value}'\n"))
+                .expect("supported presenter toolbar mode should parse");
+        assert_eq!(config.presenter_mode.toolbar_mode, expected);
+
+        let serialized = toml::to_string(&config).expect("config serializes");
+        let reloaded: Config = toml::from_str(&serialized).expect("round trip parses");
+        assert_eq!(reloaded.presenter_mode.toolbar_mode, expected);
+    }
+
+    let error = toml::from_str::<Config>("[presenter_mode]\ntoolbar_mode = 'tiny'\n")
+        .expect_err("unknown presenter toolbar mode should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
+fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
+    use crate::config::TopDisplayMode;
+
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(
+        default_config.ui.toolbar.top_display_mode,
+        TopDisplayMode::Full
+    );
+
+    for (value, expected) in [
+        ("full", TopDisplayMode::Full),
+        ("micro", TopDisplayMode::Micro),
+        ("hidden", TopDisplayMode::Hidden),
+    ] {
+        let config: Config =
+            toml::from_str(&format!("[ui.toolbar]\ntop_display_mode = '{value}'\n"))
+                .expect("supported top display mode should parse");
+        assert_eq!(config.ui.toolbar.top_display_mode, expected);
+    }
+
+    // Hidden never persists: like F9 visibility, startup is governed by
+    // `top_pinned`, so the persisted form collapses to full.
+    assert_eq!(TopDisplayMode::Hidden.persisted(), TopDisplayMode::Full);
+    assert_eq!(TopDisplayMode::Micro.persisted(), TopDisplayMode::Micro);
+}
+
+#[test]
+fn toolbar_side_layout_defaults_to_pill_and_round_trips() {
+    use crate::config::ToolbarSideLayout;
+
+    // Pill became the default once the Session/Settings panes were
+    // re-hosted as top-strip overflow popovers (M4-B3); the classic panel
+    // remains a deprecated escape hatch.
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(
+        default_config.ui.toolbar.side_layout,
+        ToolbarSideLayout::Pill
+    );
+
+    for (value, expected) in [
+        ("pill", ToolbarSideLayout::Pill),
+        ("panel", ToolbarSideLayout::Panel),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui.toolbar]\nside_layout = '{value}'\n"))
+            .expect("supported side layout should parse");
+        assert_eq!(config.ui.toolbar.side_layout, expected);
+
+        let saved = toml::to_string(&config).expect("config should serialize");
+        let reloaded: Config = toml::from_str(&saved).expect("saved config should reload");
+        assert_eq!(reloaded.ui.toolbar.side_layout, expected);
+    }
+
+    let error = toml::from_str::<Config>("[ui.toolbar]\nside_layout = 'drawer'\n")
+        .expect_err("unknown side layout should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
+fn ui_theme_rejects_unknown_values() {
+    let error = toml::from_str::<Config>("[ui]\ntheme = 'sepia'\n")
+        .expect_err("unknown ui theme should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
+fn ui_reduced_motion_defaults_to_auto_and_parses_explicit_values() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(default_config.ui.reduced_motion, ReducedMotion::Auto);
+
+    for (value, expected) in [
+        ("auto", ReducedMotion::Auto),
+        ("on", ReducedMotion::On),
+        ("off", ReducedMotion::Off),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui]\nreduced_motion = '{value}'\n"))
+            .expect("supported reduced motion value should parse");
+        assert_eq!(config.ui.reduced_motion, expected);
+    }
+}
+
+#[test]
+fn ui_reduced_motion_rejects_unknown_values() {
+    let error = toml::from_str::<Config>("[ui]\nreduced_motion = 'sometimes'\n")
+        .expect_err("unknown reduced motion value should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
+fn ui_reduced_motion_maps_to_motion_enabled() {
+    assert!(ReducedMotion::Auto.motion_enabled());
+    assert!(ReducedMotion::Off.motion_enabled());
+    assert!(!ReducedMotion::On.motion_enabled());
+}
+
+#[test]
 fn tray_icon_style_defaults_to_auto_and_parses_explicit_values() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(default_config.tray.icon_style, TrayIconStyle::Auto);
@@ -111,6 +249,114 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
             reloaded.keybindings.capture.capture_full_screen,
             ["Ctrl+Shift+P"]
         );
+    });
+}
+
+#[test]
+fn load_migrates_explicit_legacy_toggle_toolbar_pair_without_rewriting_file() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        let config_path = primary_dir.join("config.toml");
+        // The old config.example.toml shipped the toggle pair verbatim; a
+        // custom unrelated binding proves validation does not fall back to
+        // full defaults on the (pre-migration) F2 collision.
+        let original = "[keybindings]\ntoggle_toolbar = ['F2', 'F9']\nundo = ['Ctrl+Alt+U']\n";
+        fs::write(&config_path, original).unwrap();
+
+        let loaded = Config::load().expect("load succeeds").config;
+
+        assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F9"]);
+        assert_eq!(loaded.keybindings.ui.cycle_toolbar_display, ["F2"]);
+        assert_eq!(
+            loaded.keybindings.core.undo,
+            ["Ctrl+Alt+U"],
+            "custom bindings must survive the migration"
+        );
+        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert!(loaded.keybindings.build_action_map().is_ok());
+        assert_eq!(fs::read_to_string(config_path).unwrap(), original);
+    });
+}
+
+#[test]
+fn custom_f2_toggle_toolbar_binding_keeps_f2_and_unbinds_cycle() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::write(
+            primary_dir.join("config.toml"),
+            "[keybindings]\ntoggle_toolbar = ['F2']\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds").config;
+
+        assert_eq!(
+            loaded.keybindings.ui.toggle_toolbar,
+            ["F2"],
+            "a deliberate custom F2 binding keeps its old meaning"
+        );
+        assert!(
+            loaded.keybindings.ui.cycle_toolbar_display.is_empty(),
+            "the new cycle action must not steal the user's F2"
+        );
+        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert!(loaded.keybindings.build_action_map().is_ok());
+    });
+}
+
+#[test]
+fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        let config_path = primary_dir.join("config.toml");
+        fs::write(
+            &config_path,
+            "[keybindings]\ntoggle_toolbar = ['F2', 'F9']\n",
+        )
+        .unwrap();
+
+        let mut migrated = Config::load().expect("legacy load succeeds").config;
+        // Post-migration the user deliberately restores the pair and
+        // unbinds the cycle action; the saved revision protects it.
+        migrated.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
+        migrated.keybindings.ui.cycle_toolbar_display = Vec::new();
+        migrated.save().expect("saving revision succeeds");
+
+        let reloaded = Config::load().expect("current load succeeds").config;
+        assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert_eq!(reloaded.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+        assert!(reloaded.keybindings.ui.cycle_toolbar_display.is_empty());
+        assert!(reloaded.keybindings.build_action_map().is_ok());
+    });
+}
+
+#[test]
+fn revision_one_config_still_gets_the_f2_split_but_not_the_palette_heuristic() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::write(
+            primary_dir.join("config.toml"),
+            "config_revision = 1\n\n[keybindings]\ntoggle_toolbar = ['F2', 'F9']\ntoggle_command_palette = ['Ctrl+K']\ncapture_full_screen = ['Ctrl+Shift+P']\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds").config;
+
+        // The F2 split (revision 2) applies...
+        assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F9"]);
+        assert_eq!(loaded.keybindings.ui.cycle_toolbar_display, ["F2"]);
+        // ...but the revision-1 heuristic must not re-run against a pair
+        // that was deliberately kept at revision 1.
+        assert_eq!(loaded.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
+        assert_eq!(
+            loaded.keybindings.capture.capture_full_screen,
+            ["Ctrl+Shift+P"]
+        );
+        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
     });
 }
 
@@ -192,15 +438,15 @@ fn drawing_quick_colors_missing_shortcut_slots_backfill_defaults() {
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorRed),
-        Some(crate::draw::color::BLUE)
+        Some(tuned_default("#3584E4"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorGreen),
-        Some(crate::draw::color::GREEN)
+        Some(tuned_default("#2EC27E"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorBlack),
-        Some(crate::draw::color::BLACK)
+        Some(tuned_default("#241F31"))
     );
 }
 
@@ -323,35 +569,35 @@ fn drawing_quick_color_actions_stay_limited_to_first_eight_slots() {
 
     assert_eq!(
         palette.color_for_action(Action::SetColorRed),
-        Some(crate::draw::color::RED)
+        Some(tuned_default("#F5333F"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorGreen),
-        Some(crate::draw::color::GREEN)
+        Some(tuned_default("#2EC27E"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorBlue),
-        Some(crate::draw::color::BLUE)
+        Some(tuned_default("#3584E4"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorYellow),
-        Some(crate::draw::color::YELLOW)
+        Some(tuned_default("#F6D32D"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorOrange),
-        Some(crate::draw::color::ORANGE)
+        Some(tuned_default("#FF7800"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorPink),
-        Some(crate::draw::color::PINK)
+        Some(tuned_default("#C061CB"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorWhite),
-        Some(crate::draw::color::WHITE)
+        Some(tuned_default("#FFFFFF"))
     );
     assert_eq!(
         palette.color_for_action(Action::SetColorBlack),
-        Some(crate::draw::color::BLACK)
+        Some(tuned_default("#241F31"))
     );
     assert_eq!(QuickColorPalette::action_for_index(8), None);
     assert_eq!(QuickColorPalette::action_for_index(9), None);
@@ -393,8 +639,33 @@ fn drawing_quick_colors_invalid_hash_hex_warns_and_falls_back_red() {
     .expect("invalid hash-looking hex strings keep load compatibility");
 
     let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
-    assert_eq!(palette.color_for_index(0), Some(crate::draw::color::RED));
-    assert_eq!(palette.color_for_index(1), Some(crate::draw::color::RED));
+    assert_eq!(palette.color_for_index(0), Some(tuned_default("#F5333F")));
+    assert_eq!(palette.color_for_index(1), Some(tuned_default("#F5333F")));
+}
+
+#[test]
+fn named_colors_bit_match_default_quick_color_slots() {
+    let palette = QuickColorPalette::default();
+
+    for (index, name) in [
+        "red", "green", "blue", "yellow", "orange", "pink", "white", "black",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(
+            Some(ColorSpec::Name(name.to_string()).to_color()),
+            palette.color_for_index(index),
+            "named '{name}' must bit-match default quick color slot {index}"
+        );
+    }
+
+    // The startup pen color is `default_color = "red"`; it must bit-match
+    // slot 0 so the swatch selection ring is shown on default configs.
+    assert_eq!(
+        Some(DrawingConfig::default().default_color.to_color()),
+        palette.color_for_index(0)
+    );
 }
 
 #[test]
@@ -413,6 +684,12 @@ fn pdf_transparent_background_defaults_to_none() {
         Config::default().export.pdf.transparent_background,
         PdfTransparentBackground::None
     );
+}
+
+/// Resolves one of the tuned built-in palette hex values exactly like
+/// `ColorSpec::to_color`, so assertions can compare with `==`.
+fn tuned_default(hex: &str) -> crate::draw::Color {
+    crate::util::parse_config_hex_color(hex).expect("tuned default hex is valid")
 }
 
 fn color_approx_eq(a: &crate::draw::Color, b: &crate::draw::Color) -> bool {
@@ -572,6 +849,27 @@ fn ui_defaults_follow_desktop_for_xdg_focus_loss() {
     };
 
     assert_eq!(Config::default().ui.xdg_focus_loss_behavior, expected);
+}
+
+#[test]
+fn ui_status_bar_interactive_defaults_to_true() {
+    assert!(Config::default().ui.status_bar_interactive);
+
+    // Omitting the key in an existing [ui] table keeps the default.
+    let config: Config = toml::from_str("[ui]\nshow_status_bar = true\n")
+        .expect("ui table without status_bar_interactive should parse");
+    assert!(config.ui.status_bar_interactive);
+}
+
+#[test]
+fn ui_status_bar_interactive_round_trips_disabled_value() {
+    let parsed: Config = toml::from_str("[ui]\nstatus_bar_interactive = false\n")
+        .expect("status_bar_interactive = false should parse");
+    assert!(!parsed.ui.status_bar_interactive);
+
+    let serialized = toml::to_string(&parsed).expect("config serializes");
+    let reparsed: Config = toml::from_str(&serialized).expect("serialized config reparses");
+    assert!(!reparsed.ui.status_bar_interactive);
 }
 
 #[cfg(feature = "tablet-input")]

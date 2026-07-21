@@ -5,9 +5,21 @@ use crate::input::state::{
     BoardPickerFocus, BoardPickerLayout, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
 use crate::ui::constants::{
-    self, BG_HOVER, DIVIDER_LIGHT, TEXT_HINT, TEXT_SECONDARY, TEXT_TERTIARY,
+    self, BG_HOVER, DIVIDER_LIGHT, RADIUS_SM, TEXT_HINT, TEXT_SECONDARY, TEXT_TERTIARY, TEXT_WHITE,
 };
-use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::theme::Rgba;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
+
+// File-local colors with no matching theme token (kept from the pre-theme
+// literals).
+/// Sticky "+ Add page" button fill/border ladder.
+const ADD_BUTTON_BG: Rgba = (0.16, 0.20, 0.28, 0.85);
+const ADD_BUTTON_BORDER: Rgba = (1.0, 1.0, 1.0, 0.16);
+const ADD_BUTTON_BORDER_HOVER: Rgba = (1.0, 1.0, 1.0, 0.28);
+/// Inline page-rename input scrim and border.
+const RENAME_INPUT_BG: Rgba = (0.0, 0.0, 0.0, 0.6);
+const RENAME_INPUT_BORDER: Rgba = (1.0, 1.0, 1.0, 0.25);
 
 use thumbnail::{
     PagePreviewArgs, PageThumbnailArgs, render_add_page_card, render_page_preview,
@@ -40,7 +52,7 @@ pub(super) fn render_page_panel(
         let divider_x = layout.page_panel_x - 8.0;
         let divider_top = layout.origin_y + layout.padding_y;
         let divider_bottom = layout.origin_y + layout.height - layout.padding_y;
-        ctx.set_source_rgba(DIVIDER_LIGHT.0, DIVIDER_LIGHT.1, DIVIDER_LIGHT.2, 0.4);
+        constants::set_color(ctx, constants::with_alpha(DIVIDER_LIGHT, 0.4));
         ctx.set_line_width(1.0);
         ctx.move_to(divider_x, divider_top);
         ctx.line_to(divider_x, divider_bottom);
@@ -53,12 +65,22 @@ pub(super) fn render_page_panel(
     } else {
         format!("Pages — {}", board.spec.name)
     };
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(layout.footer_font_size);
+    let footer_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: layout.footer_font_size,
+    };
     constants::set_color(ctx, TEXT_TERTIARY);
     let label_y = layout.origin_y + layout.padding_y + layout.title_font_size;
-    ctx.move_to(layout.page_panel_x + 2.0, label_y);
-    let _ = ctx.show_text(&label);
+    draw_text_baseline(
+        ctx,
+        footer_style,
+        &label,
+        layout.page_panel_x + 2.0,
+        label_y,
+        None,
+    );
 
     let (pointer_x, pointer_y) = input_state.pointer_position();
     let start_x = layout.page_viewport_x;
@@ -215,8 +237,6 @@ pub(super) fn render_page_panel(
         let first_label = first_visible + 1;
         let last_label = first_visible + visible;
         let hint = format!("Pages {first_label}-{last_label} of {page_count}");
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(layout.footer_font_size);
         let overflow_hover = input_state.board_picker_page_overflow_at(pointer_x, pointer_y);
         if overflow_hover {
             constants::set_color(ctx, TEXT_TERTIARY);
@@ -224,9 +244,8 @@ pub(super) fn render_page_panel(
             constants::set_color(ctx, TEXT_HINT);
         }
         let hint_y = layout.page_add_button_y - 4.0;
-        ctx.move_to(start_x, hint_y);
-        let _ = ctx.show_text(&hint);
-        if overflow_hover && let Ok(extents) = ctx.text_extents(&hint) {
+        let extents = draw_text_baseline(ctx, footer_style, &hint, start_x, hint_y, None);
+        if overflow_hover {
             ctx.set_line_width(1.0);
             ctx.move_to(start_x, hint_y + 2.0);
             ctx.line_to(start_x + extents.width(), hint_y + 2.0);
@@ -260,26 +279,40 @@ fn render_sticky_add_button(
     if hover {
         constants::set_color(ctx, BG_HOVER);
     } else {
-        ctx.set_source_rgba(0.16, 0.20, 0.28, 0.85);
+        constants::set_color(ctx, ADD_BUTTON_BG);
     }
     let _ = ctx.fill_preserve();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, if hover { 0.28 } else { 0.16 });
+    constants::set_color(
+        ctx,
+        if hover {
+            ADD_BUTTON_BORDER_HOVER
+        } else {
+            ADD_BUTTON_BORDER
+        },
+    );
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(layout.footer_font_size);
+    let label_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: layout.footer_font_size,
+    };
     constants::set_color(ctx, TEXT_SECONDARY);
     let label = "+ Add page";
-    if let Ok(extents) = ctx.text_extents(label) {
-        let text_x =
-            layout.page_add_button_x + (layout.page_add_button_width - extents.width()) * 0.5;
-        let text_y = layout.page_add_button_y
-            + (layout.page_add_button_height + extents.height()) * 0.5
-            - 1.0;
-        ctx.move_to(text_x, text_y);
-        let _ = ctx.show_text(label);
-    }
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        layout.footer_font_size,
+        label,
+    );
+    let text_x = layout.page_add_button_x + (layout.page_add_button_width - extents.width()) * 0.5;
+    let text_y =
+        layout.page_add_button_y + (layout.page_add_button_height + extents.height()) * 0.5 - 1.0;
+    draw_text_baseline(ctx, label_style, label, text_x, text_y, None);
 }
 
 fn point_in_rect(x: i32, y: i32, rx: f64, ry: f64, rw: f64, rh: f64) -> bool {
@@ -304,31 +337,40 @@ fn render_page_rename_overlay(
     let input_x = x + pad;
     let input_y = y + height + PAGE_NAME_PADDING;
     let input_w = (width - pad * 2.0).max(24.0);
-    draw_rounded_rect(ctx, input_x, input_y, input_w, input_h, 4.0);
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.6);
+    draw_rounded_rect(ctx, input_x, input_y, input_w, input_h, RADIUS_SM);
+    constants::set_color(ctx, RENAME_INPUT_BG);
     let _ = ctx.fill_preserve();
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.25);
+    constants::set_color(ctx, RENAME_INPUT_BORDER);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(font_size);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    let text_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: font_size,
+    };
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, 0.9));
     let text_x = input_x + 4.0;
     let text_y = input_y + input_h - 4.0;
     let _ = ctx.save();
     ctx.rectangle(input_x + 4.0, input_y, input_w - 8.0, input_h);
     ctx.clip();
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(text);
+    draw_text_baseline(ctx, text_style, text, text_x, text_y, None);
     let _ = ctx.restore();
 
-    if let Ok(extents) = ctx.text_extents(text) {
-        let caret_x = (text_x + extents.x_advance()).min(input_x + input_w - 6.0);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-        ctx.set_line_width(1.0);
-        ctx.move_to(caret_x, input_y + 3.0);
-        ctx.line_to(caret_x, input_y + input_h - 3.0);
-        let _ = ctx.stroke();
-    }
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        font_size,
+        text,
+    );
+    let caret_x = (text_x + extents.x_advance()).min(input_x + input_w - 6.0);
+    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, 0.9));
+    ctx.set_line_width(1.0);
+    ctx.move_to(caret_x, input_y + 3.0);
+    ctx.line_to(caret_x, input_y + input_h - 3.0);
+    let _ = ctx.stroke();
 }

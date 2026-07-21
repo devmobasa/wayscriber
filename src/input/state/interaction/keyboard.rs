@@ -17,6 +17,9 @@ pub(crate) fn route_key_press(state: &mut InputState, key: Key) -> RoutingOutcom
     if let Some(outcome) = adapters::handle_radial_menu_key(state, key) {
         return outcome;
     }
+    if let Some(outcome) = adapters::handle_precision_entry_key(state, key) {
+        return outcome;
+    }
     if let Some(outcome) = adapters::handle_color_picker_key(state, key) {
         return outcome;
     }
@@ -30,6 +33,9 @@ pub(crate) fn route_key_press(state: &mut InputState, key: Key) -> RoutingOutcom
         return outcome;
     }
     if let Some(outcome) = adapters::handle_properties_panel_key(state, key) {
+        return outcome;
+    }
+    if let Some(outcome) = adapters::handle_top_popover_dismiss_key(state, key) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_pending_delete_cancel_key(state, key) {

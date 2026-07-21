@@ -7,6 +7,7 @@ use super::constants::{
     self, BORDER_MODAL, OVERLAY_DIM_HEAVY, PANEL_BG_MODAL, PROGRESS_FILL, PROGRESS_TRACK,
     RADIUS_PANEL, SPACING_PANEL, TEXT_DESCRIPTION, TEXT_HINT, TEXT_WHITE,
 };
+use super::primitives::draw_rounded_rect;
 
 /// Render the guided tour overlay.
 pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
@@ -16,6 +17,10 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     let width = width as f64;
     let height = height as f64;
+
+    // Build the step copy dynamically for the current bindings so every key
+    // mention reflects the user's actual configuration (no hardcoded strings).
+    let description = input_state.tour_step_description(step);
 
     // Semi-transparent backdrop
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_HEAVY);
@@ -31,7 +36,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
     // Calculate dialog height based on content
     let title_height = 36.0;
     let desc_line_height = 24.0;
-    let desc_lines = step.description().lines().count() as f64;
+    let desc_lines = description.lines().count() as f64;
     let nav_height = 24.0;
     let progress_height = 20.0;
     let dialog_height = dialog_padding * 2.0
@@ -42,7 +47,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
         + 40.0;
 
     // Dialog background
-    rounded_rect(
+    draw_rounded_rect(
         ctx,
         dialog_x,
         dialog_y,
@@ -96,7 +101,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     // Description
     constants::set_color(ctx, TEXT_DESCRIPTION);
-    for line in step.description().lines() {
+    for line in description.lines() {
         draw_text_baseline(ctx, desc_style, line, content_x, y + 18.0, None);
         y += desc_line_height;
     }
@@ -106,39 +111,17 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
     let progress_width = dialog_width - dialog_padding * 2.0;
     let progress_y = y;
     constants::set_color(ctx, PROGRESS_TRACK);
-    rounded_rect(ctx, content_x, progress_y, progress_width, 6.0, 3.0);
+    draw_rounded_rect(ctx, content_x, progress_y, progress_width, 6.0, 3.0);
     let _ = ctx.fill();
 
     let filled_width =
         progress_width * ((input_state.tour_step + 1) as f64 / TourStep::COUNT as f64);
     constants::set_color(ctx, PROGRESS_FILL);
-    rounded_rect(ctx, content_x, progress_y, filled_width, 6.0, 3.0);
+    draw_rounded_rect(ctx, content_x, progress_y, filled_width, 6.0, 3.0);
     let _ = ctx.fill();
     y += progress_height + 16.0;
 
     // Navigation hint
-    ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.8);
+    constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.8));
     draw_text_baseline(ctx, nav_style, step.nav_hint(), content_x, y + 13.0, None);
-}
-
-fn rounded_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    ctx.new_sub_path();
-    ctx.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
-    ctx.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    ctx.arc(
-        x + r,
-        y + h - r,
-        r,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::PI,
-    );
-    ctx.arc(
-        x + r,
-        y + r,
-        r,
-        std::f64::consts::PI,
-        3.0 * std::f64::consts::FRAC_PI_2,
-    );
-    ctx.close_path();
 }

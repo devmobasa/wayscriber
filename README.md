@@ -123,7 +123,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
 - Render color profiles for print/projector/light-theme preview
-- Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection plus scroll size adjust
+- Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection with recent colors, press-flick-release tool commits, plus a draggable outer size ring and scroll size adjust
 
 ### Boards
 - Named boards with transparent overlay or custom backgrounds
@@ -145,7 +145,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - See [Session manager and persistence](#session-manager-and-persistence) for the full workflow
 
 ### Toolbars and UI
-- Floating toolbars (pin/unpin: <kbd>F2</kbd>/<kbd>F9</kbd>)
+- Floating toolbars (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro chip → hidden)
 - Two toolbar frontends: GTK4-rendered bars on layer-shell compositors (Hyprland, KWin, Wayfire, River, ...), with automatic fallback to the built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline mode, builds without the `toolbar-gtk` feature)
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
@@ -731,13 +731,14 @@ pick_screen_color = ["I"]
 | Cancel action | <kbd>Right-click</kbd> (while drawing) / <kbd>Escape</kbd> |
 | Context menu | <kbd>Right-click</kbd> (idle) / <kbd>Shift+F10</kbd> / <kbd>Menu</kbd>, <kbd>Arrow keys</kbd> + <kbd>Enter</kbd>/<kbd>Space</kbd> |
 | Edit selected text/note | <kbd>Enter</kbd> (single selection) |
-| Toggle toolbars | <kbd>F2</kbd> / <kbd>F9</kbd> |
+| Toggle toolbars | <kbd>F9</kbd> |
+| Cycle top strip (full → micro → hidden) | <kbd>F2</kbd> |
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
 | Quick reference | <kbd>Shift+F1</kbd> |
 | Configurator | <kbd>F11</kbd> |
 | Command palette | <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd> |
 | Screen eyedropper | <kbd>I</kbd>, toolbar/color picker, or <kbd>Ctrl+K</kbd> → **Pick screen color** |
-| Radial menu | <kbd>Middle-click</kbd> (idle) open/close; <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; scroll adjusts active tool size |
+| Radial menu | <kbd>Middle-click</kbd> (idle) open/close; hold + flick toward a wedge to commit instantly (release in the center cancels); <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; drag the outer ring or scroll to adjust active tool size |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |

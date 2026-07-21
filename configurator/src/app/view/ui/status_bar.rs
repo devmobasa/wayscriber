@@ -27,6 +27,12 @@ impl ConfiguratorApp {
                 ToggleField::UiShowStatusBar,
             ),
             toggle_row(
+                "Clickable status bar segments",
+                self.draft.ui_status_bar_interactive,
+                self.defaults.ui_status_bar_interactive,
+                ToggleField::UiStatusBarInteractive,
+            ),
+            toggle_row(
                 "Show board label",
                 self.draft.ui_show_status_board_badge,
                 self.defaults.ui_show_status_board_badge,

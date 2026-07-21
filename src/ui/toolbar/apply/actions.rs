@@ -42,8 +42,12 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_clear_canvas(&mut self) -> bool {
-        self.toolbar_clear();
+    pub(super) fn apply_toolbar_clear_canvas(&mut self, instant: bool) -> bool {
+        if instant {
+            self.toolbar_clear();
+        } else {
+            self.toolbar_clear_with_undo_toast();
+        }
         true
     }
 

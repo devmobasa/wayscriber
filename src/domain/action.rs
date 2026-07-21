@@ -112,6 +112,8 @@ pub enum Action {
     ToggleStatusBar,
     ToggleClickHighlight,
     ToggleToolbar,
+    /// Cycle the top toolbar's display: full strip → micro chip → hidden.
+    CycleToolbarDisplay,
     TogglePresenterMode,
     ToggleLightMode,
     ToggleLightModeDrawing,

@@ -9,7 +9,13 @@ use super::types::{
 use serde::{Deserialize, Serialize};
 
 /// Current revision for one-time in-memory configuration migrations.
-pub const CURRENT_CONFIG_REVISION: u32 = 1;
+///
+/// Revision history:
+/// - 1: split the command-palette / full-screen-capture default shortcuts
+///   (`Ctrl+K` + `Ctrl+Shift+P` vs `Ctrl+Alt+F`).
+/// - 2: moved `F2` from the `toggle_toolbar` default pair (`["F2", "F9"]`)
+///   to the new `cycle_toolbar_display` action default (`["F2"]`).
+pub const CURRENT_CONFIG_REVISION: u32 = 2;
 
 /// Main configuration structure containing all user settings.
 ///

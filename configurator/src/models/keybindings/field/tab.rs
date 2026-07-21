@@ -90,6 +90,7 @@ impl KeybindingField {
             | Self::ToggleStatusBar
             | Self::ToggleClickHighlight
             | Self::ToggleToolbar
+            | Self::CycleToolbarDisplay
             | Self::TogglePresenterMode
             | Self::RenderProfileNext
             | Self::RenderProfilePrevious

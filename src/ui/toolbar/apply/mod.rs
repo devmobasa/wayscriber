@@ -14,6 +14,37 @@ impl InputState {
     ///
     /// Returns true if the event resulted in a state change.
     pub fn apply_toolbar_event(&mut self, event: ToolbarEvent) -> bool {
+        // Resolve the keyboard-action equivalent before the event is consumed
+        // so the shortcut coach can learn from toolbar use (the slow path the
+        // palette also feeds).
+        let coach_action = event.action();
+        let changed = self.apply_toolbar_event_inner(event);
+        self.note_toolbar_shortcut_slow_path(coach_action, changed);
+        changed
+    }
+
+    /// Shortcut-coach slow-path signal for toolbar use: invoking a
+    /// shortcut-bound action from the toolbar is the same "you could have
+    /// pressed the key" case the command palette records. Only genuine state
+    /// changes for actions that resolve to a shortcut count, so the coach can
+    /// always name the key and no-op clicks never build a streak.
+    fn note_toolbar_shortcut_slow_path(
+        &mut self,
+        coach_action: Option<crate::config::Action>,
+        changed: bool,
+    ) {
+        if !changed {
+            return;
+        }
+        if let Some(action) = coach_action
+            && self.shortcut_for_action(action).is_some()
+        {
+            self.pending_onboarding_usage
+                .note_shortcut_slow_path(action);
+        }
+    }
+
+    fn apply_toolbar_event_inner(&mut self, event: ToolbarEvent) -> bool {
         match event {
             ToolbarEvent::SelectTool(tool) => self.apply_toolbar_select_tool(tool),
             ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
@@ -61,7 +92,7 @@ impl InputState {
             ToolbarEvent::RedoAllDelayed => self.apply_toolbar_redo_all_delayed(),
             ToolbarEvent::CustomUndo => self.apply_toolbar_custom_undo(),
             ToolbarEvent::CustomRedo => self.apply_toolbar_custom_redo(),
-            ToolbarEvent::ClearCanvas => self.apply_toolbar_clear_canvas(),
+            ToolbarEvent::ClearCanvas { instant } => self.apply_toolbar_clear_canvas(instant),
             ToolbarEvent::CaptureScreenshot => self.apply_toolbar_capture_screenshot(),
             ToolbarEvent::PagePrev => self.apply_toolbar_page_prev(),
             ToolbarEvent::PageNext => self.apply_toolbar_page_next(),
@@ -97,9 +128,20 @@ impl InputState {
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
             ToolbarEvent::OpenCommandPalette => self.apply_toolbar_open_command_palette(),
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
+            ToolbarEvent::ToggleSessionPopover(open) => {
+                self.apply_toolbar_toggle_session_popover(open)
+            }
+            ToolbarEvent::ToggleSettingsPopover(open) => {
+                self.apply_toolbar_toggle_settings_popover(open)
+            }
+            ToolbarEvent::ToggleCanvasPopover(open) => {
+                self.apply_toolbar_toggle_canvas_popover(open)
+            }
+            ToolbarEvent::ScrollTopPopover(offset) => self.apply_toolbar_scroll_top_popover(offset),
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)
             }
+            ToolbarEvent::SetTopDisplayMode(mode) => self.apply_toolbar_set_top_display_mode(mode),
             ToolbarEvent::SetSideMinimized(minimized) => {
                 self.apply_toolbar_set_side_minimized(minimized)
             }
@@ -115,6 +157,16 @@ impl InputState {
             ToolbarEvent::PasteHexColor => self.apply_toolbar_paste_hex_color(),
             ToolbarEvent::EditHexColor => self.apply_toolbar_edit_hex_color(),
             ToolbarEvent::OpenColorPickerPopup => self.apply_toolbar_open_color_picker_popup(),
+            ToolbarEvent::AdjustSelectionProperty { kind, direction } => {
+                self.adjust_selection_property_kind(kind, direction)
+            }
+            ToolbarEvent::OpenPrecisionEntry(target) => {
+                self.apply_toolbar_open_precision_entry(target)
+            }
+            ToolbarEvent::CommitPrecisionEntry { target, value } => {
+                self.apply_toolbar_commit_precision_entry(target, value)
+            }
+            ToolbarEvent::CancelPrecisionEntry => self.cancel_precision_entry(),
             ToolbarEvent::PickScreenColor => {
                 self.request_eyedropper_toggle();
                 true
@@ -192,5 +244,123 @@ impl InputState {
             | ToolbarEvent::ClearSession => false,
             ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod coach_tests {
+    use crate::config::{Action, KeyBinding};
+    use crate::draw::{Color, Shape};
+    use crate::input::InputState;
+    use crate::input::state::test_support::{
+        make_test_input_state, make_test_input_state_with_action_bindings,
+    };
+    use crate::ui::toolbar::ToolbarEvent;
+    use std::collections::HashMap;
+
+    fn add_test_shape(state: &mut InputState) {
+        state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 10,
+            y: 10,
+            w: 5,
+            h: 5,
+            fill: false,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 1.0,
+        });
+    }
+
+    #[test]
+    fn toolbar_action_with_shortcut_records_coach_slow_path() {
+        let mut state = make_test_input_state();
+        add_test_shape(&mut state);
+        assert!(
+            state.shortcut_for_action(Action::Undo).is_some(),
+            "test relies on Undo having a default shortcut"
+        );
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::Undo));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            Some(Action::Undo),
+            "toolbar-invoked shortcut-bound action feeds the coach slow path"
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+
+        // A second toolbar Undo accumulates the slow-path streak.
+        add_test_shape(&mut state);
+        assert!(state.apply_toolbar_event(ToolbarEvent::Undo));
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 2);
+    }
+
+    #[test]
+    fn canvas_popover_action_with_shortcut_records_coach_slow_path() {
+        // The M8 "Canvas…" overflow popover dispatches its boards/pages/zoom/
+        // undo-all/freeze controls as ToolbarEvents, so they route through
+        // apply_toolbar_event and feed the shortcut coach the same slow-path
+        // signal as any other toolbar use. Zoom In is a canvas-popover control
+        // with a default shortcut, so activating it must nudge toward the key.
+        let mut state = make_test_input_state();
+        assert!(
+            state.shortcut_for_action(Action::ZoomIn).is_some(),
+            "test relies on ZoomIn having a default shortcut"
+        );
+        assert_eq!(
+            ToolbarEvent::ZoomIn.action(),
+            Some(Action::ZoomIn),
+            "the canvas-popover Zoom In maps to the ZoomIn action"
+        );
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::ZoomIn));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            Some(Action::ZoomIn),
+            "canvas-popover Zoom In feeds the coach slow path"
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+    }
+
+    #[test]
+    fn toolbar_action_without_shortcut_does_not_coach() {
+        // Undo explicitly bound to nothing: it resolves to no shortcut, so
+        // there is nothing to coach — the coach must not record a slow path it
+        // cannot name. (An empty map would fall back to the default action map,
+        // which still binds Undo, so the override must be an explicit empty
+        // binding list.)
+        let bindings: HashMap<Action, Vec<KeyBinding>> =
+            HashMap::from([(Action::Undo, Vec::new())]);
+        let mut state = make_test_input_state_with_action_bindings(bindings);
+        add_test_shape(&mut state);
+        assert!(state.shortcut_for_action(Action::Undo).is_none());
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::Undo));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            None
+        );
+        assert_eq!(state.pending_onboarding_usage.shortcut_slow_path_repeats, 0);
+    }
+
+    #[test]
+    fn toolbar_layout_event_without_action_mapping_does_not_coach() {
+        // A layout-only event has no keyboard-action equivalent, so it is never
+        // a shortcut slow path regardless of whether it changed state.
+        let mut state = make_test_input_state();
+        assert_eq!(ToolbarEvent::ToggleStatusBar(false).action(), None);
+
+        state.apply_toolbar_event(ToolbarEvent::ToggleStatusBar(false));
+
+        assert_eq!(
+            state.pending_onboarding_usage.shortcut_slow_path_action,
+            None
+        );
     }
 }

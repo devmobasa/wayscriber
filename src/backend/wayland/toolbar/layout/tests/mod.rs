@@ -89,37 +89,46 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (1120, 58));
+    // Width includes the island gaps/padding of the four-pill band (tools,
+    // presets, history, chrome): the presets island replaced the retired
+    // colors group (M7-C1/C2). Height adds the contextual style pill under
+    // the 58px island band (6px gap + 40px pill) while a drawing tool is
+    // active.
+    assert_eq!(top_size(&snapshot), (1167, 104));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot).1, 60);
+    assert_eq!(top_size(&snapshot).1, 106);
 }
 
 #[test]
-fn narrow_viewports_degrade_swatches_then_overflow_items() {
+fn narrow_viewports_drop_presets_then_overflow_items() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let mut snapshot = snapshot_from_state(&state);
 
-    // Unconstrained: all eight swatches, no overflow chrome.
+    // Unconstrained: presets shown, the pill's eight swatches available,
+    // nothing dropped into the overflow.
     let full = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
+    assert!(!full.drop_presets);
     assert_eq!(full.swatch_count, 8);
-    assert!(!full.show_overflow);
+    assert!(full.dropped_tools.is_empty() && full.dropped_utilities.is_empty());
     let full_width = top_size(&snapshot).0;
 
-    // Slightly narrow: swatches degrade before anything is dropped.
+    // Slightly narrow: the non-essential presets island yields first, before
+    // any tool or utility is dropped (M7-C2).
     snapshot.top_viewport_max = Some(full_width as f64 - 60.0);
     let degraded = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-    assert!(degraded.swatch_count < 8);
-    assert!(degraded.dropped_tools.is_empty());
+    assert!(degraded.drop_presets);
+    assert!(degraded.dropped_tools.is_empty() && degraded.dropped_utilities.is_empty());
     assert!(top_size(&snapshot).0 as f64 <= full_width as f64 - 60.0);
 
-    // Very narrow: droppable items move into the overflow menu; the
-    // protected core (Pen, Eraser, chip, Undo/Redo, Clear) stays.
+    // Very narrow: droppable items move into the overflow menu; the protected
+    // core (Pen, Eraser, Undo/Redo, Clear) stays. Colors and presets have
+    // already left the strip.
     snapshot.top_viewport_max = Some(700.0);
     let tight = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-    assert!(tight.show_overflow);
+    assert!(tight.drop_presets);
     assert!(!tight.dropped_utilities.is_empty());
     assert!(top_size(&snapshot).0 as f64 <= 700.0);
     let (w, h) = top_size(&snapshot);
@@ -128,9 +137,7 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
     for id in [
         "top.tool.pen",
         "top.tool.eraser",
-        "top.group.quick-colors",
         "top.utility.undo",
-        "top.utility.clear-canvas",
         "top.chrome.overflow",
     ] {
         assert!(
@@ -138,8 +145,11 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
             "{id} must survive width pressure"
         );
     }
+    // No preset slots or color chip remain in the strip under pressure.
+    assert!(tree.node_by_id(&"top.preset.0".into()).is_none());
+    assert!(tree.node_by_id(&"top.group.quick-colors".into()).is_none());
 
-    // Opening the overflow reveals the dropped items below the bar.
+    // Opening the overflow reveals Clear first, then the dropped items.
     snapshot.top_overflow_open = true;
     let (w, h) = top_size(&snapshot);
     let tree =
@@ -151,8 +161,16 @@ fn narrow_viewports_degrade_swatches_then_overflow_items() {
         .filter(|id| id.starts_with("top.overflow."))
         .collect();
     assert!(
-        overflow_ids.len() > 1,
-        "panel + dropped items: {overflow_ids:?}"
+        overflow_ids.len() > 2,
+        "panel + Clear + dropped items: {overflow_ids:?}"
+    );
+    assert_eq!(
+        overflow_ids
+            .iter()
+            .find(|id| **id != "top.overflow.panel")
+            .copied(),
+        Some("top.overflow.top.utility.clear-canvas"),
+        "Clear leads the overflow menu"
     );
 }
 
@@ -171,7 +189,10 @@ fn overflow_contains_only_visible_items_and_is_structural() {
     snapshot.top_viewport_max = Some(700.0);
 
     let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-    assert!(plan.show_overflow);
+    assert!(
+        !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty(),
+        "the 700px budget must force items into the overflow: {plan:?}"
+    );
     assert!(
         !plan
             .dropped_utilities
@@ -312,12 +333,13 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
         ToolbarEvent::NudgePolygonSides(-1)
     ));
 
-    // With the popover closed the bar carries no fill checkbox at all —
-    // the permanently reserved mini-checkbox lane is gone.
+    // With the popover closed the bar keeps only the island band plus the
+    // contextual style pill — the permanently reserved mini-checkbox lane
+    // is gone. The pill carries its own Fill toggle for shape tools.
     state.toolbar_shapes_expanded = false;
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&snapshot);
-    assert_eq!(h, 58);
+    assert_eq!(h, 104);
     let tree =
         crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
     assert!(tree.node_by_id(&"top.utility.fill".into()).is_none());
@@ -328,15 +350,22 @@ fn highlight_ring_row_grows_the_bar_only_while_active() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot).1, 58);
+    // Band (58) plus the contextual style pill (6 + 40) — no ring lane yet.
+    assert_eq!(top_size(&snapshot).1, 104);
 
     state.set_highlight_tool(true);
     let snapshot = snapshot_from_state(&state);
     assert!(snapshot.highlight_tool_active);
     let (w, h) = top_size(&snapshot);
+    // The highlight tool has no style properties, so the pill yields and
+    // only the ring lane grows the 58px band.
     assert!(h > 58, "ring row grows the bar: {h}");
     let tree =
         crate::backend::wayland::toolbar::view::top::build_top_view(&snapshot, w as f64, h as f64);
+    assert!(
+        tree.node_by_id(&"top.island.style".into()).is_none(),
+        "no style pill while the highlight tool is active"
+    );
     let ring = tree
         .node_by_id(&"top.utility.highlight-ring".into())
         .expect("ring checkbox");
@@ -375,7 +404,9 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
     snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
         snapshot.top_viewport_max = Some(budget as f64);
         let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&snapshot);
-        (plan.show_overflow
+        let has_dropped_items =
+            !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty();
+        (has_dropped_items
             && !plan
                 .dropped_utilities
                 .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight))
@@ -492,7 +523,7 @@ fn canvas_pane_right_aligns_destructive_buttons() {
     for (event_name, matcher) in [
         (
             "ClearCanvas",
-            &(|hit: &HitRegion| matches!(hit.event, ToolbarEvent::ClearCanvas))
+            &(|hit: &HitRegion| matches!(hit.event, ToolbarEvent::ClearCanvas { .. }))
                 as &dyn Fn(&HitRegion) -> bool,
         ),
         ("BoardDelete", &|hit: &HitRegion| {

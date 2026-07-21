@@ -10,10 +10,11 @@ fn color_input_named_round_trip_and_preview() {
     assert_eq!(input.selected_named, NamedColorOption::Red);
     assert_eq!(input.summary(), "Red");
 
+    // Named "red" resolves to the tuned palette red #F5333F.
     let preview = input.preview_color().expect("preview should resolve");
-    assert!((preview.r - 1.0).abs() < f32::EPSILON);
-    assert!((preview.g - 0.0).abs() < f32::EPSILON);
-    assert!((preview.b - 0.0).abs() < f32::EPSILON);
+    assert!((preview.r - 245.0 / 255.0).abs() < 1e-6);
+    assert!((preview.g - 51.0 / 255.0).abs() < 1e-6);
+    assert!((preview.b - 63.0 / 255.0).abs() < 1e-6);
 
     let round_trip = input.to_color_spec().expect("to_color_spec should succeed");
     match round_trip {

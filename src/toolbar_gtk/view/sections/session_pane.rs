@@ -19,24 +19,42 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
         ToolbarSideSection::Session,
         ToolbarSideSection::Session.label(),
     );
+    card.body.append(&content(ctx, &session, true));
+    Some(card.root.upcast())
+}
 
+/// The pane's content for the top strip's Session popover: identical
+/// controls without the collapsible-card chrome. Live updates come from
+/// content-key rebuilds in the popover host, so no updaters register.
+pub(in crate::toolbar_gtk) fn build_popover_content(
+    ctx: &mut SectionCtx,
+    session: &model::ToolbarSessionModel,
+) -> gtk4::Box {
+    content(ctx, session, false)
+}
+
+fn content(
+    ctx: &mut SectionCtx,
+    session: &model::ToolbarSessionModel,
+    register_updaters: bool,
+) -> gtk4::Box {
+    let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
     let name_label = gtk4::Label::new(Some(&session.active_name));
     name_label.set_xalign(0.0);
     name_label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
-    card.body.append(&name_label);
+    column.append(&name_label);
     // Keep the tail of the path — the leading directories are the least
     // informative part of a session path.
     let path_label = gtk4::Label::new(Some(&session.active_path_label));
     path_label.add_css_class("hint");
     path_label.set_xalign(0.0);
     path_label.set_ellipsize(gtk4::pango::EllipsizeMode::Start);
-    card.body.append(&path_label);
+    column.append(&path_label);
 
     // A pending Save-As overwrite confirmation replaces the button grid.
     let mut handles: Vec<gtk4::Button> = Vec::new();
     if let Some(confirmation) = session.overwrite_confirmation.as_ref() {
-        card.body
-            .append(&overwrite_confirmation_rows(ctx, confirmation));
+        column.append(&overwrite_confirmation_rows(ctx, confirmation));
     } else {
         let columns = session.button_columns();
         let grid = gtk4::Grid::new();
@@ -54,24 +72,26 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
             );
             handles.push(button);
         }
-        card.body.append(&grid);
+        column.append(&grid);
     }
 
     for recent in &session.recents {
-        card.body.append(&recent_row(ctx, recent));
+        column.append(&recent_row(ctx, recent));
     }
 
-    ctx.updaters.push(Box::new(move |snapshot| {
-        let Some(session) = model::ToolbarSessionModel::from_snapshot(snapshot) else {
-            return;
-        };
-        name_label.set_text(&session.active_name);
-        path_label.set_text(&session.active_path_label);
-        for (handle, button_model) in handles.iter().zip(session.buttons.iter()) {
-            handle.set_sensitive(button_model.enabled);
-        }
-    }));
-    Some(card.root.upcast())
+    if register_updaters {
+        ctx.updaters.push(Box::new(move |snapshot| {
+            let Some(session) = model::ToolbarSessionModel::from_snapshot(snapshot) else {
+                return;
+            };
+            name_label.set_text(&session.active_name);
+            path_label.set_text(&session.active_path_label);
+            for (handle, button_model) in handles.iter().zip(session.buttons.iter()) {
+                handle.set_sensitive(button_model.enabled);
+            }
+        }));
+    }
+    column
 }
 
 fn session_button(ctx: &SectionCtx, button_model: &model::ToolbarSessionButton) -> gtk4::Button {

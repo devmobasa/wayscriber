@@ -1,7 +1,6 @@
-use super::super::base::{
-    DesktopEnvironment, InputState, LightModeRestore, ShellMode, UiToastKind,
-};
+use super::super::base::{DesktopEnvironment, InputState, LightModeRestore, ShellMode};
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -53,7 +52,11 @@ impl InputState {
             self.exit_light_mode();
         } else {
             if !self.light_mode_supported() {
-                self.set_ui_toast(UiToastKind::Warning, self.light_mode_unsupported_message());
+                self.push_toast(
+                    ToastPriority::Info,
+                    "light_mode",
+                    Toast::warning(self.light_mode_unsupported_message()),
+                );
                 self.needs_redraw = true;
                 return false;
             }
@@ -75,7 +78,11 @@ impl InputState {
         if !self.light_mode {
             if drawing {
                 if !self.light_mode_supported() {
-                    self.set_ui_toast(UiToastKind::Warning, self.light_mode_unsupported_message());
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "light_mode",
+                        Toast::warning(self.light_mode_unsupported_message()),
+                    );
                     self.needs_redraw = true;
                     return false;
                 }
@@ -95,7 +102,7 @@ impl InputState {
         } else {
             "Light Mode passthrough"
         };
-        self.set_ui_toast(UiToastKind::Info, message);
+        self.push_toast(ToastPriority::Info, "light_mode", Toast::info(message));
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.light_mode_drawing
@@ -122,7 +129,11 @@ impl InputState {
             }
         }
 
-        self.set_ui_toast(UiToastKind::Info, "Stopping Light Mode");
+        self.push_toast(
+            ToastPriority::Info,
+            "light_mode",
+            Toast::info("Stopping Light Mode"),
+        );
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -169,7 +180,11 @@ impl InputState {
         } else {
             "Light Mode passthrough"
         };
-        self.set_ui_toast_with_action(UiToastKind::Info, message, "Exit", Action::ToggleLightMode);
+        self.push_toast(
+            ToastPriority::Action,
+            "light_mode",
+            Toast::info(message).action("Exit", Action::ToggleLightMode),
+        );
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }

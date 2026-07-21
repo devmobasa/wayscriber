@@ -140,6 +140,7 @@ fn action_serialization_matches_established_contract() {
         (Action::ToggleStatusBar, "toggle_status_bar"),
         (Action::ToggleClickHighlight, "toggle_click_highlight"),
         (Action::ToggleToolbar, "toggle_toolbar"),
+        (Action::CycleToolbarDisplay, "cycle_toolbar_display"),
         (Action::TogglePresenterMode, "toggle_presenter_mode"),
         (Action::ToggleLightMode, "toggle_light_mode"),
         (Action::ToggleLightModeDrawing, "toggle_light_mode_drawing"),

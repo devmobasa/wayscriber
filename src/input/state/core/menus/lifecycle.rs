@@ -30,6 +30,7 @@ impl InputState {
         if !self.context_menu_enabled {
             return;
         }
+        self.close_radial_menu();
         self.close_properties_panel();
         self.context_menu_page_target = None;
         if let Some(layout) = self.context_menu_layout.take() {

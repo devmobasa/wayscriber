@@ -8,8 +8,9 @@ fn desired_keyboard_interactivity_for(
     layer_shell_available: bool,
     toolbar_visible: bool,
     inline_toolbars_active: bool,
+    canvas_modal_active: bool,
 ) -> KeyboardInteractivity {
-    if layer_shell_available && toolbar_visible && !inline_toolbars_active {
+    if layer_shell_available && toolbar_visible && !inline_toolbars_active && !canvas_modal_active {
         KeyboardInteractivity::OnDemand
     } else {
         KeyboardInteractivity::Exclusive
