@@ -3,8 +3,9 @@ use super::super::base::{
 };
 use crate::domain::Action;
 use crate::input::boards::{
-    BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
-    BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
+    BoardConfigChange, BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest,
+    BoardDeleteTarget, BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection,
+    BoardRestoreRequest,
 };
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
@@ -163,7 +164,9 @@ impl InputState {
                 self.pending_board_delete = None;
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
                 self.remove_board_recent(&deleted_id);
-                self.queue_board_config_save();
+                self.queue_board_config_save(BoardConfigChange::IdentityDeleted(
+                    deleted_id.clone(),
+                ));
                 self.deleted_boards.push((
                     BoardRestoreRequest {
                         board: deleted_board,
@@ -249,9 +252,19 @@ impl InputState {
         let generation_before = self.boards.board_identity_generation();
 
         match self.boards.restore_board(request) {
-            BoardRestoreOutcome::Restored { restored_name, .. } => {
+            BoardRestoreOutcome::Restored {
+                restored_id,
+                restored_name,
+                id_changed,
+                ..
+            } => {
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
-                self.queue_board_config_save();
+                let change = if id_changed {
+                    BoardConfigChange::IdentitiesCreated(vec![restored_id])
+                } else {
+                    BoardConfigChange::IdentityRestored(restored_id)
+                };
+                self.queue_board_config_save(change);
                 self.finish_board_transition_from(current_spec, &current_id, false);
                 self.push_toast(
                     ToastPriority::Info,

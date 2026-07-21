@@ -28,10 +28,10 @@ pub(crate) use control::{
 };
 #[allow(unused_imports)]
 pub(crate) use event_policy::{
-    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPersistenceTarget,
-    ToolbarPreApplyEffect, ToolbarUiPersistenceTarget, action_for_apply_preset,
-    action_for_clear_preset, action_for_event, action_for_save_preset, action_for_tool,
-    short_label_for_event, tooltip_label_for_event,
+    ToolbarBackendRoute, ToolbarConfigPersistenceTarget, ToolbarEventPolicy, ToolbarPersistence,
+    ToolbarPersistenceTarget, ToolbarPreApplyEffect, ToolbarUiPersistenceTarget,
+    action_for_apply_preset, action_for_clear_preset, action_for_event, action_for_save_preset,
+    action_for_tool, short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
 pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
@@ -324,7 +324,9 @@ mod tests {
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas)).persistence,
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar)
+            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar(
+                ToolbarConfigPersistenceTarget::SidePane
+            ))
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleSideSectionCollapsed(
@@ -332,7 +334,12 @@ mod tests {
                 true,
             ))
             .persistence,
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar)
+            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar(
+                ToolbarConfigPersistenceTarget::CollapsedSection {
+                    section: crate::ui::toolbar::ToolbarSideSection::Colors,
+                    collapsed: true,
+                }
+            ))
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ScrollSidePane(12.0)).persistence,

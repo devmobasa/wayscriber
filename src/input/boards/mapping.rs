@@ -5,6 +5,81 @@ use super::{
 };
 use crate::config::{BoardBackgroundConfig, BoardItemConfig, BoardsConfig};
 use crate::domain::Color;
+use std::collections::BTreeSet;
+
+#[derive(Debug, Clone)]
+pub(crate) enum BoardConfigChange {
+    Structure,
+    IdentitiesCreated(Vec<String>),
+    IdentityDeleted(String),
+    IdentityRestored(String),
+    Name(String),
+    Appearance(String),
+    Pinned(String),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PendingBoardConfigUpdate {
+    pub(crate) snapshot: BoardsConfig,
+    pub(crate) structure_changed: bool,
+    pub(crate) created_ids: BTreeSet<String>,
+    pub(crate) deleted_ids: BTreeSet<String>,
+    pub(crate) changed_names: BTreeSet<String>,
+    pub(crate) changed_appearances: BTreeSet<String>,
+    pub(crate) changed_pins: BTreeSet<String>,
+}
+
+impl PendingBoardConfigUpdate {
+    pub(crate) fn new(snapshot: BoardsConfig, change: BoardConfigChange) -> Self {
+        let mut update = Self {
+            snapshot,
+            structure_changed: false,
+            created_ids: BTreeSet::new(),
+            deleted_ids: BTreeSet::new(),
+            changed_names: BTreeSet::new(),
+            changed_appearances: BTreeSet::new(),
+            changed_pins: BTreeSet::new(),
+        };
+        update.record(change);
+        update
+    }
+
+    pub(crate) fn merge(&mut self, snapshot: BoardsConfig, change: BoardConfigChange) {
+        self.snapshot = snapshot;
+        self.record(change);
+    }
+
+    pub(crate) fn into_snapshot(self) -> BoardsConfig {
+        self.snapshot
+    }
+
+    fn record(&mut self, change: BoardConfigChange) {
+        match change {
+            BoardConfigChange::Structure => self.structure_changed = true,
+            BoardConfigChange::IdentitiesCreated(ids) => {
+                self.structure_changed = true;
+                self.created_ids.extend(ids);
+            }
+            BoardConfigChange::IdentityDeleted(id) => {
+                self.structure_changed = true;
+                self.deleted_ids.insert(id);
+            }
+            BoardConfigChange::IdentityRestored(id) => {
+                self.structure_changed = true;
+                self.deleted_ids.remove(&id);
+            }
+            BoardConfigChange::Name(id) => {
+                self.changed_names.insert(id);
+            }
+            BoardConfigChange::Appearance(id) => {
+                self.changed_appearances.insert(id);
+            }
+            BoardConfigChange::Pinned(id) => {
+                self.changed_pins.insert(id);
+            }
+        }
+    }
+}
 use crate::domain::color::PALETTE_BLACK;
 
 impl BoardSpec {

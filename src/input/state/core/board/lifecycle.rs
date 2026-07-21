@@ -1,4 +1,5 @@
 use super::super::base::InputState;
+use crate::input::boards::BoardConfigChange;
 
 impl InputState {
     pub(super) fn mark_board_surface_dirty(&mut self) {
@@ -16,11 +17,18 @@ impl InputState {
         self.mark_board_surface_changed();
     }
 
-    pub(crate) fn queue_board_config_save(&mut self) {
+    pub(crate) fn queue_board_config_save(&mut self, change: BoardConfigChange) {
         if !self.boards.persist_customizations() {
             return;
         }
-        self.pending_board_config = Some(self.boards.to_config());
+        let snapshot = self.boards.to_config();
+        if let Some(update) = &mut self.pending_board_config {
+            update.merge(snapshot, change);
+        } else {
+            self.pending_board_config = Some(crate::input::boards::PendingBoardConfigUpdate::new(
+                snapshot, change,
+            ));
+        }
     }
 
     pub(super) fn prepare_active_page_content_change(&mut self) {

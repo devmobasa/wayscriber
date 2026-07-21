@@ -1,4 +1,5 @@
 use super::super::base::InputState;
+use crate::input::boards::BoardConfigChange;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
@@ -64,7 +65,6 @@ impl InputState {
         );
         if created {
             let name = self.boards.active_board_name().to_string();
-            self.queue_board_config_save();
             self.push_toast(
                 ToastPriority::Info,
                 "board.switch",
@@ -130,7 +130,9 @@ impl InputState {
         if let Some(new_id) = self.boards.duplicate_active_board() {
             self.clear_pending_deletes_after_board_generation_change(generation_before);
             self.record_board_recent(&new_id);
-            self.queue_board_config_save();
+            self.queue_board_config_save(BoardConfigChange::IdentitiesCreated(vec![
+                new_id.clone(),
+            ]));
             let name = self.boards.active_board_name();
             self.push_toast(
                 ToastPriority::Info,
@@ -190,7 +192,12 @@ impl InputState {
         }
 
         let current_spec = self.boards.active_board().spec.clone();
-        let prev_count = self.boards.board_count();
+        let ids_before = self
+            .boards
+            .board_states()
+            .iter()
+            .map(|board| board.spec.id.clone())
+            .collect::<std::collections::BTreeSet<_>>();
         let generation_before = self.boards.board_identity_generation();
         self.cancel_active_interaction();
         let switched = switch(&mut self.boards);
@@ -204,8 +211,15 @@ impl InputState {
         if target_spec.id == current_id {
             return false;
         }
-        if self.boards.board_count() > prev_count {
-            self.queue_board_config_save();
+        let created_ids = self
+            .boards
+            .board_states()
+            .iter()
+            .filter(|board| !ids_before.contains(&board.spec.id))
+            .map(|board| board.spec.id.clone())
+            .collect::<Vec<_>>();
+        if !created_ids.is_empty() {
+            self.queue_board_config_save(BoardConfigChange::IdentitiesCreated(created_ids));
         }
         self.clear_pending_deletes_after_board_generation_change(generation_before);
         self.finish_board_transition_from(current_spec, current_id, true);
