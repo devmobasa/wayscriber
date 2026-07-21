@@ -150,6 +150,13 @@ impl WaylandState {
             return;
         }
 
+        if !self.input_state.show_help {
+            // A new tip-down supersedes any consume-only help ownership left
+            // by a sequence whose tip-up was not delivered.
+            self.input_state
+                .clear_help_overlay_press_for(HelpOverlayPressSource::Stylus);
+        }
+
         if self.input_state.eyedropper_is_active() {
             let (x, y) = self.current_stylus_position();
             self.sample_eyedropper(x, y);
@@ -229,9 +236,7 @@ impl WaylandState {
         self.set_current_mouse(x as i32, y as i32);
         let screen_x = self.current_mouse().0;
         let screen_y = self.current_mouse().1;
-        if self.input_state.show_help
-            && self.handle_help_overlay_release(HelpOverlayPressSource::Stylus, screen_x, screen_y)
-        {
+        if self.handle_help_overlay_release(HelpOverlayPressSource::Stylus, screen_x, screen_y) {
             let hover_cursor_pos = self.stylus_hover_cursor_position();
             self.mark_stylus_hover_cursor_dirty(None, hover_cursor_pos);
             self.input_state.needs_redraw = true;

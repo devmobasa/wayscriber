@@ -21,6 +21,14 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        let help_press_source = HelpOverlayPressSource::Pointer(button);
+        if !self.input_state.show_help {
+            // A new press proves any older help-owned sequence for this button
+            // has ended, even if its release was lost with a surface/device.
+            self.input_state
+                .clear_help_overlay_press_for(help_press_source);
+        }
+
         if self.input_state.eyedropper_is_active() {
             if on_toolbar || self.pointer_over_toolbar() {
                 self.cancel_eyedropper();
@@ -54,7 +62,6 @@ impl WaylandState {
         // toolbar-local coordinates, so convert to screen space just like the
         // toast/status-HUD press guards below.
         if self.input_state.show_help {
-            let source = HelpOverlayPressSource::Pointer(button);
             let screen_position = if on_toolbar {
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             } else {
@@ -62,12 +69,13 @@ impl WaylandState {
             };
             match screen_position {
                 Some((sx, sy)) => self.input_state.note_help_overlay_press(
-                    source,
+                    help_press_source,
                     sx.round() as i32,
                     sy.round() as i32,
                 ),
                 None => {
-                    self.input_state.clear_help_overlay_press_for(source);
+                    self.input_state
+                        .clear_help_overlay_press_for(help_press_source);
                 }
             }
             return;

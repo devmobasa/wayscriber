@@ -162,6 +162,10 @@ pub struct InputState {
         crate::input::state::HelpOverlayPressSource,
         crate::input::state::HelpOverlayClick,
     )>,
+    /// Help-owned presses whose overlay generation ended before physical
+    /// release. Their eventual releases must still be swallowed, but can no
+    /// longer resolve an action against either the old or a reopened layout.
+    pub(crate) help_overlay_consume_only_presses: Vec<crate::input::state::HelpOverlayPressSource>,
     /// Board picker quick search query
     pub board_picker_search: String,
     /// Time of last board picker search input

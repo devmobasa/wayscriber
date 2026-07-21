@@ -66,7 +66,7 @@ impl InputState {
         // Defensively drop any geometry left from a previous open. The hit map
         // is normally cleared on close, but re-opening should never expose the
         // prior layout to a click before the first fresh render repopulates it.
-        self.help_overlay_pending_presses.clear();
+        self.retire_help_overlay_press_targets();
         crate::ui::clear_help_overlay_hit_map();
         if track_usage {
             self.pending_onboarding_usage.used_help_overlay = true;
@@ -102,7 +102,7 @@ impl InputState {
         self.help_overlay_quick_mode = false;
         self.help_overlay_scroll = 0.0;
         self.help_overlay_scroll_max = 0.0;
-        self.help_overlay_pending_presses.clear();
+        self.retire_help_overlay_press_targets();
         crate::ui::clear_help_overlay_hit_map();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -128,6 +128,15 @@ impl InputState {
         x: i32,
         y: i32,
     ) {
+        // A new physical press supersedes any consume-only token left by a
+        // release the compositor never delivered for this source.
+        if let Some(index) = self
+            .help_overlay_consume_only_presses
+            .iter()
+            .position(|pending_source| *pending_source == source)
+        {
+            self.help_overlay_consume_only_presses.swap_remove(index);
+        }
         let target = self.help_overlay_click_at(x, y);
         if let Some((_, pending_target)) = self
             .help_overlay_pending_presses
@@ -144,16 +153,24 @@ impl InputState {
     /// whether this modality owned the press and therefore owns and swallows its
     /// eventual release.
     pub(crate) fn clear_help_overlay_press_for(&mut self, source: HelpOverlayPressSource) -> bool {
+        let mut removed = false;
         if let Some(index) = self
             .help_overlay_pending_presses
             .iter()
             .position(|(pressed_source, _)| *pressed_source == source)
         {
             self.help_overlay_pending_presses.swap_remove(index);
-            true
-        } else {
-            false
+            removed = true;
         }
+        if let Some(index) = self
+            .help_overlay_consume_only_presses
+            .iter()
+            .position(|pending_source| *pending_source == source)
+        {
+            self.help_overlay_consume_only_presses.swap_remove(index);
+            removed = true;
+        }
+        removed
     }
 
     /// Resolve a left release at `(x, y)` (screen space) against the target
@@ -169,6 +186,19 @@ impl InputState {
         x: i32,
         y: i32,
     ) -> Option<HelpOverlayReleaseOutcome> {
+        if !self.show_help {
+            return self
+                .clear_help_overlay_press_for(source)
+                .then_some(HelpOverlayReleaseOutcome::None);
+        }
+        if let Some(index) = self
+            .help_overlay_consume_only_presses
+            .iter()
+            .position(|pending_source| *pending_source == source)
+        {
+            self.help_overlay_consume_only_presses.swap_remove(index);
+            return Some(HelpOverlayReleaseOutcome::None);
+        }
         let index = self
             .help_overlay_pending_presses
             .iter()
@@ -186,6 +216,18 @@ impl InputState {
             }
             _ => HelpOverlayReleaseOutcome::None,
         })
+    }
+
+    /// Invalidate action targets from the current help layout while retaining
+    /// ownership of their physical releases. This prevents releases from
+    /// leaking into a surface opened after help closes, without allowing an
+    /// old press to act against a newly rendered help layout.
+    fn retire_help_overlay_press_targets(&mut self) {
+        for (source, _) in self.help_overlay_pending_presses.drain(..) {
+            if !self.help_overlay_consume_only_presses.contains(&source) {
+                self.help_overlay_consume_only_presses.push(source);
+            }
+        }
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {
@@ -686,6 +728,88 @@ mod tests {
                 crate::config::Action::ClearCanvas
             )),
             "middle ownership must not consume the left help click"
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn closing_help_keeps_its_press_release_owned_without_running_the_stale_target() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+        let pointer = HelpOverlayPressSource::Pointer(1);
+        state.note_help_overlay_press(pointer, 150, 215);
+
+        state.close_help_overlay();
+
+        assert!(state.help_overlay_pending_presses.is_empty());
+        assert_eq!(state.help_overlay_consume_only_presses, vec![pointer]);
+
+        assert_eq!(
+            state.resolve_help_overlay_release(pointer, 150, 215),
+            Some(HelpOverlayReleaseOutcome::None),
+            "a press swallowed by help must still consume its physical release after help closes"
+        );
+        assert!(state.help_overlay_pending_presses.is_empty());
+        assert!(state.help_overlay_consume_only_presses.is_empty());
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn reopening_help_cannot_retarget_a_press_from_the_previous_layout() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+        let pointer = HelpOverlayPressSource::Pointer(1);
+        state.note_help_overlay_press(pointer, 150, 215);
+
+        state.close_help_overlay();
+        state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            &[(
+                120.0,
+                200.0,
+                160.0,
+                30.0,
+                crate::config::Action::ClearCanvas,
+            )],
+        );
+
+        assert_eq!(
+            state.resolve_help_overlay_release(pointer, 150, 215),
+            Some(HelpOverlayReleaseOutcome::None),
+            "an old press may only be consumed, never resolved against a reopened layout"
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn a_new_help_press_supersedes_consume_only_ownership_for_its_source() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+        let pointer = HelpOverlayPressSource::Pointer(1);
+        state.note_help_overlay_press(pointer, 150, 215);
+        state.close_help_overlay();
+        state.toggle_help_overlay();
+        crate::ui::install_help_hit_map_for_test(
+            (100.0, 100.0, 200.0, 300.0),
+            None,
+            &[(
+                120.0,
+                200.0,
+                160.0,
+                30.0,
+                crate::config::Action::ClearCanvas,
+            )],
+        );
+
+        state.note_help_overlay_press(pointer, 150, 215);
+
+        assert_eq!(
+            state.resolve_help_overlay_release(pointer, 150, 215),
+            Some(HelpOverlayReleaseOutcome::Run(
+                crate::config::Action::ClearCanvas
+            ))
         );
 
         crate::ui::clear_help_overlay_hit_map();

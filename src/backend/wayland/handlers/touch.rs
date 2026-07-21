@@ -196,6 +196,13 @@ impl WaylandState {
         let screen_y = screen_position.1.round() as i32;
         self.set_current_mouse(screen_x, screen_y);
 
+        if !self.input_state.show_help {
+            // A new touch supersedes any consume-only help ownership left by
+            // a sequence whose release/cancel was not delivered.
+            self.input_state
+                .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
+        }
+
         if self.input_state.eyedropper_is_active() {
             let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
             let inline_hit = target == TouchTarget::Overlay
@@ -411,29 +418,23 @@ impl WaylandState {
             return;
         }
 
-        // Mirror the mouse help release contract before toolbar/canvas
-        // routing. Touch presses can originate on either the overlay or a GTK
-        // toolbar surface, so resolve through the same screen conversion used
-        // on touch-down.
-        if self.input_state.show_help {
-            let help_owned_release = match self.touch_screen_position(surface, position, target) {
-                Some((screen_x, screen_y)) => self.handle_help_overlay_release(
-                    HelpOverlayPressSource::Touch,
-                    screen_x.round() as i32,
-                    screen_y.round() as i32,
-                ),
-                None => self
-                    .input_state
-                    .clear_help_overlay_press_for(HelpOverlayPressSource::Touch),
-            };
-            if help_owned_release {
-                self.set_pending_toast_press(None);
-                self.set_pending_status_hud_press(false);
-                self.set_pending_zoom_chip_press(ZoomChipPress::None);
-                return;
-            }
-            // Help opened after this touch began. Finish the pre-help gesture
-            // through the normal release path below.
+        // Resolve help ownership even after help closes, before routing into a
+        // popup that may have opened in the meantime.
+        let help_owned_release = match self.touch_screen_position(surface, position, target) {
+            Some((screen_x, screen_y)) => self.handle_help_overlay_release(
+                HelpOverlayPressSource::Touch,
+                screen_x.round() as i32,
+                screen_y.round() as i32,
+            ),
+            None => self
+                .input_state
+                .clear_help_overlay_press_for(HelpOverlayPressSource::Touch),
+        };
+        if help_owned_release {
+            self.set_pending_toast_press(None);
+            self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
+            return;
         }
 
         if self.input_state.command_palette_open || self.input_state.tour_active {

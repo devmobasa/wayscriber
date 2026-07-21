@@ -28,44 +28,32 @@ impl WaylandState {
             return;
         }
 
-        // The help overlay owns pointer releases while open: a release that
-        // lands on the SAME clickable row the press recorded runs its action, a
-        // press+release both outside the box dismisses it, and anything else is
-        // inert. The matching press was swallowed so nothing started a stroke
-        // underneath. Toolbar surfaces report toolbar-local coordinates, so
-        // convert to screen space (matching the press guard) before resolving.
-        if self.input_state.show_help {
-            let source = HelpOverlayPressSource::Pointer(button);
-            let help_owned_release = if button == BTN_LEFT {
-                let screen_position = if on_toolbar {
-                    self.toolbar_surface_screen_coords(&event.surface, event.position)
-                } else {
-                    Some(event.position)
-                };
-                match screen_position {
-                    Some((sx, sy)) => self.handle_help_overlay_release(
-                        source,
-                        sx.round() as i32,
-                        sy.round() as i32,
-                    ),
-                    None => self.input_state.clear_help_overlay_press_for(source),
-                }
+        // Resolve help ownership even after the overlay has closed: a press
+        // swallowed by help must not leak its release into a newly opened
+        // popup. Conversely, a press that preceded help has no owner and falls
+        // through to finish its original gesture.
+        let source = HelpOverlayPressSource::Pointer(button);
+        let help_owned_release = if button == BTN_LEFT {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
             } else {
-                // Non-left presses made while help was open are modal-owned
-                // and swallowed, but they never resolve rows/actions. A
-                // release whose press preceded help has no matching owner and
-                // falls through to finish panning or another active gesture.
-                self.input_state.clear_help_overlay_press_for(source)
+                Some(event.position)
             };
-            if help_owned_release {
-                self.set_pending_toast_press(None);
-                self.set_pending_status_hud_press(false);
-                self.set_pending_zoom_chip_press(ZoomChipPress::None);
-                return;
+            match screen_position {
+                Some((sx, sy)) => {
+                    self.handle_help_overlay_release(source, sx.round() as i32, sy.round() as i32)
+                }
+                None => self.input_state.clear_help_overlay_press_for(source),
             }
-            // Help opened after this pointer press began, so it owns neither the
-            // gesture nor its release. Fall through and finish the pre-help
-            // canvas/drag interaction instead of leaving it stuck.
+        } else {
+            // Non-left help presses are modal-owned but never resolve rows.
+            self.input_state.clear_help_overlay_press_for(source)
+        };
+        if help_owned_release {
+            self.set_pending_toast_press(None);
+            self.set_pending_status_hud_press(false);
+            self.set_pending_zoom_chip_press(ZoomChipPress::None);
+            return;
         }
 
         // Block pointer input when modal overlays are active
