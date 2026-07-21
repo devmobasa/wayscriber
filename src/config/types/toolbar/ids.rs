@@ -98,6 +98,7 @@ pub const SIDE_PAGES_NEW: ToolbarItemId = ToolbarItemId::from_known("side.pages.
 pub const SIDE_PAGES_DUPLICATE: ToolbarItemId = ToolbarItemId::from_known("side.pages.duplicate");
 pub const SIDE_PAGES_DELETE: ToolbarItemId = ToolbarItemId::from_known("side.pages.delete");
 
+pub const SIDE_BOARDS_PICKER: ToolbarItemId = ToolbarItemId::from_known("side.boards.picker");
 pub const SIDE_BOARDS_PREVIOUS: ToolbarItemId = ToolbarItemId::from_known("side.boards.previous");
 pub const SIDE_BOARDS_NEXT: ToolbarItemId = ToolbarItemId::from_known("side.boards.next");
 pub const SIDE_BOARDS_NEW: ToolbarItemId = ToolbarItemId::from_known("side.boards.new");

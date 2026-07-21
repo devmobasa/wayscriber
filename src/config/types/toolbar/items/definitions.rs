@@ -362,6 +362,13 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Some(ToolbarGroupId::Pages),
     ),
     item(
+        ids::SIDE_BOARDS_PICKER,
+        "Board picker",
+        Side,
+        Board,
+        Some(ToolbarGroupId::Boards),
+    ),
+    item(
         ids::SIDE_BOARDS_PREVIOUS,
         "Previous board",
         Side,

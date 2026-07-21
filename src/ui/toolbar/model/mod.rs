@@ -349,4 +349,57 @@ mod tests {
                 .is_empty()
         );
     }
+
+    #[test]
+    fn board_picker_button_is_popover_only_and_hideable() {
+        let mut snapshot = snapshot();
+
+        // The Canvas popover boards group leads with the board picker — the
+        // top bar's only route to the picker.
+        let popover = toolbar_boards_model_for_popover(&snapshot).expect("boards popover group");
+        assert_eq!(
+            popover.buttons.first().map(|button| &button.event),
+            Some(&ToolbarEvent::ToggleBoardPicker),
+            "the picker leads the popover boards row"
+        );
+        let picker = popover.buttons.first().expect("board picker button");
+        assert_eq!(picker.short_label(&snapshot, "Board"), "Picker");
+        assert_eq!(picker.tooltip_label(&snapshot, "Board"), "Board Picker");
+
+        // The side-palette boards group keeps its legacy header trigger and is
+        // not given the picker button.
+        let side = toolbar_boards_model(&snapshot).expect("side boards group");
+        assert!(
+            !side
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::ToggleBoardPicker),
+            "the side palette boards row is unchanged"
+        );
+
+        // Hiding side.boards.picker drops the button (config plumbing), while
+        // the rest of the boards row survives.
+        snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+            hidden: vec![ids::SIDE_BOARDS_PICKER.as_str().to_string()],
+            shown: Vec::new(),
+            order: crate::config::ToolbarItemOrderConfig::default(),
+        }
+        .resolved();
+        let hidden =
+            toolbar_boards_model_for_popover(&snapshot).expect("boards popover still present");
+        assert!(
+            !hidden
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::ToggleBoardPicker),
+            "hiding side.boards.picker removes the picker button"
+        );
+        assert!(
+            hidden
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::BoardNew),
+            "hiding the picker leaves the rest of the boards row intact"
+        );
+    }
 }

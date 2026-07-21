@@ -1082,6 +1082,11 @@ fn canvas_popover_sections_are_gated_by_their_display_toggles() {
             .is_some_and(|node| matches!(node.kind, WidgetKind::Popover { .. }))
     );
     assert!(canvas_tree_has_event(&boards, &ToolbarEvent::BoardNew));
+    // The board picker is reachable from the top bar only through this popover.
+    assert!(canvas_tree_has_event(
+        &boards,
+        &ToolbarEvent::ToggleBoardPicker
+    ));
     assert!(!canvas_tree_has_event(&boards, &ToolbarEvent::PageNew));
 
     let pages = build_open(&|s| s.show_pages_section = true);
