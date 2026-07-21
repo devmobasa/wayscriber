@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use crate::backend::wayland::RuntimeWakeHandle;
-#[cfg(test)]
+#[cfg(all(test, feature = "portal"))]
 use crate::backend::wayland::RuntimeWakeSource;
 
 trait ControlWake: Send + Sync {
@@ -58,7 +58,7 @@ impl DaemonControlEvent {
         self.flag.load(Ordering::Acquire)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "portal"))]
     pub(super) fn for_test(flag: Arc<AtomicBool>) -> (Self, RuntimeWakeSource) {
         let wake = RuntimeWakeSource::new().unwrap();
         (Self::new(flag, wake.handle()), wake)
@@ -90,7 +90,7 @@ pub(super) struct VisibilityPublisher {
 }
 
 impl VisibilityIntents {
-    #[cfg(test)]
+    #[cfg(all(test, feature = "tray"))]
     pub(super) fn with_ready(ready: Arc<AtomicBool>) -> Self {
         Self {
             state: Mutex::new(VisibilityIntentState::default()),
@@ -250,6 +250,7 @@ impl std::error::Error for AlreadyRunningError {}
 /// Daemon state manager
 pub type BackendRunner = dyn Fn(Option<String>) -> anyhow::Result<()> + Send + Sync;
 
+#[cfg(any(feature = "tray", test))]
 const MAX_OVERLAY_ACTION_INTENTS: usize = 64;
 
 #[derive(Debug, Default)]
@@ -266,10 +267,13 @@ pub(crate) struct OverlayActionIntents {
 
 #[derive(Clone)]
 pub(super) struct OverlayActionPublisher {
+    #[cfg(any(feature = "tray", test))]
     intents: Arc<OverlayActionIntents>,
+    #[cfg(any(feature = "tray", test))]
     event: DaemonControlEvent,
 }
 
+#[cfg(any(feature = "tray", test))]
 #[derive(Debug)]
 pub(super) enum OverlayActionPublishError {
     QueueFull,
@@ -278,8 +282,12 @@ pub(super) enum OverlayActionPublishError {
 
 impl OverlayActionIntents {
     pub(super) fn publisher(self: &Arc<Self>, wake: RuntimeWakeHandle) -> OverlayActionPublisher {
+        #[cfg(not(any(feature = "tray", test)))]
+        let _ = wake;
         OverlayActionPublisher {
+            #[cfg(any(feature = "tray", test))]
             intents: Arc::clone(self),
+            #[cfg(any(feature = "tray", test))]
             event: DaemonControlEvent::new(Arc::clone(&self.ready), wake),
         }
     }
@@ -328,6 +336,7 @@ impl OverlayActionIntents {
     }
 }
 
+#[cfg(any(feature = "tray", test))]
 impl OverlayActionPublisher {
     pub(super) fn publish(&self, action: TrayAction) -> Result<(), OverlayActionPublishError> {
         let mut state = self
@@ -439,10 +448,13 @@ mod control_tests {
         wake.fail.store(true, Ordering::Relaxed);
         let publisher = action_publisher(&intents, wake);
 
-        assert!(matches!(
-            publisher.publish(TrayAction::ToggleFreeze),
-            Err(OverlayActionPublishError::Wake(_))
-        ));
+        let error = publisher
+            .publish(TrayAction::ToggleFreeze)
+            .expect_err("injected wake failure should be returned");
+        let OverlayActionPublishError::Wake(error) = error else {
+            panic!("expected wake failure");
+        };
+        assert_eq!(error.kind(), io::ErrorKind::Other);
         assert!(intents.ready.load(Ordering::Acquire));
         assert_eq!(intents.pending_counts(), (1, 0));
 

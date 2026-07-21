@@ -129,6 +129,7 @@ fn command_section(
 
 fn board_icon(_snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> IconPainter {
     match event {
+        ToolbarEvent::ToggleBoardPicker => toolbar_icons::draw_icon_grid,
         ToolbarEvent::BoardPrev => toolbar_icons::draw_icon_chevron_left,
         ToolbarEvent::BoardNext => toolbar_icons::draw_icon_chevron_right,
         ToolbarEvent::BoardNew => toolbar_icons::draw_icon_plus,

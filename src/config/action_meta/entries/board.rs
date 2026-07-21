@@ -260,7 +260,7 @@ pub const ENTRIES: &[ActionMeta] = &[
     meta!(
         BoardPicker,
         "Board Picker",
-        None,
+        Some("Picker"),
         "Open the board picker",
         Board,
         true,

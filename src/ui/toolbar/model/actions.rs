@@ -253,11 +253,17 @@ pub(crate) fn toolbar_boards_model_for_popover(
     if !snapshot.show_boards_section {
         return None;
     }
-    visible_group(
-        snapshot,
-        ToolbarCommandGroupKind::Boards,
-        boards_buttons(snapshot),
-    )
+    // The top strip has no side pane, so the Canvas popover is the only place
+    // the board picker (the full board grid) is reachable from the top bar. It
+    // leads the row as the section's "browse all boards" entry, ahead of the
+    // linear nav/create buttons; the side palette keeps its own header trigger.
+    let mut buttons = Vec::with_capacity(6);
+    buttons.push(ToolbarButtonModel::new(
+        ToolbarEvent::ToggleBoardPicker,
+        true,
+    ));
+    buttons.extend(boards_buttons(snapshot));
+    visible_group(snapshot, ToolbarCommandGroupKind::Boards, buttons)
 }
 
 /// Pages command group for the Canvas popover; see
@@ -356,6 +362,7 @@ fn toolbar_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
         ToolbarEvent::PageNew => ids::SIDE_PAGES_NEW,
         ToolbarEvent::PageDuplicate => ids::SIDE_PAGES_DUPLICATE,
         ToolbarEvent::PageDelete => ids::SIDE_PAGES_DELETE,
+        ToolbarEvent::ToggleBoardPicker => ids::SIDE_BOARDS_PICKER,
         ToolbarEvent::BoardPrev => ids::SIDE_BOARDS_PREVIOUS,
         ToolbarEvent::BoardNext => ids::SIDE_BOARDS_NEXT,
         ToolbarEvent::BoardNew => ids::SIDE_BOARDS_NEW,

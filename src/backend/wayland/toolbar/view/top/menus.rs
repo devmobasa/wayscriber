@@ -591,6 +591,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
 /// from the shared command-group models.
 fn canvas_button_suffix(event: &ToolbarEvent) -> &'static str {
     match event {
+        ToolbarEvent::ToggleBoardPicker => "board-picker",
         ToolbarEvent::BoardPrev => "board-prev",
         ToolbarEvent::BoardNext => "board-next",
         ToolbarEvent::BoardNew => "board-new",

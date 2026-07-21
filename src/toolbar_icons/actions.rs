@@ -185,6 +185,28 @@ pub fn draw_icon_layers(ctx: &Context, x: f64, y: f64, size: f64) {
     }
 }
 
+/// Draw a board-picker icon: a 2x2 grid of cells — the "browse all boards"
+/// overview that opens the board picker.
+pub fn draw_icon_grid(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    let pad = s * 0.16;
+    let gap = s * 0.14;
+    let cell = (s - pad * 2.0 - gap) / 2.0;
+    for row in 0..2 {
+        for col in 0..2 {
+            let cx = x + pad + col as f64 * (cell + gap);
+            let cy = y + pad + row as f64 * (cell + gap);
+            ctx.rectangle(cx, cy, cell, cell);
+            let _ = ctx.stroke();
+        }
+    }
+}
+
 /// Draw a session icon (the Session popover entry): a floppy-disk save body
 /// with a small clock overlaid in the lower-right corner (save + recent).
 pub fn draw_icon_session(ctx: &Context, x: f64, y: f64, size: f64) {
