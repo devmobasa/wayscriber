@@ -229,14 +229,12 @@ fn process_requests(root: &Path) -> io::Result<usize> {
 }
 
 fn write_report(root: &Path, typed_count: usize) -> io::Result<()> {
-    fs::write(
-        root.join("fixture-report"),
-        format!(
-            "signals={}\ntyped={}\n",
-            SIGNAL_COUNT.load(Ordering::Relaxed),
-            typed_count
-        ),
-    )
+    let report = format!(
+        "signals={}\ntyped={}\n",
+        SIGNAL_COUNT.load(Ordering::Relaxed),
+        typed_count
+    );
+    atomic_write(&root.join("fixture-report"), report.as_bytes())
 }
 
 fn run_fake_daemon(root: &Path, v2_record: bool) -> io::Result<()> {
