@@ -1,6 +1,6 @@
 //! Interactive bottom-right zoom chip (M8 Part 2).
 //!
-//! A persistent, interactive `⊖  NN%  ⊕  Fit` control anchored to the
+//! A persistent, interactive `[−]  NN%  [+]  Fit` control anchored to the
 //! bottom-right corner. In the default pill layout zoom is otherwise
 //! keyboard-only; this chip surfaces the live zoom percentage and lets the
 //! user step the zoom by clicking. It is a builtin Cairo overlay modelled on
@@ -8,8 +8,10 @@
 //! frame and cached on `InputState`, so rendering, damage geometry, and
 //! pointer hit-testing all read the same cache and can never disagree.
 //!
+//! The zoom-out/in marks are drawn as bold vector +/- strokes (not circled
+//! glyphs), sized to the `NN%` digits and using the same adaptive chip color.
 //! Buttons dispatch through the shared zoom action path:
-//! `⊖` = ZoomOut, `⊕` = ZoomIn, `Fit` = ResetZoom (back to 100%), and — only
+//! minus = ZoomOut, plus = ZoomIn, `Fit` = ResetZoom (back to 100%), and — only
 //! while zoom is active — a compact `Lock` toggle = ToggleZoomLock. The `NN%`
 //! readout is a passive display (it consumes clicks but triggers nothing), so
 //! no drag ever starts on the canvas beneath the chip.
@@ -41,10 +43,21 @@ const ZOOM_CHIP_PIECE_GAP: f64 = overlay::SPACING_MD;
 /// so the two bottom-anchored pills read as a tidy stack rather than touching.
 const ZOOM_CHIP_STATUS_GAP: f64 = overlay::SPACING_MD;
 
-/// Zoom-out button glyph (circled minus).
-const ZOOM_OUT_GLYPH: &str = "\u{2296}";
-/// Zoom-in button glyph (circled plus).
-const ZOOM_IN_GLYPH: &str = "\u{2295}";
+/// Reserved box width for a vector +/- mark, as a fraction of the font size.
+/// The layout, hit-test, and render center all read this via
+/// [`zoom_glyph_advance`], so the drawn mark can never drift from its hit box.
+const ZOOM_CHIP_GLYPH_ADVANCE_FACTOR: f64 = 1.0;
+/// Stroke weight of the vector +/- marks, as a fraction of the font size
+/// (matches the house `controls::draw_icon_plus` weight, floored so the mark
+/// stays solid at tiny user fonts).
+const ZOOM_CHIP_GLYPH_STROKE_FACTOR: f64 = 0.15;
+const ZOOM_CHIP_GLYPH_STROKE_MIN: f64 = 2.0;
+/// Half-length of each +/- arm, as a fraction of the digit cap height, so the
+/// marks read slightly bolder than the adjacent `NN%` digits.
+const ZOOM_CHIP_GLYPH_ARM_CAP_FRACTION: f64 = 0.575;
+/// Vertical center of the +/- marks above the baseline, as a fraction of the
+/// digit cap height (lands them on the digits' optical middle).
+const ZOOM_CHIP_GLYPH_CENTER_CAP_FRACTION: f64 = 0.5;
 /// Reset-to-100% button label.
 const ZOOM_FIT_LABEL: &str = "Fit";
 /// Zoom-lock toggle label (shown only while zoom is active).
@@ -58,9 +71,9 @@ const ZOOM_LOCK_LABEL: &str = "Lock";
 /// Interactive surface a zoom chip button activates on click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoomChipButtonKind {
-    /// `⊖` — dispatches ZoomOut.
+    /// Bold vector minus mark — dispatches ZoomOut.
     Out,
-    /// `⊕` — dispatches ZoomIn.
+    /// Bold vector plus mark — dispatches ZoomIn.
     In,
     /// `Fit` — dispatches ResetZoom (back to 100%).
     Fit,
@@ -126,6 +139,21 @@ pub(crate) struct ZoomChipRun {
     pub(crate) button: Option<ZoomChipButtonKind>,
 }
 
+/// Geometry for drawing the vector +/- marks, derived once at layout time so
+/// render, hit-testing, and damage all agree on the marks' box.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ZoomGlyphMetrics {
+    /// Reserved advance (box width) of one mark; equals the Out/In hit width
+    /// contribution and `zoom_glyph_advance(font_size)`.
+    pub(crate) advance: f64,
+    /// Absolute y of each mark's optical center (on the digits' middle).
+    pub(crate) center_y: f64,
+    /// Half-length of each arm.
+    pub(crate) arm_half: f64,
+    /// Stroke width of the marks.
+    pub(crate) stroke: f64,
+}
+
 /// Cached zoom chip geometry for one frame: the pill, its text runs, and the
 /// interactive button rects.
 #[derive(Debug, Clone)]
@@ -137,6 +165,8 @@ pub struct ZoomChipLayout {
     pub(crate) runs: Vec<ZoomChipRun>,
     /// Absolute baseline y shared by every text run.
     pub(crate) line_baseline: f64,
+    /// Geometry for the vector +/- marks (Out/In runs).
+    pub(crate) glyph_metrics: ZoomGlyphMetrics,
     pub(crate) buttons: Vec<ZoomChipButton>,
     /// Whether zoom is currently locked (tints the `Lock` button on-state).
     pub(crate) lock_active: bool,
@@ -190,12 +220,32 @@ fn chip_text_style(font_size: f64) -> UiTextStyle<'static> {
     }
 }
 
+/// The reserved box width for one vector +/- mark. THE single source of truth:
+/// the layout advance, the hit rect, and the render center all call this, so
+/// the drawn mark always sits inside its hit box (dead-center of the reserved
+/// box; the tiny-font widen pass may nudge the hit box a hair off that center,
+/// but never off the mark).
+fn zoom_glyph_advance(font_size: f64) -> f64 {
+    font_size * ZOOM_CHIP_GLYPH_ADVANCE_FACTOR
+}
+
+/// Whether a piece is a vector +/- mark (drawn as strokes) rather than text.
+fn is_glyph_icon(kind: Option<ZoomChipButtonKind>) -> bool {
+    matches!(
+        kind,
+        Some(ZoomChipButtonKind::Out) | Some(ZoomChipButtonKind::In)
+    )
+}
+
 /// One chip piece before positioning: a glyph/label button or the `NN%`
 /// passive readout (`kind == None`).
 struct ChipPiece {
     text: String,
     kind: Option<ZoomChipButtonKind>,
     extents: UiTextExtents,
+    /// Horizontal advance reserved for this piece: the measured text advance
+    /// for labels, or [`zoom_glyph_advance`] for the vector +/- marks.
+    advance: f64,
 }
 
 /// Compute the zoom chip layout headlessly (no rendering context; text goes
@@ -214,41 +264,58 @@ pub fn compute_zoom_chip_layout(
     let pct = (input_state.zoom_scale() * 100.0).round() as i32;
     let lock_active = input_state.zoom_locked();
 
-    // Piece order: ⊖  NN%  ⊕  Fit  [Lock]. The Lock toggle only makes sense
-    // while zoomed, so it is appended only then.
+    // Piece order: [−]  NN%  [+]  Fit  [Lock]. The Out/In marks are vector
+    // strokes (empty text), so they carry no glyph. The Lock toggle only makes
+    // sense while zoomed, so it is appended only then.
     let mut specs: Vec<(String, Option<ZoomChipButtonKind>)> = vec![
-        (ZOOM_OUT_GLYPH.to_string(), Some(ZoomChipButtonKind::Out)),
+        (String::new(), Some(ZoomChipButtonKind::Out)),
         (format!("{pct}%"), None),
-        (ZOOM_IN_GLYPH.to_string(), Some(ZoomChipButtonKind::In)),
+        (String::new(), Some(ZoomChipButtonKind::In)),
         (ZOOM_FIT_LABEL.to_string(), Some(ZoomChipButtonKind::Fit)),
     ];
     if input_state.zoom_active() {
         specs.push((ZOOM_LOCK_LABEL.to_string(), Some(ZoomChipButtonKind::Lock)));
     }
 
+    // Cap height of the `NN%` readout (the only `kind == None` piece), used to
+    // size the vector +/- marks to the digits. `measure_text` returns ink
+    // extents whose `y_bearing` is negative above the baseline, so negating it
+    // yields a positive cap height.
+    let mut digit_cap: Option<f64> = None;
     let mut pieces: Vec<ChipPiece> = Vec::with_capacity(specs.len());
     for (text, kind) in specs {
         let extents = measure_text(text_style, &text, None)?;
+        if kind.is_none() {
+            digit_cap = Some(-extents.y_bearing());
+        }
+        let advance = if is_glyph_icon(kind) {
+            zoom_glyph_advance(style.font_size)
+        } else {
+            extents.x_advance()
+        };
         pieces.push(ChipPiece {
             text,
             kind,
             extents,
+            advance,
         });
     }
 
-    // Shared ascent/descent so every run sits on one baseline.
+    // Shared ascent/descent so every run sits on one baseline. The vector +/-
+    // marks are sized to the digit cap (not the font line box) and drawn
+    // separately, so they never set the line metrics.
     let mut ascent = 0.0_f64;
     let mut descent = 0.0_f64;
     for piece in &pieces {
+        if is_glyph_icon(piece.kind) {
+            continue;
+        }
         ascent = ascent.max(-piece.extents.y_bearing());
         descent = descent.max(piece.extents.height() + piece.extents.y_bearing());
     }
     let line_height = ascent + descent;
 
-    let content_width: f64 = pieces
-        .iter()
-        .map(|piece| piece.extents.x_advance())
-        .sum::<f64>()
+    let content_width: f64 = pieces.iter().map(|piece| piece.advance).sum::<f64>()
         + ZOOM_CHIP_PIECE_GAP * pieces.len().saturating_sub(1) as f64;
 
     let v_pad = style.padding * 0.5;
@@ -267,6 +334,28 @@ pub fn compute_zoom_chip_layout(
     let line_baseline = pill_y + (pill_height - line_height) / 2.0 + ascent;
     let pill_right = pill_x + pill_width;
 
+    // Vector +/- geometry: sized to the digit cap so the marks sit on the
+    // numbers' optical middle and read a touch bolder than them. Falls back to
+    // the shared ascent if the readout piece is somehow absent.
+    let cap = digit_cap.unwrap_or(ascent);
+    let center_y = line_baseline - cap * ZOOM_CHIP_GLYPH_CENTER_CAP_FRACTION;
+    let stroke = (style.font_size * ZOOM_CHIP_GLYPH_STROKE_FACTOR).max(ZOOM_CHIP_GLYPH_STROKE_MIN);
+    // Keep the round-capped arms wholly inside the pill even in compact configs
+    // (font_size >> padding), where the cap-sized arm would otherwise be trimmed
+    // by the render clip into a stunted mark. The mark shrinks symmetrically
+    // instead, so the "marks fully inside the pill" invariant holds for any font
+    // and padding the user configures.
+    let half_stroke = stroke * 0.5;
+    let max_arm = (center_y - pill_y - half_stroke)
+        .min(pill_y + pill_height - center_y - half_stroke)
+        .max(0.0);
+    let glyph_metrics = ZoomGlyphMetrics {
+        advance: zoom_glyph_advance(style.font_size),
+        center_y,
+        arm_half: (cap * ZOOM_CHIP_GLYPH_ARM_CAP_FRACTION).min(max_arm),
+        stroke,
+    };
+
     let mut runs = Vec::with_capacity(pieces.len());
     let mut buttons = Vec::new();
     let mut cursor = pill_x + style.padding;
@@ -274,7 +363,7 @@ pub fn compute_zoom_chip_layout(
         if index > 0 {
             cursor += ZOOM_CHIP_PIECE_GAP;
         }
-        let advance = piece.extents.x_advance();
+        let advance = piece.advance;
         if let Some(kind) = piece.kind {
             // Hit target: the piece plus half a gap on each side, at full pill
             // height (>= ZOOM_CHIP_MIN_HEIGHT by construction), clamped inside
@@ -307,6 +396,7 @@ pub fn compute_zoom_chip_layout(
         pill_height,
         runs,
         line_baseline,
+        glyph_metrics,
         buttons,
         lock_active,
         bounds: (pill_x, pill_y, pill_width, pill_height),
@@ -472,23 +562,58 @@ pub fn render_zoom_chip(
         layout.pill_height,
     );
     ctx.clip();
+    let m = layout.glyph_metrics;
     for run in &layout.runs {
-        // The Lock toggle in its on-state gets the accent tint so the locked
-        // state reads without a separate label; every other run uses the
-        // shared chip text color.
-        if run.button == Some(ZoomChipButtonKind::Lock) && layout.lock_active {
-            let (ar, ag, ab, aa) = theme::current().accent;
-            ctx.set_source_rgba(ar, ag, ab, aa);
-        } else {
-            ctx.set_source_rgba(r, g, b, a);
+        match run.button {
+            // The zoom-out/in marks are bold vector +/- strokes in the shared
+            // chip text color, sized to sit on the digits' optical middle.
+            Some(ZoomChipButtonKind::Out) => {
+                ctx.set_source_rgba(r, g, b, a);
+                draw_zoom_sign(ctx, &m, run.x, false);
+            }
+            Some(ZoomChipButtonKind::In) => {
+                ctx.set_source_rgba(r, g, b, a);
+                draw_zoom_sign(ctx, &m, run.x, true);
+            }
+            _ => {
+                // The Lock toggle in its on-state gets the accent tint so the
+                // locked state reads without a separate label; every other run
+                // uses the shared chip text color.
+                if run.button == Some(ZoomChipButtonKind::Lock) && layout.lock_active {
+                    let (ar, ag, ab, aa) = theme::current().accent;
+                    ctx.set_source_rgba(ar, ag, ab, aa);
+                } else {
+                    ctx.set_source_rgba(r, g, b, a);
+                }
+                text_layout(ctx, text_style, &run.text, None).show_at_baseline(
+                    ctx,
+                    run.x,
+                    layout.line_baseline,
+                );
+            }
         }
-        text_layout(ctx, text_style, &run.text, None).show_at_baseline(
-            ctx,
-            run.x,
-            layout.line_baseline,
-        );
     }
     let _ = ctx.restore();
+}
+
+/// Draw one bold vector +/- mark centered in its reserved box. The caller sets
+/// the source color and clip; this only lays down the stroked arms. `plus`
+/// adds the vertical arm (zoom-in); otherwise it is a lone horizontal bar
+/// (zoom-out). Each arm is stroked separately so the round caps stay clean.
+fn draw_zoom_sign(ctx: &cairo::Context, m: &ZoomGlyphMetrics, run_x: f64, plus: bool) {
+    let cx = run_x + m.advance * 0.5;
+    let cy = m.center_y;
+    ctx.set_line_width(m.stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.move_to(cx - m.arm_half, cy);
+    ctx.line_to(cx + m.arm_half, cy);
+    let _ = ctx.stroke();
+    if plus {
+        ctx.move_to(cx, cy - m.arm_half);
+        ctx.line_to(cx, cy + m.arm_half);
+        let _ = ctx.stroke();
+    }
 }
 
 #[cfg(test)]
@@ -665,6 +790,100 @@ mod tests {
                 pair[0].kind,
                 pair[1].kind
             );
+        }
+    }
+
+    /// The vector +/- marks are bold, symmetric, and fully inside the pill at
+    /// the default font (the retired circled glyphs were neither symmetric nor
+    /// stroke-bold).
+    #[test]
+    fn zoom_glyph_marks_are_bold_symmetric_and_within_pill() {
+        let state = make_state();
+        let style = StatusBarStyle::default();
+        let layout = compute_zoom_chip_layout(&state, &style, 1920, 1080).expect("layout");
+        let m = layout.glyph_metrics;
+
+        assert!((m.advance - zoom_glyph_advance(style.font_size)).abs() < 1e-9);
+        let expected_stroke =
+            (style.font_size * ZOOM_CHIP_GLYPH_STROKE_FACTOR).max(ZOOM_CHIP_GLYPH_STROKE_MIN);
+        assert!((m.stroke - expected_stroke).abs() < 1e-9);
+        assert!(m.arm_half > 0.0);
+
+        // Both marks reserve equal boxes, so their hit widths match (the circled
+        // glyphs had slightly different advances).
+        let out = layout
+            .buttons
+            .iter()
+            .find(|b| b.kind == ZoomChipButtonKind::Out)
+            .expect("out");
+        let inb = layout
+            .buttons
+            .iter()
+            .find(|b| b.kind == ZoomChipButtonKind::In)
+            .expect("in");
+        assert!(
+            (out.width - inb.width).abs() < 1e-9,
+            "out/in hit widths symmetric"
+        );
+
+        // Round-capped arms (half a stroke past each end) stay within the pill.
+        let top = m.center_y - m.arm_half - m.stroke * 0.5;
+        let bottom = m.center_y + m.arm_half + m.stroke * 0.5;
+        assert!(top >= layout.pill_y - 1e-6, "mark top clips the pill");
+        assert!(
+            bottom <= layout.pill_y + layout.pill_height + 1e-6,
+            "mark bottom clips the pill"
+        );
+    }
+
+    /// The marks scale with the user font and never clip the pill at both tiny
+    /// and large sizes (validated on the real Sans-Bold metrics, not estimates).
+    #[test]
+    fn zoom_glyph_marks_scale_and_stay_within_pill() {
+        let state = make_state();
+        // Includes a compact config (font_size >> padding) where the cap-sized
+        // arm must be clamped to the pill rather than trimmed by the clip.
+        for (font_size, padding) in [(8.0, 2.0), (48.0, 30.0), (40.0, 1.0)] {
+            let style = StatusBarStyle {
+                font_size,
+                padding,
+                ..StatusBarStyle::default()
+            };
+            let layout = compute_zoom_chip_layout(&state, &style, 1920, 1080).expect("layout");
+            let m = layout.glyph_metrics;
+
+            assert!(
+                (m.advance - zoom_glyph_advance(font_size)).abs() < 1e-9,
+                "advance scales with font {font_size}"
+            );
+            let expected_stroke =
+                (font_size * ZOOM_CHIP_GLYPH_STROKE_FACTOR).max(ZOOM_CHIP_GLYPH_STROKE_MIN);
+            assert!((m.stroke - expected_stroke).abs() < 1e-9);
+
+            let top = m.center_y - m.arm_half - m.stroke * 0.5;
+            let bottom = m.center_y + m.arm_half + m.stroke * 0.5;
+            assert!(
+                top >= layout.pill_y - 1e-6,
+                "mark clips the pill top at font {font_size}"
+            );
+            assert!(
+                bottom <= layout.pill_y + layout.pill_height + 1e-6,
+                "mark clips the pill bottom at font {font_size}"
+            );
+        }
+    }
+
+    /// The Out/In runs carry no text — they render as vectors, so a future edit
+    /// can never accidentally re-render the retired circled glyph as text.
+    #[test]
+    fn zoom_glyph_runs_carry_no_text() {
+        let state = make_state();
+        let style = StatusBarStyle::default();
+        let layout = compute_zoom_chip_layout(&state, &style, 1920, 1080).expect("layout");
+        for run in &layout.runs {
+            if is_glyph_icon(run.button) {
+                assert!(run.text.is_empty(), "vector-mark run must carry no text");
+            }
         }
     }
 
