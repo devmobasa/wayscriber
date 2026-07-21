@@ -90,6 +90,7 @@ impl WaylandState {
             let tool_preview_active = render_ui && self.mouse_tool_preview_eligible();
             let zoom_chip_active = render_ui && self.zoom_chip_visible();
             let command_palette_active = render_ui && self.input_state.command_palette_is_engaged();
+            let color_picker_active = render_ui && self.input_state.is_color_picker_popup_open();
             let ui_effect_damage = self.collect_ui_effect_damage(
                 ui_toast_active,
                 preset_feedback_active,
@@ -98,6 +99,7 @@ impl WaylandState {
                 render_ui && self.input_state.show_status_bar,
                 zoom_chip_active,
                 command_palette_active,
+                color_picker_active,
                 tool_preview_active,
                 width,
                 height,

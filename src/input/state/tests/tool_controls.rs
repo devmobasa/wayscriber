@@ -628,6 +628,77 @@ fn color_picker_action_buttons_occupy_distinct_regions() {
 }
 
 #[test]
+fn color_picker_action_buttons_expose_tooltips() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+
+    let center = |x: f64, y: f64| {
+        (
+            x + layout.action_btn_size / 2.0,
+            y + layout.action_btn_size / 2.0,
+        )
+    };
+    let copy = center(layout.copy_btn_x, layout.copy_btn_y);
+    let paste = center(layout.paste_btn_x, layout.paste_btn_y);
+    let eyedropper = center(layout.eyedropper_btn_x, layout.eyedropper_btn_y);
+
+    assert_eq!(
+        layout.action_tooltip_at(copy.0, copy.1),
+        Some("Copy hex color")
+    );
+    assert_eq!(
+        layout.action_tooltip_at(paste.0, paste.1),
+        Some("Paste hex color from clipboard")
+    );
+    assert_eq!(
+        layout.action_tooltip_at(eyedropper.0, eyedropper.1),
+        Some("Pick color from screen")
+    );
+    assert_eq!(
+        layout.action_tooltip_at(layout.origin_x, layout.origin_y),
+        None
+    );
+}
+
+#[test]
+fn color_picker_motion_tracks_action_hover_for_tooltips() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.copy_btn_x + layout.action_btn_size / 2.0) as i32;
+    let y = (layout.copy_btn_y + layout.action_btn_size / 2.0) as i32;
+    state.needs_redraw = false;
+
+    state.on_mouse_motion_with_canvas(x, y, x, y);
+
+    assert_eq!(state.color_picker_popup_hover(), Some((x as f64, y as f64)));
+    assert!(state.needs_redraw);
+}
+
+#[test]
+fn color_picker_motion_within_one_action_does_not_redraw_every_pixel() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.copy_btn_x + layout.action_btn_size / 2.0) as i32;
+    let y = (layout.copy_btn_y + layout.action_btn_size / 2.0) as i32;
+
+    state.on_mouse_motion_with_canvas(x, y, x, y);
+    state.needs_redraw = false;
+    state.on_mouse_motion_with_canvas(x + 1, y + 1, x + 1, y + 1);
+
+    assert_eq!(
+        state.color_picker_popup_hover(),
+        Some(((x + 1) as f64, (y + 1) as f64))
+    );
+    assert!(!state.needs_redraw);
+}
+
+#[test]
 fn color_picker_set_color_updates_live_preview_and_buffer() {
     let mut state = create_test_input_state();
     let original = state.color_for_tool(Tool::Pen);
@@ -650,6 +721,103 @@ fn color_picker_set_color_updates_live_preview_and_buffer() {
     assert!(!state.color_picker_popup_is_hex_editing());
     // Previews live on the editing tool, like a gradient drag.
     assert_ne!(state.color_for_tool(Tool::Pen), original);
+}
+
+#[test]
+fn typing_a_hex_key_starts_manual_entry_without_a_click() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    assert!(!state.color_picker_popup_is_hex_editing());
+
+    // A hex key focuses the field (armed to replace) and enters the char —
+    // no click on the field, no select-all ceremony.
+    state.on_key_press(Key::Char('a'));
+    assert!(state.color_picker_popup_is_hex_editing());
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A"));
+
+    // Continued typing builds the value and previews live once it parses.
+    for ch in ['1', 'b', '2', 'c', '3'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B2C3"));
+    assert_eq!(
+        state.color_picker_popup_current_color(),
+        crate::input::state::parse_hex_color("A1B2C3")
+    );
+}
+
+#[test]
+fn hex_typing_defers_live_preview_until_six_digits() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    let original = state.color_picker_popup_current_color().unwrap();
+    state.color_picker_popup_set_hex_editing(true);
+
+    for ch in ['a', '1', 'b'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B"));
+    assert_eq!(state.color_picker_popup_current_color(), Some(original));
+
+    for ch in ['2', 'c', '3'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    let expected = crate::input::state::parse_hex_color("A1B2C3").unwrap();
+    assert_eq!(state.color_picker_popup_current_color(), Some(expected));
+}
+
+#[test]
+fn three_digit_hex_still_applies_when_committed() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_hex_editing(true);
+    for ch in ['a', '1', 'b'] {
+        state.on_key_press(Key::Char(ch));
+    }
+
+    state.on_key_press(Key::Return);
+
+    let expected = crate::input::state::parse_hex_color("A1B").unwrap();
+    assert_eq!(state.color_picker_popup_current_color(), Some(expected));
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("#AA11BB"));
+    assert!(!state.color_picker_popup_is_hex_editing());
+}
+
+#[test]
+fn color_picker_ok_button_commits_valid_three_digit_hex_before_apply() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    let original = state.color_for_tool(Tool::Pen);
+
+    for ch in ['a', '1', 'b'] {
+        state.on_key_press(Key::Char(ch));
+    }
+    assert_eq!(state.color_picker_popup_hex_buffer(), Some("A1B"));
+    assert_eq!(state.color_picker_popup_current_color(), Some(original));
+
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let x = (layout.ok_btn_x + layout.btn_width / 2.0) as i32;
+    let y = (layout.ok_btn_y + layout.btn_height / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
+    assert!(state.handle_color_picker_popup_release_at(x, y));
+
+    let expected = crate::input::state::parse_hex_color("A1B").unwrap();
+    assert!(!state.is_color_picker_popup_open());
+    assert_eq!(state.color_for_tool(Tool::Pen), expected);
+    assert_eq!(state.current_color, expected);
+}
+
+#[test]
+fn modified_hex_key_does_not_start_manual_entry() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.modifiers.ctrl = true;
+
+    // Ctrl+C is a shortcut, not manual entry: it must not type into the field.
+    state.on_key_press(Key::Char('c'));
+    assert!(!state.color_picker_popup_is_hex_editing());
 }
 
 #[test]

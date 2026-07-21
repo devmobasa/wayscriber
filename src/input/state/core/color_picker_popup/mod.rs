@@ -287,6 +287,40 @@ impl ColorPickerPopupLayout {
         }
     }
 
+    /// Tooltip for an icon-only action at the given point.
+    pub(crate) fn action_tooltip_at(&self, x: f64, y: f64) -> Option<&'static str> {
+        if self.point_in_copy_button(x, y) {
+            Some("Copy hex color")
+        } else if self.point_in_paste_button(x, y) {
+            Some("Paste hex color from clipboard")
+        } else if self.point_in_eyedropper_button(x, y) {
+            Some("Pick color from screen")
+        } else {
+            None
+        }
+    }
+
+    /// Tooltip text and a stable button-center anchor for an icon-only action.
+    pub(crate) fn action_tooltip_anchor_at(
+        &self,
+        x: f64,
+        y: f64,
+    ) -> Option<(&'static str, f64, f64)> {
+        let text = self.action_tooltip_at(x, y)?;
+        let (button_x, button_y) = if self.point_in_copy_button(x, y) {
+            (self.copy_btn_x, self.copy_btn_y)
+        } else if self.point_in_paste_button(x, y) {
+            (self.paste_btn_x, self.paste_btn_y)
+        } else {
+            (self.eyedropper_btn_x, self.eyedropper_btn_y)
+        };
+        Some((
+            text,
+            button_x + self.action_btn_size / 2.0,
+            button_y + self.action_btn_size / 2.0,
+        ))
+    }
+
     /// Check if a point is within the popup panel.
     pub fn point_in_panel(&self, x: f64, y: f64) -> bool {
         x >= self.origin_x

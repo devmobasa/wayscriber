@@ -40,6 +40,20 @@ impl InputState {
                     self.close_color_picker_popup(true);
                     true
                 }
+                // Type-to-edit: a hex key (0-9, A-F, #) with no command
+                // modifier focuses the field armed to replace, then enters the
+                // character — so manual entry needs no click and no select-all
+                // ceremony, while copy/paste stay one-click. Ctrl/Alt-modified
+                // keys stay inert (shortcuts must not type into the field).
+                Key::Char(ch)
+                    if !self.modifiers.ctrl
+                        && !self.modifiers.alt
+                        && (ch == '#' || ch.is_ascii_hexdigit()) =>
+                {
+                    self.color_picker_popup_set_hex_editing(true);
+                    self.color_picker_popup_hex_append(ch);
+                    true
+                }
                 Key::Return => {
                     // Apply and close popup
                     self.apply_color_picker_popup();

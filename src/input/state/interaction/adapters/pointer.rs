@@ -333,15 +333,18 @@ pub(crate) fn handle_color_picker_motion(
     if !state.is_color_picker_popup_open() {
         return None;
     }
+    let screen = points.screen();
     if state.color_picker_popup_is_dragging()
         && let Some(layout) = state.color_picker_popup_layout()
     {
-        let screen = points.screen();
         let fx = screen.x() as f64;
         let fy = screen.y() as f64;
         let norm_x = ((fx - layout.gradient_x) / layout.gradient_w).clamp(0.0, 1.0);
         let norm_y = ((fy - layout.gradient_y) / layout.gradient_h).clamp(0.0, 1.0);
         state.color_picker_popup_set_from_gradient(norm_x, norm_y);
+        state.color_picker_popup_set_hover(None);
+    } else {
+        state.color_picker_popup_set_hover(Some((screen.x() as f64, screen.y() as f64)));
     }
     Some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup))
 }

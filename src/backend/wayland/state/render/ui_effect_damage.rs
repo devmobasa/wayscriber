@@ -27,6 +27,11 @@ pub(super) fn effect_rect(bounds: (f64, f64, f64, f64), width: u32, height: u32)
     Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
 
+fn color_picker_effect_rect(input_state: &InputState, width: u32, height: u32) -> Option<Rect> {
+    crate::ui::color_picker_popup_visual_geometry(input_state, width, height)
+        .and_then(|bounds| effect_rect(bounds, width, height))
+}
+
 /// Push damage covering an effect's previous and current footprint.
 fn push_effect_damage(regions: &mut Vec<Rect>, prev: Option<Rect>, current: Option<Rect>) {
     match (prev, current) {
@@ -57,6 +62,7 @@ impl WaylandState {
         status_hud_active: bool,
         zoom_chip_active: bool,
         command_palette_active: bool,
+        color_picker_active: bool,
         tool_preview_active: bool,
         width: u32,
         height: u32,
@@ -168,6 +174,20 @@ impl WaylandState {
             command_palette_rect,
         );
         self.data.prev_command_palette_damage = command_palette_rect;
+
+        // Like the command palette, the color picker owns a stable full-screen
+        // dimmer while open. Opening/closing already forces full damage; while
+        // engaged, redraw only its panel and optional action tooltip so hex
+        // typing cannot fall through to the full-screen empty-damage fallback.
+        let color_picker_rect = color_picker_active
+            .then(|| color_picker_effect_rect(&self.input_state, width, height))
+            .flatten();
+        push_effect_damage(
+            &mut regions,
+            self.data.prev_color_picker_damage,
+            color_picker_rect,
+        );
+        self.data.prev_color_picker_damage = color_picker_rect;
 
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
             let (x, y) = self.current_mouse();
@@ -322,5 +342,37 @@ mod tests {
         let mut close = Vec::new();
         push_effect_damage(&mut close, Some(expanded), None);
         assert_eq!(close, vec![expanded]);
+    }
+
+    #[test]
+    fn color_picker_typing_damage_is_compact_instead_of_full_screen() {
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.open_color_picker_popup();
+
+        let damage = color_picker_effect_rect(&input, 1920, 1080).expect("popup damage");
+
+        // Before targeted popup damage, an ordinary key used the renderer's
+        // 1920x1080 empty-damage fallback (2,073,600 pixels). The 300x340
+        // panel plus the standard two-pixel safety margin is 104,576 pixels.
+        assert_eq!(damage, Rect::new(808, 368, 304, 344).unwrap());
+        assert!(damage.width * damage.height < 1920 * 1080 / 10);
+    }
+
+    #[test]
+    fn color_picker_damage_includes_the_hovered_action_tooltip() {
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.open_color_picker_popup();
+        input.update_color_picker_popup_layout(1920, 1080);
+        let layout = input.color_picker_popup_layout().expect("popup layout");
+        input.color_picker_popup_set_hover(Some((
+            layout.eyedropper_btn_x + layout.action_btn_size / 2.0,
+            layout.eyedropper_btn_y + layout.action_btn_size / 2.0,
+        )));
+
+        let damage = color_picker_effect_rect(&input, 1920, 1080).expect("tooltip damage");
+
+        assert!(damage.width > 304);
+        assert!(damage.width < 1920);
+        assert!(damage.height < 1080);
     }
 }

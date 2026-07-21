@@ -8,6 +8,10 @@ use super::{
     color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
 };
 
+fn hex_is_complete_for_live_preview(value: &str) -> bool {
+    value.strip_prefix('#').unwrap_or(value).len() == 6
+}
+
 impl InputState {
     /// Returns true if the color picker popup is open.
     pub fn is_color_picker_popup_open(&self) -> bool {
@@ -82,9 +86,23 @@ impl InputState {
             tool,
             original_color,
             current_color,
+            hex_buffer,
             ..
-        } = &self.color_picker_popup_state
+        } = &mut self.color_picker_popup_state
         {
+            // Applying is also a commit boundary for valid buffered input.
+            // Three-digit hex is intentionally not previewed while typing, so
+            // it must be parsed here before the popup closes. Avoid reparsing
+            // a synchronized display value because that would quantize exact
+            // gradient colors through their eight-bit hex representation.
+            let current_hex = color_to_hex(*current_color);
+            let buffered_digits = hex_buffer.strip_prefix('#').unwrap_or(hex_buffer);
+            let current_digits = current_hex.strip_prefix('#').unwrap_or(&current_hex);
+            if !buffered_digits.eq_ignore_ascii_case(current_digits)
+                && let Some(color) = parse_hex_color(hex_buffer)
+            {
+                *current_color = color;
+            }
             applied_color = Some((*tool, *original_color, *current_color));
         }
         if let Some((tool, original_color, color)) = applied_color
@@ -327,8 +345,12 @@ impl InputState {
                 hex_buffer.push(ch.to_ascii_uppercase());
                 self.needs_redraw = true;
 
-                // Try to parse and update color live
-                if let Some(color) = parse_hex_color(hex_buffer) {
+                // Three-digit hex remains valid on commit, but do not flash a
+                // provisional shorthand color halfway through a six-digit
+                // entry. Live preview only once the full value is present.
+                if hex_is_complete_for_live_preview(hex_buffer)
+                    && let Some(color) = parse_hex_color(hex_buffer)
+                {
                     *current_color = color;
                     live_color = Some((*tool, color));
                 }
@@ -362,8 +384,11 @@ impl InputState {
                 }
                 self.needs_redraw = true;
 
-                // Try to parse and update color live
-                if let Some(color) = parse_hex_color(hex_buffer) {
+                // Keep the last complete preview while the user edits an
+                // incomplete value; Enter still accepts three-digit hex.
+                if hex_is_complete_for_live_preview(hex_buffer)
+                    && let Some(color) = parse_hex_color(hex_buffer)
+                {
                     *current_color = color;
                     live_color = Some((*tool, color));
                 }
@@ -443,10 +468,22 @@ impl InputState {
     }
 
     /// Sets the hover position within the popup.
-    #[allow(dead_code)]
     pub fn color_picker_popup_set_hover(&mut self, pos: Option<(f64, f64)>) {
-        if let ColorPickerPopupState::Open { hover_pos, .. } = &mut self.color_picker_popup_state {
+        let layout = self.color_picker_popup_layout;
+        let visual_changed = if let ColorPickerPopupState::Open { hover_pos, .. } =
+            &mut self.color_picker_popup_state
+        {
+            let previous_action =
+                layout.and_then(|layout| hover_pos.and_then(|(x, y)| layout.action_at(x, y)));
+            let next_action =
+                layout.and_then(|layout| pos.and_then(|(x, y)| layout.action_at(x, y)));
             *hover_pos = pos;
+            previous_action != next_action
+        } else {
+            false
+        };
+        if visual_changed {
+            self.needs_redraw = true;
         }
     }
 

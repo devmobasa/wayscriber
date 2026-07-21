@@ -5,10 +5,10 @@
 
 use crate::draw::Color;
 use crate::input::InputState;
-use crate::input::state::COLOR_PICKER_PREVIEW_SIZE;
+use crate::input::state::{COLOR_PICKER_PREVIEW_SIZE, ColorPickerPopupLayout};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui::theme::Rgba;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
+use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
     self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, BORDER_MODAL, INPUT_BG,
@@ -46,6 +46,63 @@ const BUTTON_SECONDARY_BORDER: Rgba = (0.4, 0.4, 0.45, 0.8);
 const BUTTON_SECONDARY_BORDER_HOVER: Rgba = (0.5, 0.5, 0.55, 0.9);
 /// White glow behind hovered secondary buttons.
 const BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.1);
+const TOOLTIP_PADDING_X: f64 = 8.0;
+const TOOLTIP_PADDING_Y: f64 = 5.0;
+const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
+const TOOLTIP_SCREEN_MARGIN: f64 = 6.0;
+const TOOLTIP_SHADOW_OFFSET: f64 = 2.0;
+
+/// Bounds of every pixel the color picker may change while it stays open.
+/// The full-screen dimmer is stable between open and close; those transitions
+/// already request full damage, so typing and hover updates only need this
+/// panel-plus-tooltip footprint.
+pub fn color_picker_popup_visual_geometry(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    if !input_state.is_color_picker_popup_open() {
+        return None;
+    }
+
+    let layout = ColorPickerPopupLayout::compute(screen_width, screen_height);
+    let mut bounds = (
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height,
+    );
+    if let Some((hover_x, hover_y)) = input_state.color_picker_popup_hover()
+        && let Some((tooltip, anchor_x, anchor_y)) =
+            layout.action_tooltip_anchor_at(hover_x, hover_y)
+        && let Some((x, y, width, height)) = action_tooltip_geometry(
+            tooltip,
+            anchor_x,
+            anchor_y,
+            screen_width as f64,
+            screen_height as f64,
+        )
+    {
+        bounds = union_bounds(
+            bounds,
+            (
+                x,
+                y,
+                width + TOOLTIP_SHADOW_OFFSET,
+                height + TOOLTIP_SHADOW_OFFSET,
+            ),
+        );
+    }
+    Some(bounds)
+}
+
+fn union_bounds(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    let min_x = a.0.min(b.0);
+    let min_y = a.1.min(b.1);
+    let max_x = (a.0 + a.2).max(b.0 + b.2);
+    let max_y = (a.1 + a.3).max(b.1 + b.3);
+    (min_x, min_y, max_x - min_x, max_y - min_y)
+}
 
 /// Render the color picker popup.
 pub fn render_color_picker_popup(
@@ -249,6 +306,20 @@ pub fn render_color_picker_popup(
     let hint_x = layout.origin_x + (layout.width - hint_extents.width()) / 2.0;
     let hint_y = layout.ok_btn_y + layout.btn_height + 12.0;
     draw_text_baseline(ctx, hint_style, hint, hint_x, hint_y, None);
+
+    if let Some((hover_x, hover_y)) = hover_pos
+        && let Some((tooltip, anchor_x, anchor_y)) =
+            layout.action_tooltip_anchor_at(hover_x, hover_y)
+    {
+        draw_action_tooltip(
+            ctx,
+            tooltip,
+            anchor_x,
+            anchor_y,
+            screen_width as f64,
+            screen_height as f64,
+        );
+    }
 
     let _ = ctx.restore();
 }
@@ -465,6 +536,83 @@ fn draw_action_button(
         y + (size - icon_size) / 2.0,
         icon_size,
     );
+}
+
+fn draw_action_tooltip(
+    ctx: &cairo::Context,
+    text: &str,
+    anchor_x: f64,
+    anchor_y: f64,
+    screen_width: f64,
+    screen_height: f64,
+) {
+    let Some((x, y, width, height)) =
+        action_tooltip_geometry(text, anchor_x, anchor_y, screen_width, screen_height)
+    else {
+        return;
+    };
+    let style = action_tooltip_text_style();
+
+    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_SHADOW);
+    draw_rounded_rect(
+        ctx,
+        x + TOOLTIP_SHADOW_OFFSET,
+        y + TOOLTIP_SHADOW_OFFSET,
+        width,
+        height,
+        RADIUS_SM,
+    );
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_BACKGROUND);
+    draw_rounded_rect(ctx, x, y, width, height, RADIUS_SM);
+    let _ = ctx.fill_preserve();
+    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_BORDER);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    constants::set_color(ctx, TEXT_PRIMARY);
+    draw_text_baseline(
+        ctx,
+        style,
+        text,
+        x + TOOLTIP_PADDING_X,
+        y + TOOLTIP_PADDING_Y + style.size,
+        None,
+    );
+}
+
+fn action_tooltip_text_style() -> UiTextStyle<'static> {
+    UiTextStyle {
+        family: toolbar_theme::FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: toolbar_theme::FONT_SIZE_TOOLTIP,
+    }
+}
+
+fn action_tooltip_geometry(
+    text: &str,
+    anchor_x: f64,
+    anchor_y: f64,
+    screen_width: f64,
+    screen_height: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let style = action_tooltip_text_style();
+    let extents = measure_text(style, text, None)?;
+    let width = extents.width() + TOOLTIP_PADDING_X * 2.0;
+    let height = style.size + TOOLTIP_PADDING_Y * 2.0;
+    let max_x = (screen_width - width - TOOLTIP_SCREEN_MARGIN).max(TOOLTIP_SCREEN_MARGIN);
+    let x = (anchor_x + TOOLTIP_POINTER_OFFSET).clamp(TOOLTIP_SCREEN_MARGIN, max_x);
+    let above_y = anchor_y - height - TOOLTIP_POINTER_OFFSET;
+    let preferred_y = if above_y >= TOOLTIP_SCREEN_MARGIN {
+        above_y
+    } else {
+        anchor_y + TOOLTIP_POINTER_OFFSET
+    };
+    let max_y = (screen_height - height - TOOLTIP_SCREEN_MARGIN).max(TOOLTIP_SCREEN_MARGIN);
+    let y = preferred_y.clamp(TOOLTIP_SCREEN_MARGIN, max_y);
+    Some((x, y, width, height))
 }
 
 /// Draw a button with hover state.
