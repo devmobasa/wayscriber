@@ -27,6 +27,21 @@ pub enum HelpOverlayClick {
     Outside,
 }
 
+/// Pointing modality that owns a pending help-overlay press.
+///
+/// Releases only resolve the target recorded by the same modality. This lets
+/// a canvas gesture that began before help opened finish normally instead of
+/// being mistaken for a help click.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HelpOverlayPressSource {
+    /// Raw Linux pointer button code, so middle/right ownership cannot be
+    /// confused with a left-click help action.
+    Pointer(u32),
+    Touch,
+    #[cfg(feature = "tablet-input")]
+    Stylus,
+}
+
 /// What a completed left press+release gesture over the help overlay should do,
 /// after enforcing the same-target contract between the press and the release
 /// (see [`InputState::resolve_help_overlay_release`]).
@@ -43,6 +58,7 @@ pub enum HelpOverlayReleaseOutcome {
 
 impl InputState {
     fn open_help_overlay_internal(&mut self, quick_mode: bool, track_usage: bool) {
+        self.close_radial_menu();
         self.show_help = true;
         self.help_overlay_quick_mode = quick_mode;
         self.help_overlay_scroll = 0.0;
@@ -50,7 +66,7 @@ impl InputState {
         // Defensively drop any geometry left from a previous open. The hit map
         // is normally cleared on close, but re-opening should never expose the
         // prior layout to a click before the first fresh render repopulates it.
-        self.help_overlay_pending_press = None;
+        self.help_overlay_pending_presses.clear();
         crate::ui::clear_help_overlay_hit_map();
         if track_usage {
             self.pending_onboarding_usage.used_help_overlay = true;
@@ -86,7 +102,7 @@ impl InputState {
         self.help_overlay_quick_mode = false;
         self.help_overlay_scroll = 0.0;
         self.help_overlay_scroll_max = 0.0;
-        self.help_overlay_pending_press = None;
+        self.help_overlay_pending_presses.clear();
         crate::ui::clear_help_overlay_hit_map();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -102,18 +118,42 @@ impl InputState {
         }
     }
 
-    /// Record the help target under a left press (screen space) so the matching
-    /// release can enforce a same-target contract. Mirrors the toast press
-    /// guard: the press only *marks* intent, never acts.
-    pub fn note_help_overlay_press(&mut self, x: i32, y: i32) {
-        self.help_overlay_pending_press = Some(self.help_overlay_click_at(x, y));
+    /// Record the help target under a press (screen space) so the matching
+    /// release can enforce source ownership and, for left clicks, a same-target
+    /// contract. Mirrors the toast press guard: the press only *marks* intent,
+    /// never acts.
+    pub(crate) fn note_help_overlay_press(
+        &mut self,
+        source: HelpOverlayPressSource,
+        x: i32,
+        y: i32,
+    ) {
+        let target = self.help_overlay_click_at(x, y);
+        if let Some((_, pending_target)) = self
+            .help_overlay_pending_presses
+            .iter_mut()
+            .find(|(pending_source, _)| *pending_source == source)
+        {
+            *pending_target = target;
+        } else {
+            self.help_overlay_pending_presses.push((source, target));
+        }
     }
 
-    /// Forget any recorded help press without acting (e.g. a release whose
-    /// screen coordinates could not be resolved), so a later release can never
-    /// consume stale intent.
-    pub fn clear_help_overlay_press(&mut self) {
-        self.help_overlay_pending_press = None;
+    /// Clear a pending help press only when it belongs to `source`. Returns
+    /// whether this modality owned the press and therefore owns and swallows its
+    /// eventual release.
+    pub(crate) fn clear_help_overlay_press_for(&mut self, source: HelpOverlayPressSource) -> bool {
+        if let Some(index) = self
+            .help_overlay_pending_presses
+            .iter()
+            .position(|(pressed_source, _)| *pressed_source == source)
+        {
+            self.help_overlay_pending_presses.swap_remove(index);
+            true
+        } else {
+            false
+        }
     }
 
     /// Resolve a left release at `(x, y)` (screen space) against the target
@@ -123,21 +163,29 @@ impl InputState {
     /// dragging onto a clickable row — e.g. the destructive Clear row — never
     /// fires it. A dismiss requires the press and release to both fall outside
     /// the box. Consumes the recorded press.
-    pub fn resolve_help_overlay_release(&mut self, x: i32, y: i32) -> HelpOverlayReleaseOutcome {
-        let pressed = self.help_overlay_pending_press.take();
+    pub(crate) fn resolve_help_overlay_release(
+        &mut self,
+        source: HelpOverlayPressSource,
+        x: i32,
+        y: i32,
+    ) -> Option<HelpOverlayReleaseOutcome> {
+        let index = self
+            .help_overlay_pending_presses
+            .iter()
+            .position(|(pressed_source, _)| *pressed_source == source)?;
+        let pressed = self.help_overlay_pending_presses.swap_remove(index);
         let released = self.help_overlay_click_at(x, y);
-        match (pressed, released) {
-            (
-                Some(HelpOverlayClick::Run(pressed_action)),
-                HelpOverlayClick::Run(released_action),
-            ) if pressed_action == released_action => {
+        Some(match (pressed.1, released) {
+            (HelpOverlayClick::Run(pressed_action), HelpOverlayClick::Run(released_action))
+                if pressed_action == released_action =>
+            {
                 HelpOverlayReleaseOutcome::Run(released_action)
             }
-            (Some(HelpOverlayClick::Outside), HelpOverlayClick::Outside) => {
+            (HelpOverlayClick::Outside, HelpOverlayClick::Outside) => {
                 HelpOverlayReleaseOutcome::Dismiss
             }
             _ => HelpOverlayReleaseOutcome::None,
-        }
+        })
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {
@@ -326,6 +374,18 @@ mod tests {
     }
 
     #[test]
+    fn opening_help_closes_radial_menu() {
+        let mut state = make_state();
+        state.open_radial_menu(320.0, 240.0);
+        assert!(state.is_radial_menu_open());
+
+        state.toggle_help_overlay();
+
+        assert!(state.show_help);
+        assert!(!state.is_radial_menu_open());
+    }
+
+    #[test]
     fn toggle_quick_help_closes_when_already_in_quick_mode() {
         let mut state = make_state();
         state.toggle_quick_help();
@@ -486,13 +546,15 @@ mod tests {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
         // Press and release both on the row -> the row's action runs.
-        state.note_help_overlay_press(150, 215);
+        state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 215);
         assert_eq!(
-            state.resolve_help_overlay_release(150, 215),
-            HelpOverlayReleaseOutcome::Run(crate::config::Action::ClearCanvas)
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
+            Some(HelpOverlayReleaseOutcome::Run(
+                crate::config::Action::ClearCanvas
+            ))
         );
         // The recorded press was consumed.
-        assert!(state.help_overlay_pending_press.is_none());
+        assert!(state.help_overlay_pending_presses.is_empty());
 
         crate::ui::clear_help_overlay_hit_map();
     }
@@ -505,14 +567,14 @@ mod tests {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
         // (150, 280) is inside the box but below the row and search well: chrome.
-        state.note_help_overlay_press(150, 280);
+        state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 280);
         assert_eq!(
-            state.help_overlay_pending_press,
-            Some(HelpOverlayClick::Inside)
+            state.help_overlay_pending_presses,
+            vec![(HelpOverlayPressSource::Pointer(1), HelpOverlayClick::Inside)]
         );
         assert_eq!(
-            state.resolve_help_overlay_release(150, 215),
-            HelpOverlayReleaseOutcome::None
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
+            Some(HelpOverlayReleaseOutcome::None)
         );
 
         crate::ui::clear_help_overlay_hit_map();
@@ -522,14 +584,17 @@ mod tests {
     fn help_press_outside_then_release_on_row_does_not_run() {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
-        state.note_help_overlay_press(10, 10);
+        state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 10, 10);
         assert_eq!(
-            state.help_overlay_pending_press,
-            Some(HelpOverlayClick::Outside)
+            state.help_overlay_pending_presses,
+            vec![(
+                HelpOverlayPressSource::Pointer(1),
+                HelpOverlayClick::Outside
+            )]
         );
         assert_eq!(
-            state.resolve_help_overlay_release(150, 215),
-            HelpOverlayReleaseOutcome::None
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
+            Some(HelpOverlayReleaseOutcome::None)
         );
 
         crate::ui::clear_help_overlay_hit_map();
@@ -539,10 +604,10 @@ mod tests {
     fn help_press_and_release_outside_dismisses() {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
-        state.note_help_overlay_press(10, 10);
+        state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 10, 10);
         assert_eq!(
-            state.resolve_help_overlay_release(20, 20),
-            HelpOverlayReleaseOutcome::Dismiss
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 20, 20),
+            Some(HelpOverlayReleaseOutcome::Dismiss)
         );
 
         crate::ui::clear_help_overlay_hit_map();
@@ -552,10 +617,10 @@ mod tests {
     fn help_press_on_row_then_release_on_chrome_does_not_run() {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
-        state.note_help_overlay_press(150, 215);
+        state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 215);
         assert_eq!(
-            state.resolve_help_overlay_release(150, 280),
-            HelpOverlayReleaseOutcome::None
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 280),
+            Some(HelpOverlayReleaseOutcome::None)
         );
 
         crate::ui::clear_help_overlay_hit_map();
@@ -566,10 +631,61 @@ mod tests {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
         // No note_help_overlay_press call: a release cannot fabricate intent.
-        assert!(state.help_overlay_pending_press.is_none());
+        assert!(state.help_overlay_pending_presses.is_empty());
         assert_eq!(
-            state.resolve_help_overlay_release(150, 215),
-            HelpOverlayReleaseOutcome::None
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Touch, 150, 215),
+            None
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_release_requires_the_modality_that_owned_the_press() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+        state.note_help_overlay_press(HelpOverlayPressSource::Touch, 150, 215);
+
+        assert_eq!(
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
+            None,
+            "a pointer release must fall through when touch owns the help press"
+        );
+        assert!(
+            !state.help_overlay_pending_presses.is_empty(),
+            "another modality must not consume the touch press"
+        );
+        assert_eq!(
+            state.resolve_help_overlay_release(HelpOverlayPressSource::Touch, 150, 215),
+            Some(HelpOverlayReleaseOutcome::Run(
+                crate::config::Action::ClearCanvas
+            ))
+        );
+
+        crate::ui::clear_help_overlay_hit_map();
+    }
+
+    #[test]
+    fn help_pointer_ownership_is_tracked_per_button() {
+        let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
+        let left = HelpOverlayPressSource::Pointer(1);
+        let middle = HelpOverlayPressSource::Pointer(2);
+        state.note_help_overlay_press(left, 150, 215);
+        state.note_help_overlay_press(middle, 150, 215);
+
+        assert!(
+            state.clear_help_overlay_press_for(middle),
+            "a middle press made while help is open owns its release"
+        );
+        assert!(
+            !state.clear_help_overlay_press_for(middle),
+            "a middle release whose press preceded help must fall through"
+        );
+        assert_eq!(
+            state.resolve_help_overlay_release(left, 150, 215),
+            Some(HelpOverlayReleaseOutcome::Run(
+                crate::config::Action::ClearCanvas
+            )),
+            "middle ownership must not consume the left help click"
         );
 
         crate::ui::clear_help_overlay_hit_map();
@@ -591,7 +707,7 @@ mod tests {
 
         assert!(state.show_help);
         assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
-        assert!(state.help_overlay_pending_press.is_none());
+        assert!(state.help_overlay_pending_presses.is_empty());
 
         crate::ui::clear_help_overlay_hit_map();
     }

@@ -213,7 +213,6 @@ pub enum UiToastKind {
 #[derive(Debug, Clone)]
 pub struct ToastAction {
     pub label: String,
-    #[allow(dead_code)] // Used in check_toast_click via WaylandState
     pub action: Action,
 }
 
@@ -235,6 +234,27 @@ pub(crate) struct UiToastState {
     pub priority: super::toast_queue::ToastPriority,
     /// Dedup/rate-limit key this toast was pushed with.
     pub key: &'static str,
+    /// Monotonic identity for this exact visible activation. Press/release
+    /// handling uses it so a queue promotion or same-key update cannot retarget
+    /// a pending click to different toast content.
+    pub activation_id: u64,
+}
+
+/// Identity captured when an input press begins inside the visible toast.
+///
+/// The field stays opaque outside input state: callers can only return the
+/// token on release, where it is matched against the still-active toast.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToastPress(u64);
+
+impl ToastPress {
+    pub(crate) fn new(activation_id: u64) -> Self {
+        Self(activation_id)
+    }
+
+    pub(crate) fn matches(self, toast: &UiToastState) -> bool {
+        self.0 == toast.activation_id
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

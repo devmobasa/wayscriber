@@ -141,6 +141,7 @@ pub struct ToastQueue {
     /// Last message shown per key this session (rate-limit memory).
     shown_contents: HashMap<&'static str, String>,
     seq: u64,
+    activation_seq: u64,
 }
 
 /// Pending toasts beyond this are dropped (oldest of the lowest class first).
@@ -176,7 +177,7 @@ impl ToastQueue {
 
         // Dedup by key: update in place instead of stacking.
         if active.as_ref().is_some_and(|current| current.key == key) {
-            *active = Some(Self::activate_toast(priority, key, toast, now));
+            *active = Some(self.activate_toast(priority, key, toast, now));
             self.record_shown(key, active.as_ref().map(|t| t.message.clone()));
             return ToastPushOutcome::UpdatedActive;
         }
@@ -297,11 +298,13 @@ impl ToastQueue {
     }
 
     fn activate_toast(
+        &mut self,
         priority: ToastPriority,
         key: &'static str,
         toast: Toast,
         now: Instant,
     ) -> UiToastState {
+        self.activation_seq = self.activation_seq.wrapping_add(1);
         UiToastState {
             kind: toast.kind,
             message: toast.message,
@@ -310,6 +313,7 @@ impl ToastQueue {
             action: toast.action,
             priority,
             key,
+            activation_id: self.activation_seq,
         }
     }
 
@@ -320,12 +324,7 @@ impl ToastQueue {
         }
         let entry = self.pending.remove(0);
         self.record_shown(entry.key, Some(entry.toast.message.clone()));
-        *active = Some(Self::activate_toast(
-            entry.priority,
-            entry.key,
-            entry.toast,
-            now,
-        ));
+        *active = Some(self.activate_toast(entry.priority, entry.key, entry.toast, now));
     }
 
     fn record_shown(&mut self, key: &'static str, message: Option<String>) {
@@ -813,12 +812,8 @@ mod tests {
         assert_eq!(outcome, ToastPushOutcome::Displayed);
 
         // Busy queue: hint rejected, never queued.
-        let mut active = Some(ToastQueue::activate_toast(
-            ToastPriority::Info,
-            "busy",
-            Toast::info("busy"),
-            now,
-        ));
+        let mut active =
+            Some(queue.activate_toast(ToastPriority::Info, "busy", Toast::info("busy"), now));
         let outcome = queue.push(
             &mut active,
             ToastPriority::Hint,

@@ -158,8 +158,9 @@ pub struct StateData {
     pub(super) overlay_ready: bool,
     /// Suppress the next pointer release after a modal click (e.g., command palette).
     pub(super) suppress_next_release: bool,
-    /// True when a left press began inside the main-surface toast.
-    pub(super) pending_toast_press: bool,
+    /// Exact toast activation a left press began inside. A release is accepted
+    /// only while this same activation remains visible.
+    pub(super) pending_toast_press: Option<crate::input::state::ToastPress>,
     /// True when a left press began inside the interactive status HUD.
     pub(super) pending_status_hud_press: bool,
     /// The chip press a left press began (`None` when no chip press is pending;
@@ -269,7 +270,7 @@ impl StateData {
             overlay_clickthrough: false,
             overlay_ready: false,
             suppress_next_release: false,
-            pending_toast_press: false,
+            pending_toast_press: None,
             pending_status_hud_press: false,
             pending_zoom_chip_press: crate::ui::ZoomChipPress::None,
             suppress_focus_exit_until: None,

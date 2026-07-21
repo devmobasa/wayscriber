@@ -70,6 +70,7 @@ impl InputState {
     }
 
     fn open_command_palette_internal(&mut self, track_usage: bool) {
+        self.close_radial_menu();
         self.command_palette_open = true;
         self.clear_command_palette_repeat();
         if track_usage {

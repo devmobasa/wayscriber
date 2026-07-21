@@ -52,6 +52,8 @@ impl InputState {
             return false;
         }
 
+        self.close_radial_menu();
+
         let panel = (|| {
             let ids = self.selected_shape_ids();
             let frame = self.boards.active_frame();

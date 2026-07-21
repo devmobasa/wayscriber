@@ -1,6 +1,6 @@
 use super::super::base::{
     BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
-    TEXT_EDIT_ENTRY_DURATION_MS, Toast, ToastPriority, ToastPushOutcome,
+    TEXT_EDIT_ENTRY_DURATION_MS, Toast, ToastPress, ToastPriority, ToastPushOutcome,
 };
 use crate::capture::{
     ImageOperationKind,
@@ -83,15 +83,26 @@ impl InputState {
         still_showing
     }
 
-    /// Check if a click at (x, y) hits the toast. If so, dismisses it and returns
-    /// whether it was hit plus any associated action.
-    #[allow(dead_code)] // Called from WaylandState pointer release handler
-    pub(crate) fn check_toast_click(&mut self, x: i32, y: i32) -> (bool, Option<Action>) {
+    /// Capture the identity of the toast under a press without dismissing it.
+    pub(crate) fn toast_press_at(&self, x: i32, y: i32) -> Option<ToastPress> {
+        let toast = self.ui_toast.as_ref()?;
+        self.toast_contains(x, y)
+            .then(|| ToastPress::new(toast.activation_id))
+    }
+
+    /// Resolve a toast release only when the exact toast activation captured
+    /// on press is still visible and the release remains within its bounds.
+    pub(crate) fn resolve_toast_release(
+        &mut self,
+        pressed: ToastPress,
+        x: i32,
+        y: i32,
+    ) -> (bool, Option<Action>) {
         let Some(toast) = self.ui_toast.as_ref() else {
             return (false, None);
         };
 
-        if self.toast_contains(x, y) {
+        if pressed.matches(toast) && self.toast_contains(x, y) {
             // Click is within toast
             let action = toast.action.as_ref().map(|action| action.action);
             // Dismiss the toast and promote the next queued one, if any.
@@ -334,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn check_toast_click_returns_action_and_dismisses_inside_bounds() {
+    fn toast_release_returns_action_and_dismisses_inside_bounds() {
         let mut state = make_state();
         state.push_toast(
             ToastPriority::Action,
@@ -343,7 +354,8 @@ mod tests {
         );
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
-        let (hit, action) = state.check_toast_click(50, 40);
+        let pressed = state.toast_press_at(50, 40).expect("toast press");
+        let (hit, action) = state.resolve_toast_release(pressed, 50, 40);
 
         assert!(hit);
         assert_eq!(action, Some(Action::OpenCaptureFolder));
@@ -352,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn check_toast_click_promotes_next_queued_toast() {
+    fn toast_release_promotes_next_queued_toast() {
         let mut state = make_state();
         state.push_toast(
             ToastPriority::Action,
@@ -362,7 +374,8 @@ mod tests {
         state.push_toast(ToastPriority::Info, "info", Toast::info("Later"));
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
-        let (hit, action) = state.check_toast_click(50, 40);
+        let pressed = state.toast_press_at(50, 40).expect("toast press");
+        let (hit, action) = state.resolve_toast_release(pressed, 50, 40);
 
         assert!(hit);
         assert_eq!(action, Some(Action::PageDelete));
@@ -410,7 +423,11 @@ mod tests {
 
         // Clicking inside the toast returns the attached Undo action.
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
-        assert_eq!(state.check_toast_click(50, 40), (true, Some(Action::Undo)));
+        let pressed = state.toast_press_at(50, 40).expect("toast press");
+        assert_eq!(
+            state.resolve_toast_release(pressed, 50, 40),
+            (true, Some(Action::Undo))
+        );
     }
 
     #[test]
@@ -465,7 +482,11 @@ mod tests {
         assert_eq!(toast.message, "Delete page?");
         assert!(state.ui_toast_bounds.is_none());
         assert!(!state.toast_contains(50, 40));
-        assert_eq!(state.check_toast_click(50, 40), (false, None));
+        let stale_press = ToastPress::new(0);
+        assert_eq!(
+            state.resolve_toast_release(stale_press, 50, 40),
+            (false, None)
+        );
     }
 
     #[test]
@@ -504,16 +525,87 @@ mod tests {
     }
 
     #[test]
-    fn check_toast_click_ignores_clicks_outside_bounds() {
+    fn toast_release_ignores_releases_outside_bounds() {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
-        let (hit, action) = state.check_toast_click(5, 5);
+        let pressed = state.toast_press_at(50, 40).expect("toast press");
+        let (hit, action) = state.resolve_toast_release(pressed, 5, 5);
 
         assert!(!hit);
         assert_eq!(action, None);
         assert!(state.ui_toast.is_some());
+    }
+
+    #[test]
+    fn toast_release_cannot_retarget_after_queue_promotion() {
+        let mut state = make_state();
+        state.push_toast(
+            ToastPriority::Action,
+            "first",
+            Toast::info("Open folder?")
+                .duration_ms(10)
+                .action("Open", Action::OpenCaptureFolder),
+        );
+        state.push_toast(
+            ToastPriority::Action,
+            "destructive",
+            Toast::warning("Delete page?").action("Delete", Action::PageDelete),
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        let pressed = state.toast_press_at(50, 40).expect("first toast press");
+        let expiry =
+            state.ui_toast.as_ref().expect("first toast").started + Duration::from_millis(10);
+
+        assert!(state.advance_ui_toast(expiry));
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        assert_eq!(
+            state.ui_toast.as_ref().expect("promoted toast").message,
+            "Delete page?"
+        );
+
+        assert_eq!(
+            state.resolve_toast_release(pressed, 50, 40),
+            (false, None),
+            "release must not dispatch the promoted destructive toast"
+        );
+        assert_eq!(
+            state
+                .ui_toast
+                .as_ref()
+                .expect("promoted toast remains")
+                .message,
+            "Delete page?"
+        );
+    }
+
+    #[test]
+    fn toast_release_cannot_retarget_after_same_key_update() {
+        let mut state = make_state();
+        state.push_toast(
+            ToastPriority::Action,
+            "confirm",
+            Toast::info("Undo clear?").action("Undo", Action::Undo),
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        let pressed = state.toast_press_at(50, 40).expect("original toast press");
+
+        assert_eq!(
+            state.push_toast(
+                ToastPriority::Action,
+                "confirm",
+                Toast::warning("Delete board?").action("Delete", Action::BoardDelete),
+            ),
+            ToastPushOutcome::UpdatedActive
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+        assert_eq!(
+            state.resolve_toast_release(pressed, 50, 40),
+            (false, None),
+            "same-key content replacement must invalidate the press"
+        );
     }
 
     #[test]

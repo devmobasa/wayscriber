@@ -152,12 +152,16 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
-    /// Help target resolved under the last help-overlay left press, recorded so
-    /// the matching release only runs a row when press and release land on the
-    /// SAME target. Mirrors the toast press/release contract and guards
-    /// destructive rows (e.g. Clear) against a press-drag-release that starts
-    /// off-row and ends on the row.
-    pub(crate) help_overlay_pending_press: Option<crate::input::state::HelpOverlayClick>,
+    /// Help targets resolved under pending help-overlay presses, keyed by input
+    /// modality so only the modality that owned a press can resolve it. Each
+    /// matching release only runs a row when press and release land on the SAME
+    /// target. Mirrors the toast press/release contract and guards destructive
+    /// rows (e.g. Clear) against a press-drag-release that starts off-row and
+    /// ends on the row.
+    pub(crate) help_overlay_pending_presses: Vec<(
+        crate::input::state::HelpOverlayPressSource,
+        crate::input::state::HelpOverlayClick,
+    )>,
     /// Board picker quick search query
     pub board_picker_search: String,
     /// Time of last board picker search input

@@ -30,7 +30,7 @@ pub use base::{
     ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
-pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState};
+pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState, ToastPress};
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,
     PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
@@ -68,5 +68,6 @@ pub use radial_menu::{
 pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::TourStep;
+pub(crate) use utility::HelpOverlayPressSource;
 pub(crate) use utility::default_step_marker_size;
 pub use utility::{HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome};

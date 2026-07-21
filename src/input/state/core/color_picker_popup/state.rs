@@ -19,6 +19,7 @@ impl InputState {
 
     /// Opens the color picker popup with the current color.
     pub fn open_color_picker_popup(&mut self) {
+        self.close_radial_menu();
         if self.show_help {
             self.toggle_help_overlay();
         }

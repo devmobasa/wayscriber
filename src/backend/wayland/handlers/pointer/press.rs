@@ -5,6 +5,7 @@ use wayland_client::QueueHandle;
 use crate::backend::wayland::state::drag_log;
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
+use crate::input::state::HelpOverlayPressSource;
 use crate::ui::ZoomChipPress;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -53,17 +54,20 @@ impl WaylandState {
         // toolbar-local coordinates, so convert to screen space just like the
         // toast/status-HUD press guards below.
         if self.input_state.show_help {
-            if button == BTN_LEFT {
-                let screen_position = if on_toolbar {
-                    self.toolbar_surface_screen_coords(&event.surface, event.position)
-                } else {
-                    Some(event.position)
-                };
-                match screen_position {
-                    Some((sx, sy)) => self
-                        .input_state
-                        .note_help_overlay_press(sx.round() as i32, sy.round() as i32),
-                    None => self.input_state.clear_help_overlay_press(),
+            let source = HelpOverlayPressSource::Pointer(button);
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            match screen_position {
+                Some((sx, sy)) => self.input_state.note_help_overlay_press(
+                    source,
+                    sx.round() as i32,
+                    sy.round() as i32,
+                ),
+                None => {
+                    self.input_state.clear_help_overlay_press_for(source);
                 }
             }
             return;
@@ -162,9 +166,9 @@ impl WaylandState {
         if button == BTN_LEFT {
             let screen_x = event.position.0.round() as i32;
             let screen_y = event.position.1.round() as i32;
-            self.set_pending_toast_press(false);
-            if self.input_state.toast_contains(screen_x, screen_y) {
-                self.set_pending_toast_press(true);
+            self.set_pending_toast_press(None);
+            if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
+                self.set_pending_toast_press(Some(pressed));
                 return;
             }
             // Interactive status HUD: report the hit on press without side

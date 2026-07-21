@@ -2,6 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 
 use crate::backend::wayland::state::drag_log;
+use crate::input::state::HelpOverlayPressSource;
 use crate::input::{HelpOverlayReleaseOutcome, MouseButton};
 use crate::ui::ZoomChipPress;
 
@@ -21,7 +22,7 @@ impl WaylandState {
 
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self.take_suppress_next_release() {
-            self.set_pending_toast_press(false);
+            self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
@@ -34,44 +35,62 @@ impl WaylandState {
         // underneath. Toolbar surfaces report toolbar-local coordinates, so
         // convert to screen space (matching the press guard) before resolving.
         if self.input_state.show_help {
-            if button == BTN_LEFT {
+            let source = HelpOverlayPressSource::Pointer(button);
+            let help_owned_release = if button == BTN_LEFT {
                 let screen_position = if on_toolbar {
                     self.toolbar_surface_screen_coords(&event.surface, event.position)
                 } else {
                     Some(event.position)
                 };
                 match screen_position {
-                    Some((sx, sy)) => {
-                        self.handle_help_overlay_release(sx.round() as i32, sy.round() as i32)
-                    }
-                    None => self.input_state.clear_help_overlay_press(),
+                    Some((sx, sy)) => self.handle_help_overlay_release(
+                        source,
+                        sx.round() as i32,
+                        sy.round() as i32,
+                    ),
+                    None => self.input_state.clear_help_overlay_press_for(source),
                 }
+            } else {
+                // Non-left presses made while help was open are modal-owned
+                // and swallowed, but they never resolve rows/actions. A
+                // release whose press preceded help has no matching owner and
+                // falls through to finish panning or another active gesture.
+                self.input_state.clear_help_overlay_press_for(source)
+            };
+            if help_owned_release {
+                self.set_pending_toast_press(None);
+                self.set_pending_status_hud_press(false);
+                self.set_pending_zoom_chip_press(ZoomChipPress::None);
+                return;
             }
-            self.set_pending_toast_press(false);
-            self.set_pending_status_hud_press(false);
-            self.set_pending_zoom_chip_press(ZoomChipPress::None);
-            return;
+            // Help opened after this pointer press began, so it owns neither the
+            // gesture nor its release. Fall through and finish the pre-help
+            // canvas/drag interaction instead of leaving it stuck.
         }
 
         // Block pointer input when modal overlays are active
         if self.input_state.command_palette_open || self.input_state.tour_active {
             // For command palette, press handles the click - release is a no-op
-            self.set_pending_toast_press(false);
+            self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
-        if button == BTN_LEFT && self.take_pending_toast_press() {
+        if button == BTN_LEFT
+            && let Some(pressed) = self.take_pending_toast_press()
+        {
             let screen_position = if on_toolbar {
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             } else {
                 Some(event.position)
             };
             if let Some((screen_x, screen_y)) = screen_position {
-                let (hit, action) = self
-                    .input_state
-                    .check_toast_click(screen_x.round() as i32, screen_y.round() as i32);
+                let (hit, action) = self.input_state.resolve_toast_release(
+                    pressed,
+                    screen_x.round() as i32,
+                    screen_y.round() as i32,
+                );
                 if hit && let Some(action) = action {
                     self.dispatch_input_action(action);
                 }
@@ -252,11 +271,19 @@ impl WaylandState {
     /// recorded on press, enforcing the same-target contract: run a row only
     /// when press and release land on the SAME row, dismiss only when both fall
     /// outside the box, and otherwise leave the overlay untouched.
-    fn handle_help_overlay_release(&mut self, screen_x: i32, screen_y: i32) {
-        match self
+    pub(in crate::backend::wayland) fn handle_help_overlay_release(
+        &mut self,
+        source: HelpOverlayPressSource,
+        screen_x: i32,
+        screen_y: i32,
+    ) -> bool {
+        let Some(outcome) = self
             .input_state
-            .resolve_help_overlay_release(screen_x, screen_y)
-        {
+            .resolve_help_overlay_release(source, screen_x, screen_y)
+        else {
+            return false;
+        };
+        match outcome {
             HelpOverlayReleaseOutcome::Run(action) => {
                 self.dispatch_input_action(action);
                 // Most actions leave the overlay up; close it so the effect is
@@ -272,5 +299,6 @@ impl WaylandState {
             }
             HelpOverlayReleaseOutcome::None => {}
         }
+        true
     }
 }

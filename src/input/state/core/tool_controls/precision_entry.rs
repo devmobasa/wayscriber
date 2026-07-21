@@ -33,6 +33,7 @@ impl InputState {
     /// Open the precise-entry popup prefilled with the target's current
     /// value (selected, so the first keystroke replaces it).
     pub fn open_precision_entry(&mut self, target: PrecisionEntryTarget) {
+        self.close_radial_menu();
         let value = match target {
             PrecisionEntryTarget::Thickness => {
                 if self.active_tool().uses_eraser_size()
@@ -224,6 +225,22 @@ mod tests {
         let mut state = make_test_input_state();
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
         state.on_mouse_press(crate::input::MouseButton::Left, 100, 100);
+        assert!(!state.is_precision_entry_open());
+    }
+
+    #[test]
+    fn opening_precision_entry_closes_radial_menu() {
+        let mut state = make_test_input_state();
+        state.open_radial_menu(320.0, 240.0);
+        assert!(state.is_radial_menu_open());
+
+        state.open_precision_entry(PrecisionEntryTarget::Thickness);
+
+        assert!(state.is_precision_entry_open());
+        assert!(!state.is_radial_menu_open());
+
+        state.open_radial_menu(320.0, 240.0);
+        assert!(state.is_radial_menu_open());
         assert!(!state.is_precision_entry_open());
     }
 }

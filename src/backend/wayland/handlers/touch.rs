@@ -10,6 +10,7 @@ use crate::backend::wayland::state::{
 };
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
+use crate::input::state::HelpOverlayPressSource;
 use crate::ui::ZoomChipPress;
 
 impl TouchHandler for WaylandState {
@@ -107,14 +108,18 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn cancel_active_touch_sequence(&mut self) {
         if !self.active_touch.is_active() {
             self.active_touch_surface = None;
+            self.input_state
+                .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
             return;
         }
 
         let target = self.active_touch.target();
-        self.set_pending_toast_press(false);
+        self.set_pending_toast_press(None);
         self.set_pending_status_hud_press(false);
         self.set_pending_zoom_chip_press(ZoomChipPress::None);
         self.set_suppress_next_release(false);
+        self.input_state
+            .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
 
         if !matches!(
             target,
@@ -208,6 +213,18 @@ impl WaylandState {
             return TouchTarget::Other;
         }
 
+        // Help is modal for every pointing modality. Record the same
+        // screen-space target as the mouse path and swallow the touch so it
+        // cannot operate the toolbar or canvas underneath.
+        if self.input_state.show_help {
+            self.input_state.note_help_overlay_press(
+                HelpOverlayPressSource::Touch,
+                screen_x,
+                screen_y,
+            );
+            return target;
+        }
+
         if self.input_state.command_palette_open {
             let screen_width = self.surface.width();
             let screen_height = self.surface.height();
@@ -257,9 +274,9 @@ impl WaylandState {
             return target;
         }
 
-        self.set_pending_toast_press(false);
-        if self.input_state.toast_contains(screen_x, screen_y) {
-            self.set_pending_toast_press(true);
+        self.set_pending_toast_press(None);
+        if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
+            self.set_pending_toast_press(Some(pressed));
             return target;
         }
 
@@ -366,7 +383,10 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.command_palette_open || self.input_state.tour_active {
+        if self.input_state.show_help
+            || self.input_state.command_palette_open
+            || self.input_state.tour_active
+        {
             return;
         }
 
@@ -385,14 +405,39 @@ impl WaylandState {
         target: TouchTarget,
     ) {
         if self.take_suppress_next_release() {
-            self.set_pending_toast_press(false);
+            self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);
             return;
         }
 
+        // Mirror the mouse help release contract before toolbar/canvas
+        // routing. Touch presses can originate on either the overlay or a GTK
+        // toolbar surface, so resolve through the same screen conversion used
+        // on touch-down.
+        if self.input_state.show_help {
+            let help_owned_release = match self.touch_screen_position(surface, position, target) {
+                Some((screen_x, screen_y)) => self.handle_help_overlay_release(
+                    HelpOverlayPressSource::Touch,
+                    screen_x.round() as i32,
+                    screen_y.round() as i32,
+                ),
+                None => self
+                    .input_state
+                    .clear_help_overlay_press_for(HelpOverlayPressSource::Touch),
+            };
+            if help_owned_release {
+                self.set_pending_toast_press(None);
+                self.set_pending_status_hud_press(false);
+                self.set_pending_zoom_chip_press(ZoomChipPress::None);
+                return;
+            }
+            // Help opened after this touch began. Finish the pre-help gesture
+            // through the normal release path below.
+        }
+
         if self.input_state.command_palette_open || self.input_state.tour_active {
-            self.set_pending_toast_press(false);
+            self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);
             self.cancel_active_touch_sequence();
@@ -423,8 +468,10 @@ impl WaylandState {
         let screen_x = screen_position.0.round() as i32;
         let screen_y = screen_position.1.round() as i32;
 
-        if self.take_pending_toast_press() {
-            let (hit, action) = self.input_state.check_toast_click(screen_x, screen_y);
+        if let Some(pressed) = self.take_pending_toast_press() {
+            let (hit, action) = self
+                .input_state
+                .resolve_toast_release(pressed, screen_x, screen_y);
             if hit && let Some(action) = action {
                 self.dispatch_input_action(action);
             }

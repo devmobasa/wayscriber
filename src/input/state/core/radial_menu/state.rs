@@ -29,6 +29,12 @@ impl InputState {
         if self.is_properties_panel_open() {
             self.close_properties_panel();
         }
+        if self.is_board_picker_open() {
+            self.close_board_picker();
+        }
+        if self.is_precision_entry_open() {
+            self.cancel_precision_entry();
+        }
         if self.command_palette_open {
             self.command_palette_open = false;
         }

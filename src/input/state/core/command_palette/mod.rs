@@ -387,6 +387,18 @@ mod tests {
     }
 
     #[test]
+    fn opening_command_palette_closes_radial_menu() {
+        let mut state = make_state();
+        state.open_radial_menu(320.0, 240.0);
+        assert!(state.is_radial_menu_open());
+
+        state.toggle_command_palette();
+
+        assert!(state.command_palette_open);
+        assert!(!state.is_radial_menu_open());
+    }
+
+    #[test]
     fn backspace_resets_selection_and_scroll_when_query_changes() {
         let mut state = make_state();
         state.toggle_command_palette();

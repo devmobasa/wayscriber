@@ -114,7 +114,7 @@ impl InputState {
             help_overlay_search: String::new(),
             help_overlay_scroll: 0.0,
             help_overlay_scroll_max: 0.0,
-            help_overlay_pending_press: None,
+            help_overlay_pending_presses: Vec::new(),
             board_picker_search: String::new(),
             board_picker_search_last_input: None,
             command_palette_open: false,
