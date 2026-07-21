@@ -812,7 +812,7 @@ fn style_pill_morphs_per_tool() {
     ));
     assert!(matches!(
         fill.interact.as_ref().unwrap().event,
-        ToolbarEvent::ToggleFill(value) if value == !rect.fill_enabled
+        ToolbarEvent::ToggleFill(value) if value != rect.fill_enabled
     ));
 
     // Arrow: auto-number toggle, and the reset button (with the next-N
