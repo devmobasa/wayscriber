@@ -6,7 +6,7 @@ use super::super::default_step_marker_size;
 use crate::config::{
     PRESET_SLOTS_MAX, PresetSlotsConfig, PresetToolStatesConfig, ToolPresetConfig,
 };
-use crate::input::tool::Tool;
+use crate::input::{DragModifier, tool::Tool};
 use std::time::{Duration, Instant};
 
 impl InputState {
@@ -270,12 +270,19 @@ impl InputState {
     }
 
     fn capture_current_preset(&self) -> ToolPresetConfig {
-        let active_tool = self.active_tool();
-        let size = self.size_for_active_tool();
+        // Saving is commonly invoked with Shift+1..5. Those shortcut
+        // modifiers also select temporary drag tools (Shift = Line, Ctrl =
+        // Rect, and so on), so `active_tool()` would capture the shortcut's
+        // transient tool instead of the user's persistent selection.
+        let selected_tool = self.tool_override().unwrap_or_else(|| {
+            self.drag_tool_bindings
+                .tool_for_modifier(DragModifier::None)
+        });
+        let size = self.thickness_for_tool(selected_tool);
         ToolPresetConfig {
             name: None,
-            tool: active_tool,
-            color: self.color_for_tool(active_tool).into(),
+            tool: selected_tool,
+            color: self.color_for_tool(selected_tool).into(),
             size,
             tool_settings: Some(PresetToolStatesConfig::from_runtime(
                 &self.tool_settings,

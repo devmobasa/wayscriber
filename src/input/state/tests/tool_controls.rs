@@ -674,6 +674,72 @@ fn save_preset_captures_all_tool_settings() {
 }
 
 #[test]
+fn save_preset_ignores_temporary_drag_modifier_tools() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 4;
+    let pen_color = Color {
+        r: 0.12,
+        g: 0.34,
+        b: 0.56,
+        a: 1.0,
+    };
+
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    assert!(state.set_color(pen_color));
+    assert!(state.set_thickness(7.0));
+
+    for (slot, modifiers, temporary_tool) in [
+        (1, vec![Key::Shift], Tool::Line),
+        (2, vec![Key::Ctrl], Tool::Rect),
+        (3, vec![Key::Ctrl, Key::Shift], Tool::Arrow),
+        (4, vec![Key::Tab], Tool::Ellipse),
+    ] {
+        for key in &modifiers {
+            state.on_key_press(*key);
+        }
+        assert_eq!(state.active_tool(), temporary_tool);
+
+        assert!(state.save_preset(slot));
+
+        for key in modifiers.iter().rev() {
+            state.on_key_release(*key);
+        }
+        let preset = state.presets[slot - 1].as_ref().expect("saved preset");
+        assert_eq!(preset.tool, Tool::Pen);
+        assert_eq!(preset.color, ColorSpec::from(pen_color));
+        assert_eq!(preset.size, 7.0);
+    }
+}
+
+#[test]
+fn save_preset_without_override_uses_unmodified_drag_tool() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 1;
+    let marker_color = Color {
+        r: 0.72,
+        g: 0.18,
+        b: 0.42,
+        a: 1.0,
+    };
+
+    state.drag_tool_bindings.left.drag = DragBinding::from_tool(Tool::Marker);
+    assert!(state.set_tool_override(Some(Tool::Marker)));
+    assert!(state.set_color(marker_color));
+    assert!(state.set_thickness(19.0));
+    assert!(state.set_tool_override(None));
+
+    state.on_key_press(Key::Shift);
+    assert_eq!(state.active_tool(), Tool::Line);
+    assert!(state.save_preset(1));
+    state.on_key_release(Key::Shift);
+
+    let preset = state.presets[0].as_ref().expect("saved preset");
+    assert_eq!(preset.tool, Tool::Marker);
+    assert_eq!(preset.color, ColorSpec::from(marker_color));
+    assert_eq!(preset.size, 19.0);
+}
+
+#[test]
 fn apply_full_preset_restores_all_tool_settings() {
     let mut state = create_test_input_state();
     state.preset_slot_count = 3;
