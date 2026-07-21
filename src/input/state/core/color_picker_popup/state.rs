@@ -4,8 +4,8 @@ use crate::draw::Color;
 use crate::input::state::InputState;
 
 use super::{
-    ColorPickerPopupLayout, ColorPickerPopupState, color_to_hex, hsv_to_rgb, parse_hex_color,
-    rgb_to_hsv,
+    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
+    color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
 };
 
 impl InputState {
@@ -19,6 +19,7 @@ impl InputState {
 
     /// Opens the color picker popup with the current color.
     pub fn open_color_picker_popup(&mut self) {
+        self.cancel_pending_color_picker_paste();
         self.close_radial_menu();
         if self.show_help {
             self.toggle_help_overlay();
@@ -31,6 +32,9 @@ impl InputState {
         let tool = self.active_tool();
         let color = self.color_for_tool(tool);
         let hex = color_to_hex(color);
+
+        self.color_picker_popup_generation = self.color_picker_popup_generation.wrapping_add(1);
+        self.color_picker_popup_pressed_action = None;
 
         self.color_picker_popup_state = ColorPickerPopupState::Open {
             tool,
@@ -49,6 +53,7 @@ impl InputState {
 
     /// Closes the color picker popup, optionally restoring the original color.
     pub fn close_color_picker_popup(&mut self, restore_original: bool) {
+        self.cancel_pending_color_picker_paste();
         let mut restored_color = None;
         if let ColorPickerPopupState::Open {
             tool,
@@ -64,12 +69,14 @@ impl InputState {
         }
         self.color_picker_popup_state = ColorPickerPopupState::Hidden;
         self.color_picker_popup_layout = None;
+        self.color_picker_popup_pressed_action = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
     /// Applies the current color and closes the popup.
     pub fn apply_color_picker_popup(&mut self) {
+        self.cancel_pending_color_picker_paste();
         let mut applied_color = None;
         if let ColorPickerPopupState::Open {
             tool,
@@ -89,6 +96,7 @@ impl InputState {
         }
         self.color_picker_popup_state = ColorPickerPopupState::Hidden;
         self.color_picker_popup_layout = None;
+        self.color_picker_popup_pressed_action = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -99,6 +107,46 @@ impl InputState {
             ColorPickerPopupState::Open { current_color, .. } => Some(*current_color),
             ColorPickerPopupState::Hidden => None,
         }
+    }
+
+    pub(crate) fn color_picker_popup_generation(&self) -> Option<u64> {
+        self.is_color_picker_popup_open()
+            .then_some(self.color_picker_popup_generation)
+    }
+
+    pub(crate) fn color_picker_popup_generation_is_current(&self, generation: u64) -> bool {
+        self.color_picker_popup_generation() == Some(generation)
+    }
+
+    fn cancel_pending_color_picker_paste(&mut self) {
+        if matches!(
+            self.pending_paste_hex,
+            Some(HexPasteTarget::ColorPickerPopup { .. })
+        ) {
+            self.pending_paste_hex = None;
+        }
+    }
+
+    pub(in crate::input::state) fn color_picker_popup_note_action_press(
+        &mut self,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        let action = self
+            .color_picker_popup_layout
+            .and_then(|layout| layout.action_at(x as f64, y as f64));
+        self.color_picker_popup_pressed_action = action;
+        action.is_some()
+    }
+
+    pub(in crate::input::state) fn color_picker_popup_clear_action_press(&mut self) {
+        self.color_picker_popup_pressed_action = None;
+    }
+
+    pub(in crate::input::state) fn color_picker_popup_take_action_press(
+        &mut self,
+    ) -> Option<ColorPickerPopupAction> {
+        self.color_picker_popup_pressed_action.take()
     }
 
     /// Gets the cached layout for the color picker popup.
@@ -137,6 +185,33 @@ impl InputState {
         {
             *current_color = color;
             *hex_buffer = color_to_hex(color);
+            live_color = Some((*tool, color));
+        }
+        if let Some((tool, color)) = live_color {
+            let _ = self.preview_color_for_tool(tool, color);
+        }
+        self.needs_redraw = true;
+    }
+
+    /// Sets the popup's live color directly (e.g. from a pasted hex),
+    /// refreshing the hex buffer and previewing on the editing tool. Mirrors
+    /// [`Self::color_picker_popup_set_from_gradient`] but takes a color, and
+    /// leaves hex editing unfocused so the pasted value shows as the buffer.
+    pub fn color_picker_popup_set_color(&mut self, color: Color) {
+        let mut live_color = None;
+        if let ColorPickerPopupState::Open {
+            tool,
+            current_color,
+            hex_buffer,
+            hex_editing,
+            hex_selected,
+            ..
+        } = &mut self.color_picker_popup_state
+        {
+            *current_color = color;
+            *hex_buffer = color_to_hex(color);
+            *hex_editing = false;
+            *hex_selected = false;
             live_color = Some((*tool, color));
         }
         if let Some((tool, color)) = live_color {

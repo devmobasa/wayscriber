@@ -3,7 +3,9 @@ use super::super::super::{
         BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerPageEdit,
         BoardPickerPageTarget, BoardPickerState,
     },
-    color_picker_popup::{ColorPickerPopupLayout, ColorPickerPopupState},
+    color_picker_popup::{
+        ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
+    },
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
@@ -330,10 +332,10 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
-    /// Pending copy hex color to clipboard request
-    pub(crate) pending_copy_hex: bool,
-    /// Pending paste hex color from clipboard request
-    pub(crate) pending_paste_hex: bool,
+    /// Color snapshot for the newest pending copy-hex request.
+    pub(crate) pending_copy_hex: Option<Color>,
+    /// Destination owned by the newest pending paste-hex request.
+    pub(crate) pending_paste_hex: Option<HexPasteTarget>,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
@@ -362,6 +364,10 @@ pub struct InputState {
     pub color_picker_popup_state: ColorPickerPopupState,
     /// Cached layout details for the color picker popup
     pub color_picker_popup_layout: Option<ColorPickerPopupLayout>,
+    /// Identity of the currently open color picker popup.
+    pub(in crate::input::state) color_picker_popup_generation: u64,
+    /// Popup action button owned by the current left-button press.
+    pub(in crate::input::state) color_picker_popup_pressed_action: Option<ColorPickerPopupAction>,
     /// Current radial menu state
     pub radial_menu_state: RadialMenuState,
     /// Cached layout details for the radial menu

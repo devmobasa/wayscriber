@@ -3,7 +3,7 @@ use crate::domain::Action;
 use crate::draw::Color;
 use crate::input::Tool;
 
-use super::super::InputState;
+use super::super::{HexPasteTarget, InputState};
 
 /// Cap on the session-only recent-color list (`InputState::recent_colors`).
 pub(crate) const RECENT_COLORS_CAP: usize = 6;
@@ -46,13 +46,50 @@ impl InputState {
         self.recent_colors.truncate(RECENT_COLORS_CAP);
     }
 
-    /// Take and clear the pending copy hex color request.
-    pub fn take_pending_copy_hex(&mut self) -> bool {
-        std::mem::take(&mut self.pending_copy_hex)
+    /// Request a hex-color copy to the clipboard. The color is captured now so
+    /// a later popup or tool transition cannot retarget the request.
+    pub fn request_copy_hex(&mut self) {
+        let color = self
+            .color_picker_popup_current_color()
+            .unwrap_or_else(|| self.color_for_tool(self.active_tool()));
+        self.pending_copy_hex = Some(color);
     }
 
-    /// Take and clear the pending paste hex color request.
+    /// Request a hex-color paste from the clipboard. Popup requests retain the
+    /// current popup generation so a later popup cannot inherit them.
+    pub fn request_paste_hex(&mut self) {
+        self.pending_paste_hex = Some(
+            self.color_picker_popup_generation()
+                .map_or(HexPasteTarget::ActiveTool, |generation| {
+                    HexPasteTarget::ColorPickerPopup { generation }
+                }),
+        );
+    }
+
+    /// Take and clear whether a copy-hex request is pending.
+    pub fn take_pending_copy_hex(&mut self) -> bool {
+        self.take_pending_copy_hex_request().is_some()
+    }
+
+    pub(crate) fn take_pending_copy_hex_request(&mut self) -> Option<Color> {
+        self.pending_copy_hex.take()
+    }
+
+    /// Take and clear whether a paste-hex request is pending.
     pub fn take_pending_paste_hex(&mut self) -> bool {
-        std::mem::take(&mut self.pending_paste_hex)
+        self.take_pending_paste_hex_request().is_some()
+    }
+
+    pub(crate) fn take_pending_paste_hex_request(&mut self) -> Option<HexPasteTarget> {
+        self.pending_paste_hex.take()
+    }
+
+    pub(crate) fn hex_paste_target_is_current(&self, target: HexPasteTarget) -> bool {
+        match target {
+            HexPasteTarget::ActiveTool => true,
+            HexPasteTarget::ColorPickerPopup { generation } => {
+                self.color_picker_popup_generation_is_current(generation)
+            }
+        }
     }
 }

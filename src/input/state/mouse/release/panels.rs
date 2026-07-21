@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use crate::input::InputState;
+use crate::input::state::core::color_picker_popup::ColorPickerPopupAction;
 use crate::input::state::core::{BoardPickerClickState, MenuCommand};
 
 use super::super::{BOARD_PICKER_DOUBLE_CLICK_DISTANCE, BOARD_PICKER_DOUBLE_CLICK_MS};
@@ -25,21 +26,23 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
     let fx = x as f64;
     let fy = y as f64;
 
-    if layout.point_in_eyedropper_button(fx, fy) {
-        state.close_color_picker_popup(true);
-        state.request_eyedropper_toggle();
-        return true;
-    }
-
-    // Check OK button
-    if layout.point_in_ok_button(fx, fy) {
-        state.apply_color_picker_popup();
-        return true;
-    }
-
-    // Check Cancel button
-    if layout.point_in_cancel_button(fx, fy) {
-        state.close_color_picker_popup(true);
+    // Popup actions use a same-button press/release contract. A press that
+    // starts elsewhere (including a gradient drag), or moves to another
+    // action before release, is consumed without activating that action.
+    if let Some(pressed) = state.color_picker_popup_take_action_press() {
+        if layout.action_at(fx, fy) != Some(pressed) {
+            return true;
+        }
+        match pressed {
+            ColorPickerPopupAction::Copy => state.request_copy_hex(),
+            ColorPickerPopupAction::Paste => state.request_paste_hex(),
+            ColorPickerPopupAction::Eyedropper => {
+                state.close_color_picker_popup(true);
+                state.request_eyedropper_toggle();
+            }
+            ColorPickerPopupAction::Ok => state.apply_color_picker_popup(),
+            ColorPickerPopupAction::Cancel => state.close_color_picker_popup(true),
+        }
         return true;
     }
 

@@ -86,7 +86,8 @@ impl InputState {
         self.update_pointer_position(x, y);
         match button {
             MouseButton::Left => {
-                if let Some(layout) = self.color_picker_popup_layout() {
+                let action_pressed = self.color_picker_popup_note_action_press(x, y);
+                if !action_pressed && let Some(layout) = self.color_picker_popup_layout() {
                     let fx = x as f64;
                     let fy = y as f64;
                     // Start dragging if clicking on gradient
@@ -100,9 +101,10 @@ impl InputState {
                 }
             }
             MouseButton::Right => {
+                self.color_picker_popup_clear_action_press();
                 self.close_color_picker_popup(true);
             }
-            MouseButton::Middle => {}
+            MouseButton::Middle => self.color_picker_popup_clear_action_press(),
         }
         true
     }

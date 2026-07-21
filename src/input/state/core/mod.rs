@@ -38,6 +38,7 @@ pub(crate) use base::{
 };
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
+pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
     PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,

@@ -30,6 +30,26 @@ pub const PADDING: f64 = 20.0;
 pub const TITLE_HEIGHT: f64 = 24.0;
 /// Gap between elements.
 pub const ELEMENT_GAP: f64 = 12.0;
+/// Gap between the hex input and the trailing action-button cluster
+/// (copy / paste / eyedropper).
+pub const ACTION_ROW_GAP: f64 = 8.0;
+/// Gap between adjacent action buttons in the trailing cluster.
+pub const ACTION_BTN_GAP: f64 = 6.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ColorPickerPopupAction {
+    Copy,
+    Paste,
+    Eyedropper,
+    Ok,
+    Cancel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HexPasteTarget {
+    ActiveTool,
+    ColorPickerPopup { generation: u64 },
+}
 
 /// State of the color picker popup.
 #[derive(Debug, Clone, Default)]
@@ -89,12 +109,20 @@ pub struct ColorPickerPopupLayout {
     pub hex_input_w: f64,
     /// Height of the hex input.
     pub hex_input_h: f64,
+    /// X position of the copy-hex button.
+    pub copy_btn_x: f64,
+    /// Y position of the copy-hex button.
+    pub copy_btn_y: f64,
+    /// X position of the paste-hex button.
+    pub paste_btn_x: f64,
+    /// Y position of the paste-hex button.
+    pub paste_btn_y: f64,
     /// X position of the screen eyedropper button.
     pub eyedropper_btn_x: f64,
     /// Y position of the screen eyedropper button.
     pub eyedropper_btn_y: f64,
-    /// Size of the square screen eyedropper button.
-    pub eyedropper_btn_size: f64,
+    /// Size of the square action buttons (copy / paste / eyedropper).
+    pub action_btn_size: f64,
     /// X position of the OK button.
     pub ok_btn_x: f64,
     /// Y position of the OK button.
@@ -137,8 +165,16 @@ impl ColorPickerPopupLayout {
         let hex_input_y = preview_row_y + (PREVIEW_SIZE - 24.0) / 2.0;
         let hex_input_w = HEX_INPUT_WIDTH;
         let hex_input_h = 24.0;
-        let eyedropper_btn_size = PREVIEW_SIZE;
-        let eyedropper_btn_x = hex_input_x + hex_input_w + 12.0;
+
+        // Trailing action-button cluster: copy, paste, eyedropper. All three
+        // share the preview swatch's size and sit on the preview row; the
+        // cluster ends flush with the content's right edge.
+        let action_btn_size = PREVIEW_SIZE;
+        let copy_btn_x = hex_input_x + hex_input_w + ACTION_ROW_GAP;
+        let paste_btn_x = copy_btn_x + action_btn_size + ACTION_BTN_GAP;
+        let eyedropper_btn_x = paste_btn_x + action_btn_size + ACTION_BTN_GAP;
+        let copy_btn_y = preview_row_y;
+        let paste_btn_y = preview_row_y;
         let eyedropper_btn_y = preview_row_y;
 
         // Buttons at the bottom (centered)
@@ -163,9 +199,13 @@ impl ColorPickerPopupLayout {
             hex_input_y,
             hex_input_w,
             hex_input_h,
+            copy_btn_x,
+            copy_btn_y,
+            paste_btn_x,
+            paste_btn_y,
             eyedropper_btn_x,
             eyedropper_btn_y,
-            eyedropper_btn_size,
+            action_btn_size,
             ok_btn_x,
             ok_btn_y: btn_row_y,
             cancel_btn_x,
@@ -199,12 +239,28 @@ impl ColorPickerPopupLayout {
             && y <= self.ok_btn_y + self.btn_height
     }
 
+    /// Check if a point is within the copy-hex button.
+    pub fn point_in_copy_button(&self, x: f64, y: f64) -> bool {
+        x >= self.copy_btn_x
+            && x <= self.copy_btn_x + self.action_btn_size
+            && y >= self.copy_btn_y
+            && y <= self.copy_btn_y + self.action_btn_size
+    }
+
+    /// Check if a point is within the paste-hex button.
+    pub fn point_in_paste_button(&self, x: f64, y: f64) -> bool {
+        x >= self.paste_btn_x
+            && x <= self.paste_btn_x + self.action_btn_size
+            && y >= self.paste_btn_y
+            && y <= self.paste_btn_y + self.action_btn_size
+    }
+
     /// Check if a point is within the screen eyedropper button.
     pub fn point_in_eyedropper_button(&self, x: f64, y: f64) -> bool {
         x >= self.eyedropper_btn_x
-            && x <= self.eyedropper_btn_x + self.eyedropper_btn_size
+            && x <= self.eyedropper_btn_x + self.action_btn_size
             && y >= self.eyedropper_btn_y
-            && y <= self.eyedropper_btn_y + self.eyedropper_btn_size
+            && y <= self.eyedropper_btn_y + self.action_btn_size
     }
 
     /// Check if a point is within the Cancel button.
@@ -213,6 +269,22 @@ impl ColorPickerPopupLayout {
             && x <= self.cancel_btn_x + self.btn_width
             && y >= self.cancel_btn_y
             && y <= self.cancel_btn_y + self.btn_height
+    }
+
+    pub(crate) fn action_at(&self, x: f64, y: f64) -> Option<ColorPickerPopupAction> {
+        if self.point_in_copy_button(x, y) {
+            Some(ColorPickerPopupAction::Copy)
+        } else if self.point_in_paste_button(x, y) {
+            Some(ColorPickerPopupAction::Paste)
+        } else if self.point_in_eyedropper_button(x, y) {
+            Some(ColorPickerPopupAction::Eyedropper)
+        } else if self.point_in_ok_button(x, y) {
+            Some(ColorPickerPopupAction::Ok)
+        } else if self.point_in_cancel_button(x, y) {
+            Some(ColorPickerPopupAction::Cancel)
+        } else {
+            None
+        }
     }
 
     /// Check if a point is within the popup panel.
@@ -232,6 +304,8 @@ impl ColorPickerPopupLayout {
             ColorPickerCursorHint::Crosshair
         } else if self.point_in_ok_button(x, y)
             || self.point_in_cancel_button(x, y)
+            || self.point_in_copy_button(x, y)
+            || self.point_in_paste_button(x, y)
             || self.point_in_eyedropper_button(x, y)
         {
             ColorPickerCursorHint::Pointer

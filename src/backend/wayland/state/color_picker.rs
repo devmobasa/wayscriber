@@ -2,17 +2,15 @@
 
 use super::{ClipboardOperationController, WaylandState};
 use crate::backend::wayland::clipboard::ClipboardPoll;
-use crate::input::state::{Toast, ToastPriority};
+use crate::draw::Color;
+use crate::input::state::{HexPasteTarget, Toast, ToastPriority};
 use crate::input::state::{color_to_hex, parse_hex_color};
 use std::ffi::OsStr;
 use std::time::Duration;
 
 impl WaylandState {
-    /// Copies the current color as hex to the clipboard.
-    pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self) {
-        let color = self
-            .input_state
-            .color_for_tool(self.input_state.active_tool());
+    /// Copies the color captured when the request was made as hex.
+    pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self, color: Color) {
         let hex = color_to_hex(color);
         log::info!("Hex copy requested: {}", hex);
         self.suppress_focus_exit_for(Duration::from_millis(1500));
@@ -98,7 +96,11 @@ impl WaylandState {
     }
 
     /// Pastes a hex color from the clipboard.
-    pub(in crate::backend::wayland) fn handle_paste_hex_color(&mut self) {
+    pub(in crate::backend::wayland) fn handle_paste_hex_color(&mut self, target: HexPasteTarget) {
+        if !self.input_state.hex_paste_target_is_current(target) {
+            log::debug!("Discarding stale color-picker hex paste request");
+            return;
+        }
         log::info!("Hex paste requested");
         self.suppress_focus_exit_for(Duration::from_millis(1500));
         let clipboard = match std::panic::catch_unwind(read_clipboard_text_via_command) {
@@ -132,7 +134,21 @@ impl WaylandState {
         };
 
         if let Some(color) = parse_hex_color(clipboard.trim()) {
-            let _ = self.input_state.apply_color_from_ui(color);
+            match target {
+                HexPasteTarget::ActiveTool => {
+                    let _ = self.input_state.apply_color_from_ui(color);
+                }
+                HexPasteTarget::ColorPickerPopup { generation } => {
+                    if !self
+                        .input_state
+                        .color_picker_popup_generation_is_current(generation)
+                    {
+                        log::debug!("Discarding stale color-picker hex paste completion");
+                        return;
+                    }
+                    self.input_state.color_picker_popup_set_color(color);
+                }
+            }
             let hex = color_to_hex(color);
             self.input_state.push_toast(
                 ToastPriority::Info,

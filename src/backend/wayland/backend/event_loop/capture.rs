@@ -82,6 +82,15 @@ pub(super) fn handle_pending_actions(
     state.poll_session_file_dialog_completion(qh);
     state.drain_clipboard_requests();
     state.handle_pending_eyedropper_toggle();
+    // Copy/paste-hex requests from the color picker popup's pointer release are
+    // drained here: unlike the toolbar/key paths, that release has no other
+    // drain site.
+    if let Some(color) = state.input_state.take_pending_copy_hex_request() {
+        state.handle_copy_hex_color(color);
+    }
+    if let Some(target) = state.input_state.take_pending_paste_hex_request() {
+        state.handle_paste_hex_color(target);
+    }
     handle_frozen_toggle(state);
 
     if let Some(action) = state.input_state.take_pending_backend_action() {

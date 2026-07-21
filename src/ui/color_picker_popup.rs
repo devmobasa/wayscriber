@@ -155,34 +155,46 @@ pub fn render_color_picker_popup(
         hex_valid,
     );
 
+    // Trailing action cluster on the preview row: copy the live hex, paste a
+    // hex from the clipboard, or sample a color from the screen. Copy/paste
+    // restore the inline hex actions the pre-overhaul color section carried.
     let hover_pos = input_state.color_picker_popup_hover();
+    let size = layout.action_btn_size;
+    let copy_hover = hover_pos
+        .map(|(hx, hy)| layout.point_in_copy_button(hx, hy))
+        .unwrap_or(false);
+    let paste_hover = hover_pos
+        .map(|(hx, hy)| layout.point_in_paste_button(hx, hy))
+        .unwrap_or(false);
     let eyedropper_hover = hover_pos
         .map(|(hx, hy)| layout.point_in_eyedropper_button(hx, hy))
         .unwrap_or(false);
-    draw_rounded_rect(
+    draw_action_button(
+        ctx,
+        layout.copy_btn_x,
+        layout.copy_btn_y,
+        size,
+        copy_hover,
+        crate::toolbar_icons::draw_icon_copy,
+        16.0,
+    );
+    draw_action_button(
+        ctx,
+        layout.paste_btn_x,
+        layout.paste_btn_y,
+        size,
+        paste_hover,
+        crate::toolbar_icons::draw_icon_paste,
+        16.0,
+    );
+    draw_action_button(
         ctx,
         layout.eyedropper_btn_x,
         layout.eyedropper_btn_y,
-        layout.eyedropper_btn_size,
-        layout.eyedropper_btn_size,
-        RADIUS_MD,
-    );
-    if eyedropper_hover {
-        constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.8));
-    } else {
-        constants::set_color(ctx, EYEDROPPER_BG);
-    }
-    let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_MODAL);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-    constants::set_color(ctx, TEXT_PRIMARY);
-    let icon_size = 18.0;
-    crate::toolbar_icons::draw_icon_eyedropper(
-        ctx,
-        layout.eyedropper_btn_x + (layout.eyedropper_btn_size - icon_size) / 2.0,
-        layout.eyedropper_btn_y + (layout.eyedropper_btn_size - icon_size) / 2.0,
-        icon_size,
+        size,
+        eyedropper_hover,
+        crate::toolbar_icons::draw_icon_eyedropper,
+        18.0,
     );
 
     // Determine button hover states
@@ -422,6 +434,37 @@ fn draw_hex_input(
         ctx.line_to(cursor_x, y + h - 4.0);
         let _ = ctx.stroke();
     }
+}
+
+/// Draw one square action button (copy / paste / eyedropper) on the popup's
+/// preview row: a neutral rounded fill washed with the accent on hover, and a
+/// centered icon.
+fn draw_action_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    hovered: bool,
+    icon: fn(&cairo::Context, f64, f64, f64),
+    icon_size: f64,
+) {
+    draw_rounded_rect(ctx, x, y, size, size, RADIUS_MD);
+    if hovered {
+        constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.8));
+    } else {
+        constants::set_color(ctx, EYEDROPPER_BG);
+    }
+    let _ = ctx.fill_preserve();
+    constants::set_color(ctx, BORDER_MODAL);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+    constants::set_color(ctx, TEXT_PRIMARY);
+    icon(
+        ctx,
+        x + (size - icon_size) / 2.0,
+        y + (size - icon_size) / 2.0,
+        icon_size,
+    );
 }
 
 /// Draw a button with hover state.
