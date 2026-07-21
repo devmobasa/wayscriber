@@ -107,7 +107,7 @@ pub(super) fn handle_pending_actions(
                 state.handle_keybinding_edit(request);
             }
             PendingBackendAction::PersistToolbarConfig => {
-                state.save_toolbar_pin_config();
+                state.save_toolbar_display_config();
             }
         }
     }
@@ -117,8 +117,8 @@ pub(super) fn handle_pending_actions(
     if let Some(action) = state.input_state.take_pending_zoom_action() {
         state.handle_zoom_action(action);
     }
-    if let Some(boards) = state.input_state.take_pending_board_config() {
-        state.apply_board_config_update(boards);
+    if let Some(update) = state.input_state.take_pending_board_config_update() {
+        state.apply_board_config_update(update);
     }
     state.sync_zoom_board_mode();
 

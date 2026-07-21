@@ -220,6 +220,16 @@ impl ToolbarItemsConfig {
         self.order.reset_known_group_to_defaults(group)
     }
 
+    /// Copy one resolved known order group while preserving unknown raw ids
+    /// already stored by this config version.
+    pub(crate) fn sync_known_order_group_from(
+        &mut self,
+        source: &Self,
+        group: ToolbarItemOrderGroup,
+    ) -> bool {
+        self.set_known_order(group, source.order.resolved().ordered_ids(group))
+    }
+
     fn set_known_order(&mut self, group: ToolbarItemOrderGroup, ids: &[ToolbarItemId]) -> bool {
         self.order.set_known_group_order(group, ids)
     }

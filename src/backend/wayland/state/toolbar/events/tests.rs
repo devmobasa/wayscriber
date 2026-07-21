@@ -4,7 +4,7 @@ use super::session::{
     session_info_summary,
 };
 use super::*;
-use crate::config::ToolbarLayoutMode;
+use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
 use crate::draw::{Color, FontDescriptor};
 use crate::env_vars::XDG_DATA_HOME_ENV;
 use crate::input::state::test_support::make_test_input_state;
@@ -107,38 +107,135 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
 }
 
 #[test]
-fn toolbar_preference_events_save_toolbar_config() {
+fn toolbar_preference_events_have_exact_config_targets() {
+    use crate::config::{ToolbarItemOrderGroup, TopDisplayMode, toolbar_item_ids as ids};
+    use ToolbarConfigPersistenceTarget::*;
+
     let events = vec![
-        ToolbarEvent::PinTopToolbar(true),
-        ToolbarEvent::PinSideToolbar(true),
-        ToolbarEvent::ToggleIconMode(true),
-        ToolbarEvent::ToggleMoreColors(true),
-        ToolbarEvent::ToggleActionsSection(true),
-        ToolbarEvent::ToggleActionsAdvanced(true),
-        ToolbarEvent::ToggleZoomActions(true),
-        ToolbarEvent::TogglePagesSection(true),
-        ToolbarEvent::ToggleBoardsSection(true),
-        ToolbarEvent::TogglePresets(true),
-        ToolbarEvent::ToggleStepSection(true),
-        ToolbarEvent::ToggleTextControls(true),
-        ToolbarEvent::ToggleContextAwareUi(true),
-        ToolbarEvent::TogglePresetToasts(true),
-        ToolbarEvent::ToggleToolPreview(true),
-        ToolbarEvent::ToggleDelaySliders(true),
-        ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
-        ToolbarEvent::SetSidePane(crate::ui::toolbar::SidePane::Canvas),
-        ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
-        ToolbarEvent::SetTopMinimized(true),
-        ToolbarEvent::SetSideMinimized(true),
-        ToolbarEvent::CloseTopToolbar,
-        ToolbarEvent::CloseSideToolbar,
+        (ToolbarEvent::PinTopToolbar(true), TopPinned),
+        (ToolbarEvent::PinSideToolbar(true), SidePinned),
+        (ToolbarEvent::ToggleIconMode(true), Icons),
+        (ToolbarEvent::ToggleMoreColors(true), MoreColors),
+        (
+            ToolbarEvent::ToggleActionsSection(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::Actions.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::ToggleActionsAdvanced(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::ActionsAdvanced.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::ToggleZoomActions(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::ZoomActions.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::TogglePagesSection(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::Pages.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::ToggleBoardsSection(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::Boards.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::TogglePresets(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::Presets.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::ToggleStepSection(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::StepSection.item_id(),
+                hidden: false,
+            },
+        ),
+        (
+            ToolbarEvent::ToggleTextControls(true),
+            ItemVisibility {
+                id: ToolbarSectionFlag::TextControls.item_id(),
+                hidden: false,
+            },
+        ),
+        (ToolbarEvent::ToggleContextAwareUi(true), ContextAwareUi),
+        (ToolbarEvent::TogglePresetToasts(true), PresetToasts),
+        (ToolbarEvent::ToggleToolPreview(true), ToolPreview),
+        (ToolbarEvent::ToggleDelaySliders(true), DelaySliders),
+        (
+            ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
+            LayoutMode,
+        ),
+        (
+            ToolbarEvent::SetSidePane(crate::ui::toolbar::SidePane::Canvas),
+            SidePane,
+        ),
+        (
+            ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
+            CollapsedSection {
+                section: ToolbarSideSection::Session,
+                collapsed: true,
+            },
+        ),
+        (ToolbarEvent::SetTopMinimized(true), TopMinimized),
+        (
+            ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Micro),
+            TopDisplayState,
+        ),
+        (ToolbarEvent::SetSideMinimized(true), SideMinimized),
+        (ToolbarEvent::CloseTopToolbar, TopMinimized),
+        (ToolbarEvent::CloseSideToolbar, SideMinimized),
+        (
+            ToolbarEvent::SetToolbarItemHidden(ids::TOP_TOOL_PEN, true),
+            ItemVisibility {
+                id: ids::TOP_TOOL_PEN,
+                hidden: true,
+            },
+        ),
+        (
+            ToolbarEvent::MoveToolbarItem {
+                group: ToolbarItemOrderGroup::TopTools,
+                id: ids::TOP_TOOL_PEN,
+                delta: 1,
+            },
+            ItemOrder(ToolbarItemOrderGroup::TopTools),
+        ),
+        (
+            ToolbarEvent::DragToolbarItemOver {
+                group: ToolbarItemOrderGroup::TopTools,
+                target_index: 2,
+            },
+            ItemOrder(ToolbarItemOrderGroup::TopTools),
+        ),
+        (
+            ToolbarEvent::ResetToolbarItemOrder(ToolbarItemOrderGroup::TopTools),
+            ItemOrder(ToolbarItemOrderGroup::TopTools),
+        ),
+        (
+            ToolbarEvent::ResetToolbarItemHiddenOverrides,
+            ResetItemVisibility,
+        ),
     ];
 
-    for event in events {
+    for (event, target) in events {
         assert_eq!(
             persistence_for(&event),
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar),
-            "{event:?} should save toolbar config"
+            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar(target)),
+            "{event:?} should save only its toolbar config target"
         );
     }
 }
@@ -202,6 +299,236 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
     assert!(config.ui.show_status_board_badge);
     assert!(config.ui.show_status_page_badge);
     assert!(!config.ui.show_floating_badge_always);
+}
+
+#[test]
+fn toolbar_config_target_does_not_copy_unrelated_live_state() {
+    let mut config = crate::config::Config::default();
+    config.ui.toolbar.top_pinned = true;
+    config.ui.toolbar.side_pinned = true;
+    config.ui.toolbar.top_minimized = false;
+    config.ui.toolbar.side_active_pane = "draw".to_string();
+    config.ui.toolbar.collapsed_sections = vec!["future-section".to_string()];
+    config.ui.toolbar.top_offset = 12.0;
+    config.ui.toolbar.top_offset_y = 13.0;
+    let original_items = config.ui.toolbar.items.clone();
+
+    let mut input_state = make_test_input_state();
+    input_state.toolbar_top_pinned = false;
+    input_state.toolbar_side_pinned = false;
+    input_state.toolbar_top_minimized = true;
+    input_state.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
+    input_state
+        .toolbar_collapsed_side_sections
+        .insert(ToolbarSideSection::Colors);
+    input_state
+        .toolbar_items
+        .set_hidden(crate::config::toolbar_item_ids::TOP_TOOL_PEN, true);
+
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        ToolbarPositions {
+            top_x: 90.0,
+            top_y: 91.0,
+            side_x: 92.0,
+            side_y: 93.0,
+        },
+        ToolbarConfigPersistenceTarget::TopPinned,
+    );
+
+    assert!(!config.ui.toolbar.top_pinned);
+    assert!(config.ui.toolbar.side_pinned);
+    assert!(!config.ui.toolbar.top_minimized);
+    assert_eq!(config.ui.toolbar.side_active_pane, "draw");
+    assert_eq!(
+        config.ui.toolbar.collapsed_sections,
+        ["future-section".to_string()]
+    );
+    assert_eq!(config.ui.toolbar.items, original_items);
+    assert_eq!(config.ui.toolbar.top_offset, 12.0);
+    assert_eq!(config.ui.toolbar.top_offset_y, 13.0);
+}
+
+#[test]
+fn toolbar_position_target_includes_the_side_drags_reconciled_top_offset() {
+    let mut config = crate::config::Config::default();
+    config.ui.toolbar.top_offset = 1.0;
+    config.ui.toolbar.top_offset_y = 2.0;
+    config.ui.toolbar.side_offset_x = 3.0;
+    config.ui.toolbar.side_offset = 4.0;
+    let input_state = make_test_input_state();
+    let positions = ToolbarPositions {
+        top_x: 10.0,
+        top_y: 20.0,
+        side_x: 30.0,
+        side_y: 40.0,
+    };
+
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        positions,
+        ToolbarConfigPersistenceTarget::TopPosition,
+    );
+    assert_eq!(config.ui.toolbar.top_offset, 10.0);
+    assert_eq!(config.ui.toolbar.top_offset_y, 20.0);
+    assert_eq!(config.ui.toolbar.side_offset_x, 3.0);
+    assert_eq!(config.ui.toolbar.side_offset, 4.0);
+
+    config.ui.toolbar.top_offset = 1.0;
+    config.ui.toolbar.top_offset_y = 2.0;
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        positions,
+        ToolbarConfigPersistenceTarget::SidePosition,
+    );
+    assert_eq!(config.ui.toolbar.top_offset, 10.0);
+    assert_eq!(config.ui.toolbar.top_offset_y, 2.0);
+    assert_eq!(config.ui.toolbar.side_offset_x, 30.0);
+    assert_eq!(config.ui.toolbar.side_offset, 40.0);
+}
+
+#[test]
+fn toolbar_item_order_target_preserves_other_groups_and_unknown_ids() {
+    use crate::config::{ToolbarItemOrderGroup, toolbar_item_ids as ids};
+
+    let mut config = crate::config::Config::default();
+    config.ui.toolbar.items.order.top_tools = vec![
+        ids::TOP_TOOL_PEN.as_str().to_string(),
+        "future-top-tool".to_string(),
+    ];
+    config.ui.toolbar.items.order.actions = vec!["future-action".to_string()];
+
+    let mut input_state = make_test_input_state();
+    assert!(input_state.toolbar_items.move_item_by(
+        ToolbarItemOrderGroup::TopTools,
+        ids::TOP_TOOL_PEN,
+        1,
+    ));
+
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        ToolbarPositions::default(),
+        ToolbarConfigPersistenceTarget::ItemOrder(ToolbarItemOrderGroup::TopTools),
+    );
+
+    assert_eq!(
+        config.ui.toolbar.items.order.actions,
+        ["future-action".to_string()]
+    );
+    assert!(
+        config
+            .ui
+            .toolbar
+            .items
+            .order
+            .top_tools
+            .contains(&"future-top-tool".to_string())
+    );
+    assert_eq!(
+        config
+            .ui
+            .toolbar
+            .items
+            .order
+            .resolved()
+            .index_of(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN),
+        Some(2)
+    );
+}
+
+#[test]
+fn toolbar_section_target_updates_only_its_override_and_compatibility_mirror() {
+    let mut config = crate::config::Config::default();
+    config.ui.toolbar.show_actions_section = true;
+    config.ui.toolbar.show_presets = true;
+    config.ui.toolbar.items.hidden = vec!["future-hidden".to_string()];
+    let input_state = make_test_input_state();
+
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        ToolbarPositions::default(),
+        ToolbarConfigPersistenceTarget::ItemVisibility {
+            id: ToolbarSectionFlag::Actions.item_id(),
+            hidden: true,
+        },
+    );
+
+    assert!(!config.ui.toolbar.show_actions_section);
+    assert!(config.ui.toolbar.show_presets);
+    assert!(
+        config
+            .ui
+            .toolbar
+            .items
+            .resolved()
+            .hidden
+            .contains(&ToolbarSectionFlag::Actions.item_id())
+    );
+    assert!(
+        config
+            .ui
+            .toolbar
+            .items
+            .hidden
+            .contains(&"future-hidden".to_string())
+    );
+}
+
+#[test]
+fn toolbar_collapsed_section_target_preserves_other_and_unknown_sections() {
+    let mut config = crate::config::Config::default();
+    config.ui.toolbar.collapsed_sections = vec![
+        "Colors".to_string(),
+        "session".to_string(),
+        "future-section".to_string(),
+    ];
+    let input_state = make_test_input_state();
+
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        ToolbarPositions::default(),
+        ToolbarConfigPersistenceTarget::CollapsedSection {
+            section: ToolbarSideSection::Colors,
+            collapsed: false,
+        },
+    );
+
+    assert_eq!(
+        config.ui.toolbar.collapsed_sections,
+        ["session".to_string(), "future-section".to_string()]
+    );
+}
+
+#[test]
+fn toolbar_layout_target_updates_only_layout_and_derived_compatibility_mirrors() {
+    let mut config = crate::config::Config::default();
+    config.ui.toolbar.layout_mode = ToolbarLayoutMode::Simple;
+    config.ui.toolbar.top_pinned = true;
+    config.ui.toolbar.items.hidden = vec!["future-hidden".to_string()];
+    let original_items = config.ui.toolbar.items.clone();
+
+    let mut input_state = make_test_input_state();
+    input_state.toolbar_layout_mode = ToolbarLayoutMode::Advanced;
+    input_state.toolbar_top_pinned = false;
+    input_state.show_presets = false;
+
+    apply_toolbar_config_target(
+        &mut config,
+        &input_state,
+        ToolbarPositions::default(),
+        ToolbarConfigPersistenceTarget::LayoutMode,
+    );
+
+    assert_eq!(config.ui.toolbar.layout_mode, ToolbarLayoutMode::Advanced);
+    assert!(!config.ui.toolbar.show_presets);
+    assert!(config.ui.toolbar.top_pinned);
+    assert_eq!(config.ui.toolbar.items, original_items);
 }
 
 #[test]
@@ -527,10 +854,9 @@ fn toolbar_persist_during_presenter_micro_writes_the_pre_presenter_top_state() {
         "micro mapping clears minimized"
     );
 
-    // A Persist(Toolbar) event during presenter mode (e.g. the pin toggle)
-    // runs `save_toolbar_pin_config`, which routes these two fields through
-    // the helpers below: the written config must keep the saved
-    // pre-presenter values, not the presenter mapping.
+    // A targeted top-display save during presenter mode routes these two
+    // fields through the helpers below: the written config must keep the
+    // saved pre-presenter values, not the presenter mapping.
     let restore = state.presenter_restore.as_ref().expect("presenter restore");
     assert!(persisted_top_minimized_value(
         state.toolbar_top_minimized,

@@ -54,7 +54,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn end_toolbar_move_drag(&mut self) {
-        if self.data.toolbar_move_drag.is_some() {
+        if let Some(drag) = self.data.toolbar_move_drag {
             self.reconcile_top_base_after_drag();
             drag_log(format!(
                 "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
@@ -80,7 +80,7 @@ impl WaylandState {
             if self.toolbar_drag_preview_active() {
                 self.begin_toolbar_drag_handoff();
             }
-            self.save_toolbar_pin_config();
+            self.save_toolbar_position_config(drag.kind);
             self.unlock_pointer();
         }
     }

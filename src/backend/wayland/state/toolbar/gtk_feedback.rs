@@ -64,7 +64,7 @@ impl WaylandState {
         self.mark_gtk_drag_preview_dirty();
         if phase.is_end() {
             self.clamp_gtk_top_offset(surface_size);
-            self.finish_gtk_offset_change();
+            self.finish_gtk_offset_change(crate::backend::wayland::state::MoveDragKind::Top);
         }
     }
 
@@ -83,7 +83,7 @@ impl WaylandState {
         self.mark_gtk_drag_preview_dirty();
         if phase.is_end() {
             self.clamp_gtk_side_offset(surface_size);
-            self.finish_gtk_offset_change();
+            self.finish_gtk_offset_change(crate::backend::wayland::state::MoveDragKind::Side);
         }
     }
 
@@ -164,10 +164,10 @@ impl WaylandState {
 
     /// On drag end, persist the offset accepted against GTK's measured
     /// surface. Intermediate positions are mirrored without disk writes.
-    fn finish_gtk_offset_change(&mut self) {
+    fn finish_gtk_offset_change(&mut self, kind: crate::backend::wayland::state::MoveDragKind) {
         self.reconcile_top_base_after_drag();
         self.data.drag_top_base_x = None;
-        self.save_toolbar_pin_config();
+        self.save_toolbar_position_config(kind);
         self.begin_gtk_toolbar_drag_handoff();
     }
 }

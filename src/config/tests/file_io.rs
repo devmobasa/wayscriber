@@ -85,6 +85,55 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
 }
 
 #[test]
+fn runtime_board_reorder_does_not_materialize_unchanged_item_preferences() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            r#"[boards]
+default_board = "transparent"
+
+[[boards.items]]
+id = "transparent"
+name = "Overlay"
+background = "transparent"
+
+[[boards.items]]
+id = "whiteboard"
+name = "Whiteboard"
+background = { rgb = [0.992, 0.992, 0.992] }
+"#,
+        )
+        .unwrap();
+
+        let mut config = Config::load().expect("load board config").config;
+        config.boards.as_mut().expect("boards").items.swap(0, 1);
+        config.save().expect("save reordered boards");
+
+        let saved = fs::read_to_string(&config_file).unwrap();
+        let document = saved.parse::<toml_edit::DocumentMut>().unwrap();
+        let boards = document["boards"]["items"].as_array_of_tables().unwrap();
+        assert_eq!(
+            boards.get(0).and_then(|board| board["id"].as_str()),
+            Some("whiteboard")
+        );
+        assert_eq!(
+            boards.get(1).and_then(|board| board["id"].as_str()),
+            Some("transparent")
+        );
+        assert!(boards.iter().all(|board| !board.contains_key("pinned")));
+        assert!(
+            boards
+                .iter()
+                .all(|board| !board.contains_key("auto_adjust_pen"))
+        );
+        assert!(boards.iter().all(|board| !board.contains_key("persist")));
+    });
+}
+
+#[test]
 fn runtime_save_updates_inline_board_background_without_losing_unknown_fields() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);

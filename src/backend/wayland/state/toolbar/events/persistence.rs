@@ -1,0 +1,287 @@
+use super::*;
+use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersistenceTarget};
+
+pub(super) fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) -> bool {
+    presenter_restore.unwrap_or(current)
+}
+
+/// While presenter mode owns the top strip (`[presenter_mode] toolbar_mode =
+/// "micro"`), the live display mode and minimized flag hold presenter-mapped
+/// values (`Micro`, force-cleared `false`), not user preferences. A targeted
+/// top-display or minimized save fired during presenter mode must therefore
+/// write the saved pre-presenter values from `PresenterRestore`. Outside
+/// presenter mode (and under the `"hidden"` mapping, which leaves both fields
+/// untouched) the restore slots are `None` and the live values persist as usual.
+pub(super) fn persisted_top_minimized_value(
+    current: bool,
+    presenter_restore: Option<bool>,
+) -> bool {
+    presenter_restore.unwrap_or(current)
+}
+
+pub(super) fn persisted_top_display_mode_value(
+    current: crate::config::TopDisplayMode,
+    presenter_restore: Option<crate::config::TopDisplayMode>,
+) -> crate::config::TopDisplayMode {
+    // Hidden persists as Full: like the F9 visibility toggle, a hidden
+    // strip is runtime-only and `top_pinned` governs startup.
+    presenter_restore.unwrap_or(current).persisted()
+}
+
+pub(super) fn apply_toolbar_ui_config_target(
+    config: &mut crate::config::Config,
+    input_state: &InputState,
+    target: ToolbarUiPersistenceTarget,
+) {
+    match target {
+        ToolbarUiPersistenceTarget::StatusBar => {
+            config.ui.show_status_bar = input_state.show_status_bar;
+        }
+        ToolbarUiPersistenceTarget::StatusBoardBadge => {
+            config.ui.show_status_board_badge = input_state.show_status_board_badge;
+        }
+        ToolbarUiPersistenceTarget::StatusPageBadge => {
+            config.ui.show_status_page_badge = input_state.show_status_page_badge;
+        }
+        ToolbarUiPersistenceTarget::FloatingBadgeAlways => {
+            config.ui.show_floating_badge_always = input_state.show_floating_badge_always;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct ToolbarPositions {
+    pub(super) top_x: f64,
+    pub(super) top_y: f64,
+    pub(super) side_x: f64,
+    pub(super) side_y: f64,
+}
+
+fn apply_section_compatibility_mirror(
+    config: &mut crate::config::Config,
+    flag: crate::config::ToolbarSectionFlag,
+    visible: bool,
+) {
+    use crate::config::ToolbarSectionFlag;
+
+    match flag {
+        ToolbarSectionFlag::Actions => config.ui.toolbar.show_actions_section = visible,
+        ToolbarSectionFlag::ActionsAdvanced => {
+            config.ui.toolbar.show_actions_advanced = visible;
+        }
+        ToolbarSectionFlag::ZoomActions => config.ui.toolbar.show_zoom_actions = visible,
+        ToolbarSectionFlag::Pages => config.ui.toolbar.show_pages_section = visible,
+        ToolbarSectionFlag::Boards => config.ui.toolbar.show_boards_section = visible,
+        ToolbarSectionFlag::Presets => config.ui.toolbar.show_presets = visible,
+        ToolbarSectionFlag::StepSection => config.ui.toolbar.show_step_section = visible,
+        ToolbarSectionFlag::TextControls => config.ui.toolbar.show_text_controls = visible,
+    }
+}
+
+fn apply_all_section_compatibility_mirrors(
+    config: &mut crate::config::Config,
+    input_state: &InputState,
+) {
+    config.ui.toolbar.show_actions_section = input_state.show_actions_section;
+    config.ui.toolbar.show_actions_advanced = input_state.show_actions_advanced;
+    config.ui.toolbar.show_zoom_actions = input_state.show_zoom_actions;
+    config.ui.toolbar.show_pages_section = input_state.show_pages_section;
+    config.ui.toolbar.show_boards_section = input_state.show_boards_section;
+    config.ui.toolbar.show_presets = input_state.show_presets;
+    config.ui.toolbar.show_step_section = input_state.show_step_section;
+    config.ui.toolbar.show_text_controls = input_state.show_text_controls;
+    config.ui.toolbar.show_settings_section = input_state.show_settings_section;
+}
+
+pub(super) fn apply_toolbar_config_target(
+    config: &mut crate::config::Config,
+    input_state: &InputState,
+    positions: ToolbarPositions,
+    target: ToolbarConfigPersistenceTarget,
+) {
+    use ToolbarConfigPersistenceTarget::*;
+
+    match target {
+        LayoutMode => {
+            config.ui.toolbar.layout_mode = input_state.toolbar_layout_mode;
+            apply_all_section_compatibility_mirrors(config, input_state);
+        }
+        ItemVisibility { id, hidden } => {
+            config.ui.toolbar.items.set_hidden(id, hidden);
+            if let Some(flag) = crate::config::section_flag_for_item(id) {
+                apply_section_compatibility_mirror(config, flag, !hidden);
+            }
+        }
+        ResetItemVisibility => {
+            config.ui.toolbar.items.reset_known_hidden_to_defaults();
+            apply_all_section_compatibility_mirrors(config, input_state);
+        }
+        ItemOrder(group) => {
+            config
+                .ui
+                .toolbar
+                .items
+                .sync_known_order_group_from(&input_state.toolbar_items, group);
+        }
+        TopPinned => config.ui.toolbar.top_pinned = input_state.toolbar_top_pinned,
+        SidePinned => config.ui.toolbar.side_pinned = input_state.toolbar_side_pinned,
+        TopMinimized => {
+            config.ui.toolbar.top_minimized = persisted_top_minimized_value(
+                input_state.toolbar_top_minimized,
+                input_state
+                    .presenter_restore
+                    .as_ref()
+                    .and_then(|restore| restore.toolbar_top_minimized),
+            );
+        }
+        TopDisplayState => {
+            config.ui.toolbar.top_minimized = persisted_top_minimized_value(
+                input_state.toolbar_top_minimized,
+                input_state
+                    .presenter_restore
+                    .as_ref()
+                    .and_then(|restore| restore.toolbar_top_minimized),
+            );
+            config.ui.toolbar.top_display_mode = persisted_top_display_mode_value(
+                input_state.toolbar_top_display_mode,
+                input_state
+                    .presenter_restore
+                    .as_ref()
+                    .and_then(|restore| restore.toolbar_top_display_mode),
+            );
+        }
+        SideMinimized => {
+            config.ui.toolbar.side_minimized = input_state.toolbar_side_minimized;
+        }
+        SidePane => {
+            config.ui.toolbar.side_active_pane =
+                input_state.toolbar_side_pane.config_id().to_string();
+        }
+        CollapsedSection { section, collapsed } => {
+            let id = section.config_id();
+            config.ui.toolbar.collapsed_sections.retain(|raw| {
+                crate::ui::toolbar::ToolbarSideSection::from_config_id(raw) != Some(section)
+            });
+            if collapsed {
+                config.ui.toolbar.collapsed_sections.push(id.to_string());
+            }
+        }
+        Icons => config.ui.toolbar.use_icons = input_state.toolbar_use_icons,
+        MoreColors => config.ui.toolbar.show_more_colors = input_state.show_more_colors,
+        ContextAwareUi => config.ui.toolbar.context_aware_ui = input_state.context_aware_ui,
+        PresetToasts => config.ui.toolbar.show_preset_toasts = input_state.show_preset_toasts,
+        ToolPreview => {
+            config.ui.toolbar.show_tool_preview = persisted_tool_preview_value(
+                input_state.show_tool_preview,
+                input_state
+                    .presenter_restore
+                    .as_ref()
+                    .and_then(|restore| restore.show_tool_preview),
+            );
+        }
+        DelaySliders => config.ui.toolbar.show_delay_sliders = input_state.show_delay_sliders,
+        TopPosition => {
+            config.ui.toolbar.top_offset = positions.top_x;
+            config.ui.toolbar.top_offset_y = positions.top_y;
+        }
+        SidePosition => {
+            // A side drag can change whether the side palette overlaps the
+            // top strip. Drag completion reconciles the top strip's X offset
+            // against that new base before saving, so persist the derived X
+            // together with the side position. The top Y value is unrelated.
+            config.ui.toolbar.top_offset = positions.top_x;
+            config.ui.toolbar.side_offset_x = positions.side_x;
+            config.ui.toolbar.side_offset = positions.side_y;
+        }
+    }
+}
+
+impl WaylandState {
+    pub(super) fn save_toolbar_config(&mut self, target: ToolbarConfigPersistenceTarget) {
+        apply_toolbar_config_target(
+            &mut self.config,
+            &self.input_state,
+            ToolbarPositions {
+                top_x: self.data.toolbar_top_offset,
+                top_y: self.data.toolbar_top_offset_y,
+                side_x: self.data.toolbar_side_offset_x,
+                side_y: self.data.toolbar_side_offset,
+            },
+            target,
+        );
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar config: {}", err);
+        } else {
+            log::debug!("Saved toolbar config");
+        }
+    }
+
+    pub(in crate::backend::wayland) fn save_toolbar_position_config(&mut self, kind: MoveDragKind) {
+        let target = match kind {
+            MoveDragKind::Top => ToolbarConfigPersistenceTarget::TopPosition,
+            MoveDragKind::Side => ToolbarConfigPersistenceTarget::SidePosition,
+        };
+        self.save_toolbar_config(target);
+    }
+
+    pub(in crate::backend::wayland) fn save_toolbar_display_config(&mut self) {
+        self.save_toolbar_config(ToolbarConfigPersistenceTarget::TopDisplayState);
+    }
+
+    pub(super) fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {
+        apply_toolbar_ui_config_target(&mut self.config, &self.input_state, target);
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar UI config: {}", err);
+        } else {
+            log::debug!("Saved toolbar UI config");
+        }
+    }
+
+    pub(super) fn save_toolbar_history_config(&mut self) {
+        self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar history config: {}", err);
+        } else {
+            log::debug!("Saved toolbar history config");
+        }
+    }
+
+    pub(in crate::backend::wayland) fn save_click_highlight_preferences(&mut self) {
+        if !(self.input_state.presenter_mode
+            && self
+                .input_state
+                .presenter_mode_config
+                .enable_click_highlight)
+        {
+            self.config.ui.click_highlight.enabled = self.input_state.click_highlight_enabled();
+        }
+        self.config.ui.click_highlight.show_on_highlight_tool =
+            self.input_state.highlight_tool_ring_enabled();
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to persist click highlight preferences: {}", err);
+        }
+    }
+
+    pub(in crate::backend::wayland) fn handle_preset_action(
+        &mut self,
+        action: crate::input::state::PresetAction,
+    ) {
+        match action {
+            crate::input::state::PresetAction::Save { slot, preset } => {
+                self.config.presets.set_slot(slot, Some(*preset));
+                if let Err(err) = self.config.save() {
+                    log::warn!("Failed to save preset slot {}: {}", slot, err);
+                }
+            }
+            crate::input::state::PresetAction::Clear { slot } => {
+                self.config.presets.set_slot(slot, None);
+                if let Err(err) = self.config.save() {
+                    log::warn!("Failed to clear preset slot {}: {}", slot, err);
+                }
+            }
+        }
+    }
+}

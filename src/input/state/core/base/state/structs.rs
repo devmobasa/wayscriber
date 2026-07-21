@@ -23,14 +23,14 @@ use super::super::types::{
     ZoomAction,
 };
 use crate::config::{
-    Action, BoardsConfig, KeyBinding, PresenterModeConfig, QuickColorPalette,
-    RadialMenuMouseBinding, ResolvedToolbarItems, ToolPresetConfig, ToolbarItemId,
-    ToolbarItemOrderGroup, ToolbarItemsConfig,
+    Action, KeyBinding, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding,
+    ResolvedToolbarItems, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup,
+    ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
-use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
+use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest, PendingBoardConfigUpdate};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     Key, MouseButton,
@@ -536,7 +536,7 @@ pub struct InputState {
     /// Pending preset save/clear action for backend persistence
     pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
     /// Pending boards config update (persisted by backend)
-    pub(in crate::input::state::core) pending_board_config: Option<BoardsConfig>,
+    pub(in crate::input::state::core) pending_board_config: Option<PendingBoardConfigUpdate>,
     /// Whether the guided tour is currently active
     pub tour_active: bool,
     /// Current step in the guided tour (0-indexed)

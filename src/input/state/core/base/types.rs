@@ -369,8 +369,8 @@ pub enum PendingBackendAction {
     BoardPdfExport(Action),
     ClearSavedToolState,
     EditKeybinding(KeybindingEditRequest),
-    /// Persist the toolbar configuration (used by keyboard-driven toolbar
-    /// state changes; toolbar-event paths persist via their event policy).
+    /// Persist the top-display preference changed by its keyboard action;
+    /// toolbar-event paths persist via their exact event-policy target.
     PersistToolbarConfig,
 }
 

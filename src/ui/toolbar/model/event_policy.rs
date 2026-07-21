@@ -1,7 +1,10 @@
-use crate::config::{Action, action_label, action_short_label};
+use crate::config::{
+    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag, action_label,
+    action_short_label,
+};
 use crate::input::Tool;
 
-use super::super::ToolbarEvent;
+use super::super::{ToolbarEvent, ToolbarSideSection};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ToolbarEventPolicy {
@@ -33,10 +36,39 @@ pub(crate) enum ToolbarPersistence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarPersistenceTarget {
-    Toolbar,
+    Toolbar(ToolbarConfigPersistenceTarget),
     Ui(ToolbarUiPersistenceTarget),
     History,
     ClickHighlight,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolbarConfigPersistenceTarget {
+    LayoutMode,
+    ItemVisibility {
+        id: ToolbarItemId,
+        hidden: bool,
+    },
+    ResetItemVisibility,
+    ItemOrder(ToolbarItemOrderGroup),
+    TopPinned,
+    SidePinned,
+    TopMinimized,
+    TopDisplayState,
+    SideMinimized,
+    SidePane,
+    CollapsedSection {
+        section: ToolbarSideSection,
+        collapsed: bool,
+    },
+    Icons,
+    MoreColors,
+    ContextAwareUi,
+    PresetToasts,
+    ToolPreview,
+    DelaySliders,
+    TopPosition,
+    SidePosition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,38 +214,95 @@ pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
 }
 
 fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
+    use ToolbarConfigPersistenceTarget::*;
     use ToolbarPersistenceTarget::*;
     use ToolbarUiPersistenceTarget::*;
     match event {
-        ToolbarEvent::PinTopToolbar(_)
-        | ToolbarEvent::PinSideToolbar(_)
-        | ToolbarEvent::ToggleIconMode(_)
-        | ToolbarEvent::ToggleMoreColors(_)
-        | ToolbarEvent::ToggleActionsSection(_)
-        | ToolbarEvent::ToggleActionsAdvanced(_)
-        | ToolbarEvent::ToggleZoomActions(_)
-        | ToolbarEvent::TogglePagesSection(_)
-        | ToolbarEvent::ToggleBoardsSection(_)
-        | ToolbarEvent::TogglePresets(_)
-        | ToolbarEvent::ToggleStepSection(_)
-        | ToolbarEvent::ToggleTextControls(_)
-        | ToolbarEvent::ToggleContextAwareUi(_)
-        | ToolbarEvent::TogglePresetToasts(_)
-        | ToolbarEvent::ToggleToolPreview(_)
-        | ToolbarEvent::ToggleDelaySliders(_)
-        | ToolbarEvent::SetToolbarLayoutMode(_)
-        | ToolbarEvent::SetSidePane(_)
-        | ToolbarEvent::SetTopMinimized(_)
-        | ToolbarEvent::SetTopDisplayMode(_)
-        | ToolbarEvent::SetSideMinimized(_)
-        | ToolbarEvent::CloseTopToolbar
-        | ToolbarEvent::CloseSideToolbar
-        | ToolbarEvent::ToggleSideSectionCollapsed(_, _)
-        | ToolbarEvent::SetToolbarItemHidden(_, _)
-        | ToolbarEvent::MoveToolbarItem { .. }
-        | ToolbarEvent::DragToolbarItemOver { .. }
-        | ToolbarEvent::ResetToolbarItemOrder(_)
-        | ToolbarEvent::ResetToolbarItemHiddenOverrides => ToolbarPersistence::Persist(Toolbar),
+        ToolbarEvent::PinTopToolbar(_) => ToolbarPersistence::Persist(Toolbar(TopPinned)),
+        ToolbarEvent::PinSideToolbar(_) => ToolbarPersistence::Persist(Toolbar(SidePinned)),
+        ToolbarEvent::ToggleIconMode(_) => ToolbarPersistence::Persist(Toolbar(Icons)),
+        ToolbarEvent::ToggleMoreColors(_) => ToolbarPersistence::Persist(Toolbar(MoreColors)),
+        ToolbarEvent::ToggleActionsSection(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::Actions.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::ToggleActionsAdvanced(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::ActionsAdvanced.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::ToggleZoomActions(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::ZoomActions.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::TogglePagesSection(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::Pages.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::ToggleBoardsSection(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::Boards.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::TogglePresets(show) => ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+            id: ToolbarSectionFlag::Presets.item_id(),
+            hidden: !show,
+        })),
+        ToolbarEvent::ToggleStepSection(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::StepSection.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::ToggleTextControls(show) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: ToolbarSectionFlag::TextControls.item_id(),
+                hidden: !show,
+            }))
+        }
+        ToolbarEvent::ToggleContextAwareUi(_) => {
+            ToolbarPersistence::Persist(Toolbar(ContextAwareUi))
+        }
+        ToolbarEvent::TogglePresetToasts(_) => ToolbarPersistence::Persist(Toolbar(PresetToasts)),
+        ToolbarEvent::ToggleToolPreview(_) => ToolbarPersistence::Persist(Toolbar(ToolPreview)),
+        ToolbarEvent::ToggleDelaySliders(_) => ToolbarPersistence::Persist(Toolbar(DelaySliders)),
+        ToolbarEvent::SetToolbarLayoutMode(_) => ToolbarPersistence::Persist(Toolbar(LayoutMode)),
+        ToolbarEvent::SetSidePane(_) => ToolbarPersistence::Persist(Toolbar(SidePane)),
+        ToolbarEvent::SetTopMinimized(_) | ToolbarEvent::CloseTopToolbar => {
+            ToolbarPersistence::Persist(Toolbar(TopMinimized))
+        }
+        ToolbarEvent::SetTopDisplayMode(_) => ToolbarPersistence::Persist(Toolbar(TopDisplayState)),
+        ToolbarEvent::SetSideMinimized(_) | ToolbarEvent::CloseSideToolbar => {
+            ToolbarPersistence::Persist(Toolbar(SideMinimized))
+        }
+        ToolbarEvent::ToggleSideSectionCollapsed(section, collapsed) => {
+            ToolbarPersistence::Persist(Toolbar(CollapsedSection {
+                section: *section,
+                collapsed: *collapsed,
+            }))
+        }
+        ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
+            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
+                id: *id,
+                hidden: *hidden,
+            }))
+        }
+        ToolbarEvent::MoveToolbarItem { group, .. }
+        | ToolbarEvent::DragToolbarItemOver { group, .. }
+        | ToolbarEvent::ResetToolbarItemOrder(group) => {
+            ToolbarPersistence::Persist(Toolbar(ItemOrder(*group)))
+        }
+        ToolbarEvent::ResetToolbarItemHiddenOverrides => {
+            ToolbarPersistence::Persist(Toolbar(ResetItemVisibility))
+        }
         ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Persist(History),
         ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Persist(Ui(StatusBar)),
         ToolbarEvent::ToggleStatusBoardBadge(_) => {
@@ -226,7 +315,94 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SelectTool(Tool::Highlight)
         | ToolbarEvent::ToggleAllHighlight(_)
         | ToolbarEvent::ToggleHighlightToolRing(_) => ToolbarPersistence::Persist(ClickHighlight),
-        _ => ToolbarPersistence::RuntimeOnly,
+        ToolbarEvent::SelectTool(_)
+        | ToolbarEvent::SetColor(_)
+        | ToolbarEvent::SetQuickColor { .. }
+        | ToolbarEvent::SetColorHsv { .. }
+        | ToolbarEvent::SetThickness(_)
+        | ToolbarEvent::NudgeThickness(_)
+        | ToolbarEvent::SetMarkerOpacity(_)
+        | ToolbarEvent::NudgeMarkerOpacity(_)
+        | ToolbarEvent::SetEraserMode(_)
+        | ToolbarEvent::SetFont(_)
+        | ToolbarEvent::SetFontSize(_)
+        | ToolbarEvent::NudgeFontSize(_)
+        | ToolbarEvent::ToggleFill(_)
+        | ToolbarEvent::SetPolygonSides(_)
+        | ToolbarEvent::NudgePolygonSides(_)
+        | ToolbarEvent::ToggleArrowLabels(_)
+        | ToolbarEvent::ResetArrowLabelCounter
+        | ToolbarEvent::ResetStepMarkerCounter
+        | ToolbarEvent::SetUndoDelay(_)
+        | ToolbarEvent::SetRedoDelay(_)
+        | ToolbarEvent::UndoAll
+        | ToolbarEvent::RedoAll
+        | ToolbarEvent::UndoAllDelayed
+        | ToolbarEvent::RedoAllDelayed
+        | ToolbarEvent::Undo
+        | ToolbarEvent::Redo
+        | ToolbarEvent::ClearCanvas { .. }
+        | ToolbarEvent::CaptureScreenshot
+        | ToolbarEvent::PagePrev
+        | ToolbarEvent::PageNext
+        | ToolbarEvent::PageNew
+        | ToolbarEvent::PageDuplicate
+        | ToolbarEvent::PageDelete
+        | ToolbarEvent::BoardPrev
+        | ToolbarEvent::BoardNext
+        | ToolbarEvent::BoardNew
+        | ToolbarEvent::BoardDelete
+        | ToolbarEvent::BoardDuplicate
+        | ToolbarEvent::BoardRename
+        | ToolbarEvent::ToggleBoardPicker
+        | ToolbarEvent::EnterTextMode
+        | ToolbarEvent::EnterStickyNoteMode
+        | ToolbarEvent::ToggleFreeze
+        | ToolbarEvent::ZoomIn
+        | ToolbarEvent::ZoomOut
+        | ToolbarEvent::ResetZoom
+        | ToolbarEvent::ToggleZoomLock
+        | ToolbarEvent::RefreshZoomCapture
+        | ToolbarEvent::ApplyPreset(_)
+        | ToolbarEvent::SavePreset(_)
+        | ToolbarEvent::ClearPreset(_)
+        | ToolbarEvent::OpenSession
+        | ToolbarEvent::OpenRecentSession(_)
+        | ToolbarEvent::SaveSessionAs
+        | ToolbarEvent::SaveSessionAsConfirm(_)
+        | ToolbarEvent::SaveSessionAsCancel
+        | ToolbarEvent::SessionInfo
+        | ToolbarEvent::ClearSession
+        | ToolbarEvent::OpenConfigurator
+        | ToolbarEvent::OpenConfigFile
+        | ToolbarEvent::OpenCommandPalette
+        | ToolbarEvent::SetCustomUndoDelay(_)
+        | ToolbarEvent::SetCustomRedoDelay(_)
+        | ToolbarEvent::SetCustomUndoSteps(_)
+        | ToolbarEvent::SetCustomRedoSteps(_)
+        | ToolbarEvent::CustomUndo
+        | ToolbarEvent::CustomRedo
+        | ToolbarEvent::ToggleTopOverflow(_)
+        | ToolbarEvent::ToggleSessionPopover(_)
+        | ToolbarEvent::ToggleSettingsPopover(_)
+        | ToolbarEvent::ToggleCanvasPopover(_)
+        | ToolbarEvent::ScrollTopPopover(_)
+        | ToolbarEvent::CopyHexColor
+        | ToolbarEvent::PasteHexColor
+        | ToolbarEvent::EditHexColor
+        | ToolbarEvent::OpenColorPickerPopup
+        | ToolbarEvent::OpenPrecisionEntry(_)
+        | ToolbarEvent::CommitPrecisionEntry { .. }
+        | ToolbarEvent::CancelPrecisionEntry
+        | ToolbarEvent::AdjustSelectionProperty { .. }
+        | ToolbarEvent::PickScreenColor
+        | ToolbarEvent::ScrollSidePane(_)
+        | ToolbarEvent::StartToolbarItemDrag { .. }
+        | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
+        | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
+        | ToolbarEvent::ToggleShapePicker(_)
+        | ToolbarEvent::MoveTopToolbar { .. }
+        | ToolbarEvent::MoveSideToolbar { .. } => ToolbarPersistence::RuntimeOnly,
     }
 }
 

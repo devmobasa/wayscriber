@@ -4,6 +4,7 @@ use super::super::base::{
     ZoomAction,
 };
 use crate::config::BoardsConfig;
+use crate::input::boards::PendingBoardConfigUpdate;
 
 #[allow(dead_code)]
 impl InputState {
@@ -44,6 +45,12 @@ impl InputState {
 
     /// Takes and clears any pending board config update.
     pub fn take_pending_board_config(&mut self) -> Option<BoardsConfig> {
+        self.pending_board_config
+            .take()
+            .map(PendingBoardConfigUpdate::into_snapshot)
+    }
+
+    pub(crate) fn take_pending_board_config_update(&mut self) -> Option<PendingBoardConfigUpdate> {
         self.pending_board_config.take()
     }
 
@@ -93,6 +100,7 @@ mod tests {
     use super::*;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
+    use crate::input::boards::BoardConfigChange;
     use crate::input::{ClickHighlightSettings, EraserMode};
 
     fn make_state() -> InputState {
@@ -202,7 +210,10 @@ mod tests {
             default_board: "blackboard".to_string(),
             ..BoardsConfig::default()
         };
-        state.pending_board_config = Some(config.clone());
+        state.pending_board_config = Some(PendingBoardConfigUpdate::new(
+            config.clone(),
+            BoardConfigChange::Structure,
+        ));
 
         let taken = state.take_pending_board_config().expect("board config");
         assert_eq!(taken.default_board, "blackboard");
