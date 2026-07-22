@@ -17,6 +17,7 @@ impl RuntimeUiStateController {
             self.seeds = seeds;
             self.live_only_overlay.reconcile(&changed);
             self.model.reconcile(&self.seeds);
+            self.passthrough.reconcile_entries(&self.model);
             self.live_state =
                 RuntimeUiLiveState::rebuild(&self.seeds, &self.model, &self.live_only_overlay);
         }
@@ -166,7 +167,7 @@ impl RuntimeUiStateController {
             .checked_add(1)
             .expect("authority epoch exhausted");
         self.apply_incident_staged_reload();
-        if self.model.reconcile(&self.seeds)
+        if (self.model.reconcile(&self.seeds) | self.passthrough.reconcile_entries(&self.model))
             && matches!(self.file_status, RuntimeUiFileStatus::Supported)
             && let Some(incident) = &mut self.incident
         {

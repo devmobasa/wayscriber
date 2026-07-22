@@ -1,8 +1,8 @@
 //! Seed-guarded runtime UI state authority and persistence coordination.
 //!
-//! This module deliberately owns no toolbar event routing and performs no file
-//! I/O. It is the serialized controller boundary between runtime UI producers
-//! and the runtime-state I/O actor added by the storage layer.
+//! This module deliberately owns no toolbar event routing. It contains the
+//! serialized controller boundary plus the isolated runtime-state wire, store,
+//! and writer machinery used to exercise that boundary before UI integration.
 
 mod controller;
 mod model;
@@ -11,7 +11,10 @@ mod preview;
 mod recovery;
 mod seeds;
 mod source_revision;
+mod store;
 mod types;
+mod wire;
+mod writer;
 
 pub(crate) use controller::*;
 pub(crate) use model::*;
@@ -20,7 +23,11 @@ pub(crate) use preview::*;
 pub(crate) use recovery::*;
 pub(crate) use seeds::*;
 pub(crate) use source_revision::*;
+pub(crate) use store::*;
 pub(crate) use types::*;
+pub(crate) use wire::*;
+#[allow(unused_imports)]
+pub(crate) use writer::*;
 
 #[cfg(test)]
 mod tests;

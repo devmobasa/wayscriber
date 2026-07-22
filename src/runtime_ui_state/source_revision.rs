@@ -2,11 +2,38 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RuntimeStateFileIdentity {
+    pub(crate) device: u64,
+    pub(crate) inode: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RuntimeStateResolvedParent {
+    path: PathBuf,
+    identity: RuntimeStateFileIdentity,
+}
+
+impl RuntimeStateResolvedParent {
+    pub(crate) fn new(path: PathBuf, identity: RuntimeStateFileIdentity) -> Self {
+        Self { path, identity }
+    }
+
+    pub(crate) fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    pub(crate) fn identity(&self) -> RuntimeStateFileIdentity {
+        self.identity
+    }
+}
+
 /// Exact identity of the managed runtime-state path after resolving links.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RuntimeStatePathIdentity {
     source_path: PathBuf,
     followed_links: Arc<[(PathBuf, PathBuf)]>,
+    resolved_parent: Option<RuntimeStateResolvedParent>,
 }
 
 impl RuntimeStatePathIdentity {
@@ -17,11 +44,23 @@ impl RuntimeStatePathIdentity {
         Self {
             source_path,
             followed_links: followed_links.into(),
+            resolved_parent: None,
         }
     }
 
     pub(crate) fn direct(source_path: impl Into<PathBuf>) -> Self {
         Self::new(source_path.into(), Arc::from([]))
+    }
+
+    pub(crate) fn observed(
+        source_path: impl Into<PathBuf>,
+        resolved_parent: RuntimeStateResolvedParent,
+    ) -> Self {
+        Self {
+            source_path: source_path.into(),
+            followed_links: Arc::from([]),
+            resolved_parent: Some(resolved_parent),
+        }
     }
 
     pub(crate) fn source_path(&self) -> &std::path::Path {
@@ -30,6 +69,10 @@ impl RuntimeStatePathIdentity {
 
     pub(crate) fn followed_links(&self) -> &[(PathBuf, PathBuf)] {
         &self.followed_links
+    }
+
+    pub(crate) fn resolved_parent(&self) -> Option<&RuntimeStateResolvedParent> {
+        self.resolved_parent.as_ref()
     }
 }
 
@@ -42,6 +85,7 @@ pub(crate) enum RuntimeStateSourceRevision {
     Present {
         path: RuntimeStatePathIdentity,
         bytes: Arc<[u8]>,
+        file_identity: Option<RuntimeStateFileIdentity>,
     },
 }
 
@@ -54,6 +98,19 @@ impl RuntimeStateSourceRevision {
         Self::Present {
             path,
             bytes: bytes.into(),
+            file_identity: None,
+        }
+    }
+
+    pub(crate) fn present_observed(
+        path: RuntimeStatePathIdentity,
+        bytes: impl Into<Arc<[u8]>>,
+        file_identity: RuntimeStateFileIdentity,
+    ) -> Self {
+        Self::Present {
+            path,
+            bytes: bytes.into(),
+            file_identity: Some(file_identity),
         }
     }
 
@@ -69,6 +126,28 @@ impl RuntimeStateSourceRevision {
             Self::Present { bytes, .. } => Some(bytes),
         }
     }
+
+    pub(crate) fn file_identity(&self) -> Option<RuntimeStateFileIdentity> {
+        match self {
+            Self::Missing { .. } => None,
+            Self::Present { file_identity, .. } => *file_identity,
+        }
+    }
+
+    pub(crate) fn with_path_identity(&self, path: RuntimeStatePathIdentity) -> Self {
+        match self {
+            Self::Missing { .. } => Self::Missing { path },
+            Self::Present {
+                bytes,
+                file_identity,
+                ..
+            } => Self::Present {
+                path,
+                bytes: Arc::clone(bytes),
+                file_identity: *file_identity,
+            },
+        }
+    }
 }
 
 impl fmt::Debug for RuntimeStateSourceRevision {
@@ -78,10 +157,15 @@ impl fmt::Debug for RuntimeStateSourceRevision {
                 .debug_struct("Missing")
                 .field("path", path)
                 .finish(),
-            Self::Present { path, bytes } => formatter
+            Self::Present {
+                path,
+                bytes,
+                file_identity,
+            } => formatter
                 .debug_struct("Present")
                 .field("path", path)
                 .field("byte_len", &bytes.len())
+                .field("file_identity", file_identity)
                 .finish(),
         }
     }

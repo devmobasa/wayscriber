@@ -171,7 +171,7 @@ pub(crate) struct SupportedResetAuthoritySnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SupportedResetAuthorityState {
     WaitingForPrerequisite,
-    Captured(SupportedResetAuthoritySnapshot),
+    Captured(Box<SupportedResetAuthoritySnapshot>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -278,7 +278,7 @@ impl RuntimeUiStateController {
         );
         debug_assert!(
             matches!(file_status, RuntimeUiFileStatus::Supported)
-                || (acknowledged.model.is_empty() && acknowledged.passthrough.values().is_empty()),
+                || (acknowledged.model.is_empty() && acknowledged.passthrough.is_empty()),
             "missing, unsupported, and invalid startup authorities cannot carry decoded V1 state"
         );
         let acknowledged = if matches!(file_status, RuntimeUiFileStatus::Supported) {
@@ -295,8 +295,8 @@ impl RuntimeUiStateController {
         );
         let seeds = InteractionSeedRegistry::from_validated(seeds);
         let mut model = acknowledged.model.clone();
-        let passthrough = acknowledged.passthrough.clone();
-        let needs_cleanup = model.reconcile(&seeds);
+        let mut passthrough = acknowledged.passthrough.clone();
+        let needs_cleanup = model.reconcile(&seeds) | passthrough.reconcile_entries(&model);
         let live_only_overlay = RuntimeUiLiveOnlyOverlay::default();
         let live_state = RuntimeUiLiveState::rebuild(&seeds, &model, &live_only_overlay);
         let canonical = RuntimeUiWireState {
@@ -521,15 +521,18 @@ impl RuntimeUiStateController {
         }
 
         let previous_model = self.model.clone();
+        let previous_passthrough = self.passthrough.clone();
         if !self.model.apply(&permit.guards, &desired_values) {
             return CommitResult::NoChange;
         }
+        self.passthrough.reconcile_entries(&self.model);
         self.rebuild_live_state();
         let snapshot = self.canonical_wire();
         match self.pipeline.accept_replace(snapshot, self.authority_epoch) {
             Ok(through) => CommitResult::Accepted { through },
             Err(error) => {
                 self.model = previous_model;
+                self.passthrough = previous_passthrough;
                 self.rebuild_live_state();
                 CommitResult::RejectedPersistence(error)
             }
@@ -688,7 +691,7 @@ impl RuntimeUiStateController {
             authority: if waiting {
                 SupportedResetAuthorityState::WaitingForPrerequisite
             } else {
-                SupportedResetAuthorityState::Captured(self.capture_reset_authority())
+                SupportedResetAuthorityState::Captured(Box::new(self.capture_reset_authority()))
             },
         });
         if let Err(error) = self.pipeline.stage_supported_reset(through, publish_epoch) {
@@ -782,7 +785,7 @@ impl RuntimeUiStateController {
             authority: if waiting {
                 SupportedResetAuthorityState::WaitingForPrerequisite
             } else {
-                SupportedResetAuthorityState::Captured(self.capture_reset_authority())
+                SupportedResetAuthorityState::Captured(Box::new(self.capture_reset_authority()))
             },
         });
         if let Err(error) =
@@ -1036,7 +1039,7 @@ impl RuntimeUiStateController {
             return Err(ExternalAuthorityInstallError::FileStatusMismatch);
         }
         if !matches!(file_status, RuntimeUiFileStatus::Supported)
-            && (!model.is_empty() || !passthrough.values().is_empty())
+            && (!model.is_empty() || !passthrough.is_empty())
         {
             return Err(ExternalAuthorityInstallError::UnexpectedDecodedAuthority);
         }
@@ -1064,9 +1067,11 @@ impl RuntimeUiStateController {
             .unwrap_or_else(|| (self.seeds.clone(), BTreeSet::new()));
         let mut canonical_model = model;
         canonical_model.reconcile(&next_seeds);
+        let mut canonical_passthrough = passthrough.clone();
+        canonical_passthrough.reconcile_entries(&canonical_model);
         let canonical_wire = RuntimeUiWireState {
             model: canonical_model.clone(),
-            passthrough: passthrough.clone(),
+            passthrough: canonical_passthrough.clone(),
         };
         let needs_cleanup = matches!(file_status, RuntimeUiFileStatus::Supported)
             && canonical_wire != observed_wire;
@@ -1080,7 +1085,7 @@ impl RuntimeUiStateController {
         self.seeds = next_seeds;
         self.file_status = file_status;
         self.model = canonical_model;
-        self.passthrough = passthrough;
+        self.passthrough = canonical_passthrough;
         self.pipeline
             .install_acknowledged_authority(observation.revision.clone(), observed_wire);
         if retains_live_only_authority {
@@ -1192,7 +1197,9 @@ impl RuntimeUiStateController {
         let mut next_live_only_overlay = self.live_only_overlay.clone();
         next_live_only_overlay.reconcile(&changed_targets);
         let mut next_model = self.model.clone();
-        let pruned = next_model.reconcile(&next_seeds);
+        let mut next_passthrough = self.passthrough.clone();
+        let pruned =
+            next_model.reconcile(&next_seeds) | next_passthrough.reconcile_entries(&next_model);
         let next_live_state =
             RuntimeUiLiveState::rebuild(&next_seeds, &next_model, &next_live_only_overlay);
         let needs_cleanup = pruned
@@ -1207,6 +1214,7 @@ impl RuntimeUiStateController {
         self.seeds = next_seeds;
         self.live_only_overlay = next_live_only_overlay;
         self.model = next_model;
+        self.passthrough = next_passthrough;
         self.live_state = next_live_state;
         let cleanup_through = if needs_cleanup {
             Some(
@@ -1237,9 +1245,11 @@ impl RuntimeUiStateController {
         next_live_only_overlay.reconcile(&changed_targets);
         let mut next_model = self.model.clone();
         next_model.reconcile(&next_seeds);
+        let mut next_passthrough = self.passthrough.clone();
+        next_passthrough.reconcile_entries(&next_model);
         let canonical = RuntimeUiWireState {
             model: next_model.clone(),
-            passthrough: self.passthrough.clone(),
+            passthrough: next_passthrough.clone(),
         };
         let needs_cleanup = matches!(self.file_status, RuntimeUiFileStatus::Supported)
             && canonical != *self.pipeline.acknowledged_wire();
@@ -1251,6 +1261,7 @@ impl RuntimeUiStateController {
         self.seeds = next_seeds;
         self.live_only_overlay = next_live_only_overlay;
         self.model = next_model;
+        self.passthrough = next_passthrough;
         self.rebuild_live_state();
 
         if needs_cleanup {
@@ -1327,7 +1338,7 @@ impl RuntimeUiStateController {
     fn capture_reset_authority_after_prerequisite(&mut self) {
         let snapshot = self.capture_reset_authority();
         if let Some(transaction) = &mut self.supported_reset {
-            transaction.authority = SupportedResetAuthorityState::Captured(snapshot);
+            transaction.authority = SupportedResetAuthorityState::Captured(Box::new(snapshot));
         }
     }
 

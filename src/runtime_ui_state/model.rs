@@ -28,6 +28,22 @@ impl RuntimeUiModel {
         self.overrides.is_empty()
     }
 
+    pub(in crate::runtime_ui_state) fn insert_decoded(
+        &mut self,
+        target: InteractionSeedTarget,
+        runtime_override: RuntimeOverride,
+    ) -> Result<(), InteractionSeedTarget> {
+        if !target.is_runtime_owned()
+            || !runtime_override.seed.matches_target(&target)
+            || !runtime_override.value.matches_target(&target)
+            || self.overrides.contains_key(&target)
+        {
+            return Err(target);
+        }
+        self.overrides.insert(target, runtime_override);
+        Ok(())
+    }
+
     pub(crate) fn apply(
         &mut self,
         guards: &[SeedGuard],
@@ -79,12 +95,25 @@ pub(crate) struct RuntimeUiWireState {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct WirePassthrough {
-    values: BTreeMap<String, String>,
+    pub(in crate::runtime_ui_state) top_level: BTreeMap<String, String>,
+    pub(in crate::runtime_ui_state) toolbar: BTreeMap<String, String>,
+    pub(in crate::runtime_ui_state) boards: BTreeMap<String, String>,
+    pub(in crate::runtime_ui_state) entries:
+        BTreeMap<InteractionSeedTarget, BTreeMap<String, String>>,
 }
 
 impl WirePassthrough {
-    pub(crate) fn values(&self) -> &BTreeMap<String, String> {
-        &self.values
+    pub(crate) fn is_empty(&self) -> bool {
+        self.top_level.is_empty()
+            && self.toolbar.is_empty()
+            && self.boards.is_empty()
+            && self.entries.values().all(BTreeMap::is_empty)
+    }
+
+    pub(crate) fn reconcile_entries(&mut self, model: &RuntimeUiModel) -> bool {
+        let before = self.entries.len();
+        self.entries.retain(|target, _| model.get(target).is_some());
+        self.entries.len() != before
     }
 }
 

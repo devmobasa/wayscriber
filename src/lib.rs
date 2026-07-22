@@ -30,8 +30,8 @@ pub mod paths;
 mod process_broker;
 pub mod render_profiles;
 pub mod runtime_capabilities;
-// Phase 2 establishes the controller contract before later phases route UI
-// producers and the storage actor through it.
+// Phases 2-3 establish the controller and storage contracts before later
+// phases route live UI producers through them.
 #[allow(dead_code)]
 pub(crate) mod runtime_ui_state;
 pub mod session;

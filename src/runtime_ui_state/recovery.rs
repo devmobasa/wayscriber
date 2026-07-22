@@ -136,6 +136,12 @@ pub(crate) struct InvalidStateResetConfirmation {
     envelope: RuntimeStateObservedEnvelope,
 }
 
+impl InvalidStateResetConfirmation {
+    pub(in crate::runtime_ui_state) fn revision(&self) -> &RuntimeStateSourceRevision {
+        &self.revision
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum PersistenceRecoveryAction {
     RetryPending,
