@@ -21,6 +21,7 @@ use helpers::{
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarSettingsModel {
     toggles: Vec<ToolbarSettingsToggle>,
+    notices: Vec<ToolbarSettingsNotice>,
     buttons: Vec<ToolbarSettingsButton>,
     groups: Vec<ToolbarSettingsCustomizeGroup>,
     item_overrides: Vec<ToolbarSettingsItemOverride>,
@@ -166,6 +167,11 @@ impl ToolbarSettingsModel {
             toggles.clear();
         }
 
+        let notices = if customizing {
+            Vec::new()
+        } else {
+            runtime_persistence_notices(snapshot)
+        };
         let buttons = if customizing {
             customize_buttons(snapshot)
         } else {
@@ -192,8 +198,13 @@ impl ToolbarSettingsModel {
             Vec::new()
         };
 
-        (!toggles.is_empty() || !buttons.is_empty() || !item_overrides.is_empty()).then_some(Self {
+        (!toggles.is_empty()
+            || !notices.is_empty()
+            || !buttons.is_empty()
+            || !item_overrides.is_empty())
+        .then_some(Self {
             toggles,
+            notices,
             buttons,
             groups,
             item_overrides,
@@ -230,6 +241,10 @@ impl ToolbarSettingsModel {
 
     pub(crate) fn buttons(&self) -> &[ToolbarSettingsButton] {
         &self.buttons
+    }
+
+    pub(crate) fn notices(&self) -> &[ToolbarSettingsNotice] {
+        &self.notices
     }
 
     pub(crate) fn groups(&self) -> &[ToolbarSettingsCustomizeGroup] {
@@ -367,4 +382,106 @@ pub(crate) struct ToolbarSettingsButton {
     pub(crate) event: ToolbarEvent,
     pub(crate) icon: ToolbarIcon,
     pub(crate) tooltip: ToolbarTooltip,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ToolbarSettingsNotice {
+    pub(crate) text: Cow<'static, str>,
+    pub(crate) severity: ToolbarSettingsNoticeSeverity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolbarSettingsNoticeSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
+fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsNotice> {
+    use crate::ui::toolbar::RuntimeUiPersistenceMode as Mode;
+
+    let Some(runtime) = &snapshot.runtime_ui_persistence else {
+        return Vec::new();
+    };
+    let (summary, severity) = match &runtime.mode {
+        Mode::Missing => (
+            "Runtime preferences use configured defaults",
+            ToolbarSettingsNoticeSeverity::Info,
+        ),
+        Mode::Supported => (
+            "Runtime preferences are saved separately",
+            ToolbarSettingsNoticeSeverity::Info,
+        ),
+        Mode::UnsupportedReadOnly { .. } => (
+            "Runtime preferences are read-only (newer format)",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::Resetting => (
+            "Resetting runtime preferences…",
+            ToolbarSettingsNoticeSeverity::Info,
+        ),
+        Mode::AwaitingUnsupportedResetConfirmation { .. } => (
+            "Confirm reset of newer runtime-state data",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::Unhealthy => (
+            "Runtime preference persistence is blocked",
+            ToolbarSettingsNoticeSeverity::Error,
+        ),
+        Mode::Recovering => (
+            "Recovering runtime preference persistence…",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::CancellingRecovery => (
+            "Waiting for the active recovery write…",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::AwaitingInvalidResetConfirmation => (
+            "Confirm preservation and reset of invalid data",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+    };
+    let mut notices = Vec::new();
+    push_wrapped_notice(&mut notices, summary, severity);
+    if let Some(detail) = &runtime.detail {
+        push_wrapped_notice(&mut notices, detail, severity);
+    }
+    push_wrapped_notice(
+        &mut notices,
+        &format!("Runtime state: {}", runtime.path.display()),
+        ToolbarSettingsNoticeSeverity::Info,
+    );
+    for path in &runtime.recovery_artifacts {
+        push_wrapped_notice(
+            &mut notices,
+            &format!("Preserved recovery file: {}", path.display()),
+            ToolbarSettingsNoticeSeverity::Warning,
+        );
+    }
+    notices
+}
+
+fn push_wrapped_notice(
+    notices: &mut Vec<ToolbarSettingsNotice>,
+    text: &str,
+    severity: ToolbarSettingsNoticeSeverity,
+) {
+    // The Cairo settings renderers ellipsize individual rows. Conservative
+    // fixed-size character chunks keep all diagnostic and artifact path text
+    // visible across rows instead of silently dropping the tail.
+    const MAX_NOTICE_CHARS: usize = 20;
+    let chars: Vec<char> = text.chars().collect();
+    if chars.is_empty() {
+        notices.push(ToolbarSettingsNotice {
+            text: Cow::Borrowed(""),
+            severity,
+        });
+        return;
+    }
+    for chunk in chars.chunks(MAX_NOTICE_CHARS) {
+        notices.push(ToolbarSettingsNotice {
+            text: Cow::Owned(chunk.iter().collect()),
+            severity,
+        });
+    }
 }

@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
 use crate::input::state::test_support::make_test_input_state;
+use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarEvent};
 
 fn input_from_config(config: &Config) -> InputState {
     let mut input = make_test_input_state();
@@ -28,6 +29,15 @@ fn input_from_config(config: &Config) -> InputState {
 }
 
 fn test_runtime(config: &Config, path: &Path) -> ToolbarRuntimeState {
+    let runtime = test_runtime_allow_startup_incident(config, path);
+    assert!(!matches!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::Unhealthy
+    ));
+    runtime
+}
+
+fn test_runtime_allow_startup_incident(config: &Config, path: &Path) -> ToolbarRuntimeState {
     fs::create_dir_all(path.parent().expect("runtime parent")).unwrap();
     let store = RuntimeUiStateStore::new(path);
     let mut board_pin_seeds = board_pin_seeds_from_input(&input_from_config(config));
@@ -35,9 +45,10 @@ fn test_runtime(config: &Config, path: &Path) -> ToolbarRuntimeState {
     retain_stored_board_pin_seeds_for_session_restore(&mut board_pin_seeds, &inspection);
     let bootstrap = inspection
         .into_controller_bootstrap(runtime_seeds_from_config(config, &board_pin_seeds).unwrap());
-    assert!(bootstrap.startup_incident.is_none());
     let mut runtime = ToolbarRuntimeState {
         controller: bootstrap.controller,
+        runtime_path: path.to_path_buf(),
+        lifecycle: RuntimeUiLifecycleState::startup(bootstrap.startup_incident),
         board_pin_seeds,
         deferred_board_pin_restores: BTreeMap::new(),
         writer: Some(RuntimeUiStateWriter::spawn(store).unwrap()),
@@ -58,6 +69,8 @@ fn controller_only_runtime(config: &Config, path: &Path) -> ToolbarRuntimeState 
         .into_controller_bootstrap(runtime_seeds_from_config(config, &board_pin_seeds).unwrap());
     ToolbarRuntimeState {
         controller: bootstrap.controller,
+        runtime_path: path.to_path_buf(),
+        lifecycle: RuntimeUiLifecycleState::startup(bootstrap.startup_incident),
         board_pin_seeds,
         deferred_board_pin_restores: BTreeMap::new(),
         writer: None,
@@ -74,6 +87,7 @@ fn settle_runtime(runtime: &mut ToolbarRuntimeState) -> ToolbarRuntimeDrain {
         let drain = runtime.drain_writer_completions();
         combined.rollbacks.extend(drain.rollbacks);
         combined.rebuild_live |= drain.rebuild_live;
+        combined.lifecycle_changed |= drain.lifecycle_changed;
         let pipeline = runtime.controller.pipeline();
         if pipeline.settled_through() == pipeline.latest_accepted()
             && !pipeline.has_source_mutation_in_flight()
@@ -84,6 +98,24 @@ fn settle_runtime(runtime: &mut ToolbarRuntimeState) -> ToolbarRuntimeDrain {
         thread::sleep(Duration::from_millis(5));
     }
     panic!("runtime writer did not settle");
+}
+
+fn wait_for_runtime_mode(
+    runtime: &mut ToolbarRuntimeState,
+    expected: RuntimeUiPersistenceMode,
+) -> RuntimeUiPersistenceSnapshot {
+    for _ in 0..800 {
+        runtime.drain_writer_completions();
+        let snapshot = runtime.persistence_snapshot();
+        if snapshot.mode == expected {
+            return snapshot;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    panic!(
+        "runtime UI lifecycle did not reach {expected:?}; last state: {:?}",
+        runtime.persistence_snapshot()
+    );
 }
 
 fn apply_finish(
@@ -242,6 +274,279 @@ fn runtime_rebuild_reuses_minimize_and_pane_transition_cleanup() {
     assert_eq!(rebuilt.toolbar_side_pane, SidePane::Canvas);
     assert!(!rebuilt.toolbar_customize_items_open);
     assert!(rebuilt.toolbar_customize_items_group.is_none());
+    runtime.shutdown_blocking();
+}
+
+#[test]
+fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let prepared = runtime
+        .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input)
+        .expect("top-pin permit");
+    input.toolbar_top_pinned = false;
+    assert!(matches!(
+        runtime.finish_toolbar_mutation(prepared, true, &input),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert!(runtime_path.exists());
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::Supported
+    );
+
+    assert!(runtime.handle_persistence_lifecycle_event(&ToolbarEvent::RequestRuntimeUiReset));
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::Resetting
+    );
+    let drain = settle_runtime(&mut runtime);
+    assert!(drain.lifecycle_changed);
+    assert!(drain.rebuild_live);
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::Missing
+    );
+    assert!(!runtime_path.exists());
+
+    let mut positions = ToolbarPositionSnapshot {
+        top: (0.0, 0.0),
+        side: (0.0, 0.0),
+    };
+    runtime.apply_live_state(&mut input, &mut positions);
+    assert_eq!(input.toolbar_top_pinned, config.ui.toolbar.top_pinned);
+}
+
+#[test]
+fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let artifact_path = temp.path().join("runtime-ui.wayscriber-recovery-test.toml");
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = controller_only_runtime(&config, &runtime_path);
+
+    let prepared = runtime
+        .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input)
+        .expect("top-pin permit");
+    input.toolbar_top_pinned = false;
+    let desired = toolbar_values(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input).unwrap();
+    assert!(matches!(
+        runtime.controller.finish_preview(
+            PreviewFinishRequest::RuntimeUi {
+                session: prepared.session,
+                intent: RuntimePreviewFinishIntent::Commit(desired),
+            },
+            |_, _| unreachable!(),
+        ),
+        PreviewFinishResult::AcceptedRuntime { .. }
+    ));
+    let request = runtime
+        .controller
+        .take_source_mutation()
+        .expect("undispatched replacement");
+    let new_source = RuntimeStateSourceRevision::present(
+        request.expected_source.path_identity().clone(),
+        b"version = 1\n".as_slice(),
+    );
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: artifact_path.clone(),
+        observation: RuntimeStateSourceObservation {
+            revision: new_source.clone(),
+            envelope: RuntimeStateObservedEnvelope::Version(1),
+        },
+    };
+    runtime.integrate_writer_completion(RuntimeStateWriterCompletion::SourceMutation(
+        SourceMutationResult::Applied {
+            id: request.id,
+            applied_through: request.accepted_through,
+            new_source,
+            recovery_artifacts: vec![artifact],
+        },
+    ));
+
+    assert_eq!(
+        runtime.persistence_snapshot().recovery_artifacts,
+        vec![artifact_path]
+    );
+}
+
+#[test]
+fn unsupported_runtime_reset_requires_confirmation_and_preserves_exact_source() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let unsupported = b"version = 73\nfuture = 'preserve exactly'\n";
+    fs::write(&runtime_path, unsupported).unwrap();
+    let config = Config::default();
+    let mut runtime = test_runtime(&config, &runtime_path);
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::UnsupportedReadOnly { version: Some(73) }
+    );
+
+    assert!(runtime.handle_persistence_lifecycle_event(&ToolbarEvent::RequestRuntimeUiReset));
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::AwaitingUnsupportedResetConfirmation { version: Some(73) }
+    );
+    assert!(
+        runtime.handle_persistence_lifecycle_event(&ToolbarEvent::CancelUnsupportedRuntimeUiReset)
+    );
+    assert_eq!(fs::read(&runtime_path).unwrap(), unsupported);
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::UnsupportedReadOnly { version: Some(73) }
+    );
+
+    assert!(runtime.handle_persistence_lifecycle_event(&ToolbarEvent::RequestRuntimeUiReset));
+    assert!(
+        runtime.handle_persistence_lifecycle_event(&ToolbarEvent::ConfirmUnsupportedRuntimeUiReset)
+    );
+    let snapshot = wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Missing);
+    assert!(!runtime_path.exists());
+    assert_eq!(snapshot.recovery_artifacts.len(), 1);
+    assert_eq!(
+        fs::read(&snapshot.recovery_artifacts[0]).unwrap(),
+        unsupported
+    );
+}
+
+#[test]
+fn invalid_runtime_reset_keeps_the_incident_handle_paired_with_confirmation() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let invalid = b"this is not = valid = toml\n";
+    fs::write(&runtime_path, invalid).unwrap();
+    let config = Config::default();
+    let mut runtime = test_runtime_allow_startup_incident(&config, &runtime_path);
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::Unhealthy
+    );
+
+    assert!(
+        runtime.handle_persistence_lifecycle_event(
+            &ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        )
+    );
+    assert!(
+        runtime.has_retained_recovery_client(),
+        "the adapter owns cancellation and completion until the exact attempt terminalizes"
+    );
+    wait_for_runtime_mode(
+        &mut runtime,
+        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
+    );
+    assert!(
+        runtime
+            .handle_persistence_lifecycle_event(&ToolbarEvent::CancelPreserveInvalidRuntimeUiReset)
+    );
+    assert_eq!(fs::read(&runtime_path).unwrap(), invalid);
+    assert_eq!(
+        runtime.persistence_snapshot().mode,
+        RuntimeUiPersistenceMode::Unhealthy
+    );
+
+    assert!(
+        runtime.handle_persistence_lifecycle_event(
+            &ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        )
+    );
+    wait_for_runtime_mode(
+        &mut runtime,
+        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
+    );
+    assert!(
+        runtime.handle_persistence_lifecycle_event(
+            &ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+        )
+    );
+    let snapshot = wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Missing);
+    assert!(!runtime_path.exists());
+    assert_eq!(snapshot.recovery_artifacts.len(), 1);
+    assert_eq!(fs::read(&snapshot.recovery_artifacts[0]).unwrap(), invalid);
+}
+
+#[test]
+fn cancelling_read_only_recovery_returns_the_same_incident_to_the_actor() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let invalid = b"not valid runtime state";
+    fs::write(&runtime_path, invalid).unwrap();
+    let config = Config::default();
+    let mut runtime = test_runtime_allow_startup_incident(&config, &runtime_path);
+
+    assert!(
+        runtime.handle_persistence_lifecycle_event(
+            &ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        )
+    );
+    assert!(runtime.has_retained_recovery_client());
+    assert!(runtime.handle_persistence_lifecycle_event(&ToolbarEvent::CancelRuntimeUiRecovery));
+    wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Unhealthy);
+    assert!(!runtime.has_retained_recovery_client());
+    assert_eq!(fs::read(&runtime_path).unwrap(), invalid);
+
+    // The returned capability remains owned by this exact incident, so a
+    // subsequent actor action can check it out again instead of stranding the
+    // barrier behind an inert cancellation token.
+    assert!(
+        runtime.handle_persistence_lifecycle_event(
+            &ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        )
+    );
+    wait_for_runtime_mode(
+        &mut runtime,
+        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation,
+    );
+}
+
+#[test]
+fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    fs::write(&runtime_path, b"not valid runtime state").unwrap();
+    let config_a = Config::default();
+    let mut input = input_from_config(&config_a);
+    let mut positions = ToolbarPositionSnapshot {
+        top: (
+            config_a.ui.toolbar.top_offset,
+            config_a.ui.toolbar.top_offset_y,
+        ),
+        side: (
+            config_a.ui.toolbar.side_offset_x,
+            config_a.ui.toolbar.side_offset,
+        ),
+    };
+    let mut runtime = test_runtime_allow_startup_incident(&config_a, &runtime_path);
+
+    assert!(
+        runtime.handle_persistence_lifecycle_event(
+            &ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        )
+    );
+    let mut config_b = config_a;
+    config_b.ui.toolbar.top_pinned = false;
+    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    assert!(!refresh.applied, "the reload is staged behind recovery");
+    assert!(
+        input.toolbar_top_pinned,
+        "live input still has the old seed"
+    );
+
+    assert!(runtime.handle_persistence_lifecycle_event(&ToolbarEvent::CancelRuntimeUiRecovery));
+    let drain = runtime.drain_writer_completions();
+    assert!(
+        drain.rebuild_live,
+        "synchronous cancellation must publish the staged live authority"
+    );
+    runtime.apply_live_state(&mut input, &mut positions);
+    assert!(!input.toolbar_top_pinned);
     runtime.shutdown_blocking();
 }
 

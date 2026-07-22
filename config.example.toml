@@ -2,7 +2,12 @@
 # Location: ~/.config/wayscriber/config.toml
 #
 # All settings are optional. If not specified, defaults will be used.
-# Delete this file to reset to defaults.
+# This file contains authored/configured defaults. Overlay changes to toolbar
+# pins, minimized/pane/collapsed state, toolbar item visibility/order, and board
+# pins are stored separately in $XDG_DATA_HOME/wayscriber/runtime-ui.toml
+# (normally ~/.local/share/wayscriber/runtime-ui.toml). Reset those generated
+# runtime preferences from the overlay Settings panel; do not hand-edit them.
+# Delete this config file only to reset authored settings to built-in defaults.
 
 # Internal migration provenance. Keep this value when editing the file.
 config_revision = 2

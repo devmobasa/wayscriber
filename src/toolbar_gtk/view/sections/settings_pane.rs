@@ -51,6 +51,18 @@ fn content(ctx: &mut SectionCtx, settings_model: &model::ToolbarSettingsModel) -
     if let Some(grid) = toggle_grid(ctx, settings_model) {
         column.append(&grid);
     }
+    for notice in settings_model.notices() {
+        let label = gtk4::Label::new(Some(notice.text.as_ref()));
+        label.set_xalign(0.0);
+        label.set_wrap(true);
+        label.set_selectable(true);
+        match notice.severity {
+            model::ToolbarSettingsNoticeSeverity::Info => {}
+            model::ToolbarSettingsNoticeSeverity::Warning => label.add_css_class("warning"),
+            model::ToolbarSettingsNoticeSeverity::Error => label.add_css_class("error"),
+        }
+        column.append(&label);
+    }
     if let Some(grid) = buttons_grid(ctx, settings_model.buttons()) {
         column.append(&grid);
     }
@@ -219,6 +231,9 @@ fn settings_button(ctx: &SectionCtx, button_model: &model::ToolbarSettingsButton
     }
     if let Some(tooltip) = button_model.tooltip.as_string() {
         button.set_tooltip_text(Some(&tooltip));
+    }
+    if button_model.event.is_destructive() {
+        button.add_css_class("destructive-action");
     }
     let sender = ctx.feedback.clone();
     let event = button_model.event.clone();

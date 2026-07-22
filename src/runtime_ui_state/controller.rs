@@ -122,7 +122,9 @@ pub(crate) enum CancelUnsupportedResetConfirmationResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SubmitSourceMutationResult {
-    Integrated,
+    Integrated {
+        recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
+    },
     ResetCompleted {
         barrier: ControllerBarrierId,
         published_epoch: u64,
@@ -395,6 +397,10 @@ impl RuntimeUiStateController {
 
     pub(crate) fn live_state(&self) -> &RuntimeUiLiveState {
         &self.live_state
+    }
+
+    pub(crate) fn file_status(&self) -> &RuntimeUiFileStatus {
+        &self.file_status
     }
 
     pub(crate) fn active_barrier(&self) -> Option<&ActiveControllerBarrier> {
@@ -845,7 +851,10 @@ impl RuntimeUiStateController {
         };
 
         match &integrated.result {
-            SourceMutationResult::Applied { .. } => {
+            SourceMutationResult::Applied {
+                recovery_artifacts, ..
+            } => {
+                let recovery_artifacts = recovery_artifacts.clone();
                 if matches!(&integrated.request.kind, SourceMutationKind::Replace(_)) {
                     self.file_status = RuntimeUiFileStatus::Supported;
                 }
@@ -877,7 +886,7 @@ impl RuntimeUiStateController {
                         return SubmitSourceMutationResult::Rejected(error);
                     }
                 }
-                SubmitSourceMutationResult::Integrated
+                SubmitSourceMutationResult::Integrated { recovery_artifacts }
             }
             SourceMutationResult::SourceChangedBeforeMutation { active, .. } => {
                 self.enter_external_reconciliation(

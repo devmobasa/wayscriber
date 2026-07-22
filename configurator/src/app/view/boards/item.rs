@@ -146,7 +146,7 @@ impl ConfiguratorApp {
                     Message::BoardsItemToggleChanged(index, BoardItemToggleField::Persist, value)
                 }),
             checkbox(item.pinned)
-                .label("Pinned")
+                .label("Configured default pinned")
                 .on_toggle(move |value| {
                     Message::BoardsItemToggleChanged(index, BoardItemToggleField::Pinned, value)
                 }),

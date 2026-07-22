@@ -5,6 +5,7 @@
 //! models and `InputState` never see storage or controller details.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
@@ -19,7 +20,10 @@ use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
 mod board;
 mod coordinator;
+mod lifecycle;
 mod wayland;
+
+use lifecycle::RuntimeUiLifecycleState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(in crate::backend::wayland) struct ToolbarPositionSnapshot {
@@ -45,6 +49,7 @@ pub(in crate::backend::wayland) struct ToolbarSeedRefresh {
 struct ToolbarRuntimeDrain {
     rollbacks: Vec<PreviewRollbackSnapshot>,
     rebuild_live: bool,
+    lifecycle_changed: bool,
 }
 
 #[derive(Debug)]
@@ -84,6 +89,8 @@ struct ActivePositionDrag {
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct ToolbarRuntimeState {
     controller: RuntimeUiStateController,
+    runtime_path: PathBuf,
+    lifecycle: RuntimeUiLifecycleState,
     board_pin_seeds: BTreeMap<String, bool>,
     deferred_board_pin_restores: BTreeMap<String, DeferredBoardPinRestore>,
     writer: Option<RuntimeUiStateWriter>,

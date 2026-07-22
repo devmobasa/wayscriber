@@ -296,6 +296,17 @@ pub enum ToolbarEvent {
     ClearSession,
     OpenConfigurator,
     OpenConfigFile,
+    /// Reset generated runtime UI preferences. Supported state resets
+    /// immediately; newer unsupported state first requests confirmation.
+    RequestRuntimeUiReset,
+    ConfirmUnsupportedRuntimeUiReset,
+    CancelUnsupportedRuntimeUiReset,
+    RetryRuntimeUiPersistence,
+    DiscardPendingRuntimeUiAndAdoptDisk,
+    RequestPreserveInvalidRuntimeUiReset,
+    ConfirmPreserveInvalidRuntimeUiReset,
+    CancelPreserveInvalidRuntimeUiReset,
+    CancelRuntimeUiRecovery,
     /// Open (toggle) the command palette overlay.
     OpenCommandPalette,
     ToggleCustomSection(bool),
@@ -472,6 +483,10 @@ impl ToolbarEvent {
                 | ToolbarEvent::BoardDelete
                 | ToolbarEvent::PageDelete
                 | ToolbarEvent::ClearSession
+                | ToolbarEvent::RequestRuntimeUiReset
+                | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+                | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+                | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
         )
     }
 

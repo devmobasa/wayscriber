@@ -197,6 +197,27 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   IDs, paths, labels, help/search terms, and numeric constraints while the configurator keeps typed
   draft fields and messages.
 
+### Runtime UI preference persistence
+
+- `src/runtime_ui_state/` owns the versioned wire model, seed/override reconciliation, guarded
+  mutation pipeline, exact source revisions, pinned-directory store operations, recovery barriers,
+  cancellation capabilities, and per-mutation durability outcomes.
+- `src/backend/wayland/runtime_ui_state.rs` adapts toolbar and board interactions to that controller.
+  `coordinator.rs` owns previews and writer transport, `lifecycle.rs` retains the exact active
+  incident/recovery capabilities and publishes safe toolbar diagnostics, and `wayland.rs` applies
+  rollback or rebuilt live authority through normal toolbar transition cleanup.
+- Startup inspects the generated runtime-state file after config and board seeds exist. Config and
+  session reloads update the same seed registry in process; generation guards invalidate previews
+  created from stale seeds.
+- The storage worker accepts only conditional operations against an inspected source and verified
+  directory identity. Supported V1 writes preserve passthrough data. Unsupported/invalid reset
+  paths retain the original bytes as recovery artifacts, while uncertain outcomes keep a barrier
+  active until reinspection establishes authority.
+- Toolbar Settings is the presentation boundary for supported reset, unsupported-version
+  confirmation, unhealthy retry/adopt/preserve-reset actions, cancellation state, and complete
+  diagnostic/artifact paths. The actor retains recovery cancellation and completion ownership until
+  the controller terminalizes the exact attempt.
+
 ---
 
 ## 9. Session Persistence and Named Session Manager
@@ -246,6 +267,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/ui.rs` | Status/help overlays. |
 | `src/capture/` | Screenshot pipeline (manager, dependencies, sources, clipboard/file helpers). |
 | `src/config/` | Config parsing, defaults, keybinding map. |
+| `src/runtime_ui_state/` | Generated UI preference wire format, seed registry, guarded persistence, reset, and recovery state machines. |
 | `src/session/` | Configured and named session persistence, snapshots, sidecars, locks, and catalog metadata. |
 | `src/notification.rs` | Desktop notifications for capture results. |
 | `src/util/` | Shared math, color, arrow, and text utilities. |
@@ -260,7 +282,8 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 3. **Backend** sets up Wayland surfaces and loops, forwarding input to `InputState`.
 4. **InputState + draw/ui** update the overlay contents and request renders.
 5. **Capture** subsystem handles screenshot actions asynchronously and notifies the user.
-6. **Session** loads and saves configured or named session state, including runtime Open/Save As/Clear transactions.
-7. **Config** module ensures user preferences are honored everywhere.
+6. **Runtime UI state** layers direct toolbar/board preferences over configured seeds and settles guarded writes or recovery barriers.
+7. **Session** loads and saves configured or named session state, including runtime Open/Save As/Clear transactions.
+8. **Config** module ensures user preferences are honored everywhere.
 
 Use this document to trace any feature: locate the entry point (CLI, tray, keybinding), follow it through the backend/input/capture stacks, and consult the relevant modules listed above for details.

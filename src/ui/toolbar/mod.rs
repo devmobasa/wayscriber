@@ -13,6 +13,7 @@ pub use events::{
 };
 #[allow(unused_imports)]
 pub use snapshot::{
-    PresetFeedbackSnapshot, PresetSlotSnapshot, SessionRecentSnapshot, ToolContext,
-    ToolOptionsKind, ToolbarSnapshot,
+    PresetFeedbackSnapshot, PresetSlotSnapshot, RuntimeUiPersistenceMode,
+    RuntimeUiPersistenceSnapshot, SessionRecentSnapshot, ToolContext, ToolOptionsKind,
+    ToolbarSnapshot,
 };

@@ -171,6 +171,15 @@ fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
                 | ToolbarEvent::OpenCommandPalette
                 | ToolbarEvent::OpenConfigurator
                 | ToolbarEvent::OpenConfigFile
+                | ToolbarEvent::RequestRuntimeUiReset
+                | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+                | ToolbarEvent::CancelUnsupportedRuntimeUiReset
+                | ToolbarEvent::RetryRuntimeUiPersistence
+                | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+                | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+                | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+                | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
+                | ToolbarEvent::CancelRuntimeUiRecovery
         )
 }
 
@@ -184,6 +193,10 @@ impl WaylandState {
         let mut snapshot =
             ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
         populate_session_snapshot(&mut snapshot, self.session.options());
+        snapshot.runtime_ui_persistence = self
+            .runtime_ui
+            .as_ref()
+            .map(|runtime| runtime.persistence_snapshot());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_fade = self.data.top_strip_fade.value();
@@ -314,6 +327,20 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         if self.handle_toolbar_session_event(&event, conn, qh) {
+            return;
+        }
+        let persistence_lifecycle_handled = self
+            .runtime_ui
+            .as_mut()
+            .is_some_and(|runtime| runtime.handle_persistence_lifecycle_event(&event));
+        if persistence_lifecycle_handled {
+            // Read-only recovery cancellation can terminalize synchronously
+            // and install a seed reload that was staged behind the barrier.
+            // Consume that rebuild in this dispatch instead of waiting for a
+            // writer wake that may never arrive.
+            self.drain_runtime_ui_completions();
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
             return;
         }
 

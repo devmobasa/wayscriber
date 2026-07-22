@@ -70,10 +70,10 @@ fn supported_write_connects_controller_to_restart_inspection() {
     let write = commit_top_pinned(&mut controller);
     let result = store.execute_source_mutation(write);
     assert!(matches!(result, SourceMutationResult::Applied { .. }));
-    assert_eq!(
+    assert!(matches!(
         controller.submit_source_mutation(result),
-        SubmitSourceMutationResult::Integrated
-    );
+        SubmitSourceMutationResult::Integrated { .. }
+    ));
 
     let inspection = store.inspect().unwrap();
     assert_eq!(inspection.status, RuntimeUiFileStatus::Supported);
@@ -669,7 +669,7 @@ fn confirmed_unsupported_reset_runs_end_to_end_through_the_controller() {
     let result = store.execute_source_mutation(write);
     assert!(matches!(
         bootstrap.controller.submit_source_mutation(result),
-        SubmitSourceMutationResult::Integrated
+        SubmitSourceMutationResult::Integrated { .. }
     ));
     let restarted = store
         .inspect()
@@ -860,17 +860,17 @@ future_entry = "must not return"
         CommitResult::Accepted { .. }
     ));
     let removed = store.execute_source_mutation(controller.take_source_mutation().unwrap());
-    assert_eq!(
+    assert!(matches!(
         controller.submit_source_mutation(removed),
-        SubmitSourceMutationResult::Integrated
-    );
+        SubmitSourceMutationResult::Integrated { .. }
+    ));
 
     let recreated = commit_top_pinned(&mut controller);
     let recreated = store.execute_source_mutation(recreated);
-    assert_eq!(
+    assert!(matches!(
         controller.submit_source_mutation(recreated),
-        SubmitSourceMutationResult::Integrated
-    );
+        SubmitSourceMutationResult::Integrated { .. }
+    ));
     let encoded = fs::read_to_string(path).unwrap();
     assert!(encoded.contains("[toolbar.top_pinned]"));
     assert!(!encoded.contains("future_entry"));
@@ -919,10 +919,10 @@ future_entry = "must not return"
         }
     ));
     let cleanup = store.execute_source_mutation(controller.take_source_mutation().unwrap());
-    assert_eq!(
+    assert!(matches!(
         controller.submit_source_mutation(cleanup),
-        SubmitSourceMutationResult::Integrated
-    );
+        SubmitSourceMutationResult::Integrated { .. }
+    ));
     assert!(matches!(
         controller.update_seeds(seeds()),
         UpdateSeedsResult::Applied { .. }
@@ -930,10 +930,10 @@ future_entry = "must not return"
 
     let recreated = commit_top_pinned(&mut controller);
     let recreated = store.execute_source_mutation(recreated);
-    assert_eq!(
+    assert!(matches!(
         controller.submit_source_mutation(recreated),
-        SubmitSourceMutationResult::Integrated
-    );
+        SubmitSourceMutationResult::Integrated { .. }
+    ));
     let encoded = fs::read_to_string(path).unwrap();
     assert!(encoded.contains("[toolbar.top_pinned]"));
     assert!(!encoded.contains("future_entry"));

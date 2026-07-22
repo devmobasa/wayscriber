@@ -251,6 +251,10 @@ impl WaylandState {
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }
+        if drain.lifecycle_changed {
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+        }
         let deferred_finishes = self
             .runtime_ui
             .as_mut()

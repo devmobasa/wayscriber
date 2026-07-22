@@ -30,7 +30,8 @@ impl ToolbarRuntimeState {
         retain_stored_board_pin_seeds_for_session_restore(&mut board_pin_seeds, &inspection);
         let seeds = runtime_seeds_from_config(config, &board_pin_seeds)?;
         let bootstrap = inspection.into_controller_bootstrap(seeds);
-        if let Some(incident) = bootstrap.startup_incident {
+        let startup_incident = bootstrap.startup_incident;
+        if let Some(incident) = startup_incident {
             log::warn!(
                 "Runtime UI state started behind recovery barrier {:?}; runtime preference writes are blocked",
                 incident
@@ -44,6 +45,8 @@ impl ToolbarRuntimeState {
         .context("failed to start runtime UI state writer")?;
         let mut runtime = Self {
             controller: bootstrap.controller,
+            runtime_path: path.to_path_buf(),
+            lifecycle: RuntimeUiLifecycleState::startup(startup_incident),
             board_pin_seeds,
             deferred_board_pin_restores: BTreeMap::new(),
             writer: Some(writer),
@@ -354,11 +357,13 @@ impl ToolbarRuntimeState {
     }
 
     pub(super) fn drain_writer_completions(&mut self) -> ToolbarRuntimeDrain {
+        let lifecycle_before = self.persistence_snapshot();
         let mut drain = ToolbarRuntimeDrain {
             rebuild_live: std::mem::take(&mut self.live_rebuild_pending),
             ..ToolbarRuntimeDrain::default()
         };
         self.collect_preview_resolutions(&mut drain);
+        self.poll_recovery_completion();
         loop {
             let completion = match self.writer.as_ref().map(RuntimeUiStateWriter::try_recv) {
                 Some(Ok(completion)) => completion,
@@ -369,6 +374,7 @@ impl ToolbarRuntimeState {
                 }
             };
             self.integrate_writer_completion(completion);
+            self.poll_recovery_completion();
             drain.rebuild_live |= std::mem::take(&mut self.live_rebuild_pending);
             self.collect_preview_resolutions(&mut drain);
             self.dispatch_writer_command();
@@ -376,6 +382,8 @@ impl ToolbarRuntimeState {
         if self.drop_stale_active_previews() {
             drain.rebuild_live = true;
         }
+        self.poll_recovery_completion();
+        drain.lifecycle_changed = self.persistence_snapshot() != lifecycle_before;
         drain
     }
 
@@ -436,31 +444,37 @@ impl ToolbarRuntimeState {
     }
 
     pub(super) fn dispatch_writer_command(&mut self) {
-        if self.pending_writer_command.is_none() {
-            self.pending_writer_command = self
-                .controller
-                .take_source_mutation()
-                .map(RuntimeStateWriterCommand::SourceMutation)
-                .or_else(|| {
-                    self.controller
-                        .take_recovery_io_command()
-                        .map(RuntimeStateWriterCommand::Recovery)
-                });
-        }
-        let Some(command) = self.pending_writer_command.take() else {
-            return;
-        };
-        let Some(writer) = self.writer.as_ref() else {
-            self.integrate_rejected_writer_command(command);
-            return;
-        };
-        match writer.submit(command) {
-            Ok(()) => {}
-            Err(RuntimeStateWriterSubmitError::Full(command)) => {
-                self.pending_writer_command = Some(*command);
+        loop {
+            if self.pending_writer_command.is_none() {
+                self.pending_writer_command = self
+                    .controller
+                    .take_source_mutation()
+                    .map(RuntimeStateWriterCommand::SourceMutation)
+                    .or_else(|| {
+                        self.controller
+                            .take_recovery_io_command()
+                            .map(RuntimeStateWriterCommand::Recovery)
+                    });
             }
-            Err(RuntimeStateWriterSubmitError::Disconnected(command)) => {
-                self.integrate_rejected_writer_command(*command);
+            let Some(command) = self.pending_writer_command.take() else {
+                return;
+            };
+            let Some(writer) = self.writer.as_ref() else {
+                self.integrate_rejected_writer_command(command);
+                // A rejected recovery inspection can synchronously dispatch
+                // another command. Reject every such command until the exact
+                // attempt produces its terminal completion.
+                continue;
+            };
+            match writer.submit(command) {
+                Ok(()) => return,
+                Err(RuntimeStateWriterSubmitError::Full(command)) => {
+                    self.pending_writer_command = Some(*command);
+                    return;
+                }
+                Err(RuntimeStateWriterSubmitError::Disconnected(command)) => {
+                    self.integrate_rejected_writer_command(*command);
+                }
             }
         }
     }
@@ -507,6 +521,7 @@ impl ToolbarRuntimeState {
                     result,
                 };
                 let _ = self.controller.submit_persistence_recovery_io(completion);
+                self.poll_recovery_completion();
             }
         }
         self.live_rebuild_pending |= self.controller.live_state() != &live_before;
@@ -557,16 +572,37 @@ impl ToolbarRuntimeState {
     pub(super) fn handle_source_mutation_result(&mut self, result: SourceMutationResult) {
         match self.controller.submit_source_mutation(result) {
             SubmitSourceMutationResult::ExternalReconciliationRequired {
-                barrier, active, ..
-            } => self.install_external_authority(barrier, active),
+                barrier,
+                active,
+                recovery_artifacts,
+                ..
+            } => {
+                self.note_recovery_artifacts(&recovery_artifacts);
+                self.install_external_authority(barrier, active);
+            }
             SubmitSourceMutationResult::PersistenceUnhealthy {
-                incident, error, ..
-            } => log::warn!(
-                "Runtime UI persistence is blocked by incident {:?}: {}",
                 incident,
-                error.message()
-            ),
+                error,
+                recovery_artifacts,
+                ..
+            } => {
+                self.note_persistence_unhealthy(incident, &error, &recovery_artifacts);
+                log::warn!(
+                    "Runtime UI persistence is blocked by incident {:?}: {}",
+                    incident,
+                    error.message()
+                );
+            }
+            SubmitSourceMutationResult::ResetCompleted {
+                recovery_artifacts, ..
+            } => self.note_reset_completed(&recovery_artifacts),
+            SubmitSourceMutationResult::Integrated { recovery_artifacts } => {
+                self.note_recovery_artifacts(&recovery_artifacts)
+            }
             SubmitSourceMutationResult::Rejected(error) => {
+                self.note_lifecycle_error(format!(
+                    "Runtime UI writer completion was rejected: {error:?}"
+                ));
                 log::error!("Runtime UI writer completion was rejected: {error:?}");
             }
             _ => {}
@@ -586,14 +622,28 @@ impl ToolbarRuntimeState {
             }
         };
         let RuntimeUiWireState { model, passthrough } = wire;
-        if let Err(error) = self.controller.install_external_authority(
+        match self.controller.install_external_authority(
             barrier,
             observation,
             status,
             model,
             passthrough,
         ) {
-            log::warn!("Could not install externally changed runtime UI authority: {error:?}");
+            Ok(result) => {
+                self.note_recovery_artifacts(&result.evidence.recovery_artifacts);
+                if self.controller.active_barrier().is_none() {
+                    self.note_external_authority_installed();
+                }
+            }
+            Err(error) => {
+                if let ExternalAuthorityInstallError::InvalidAuthority { incident } = error {
+                    self.note_invalid_external_authority(incident);
+                }
+                self.note_lifecycle_error(format!(
+                    "Could not install externally changed runtime UI authority: {error:?}"
+                ));
+                log::warn!("Could not install externally changed runtime UI authority: {error:?}");
+            }
         }
     }
 }

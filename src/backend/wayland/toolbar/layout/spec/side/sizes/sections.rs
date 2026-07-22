@@ -184,6 +184,12 @@ impl ToolbarLayoutSpec {
         } else {
             0.0
         };
+        let notice_rows = settings.notices().len();
+        let notices_h = if notice_rows > 0 {
+            toggle_h * notice_rows as f64 + toggle_gap * notice_rows as f64
+        } else {
+            0.0
+        };
         let group_rows = settings.groups().len().div_ceil(2);
         let group_rows_h = if group_rows > 0 {
             toggle_h
@@ -211,8 +217,13 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_SEGMENT_HEIGHT + toggle_gap
         };
-        let content_h =
-            mode_row_h + toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
+        let content_h = mode_row_h
+            + toggle_rows_h
+            + toggle_gap
+            + notices_h
+            + buttons_h
+            + customize_gap
+            + customize_h;
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 

@@ -97,10 +97,10 @@ fn accepted_mutation_uses_controller_seed_and_exact_source_revision() {
     assert!(matches!(request.kind, SourceMutationKind::Replace(_)));
 
     let revision = present_revision("r1");
-    assert_eq!(
+    assert!(matches!(
         apply_request(&mut controller, &request, revision.clone()),
-        SubmitSourceMutationResult::Integrated
-    );
+        SubmitSourceMutationResult::Integrated { .. }
+    ));
     assert_eq!(
         controller.receipt(through),
         Some(&DurabilityOutcome::Persisted { source: revision })

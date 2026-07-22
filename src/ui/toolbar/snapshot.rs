@@ -3,6 +3,7 @@ pub mod fade;
 mod types;
 
 pub use types::{
-    PresetFeedbackSnapshot, PresetSlotSnapshot, SessionRecentSnapshot, ToolContext,
-    ToolOptionsKind, ToolbarSnapshot,
+    PresetFeedbackSnapshot, PresetSlotSnapshot, RuntimeUiPersistenceMode,
+    RuntimeUiPersistenceSnapshot, SessionRecentSnapshot, ToolContext, ToolOptionsKind,
+    ToolbarSnapshot,
 };

@@ -38,7 +38,10 @@ pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
-pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
+pub(crate) use settings::{
+    ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsNotice,
+    ToolbarSettingsNoticeSeverity, ToolbarSettingsToggle,
+};
 #[allow(unused_imports)]
 pub(crate) use style_pill::{
     StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSpec,
@@ -70,7 +73,10 @@ mod tests {
         ToolbarGroupId, ToolbarLayoutMode, toolbar_item_definitions, toolbar_item_ids as ids,
     };
     use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::{SidePane, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
+    use crate::ui::toolbar::{
+        RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, SidePane, ToolbarBindingHints,
+        ToolbarEvent, ToolbarSnapshot,
+    };
 
     fn snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
@@ -411,6 +417,72 @@ mod tests {
     }
 
     #[test]
+    fn runtime_persistence_controls_follow_status_and_preserve_complete_paths() {
+        let mut snapshot = snapshot();
+        let runtime_path = std::path::PathBuf::from(
+            "/a/very/long/runtime/state/location/whose/complete/path/must/remain/visible/runtime-ui.toml",
+        );
+        let artifact_path = std::path::PathBuf::from(
+            "/another/very/long/recovery/location/whose/complete/path/must/remain/visible/wayscriber-recovery.toml",
+        );
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+            path: runtime_path.clone(),
+            mode: RuntimeUiPersistenceMode::Unhealthy,
+            detail: Some("disk outcome is uncertain".to_string()),
+            recovery_artifacts: vec![artifact_path.clone()],
+        });
+
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        assert!(
+            model
+                .buttons()
+                .iter()
+                .any(|button| { matches!(button.event, ToolbarEvent::RetryRuntimeUiPersistence) })
+        );
+        assert!(model.buttons().iter().any(|button| {
+            matches!(
+                button.event,
+                ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+            )
+        }));
+        assert!(model.buttons().iter().any(|button| {
+            matches!(
+                button.event,
+                ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+            )
+        }));
+        let rendered = model
+            .notices()
+            .iter()
+            .map(|notice| notice.text.as_ref())
+            .collect::<String>();
+        assert!(rendered.contains(runtime_path.to_string_lossy().as_ref()));
+        assert!(rendered.contains(artifact_path.to_string_lossy().as_ref()));
+
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+            path: runtime_path,
+            mode: RuntimeUiPersistenceMode::AwaitingUnsupportedResetConfirmation {
+                version: Some(9),
+            },
+            detail: None,
+            recovery_artifacts: Vec::new(),
+        });
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        assert!(
+            model.buttons().iter().any(|button| matches!(
+                button.event,
+                ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+            ))
+        );
+        assert!(
+            model.buttons().iter().any(|button| matches!(
+                button.event,
+                ToolbarEvent::CancelUnsupportedRuntimeUiReset
+            ))
+        );
+    }
+
+    #[test]
     fn event_policy_classifies_persistence_and_pre_apply_effects() {
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleStatusBar(false)).persistence,
@@ -429,6 +501,10 @@ mod tests {
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas)).persistence,
             ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::SidePane)
+        );
+        assert_eq!(
+            ToolbarEventPolicy::for_event(&ToolbarEvent::RetryRuntimeUiPersistence).persistence,
+            ToolbarPersistence::Ephemeral
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleSideSectionCollapsed(

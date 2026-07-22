@@ -409,6 +409,23 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
         y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
     }
 
+    for (index, notice) in model.notices().iter().enumerate() {
+        nodes.push(WidgetNode::decor(
+            format!("top.menu.settings.notice.{index}"),
+            (0.0, y, MENU_CONTENT_W, MENU_TOGGLE_H),
+            WidgetKind::Label(LabelSpec::new(
+                notice.text.as_ref(),
+                MENU_META_FONT,
+                matches!(
+                    notice.severity,
+                    model::ToolbarSettingsNoticeSeverity::Warning
+                        | model::ToolbarSettingsNoticeSeverity::Error
+                ),
+            )),
+        ));
+        y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
+    }
+
     let buttons = model.buttons();
     if !buttons.is_empty() {
         let button_w = row_item_width(MENU_CONTENT_W, 2, MENU_TOGGLE_GAP);
@@ -427,7 +444,11 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
                 format!("top.menu.settings.button.{index}"),
                 (item.x, item.y, item.w, item.h),
                 LabelSpec::new(button.label.as_ref(), MENU_LABEL_FONT, true),
-                ButtonStyle::plain(),
+                if button.event.is_destructive() {
+                    ButtonStyle::destructive()
+                } else {
+                    ButtonStyle::plain()
+                },
                 Some(Interaction::click(
                     button.event.clone(),
                     button.tooltip.as_string(),

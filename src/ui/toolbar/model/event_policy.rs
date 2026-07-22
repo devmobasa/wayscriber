@@ -360,6 +360,15 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ClearSession
         | ToolbarEvent::OpenConfigurator
         | ToolbarEvent::OpenConfigFile
+        | ToolbarEvent::RequestRuntimeUiReset
+        | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+        | ToolbarEvent::CancelUnsupportedRuntimeUiReset
+        | ToolbarEvent::RetryRuntimeUiPersistence
+        | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+        | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::CancelRuntimeUiRecovery
         | ToolbarEvent::OpenCommandPalette
         | ToolbarEvent::SetCustomUndoDelay(_)
         | ToolbarEvent::SetCustomRedoDelay(_)

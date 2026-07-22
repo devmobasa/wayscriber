@@ -349,7 +349,7 @@ fn duplicate_or_stale_source_ack_does_not_advance_stable_revision() {
     assert_eq!(controller.pipeline().stable_source(), &missing_revision());
     assert!(matches!(
         apply_request(&mut controller, &request, present_revision("right")),
-        SubmitSourceMutationResult::Integrated
+        SubmitSourceMutationResult::Integrated { .. }
     ));
     assert_eq!(
         controller.pipeline().stable_source(),

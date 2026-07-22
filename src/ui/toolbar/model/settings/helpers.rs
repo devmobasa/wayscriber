@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
-    vec![
+    let mut buttons = vec![
         ToolbarSettingsButton {
             id: ToolbarControlId::CustomizeToolbarItems,
             label: Cow::Borrowed("Customize"),
@@ -51,11 +51,92 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
             icon: ToolbarIcon::File,
             tooltip: ToolbarTooltip::text("Config file"),
         },
-    ]
-    .into_iter()
-    .filter(|button| reset_button_visible(snapshot, button.id))
-    .filter(|button| control_visible(snapshot, button.id))
-    .collect()
+    ];
+    buttons.extend(runtime_persistence_buttons(snapshot));
+    buttons
+        .into_iter()
+        .filter(|button| reset_button_visible(snapshot, button.id))
+        .filter(|button| control_visible(snapshot, button.id))
+        .collect()
+}
+
+fn runtime_persistence_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
+    use crate::ui::toolbar::RuntimeUiPersistenceMode as Mode;
+
+    let Some(runtime) = &snapshot.runtime_ui_persistence else {
+        return Vec::new();
+    };
+    let button = |id, label, event, tooltip| ToolbarSettingsButton {
+        id,
+        label: Cow::Borrowed(label),
+        event,
+        icon: ToolbarIcon::File,
+        tooltip: ToolbarTooltip::text(tooltip),
+    };
+    match runtime.mode {
+        Mode::Missing => Vec::new(),
+        Mode::Supported | Mode::UnsupportedReadOnly { .. } => vec![button(
+            ToolbarControlId::ResetRuntimeUi,
+            "Reset runtime preferences",
+            ToolbarEvent::RequestRuntimeUiReset,
+            "Restore runtime toolbar and board preferences to their configured defaults",
+        )],
+        Mode::Resetting | Mode::CancellingRecovery => Vec::new(),
+        Mode::AwaitingUnsupportedResetConfirmation { .. } => vec![
+            button(
+                ToolbarControlId::ConfirmRuntimeUiReset,
+                "Confirm runtime reset",
+                ToolbarEvent::ConfirmUnsupportedRuntimeUiReset,
+                "Preserve the newer runtime-state file as a recovery artifact, then reset",
+            ),
+            button(
+                ToolbarControlId::CancelRuntimeUiReset,
+                "Cancel runtime reset",
+                ToolbarEvent::CancelUnsupportedRuntimeUiReset,
+                "Keep the newer runtime-state file unchanged",
+            ),
+        ],
+        Mode::Unhealthy => vec![
+            button(
+                ToolbarControlId::RetryRuntimeUiPersistence,
+                "Retry pending save",
+                ToolbarEvent::RetryRuntimeUiPersistence,
+                "Reinspect the exact source and retry only still-current pending preferences",
+            ),
+            button(
+                ToolbarControlId::AdoptRuntimeUiFromDisk,
+                "Use state from disk",
+                ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk,
+                "Discard pending runtime preferences and adopt the freshly inspected file",
+            ),
+            button(
+                ToolbarControlId::PreserveInvalidRuntimeUi,
+                "Preserve invalid & reset",
+                ToolbarEvent::RequestPreserveInvalidRuntimeUiReset,
+                "Inspect invalid runtime state and request an exact-file confirmation before reset",
+            ),
+        ],
+        Mode::Recovering => vec![button(
+            ToolbarControlId::CancelRuntimeUiRecovery,
+            "Cancel recovery",
+            ToolbarEvent::CancelRuntimeUiRecovery,
+            "Cancel read-only recovery work, or wait for an already-started write to finish safely",
+        )],
+        Mode::AwaitingInvalidResetConfirmation => vec![
+            button(
+                ToolbarControlId::ConfirmRuntimeUiReset,
+                "Confirm preserve & reset",
+                ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset,
+                "Move the exact invalid file to a retained recovery path, then reset",
+            ),
+            button(
+                ToolbarControlId::CancelRuntimeUiReset,
+                "Cancel runtime reset",
+                ToolbarEvent::CancelPreserveInvalidRuntimeUiReset,
+                "Keep the invalid runtime-state file unchanged",
+            ),
+        ],
+    }
 }
 
 pub(super) fn section_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
