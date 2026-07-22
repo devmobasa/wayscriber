@@ -1,6 +1,78 @@
 use super::*;
 
 #[test]
+fn recovery_prunes_override_when_board_id_is_removed_and_readded_with_same_seed() {
+    let mut controller = controller();
+    let target = InteractionSeedTarget::BoardPin("board-6".to_string());
+    commit_bool(&mut controller, target.clone(), true);
+    let (_, incident) = fail_current_replace(&mut controller, "board pin write failed");
+
+    let mut removed = test_seeds(false, false);
+    removed.remove(&target);
+    assert!(matches!(
+        controller.update_seeds(removed),
+        UpdateSeedsResult::StagedBehindBarrier { .. }
+    ));
+    assert!(matches!(
+        controller.update_seeds(test_seeds(false, false)),
+        UpdateSeedsResult::StagedBehindBarrier { .. }
+    ));
+
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    let result = controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    if matches!(result, SubmitPersistenceRecoveryResult::Continue { .. }) {
+        let write = controller
+            .take_recovery_io_command()
+            .expect("canonical recovery write");
+        let request = match &write.operation {
+            RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } => request.clone(),
+            operation => panic!("unexpected recovery operation: {operation:?}"),
+        };
+        assert!(matches!(
+            controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+                controller_id: controller.id(),
+                incident,
+                barrier: write.barrier,
+                attempt: write.attempt,
+                command_id: write.command_id,
+                result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                    id: request.id,
+                    applied_through: request.accepted_through,
+                    new_source: present_revision("recovered-after-board-reuse"),
+                    recovery_artifacts: Vec::new(),
+                }),
+            }),
+            SubmitPersistenceRecoveryResult::Terminal { .. }
+        ));
+    } else {
+        assert!(matches!(
+            result,
+            SubmitPersistenceRecoveryResult::Terminal { .. }
+        ));
+    }
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Recovered { .. })
+    ));
+    assert!(controller.model().get(&target).is_none());
+    assert_eq!(
+        controller.live_state().get(&target),
+        Some(&InteractionSeedValue::Bool(false))
+    );
+}
+
+#[test]
 fn recovery_captures_replacements_fenced_by_a_flush_before_closing_barrier() {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);

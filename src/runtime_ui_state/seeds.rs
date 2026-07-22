@@ -77,6 +77,7 @@ pub(crate) struct InteractionSeedRegistry {
 pub(crate) struct StagedSeedReload {
     registry: InteractionSeedRegistry,
     changed_targets: BTreeSet<InteractionSeedTarget>,
+    tombstoned_targets: BTreeSet<InteractionSeedTarget>,
 }
 
 impl StagedSeedReload {
@@ -91,10 +92,22 @@ impl StagedSeedReload {
         let mut changed_targets = previous
             .map(|staged| staged.changed_targets.clone())
             .unwrap_or_default();
+        let mut tombstoned_targets = previous
+            .map(|staged| staged.tombstoned_targets.clone())
+            .unwrap_or_default();
+        tombstoned_targets.extend(
+            registry
+                .iter()
+                .filter(|(target, state)| {
+                    state.normalized_value().is_some() && seeds.get(target).is_none()
+                })
+                .map(|(target, _)| target.clone()),
+        );
         changed_targets.extend(registry.update(seeds)?);
         Ok(Self {
             registry,
             changed_targets,
+            tombstoned_targets,
         })
     }
 
@@ -102,8 +115,14 @@ impl StagedSeedReload {
         &self.registry
     }
 
-    pub(crate) fn into_parts(self) -> (InteractionSeedRegistry, BTreeSet<InteractionSeedTarget>) {
-        (self.registry, self.changed_targets)
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        InteractionSeedRegistry,
+        BTreeSet<InteractionSeedTarget>,
+        BTreeSet<InteractionSeedTarget>,
+    ) {
+        (self.registry, self.changed_targets, self.tombstoned_targets)
     }
 }
 
@@ -220,6 +239,45 @@ impl InteractionSeedRegistry {
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&InteractionSeedTarget, &SeedState)> {
         self.states.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn board_seeds(id: Option<&str>, pinned: bool) -> ValidatedInteractionSeeds {
+        let mut seeds = ValidatedInteractionSeeds::new();
+        if let Some(id) = id {
+            seeds
+                .insert(
+                    InteractionSeedTarget::BoardPin(id.to_string()),
+                    InteractionSeedValue::Bool(pinned),
+                )
+                .unwrap();
+        }
+        seeds
+    }
+
+    #[test]
+    fn staged_remove_then_same_seed_readd_retains_identity_tombstone() {
+        let target = InteractionSeedTarget::BoardPin("board-4".to_string());
+        let current = InteractionSeedRegistry::from_validated(board_seeds(Some("board-4"), false));
+        let removed = StagedSeedReload::stage(None, &current, board_seeds(None, false)).unwrap();
+        let restored = StagedSeedReload::stage(
+            Some(&removed),
+            &current,
+            board_seeds(Some("board-4"), false),
+        )
+        .unwrap();
+
+        let (registry, changed, tombstoned) = restored.into_parts();
+        assert_eq!(
+            registry.current_value(&target),
+            Some(&InteractionSeedValue::Bool(false))
+        );
+        assert!(changed.contains(&target));
+        assert!(tombstoned.contains(&target));
     }
 }
 

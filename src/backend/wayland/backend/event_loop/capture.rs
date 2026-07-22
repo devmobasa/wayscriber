@@ -92,6 +92,7 @@ pub(super) fn handle_pending_actions(
         state.handle_paste_hex_color(target);
     }
     handle_frozen_toggle(state);
+    state.drain_pending_board_runtime_ui_actions();
 
     if let Some(action) = state.input_state.take_pending_backend_action() {
         match action {

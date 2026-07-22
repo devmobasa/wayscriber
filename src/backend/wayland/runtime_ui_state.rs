@@ -4,7 +4,7 @@
 //! toolbar target conversion, preview lifetimes, and the writer transport; UI
 //! models and `InputState` never see storage or controller details.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
 
@@ -17,6 +17,7 @@ use crate::runtime_ui_state::*;
 use crate::ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget;
 use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
+mod board;
 mod coordinator;
 mod wayland;
 
@@ -53,6 +54,22 @@ pub(in crate::backend::wayland) struct PreparedToolbarMutation {
 }
 
 #[derive(Debug)]
+pub(in crate::backend::wayland) struct PreparedBoardPinMutation {
+    board_id: String,
+    desired: bool,
+    session: RuntimeUiPreviewSession,
+}
+
+#[derive(Debug)]
+struct DeferredBoardPinRestore {
+    board_id: String,
+    board_identity_generation: crate::input::boards::BoardIdentityGeneration,
+    pin_seed: bool,
+    pinned: bool,
+    authority_epoch: u64,
+}
+
+#[derive(Debug)]
 struct ActiveItemDrag {
     group: ToolbarItemOrderGroup,
     session: RuntimeUiPreviewSession,
@@ -67,6 +84,8 @@ struct ActivePositionDrag {
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct ToolbarRuntimeState {
     controller: RuntimeUiStateController,
+    board_pin_seeds: BTreeMap<String, bool>,
+    deferred_board_pin_restores: BTreeMap<String, DeferredBoardPinRestore>,
     writer: Option<RuntimeUiStateWriter>,
     pending_writer_command: Option<RuntimeStateWriterCommand>,
     live_rebuild_pending: bool,
@@ -121,13 +140,19 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             (InteractionSeedTarget::SidePosition, InteractionSeedValue::Position(position)) => {
                 positions.side = (position.x.get(), position.y.get());
             }
+            (InteractionSeedTarget::BoardPin(board_id), InteractionSeedValue::Bool(pinned)) => {
+                input.apply_board_pinned_runtime(board_id, *pinned);
+            }
             _ => {}
         }
     }
     input.needs_redraw = true;
 }
 
-fn toolbar_seeds_from_config(config: &Config) -> Result<ValidatedInteractionSeeds> {
+fn runtime_seeds_from_config(
+    config: &Config,
+    board_pin_seeds: &BTreeMap<String, bool>,
+) -> Result<ValidatedInteractionSeeds> {
     let mut seeds = ValidatedInteractionSeeds::new();
     let mut insert = |target, value| {
         seeds
@@ -200,7 +225,40 @@ fn toolbar_seeds_from_config(config: &Config) -> Result<ValidatedInteractionSeed
             .context("side toolbar position seed is not finite")?,
         ),
     )?;
+    for (board_id, pinned) in board_pin_seeds {
+        insert(
+            InteractionSeedTarget::BoardPin(board_id.clone()),
+            InteractionSeedValue::Bool(*pinned),
+        )?;
+    }
     Ok(seeds)
+}
+
+fn board_pin_seeds_from_input(input: &InputState) -> BTreeMap<String, bool> {
+    input
+        .boards
+        .pin_seed_entries()
+        .map(|(id, pinned)| (id.to_string(), pinned))
+        .collect()
+}
+
+fn retain_stored_board_pin_seeds_for_session_restore(
+    board_pin_seeds: &mut BTreeMap<String, bool>,
+    inspection: &RuntimeUiStateInspection,
+) {
+    let Some(wire) = inspection.supported_wire.as_ref() else {
+        return;
+    };
+    for (target, runtime_override) in wire.model.iter() {
+        let (InteractionSeedTarget::BoardPin(board_id), InteractionSeedValue::Bool(stored_seed)) =
+            (target, &runtime_override.seed)
+        else {
+            continue;
+        };
+        board_pin_seeds
+            .entry(board_id.clone())
+            .or_insert(*stored_seed);
+    }
 }
 
 fn resolved_toolbar_item_seeds(config: &Config) -> crate::config::ResolvedToolbarItems {
@@ -369,6 +427,28 @@ fn apply_live_toolbar_positions(
             live.get(&InteractionSeedTarget::SidePosition)
     {
         positions.side = (position.x.get(), position.y.get());
+    }
+}
+
+fn apply_live_board_state(
+    input: &mut InputState,
+    live: &RuntimeUiLiveState,
+    include: impl Fn(&InteractionSeedTarget) -> bool,
+) {
+    let board_ids = input
+        .boards
+        .board_states()
+        .iter()
+        .map(|board| board.spec.id.clone())
+        .collect::<Vec<_>>();
+    for board_id in board_ids {
+        let target = InteractionSeedTarget::BoardPin(board_id.clone());
+        if !include(&target) {
+            continue;
+        }
+        if let Some(InteractionSeedValue::Bool(pinned)) = live.get(&target) {
+            input.apply_board_pinned_runtime(&board_id, *pinned);
+        }
     }
 }
 

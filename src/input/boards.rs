@@ -8,6 +8,7 @@ mod operations;
 mod tests;
 
 use crate::draw::BoardPages;
+use std::collections::BTreeMap;
 
 pub use crate::domain::{
     BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardSpec,
@@ -22,7 +23,9 @@ pub use color::{
 pub use identity::{
     BoardIdChangeSet, BoardIdentityGeneration, BoundaryBoardId, BoundaryBoardIdSet,
 };
-pub(crate) use mapping::{BoardConfigChange, PendingBoardConfigUpdate};
+pub(crate) use mapping::{
+    BoardConfigChange, PendingBoardConfigUpdate, PendingBoardRuntimeUiAction,
+};
 pub use operations::{
     BoardDeleteConfirmation, BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest,
     BoardDeleteTarget, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
@@ -49,6 +52,9 @@ impl BoardState {
 #[derive(Debug)]
 pub struct BoardManager {
     boards: Vec<BoardState>,
+    /// Authored/configured pin seeds keyed by live board identity. Runtime pin
+    /// overrides update `BoardSpec::pinned` without changing this map.
+    pin_seeds: BTreeMap<String, bool>,
     active_index: usize,
     max_count: usize,
     auto_create: bool,
@@ -65,6 +71,7 @@ impl Clone for BoardManager {
     fn clone(&self) -> Self {
         Self {
             boards: self.boards.clone(),
+            pin_seeds: self.pin_seeds.clone(),
             active_index: self.active_index,
             max_count: self.max_count,
             auto_create: self.auto_create,
@@ -83,6 +90,7 @@ impl BoardManager {
     pub(crate) fn clone_preserving_identity_generation(&self) -> Self {
         Self {
             boards: self.boards.clone(),
+            pin_seeds: self.pin_seeds.clone(),
             active_index: self.active_index,
             max_count: self.max_count,
             auto_create: self.auto_create,

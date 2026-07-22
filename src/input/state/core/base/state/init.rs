@@ -286,6 +286,7 @@ impl InputState {
             preset_feedback: vec![None; PRESET_SLOTS_MAX],
             pending_preset_action: None,
             pending_board_config: None,
+            pending_board_runtime_ui: Vec::new(),
             tour_active: false,
             tour_step: 0,
             compositor_capabilities: CompositorCapabilities::default(),

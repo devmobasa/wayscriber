@@ -130,6 +130,7 @@ impl InputState {
         if let Some(new_id) = self.boards.duplicate_active_board() {
             self.clear_pending_deletes_after_board_generation_change(generation_before);
             self.record_board_recent(&new_id);
+            self.queue_board_identity_available(&new_id);
             self.queue_board_config_save(BoardConfigChange::IdentitiesCreated(vec![
                 new_id.clone(),
             ]));
@@ -219,6 +220,9 @@ impl InputState {
             .map(|board| board.spec.id.clone())
             .collect::<Vec<_>>();
         if !created_ids.is_empty() {
+            for id in &created_ids {
+                self.queue_board_identity_available(id);
+            }
             self.queue_board_config_save(BoardConfigChange::IdentitiesCreated(created_ids));
         }
         self.clear_pending_deletes_after_board_generation_change(generation_before);

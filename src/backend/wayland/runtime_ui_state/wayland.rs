@@ -125,6 +125,10 @@ impl WaylandState {
     /// daemon, but keeping this boundary complete prevents a future
     /// same-process reload from committing an old drag under new seeds.
     pub(in crate::backend::wayland) fn refresh_runtime_ui_config_seeds(&mut self) {
+        let configured_boards = self.config.resolved_boards();
+        self.input_state
+            .boards
+            .sync_pin_seeds_from_config(&configured_boards);
         let mut positions = self.toolbar_position_snapshot();
         let previous_pane = self.input_state.toolbar_side_pane;
         let Some(runtime) = self.runtime_ui.as_mut() else {
@@ -148,6 +152,78 @@ impl WaylandState {
         self.toolbar.mark_dirty();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
+    }
+
+    pub(in crate::backend::wayland) fn drain_pending_board_runtime_ui_actions(&mut self) {
+        use crate::input::boards::PendingBoardRuntimeUiAction;
+
+        for action in self.input_state.take_pending_board_runtime_ui_actions() {
+            match action {
+                PendingBoardRuntimeUiAction::TogglePin {
+                    board_id,
+                    board_identity_generation,
+                    pin_seed,
+                } => {
+                    if self.input_state.boards.board_identity_generation()
+                        != board_identity_generation
+                    {
+                        continue;
+                    }
+                    let Some(current) = self
+                        .input_state
+                        .boards
+                        .board_states()
+                        .iter()
+                        .find(|board| board.spec.id == board_id)
+                        .map(|board| board.spec.pinned)
+                    else {
+                        continue;
+                    };
+                    let Some(runtime) = self.runtime_ui.as_mut() else {
+                        self.input_state
+                            .apply_board_pinned_runtime(&board_id, !current);
+                        continue;
+                    };
+                    let Some(prepared) =
+                        runtime.begin_board_pin_toggle(&self.config, board_id, pin_seed, current)
+                    else {
+                        continue;
+                    };
+                    let applied = self
+                        .input_state
+                        .apply_board_pinned_runtime(&prepared.board_id, prepared.desired);
+                    let finish = self
+                        .runtime_ui
+                        .as_mut()
+                        .expect("runtime state remained available")
+                        .finish_board_pin_toggle(prepared, applied);
+                    self.apply_toolbar_runtime_finish(finish);
+                }
+                PendingBoardRuntimeUiAction::IdentityDeleted { board_id } => {
+                    if let Some(runtime) = self.runtime_ui.as_mut() {
+                        runtime.remove_board_identity(&self.config, &board_id);
+                    }
+                }
+                PendingBoardRuntimeUiAction::IdentityAvailable {
+                    board_id,
+                    pin_seed,
+                    pinned,
+                } => {
+                    let finish = self.runtime_ui.as_mut().and_then(|runtime| {
+                        runtime.restore_board_identity(
+                            &self.config,
+                            &mut self.input_state,
+                            board_id,
+                            pin_seed,
+                            pinned,
+                        )
+                    });
+                    if let Some(finish) = finish {
+                        self.apply_toolbar_runtime_finish(finish);
+                    }
+                }
+            }
+        }
     }
 
     pub(in crate::backend::wayland) fn drain_runtime_ui_completions(&mut self) {
@@ -174,6 +250,14 @@ impl WaylandState {
             self.toolbar.mark_dirty();
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
+        }
+        let deferred_finishes = self
+            .runtime_ui
+            .as_mut()
+            .map(|runtime| runtime.finish_deferred_board_pin_restores(&mut self.input_state))
+            .unwrap_or_default();
+        for finish in deferred_finishes {
+            self.apply_toolbar_runtime_finish(finish);
         }
     }
 

@@ -8,7 +8,7 @@ impl RuntimeUiStateController {
             .and_then(|incident| incident.staged_reload.take())
             .or_else(|| self.staged_reload.take());
         if let Some(staged) = staged {
-            let (seeds, changed) = staged.into_parts();
+            let (seeds, changed, tombstoned) = staged.into_parts();
             if let Some(incident) = &mut self.incident {
                 incident
                     .applied_reload_changed_targets
@@ -16,6 +16,7 @@ impl RuntimeUiStateController {
             }
             self.seeds = seeds;
             self.live_only_overlay.reconcile(&changed);
+            self.model.remove_targets(&tombstoned);
             self.model.reconcile(&self.seeds);
             self.passthrough.reconcile_entries(&self.model);
             self.live_state =

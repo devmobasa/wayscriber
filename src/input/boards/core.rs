@@ -39,6 +39,33 @@ impl BoardManager {
         self.boards.iter().any(|board| board.spec.id == id)
     }
 
+    pub(crate) fn pin_seed(&self, id: &str) -> Option<bool> {
+        self.pin_seeds.get(id).copied()
+    }
+
+    pub(crate) fn pin_seed_entries(&self) -> impl Iterator<Item = (&str, bool)> {
+        self.boards.iter().map(|board| {
+            (
+                board.spec.id.as_str(),
+                self.pin_seeds
+                    .get(&board.spec.id)
+                    .copied()
+                    .unwrap_or(board.spec.pinned),
+            )
+        })
+    }
+
+    pub(crate) fn set_board_pinned_runtime(&mut self, id: &str, pinned: bool) -> bool {
+        let Some(board) = self.boards.iter_mut().find(|board| board.spec.id == id) else {
+            return false;
+        };
+        if board.spec.pinned == pinned {
+            return false;
+        }
+        board.spec.pinned = pinned;
+        true
+    }
+
     pub fn active_board_name(&self) -> &str {
         &self.active_board().spec.name
     }
@@ -177,6 +204,7 @@ impl BoardManager {
         }
         let removed_id = self.boards[self.active_index].spec.id.clone();
         self.boards.remove(self.active_index);
+        self.pin_seeds.remove(&removed_id);
         if self.active_index >= self.boards.len() {
             self.active_index = self.boards.len().saturating_sub(1);
         }
@@ -240,6 +268,7 @@ impl BoardManager {
 
         let removed_id = self.boards[index].spec.id.clone();
         self.boards.remove(index);
+        self.pin_seeds.remove(&removed_id);
         if self.boards.is_empty() {
             self.active_index = 0;
         } else if self.active_index >= self.boards.len() {
@@ -265,6 +294,8 @@ impl BoardManager {
             return false;
         }
         board.spec.id = self.unique_board_id(board.spec.id.clone());
+        self.pin_seeds
+            .insert(board.spec.id.clone(), board.spec.pinned);
         let insert_at = index.min(self.boards.len());
         self.boards.insert(insert_at, board);
         self.active_index = insert_at;

@@ -46,6 +46,7 @@ impl BoardManager {
                 return false;
             }
             let new_spec = self.template_for_slot(self.boards.len());
+            self.pin_seeds.insert(new_spec.id.clone(), new_spec.pinned);
             self.boards.push(BoardState::new(new_spec));
         }
 
@@ -102,6 +103,7 @@ impl BoardManager {
 
         spec.id = id.to_string();
         spec.name = name_from_id(id);
+        self.pin_seeds.insert(spec.id.clone(), spec.pinned);
         self.boards.push(BoardState::new(spec));
         let index = self.boards.len() - 1;
         self.bump_board_identity_generation();
@@ -114,6 +116,7 @@ impl BoardManager {
         }
         let index = self.boards.len();
         let new_spec = self.template_for_slot(index);
+        self.pin_seeds.insert(new_spec.id.clone(), new_spec.pinned);
         self.boards.push(BoardState::new(new_spec));
         self.active_index = index;
         self.bump_board_identity_generation();
@@ -127,6 +130,11 @@ impl BoardManager {
             return None;
         }
         let active = &self.boards[self.active_index];
+        let source_pin_seed = self
+            .pin_seeds
+            .get(&active.spec.id)
+            .copied()
+            .unwrap_or(active.spec.pinned);
         let mut new_spec = active.spec.clone();
         let base_id = format!("{}-copy", active.spec.id);
         new_spec.id = self.unique_board_id(base_id);
@@ -137,6 +145,7 @@ impl BoardManager {
         new_board.pages = active.pages.clone();
 
         let insert_at = self.active_index + 1;
+        self.pin_seeds.insert(new_spec.id.clone(), source_pin_seed);
         self.boards.insert(insert_at, new_board);
         self.active_index = insert_at;
         self.bump_board_identity_generation();

@@ -56,6 +56,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let runtime_ui = match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
         &config,
+        &input_state,
         &runtime_ui_path,
         runtime_wake.handle(),
     ) {

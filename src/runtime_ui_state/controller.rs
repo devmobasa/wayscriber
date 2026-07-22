@@ -1064,13 +1064,14 @@ impl RuntimeUiStateController {
             model: model.clone(),
             passthrough: passthrough.clone(),
         };
-        let (next_seeds, changed_targets) = self
+        let (next_seeds, changed_targets, tombstoned_targets) = self
             .staged_reload
             .as_ref()
             .cloned()
             .map(StagedSeedReload::into_parts)
-            .unwrap_or_else(|| (self.seeds.clone(), BTreeSet::new()));
+            .unwrap_or_else(|| (self.seeds.clone(), BTreeSet::new(), BTreeSet::new()));
         let mut canonical_model = model;
+        canonical_model.remove_targets(&tombstoned_targets);
         canonical_model.reconcile(&next_seeds);
         let mut canonical_passthrough = passthrough.clone();
         canonical_passthrough.reconcile_entries(&canonical_model);
@@ -1249,10 +1250,11 @@ impl RuntimeUiStateController {
             );
             return Ok(());
         };
-        let (next_seeds, changed_targets) = staged.into_parts();
+        let (next_seeds, changed_targets, tombstoned_targets) = staged.into_parts();
         let mut next_live_only_overlay = self.live_only_overlay.clone();
         next_live_only_overlay.reconcile(&changed_targets);
         let mut next_model = self.model.clone();
+        next_model.remove_targets(&tombstoned_targets);
         next_model.reconcile(&next_seeds);
         let mut next_passthrough = self.passthrough.clone();
         next_passthrough.reconcile_entries(&next_model);

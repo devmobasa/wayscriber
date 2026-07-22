@@ -81,6 +81,12 @@ impl RuntimeUiModel {
         self.overrides.len() != before
     }
 
+    pub(crate) fn remove_targets(&mut self, targets: &BTreeSet<InteractionSeedTarget>) -> bool {
+        let before = self.overrides.len();
+        self.overrides.retain(|target, _| !targets.contains(target));
+        self.overrides.len() != before
+    }
+
     pub(crate) fn clear(&mut self) {
         self.overrides.clear();
     }

@@ -1,6 +1,7 @@
 use super::create_test_input_state;
 use crate::draw::{Frame, PageDeleteOutcome};
 use crate::input::BoardBackground;
+use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::events::Key;
 use crate::input::state::core::board_picker::{
     BoardPickerDrag, BoardPickerEditMode, BoardPickerFocus, BoardPickerMode, BoardPickerPageDrag,
@@ -9,6 +10,32 @@ use crate::input::state::core::board_picker::{
 use crate::input::state::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
+
+fn apply_pending_board_pin(input: &mut crate::input::state::InputState) {
+    let actions = input.take_pending_board_runtime_ui_actions();
+    assert_eq!(actions.len(), 1);
+    let PendingBoardRuntimeUiAction::TogglePin {
+        board_id,
+        board_identity_generation,
+        ..
+    } = &actions[0]
+    else {
+        panic!("expected a board pin toggle");
+    };
+    assert_eq!(
+        input.boards.board_identity_generation(),
+        *board_identity_generation
+    );
+    let current = input
+        .boards
+        .board_states()
+        .iter()
+        .find(|board| board.spec.id == *board_id)
+        .expect("pending board")
+        .spec
+        .pinned;
+    assert!(input.apply_board_pinned_runtime(board_id, !current));
+}
 
 #[test]
 fn board_picker_search_selects_transposed_match() {
@@ -69,6 +96,7 @@ fn board_picker_quick_mode_pins_board_to_top() {
     input.open_board_picker();
     input.board_picker_set_selected(blackboard_index);
     input.board_picker_toggle_pin_selected();
+    apply_pending_board_pin(&mut input);
     input.open_board_picker_quick();
     input.board_picker_activate_row(0);
     assert_eq!(input.board_id(), "blackboard");
@@ -87,6 +115,7 @@ fn board_picker_full_mode_pins_board_to_top() {
     input.open_board_picker();
     input.board_picker_set_selected(blackboard_index);
     input.board_picker_toggle_pin_selected();
+    apply_pending_board_pin(&mut input);
     input.open_board_picker();
     input.board_picker_activate_row(0);
     assert_eq!(input.board_id(), "blackboard");
@@ -107,6 +136,7 @@ fn board_picker_drag_pinned_clamped_to_pinned_section() {
         .expect("row");
     input.board_picker_set_selected(blackboard_row);
     input.board_picker_toggle_pin_selected();
+    apply_pending_board_pin(&mut input);
     let pinned_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("row");
@@ -138,6 +168,7 @@ fn board_picker_drag_unpinned_clamped_after_pinned() {
         .expect("row");
     input.board_picker_set_selected(blackboard_row);
     input.board_picker_toggle_pin_selected();
+    apply_pending_board_pin(&mut input);
     let whiteboard_index = input
         .boards
         .board_states()
@@ -1738,6 +1769,30 @@ fn board_picker_toggle_pin_selected_ignores_new_row() {
 
     assert_eq!(input.board_picker_pinned_count(), pinned_before);
     assert_eq!(input.board_picker_selected_index(), Some(board_count));
+}
+
+#[test]
+fn board_pin_runtime_request_is_not_gated_by_config_customization_persistence() {
+    let mut input = create_test_input_state();
+    let boards = crate::config::BoardsConfig {
+        persist_customizations: false,
+        ..crate::config::BoardsConfig::default()
+    };
+    input.boards = crate::input::boards::BoardManager::from_config(boards);
+    let whiteboard = input
+        .boards
+        .board_states()
+        .iter()
+        .position(|board| board.spec.id == "whiteboard")
+        .expect("whiteboard");
+
+    assert!(input.request_board_pin_toggle(whiteboard));
+    assert!(input.take_pending_board_config_update().is_none());
+    assert!(matches!(
+        input.take_pending_board_runtime_ui_actions().as_slice(),
+        [PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
+            if board_id == "whiteboard"
+    ));
 }
 
 #[test]

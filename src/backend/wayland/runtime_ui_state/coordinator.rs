@@ -8,6 +8,7 @@ use super::*;
 impl ToolbarRuntimeState {
     pub(in crate::backend::wayland) fn start(
         config: &Config,
+        input: &InputState,
         path: &Path,
         runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
     ) -> Result<Self> {
@@ -21,15 +22,17 @@ impl ToolbarRuntimeState {
             )
         })?;
 
-        let seeds = toolbar_seeds_from_config(config)?;
+        let mut board_pin_seeds = board_pin_seeds_from_input(input);
         let store = RuntimeUiStateStore::new(path);
         let inspection = store.inspect().map_err(|error| {
             anyhow::anyhow!("failed to inspect runtime UI state: {}", error.message())
         })?;
+        retain_stored_board_pin_seeds_for_session_restore(&mut board_pin_seeds, &inspection);
+        let seeds = runtime_seeds_from_config(config, &board_pin_seeds)?;
         let bootstrap = inspection.into_controller_bootstrap(seeds);
         if let Some(incident) = bootstrap.startup_incident {
             log::warn!(
-                "Runtime UI state started behind recovery barrier {:?}; toolbar preference writes are blocked",
+                "Runtime UI state started behind recovery barrier {:?}; runtime preference writes are blocked",
                 incident
             );
         }
@@ -41,6 +44,8 @@ impl ToolbarRuntimeState {
         .context("failed to start runtime UI state writer")?;
         let mut runtime = Self {
             controller: bootstrap.controller,
+            board_pin_seeds,
+            deferred_board_pin_restores: BTreeMap::new(),
             writer: Some(writer),
             pending_writer_command: None,
             live_rebuild_pending: false,
@@ -53,6 +58,7 @@ impl ToolbarRuntimeState {
 
     pub(in crate::backend::wayland) fn apply_startup_state(&self, input: &mut InputState) {
         apply_live_toolbar_state(input, self.controller.live_state(), |_| true);
+        apply_live_board_state(input, self.controller.live_state(), |_| true);
         input.toolbar_top_visible = input.toolbar_top_pinned;
         input.toolbar_side_visible = input.toolbar_side_pinned;
         input.toolbar_visible = input.toolbar_top_visible || input.toolbar_side_visible;
@@ -65,6 +71,7 @@ impl ToolbarRuntimeState {
     ) {
         apply_live_toolbar_state(input, self.controller.live_state(), |_| true);
         apply_live_toolbar_positions(positions, self.controller.live_state(), |_| true);
+        apply_live_board_state(input, self.controller.live_state(), |_| true);
     }
 
     pub(in crate::backend::wayland) fn begin_toolbar_mutation(
@@ -272,7 +279,8 @@ impl ToolbarRuntimeState {
         input: &mut InputState,
         positions: &mut ToolbarPositionSnapshot,
     ) -> ToolbarSeedRefresh {
-        let seeds = match toolbar_seeds_from_config(config) {
+        self.board_pin_seeds = board_pin_seeds_from_input(input);
+        let seeds = match runtime_seeds_from_config(config, &self.board_pin_seeds) {
             Ok(seeds) => seeds,
             Err(error) => {
                 log::warn!("Runtime UI seed refresh rejected: {error:#}");
@@ -329,6 +337,11 @@ impl ToolbarRuntimeState {
         apply_live_toolbar_positions(positions, self.controller.live_state(), |target| {
             changed.contains(target)
         });
+        // A session reload can materialize a board whose seed was already
+        // provisionally present at startup, so it will not appear in
+        // `changed`. Reapply all live board values after reconciliation while
+        // keeping toolbar preview updates scoped to changed targets above.
+        apply_live_board_state(input, self.controller.live_state(), |_| true);
         if let Some(rollback) = position_rollback {
             apply_toolbar_runtime_rollback(input, positions, &rollback);
         }
@@ -403,7 +416,7 @@ impl ToolbarRuntimeState {
         }
     }
 
-    fn finish_result(&mut self, result: PreviewFinishResult) -> ToolbarRuntimeFinish {
+    pub(super) fn finish_result(&mut self, result: PreviewFinishResult) -> ToolbarRuntimeFinish {
         let effect = match result {
             PreviewFinishResult::AcceptedRuntime { .. }
             | PreviewFinishResult::AppliedLiveOnly
