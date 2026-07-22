@@ -74,6 +74,7 @@ fn runtime_persistence_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         tooltip: ToolbarTooltip::text(tooltip),
     };
     match runtime.mode {
+        Mode::Unavailable => Vec::new(),
         Mode::Missing => Vec::new(),
         Mode::Supported | Mode::UnsupportedReadOnly { .. } => vec![button(
             ToolbarControlId::ResetRuntimeUi,

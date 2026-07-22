@@ -196,7 +196,8 @@ impl WaylandState {
         snapshot.runtime_ui_persistence = self
             .runtime_ui
             .as_ref()
-            .map(|runtime| runtime.persistence_snapshot());
+            .map(|runtime| runtime.persistence_snapshot())
+            .or_else(|| self.runtime_ui_unavailable.clone());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_fade = self.data.top_strip_fade.value();

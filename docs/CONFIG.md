@@ -45,6 +45,11 @@ while it is read-only; if a write has already started, Wayscriber waits for its 
 before reinspection. Diagnostic and recovery-artifact paths are shown without truncating their
 contents.
 
+If runtime-state inspection or its writer cannot start at all, the Settings panel reports
+persistence as unavailable instead of offering recovery actions that cannot run. Runtime-only
+toolbar and board changes remain process-only in that mode and leave the authored configuration
+unchanged.
+
 When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
 section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
 a configurator warning but remain in the file for forward compatibility. Known values are still

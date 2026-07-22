@@ -480,6 +480,34 @@ mod tests {
                 ToolbarEvent::CancelUnsupportedRuntimeUiReset
             ))
         );
+
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+            path: std::path::PathBuf::from("/isolated/runtime-ui.toml"),
+            mode: RuntimeUiPersistenceMode::Unavailable,
+            detail: Some(
+                "writer startup failed; runtime-only toolbar and board changes are process-only"
+                    .to_string(),
+            ),
+            recovery_artifacts: Vec::new(),
+        });
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        assert!(!model.buttons().iter().any(|button| {
+            matches!(
+                button.event,
+                ToolbarEvent::RequestRuntimeUiReset
+                    | ToolbarEvent::RetryRuntimeUiPersistence
+                    | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+                    | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+            )
+        }));
+        let rendered = model
+            .notices()
+            .iter()
+            .map(|notice| notice.text.as_ref())
+            .collect::<String>();
+        assert!(rendered.contains("persistence is unavailable"));
+        assert!(rendered.contains("runtime-only toolbar and board changes are process-only"));
+        assert!(rendered.contains("/isolated/runtime-ui.toml"));
     }
 
     #[test]

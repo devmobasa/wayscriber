@@ -404,6 +404,10 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         return Vec::new();
     };
     let (summary, severity) = match &runtime.mode {
+        Mode::Unavailable => (
+            "Runtime preference persistence is unavailable",
+            ToolbarSettingsNoticeSeverity::Error,
+        ),
         Mode::Missing => (
             "Runtime preferences use configured defaults",
             ToolbarSettingsNoticeSeverity::Info,

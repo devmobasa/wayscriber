@@ -231,6 +231,7 @@ pub struct RuntimeUiPersistenceSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeUiPersistenceMode {
+    Unavailable,
     Missing,
     Supported,
     UnsupportedReadOnly { version: Option<u64> },
