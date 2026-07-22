@@ -34,6 +34,15 @@ pub fn data_dir() -> Option<PathBuf> {
     home_dir().map(|home| home.join(".local").join("share"))
 }
 
+/// Location for generated, persistent runtime UI preferences. This is kept
+/// separate from the authored configuration and drawing-session stores.
+pub(crate) fn runtime_ui_state_file() -> PathBuf {
+    data_dir()
+        .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
+        .join("wayscriber")
+        .join("runtime-ui.toml")
+}
+
 /// Best-effort pictures directory (XDG), falling back to `~/Pictures`.
 pub fn pictures_dir() -> Option<PathBuf> {
     if let Some(dir) = env::var_os(XDG_PICTURES_DIR_ENV)

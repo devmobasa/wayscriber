@@ -161,6 +161,20 @@ pub enum ToolbarItemOrderGroup {
     Sessions,
 }
 
+impl ToolbarItemOrderGroup {
+    pub(crate) const ALL: [Self; 9] = [
+        Self::TopTools,
+        Self::TopControls,
+        Self::SideSections,
+        Self::Actions,
+        Self::Pages,
+        Self::Boards,
+        Self::Presets,
+        Self::ToolOptions,
+        Self::Sessions,
+    ];
+}
+
 pub fn toolbar_item_order_group(
     definition: &ToolbarItemDefinition,
 ) -> Option<ToolbarItemOrderGroup> {

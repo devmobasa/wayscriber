@@ -56,6 +56,25 @@ pub enum ToolbarSideSection {
 }
 
 impl ToolbarSideSection {
+    pub const ALL: [Self; 16] = [
+        Self::Colors,
+        Self::Presets,
+        Self::Thickness,
+        Self::EraserMode,
+        Self::PolygonSides,
+        Self::ArrowLabels,
+        Self::StepMarkers,
+        Self::MarkerOpacity,
+        Self::TextSize,
+        Self::Font,
+        Self::Actions,
+        Self::Boards,
+        Self::Pages,
+        Self::StepUndo,
+        Self::Session,
+        Self::Settings,
+    ];
+
     /// Stable id used in config.toml (`ui.toolbar.collapsed_sections`).
     pub fn config_id(self) -> &'static str {
         match self {
@@ -80,26 +99,9 @@ impl ToolbarSideSection {
 
     pub fn from_config_id(value: &str) -> Option<Self> {
         let value = value.trim().to_ascii_lowercase();
-        [
-            Self::Colors,
-            Self::Presets,
-            Self::Thickness,
-            Self::EraserMode,
-            Self::PolygonSides,
-            Self::ArrowLabels,
-            Self::StepMarkers,
-            Self::MarkerOpacity,
-            Self::TextSize,
-            Self::Font,
-            Self::Actions,
-            Self::Boards,
-            Self::Pages,
-            Self::StepUndo,
-            Self::Session,
-            Self::Settings,
-        ]
-        .into_iter()
-        .find(|section| section.config_id() == value)
+        Self::ALL
+            .into_iter()
+            .find(|section| section.config_id() == value)
     }
 
     pub fn label(self) -> &'static str {

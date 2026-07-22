@@ -549,9 +549,10 @@ impl RuntimeUiStateController {
         if let Some(barrier) = &self.active_barrier {
             return Err(BeginConfigInteractionError::ControllerBusy(barrier.id));
         }
-        let guard = self
+        let seed_targets = target.seed_targets().into_iter().collect();
+        let guards = self
             .seeds
-            .guard(&target.seed_target())
+            .guards(&seed_targets)
             .map_err(BeginConfigInteractionError::Seed)?;
         Ok(ConfigInteractionPermit {
             controller_id: self.id,
@@ -559,7 +560,7 @@ impl RuntimeUiStateController {
             mutation_id: self
                 .allocate_mutation_id()
                 .ok_or(BeginConfigInteractionError::MutationIdExhausted)?,
-            guard,
+            guards,
             target,
         })
     }
@@ -580,7 +581,11 @@ impl RuntimeUiStateController {
         if permit.authority_epoch != self.authority_epoch {
             return ValidateConfigInteractionResult::RejectedStaleAuthority;
         }
-        if !self.seeds.guard_is_current(&permit.guard) {
+        if permit
+            .guards
+            .iter()
+            .any(|guard| !self.seeds.guard_is_current(guard))
+        {
             return ValidateConfigInteractionResult::RejectedSeedChanged;
         }
         ValidateConfigInteractionResult::Accepted(permit.target)
@@ -1180,6 +1185,10 @@ impl RuntimeUiStateController {
         } else {
             Ok(())
         }
+    }
+
+    pub(crate) fn shutdown_complete(&self) -> bool {
+        self.pipeline.shutdown_complete()
     }
 
     pub(crate) fn drain_lifecycle_controls(&mut self) {

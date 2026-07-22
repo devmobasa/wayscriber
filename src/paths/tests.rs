@@ -117,6 +117,10 @@ fn data_dir_prefers_xdg_data_home_when_set() {
     let dir =
         data_dir().unwrap_or_else(|| panic!("data_dir should resolve from {XDG_DATA_HOME_ENV}"));
     assert_eq!(dir, tmp.path());
+    assert_eq!(
+        runtime_ui_state_file(),
+        tmp.path().join("wayscriber/runtime-ui.toml")
+    );
 
     match prev_xdg {
         Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },

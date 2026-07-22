@@ -502,9 +502,7 @@ fn abandoned_preview_targets(
         AbandonedPreviewSession::RuntimeUi(RuntimeUiPreviewSession::LiveOnly(session)) => {
             session.guard.guards.as_slice()
         }
-        AbandonedPreviewSession::ConfigPosition(session) => {
-            std::slice::from_ref(&session.permit.guard)
-        }
+        AbandonedPreviewSession::ConfigPosition(session) => session.permit.guards.as_slice(),
     };
     guards.iter().map(|guard| &guard.target)
 }

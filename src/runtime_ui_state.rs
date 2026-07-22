@@ -16,6 +16,8 @@ mod types;
 mod wire;
 mod writer;
 
+pub(crate) use crate::config::ToolbarItemVisibilitySetting as ItemVisibilitySetting;
+
 pub(crate) use controller::*;
 pub(crate) use model::*;
 pub(crate) use pipeline::*;

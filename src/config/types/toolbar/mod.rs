@@ -16,6 +16,11 @@ pub use items::{
     ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface,
     ToolbarItemsConfig, toolbar_item_definitions, toolbar_item_order_group,
 };
+pub(crate) use items::{
+    ToolbarItemVisibilitySetting, factory_individual_toolbar_item_visibility_settings,
+    item_visibility_setting, resettable_individual_toolbar_item_ids,
+    toolbar_item_visibility_override_allowed,
+};
 pub use mode::{ToolbarLayoutMode, ToolbarSectionDefaults};
 pub use overrides::{ToolbarModeOverride, ToolbarModeOverrides};
 pub use rebind::ToolbarRebindModifier;

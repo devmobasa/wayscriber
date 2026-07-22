@@ -64,6 +64,11 @@ pub use toolbar::{
     ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, ToolbarSideLayout,
     TopDisplayMode, toolbar_item_definitions, toolbar_item_order_group,
 };
+pub(crate) use toolbar::{
+    ToolbarItemVisibilitySetting, factory_individual_toolbar_item_visibility_settings,
+    item_visibility_setting, resettable_individual_toolbar_item_ids,
+    toolbar_item_visibility_override_allowed,
+};
 pub use toolbar::{
     ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
     resolve_section_visibility, section_flag_for_item, set_section_visibility,

@@ -139,8 +139,9 @@ impl WaylandState {
         if target == TouchTarget::InlineToolbar {
             self.inline_toolbar_leave();
         }
+        self.finish_toolbar_item_drag(false);
         self.set_toolbar_dragging(false);
-        self.end_toolbar_move_drag();
+        self.cancel_toolbar_move_drag();
         if self.board_panning_active() {
             self.stop_board_pan();
         }
@@ -456,6 +457,7 @@ impl WaylandState {
             }
             self.toolbar.pointer_leave(surface);
             self.set_pointer_over_toolbar(false);
+            self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
             self.end_toolbar_move_drag();
             self.toolbar.mark_dirty();
@@ -517,6 +519,7 @@ impl WaylandState {
         }
 
         if self.is_move_dragging() {
+            self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
             self.end_toolbar_move_drag();
             return;

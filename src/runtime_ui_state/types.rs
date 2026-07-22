@@ -1,4 +1,6 @@
-use crate::config::{ToolbarItemId, ToolbarItemOrderGroup};
+use crate::config::{
+    ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting as ItemVisibilitySetting,
+};
 use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
 macro_rules! id_type {
@@ -56,13 +58,6 @@ impl ToolbarPositionSeed {
             y: NormalizedF64::new(y)?,
         })
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum ItemVisibilitySetting {
-    Default,
-    Hidden,
-    Shown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

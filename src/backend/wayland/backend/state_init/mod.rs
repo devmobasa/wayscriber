@@ -53,6 +53,24 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    let runtime_ui_path = crate::paths::runtime_ui_state_file();
+    let runtime_ui = match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
+        &config,
+        &runtime_ui_path,
+        runtime_wake.handle(),
+    ) {
+        Ok(runtime_ui) => {
+            runtime_ui.apply_startup_state(&mut input_state);
+            Some(runtime_ui)
+        }
+        Err(error) => {
+            warn!(
+                "Runtime UI persistence is unavailable at {}: {error:#}",
+                runtime_ui_path.display()
+            );
+            None
+        }
+    };
     input_state.set_session_preflight_options(session_options.clone());
     let screencopy_supported = setup.screencopy_manager.is_some();
     let portal_freeze_supported = screenshot_portal_available(&backend.tokio_runtime);
@@ -157,6 +175,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         capture_manager,
         session_options,
         persistence,
+        runtime_ui,
         runtime_wake: runtime_wake.handle(),
         tokio_handle,
         exit_after_capture_mode,

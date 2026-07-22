@@ -1,4 +1,8 @@
 use std::fs;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use super::*;
 use crate::runtime_ui_state::*;
@@ -42,6 +46,61 @@ fn every_accepted_command_produces_one_typed_completion() {
     assert!(matches!(writer.try_recv(), Err(TryRecvError::Empty)));
     writer.shutdown();
     assert!(path.exists());
+}
+
+#[test]
+fn a_panicking_completion_notifier_does_not_stop_the_writer() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let path = temp.path().join("runtime-ui.toml");
+    let store = RuntimeUiStateStore::new(&path);
+    let expected = store.inspect().unwrap().observation.revision;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let notify_calls = Arc::clone(&calls);
+    let writer = RuntimeUiStateWriter::spawn_with_completion_notifier(store, move || {
+        if notify_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            panic!("test notifier panic");
+        }
+    })
+    .unwrap();
+
+    writer
+        .submit(RuntimeStateWriterCommand::SourceMutation(
+            SourceMutationRequest {
+                id: SourceMutationId(1),
+                accepted_through: AcceptedStateRevision(1),
+                expected_source: expected,
+                expected_epoch: 1,
+                kind: SourceMutationKind::Replace(RuntimeUiWireState::default()),
+            },
+        ))
+        .unwrap();
+    let RuntimeStateWriterCompletion::SourceMutation(SourceMutationResult::Applied {
+        new_source,
+        ..
+    }) = writer.recv().unwrap()
+    else {
+        panic!("first command did not complete");
+    };
+    writer
+        .submit(RuntimeStateWriterCommand::SourceMutation(
+            SourceMutationRequest {
+                id: SourceMutationId(2),
+                accepted_through: AcceptedStateRevision(2),
+                expected_source: new_source,
+                expected_epoch: 1,
+                kind: SourceMutationKind::Replace(RuntimeUiWireState::default()),
+            },
+        ))
+        .unwrap();
+    assert!(matches!(
+        writer.recv().unwrap(),
+        RuntimeStateWriterCompletion::SourceMutation(SourceMutationResult::Applied {
+            id: SourceMutationId(2),
+            ..
+        })
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    writer.shutdown();
 }
 
 #[test]

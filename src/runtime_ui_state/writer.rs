@@ -38,11 +38,25 @@ pub(crate) struct RuntimeUiStateWriter {
 
 impl RuntimeUiStateWriter {
     pub(crate) fn spawn(store: RuntimeUiStateStore) -> std::io::Result<Self> {
+        Self::spawn_with_completion_notifier(store, || {})
+    }
+
+    pub(crate) fn spawn_with_completion_notifier(
+        store: RuntimeUiStateStore,
+        notify_completion: impl Fn() + Send + 'static,
+    ) -> std::io::Result<Self> {
         let (command_tx, command_rx) = sync_channel(WRITER_COMMAND_CAPACITY);
         let (completion_tx, completion_rx) = sync_channel(WRITER_COMMAND_CAPACITY);
         let worker = thread::Builder::new()
             .name("wayscriber-runtime-state-writer".to_string())
-            .spawn(move || run_writer(store, command_rx, completion_tx))?;
+            .spawn(move || {
+                run_writer(
+                    store,
+                    command_rx,
+                    completion_tx,
+                    Box::new(notify_completion),
+                )
+            })?;
         Ok(Self {
             commands: Some(command_tx),
             completions: completion_rx,
@@ -103,11 +117,15 @@ fn run_writer(
     store: RuntimeUiStateStore,
     commands: Receiver<RuntimeStateWriterCommand>,
     completions: SyncSender<RuntimeStateWriterCompletion>,
+    notify_completion: Box<dyn Fn() + Send>,
 ) {
     while let Ok(command) = commands.recv() {
         let completion = execute_catching_panics(&store, command);
         if completions.send(completion).is_err() {
             break;
+        }
+        if catch_unwind(AssertUnwindSafe(&notify_completion)).is_err() {
+            log::error!("Runtime UI completion notifier panicked; writer will continue");
         }
     }
 }

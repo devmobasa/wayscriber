@@ -178,8 +178,8 @@ fn toggle_grid(
     Some(grid)
 }
 
-/// Settings/customize button grid (Customize · Reset hidden · Configurator
-/// · Config file, or Back · Reset hidden · Reset order while customizing).
+/// Settings/customize button grid (Customize · Restore built-in visibility ·
+/// Configurator · Config file, or Back · built-in resets while customizing).
 /// The button set is structural (customize state, hidden overrides), so a
 /// rebuild follows every change and no updaters are needed.
 fn buttons_grid(ctx: &SectionCtx, buttons: &[model::ToolbarSettingsButton]) -> Option<gtk4::Grid> {

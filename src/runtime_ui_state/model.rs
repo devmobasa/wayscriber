@@ -292,10 +292,16 @@ pub(crate) enum ConfigPositionTarget {
 }
 
 impl ConfigPositionTarget {
-    pub(crate) fn seed_target(self) -> InteractionSeedTarget {
+    pub(crate) fn seed_targets(self) -> Vec<InteractionSeedTarget> {
         match self {
-            Self::Top => InteractionSeedTarget::TopPosition,
-            Self::Side => InteractionSeedTarget::SidePosition,
+            Self::Top => vec![InteractionSeedTarget::TopPosition],
+            // A side drag can reconcile and persist the top X offset when the
+            // overlap-derived base changes, so it must be fenced by both
+            // authored position seeds.
+            Self::Side => vec![
+                InteractionSeedTarget::TopPosition,
+                InteractionSeedTarget::SidePosition,
+            ],
         }
     }
 }
@@ -305,7 +311,7 @@ pub(crate) struct ConfigInteractionPermit {
     pub(crate) controller_id: ControllerId,
     pub(crate) authority_epoch: u64,
     pub(crate) mutation_id: u64,
-    pub(crate) guard: SeedGuard,
+    pub(crate) guards: Vec<SeedGuard>,
     pub(crate) target: ConfigPositionTarget,
 }
 

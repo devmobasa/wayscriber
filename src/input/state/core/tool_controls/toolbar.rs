@@ -1,5 +1,8 @@
 use super::super::base::InputState;
-use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, TopDisplayMode};
+use crate::config::{
+    ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, TopDisplayMode,
+    factory_individual_toolbar_item_visibility_settings,
+};
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -281,11 +284,28 @@ impl InputState {
         true
     }
 
-    pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
-        if !self.toolbar_items.reset_known_hidden_to_defaults() {
+    pub(crate) fn set_toolbar_item_visibility_setting(
+        &mut self,
+        id: ToolbarItemId,
+        setting: ToolbarItemVisibilitySetting,
+    ) -> bool {
+        if !self.toolbar_items.set_visibility_setting(id, setting) {
             return false;
         }
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.refresh_section_visibility();
+        self.needs_redraw = true;
+        true
+    }
 
+    pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
+        let mut changed = false;
+        for (&id, &setting) in factory_individual_toolbar_item_visibility_settings() {
+            changed |= self.toolbar_items.set_visibility_setting(id, setting);
+        }
+        if !changed {
+            return false;
+        }
         self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.refresh_section_visibility();
         self.needs_redraw = true;
@@ -346,6 +366,19 @@ impl InputState {
 
     pub fn clear_toolbar_item_drag(&mut self) {
         self.toolbar_customize_drag = None;
+    }
+
+    pub(crate) fn set_toolbar_item_order(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+        order: &[ToolbarItemId],
+    ) -> bool {
+        if !self.toolbar_items.set_known_order(group, order) {
+            return false;
+        }
+        self.resolved_toolbar_items = self.toolbar_items.resolved();
+        self.needs_redraw = true;
+        true
     }
 
     pub fn reset_toolbar_item_order(&mut self, group: ToolbarItemOrderGroup) -> bool {
@@ -418,6 +451,7 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
@@ -522,5 +556,35 @@ mod tests {
         state.init_toolbar_side_panes_from_config("bogus", &[]);
         assert_eq!(state.toolbar_side_pane, SidePane::Draw);
         assert!(state.toolbar_collapsed_side_sections.is_empty());
+    }
+
+    #[test]
+    fn factory_visibility_reset_changes_only_the_centralized_eligible_set() {
+        let mut state = make_test_input_state();
+        let section = crate::config::ToolbarSectionFlag::Actions.item_id();
+        state.toolbar_items = ToolbarItemsConfig::default();
+        state
+            .toolbar_items
+            .set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
+        state.toolbar_items.set_hidden(ids::TOP_TOOL_PEN, true);
+        state.toolbar_items.set_hidden(section, true);
+        state
+            .toolbar_items
+            .set_hidden(ids::TOP_CHROME_OVERFLOW, true);
+        state
+            .toolbar_items
+            .hidden
+            .push("future.toolbar.item".to_string());
+        state.resolved_toolbar_items = state.toolbar_items.resolved();
+
+        assert!(state.reset_toolbar_item_hidden_overrides());
+
+        let resolved = state.toolbar_items.resolved();
+        assert!(resolved.hidden.contains(&ids::TOP_UTILITY_SCREENSHOT));
+        assert!(!resolved.hidden.contains(&ids::TOP_TOOL_PEN));
+        assert!(resolved.hidden.contains(&section));
+        assert!(resolved.hidden.contains(&ids::TOP_CHROME_OVERFLOW));
+        assert_eq!(resolved.unknown_hidden, ["future.toolbar.item"]);
+        assert!(!state.reset_toolbar_item_hidden_overrides());
     }
 }

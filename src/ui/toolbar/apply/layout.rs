@@ -57,7 +57,7 @@ impl InputState {
 
     /// Minimize keeps the surface mapped as a small restore tab instead of
     /// hiding it, so a presenter who "closes" a bar is never stranded.
-    pub(super) fn apply_toolbar_set_top_minimized(&mut self, minimized: bool) -> bool {
+    pub(crate) fn apply_toolbar_set_top_minimized(&mut self, minimized: bool) -> bool {
         if self.toolbar_top_minimized == minimized {
             return false;
         }
@@ -430,7 +430,7 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_set_side_pane(
+    pub(crate) fn apply_toolbar_set_side_pane(
         &mut self,
         pane: crate::ui::toolbar::SidePane,
     ) -> bool {

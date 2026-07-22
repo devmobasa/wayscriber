@@ -17,9 +17,6 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn set_toolbar_dragging(&mut self, value: bool) {
         self.data.toolbar_dragging = value;
-        if !value {
-            self.input_state.clear_toolbar_item_drag();
-        }
     }
 
     pub(in crate::backend::wayland) fn toolbar_drag_preview_active(&self) -> bool {
@@ -62,6 +59,17 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn toolbar_side_offset_x(&self) -> f64 {
         self.data.toolbar_side_offset_x
+    }
+
+    pub(in crate::backend::wayland) fn restore_toolbar_offsets(
+        &mut self,
+        top: (f64, f64),
+        side: (f64, f64),
+    ) {
+        self.data.toolbar_top_offset = top.0;
+        self.data.toolbar_top_offset_y = top.1;
+        self.data.toolbar_side_offset_x = side.0;
+        self.data.toolbar_side_offset = side.1;
     }
 
     pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {

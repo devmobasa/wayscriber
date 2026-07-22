@@ -3,8 +3,9 @@ use std::borrow::Cow;
 use crate::config::{
     Action, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
     ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarLayoutMode,
-    action_label, action_short_label, toolbar_item_definitions, toolbar_item_ids as ids,
-    toolbar_item_order_group,
+    action_label, action_short_label, factory_individual_toolbar_item_visibility_settings,
+    item_visibility_setting, toolbar_item_definitions, toolbar_item_ids as ids,
+    toolbar_item_order_group, toolbar_item_visibility_override_allowed,
 };
 
 use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
