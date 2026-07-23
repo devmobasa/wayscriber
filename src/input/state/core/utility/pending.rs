@@ -4,7 +4,7 @@ use super::super::base::{
     ZoomAction,
 };
 use crate::config::BoardsConfig;
-use crate::input::boards::PendingBoardConfigUpdate;
+use crate::input::boards::{PendingBoardConfigUpdate, PendingBoardRuntimeUiAction};
 
 #[allow(dead_code)]
 impl InputState {
@@ -52,6 +52,12 @@ impl InputState {
 
     pub(crate) fn take_pending_board_config_update(&mut self) -> Option<PendingBoardConfigUpdate> {
         self.pending_board_config.take()
+    }
+
+    pub(crate) fn take_pending_board_runtime_ui_actions(
+        &mut self,
+    ) -> Vec<PendingBoardRuntimeUiAction> {
+        std::mem::take(&mut self.pending_board_runtime_ui)
     }
 
     pub(crate) fn take_pending_selection_clipboard_publish(

@@ -121,6 +121,11 @@ pub struct StateData {
     /// GTK surface currently parked at its drag origin while the main overlay
     /// renders the moving toolbar preview.
     pub(super) gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
+    /// Offset corrections accumulated while a persistence barrier freezes a
+    /// start-relative GTK drag. They discard fenced motion if the exact same
+    /// preview later resumes.
+    pub(super) gtk_top_drag_rebase: Option<(f64, f64)>,
+    pub(super) gtk_side_drag_rebase: Option<(f64, f64)>,
     /// A GTK drag that emitted feedback while a modal was engaged stays
     /// blocked until its matching drag-end feedback arrives.
     pub(super) gtk_top_drag_blocked: bool,
@@ -240,6 +245,8 @@ impl StateData {
             gtk_top_offset_seq: 0,
             gtk_side_offset_seq: 0,
             gtk_drag_preview: None,
+            gtk_top_drag_rebase: None,
+            gtk_side_drag_rebase: None,
             gtk_top_drag_blocked: false,
             gtk_top_hover: false,
             gtk_side_drag_blocked: false,

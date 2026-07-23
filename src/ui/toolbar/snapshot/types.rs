@@ -217,6 +217,32 @@ pub struct SessionRecentSnapshot {
     pub path: PathBuf,
 }
 
+/// User-facing lifecycle state for the generated runtime UI preference file.
+///
+/// This stays transport-only: the Wayland adapter retains reset/recovery
+/// capabilities and publishes only safe, cloneable presentation data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeUiPersistenceSnapshot {
+    pub path: PathBuf,
+    pub mode: RuntimeUiPersistenceMode,
+    pub detail: Option<String>,
+    pub recovery_artifacts: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeUiPersistenceMode {
+    Unavailable,
+    Missing,
+    Supported,
+    UnsupportedReadOnly { version: Option<u64> },
+    Resetting,
+    AwaitingUnsupportedResetConfirmation { version: Option<u64> },
+    Unhealthy,
+    Recovering,
+    CancellingRecovery,
+    AwaitingInvalidResetConfirmation,
+}
+
 /// Snapshot of state mirrored to the toolbar UI.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolbarSnapshot {
@@ -376,6 +402,9 @@ pub struct ToolbarSnapshot {
     pub recent_sessions: Vec<SessionRecentSnapshot>,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub pending_save_as_overwrite_path: Option<PathBuf>,
+    /// Generated runtime UI preference persistence and recovery state.
+    /// Generic snapshots outside the live backend leave this as `None`.
+    pub runtime_ui_persistence: Option<RuntimeUiPersistenceSnapshot>,
     /// Selection-property entries docked into the style pill while the
     /// select tool has an active selection (mirrors the overlay properties
     /// popup's entry list; empty when nothing is selected).

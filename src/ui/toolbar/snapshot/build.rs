@@ -217,6 +217,7 @@ impl ToolbarSnapshot {
             active_session_path: None,
             recent_sessions: Vec::new(),
             pending_save_as_overwrite_path: state.pending_save_as_overwrite().map(PathBuf::from),
+            runtime_ui_persistence: None,
         }
     }
 }

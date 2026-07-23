@@ -46,6 +46,7 @@ impl ConfiguratorApp {
 
         let column = column![
             text("Toolbar").size(18),
+            text("These settings are configured defaults. Toolbar pins, item visibility/order, pane state, and board pins changed in the overlay are saved separately as runtime preferences.").size(12),
             labeled_control(
                 "Layout mode",
                 toolbar_layout.width(Length::Fill).into(),
@@ -66,13 +67,13 @@ impl ConfiguratorApp {
                 self.draft.ui_toolbar_rebind_modifier != self.defaults.ui_toolbar_rebind_modifier,
             ),
             toggle_row(
-                "Pin top toolbar",
+                "Configured default: pin top toolbar",
                 self.draft.ui_toolbar_top_pinned,
                 self.defaults.ui_toolbar_top_pinned,
                 ToggleField::UiToolbarTopPinned,
             ),
             toggle_row(
-                "Pin side toolbar",
+                "Configured default: pin side toolbar",
                 self.draft.ui_toolbar_side_pinned,
                 self.defaults.ui_toolbar_side_pinned,
                 ToggleField::UiToolbarSidePinned,
@@ -241,7 +242,7 @@ impl ConfiguratorApp {
     pub(super) fn ui_toolbar_visibility_tab(&self) -> Element<'_, Message> {
         let column = column![
             text("Toolbar Visibility").size(18),
-            text("Checked items are shown. Uncheck an item to hide it from toolbar sizing, drawing, and hit testing. Existing section toggles and mode overrides can still hide checked items.").size(12),
+            text("These are configured visibility defaults. Overlay customizations are stored separately as runtime preferences. Checked items are shown; section toggles and mode overrides can still hide them.").size(12),
             toolbar_item_visibility_section(
                 &self.draft.ui_toolbar_items,
                 &self.defaults.ui_toolbar_items,
@@ -302,15 +303,21 @@ fn toolbar_item_visibility_row<'a>(
 ) -> Element<'a, Message> {
     let id = definition.id;
     let visible = !resolved.is_hidden(id);
-    let default = format!(
-        "default: {}",
+    let built_in_default = format!(
+        "built-in default: {}",
         visibility_override_label(!defaults.is_hidden(id))
     );
     let order_group = configurator_order_group(definition);
     let order = order_group.and_then(|group| {
         let index = resolved.order.index_of(group, id)?;
         let len = resolved.order.ordered_ids(group).len();
-        Some((group, index, index > 0, index + 1 < len))
+        Some((
+            group,
+            index,
+            index > 0,
+            index + 1 < len,
+            index == 0 && order_differs_from_built_in(resolved, group),
+        ))
     });
 
     let mut cells = row![
@@ -321,7 +328,7 @@ fn toolbar_item_visibility_row<'a>(
     ]
     .spacing(12)
     .align_y(iced::Alignment::Center);
-    if let Some((group, _, can_move_up, can_move_down)) = order {
+    if let Some((group, _, can_move_up, can_move_down, show_restore)) = order {
         let up = if can_move_up {
             button(text("^")).on_press(Message::ToolbarItemMoveRequested(group, id, -1))
         } else {
@@ -332,12 +339,23 @@ fn toolbar_item_visibility_row<'a>(
         } else {
             button(text("v"))
         };
-        cells = cells
-            .push(up)
-            .push(down)
-            .push(button(text("Reset")).on_press(Message::ToolbarItemOrderReset(group)));
+        cells = cells.push(up).push(down);
+        if show_restore {
+            cells = cells.push(
+                button(text("Restore built-in order"))
+                    .on_press(Message::ToolbarItemOrderReset(group)),
+            );
+        }
     }
-    cells.push(text(default).size(12)).into()
+    cells.push(text(built_in_default).size(12)).into()
+}
+
+fn order_differs_from_built_in(
+    resolved: &ResolvedToolbarItems,
+    group: ToolbarItemOrderGroup,
+) -> bool {
+    let built_in = ToolbarItemsConfig::default().resolved();
+    resolved.order.ordered_ids(group) != built_in.order.ordered_ids(group)
 }
 
 fn toolbar_item_definitions_for_display(
@@ -411,5 +429,24 @@ fn toolbar_item_category_label(category: ToolbarItemCategory) -> &'static str {
         ToolbarItemCategory::Setting => "Settings",
         ToolbarItemCategory::Session => "Sessions",
         ToolbarItemCategory::ToolOption => "Tool options",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wayscriber::config::toolbar_item_ids as ids;
+
+    #[test]
+    fn restore_order_is_available_only_after_departing_from_built_in_order() {
+        let mut items = ToolbarItemsConfig::default();
+        let group = ToolbarItemOrderGroup::TopTools;
+        assert!(!order_differs_from_built_in(&items.resolved(), group));
+
+        assert!(items.move_item_by(group, ids::TOP_TOOL_PEN, -1));
+        assert!(order_differs_from_built_in(&items.resolved(), group));
+
+        assert!(items.reset_known_order_to_defaults(group));
+        assert!(!order_differs_from_built_in(&items.resolved(), group));
     }
 }

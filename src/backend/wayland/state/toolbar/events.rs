@@ -1,24 +1,27 @@
 use super::*;
 use crate::{
+    backend::wayland::runtime_ui_state::ToolbarRuntimeFinish,
     input::InputState,
     onboarding::OnboardingState,
     ui::toolbar::model::{
         ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPersistenceTarget,
-        ToolbarPreApplyEffect,
+        ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget,
     },
 };
 use wayland_client::{Connection, QueueHandle};
 
+mod feedback;
 mod persistence;
 mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
 #[cfg(test)]
 use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersistenceTarget};
+use feedback::{ToolbarPinChange, pin_durability};
 #[cfg(test)]
 use persistence::{
     ToolbarPositions, apply_toolbar_config_target, apply_toolbar_ui_config_target,
-    persisted_tool_preview_value, persisted_top_display_mode_value, persisted_top_minimized_value,
+    persisted_tool_preview_value, persisted_top_display_mode_value,
 };
 use session::populate_session_snapshot;
 
@@ -171,6 +174,15 @@ fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
                 | ToolbarEvent::OpenCommandPalette
                 | ToolbarEvent::OpenConfigurator
                 | ToolbarEvent::OpenConfigFile
+                | ToolbarEvent::RequestRuntimeUiReset
+                | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+                | ToolbarEvent::CancelUnsupportedRuntimeUiReset
+                | ToolbarEvent::RetryRuntimeUiPersistence
+                | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+                | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+                | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+                | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
+                | ToolbarEvent::CancelRuntimeUiRecovery
         )
 }
 
@@ -184,6 +196,11 @@ impl WaylandState {
         let mut snapshot =
             ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
         populate_session_snapshot(&mut snapshot, self.session.options());
+        snapshot.runtime_ui_persistence = self
+            .runtime_ui
+            .as_ref()
+            .map(|runtime| runtime.persistence_snapshot())
+            .or_else(|| self.runtime_ui_unavailable.clone());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_fade = self.data.top_strip_fade.value();
@@ -316,6 +333,20 @@ impl WaylandState {
         if self.handle_toolbar_session_event(&event, conn, qh) {
             return;
         }
+        let persistence_lifecycle_handled = self
+            .runtime_ui
+            .as_mut()
+            .is_some_and(|runtime| runtime.handle_persistence_lifecycle_event(&event));
+        if persistence_lifecycle_handled {
+            // Read-only recovery cancellation can terminalize synchronously
+            // and install a seed reload that was staged behind the barrier.
+            // Consume that rebuild in this dispatch instead of waiting for a
+            // writer wake that may never arrive.
+            self.drain_runtime_ui_completions();
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            return;
+        }
 
         let policy = ToolbarEventPolicy::for_event(&event);
         for effect in &policy.pre_apply_effects {
@@ -336,7 +367,9 @@ impl WaylandState {
                     "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
                     *x, *y, coord_is_screen, inline_active
                 ));
-                self.begin_toolbar_move_drag(MoveDragKind::Top, (*x, *y), coord_is_screen);
+                if !self.begin_toolbar_move_drag(MoveDragKind::Top, (*x, *y), coord_is_screen) {
+                    return;
+                }
                 if coord_is_screen {
                     self.handle_toolbar_move_screen(MoveDragKind::Top, (*x, *y));
                 } else {
@@ -351,7 +384,9 @@ impl WaylandState {
                     "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
                     *x, *y, coord_is_screen, inline_active
                 ));
-                self.begin_toolbar_move_drag(MoveDragKind::Side, (*x, *y), coord_is_screen);
+                if !self.begin_toolbar_move_drag(MoveDragKind::Side, (*x, *y), coord_is_screen) {
+                    return;
+                }
                 if coord_is_screen {
                     self.handle_toolbar_move_screen(MoveDragKind::Side, (*x, *y));
                 } else {
@@ -370,8 +405,45 @@ impl WaylandState {
         let thickness_event = policy.tablet_thickness_sensitive;
 
         let pane_switch = matches!(event, ToolbarEvent::SetSidePane(_));
+        let starts_item_drag = matches!(event, ToolbarEvent::StartToolbarItemDrag { .. });
+        if matches!(event, ToolbarEvent::DragToolbarItemOver { .. })
+            && !self.toolbar_item_drag_update_allowed()
+        {
+            // Keep the active preview unchanged. Its real release/cancel still
+            // flows through the barrier-aware finish path exactly once, while
+            // a same-authority barrier failure may resume this untouched drag.
+            return;
+        }
+        let runtime_target = match policy.persistence {
+            ToolbarPersistence::RuntimeUi(target) => Some(target),
+            ToolbarPersistence::Ephemeral | ToolbarPersistence::Config(_) => None,
+        };
+        if starts_item_drag {
+            let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
+                unreachable!("item drag start must carry its order-group runtime target");
+            };
+            if !self.begin_toolbar_item_drag_preview(group) {
+                return;
+            }
+        }
+        let pin_change = ToolbarPinChange::from_event(&event);
+        let prepared_runtime = if starts_item_drag {
+            None
+        } else if let Some(target) = runtime_target {
+            match self.runtime_ui.as_ref() {
+                Some(runtime) => match runtime.begin_toolbar_mutation(target, &self.input_state) {
+                    Some(prepared) => Some(prepared),
+                    None => return,
+                },
+                None => None,
+            }
+        } else {
+            None
+        };
+        let pin_durability = pin_durability(prepared_runtime.as_ref());
 
-        if self.input_state.apply_toolbar_event(event) {
+        let applied = self.input_state.apply_toolbar_event(event);
+        if applied {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             if pane_switch {
@@ -388,20 +460,35 @@ impl WaylandState {
             }
 
             match policy.persistence {
-                ToolbarPersistence::RuntimeOnly => {}
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar(target)) => {
+                ToolbarPersistence::Ephemeral | ToolbarPersistence::RuntimeUi(_) => {}
+                ToolbarPersistence::Config(ToolbarPersistenceTarget::Toolbar(target)) => {
                     self.save_toolbar_config(target);
                 }
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Ui(target)) => {
+                ToolbarPersistence::Config(ToolbarPersistenceTarget::Ui(target)) => {
                     self.save_toolbar_ui_config(target);
                 }
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::History) => {
+                ToolbarPersistence::Config(ToolbarPersistenceTarget::History) => {
                     self.save_toolbar_history_config();
                 }
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::ClickHighlight) => {
+                ToolbarPersistence::Config(ToolbarPersistenceTarget::ClickHighlight) => {
                     self.save_click_highlight_preferences();
                 }
             }
+        }
+        if starts_item_drag && !applied {
+            self.finish_toolbar_item_drag(false);
+        }
+        let mut pin_confirmation_allowed = applied && prepared_runtime.is_none();
+        if let Some(prepared) = prepared_runtime
+            && let Some(runtime) = self.runtime_ui.as_mut()
+        {
+            let finish = runtime.finish_toolbar_mutation(prepared, applied, &self.input_state);
+            pin_confirmation_allowed =
+                applied && matches!(finish, ToolbarRuntimeFinish::KeepPreview);
+            self.apply_toolbar_runtime_finish(finish);
+        }
+        if pin_confirmation_allowed && let Some(pin_change) = pin_change {
+            pin_change.notify(&mut self.input_state, pin_durability);
         }
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);

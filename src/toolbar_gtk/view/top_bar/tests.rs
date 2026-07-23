@@ -7,7 +7,9 @@ use std::time::Duration;
 use super::*;
 use crate::config::KeyBinding;
 use crate::input::state::test_support::make_test_input_state;
-use crate::ui::toolbar::ToolbarBindingHints;
+use crate::ui::toolbar::{
+    RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarBindingHints,
+};
 use gtk4::prelude::*;
 
 #[test]
@@ -75,6 +77,29 @@ fn popover_content_keys_track_icon_mode_even_when_the_compact_plan_masks_it() {
     assert!(
         CanvasMenuContentKey::of(&text_mode) != CanvasMenuContentKey::of(&icon_mode),
         "canvas popover content key tracks icon mode"
+    );
+}
+
+#[test]
+fn settings_popover_rebuilds_when_runtime_persistence_controls_change() {
+    let state = make_test_input_state();
+    let mut unhealthy = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    unhealthy.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+        path: "/tmp/runtime-ui.toml".into(),
+        mode: RuntimeUiPersistenceMode::Unhealthy,
+        detail: None,
+        recovery_artifacts: Vec::new(),
+    });
+    let mut confirmation = unhealthy.clone();
+    confirmation.runtime_ui_persistence.as_mut().unwrap().mode =
+        RuntimeUiPersistenceMode::AwaitingInvalidResetConfirmation;
+
+    assert!(
+        SettingsMenuContentKey::of(&unhealthy) != SettingsMenuContentKey::of(&confirmation),
+        "the top settings popover must replace recovery actions with confirm/cancel controls"
     );
 }
 

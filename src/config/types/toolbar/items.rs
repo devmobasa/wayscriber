@@ -1,6 +1,7 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -154,6 +155,29 @@ impl ToolbarItemsConfig {
         }
     }
 
+    /// Replace the explicit visibility setting for one known item while
+    /// preserving unknown/future ids in both raw lists.
+    pub(crate) fn set_visibility_setting(
+        &mut self,
+        id: ToolbarItemId,
+        setting: ToolbarItemVisibilitySetting,
+    ) -> bool {
+        let before_hidden = self.hidden.clone();
+        let before_shown = self.shown.clone();
+        self.hidden = drain_without(std::mem::take(&mut self.hidden), id);
+        self.shown = drain_without(std::mem::take(&mut self.shown), id);
+        match setting {
+            ToolbarItemVisibilitySetting::Default => {}
+            ToolbarItemVisibilitySetting::Hidden => {
+                self.hidden.push(id.as_str().to_string());
+            }
+            ToolbarItemVisibilitySetting::Shown => {
+                self.shown.push(id.as_str().to_string());
+            }
+        }
+        self.hidden != before_hidden || self.shown != before_shown
+    }
+
     pub fn reset_known_hidden_to_defaults(&mut self) -> bool {
         let original_hidden = self.hidden.clone();
         let original_shown = self.shown.clone();
@@ -220,17 +244,11 @@ impl ToolbarItemsConfig {
         self.order.reset_known_group_to_defaults(group)
     }
 
-    /// Copy one resolved known order group while preserving unknown raw ids
-    /// already stored by this config version.
-    pub(crate) fn sync_known_order_group_from(
+    pub(crate) fn set_known_order(
         &mut self,
-        source: &Self,
         group: ToolbarItemOrderGroup,
+        ids: &[ToolbarItemId],
     ) -> bool {
-        self.set_known_order(group, source.order.resolved().ordered_ids(group))
-    }
-
-    fn set_known_order(&mut self, group: ToolbarItemOrderGroup, ids: &[ToolbarItemId]) -> bool {
         self.order.set_known_group_order(group, ids)
     }
 }
@@ -249,6 +267,64 @@ impl ResolvedToolbarItems {
     pub fn is_hidden(&self, id: ToolbarItemId) -> bool {
         self.hidden.contains(&id)
     }
+}
+
+/// The explicit replacement setting for one toolbar item. `Default` means
+/// the authored/factory baseline decides visibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum ToolbarItemVisibilitySetting {
+    Default,
+    Hidden,
+    Shown,
+}
+
+pub(crate) fn item_visibility_setting(
+    resolved: &ResolvedToolbarItems,
+    id: ToolbarItemId,
+) -> ToolbarItemVisibilitySetting {
+    if resolved.hidden.contains(&id) {
+        ToolbarItemVisibilitySetting::Hidden
+    } else if resolved.shown.contains(&id) {
+        ToolbarItemVisibilitySetting::Shown
+    } else {
+        ToolbarItemVisibilitySetting::Default
+    }
+}
+
+static FACTORY_INDIVIDUAL_VISIBILITY_SETTINGS: LazyLock<
+    BTreeMap<ToolbarItemId, ToolbarItemVisibilitySetting>,
+> = LazyLock::new(|| {
+    let factory = ToolbarItemsConfig::default().resolved();
+    resettable_individual_toolbar_item_ids()
+        .map(|id| (id, item_visibility_setting(&factory, id)))
+        .collect()
+});
+
+/// Built-in visibility settings for the exact individual-item reset batch.
+/// This is initialized once and shared by availability, live mutation, and
+/// runtime persistence so those layers cannot drift.
+pub(crate) fn factory_individual_toolbar_item_visibility_settings()
+-> &'static BTreeMap<ToolbarItemId, ToolbarItemVisibilitySetting> {
+    &FACTORY_INDIVIDUAL_VISIBILITY_SETTINGS
+}
+
+/// Canonical visibility-customization predicate shared by the settings UI,
+/// runtime-state seed builder, and factory reset implementation.
+pub(crate) fn toolbar_item_visibility_override_allowed(definition: &ToolbarItemDefinition) -> bool {
+    definition.group != Some(ToolbarGroupId::Settings)
+        && definition.id != ids::SIDE_GROUP_SETTINGS
+        && definition.id != ids::TOP_CHROME_OVERFLOW
+}
+
+/// Individual toolbar items affected by "Restore built-in visibility".
+/// Named section settings intentionally remain outside this reset.
+pub(crate) fn resettable_individual_toolbar_item_ids()
+-> impl Iterator<Item = ToolbarItemId> + 'static {
+    toolbar_item_definitions()
+        .iter()
+        .filter(|definition| toolbar_item_visibility_override_allowed(definition))
+        .filter(|definition| super::visibility::section_flag_for_item(definition.id).is_none())
+        .map(|definition| definition.id)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

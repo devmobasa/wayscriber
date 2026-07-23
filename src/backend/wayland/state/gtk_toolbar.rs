@@ -145,6 +145,7 @@ impl WaylandState {
                         && self.data.gtk_drag_preview
                             == Some(crate::toolbar_gtk::GtkToolbarKind::Top) =>
                     {
+                        self.data.gtk_top_drag_rebase = None;
                         self.apply_gtk_top_offset(
                             self.data.toolbar_top_offset,
                             self.data.toolbar_top_offset_y,
@@ -160,6 +161,7 @@ impl WaylandState {
                         && self.data.gtk_drag_preview
                             == Some(crate::toolbar_gtk::GtkToolbarKind::Side) =>
                     {
+                        self.data.gtk_side_drag_rebase = None;
                         self.apply_gtk_side_offset(
                             self.data.toolbar_side_offset_x,
                             self.data.toolbar_side_offset,

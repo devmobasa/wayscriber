@@ -132,11 +132,28 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         }
     }
 
-    let mut buttons_y = toggle_y;
+    let mut notices_y = toggle_y;
     if toggle_row_count > 0 {
-        buttons_y += toggle_row_count as f64 * (toggle_h + toggle_gap) - toggle_gap;
+        notices_y += toggle_row_count as f64 * (toggle_h + toggle_gap) - toggle_gap;
     }
-    buttons_y += toggle_gap;
+    notices_y += toggle_gap;
+    for notice in settings_model.notices() {
+        let notice_h = layout
+            .spec
+            .side_settings_notice_height(notice, content_width);
+        draw_label_left_wrapped(
+            ctx,
+            button_label_style(),
+            x,
+            notices_y,
+            content_width,
+            notice_h,
+            notice.text.as_ref(),
+        );
+        notices_y += notice_h + toggle_gap;
+    }
+
+    let buttons_y = notices_y;
     let button_h = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_HEIGHT;
     let button_gap = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_GAP;
     let button_w = row_item_width(content_width, 2, button_gap);
@@ -153,17 +170,16 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         2,
         buttons.len(),
     );
-    let button_label_style = UiTextStyle {
-        family: FONT_FAMILY_DEFAULT,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: FONT_SIZE_SECONDARY,
-    };
+    let button_label_style = button_label_style();
     for (item, button) in button_layout.items.iter().zip(buttons.iter()) {
         let button_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
-        draw_button(ctx, item.x, item.y, item.w, item.h, false, button_hover);
+        if button.event.is_destructive() {
+            draw_destructive_button(ctx, item.x, item.y, item.w, item.h, button_hover);
+        } else {
+            draw_button(ctx, item.x, item.y, item.w, item.h, false, button_hover);
+        }
         if use_icons {
             // Icon plus a left-aligned label: the icon-only glyphs were
             // ambiguous and left the row looking sparse and crammed at once.
@@ -393,6 +409,15 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     }
 
     *y += settings_card_h + section_gap;
+}
+
+fn button_label_style() -> UiTextStyle<'static> {
+    UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: FONT_SIZE_SECONDARY,
+    }
 }
 
 fn activation_event(activation: &ToolbarActivation) -> crate::ui::toolbar::ToolbarEvent {

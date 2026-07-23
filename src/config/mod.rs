@@ -73,6 +73,11 @@ pub use types::{
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]
 pub use types::{StylusButtonBinding, TabletInputConfig};
+pub(crate) use types::{
+    ToolbarItemVisibilitySetting, factory_individual_toolbar_item_visibility_settings,
+    item_visibility_setting, resettable_individual_toolbar_item_ids,
+    toolbar_item_visibility_override_allowed,
+};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

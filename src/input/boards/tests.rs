@@ -74,6 +74,96 @@ fn board_identity_generation_changes_only_for_identity_mutations() {
 }
 
 #[test]
+fn runtime_pins_never_leak_into_authored_board_snapshots() {
+    let mut boards = manager();
+    assert_eq!(boards.pin_seed(BOARD_ID_WHITEBOARD), Some(false));
+    assert!(boards.set_board_pinned_runtime(BOARD_ID_WHITEBOARD, true));
+
+    let whiteboard = board_index(&boards, BOARD_ID_WHITEBOARD);
+    boards.board_states_mut()[whiteboard].spec.name = "Renamed whiteboard".to_string();
+    assert!(boards.move_board(whiteboard, 2));
+    assert!(boards.switch_to_id(BOARD_ID_WHITEBOARD));
+    let duplicate_id = boards
+        .duplicate_active_board()
+        .expect("duplicated runtime-pinned board");
+    assert!(boards.create_board());
+
+    let snapshot = boards.to_config();
+    let whiteboard = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == BOARD_ID_WHITEBOARD)
+        .expect("whiteboard snapshot");
+    assert_eq!(whiteboard.name, "Renamed whiteboard");
+    assert!(!whiteboard.pinned, "runtime pin must not become authored");
+    let duplicate = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == duplicate_id)
+        .expect("duplicate snapshot");
+    assert!(
+        !duplicate.pinned,
+        "duplicate inherits the authored pin seed"
+    );
+    assert!(
+        boards
+            .board_states()
+            .iter()
+            .find(|board| board.spec.id == duplicate_id)
+            .expect("live duplicate")
+            .spec
+            .pinned,
+        "duplicate may still inherit the live runtime value"
+    );
+}
+
+#[test]
+fn delete_and_restore_preserve_pin_seed_separately_from_runtime_value() {
+    let mut boards = manager();
+    assert!(boards.set_board_pinned_runtime(BOARD_ID_BLACKBOARD, true));
+    let confirmation = board_delete_confirmation(&mut boards, BOARD_ID_BLACKBOARD);
+    let BoardDeleteOutcome::Deleted {
+        deleted_board,
+        deleted_pin_seed,
+        ..
+    } = boards.delete_board(BoardDeleteRequest::Confirm(confirmation))
+    else {
+        panic!("expected delete");
+    };
+    assert!(deleted_board.spec.pinned);
+    assert!(!deleted_pin_seed);
+
+    let BoardRestoreOutcome::Restored { restored_id, .. } =
+        boards.restore_board(BoardRestoreRequest {
+            board: deleted_board,
+            preferred_index: None,
+            pin_seed: deleted_pin_seed,
+        })
+    else {
+        panic!("expected restore");
+    };
+    assert_eq!(boards.pin_seed(&restored_id), Some(false));
+    assert!(
+        boards
+            .board_states()
+            .iter()
+            .find(|board| board.spec.id == restored_id)
+            .expect("restored board")
+            .spec
+            .pinned
+    );
+    assert!(
+        !boards
+            .to_config()
+            .items
+            .iter()
+            .find(|item| item.id == restored_id)
+            .expect("restored config entry")
+            .pinned
+    );
+}
+
+#[test]
 fn confirmed_board_delete_uses_id_after_active_drift_and_reorder() {
     let mut boards = manager();
     let confirmation = board_delete_confirmation(&mut boards, BOARD_ID_BLACKBOARD);
@@ -155,6 +245,7 @@ fn deleted_and_reused_board_id_rejects_stale_board_delete_confirmation() {
         boards.restore_board(BoardRestoreRequest {
             board: deleted_board,
             preferred_index: None,
+            pin_seed: false,
         }),
         BoardRestoreOutcome::Restored {
             id_changed: false,
@@ -262,6 +353,7 @@ fn restore_rejections_return_original_requests() {
     let request = BoardRestoreRequest {
         board: boards.active_board().clone(),
         preferred_index: Some(3),
+        pin_seed: false,
     };
     boards.max_count = boards.board_count();
     let BoardRestoreOutcome::Rejected(BoardRestoreRejection::MaxCountReached { request }) =

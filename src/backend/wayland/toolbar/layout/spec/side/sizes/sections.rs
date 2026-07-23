@@ -1,9 +1,10 @@
 use crate::backend::wayland::toolbar::rows::capped_grid_columns;
 use crate::ui::toolbar::model::{
     ToolbarActionsModel, ToolbarCommandGroupKind, ToolbarSessionModel, ToolbarSettingsModel,
-    toolbar_boards_model, toolbar_pages_model,
+    ToolbarSettingsNotice, toolbar_boards_model, toolbar_pages_model,
 };
 use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
+use crate::ui_text::{UiTextStyle, measure_text};
 
 use super::super::super::ToolbarLayoutSpec;
 
@@ -184,6 +185,12 @@ impl ToolbarLayoutSpec {
         } else {
             0.0
         };
+        let content_width = self.side_content_width(Self::SIDE_WIDTH as f64);
+        let notices_h = settings
+            .notices()
+            .iter()
+            .map(|notice| self.side_settings_notice_height(notice, content_width) + toggle_gap)
+            .sum::<f64>();
         let group_rows = settings.groups().len().div_ceil(2);
         let group_rows_h = if group_rows > 0 {
             toggle_h
@@ -211,9 +218,31 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_SEGMENT_HEIGHT + toggle_gap
         };
-        let content_h =
-            mode_row_h + toggle_rows_h + toggle_gap + buttons_h + customize_gap + customize_h;
+        let content_h = mode_row_h
+            + toggle_rows_h
+            + toggle_gap
+            + notices_h
+            + buttons_h
+            + customize_gap
+            + customize_h;
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_settings_notice_height(
+        &self,
+        notice: &ToolbarSettingsNotice,
+        content_width: f64,
+    ) -> f64 {
+        let style = UiTextStyle {
+            family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: crate::ui::theme::toolbar::FONT_SIZE_SECONDARY,
+        };
+        measure_text(style, notice.text.as_ref(), Some(content_width))
+            .map(|extents| extents.height() + 4.0)
+            .unwrap_or(Self::SIDE_TOGGLE_HEIGHT)
+            .max(Self::SIDE_TOGGLE_HEIGHT)
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_session_height(

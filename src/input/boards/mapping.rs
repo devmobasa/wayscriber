@@ -15,7 +15,23 @@ pub(crate) enum BoardConfigChange {
     IdentityRestored(String),
     Name(String),
     Appearance(String),
-    Pinned(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PendingBoardRuntimeUiAction {
+    TogglePin {
+        board_id: String,
+        board_identity_generation: BoardIdentityGeneration,
+        pin_seed: bool,
+    },
+    IdentityDeleted {
+        board_id: String,
+    },
+    IdentityAvailable {
+        board_id: String,
+        pin_seed: bool,
+        pinned: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +42,6 @@ pub(crate) struct PendingBoardConfigUpdate {
     pub(crate) deleted_ids: BTreeSet<String>,
     pub(crate) changed_names: BTreeSet<String>,
     pub(crate) changed_appearances: BTreeSet<String>,
-    pub(crate) changed_pins: BTreeSet<String>,
 }
 
 impl PendingBoardConfigUpdate {
@@ -38,7 +53,6 @@ impl PendingBoardConfigUpdate {
             deleted_ids: BTreeSet::new(),
             changed_names: BTreeSet::new(),
             changed_appearances: BTreeSet::new(),
-            changed_pins: BTreeSet::new(),
         };
         update.record(change);
         update
@@ -73,9 +87,6 @@ impl PendingBoardConfigUpdate {
             }
             BoardConfigChange::Appearance(id) => {
                 self.changed_appearances.insert(id);
-            }
-            BoardConfigChange::Pinned(id) => {
-                self.changed_pins.insert(id);
             }
         }
     }
@@ -113,6 +124,11 @@ impl BoardSpec {
 
 impl BoardManager {
     pub fn from_config(config: BoardsConfig) -> Self {
+        let pin_seeds = config
+            .items
+            .iter()
+            .map(|item| (item.id.clone(), item.pinned))
+            .collect();
         let mut boards: Vec<BoardState> = config
             .items
             .iter()
@@ -122,6 +138,12 @@ impl BoardManager {
 
         if boards.is_empty() {
             boards.push(default_overlay_board());
+        }
+        let mut pin_seeds: std::collections::BTreeMap<String, bool> = pin_seeds;
+        for board in &boards {
+            pin_seeds
+                .entry(board.spec.id.clone())
+                .or_insert(board.spec.pinned);
         }
 
         let active_index = boards
@@ -133,6 +155,7 @@ impl BoardManager {
 
         Self {
             boards,
+            pin_seeds,
             active_index,
             max_count: config.max_count,
             auto_create: config.auto_create,
@@ -165,9 +188,37 @@ impl BoardManager {
                     default_pen_color: board.spec.default_pen_color.map(board_color_to_config),
                     auto_adjust_pen: board.spec.auto_adjust_pen,
                     persist: board.spec.persist,
-                    pinned: board.spec.pinned,
+                    pinned: self
+                        .pin_seeds
+                        .get(&board.spec.id)
+                        .copied()
+                        .unwrap_or(board.spec.pinned),
                 })
                 .collect(),
+        }
+    }
+
+    pub(crate) fn sync_pin_seeds_from_config(&mut self, config: &BoardsConfig) {
+        let configured = config
+            .items
+            .iter()
+            .map(|item| (item.id.as_str(), item.pinned))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let live_ids = self
+            .boards
+            .iter()
+            .map(|board| board.spec.id.as_str())
+            .collect::<BTreeSet<_>>();
+        self.pin_seeds
+            .retain(|id, _| live_ids.contains(id.as_str()));
+        for board in &self.boards {
+            if let Some(pinned) = configured.get(board.spec.id.as_str()) {
+                self.pin_seeds.insert(board.spec.id.clone(), *pinned);
+            } else {
+                self.pin_seeds
+                    .entry(board.spec.id.clone())
+                    .or_insert(board.spec.pinned);
+            }
         }
     }
 }

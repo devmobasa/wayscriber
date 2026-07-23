@@ -40,6 +40,13 @@ pub(crate) enum ToolbarControlId {
     OpenConfigurator,
     OpenConfigFile,
     OpenCommandPalette,
+    ResetRuntimeUi,
+    ConfirmRuntimeUiReset,
+    CancelRuntimeUiReset,
+    RetryRuntimeUiPersistence,
+    AdoptRuntimeUiFromDisk,
+    PreserveInvalidRuntimeUi,
+    CancelRuntimeUiRecovery,
 }
 
 #[derive(Debug, Clone)]

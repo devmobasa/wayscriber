@@ -5,20 +5,8 @@ pub(super) fn persisted_tool_preview_value(current: bool, presenter_restore: Opt
     presenter_restore.unwrap_or(current)
 }
 
-/// While presenter mode owns the top strip (`[presenter_mode] toolbar_mode =
-/// "micro"`), the live display mode and minimized flag hold presenter-mapped
-/// values (`Micro`, force-cleared `false`), not user preferences. A targeted
-/// top-display or minimized save fired during presenter mode must therefore
-/// write the saved pre-presenter values from `PresenterRestore`. Outside
-/// presenter mode (and under the `"hidden"` mapping, which leaves both fields
-/// untouched) the restore slots are `None` and the live values persist as usual.
-pub(super) fn persisted_top_minimized_value(
-    current: bool,
-    presenter_restore: Option<bool>,
-) -> bool {
-    presenter_restore.unwrap_or(current)
-}
-
+/// While presenter mode owns the top strip, persist its saved pre-presenter
+/// display mode rather than the temporary live mapping.
 pub(super) fn persisted_top_display_mode_value(
     current: crate::config::TopDisplayMode,
     presenter_restore: Option<crate::config::TopDisplayMode>,
@@ -57,6 +45,21 @@ pub(super) struct ToolbarPositions {
     pub(super) side_y: f64,
 }
 
+fn apply_all_section_compatibility_mirrors(
+    config: &mut crate::config::Config,
+    input_state: &InputState,
+) {
+    config.ui.toolbar.show_actions_section = input_state.show_actions_section;
+    config.ui.toolbar.show_actions_advanced = input_state.show_actions_advanced;
+    config.ui.toolbar.show_zoom_actions = input_state.show_zoom_actions;
+    config.ui.toolbar.show_pages_section = input_state.show_pages_section;
+    config.ui.toolbar.show_boards_section = input_state.show_boards_section;
+    config.ui.toolbar.show_presets = input_state.show_presets;
+    config.ui.toolbar.show_step_section = input_state.show_step_section;
+    config.ui.toolbar.show_text_controls = input_state.show_text_controls;
+    config.ui.toolbar.show_settings_section = input_state.show_settings_section;
+}
+
 fn apply_section_compatibility_mirror(
     config: &mut crate::config::Config,
     flag: crate::config::ToolbarSectionFlag,
@@ -78,21 +81,6 @@ fn apply_section_compatibility_mirror(
     }
 }
 
-fn apply_all_section_compatibility_mirrors(
-    config: &mut crate::config::Config,
-    input_state: &InputState,
-) {
-    config.ui.toolbar.show_actions_section = input_state.show_actions_section;
-    config.ui.toolbar.show_actions_advanced = input_state.show_actions_advanced;
-    config.ui.toolbar.show_zoom_actions = input_state.show_zoom_actions;
-    config.ui.toolbar.show_pages_section = input_state.show_pages_section;
-    config.ui.toolbar.show_boards_section = input_state.show_boards_section;
-    config.ui.toolbar.show_presets = input_state.show_presets;
-    config.ui.toolbar.show_step_section = input_state.show_step_section;
-    config.ui.toolbar.show_text_controls = input_state.show_text_controls;
-    config.ui.toolbar.show_settings_section = input_state.show_settings_section;
-}
-
 pub(super) fn apply_toolbar_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
@@ -106,42 +94,20 @@ pub(super) fn apply_toolbar_config_target(
             config.ui.toolbar.layout_mode = input_state.toolbar_layout_mode;
             apply_all_section_compatibility_mirrors(config, input_state);
         }
-        ItemVisibility { id, hidden } => {
-            config.ui.toolbar.items.set_hidden(id, hidden);
-            if let Some(flag) = crate::config::section_flag_for_item(id) {
-                apply_section_compatibility_mirror(config, flag, !hidden);
-            }
+        SectionVisibility(flag) => {
+            let id = flag.item_id();
+            let setting =
+                crate::config::item_visibility_setting(&input_state.resolved_toolbar_items, id);
+            config.ui.toolbar.items.set_visibility_setting(id, setting);
+            let visible = crate::config::resolve_section_visibility(
+                input_state.toolbar_layout_mode,
+                &input_state.toolbar_mode_overrides,
+                &input_state.resolved_toolbar_items,
+            )
+            .get(flag);
+            apply_section_compatibility_mirror(config, flag, visible);
         }
-        ResetItemVisibility => {
-            config.ui.toolbar.items.reset_known_hidden_to_defaults();
-            apply_all_section_compatibility_mirrors(config, input_state);
-        }
-        ItemOrder(group) => {
-            config
-                .ui
-                .toolbar
-                .items
-                .sync_known_order_group_from(&input_state.toolbar_items, group);
-        }
-        TopPinned => config.ui.toolbar.top_pinned = input_state.toolbar_top_pinned,
-        SidePinned => config.ui.toolbar.side_pinned = input_state.toolbar_side_pinned,
-        TopMinimized => {
-            config.ui.toolbar.top_minimized = persisted_top_minimized_value(
-                input_state.toolbar_top_minimized,
-                input_state
-                    .presenter_restore
-                    .as_ref()
-                    .and_then(|restore| restore.toolbar_top_minimized),
-            );
-        }
-        TopDisplayState => {
-            config.ui.toolbar.top_minimized = persisted_top_minimized_value(
-                input_state.toolbar_top_minimized,
-                input_state
-                    .presenter_restore
-                    .as_ref()
-                    .and_then(|restore| restore.toolbar_top_minimized),
-            );
+        TopDisplayMode => {
             config.ui.toolbar.top_display_mode = persisted_top_display_mode_value(
                 input_state.toolbar_top_display_mode,
                 input_state
@@ -149,22 +115,6 @@ pub(super) fn apply_toolbar_config_target(
                     .as_ref()
                     .and_then(|restore| restore.toolbar_top_display_mode),
             );
-        }
-        SideMinimized => {
-            config.ui.toolbar.side_minimized = input_state.toolbar_side_minimized;
-        }
-        SidePane => {
-            config.ui.toolbar.side_active_pane =
-                input_state.toolbar_side_pane.config_id().to_string();
-        }
-        CollapsedSection { section, collapsed } => {
-            let id = section.config_id();
-            config.ui.toolbar.collapsed_sections.retain(|raw| {
-                crate::ui::toolbar::ToolbarSideSection::from_config_id(raw) != Some(section)
-            });
-            if collapsed {
-                config.ui.toolbar.collapsed_sections.push(id.to_string());
-            }
         }
         Icons => config.ui.toolbar.use_icons = input_state.toolbar_use_icons,
         MoreColors => config.ui.toolbar.show_more_colors = input_state.show_more_colors,
@@ -226,7 +176,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn save_toolbar_display_config(&mut self) {
-        self.save_toolbar_config(ToolbarConfigPersistenceTarget::TopDisplayState);
+        self.save_toolbar_config(ToolbarConfigPersistenceTarget::TopDisplayMode);
     }
 
     pub(super) fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {

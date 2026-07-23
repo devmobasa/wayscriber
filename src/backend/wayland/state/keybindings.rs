@@ -151,6 +151,10 @@ impl WaylandState {
         self.config = next;
         self.input_state
             .set_keybinding_maps(action_map, action_bindings);
+        // The edit is merged into a fresh read of the complete authored
+        // config. Reconcile runtime-state seeds with that installed snapshot
+        // so permits and active previews cannot retain the pre-reload values.
+        self.refresh_runtime_ui_config_seeds();
         self.toolbar.mark_dirty();
         self.input_state.push_toast(
             ToastPriority::Info,

@@ -6,8 +6,11 @@ impl WaylandState {
         kind: MoveDragKind,
         coord: (f64, f64),
         coord_is_screen: bool,
-    ) {
+    ) -> bool {
         if self.data.toolbar_move_drag.is_none() {
+            if !self.begin_toolbar_position_preview(kind) {
+                return false;
+            }
             if toolbar_drag_preview_enabled()
                 && self.layer_shell.is_some()
                 && !self.inline_toolbars_active()
@@ -69,6 +72,7 @@ impl WaylandState {
         }
         self.data.active_drag_kind = Some(kind);
         self.set_toolbar_dragging(true);
+        true
     }
 
     /// Handle toolbar move with toolbar-surface-local coordinates.
@@ -79,6 +83,21 @@ impl WaylandState {
         kind: MoveDragKind,
         local_coord: (f64, f64),
     ) {
+        if !self.toolbar_position_drag_update_allowed(kind) {
+            // Consume the coordinate baseline without moving the toolbar. If
+            // the exact same authority resumes this untouched preview, the
+            // next accepted event applies only post-barrier movement.
+            if let Some(drag) = self
+                .data
+                .toolbar_move_drag
+                .as_mut()
+                .filter(|drag| drag.kind == kind)
+            {
+                drag.last_coord = local_coord;
+                drag.coord_is_screen = false;
+            }
+            return;
+        }
         if self.pointer_lock_active() {
             drag_log(format!(
                 "skip handle_toolbar_move_local: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
@@ -274,6 +293,18 @@ impl WaylandState {
         kind: MoveDragKind,
         screen_coord: (f64, f64),
     ) {
+        if !self.toolbar_position_drag_update_allowed(kind) {
+            if let Some(drag) = self
+                .data
+                .toolbar_move_drag
+                .as_mut()
+                .filter(|drag| drag.kind == kind)
+            {
+                drag.last_coord = screen_coord;
+                drag.coord_is_screen = true;
+            }
+            return;
+        }
         if self.pointer_lock_active() {
             drag_log(format!(
                 "skip handle_toolbar_move_screen: pointer locked, kind={:?}, coord=({:.3}, {:.3})",

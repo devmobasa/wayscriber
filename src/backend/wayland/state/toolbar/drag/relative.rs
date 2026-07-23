@@ -7,6 +7,9 @@ impl WaylandState {
         kind: MoveDragKind,
         delta: (f64, f64),
     ) {
+        if !self.toolbar_position_drag_update_allowed(kind) {
+            return;
+        }
         drag_log(format!(
             "relative delta begin: kind={:?}, delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
             kind,
@@ -54,8 +57,18 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn end_toolbar_move_drag(&mut self) {
+        self.finish_toolbar_move_drag(true);
+    }
+
+    pub(in crate::backend::wayland) fn cancel_toolbar_move_drag(&mut self) {
+        self.finish_toolbar_move_drag(false);
+    }
+
+    fn finish_toolbar_move_drag(&mut self, commit: bool) {
         if let Some(drag) = self.data.toolbar_move_drag {
-            self.reconcile_top_base_after_drag();
+            if commit {
+                self.reconcile_top_base_after_drag();
+            }
             drag_log(format!(
                 "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
                 self.data.toolbar_top_offset,
@@ -78,9 +91,13 @@ impl WaylandState {
                 self.data.toolbar_drag_pending_apply = false;
             }
             if self.toolbar_drag_preview_active() {
-                self.begin_toolbar_drag_handoff();
+                if commit {
+                    self.begin_toolbar_drag_handoff();
+                } else {
+                    self.finish_toolbar_drag_handoff();
+                }
             }
-            self.save_toolbar_position_config(drag.kind);
+            self.finish_toolbar_position_preview(drag.kind, commit);
             self.unlock_pointer();
         }
     }

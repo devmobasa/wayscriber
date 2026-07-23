@@ -42,6 +42,7 @@ pub enum BoardDeleteOutcome {
         deleted_board: BoardState,
         deleted_id: String,
         deleted_name: String,
+        deleted_pin_seed: bool,
         active_id: String,
         active_index: usize,
         board_identity_generation: BoardIdentityGeneration,
@@ -142,6 +143,7 @@ pub enum PageOperationRejection {
 pub struct BoardRestoreRequest {
     pub board: BoardState,
     pub preferred_index: Option<usize>,
+    pub pin_seed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -221,6 +223,7 @@ impl BoardManager {
         }
 
         let original_id = request.board.spec.id.clone();
+        let pin_seed = request.pin_seed;
         let mut board = request.board;
         board.spec.id = self.unique_board_id(board.spec.id.clone());
         let restored_id = board.spec.id.clone();
@@ -230,6 +233,7 @@ impl BoardManager {
             .filter(|index| *index <= self.boards.len())
             .unwrap_or(self.boards.len());
 
+        self.pin_seeds.insert(restored_id.clone(), pin_seed);
         self.boards.insert(restored_index, board);
         self.active_index = restored_index;
         let board_identity_generation = self.bump_board_identity_generation();
@@ -316,6 +320,10 @@ impl BoardManager {
 
         let deleted_board = self.boards.remove(index);
         let deleted_id = deleted_board.spec.id.clone();
+        let deleted_pin_seed = self
+            .pin_seeds
+            .remove(&deleted_id)
+            .unwrap_or(deleted_board.spec.pinned);
         let deleted_name = deleted_board.spec.name.clone();
         if self.active_index == index {
             self.active_index = self.active_index.min(self.boards.len().saturating_sub(1));
@@ -331,6 +339,7 @@ impl BoardManager {
             deleted_board,
             deleted_id,
             deleted_name,
+            deleted_pin_seed,
             active_id,
             active_index,
             board_identity_generation,

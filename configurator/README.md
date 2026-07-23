@@ -20,6 +20,12 @@ configurator binary.
 
 The window loads the current config, lets you tweak values across the tabbed sections, and writes changes back through the guarded `ConfigDocument` save interface.
 
+Toolbar pins, item visibility/order, pane state, and board pin controls are labeled as configured
+defaults because the running overlay can store later customizations in the separate generated
+`$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. The configurator edits only `config.toml`; it does
+not overwrite or reset runtime preferences. Use the overlay Settings panel to inspect or reset that
+state.
+
 Config, daemon-setup, and saved-session filesystem/process operations run through a bounded Tokio
 blocking-job adapter. Two jobs may run concurrently; existing request ordering and busy-state gates
 still serialize user mutations. Once started, a durable blocking operation is allowed to finish even

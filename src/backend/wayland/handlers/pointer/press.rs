@@ -163,6 +163,7 @@ impl WaylandState {
             }
             return;
         } else if self.pointer_over_toolbar() {
+            self.finish_toolbar_item_drag(false);
             self.set_toolbar_dragging(false);
             return;
         }

@@ -7,7 +7,18 @@
 //! coordinates.
 
 use super::super::{WaylandState, drag_log};
+use super::MoveDragKind;
 use crate::toolbar_gtk::{GtkToolbarDragPhase, GtkToolbarKind, GtkToolbarSurfaceSize};
+
+fn gtk_drag_rebase(accepted: (f64, f64), rejected: (f64, f64)) -> (f64, f64) {
+    (accepted.0 - rejected.0, accepted.1 - rejected.1)
+}
+
+fn apply_gtk_drag_rebase(reported: (f64, f64), rebase: Option<(f64, f64)>) -> (f64, f64) {
+    rebase.map_or(reported, |delta| {
+        (reported.0 + delta.0, reported.1 + delta.1)
+    })
+}
 
 fn clamp_gtk_surface_offset(
     offset: (f64, f64),
@@ -57,12 +68,31 @@ impl WaylandState {
         phase: GtkToolbarDragPhase,
     ) {
         if phase == GtkToolbarDragPhase::Start {
+            self.data.gtk_top_drag_rebase = None;
+            if !self.begin_toolbar_position_preview(MoveDragKind::Top) {
+                self.data.gtk_top_drag_blocked = true;
+                return;
+            }
             self.begin_gtk_toolbar_drag_preview(GtkToolbarKind::Top);
+        } else if !self.toolbar_position_drag_update_allowed(MoveDragKind::Top) {
+            if phase.is_end() {
+                self.data.gtk_top_drag_rebase = None;
+                self.clamp_gtk_top_offset(surface_size);
+                self.finish_gtk_offset_change(MoveDragKind::Top);
+            } else {
+                self.data.gtk_top_drag_rebase = Some(gtk_drag_rebase(
+                    (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
+                    (x, y),
+                ));
+            }
+            return;
         }
+        let (x, y) = apply_gtk_drag_rebase((x, y), self.data.gtk_top_drag_rebase);
         self.data.toolbar_top_offset = x;
         self.data.toolbar_top_offset_y = y;
         self.mark_gtk_drag_preview_dirty();
         if phase.is_end() {
+            self.data.gtk_top_drag_rebase = None;
             self.clamp_gtk_top_offset(surface_size);
             self.finish_gtk_offset_change(crate::backend::wayland::state::MoveDragKind::Top);
         }
@@ -76,12 +106,34 @@ impl WaylandState {
         phase: GtkToolbarDragPhase,
     ) {
         if phase == GtkToolbarDragPhase::Start {
+            self.data.gtk_side_drag_rebase = None;
+            if !self.begin_toolbar_position_preview(MoveDragKind::Side) {
+                self.data.gtk_side_drag_blocked = true;
+                return;
+            }
             self.begin_gtk_toolbar_drag_preview(GtkToolbarKind::Side);
+        } else if !self.toolbar_position_drag_update_allowed(MoveDragKind::Side) {
+            if phase.is_end() {
+                self.data.gtk_side_drag_rebase = None;
+                self.clamp_gtk_side_offset(surface_size);
+                self.finish_gtk_offset_change(MoveDragKind::Side);
+            } else {
+                self.data.gtk_side_drag_rebase = Some(gtk_drag_rebase(
+                    (
+                        self.data.toolbar_side_offset_x,
+                        self.data.toolbar_side_offset,
+                    ),
+                    (x, y),
+                ));
+            }
+            return;
         }
+        let (x, y) = apply_gtk_drag_rebase((x, y), self.data.gtk_side_drag_rebase);
         self.data.toolbar_side_offset_x = x;
         self.data.toolbar_side_offset = y;
         self.mark_gtk_drag_preview_dirty();
         if phase.is_end() {
+            self.data.gtk_side_drag_rebase = None;
             self.clamp_gtk_side_offset(surface_size);
             self.finish_gtk_offset_change(crate::backend::wayland::state::MoveDragKind::Side);
         }
@@ -167,7 +219,7 @@ impl WaylandState {
     fn finish_gtk_offset_change(&mut self, kind: crate::backend::wayland::state::MoveDragKind) {
         self.reconcile_top_base_after_drag();
         self.data.drag_top_base_x = None;
-        self.save_toolbar_position_config(kind);
+        self.finish_toolbar_position_preview(kind, true);
         self.begin_gtk_toolbar_drag_handoff();
     }
 }
@@ -222,6 +274,20 @@ mod tests {
                 (0.0, 24.0),
             ),
             None
+        );
+    }
+
+    #[test]
+    fn gtk_drag_rebase_discards_motion_reported_while_frozen() {
+        let accepted = (120.0, 80.0);
+        let frozen_report = (150.0, 100.0);
+        let rebase = gtk_drag_rebase(accepted, frozen_report);
+
+        assert_eq!(apply_gtk_drag_rebase(frozen_report, Some(rebase)), accepted);
+        assert_eq!(
+            apply_gtk_drag_rebase((154.0, 103.0), Some(rebase)),
+            (124.0, 83.0),
+            "only movement reported after the freeze point is applied"
         );
     }
 }

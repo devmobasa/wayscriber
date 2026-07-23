@@ -1,5 +1,5 @@
 use super::super::super::base::InputState;
-use super::super::{BoardPickerEditMode, BoardPickerState};
+use super::super::BoardPickerEditMode;
 use crate::draw::PageDeleteOutcome;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -143,16 +143,6 @@ impl InputState {
         let Some(board_index) = self.board_picker_board_index_for_row(index) else {
             return;
         };
-        if !self.toggle_board_pinned(board_index) {
-            return;
-        }
-        let selected_row = self.board_picker_row_for_board(board_index);
-        if let (Some(row), BoardPickerState::Open { selected, .. }) =
-            (selected_row, &mut self.board_picker_state)
-        {
-            *selected = row;
-        }
-        self.board_picker_layout = None;
-        self.needs_redraw = true;
+        self.request_board_pin_toggle(board_index);
     }
 }

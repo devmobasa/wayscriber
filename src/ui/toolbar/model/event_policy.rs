@@ -1,6 +1,6 @@
 use crate::config::{
-    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag, action_label,
-    action_short_label,
+    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
+    action_label, action_short_label, section_flag_for_item,
 };
 use crate::input::Tool;
 
@@ -30,8 +30,25 @@ impl ToolbarEventPolicy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarPersistence {
-    RuntimeOnly,
-    Persist(ToolbarPersistenceTarget),
+    Ephemeral,
+    RuntimeUi(ToolbarRuntimeUiPersistenceTarget),
+    Config(ToolbarPersistenceTarget),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
+    TopPinned,
+    SidePinned,
+    TopMinimized,
+    SideMinimized,
+    SidePane,
+    CollapsedSection(ToolbarSideSection),
+    ItemVisibility {
+        id: ToolbarItemId,
+        setting: ToolbarItemVisibilitySetting,
+    },
+    ItemOrder(ToolbarItemOrderGroup),
+    ResetItemVisibility,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,22 +62,8 @@ pub(crate) enum ToolbarPersistenceTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarConfigPersistenceTarget {
     LayoutMode,
-    ItemVisibility {
-        id: ToolbarItemId,
-        hidden: bool,
-    },
-    ResetItemVisibility,
-    ItemOrder(ToolbarItemOrderGroup),
-    TopPinned,
-    SidePinned,
-    TopMinimized,
-    TopDisplayState,
-    SideMinimized,
-    SidePane,
-    CollapsedSection {
-        section: ToolbarSideSection,
-        collapsed: bool,
-    },
+    SectionVisibility(ToolbarSectionFlag),
+    TopDisplayMode,
     Icons,
     MoreColors,
     ContextAwareUi,
@@ -216,105 +219,87 @@ pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
 fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
     use ToolbarConfigPersistenceTarget::*;
     use ToolbarPersistenceTarget::*;
+    use ToolbarRuntimeUiPersistenceTarget as Runtime;
     use ToolbarUiPersistenceTarget::*;
     match event {
-        ToolbarEvent::PinTopToolbar(_) => ToolbarPersistence::Persist(Toolbar(TopPinned)),
-        ToolbarEvent::PinSideToolbar(_) => ToolbarPersistence::Persist(Toolbar(SidePinned)),
-        ToolbarEvent::ToggleIconMode(_) => ToolbarPersistence::Persist(Toolbar(Icons)),
-        ToolbarEvent::ToggleMoreColors(_) => ToolbarPersistence::Persist(Toolbar(MoreColors)),
-        ToolbarEvent::ToggleActionsSection(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::Actions.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::PinTopToolbar(_) => ToolbarPersistence::RuntimeUi(Runtime::TopPinned),
+        ToolbarEvent::PinSideToolbar(_) => ToolbarPersistence::RuntimeUi(Runtime::SidePinned),
+        ToolbarEvent::ToggleIconMode(_) => ToolbarPersistence::Config(Toolbar(Icons)),
+        ToolbarEvent::ToggleMoreColors(_) => ToolbarPersistence::Config(Toolbar(MoreColors)),
+        ToolbarEvent::ToggleActionsSection(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Actions)))
         }
-        ToolbarEvent::ToggleActionsAdvanced(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::ActionsAdvanced.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::ToggleActionsAdvanced(_) => ToolbarPersistence::Config(Toolbar(
+            SectionVisibility(ToolbarSectionFlag::ActionsAdvanced),
+        )),
+        ToolbarEvent::ToggleZoomActions(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::ZoomActions)))
         }
-        ToolbarEvent::ToggleZoomActions(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::ZoomActions.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::TogglePagesSection(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Pages)))
         }
-        ToolbarEvent::TogglePagesSection(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::Pages.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::ToggleBoardsSection(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Boards)))
         }
-        ToolbarEvent::ToggleBoardsSection(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::Boards.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::TogglePresets(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Presets)))
         }
-        ToolbarEvent::TogglePresets(show) => ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-            id: ToolbarSectionFlag::Presets.item_id(),
-            hidden: !show,
-        })),
-        ToolbarEvent::ToggleStepSection(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::StepSection.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::ToggleStepSection(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::StepSection)))
         }
-        ToolbarEvent::ToggleTextControls(show) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: ToolbarSectionFlag::TextControls.item_id(),
-                hidden: !show,
-            }))
+        ToolbarEvent::ToggleTextControls(_) => {
+            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::TextControls)))
         }
         ToolbarEvent::ToggleContextAwareUi(_) => {
-            ToolbarPersistence::Persist(Toolbar(ContextAwareUi))
+            ToolbarPersistence::Config(Toolbar(ContextAwareUi))
         }
-        ToolbarEvent::TogglePresetToasts(_) => ToolbarPersistence::Persist(Toolbar(PresetToasts)),
-        ToolbarEvent::ToggleToolPreview(_) => ToolbarPersistence::Persist(Toolbar(ToolPreview)),
-        ToolbarEvent::ToggleDelaySliders(_) => ToolbarPersistence::Persist(Toolbar(DelaySliders)),
-        ToolbarEvent::SetToolbarLayoutMode(_) => ToolbarPersistence::Persist(Toolbar(LayoutMode)),
-        ToolbarEvent::SetSidePane(_) => ToolbarPersistence::Persist(Toolbar(SidePane)),
+        ToolbarEvent::TogglePresetToasts(_) => ToolbarPersistence::Config(Toolbar(PresetToasts)),
+        ToolbarEvent::ToggleToolPreview(_) => ToolbarPersistence::Config(Toolbar(ToolPreview)),
+        ToolbarEvent::ToggleDelaySliders(_) => ToolbarPersistence::Config(Toolbar(DelaySliders)),
+        ToolbarEvent::SetToolbarLayoutMode(_) => ToolbarPersistence::Config(Toolbar(LayoutMode)),
+        ToolbarEvent::SetSidePane(_) => ToolbarPersistence::RuntimeUi(Runtime::SidePane),
         ToolbarEvent::SetTopMinimized(_) | ToolbarEvent::CloseTopToolbar => {
-            ToolbarPersistence::Persist(Toolbar(TopMinimized))
+            ToolbarPersistence::RuntimeUi(Runtime::TopMinimized)
         }
-        ToolbarEvent::SetTopDisplayMode(_) => ToolbarPersistence::Persist(Toolbar(TopDisplayState)),
+        ToolbarEvent::SetTopDisplayMode(_) => ToolbarPersistence::Config(Toolbar(TopDisplayMode)),
         ToolbarEvent::SetSideMinimized(_) | ToolbarEvent::CloseSideToolbar => {
-            ToolbarPersistence::Persist(Toolbar(SideMinimized))
+            ToolbarPersistence::RuntimeUi(Runtime::SideMinimized)
         }
-        ToolbarEvent::ToggleSideSectionCollapsed(section, collapsed) => {
-            ToolbarPersistence::Persist(Toolbar(CollapsedSection {
-                section: *section,
-                collapsed: *collapsed,
-            }))
+        ToolbarEvent::ToggleSideSectionCollapsed(section, _) => {
+            ToolbarPersistence::RuntimeUi(Runtime::CollapsedSection(*section))
         }
         ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
-            ToolbarPersistence::Persist(Toolbar(ItemVisibility {
-                id: *id,
-                hidden: *hidden,
-            }))
+            if let Some(flag) = section_flag_for_item(*id) {
+                ToolbarPersistence::Config(Toolbar(SectionVisibility(flag)))
+            } else {
+                ToolbarPersistence::RuntimeUi(Runtime::ItemVisibility {
+                    id: *id,
+                    setting: if *hidden {
+                        ToolbarItemVisibilitySetting::Hidden
+                    } else {
+                        ToolbarItemVisibilitySetting::Default
+                    },
+                })
+            }
         }
         ToolbarEvent::MoveToolbarItem { group, .. }
-        | ToolbarEvent::DragToolbarItemOver { group, .. }
+        | ToolbarEvent::StartToolbarItemDrag { group, .. }
         | ToolbarEvent::ResetToolbarItemOrder(group) => {
-            ToolbarPersistence::Persist(Toolbar(ItemOrder(*group)))
+            ToolbarPersistence::RuntimeUi(Runtime::ItemOrder(*group))
         }
         ToolbarEvent::ResetToolbarItemHiddenOverrides => {
-            ToolbarPersistence::Persist(Toolbar(ResetItemVisibility))
+            ToolbarPersistence::RuntimeUi(Runtime::ResetItemVisibility)
         }
-        ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Persist(History),
-        ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Persist(Ui(StatusBar)),
-        ToolbarEvent::ToggleStatusBoardBadge(_) => {
-            ToolbarPersistence::Persist(Ui(StatusBoardBadge))
-        }
-        ToolbarEvent::ToggleStatusPageBadge(_) => ToolbarPersistence::Persist(Ui(StatusPageBadge)),
+        ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Config(History),
+        ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Config(Ui(StatusBar)),
+        ToolbarEvent::ToggleStatusBoardBadge(_) => ToolbarPersistence::Config(Ui(StatusBoardBadge)),
+        ToolbarEvent::ToggleStatusPageBadge(_) => ToolbarPersistence::Config(Ui(StatusPageBadge)),
         ToolbarEvent::ToggleFloatingBadgeAlways(_) => {
-            ToolbarPersistence::Persist(Ui(FloatingBadgeAlways))
+            ToolbarPersistence::Config(Ui(FloatingBadgeAlways))
         }
         ToolbarEvent::SelectTool(Tool::Highlight)
         | ToolbarEvent::ToggleAllHighlight(_)
-        | ToolbarEvent::ToggleHighlightToolRing(_) => ToolbarPersistence::Persist(ClickHighlight),
+        | ToolbarEvent::ToggleHighlightToolRing(_) => ToolbarPersistence::Config(ClickHighlight),
         ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }
@@ -375,6 +360,15 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ClearSession
         | ToolbarEvent::OpenConfigurator
         | ToolbarEvent::OpenConfigFile
+        | ToolbarEvent::RequestRuntimeUiReset
+        | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+        | ToolbarEvent::CancelUnsupportedRuntimeUiReset
+        | ToolbarEvent::RetryRuntimeUiPersistence
+        | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+        | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
+        | ToolbarEvent::CancelRuntimeUiRecovery
         | ToolbarEvent::OpenCommandPalette
         | ToolbarEvent::SetCustomUndoDelay(_)
         | ToolbarEvent::SetCustomRedoDelay(_)
@@ -397,12 +391,12 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::AdjustSelectionProperty { .. }
         | ToolbarEvent::PickScreenColor
         | ToolbarEvent::ScrollSidePane(_)
-        | ToolbarEvent::StartToolbarItemDrag { .. }
+        | ToolbarEvent::DragToolbarItemOver { .. }
         | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
         | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
         | ToolbarEvent::ToggleShapePicker(_)
         | ToolbarEvent::MoveTopToolbar { .. }
-        | ToolbarEvent::MoveSideToolbar { .. } => ToolbarPersistence::RuntimeOnly,
+        | ToolbarEvent::MoveSideToolbar { .. } => ToolbarPersistence::Ephemeral,
     }
 }
 

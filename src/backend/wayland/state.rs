@@ -149,6 +149,8 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
     pub persistence: crate::backend::wayland::session::PersistenceController,
+    pub runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
+    pub runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
     pub tokio_handle: tokio::runtime::Handle,
     pub exit_after_capture_mode: ExitAfterCaptureMode,
@@ -189,6 +191,10 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
+    pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
+    pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
+    pub(super) runtime_ui_unavailable_previews:
+        crate::backend::wayland::runtime_ui_state::UnavailablePersistencePreviews,
 
     // Input state
     pub(super) input_state: InputState,

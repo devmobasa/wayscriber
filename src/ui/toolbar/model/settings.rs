@@ -3,8 +3,9 @@ use std::borrow::Cow;
 use crate::config::{
     Action, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
     ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarLayoutMode,
-    action_label, action_short_label, toolbar_item_definitions, toolbar_item_ids as ids,
-    toolbar_item_order_group,
+    action_label, action_short_label, factory_individual_toolbar_item_visibility_settings,
+    item_visibility_setting, toolbar_item_definitions, toolbar_item_ids as ids,
+    toolbar_item_order_group, toolbar_item_visibility_override_allowed,
 };
 
 use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
@@ -20,6 +21,7 @@ use helpers::{
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarSettingsModel {
     toggles: Vec<ToolbarSettingsToggle>,
+    notices: Vec<ToolbarSettingsNotice>,
     buttons: Vec<ToolbarSettingsButton>,
     groups: Vec<ToolbarSettingsCustomizeGroup>,
     item_overrides: Vec<ToolbarSettingsItemOverride>,
@@ -165,6 +167,11 @@ impl ToolbarSettingsModel {
             toggles.clear();
         }
 
+        let notices = if customizing {
+            Vec::new()
+        } else {
+            runtime_persistence_notices(snapshot)
+        };
         let buttons = if customizing {
             customize_buttons(snapshot)
         } else {
@@ -191,8 +198,13 @@ impl ToolbarSettingsModel {
             Vec::new()
         };
 
-        (!toggles.is_empty() || !buttons.is_empty() || !item_overrides.is_empty()).then_some(Self {
+        (!toggles.is_empty()
+            || !notices.is_empty()
+            || !buttons.is_empty()
+            || !item_overrides.is_empty())
+        .then_some(Self {
             toggles,
+            notices,
             buttons,
             groups,
             item_overrides,
@@ -229,6 +241,10 @@ impl ToolbarSettingsModel {
 
     pub(crate) fn buttons(&self) -> &[ToolbarSettingsButton] {
         &self.buttons
+    }
+
+    pub(crate) fn notices(&self) -> &[ToolbarSettingsNotice] {
+        &self.notices
     }
 
     pub(crate) fn groups(&self) -> &[ToolbarSettingsCustomizeGroup] {
@@ -366,4 +382,96 @@ pub(crate) struct ToolbarSettingsButton {
     pub(crate) event: ToolbarEvent,
     pub(crate) icon: ToolbarIcon,
     pub(crate) tooltip: ToolbarTooltip,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ToolbarSettingsNotice {
+    pub(crate) text: Cow<'static, str>,
+    pub(crate) severity: ToolbarSettingsNoticeSeverity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolbarSettingsNoticeSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
+fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsNotice> {
+    use crate::ui::toolbar::RuntimeUiPersistenceMode as Mode;
+
+    let Some(runtime) = &snapshot.runtime_ui_persistence else {
+        return Vec::new();
+    };
+    let (summary, severity) = match &runtime.mode {
+        Mode::Unavailable => (
+            "Runtime preference persistence is unavailable",
+            ToolbarSettingsNoticeSeverity::Error,
+        ),
+        Mode::Missing => (
+            "Runtime preferences use configured defaults",
+            ToolbarSettingsNoticeSeverity::Info,
+        ),
+        Mode::Supported => (
+            "Runtime preferences are saved separately",
+            ToolbarSettingsNoticeSeverity::Info,
+        ),
+        Mode::UnsupportedReadOnly { .. } => (
+            "Runtime preferences are read-only (newer format)",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::Resetting => (
+            "Resetting runtime preferences…",
+            ToolbarSettingsNoticeSeverity::Info,
+        ),
+        Mode::AwaitingUnsupportedResetConfirmation { .. } => (
+            "Confirm reset of newer runtime-state data",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::Unhealthy => (
+            "Runtime preference persistence is blocked",
+            ToolbarSettingsNoticeSeverity::Error,
+        ),
+        Mode::Recovering => (
+            "Recovering runtime preference persistence…",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::CancellingRecovery => (
+            "Waiting for the active recovery write…",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+        Mode::AwaitingInvalidResetConfirmation => (
+            "Confirm preservation and reset of invalid data",
+            ToolbarSettingsNoticeSeverity::Warning,
+        ),
+    };
+    let mut notices = Vec::new();
+    push_notice(&mut notices, summary, severity);
+    if let Some(detail) = &runtime.detail {
+        push_notice(&mut notices, detail, severity);
+    }
+    push_notice(
+        &mut notices,
+        &format!("Runtime state: {}", runtime.path.display()),
+        ToolbarSettingsNoticeSeverity::Info,
+    );
+    for path in &runtime.recovery_artifacts {
+        push_notice(
+            &mut notices,
+            &format!("Preserved recovery file: {}", path.display()),
+            ToolbarSettingsNoticeSeverity::Warning,
+        );
+    }
+    notices
+}
+
+fn push_notice(
+    notices: &mut Vec<ToolbarSettingsNotice>,
+    text: &str,
+    severity: ToolbarSettingsNoticeSeverity,
+) {
+    notices.push(ToolbarSettingsNotice {
+        text: Cow::Owned(text.to_string()),
+        severity,
+    });
 }

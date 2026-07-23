@@ -12,6 +12,8 @@ impl WaylandState {
         apply_board_config_update_to_config(&mut self.config, update);
         if let Err(err) = self.config.save() {
             log::warn!("Failed to save board config: {}", err);
+        } else {
+            self.refresh_runtime_ui_config_seeds();
         }
     }
 
@@ -171,7 +173,6 @@ fn apply_board_config_update_to_config(
         deleted_ids: _,
         changed_names,
         changed_appearances,
-        changed_pins,
     } = update;
 
     let apply_changed_fields = |saved: &mut BoardItemConfig, live: &BoardItemConfig| {
@@ -181,9 +182,6 @@ fn apply_board_config_update_to_config(
         if changed_appearances.contains(&live.id) {
             saved.background = live.background.clone();
             saved.default_pen_color = live.default_pen_color.clone();
-        }
-        if changed_pins.contains(&live.id) {
-            saved.pinned = live.pinned;
         }
     };
 
@@ -210,9 +208,7 @@ fn apply_board_config_update_to_config(
     }
 
     for live in snapshot.items {
-        let changed = changed_names.contains(&live.id)
-            || changed_appearances.contains(&live.id)
-            || changed_pins.contains(&live.id);
+        let changed = changed_names.contains(&live.id) || changed_appearances.contains(&live.id);
         if !changed {
             continue;
         }
@@ -373,18 +369,13 @@ mod tests {
     }
 
     #[test]
-    fn coalesced_board_pin_and_reorder_apply_both_without_copying_other_fields() {
+    fn board_reorder_does_not_copy_runtime_pin_or_unrelated_fields() {
         let mut config = crate::config::Config::default();
         let configured = config.boards.as_mut().expect("configured boards");
         board_mut(configured, "whiteboard").name = "Configured whiteboard".to_string();
 
         let mut live = configured.clone();
         board_mut(&mut live, "whiteboard").pinned = true;
-        let mut update = PendingBoardConfigUpdate::new(
-            live.clone(),
-            BoardConfigChange::Pinned("whiteboard".to_string()),
-        );
-
         board_mut(&mut live, "whiteboard").name = "Unrelated live name".to_string();
         let whiteboard = live
             .items
@@ -397,9 +388,10 @@ mod tests {
             .position(|item| item.id == "blackboard")
             .expect("blackboard index");
         live.items.swap(whiteboard, blackboard);
-        update.merge(live, BoardConfigChange::Structure);
-
-        apply_board_config_update_to_config(&mut config, update);
+        apply_board_config_update_to_config(
+            &mut config,
+            PendingBoardConfigUpdate::new(live, BoardConfigChange::Structure),
+        );
 
         let saved = config.boards.as_ref().expect("saved boards");
         let saved_whiteboard = saved
@@ -407,7 +399,7 @@ mod tests {
             .iter()
             .find(|item| item.id == "whiteboard")
             .expect("saved whiteboard");
-        assert!(saved_whiteboard.pinned);
+        assert!(!saved_whiteboard.pinned);
         assert_eq!(saved_whiteboard.name, "Configured whiteboard");
         assert!(
             saved

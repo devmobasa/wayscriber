@@ -83,8 +83,9 @@ impl WaylandState {
             // The drag will continue on the main surface.
             if !self.is_move_dragging() {
                 debug!("Clearing toolbar drag state on leave");
+                self.finish_toolbar_item_drag(false);
                 self.set_toolbar_dragging(false);
-                self.end_toolbar_move_drag();
+                self.cancel_toolbar_move_drag();
             } else {
                 debug!("Preserving move drag state on toolbar leave");
             }
