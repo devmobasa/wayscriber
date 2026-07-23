@@ -65,11 +65,16 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_some());
 
-    // The runtime toggle (palette/keybinding) hides the chip without
-    // touching the `show_zoom_actions` toolbar preference.
+    // The palette/keybinding toggle hides the chip without
+    // touching the `show_zoom_actions` toolbar preference, and persists
+    // its own preference across restarts.
     input.handle_action(crate::config::Action::ToggleZoomChip);
     assert!(!input.zoom_chip_enabled());
     assert!(input.show_zoom_actions, "toolbar preference untouched");
+    assert_eq!(
+        input.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(false))
+    );
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_none());
     assert!(!input.zoom_chip_contains(1270, 710));
@@ -79,6 +84,89 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     assert!(input.zoom_chip_enabled());
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_some());
+}
+
+#[test]
+fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
+    let mut input = create_test_input_state();
+    update_chip_layout(&mut input, 1280, 720);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::In);
+
+    input.needs_redraw = false;
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.zoom_chip_hover, Some(ZoomChipButtonKind::In));
+    assert!(input.needs_redraw, "hover transition requests a redraw");
+
+    // Runtime-hiding the chip clears hover on the next layout pass.
+    input.handle_action(crate::config::Action::ToggleZoomChip);
+    update_chip_layout(&mut input, 1280, 720);
+    assert_eq!(input.zoom_chip_hover, None);
+}
+
+#[test]
+fn zoom_chip_reclassifies_hover_after_fit_removes_the_lock_button() {
+    let mut input = create_test_input_state();
+    input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
+    update_chip_layout(&mut input, 1280, 720);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::Fit);
+
+    input.on_mouse_motion_with_canvas(x, y, x, y);
+    assert_eq!(input.zoom_chip_hover, Some(ZoomChipButtonKind::Fit));
+
+    // Fit returns to 100%, removing Lock and shrinking the right-anchored
+    // layout while the physical pointer remains stationary.
+    input.set_zoom_status(false, false, 1.0, (0.0, 0.0));
+    update_chip_layout(&mut input, 1280, 720);
+    let button_now_under_pointer = input.zoom_chip_button_at(x, y);
+    assert_ne!(button_now_under_pointer, Some(ZoomChipButtonKind::Fit));
+    assert_eq!(
+        input.zoom_chip_hover, button_now_under_pointer,
+        "hover must follow the rebuilt geometry, not the old button identity"
+    );
+}
+
+#[test]
+fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
+    let mut input = create_test_input_state();
+    input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
+    update_chip_layout(&mut input, 1280, 720);
+    let (x, y) = button_center(&input, ZoomChipButtonKind::In);
+    input.on_mouse_motion_with_canvas(x, y, x, y);
+    assert_eq!(input.zoom_chip_hover, Some(ZoomChipButtonKind::In));
+
+    // Pointer leave clears hover but retains the last coordinates. A redraw
+    // must not reapply that stale hit while focus is elsewhere.
+    input.clear_chrome_hover();
+    input.update_zoom_chip_layout_for_pointer(&StatusBarStyle::default(), 1280, 720, false);
+
+    assert_eq!(
+        input.zoom_chip_hover, None,
+        "layout rebuild must not restore hover without main-surface pointer focus"
+    );
+}
+
+#[test]
+fn while_zoomed_display_mode_shows_the_chip_only_during_zoom() {
+    let mut input = create_test_input_state();
+    input.zoom_chip_display = crate::config::ZoomChipDisplay::WhileZoomed;
+
+    // At 100% the corner stays clean: no layout, no hit.
+    update_chip_layout(&mut input, 1280, 720);
+    assert!(!input.zoom_chip_enabled());
+    assert!(input.zoom_chip_layout().is_none());
+
+    // Zoom engages: the chip appears (and with it the one-indicator
+    // handoff — zoom_chip_enabled() drives the fallback badges too).
+    input.set_zoom_status(true, false, 2.0, (0.0, 0.0));
+    assert!(input.zoom_chip_enabled());
+    update_chip_layout(&mut input, 1280, 720);
+    assert!(input.zoom_chip_layout().is_some());
+
+    // Zoom ends: clean corner again.
+    input.set_zoom_status(false, false, 1.0, (0.0, 0.0));
+    assert!(!input.zoom_chip_enabled());
+    update_chip_layout(&mut input, 1280, 720);
+    assert!(input.zoom_chip_layout().is_none());
 }
 
 #[test]

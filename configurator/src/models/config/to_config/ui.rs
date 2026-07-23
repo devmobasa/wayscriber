@@ -12,6 +12,7 @@ impl ConfigDraft {
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;
         config.ui.show_toolbar_hint = self.ui_show_toolbar_hint;
+        config.ui.show_floating_badge = self.ui_show_floating_badge;
         config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.show_capabilities_warning = self.ui_show_capabilities_warning;
@@ -41,6 +42,8 @@ impl ConfigDraft {
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
         config.ui.toolbar.side_layout = self.ui_toolbar_side_layout.to_config();
+        config.ui.toolbar.zoom_chip_display = self.ui_toolbar_zoom_chip_display.to_config();
+        config.ui.toolbar.show_zoom_chip = self.ui_toolbar_show_zoom_chip;
         config.ui.toolbar.rebind_modifier = self.ui_toolbar_rebind_modifier.to_config();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.items = self.ui_toolbar_items.clone();

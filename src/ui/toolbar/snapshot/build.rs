@@ -207,6 +207,7 @@ impl ToolbarSnapshot {
             active_side_pane,
             side_scroll,
             side_viewport_max: None,
+            top_available_height: None,
             customize_items_open,
             customize_items_group,
             binding_hints,

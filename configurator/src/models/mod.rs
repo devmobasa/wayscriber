@@ -30,6 +30,7 @@ pub use fields::{
     ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
     TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
     ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

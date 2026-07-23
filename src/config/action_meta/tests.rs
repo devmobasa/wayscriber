@@ -215,6 +215,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::ToggleStatusBar,
     Action::ToggleFloatingBadge,
     Action::ToggleZoomChip,
+    Action::ToggleFocusMode,
     Action::TogglePresenterMode,
     Action::ToggleLightMode,
     Action::ToggleLightModeDrawing,

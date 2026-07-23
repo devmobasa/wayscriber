@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, ToolbarSideLayout, TopDisplayMode,
+    ToolbarRebindModifier, ToolbarSideLayout, TopDisplayMode, ZoomChipDisplay,
 };
 
 /// Toolbar visibility and pinning configuration.
@@ -92,6 +92,17 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_zoom_actions")]
     pub show_zoom_actions: bool,
 
+    /// When the bottom-right zoom chip is shown: "always" (default) or
+    /// "while-zoomed" (only while zoom is active, keeping the corner clean
+    /// at 100%)
+    #[serde(default)]
+    pub zoom_chip_display: ZoomChipDisplay,
+
+    /// Master visibility for the bottom-right zoom chip; the
+    /// `toggle_zoom_chip` palette/keyboard action flips and persists it
+    #[serde(default = "default_show_zoom_chip")]
+    pub show_zoom_chip: bool,
+
     /// Show the Pages section in the side toolbar
     #[serde(default = "default_show_pages_section")]
     pub show_pages_section: bool,
@@ -172,6 +183,8 @@ impl Default for ToolbarConfig {
             side_pinned: default_toolbar_side_pinned(),
             top_minimized: false,
             top_display_mode: TopDisplayMode::default(),
+            zoom_chip_display: ZoomChipDisplay::default(),
+            show_zoom_chip: default_show_zoom_chip(),
             side_minimized: false,
             side_layout: ToolbarSideLayout::default(),
             side_active_pane: default_side_active_pane(),
@@ -240,6 +253,10 @@ fn default_show_actions_advanced() -> bool {
 }
 
 fn default_show_zoom_actions() -> bool {
+    true
+}
+
+fn default_show_zoom_chip() -> bool {
     true
 }
 

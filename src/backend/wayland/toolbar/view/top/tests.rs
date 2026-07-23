@@ -1634,6 +1634,106 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
     ));
 }
 
+/// Screen-aware sizing: when the output is tall enough, the popover grows to
+/// its natural height and does not scroll — even for content that overflows
+/// the fixed fallback cap. This is the fix for the Advanced Settings tab
+/// clipping its footer buttons on a normal screen.
+#[test]
+fn tall_content_fills_a_tall_screen_without_scrolling() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    snapshot.customize_items_open = true;
+    snapshot.customize_items_group =
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+
+    // Without a known output height, the fixed fallback cap still scrolls.
+    let (natural, capped) =
+        top_popover_scroll_bounds(&snapshot).expect("bounds while the settings popover is open");
+    assert_eq!(capped, super::menus::MENU_MAX_CONTENT_H);
+    assert!(natural > capped, "content overflows the fallback cap");
+
+    // A tall screen: the popover grows to the full natural height, no scroll.
+    snapshot.top_available_height = Some(natural + 600.0);
+    let (natural2, viewport) =
+        top_popover_scroll_bounds(&snapshot).expect("bounds with a known tall output");
+    assert_eq!(natural2, natural, "content is unchanged");
+    assert!(
+        (viewport - natural).abs() < 1e-9,
+        "viewport should equal natural height on a tall screen: {viewport} vs {natural}"
+    );
+
+    let (w, h) = top_size(&snapshot);
+    let tree = build_top_view(&snapshot, w as f64, h as f64);
+    assert!(
+        tree.node_by_id(&"top.menu.settings.scrollbar".into())
+            .is_none(),
+        "no scrollbar when everything fits"
+    );
+    let panel = tree
+        .node_by_id(&"top.menu.settings.panel".into())
+        .expect("settings popover panel");
+    assert!(
+        panel.rect.3 > super::menus::MENU_MAX_CONTENT_H,
+        "panel grows past the fixed fallback cap to fit: {}",
+        panel.rect.3
+    );
+}
+
+/// The complement: a short output still caps the popover to the room below
+/// its anchor and scrolls internally, so the footer can never run off the
+/// bottom of a small screen.
+#[test]
+fn tall_content_scrolls_on_a_short_screen() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    snapshot.customize_items_open = true;
+    snapshot.customize_items_group =
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    // A short output forces the screen-aware cap below the natural height.
+    snapshot.top_available_height = Some(360.0);
+
+    let (natural, viewport) =
+        top_popover_scroll_bounds(&snapshot).expect("bounds with a known short output");
+    assert!(
+        viewport < natural,
+        "content must still scroll when the screen is too short"
+    );
+
+    let (w, h) = top_size(&snapshot);
+    let tree = build_top_view(&snapshot, w as f64, h as f64);
+    let scrollbar = tree
+        .node_by_id(&"top.menu.settings.scrollbar".into())
+        .expect("internal scrollbar on a short screen");
+    assert!(matches!(scrollbar.kind, WidgetKind::VScrollbar { .. }));
+    // Every content node stays inside the panel — the footer never clips off.
+    let panel = tree
+        .node_by_id(&"top.menu.settings.panel".into())
+        .expect("panel");
+    for node in tree.nodes() {
+        if node.id.as_str().starts_with("top.menu.settings.")
+            && node.id.as_str() != "top.menu.settings.panel"
+        {
+            assert!(
+                node.rect.1 + node.rect.3 <= panel.rect.1 + panel.rect.3 + 1e-9,
+                "{} escapes the short-screen panel",
+                node.id
+            );
+        }
+    }
+}
+
+#[test]
+fn popover_height_budget_is_relative_to_the_toolbar_surface_origin() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    snapshot.customize_items_open = true;
+    snapshot.customize_items_group =
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.top_available_height = Some(360.0);
+
+    assert_eq!(top_size(&snapshot).1, 360);
+}
+
 /// The wheel path scrolls the open popover against the same bounds the
 /// tree's scrollbar drags against — the popover must stay wheel-scrollable
 /// like the side panes it re-hosts (and the GTK `ScrolledWindow`).

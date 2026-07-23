@@ -34,6 +34,28 @@ pub(super) fn apply_toolbar_ui_config_target(
         ToolbarUiPersistenceTarget::FloatingBadgeAlways => {
             config.ui.show_floating_badge_always = input_state.show_floating_badge_always;
         }
+        ToolbarUiPersistenceTarget::FloatingBadge => {
+            config.ui.show_floating_badge = input_state.show_floating_badge;
+        }
+        ToolbarUiPersistenceTarget::ZoomChip => {
+            config.ui.toolbar.show_zoom_chip = input_state.show_zoom_chip;
+        }
+    }
+}
+
+fn apply_toolbar_ui_visibility_value(
+    config: &mut crate::config::Config,
+    target: ToolbarUiPersistenceTarget,
+    visible: bool,
+) {
+    match target {
+        ToolbarUiPersistenceTarget::FloatingBadge => {
+            config.ui.show_floating_badge = visible;
+        }
+        ToolbarUiPersistenceTarget::ZoomChip => {
+            config.ui.toolbar.show_zoom_chip = visible;
+        }
+        _ => unreachable!("only master-visibility targets carry authored values"),
     }
 }
 
@@ -179,13 +201,48 @@ impl WaylandState {
         self.save_toolbar_config(ToolbarConfigPersistenceTarget::TopDisplayMode);
     }
 
-    pub(super) fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {
-        apply_toolbar_ui_config_target(&mut self.config, &self.input_state, target);
+    pub(in crate::backend::wayland) fn save_floating_badge_visibility_config(
+        &mut self,
+        visible: bool,
+    ) {
+        self.save_toolbar_ui_visibility_config(ToolbarUiPersistenceTarget::FloatingBadge, visible);
+    }
 
-        if let Err(err) = self.config.save() {
-            log::warn!("Failed to save toolbar UI config: {}", err);
-        } else {
-            log::debug!("Saved toolbar UI config");
+    pub(in crate::backend::wayland) fn save_zoom_chip_visibility_config(&mut self, visible: bool) {
+        self.save_toolbar_ui_visibility_config(ToolbarUiPersistenceTarget::ZoomChip, visible);
+    }
+
+    fn save_toolbar_ui_visibility_config(
+        &mut self,
+        target: ToolbarUiPersistenceTarget,
+        visible: bool,
+    ) {
+        let save_result = crate::config::Config::update_file(|config| {
+            apply_toolbar_ui_visibility_value(config, target, visible);
+        });
+        match save_result {
+            Ok(()) => {
+                apply_toolbar_ui_visibility_value(&mut self.config, target, visible);
+                log::debug!("Saved toolbar UI visibility config");
+            }
+            Err(err) => log::warn!("Failed to save toolbar UI visibility config: {}", err),
+        }
+    }
+
+    pub(super) fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {
+        let save_result = crate::config::Config::update_file(|config| {
+            apply_toolbar_ui_config_target(config, &self.input_state, target);
+        });
+
+        match save_result {
+            Ok(()) => {
+                // Keep the runtime's config baseline aligned only after the
+                // durable write succeeds. On failure the live InputState value
+                // remains in effect, but cannot hitchhike on a later save.
+                apply_toolbar_ui_config_target(&mut self.config, &self.input_state, target);
+                log::debug!("Saved toolbar UI config");
+            }
+            Err(err) => log::warn!("Failed to save toolbar UI config: {}", err),
         }
     }
 

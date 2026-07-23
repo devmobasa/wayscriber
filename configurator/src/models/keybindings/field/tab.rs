@@ -90,6 +90,7 @@ impl KeybindingField {
             | Self::ToggleStatusBar
             | Self::ToggleFloatingBadge
             | Self::ToggleZoomChip
+            | Self::ToggleFocusMode
             | Self::ToggleClickHighlight
             | Self::ToggleToolbar
             | Self::CycleToolbarDisplay

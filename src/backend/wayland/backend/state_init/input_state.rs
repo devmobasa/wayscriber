@@ -59,6 +59,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
     input_state.show_toolbar_hint = config.ui.show_toolbar_hint;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
+    input_state.show_floating_badge = config.ui.show_floating_badge;
     input_state.show_active_output_badge = config.ui.active_output_badge;
     input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
     input_state.radial_menu_mouse_binding = config.ui.radial_menu_mouse_binding;
@@ -100,6 +101,8 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     );
     input_state.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
     input_state.init_toolbar_side_layout_from_config(config.ui.toolbar.side_layout);
+    input_state.zoom_chip_display = config.ui.toolbar.zoom_chip_display;
+    input_state.show_zoom_chip = config.ui.toolbar.show_zoom_chip;
     input_state.init_toolbar_rebind_modifier_from_config(config.ui.toolbar.rebind_modifier);
     input_state.init_toolbar_side_panes_from_config(
         &config.ui.toolbar.side_active_pane,
@@ -197,6 +200,8 @@ mod tests {
         config.ui.show_status_board_badge = false;
         config.ui.show_status_page_badge = false;
         config.ui.show_floating_badge_always = true;
+        config.ui.show_floating_badge = false;
+        config.ui.toolbar.show_zoom_chip = false;
         config.ui.active_output_badge = true;
         config.ui.command_palette_toast_duration_ms = 1234;
         let boards = config.boards.as_mut().expect("boards config");
@@ -210,6 +215,14 @@ mod tests {
         assert!(!input.show_status_board_badge);
         assert!(!input.show_status_page_badge);
         assert!(input.show_floating_badge_always);
+        assert!(
+            !input.show_floating_badge,
+            "persisted badge visibility must be restored at startup"
+        );
+        assert!(
+            !input.show_zoom_chip,
+            "persisted zoom chip visibility must be restored at startup"
+        );
         assert!(input.show_active_output_badge);
         assert_eq!(input.command_palette_toast_duration_ms, 1234);
         assert!(!input.boards.pan_enabled());

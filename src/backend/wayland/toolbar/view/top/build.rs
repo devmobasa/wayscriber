@@ -885,6 +885,17 @@ fn push_style_pill(
 }
 
 /// Height the style pill adds under the island band (gap plus pill).
+/// Height of the strip's base band in full display mode (icons vs text). A
+/// menu popover is only ever open while the strip is full, so this is the
+/// offset the contextual rows and the popover stack below.
+pub(super) fn base_band_height(snapshot: &ToolbarSnapshot) -> f64 {
+    if snapshot.use_icons {
+        ToolbarLayoutSpec::TOP_SIZE_ICONS.1 as f64
+    } else {
+        ToolbarLayoutSpec::TOP_SIZE_TEXT.1 as f64
+    }
+}
+
 pub(super) fn style_pill_height(snapshot: &ToolbarSnapshot) -> f64 {
     let plan = plan_top_strip(snapshot);
     style_pill_height_planned(snapshot, &plan)

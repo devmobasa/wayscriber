@@ -12,6 +12,15 @@ use super::base::InputState;
 use super::board_picker::BoardPickerFocus;
 
 impl InputState {
+    /// Whether the floating board/page badge can render in the current state.
+    /// Rendering and higher-level chrome policies share this predicate so a
+    /// badge-only screen is never mistaken for a fully hidden UI.
+    pub fn floating_badge_visible(&self) -> bool {
+        self.show_floating_badge
+            && (!self.show_status_bar || self.show_floating_badge_always)
+            && (self.boards.board_count() > 1 || self.boards.page_count() > 1)
+    }
+
     pub fn status_hud_layout(&self) -> Option<&StatusHudLayout> {
         self.status_hud_layout.as_ref()
     }
@@ -25,15 +34,78 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
+        self.update_status_hud_layout_for_pointer(
+            position,
+            style,
+            screen_width,
+            screen_height,
+            true,
+        );
+    }
+
+    pub(crate) fn update_status_hud_layout_for_pointer(
+        &mut self,
+        position: StatusPosition,
+        style: &StatusBarStyle,
+        screen_width: u32,
+        screen_height: u32,
+        chrome_cursor_focused: bool,
+    ) {
         self.status_hud_layout = if self.show_status_bar {
             compute_status_hud_layout(self, position, style, screen_width, screen_height)
         } else {
             None
         };
+        if chrome_cursor_focused {
+            // Dynamic segments such as the toolbar recovery hint can shift the
+            // rest of the HUD under a stationary pointer. Re-hit-test the cached
+            // position so rendering, click dispatch, and the Wayland cursor all
+            // describe the rebuilt geometry.
+            let (pointer_x, pointer_y) = self.pointer_position();
+            self.update_status_hud_hover_from_pointer(pointer_x, pointer_y);
+        } else if self.status_hud_hover.take().is_some() {
+            // Cached coordinates outlive pointer/stylus focus. Never resurrect
+            // a highlight while the cursor is off-surface or over a toolbar.
+            self.needs_redraw = true;
+        }
     }
 
     pub fn clear_status_hud_layout(&mut self) {
         self.status_hud_layout = None;
+        self.status_hud_hover = None;
+    }
+
+    /// Clear pointer hover shared by the two persistent chrome pills. Used
+    /// when the Wayland pointer leaves their surface, where no motion event is
+    /// guaranteed to follow and clear the cached affordance.
+    pub(crate) fn clear_chrome_hover(&mut self) {
+        let status_hovered = self.status_hud_hover.take().is_some();
+        let zoom_hovered = self.zoom_chip_hover.take().is_some();
+        if status_hovered || zoom_hovered {
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Update the hovered HUD segment from idle pointer motion. Hover
+    /// exists only under the exact gates a click would pass (interactive,
+    /// visible, not overlay-eclipsed) and only while the pointer is idle —
+    /// an active stroke crossing the pill must not light chips up. Redraw
+    /// is requested on transitions only; the damage pass re-damages the
+    /// pill footprint every rendered frame, so no region marking is needed.
+    pub(crate) fn update_status_hud_hover_from_pointer(&mut self, x: i32, y: i32) {
+        let new_hover = if matches!(self.state, crate::input::DrawingState::Idle)
+            && self.status_hud_contains(x, y)
+        {
+            self.status_hud_layout
+                .as_ref()
+                .and_then(|layout| layout.segment_at(x as f64, y as f64))
+        } else {
+            None
+        };
+        if self.status_hud_hover != new_hover {
+            self.status_hud_hover = new_hover;
+            self.needs_redraw = true;
+        }
     }
 
     /// True while an overlay that renders above the status HUD is open. The

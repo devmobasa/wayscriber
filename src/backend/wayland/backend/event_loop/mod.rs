@@ -123,6 +123,13 @@ pub(super) fn run_event_loop(
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
         let capture_timeout = capture::capture_timeout(state, now);
         let durable_action_timeout = durable_action_retry_timeout(state, now);
+        // Backend output actions are drained one at a time. If one remains,
+        // loop immediately even when VSync is disabled and the preceding
+        // action's redraw cleared `needs_redraw`.
+        let pending_backend_action_timeout = state
+            .input_state
+            .has_pending_backend_actions()
+            .then_some(Duration::ZERO);
         let timeout = if should_block {
             min_timeout(autosave_timeout, focus_exit_timeout)
         } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -149,6 +156,7 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
         let timeout = min_timeout(timeout, durable_action_timeout);
+        let timeout = min_timeout(timeout, pending_backend_action_timeout);
         // A radial menu waiting out its paint delay must appear without
         // further input events.
         let timeout = min_timeout(timeout, state.input_state.radial_menu_paint_timeout(now));
@@ -277,6 +285,7 @@ pub(super) fn run_event_loop(
 
         if let Some(err) = render::maybe_render(
             state,
+            conn,
             qh,
             &mut consecutive_render_failures,
             &mut last_render_time,

@@ -51,7 +51,13 @@ impl ConfiguratorApp {
                 ToggleField::UiShowToolbarHint,
             ),
             toggle_row(
-                "Show overlay badge with status bar",
+                "Show board/page badge",
+                self.draft.ui_show_floating_badge,
+                self.defaults.ui_show_floating_badge,
+                ToggleField::UiShowFloatingBadge,
+            ),
+            toggle_row(
+                "Also show badge with status bar",
                 self.draft.ui_show_page_badge_with_status_bar,
                 self.defaults.ui_show_page_badge_with_status_bar,
                 ToggleField::UiShowPageBadgeWithStatusBar,

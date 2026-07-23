@@ -203,6 +203,7 @@ impl WaylandState {
             .or_else(|| self.runtime_ui_unavailable.clone());
         snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
+        snapshot.top_available_height = self.top_popover_available_height(&snapshot);
         snapshot.top_fade = self.data.top_strip_fade.value();
         snapshot
     }
@@ -220,6 +221,23 @@ impl WaylandState {
         };
         let base_x = self.inline_top_base_x(snapshot);
         super::geometry::remaining_top_width(screen_width, base_x, Self::TOP_MARGIN_RIGHT, scale)
+    }
+
+    /// Height available from the top toolbar surface origin to the output
+    /// bottom, in pre-scale spec units, for sizing the open
+    /// Canvas/Session/Settings popover (see
+    /// `ToolbarSnapshot::top_available_height`). The surface origin includes
+    /// the live vertical drag offset, so opening a tall popover does not make
+    /// the toolbar clamp back up the screen.
+    fn top_popover_available_height(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
+        let screen_height = self.surface.height() as f64;
+        let scale = if snapshot.toolbar_scale.is_finite() {
+            snapshot.toolbar_scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+        let surface_y = self.inline_top_base_y() + self.data.toolbar_top_offset_y;
+        super::geometry::remaining_top_height(screen_height, surface_y, scale)
     }
 
     /// Height available to the side palette in pre-scale spec units: the

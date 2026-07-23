@@ -19,6 +19,10 @@ pub(crate) fn default_toggle_zoom_chip() -> Vec<String> {
     Vec::new()
 }
 
+pub(crate) fn default_toggle_focus_mode() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
 }

@@ -116,9 +116,8 @@ impl InputState {
         }
         if let Some(show_status_bar) = preset.show_status_bar
             && !(self.presenter_mode && self.presenter_mode_config.hide_status_bar)
-            && self.show_status_bar != show_status_bar
+            && self.set_status_bar_visibility_preserving_focus(show_status_bar)
         {
-            self.show_status_bar = show_status_bar;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();

@@ -10,7 +10,7 @@ use crate::models::{
     PresenterToolBehaviorOption, PresenterToolbarModeOption, QuadField, ReducedMotionOption,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    ToolbarSideLayoutOption, TripletField, UiThemeOption,
+    ToolbarSideLayoutOption, TripletField, UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -249,6 +249,16 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.ui_toolbar_side_layout = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_toolbar_zoom_chip_display_changed(
+        &mut self,
+        option: ZoomChipDisplayOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.ui_toolbar_zoom_chip_display = option;
         self.refresh_dirty_flag();
         Task::none()
     }

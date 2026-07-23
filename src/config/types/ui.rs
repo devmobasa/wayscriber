@@ -50,6 +50,11 @@ pub struct UiConfig {
     #[serde(default = "default_show_toolbar_hint")]
     pub show_toolbar_hint: bool,
 
+    /// Master visibility for the floating board/page badge; the
+    /// `toggle_floating_badge` palette/keyboard action flips and persists it
+    #[serde(default = "default_show_floating_badge")]
+    pub show_floating_badge: bool,
+
     /// Show the board/page badge even when the status bar is visible
     /// (renamed from show_page_badge_with_status_bar for clarity)
     #[serde(
@@ -140,6 +145,7 @@ impl Default for UiConfig {
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),
             show_toolbar_hint: default_show_toolbar_hint(),
+            show_floating_badge: default_show_floating_badge(),
             show_floating_badge_always: default_show_page_badge_with_status_bar(),
             show_frozen_badge: default_show_frozen_badge(),
             status_bar_position: default_status_position(),
@@ -178,6 +184,10 @@ fn default_show_status_page_badge() -> bool {
 }
 
 fn default_show_toolbar_hint() -> bool {
+    true
+}
+
+fn default_show_floating_badge() -> bool {
     true
 }
 

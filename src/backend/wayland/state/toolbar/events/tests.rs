@@ -361,12 +361,16 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
     config.ui.show_status_board_badge = false;
     config.ui.show_status_page_badge = true;
     config.ui.show_floating_badge_always = false;
+    config.ui.show_floating_badge = true;
+    config.ui.toolbar.show_zoom_chip = true;
 
     let mut input_state = make_test_input_state();
     input_state.show_status_bar = false;
     input_state.show_status_board_badge = true;
     input_state.show_status_page_badge = false;
     input_state.show_floating_badge_always = true;
+    input_state.show_floating_badge = false;
+    input_state.show_zoom_chip = false;
 
     apply_toolbar_ui_config_target(
         &mut config,
@@ -378,6 +382,34 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
     assert!(config.ui.show_status_board_badge);
     assert!(config.ui.show_status_page_badge);
     assert!(!config.ui.show_floating_badge_always);
+    assert!(config.ui.show_floating_badge, "sibling untouched");
+    assert!(config.ui.toolbar.show_zoom_chip, "sibling untouched");
+}
+
+#[test]
+fn master_visibility_targets_copy_only_their_own_field() {
+    let mut config = crate::config::Config::default();
+    let mut input_state = make_test_input_state();
+    input_state.show_floating_badge = false;
+    input_state.show_zoom_chip = false;
+
+    apply_toolbar_ui_config_target(
+        &mut config,
+        &input_state,
+        ToolbarUiPersistenceTarget::FloatingBadge,
+    );
+    assert!(!config.ui.show_floating_badge);
+    assert!(
+        config.ui.toolbar.show_zoom_chip,
+        "zoom chip pref untouched by the badge target"
+    );
+
+    apply_toolbar_ui_config_target(
+        &mut config,
+        &input_state,
+        ToolbarUiPersistenceTarget::ZoomChip,
+    );
+    assert!(!config.ui.toolbar.show_zoom_chip);
 }
 
 #[test]

@@ -80,6 +80,12 @@ pub(crate) enum ToolbarUiPersistenceTarget {
     StatusBoardBadge,
     StatusPageBadge,
     FloatingBadgeAlways,
+    /// Master floating-badge visibility (`ui.show_floating_badge`),
+    /// persisted by its keyboard/palette toggle action.
+    FloatingBadge,
+    /// Master zoom-chip visibility (`ui.toolbar.show_zoom_chip`),
+    /// persisted by its keyboard/palette toggle action.
+    ZoomChip,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

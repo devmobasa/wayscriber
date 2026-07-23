@@ -62,7 +62,7 @@ pub use toolbar::{
     ToolbarItemDefinition, ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
     ToolbarItemSurface, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverride,
     ToolbarModeOverrides, ToolbarRebindModifier, ToolbarSectionDefaults, ToolbarSideLayout,
-    TopDisplayMode, toolbar_item_definitions, toolbar_item_order_group,
+    TopDisplayMode, ZoomChipDisplay, toolbar_item_definitions, toolbar_item_order_group,
 };
 pub(crate) use toolbar::{
     ToolbarItemVisibilitySetting, factory_individual_toolbar_item_visibility_settings,

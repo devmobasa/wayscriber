@@ -10,9 +10,55 @@ fn toggle_floating_badge_action_flips_runtime_visibility() {
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
     assert!(!state.show_floating_badge);
     assert!(state.needs_redraw);
+    // The explicit toggle persists the preference across restarts.
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(false))
+    );
 
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
     assert!(state.show_floating_badge);
+}
+
+#[test]
+fn chrome_visibility_persistence_actions_are_queued_without_loss() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    state.handle_action(crate::config::Action::ToggleZoomChip);
+    assert!(state.has_pending_backend_actions());
+
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(false))
+    );
+    assert!(state.has_pending_backend_actions());
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(false))
+    );
+    assert!(!state.has_pending_backend_actions());
+    assert!(state.take_pending_backend_action().is_none());
+}
+
+#[test]
+fn repeated_visibility_saves_coalesce_to_the_latest_authored_value() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    state.handle_action(crate::config::Action::ToggleZoomChip);
+    state.handle_action(crate::config::Action::ToggleZoomChip);
+
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(true))
+    );
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(true))
+    );
+    assert!(state.take_pending_backend_action().is_none());
 }
 
 #[test]

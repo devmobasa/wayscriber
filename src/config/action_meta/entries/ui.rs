@@ -75,6 +75,22 @@ pub const ENTRIES: &[ActionMeta] = &[
         &["hide zoom", "zoom controls"]
     ),
     meta!(
+        ToggleFocusMode,
+        "Focus Mode",
+        None,
+        "Hide all UI chrome; press again to restore it",
+        UI,
+        true,
+        true,
+        false,
+        &[
+            "clean screen",
+            "hide all ui",
+            "hide everything",
+            "distraction free"
+        ]
+    ),
+    meta!(
         TogglePresenterMode,
         "Presenter Mode",
         None,

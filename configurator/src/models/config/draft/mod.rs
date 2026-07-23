@@ -1,7 +1,6 @@
 mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
-use super::super::fields::ToolbarSideLayoutOption;
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
@@ -11,6 +10,7 @@ use super::super::fields::{
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
+use super::super::fields::{ToolbarSideLayoutOption, ZoomChipDisplayOption};
 use super::super::keybindings::KeybindingsDraft;
 use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
@@ -70,6 +70,7 @@ pub struct ConfigDraft {
     pub ui_show_status_board_badge: bool,
     pub ui_show_status_page_badge: bool,
     pub ui_show_toolbar_hint: bool,
+    pub ui_show_floating_badge: bool,
     pub ui_show_page_badge_with_status_bar: bool,
     pub ui_show_frozen_badge: bool,
     pub ui_show_capabilities_warning: bool,
@@ -85,6 +86,8 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
     pub ui_toolbar_side_layout: ToolbarSideLayoutOption,
+    pub ui_toolbar_zoom_chip_display: ZoomChipDisplayOption,
+    pub ui_toolbar_show_zoom_chip: bool,
     pub ui_toolbar_rebind_modifier: ToolbarRebindModifierOption,
     pub ui_toolbar_items: ToolbarItemsConfig,
     pub ui_toolbar_show_presets: bool,

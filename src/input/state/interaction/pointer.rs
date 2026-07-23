@@ -62,6 +62,15 @@ pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -
 pub(crate) fn route_pointer_motion(state: &mut InputState, event: PointerMotion) -> RoutingOutcome {
     let points = event.points();
     adapters::update_pointer_positions(state, points);
+    // Chrome hover affordances update on every motion, before any modal
+    // early-return: the setters gate themselves (idle pointer + the same
+    // visibility/eclipse checks a click would pass), so an open overlay or
+    // an active stroke clears hover instead of freezing it.
+    {
+        let screen = points.screen();
+        state.update_status_hud_hover_from_pointer(screen.x(), screen.y());
+        state.update_zoom_chip_hover_from_pointer(screen.x(), screen.y());
+    }
     if let Some(outcome) = adapters::handle_radial_menu_motion(state, points) {
         return outcome;
     }

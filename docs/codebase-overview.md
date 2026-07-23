@@ -125,8 +125,8 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` →
 | `tests/` | Unit tests and fixtures for the manager, sources, and pipeline. |
 
 **Runtime flow:**
-1. `InputState::handle_action` sets `pending_backend_action` for screenshot capture and canvas export actions.
-2. The Wayland event loop centrally drains the pending backend action, so keybindings, command-palette Return, and command-palette mouse clicks share the same dispatch path.
+1. `InputState::handle_action` records screenshot, export, and other backend-owned work in `pending_backend_action`; independently coalesced slots retain the authored badge and zoom-chip preference saves.
+2. The Wayland event loop centrally drains that pending work, so keybindings, command-palette Return, and command-palette mouse clicks share the same dispatch path without the two preference saves overwriting one another.
 3. Screenshot actions call `WaylandState::handle_capture_action`; explicit canvas PNG export actions call `WaylandState::handle_canvas_export_action`; board PDF actions call `WaylandState::handle_board_pdf_export_action`.
 4. `WaylandState::handle_capture_action` builds a `CaptureRequest` (type + destination + save config), hides the overlay, and queues the request until the suppression frame is confirmed; it then calls `CaptureManager::request_capture`.
 5. Canvas export snapshots persisted board content in the current panned viewport, renders PNG bytes, and calls `CaptureManager::request_image_delivery`.

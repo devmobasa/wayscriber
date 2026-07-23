@@ -115,6 +115,10 @@ pub enum Action {
     ToggleFloatingBadge,
     /// Show/hide the bottom-right zoom chip.
     ToggleZoomChip,
+    /// Hide every persistent chrome surface at once (toolbars, status bar,
+    /// floating badge, zoom chip); a second press restores the exact prior
+    /// visibility.
+    ToggleFocusMode,
     ToggleClickHighlight,
     ToggleToolbar,
     /// Cycle the top toolbar's display: full strip → micro chip → hidden.

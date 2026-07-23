@@ -10,7 +10,11 @@ use crate::input::{
 };
 
 impl WaylandState {
-    pub(super) fn update_pointer_cursor(&mut self, toolbar_hover: bool, conn: &Connection) {
+    pub(in crate::backend::wayland) fn update_pointer_cursor(
+        &mut self,
+        toolbar_hover: bool,
+        conn: &Connection,
+    ) {
         if self.toolbar_dragging() && self.pointer_lock_active() {
             self.hide_pointer_cursor();
             return;
@@ -189,6 +193,21 @@ impl WaylandState {
             }
             // Idle - check for hover contexts
             DrawingState::Idle => {}
+        }
+
+        // Interactive chrome under an idle pointer: hand cursor over
+        // actionable chips/buttons, neutral arrow over the rest of the
+        // pill. Both surfaces render above the canvas, so they outrank
+        // selection-handle hover in the pixels they occupy.
+        if self.input_state.status_hud_hover.is_some() || self.input_state.zoom_chip_hover.is_some()
+        {
+            return CursorIcon::Pointer;
+        }
+        let (pointer_x, pointer_y) = self.input_state.pointer_position();
+        if self.input_state.status_hud_contains(pointer_x, pointer_y)
+            || self.input_state.zoom_chip_contains(pointer_x, pointer_y)
+        {
+            return CursorIcon::Default;
         }
 
         // Check if hovering over selection handles

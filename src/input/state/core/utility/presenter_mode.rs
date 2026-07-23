@@ -61,6 +61,13 @@ impl InputState {
         if self.light_mode {
             self.exit_light_mode();
         }
+        if self.focus_mode_active() {
+            // Restore Focus Mode's snapshot before Presenter Mode captures its
+            // own chrome baseline. This keeps the two transient owners from
+            // nesting and lets micro-toolbar presenter policy operate on the
+            // real pre-Focus visibility.
+            self.toggle_focus_mode();
+        }
 
         let mut restore = PresenterRestore {
             show_status_bar: None,

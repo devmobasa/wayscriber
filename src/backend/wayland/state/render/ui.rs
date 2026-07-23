@@ -53,10 +53,14 @@ impl WaylandState {
             // Mode badges: when the status HUD is visible they render as
             // pills stacked on the HUD (see render_status_bar); the floating
             // top-corner badges below cover the hidden-status-bar case only.
+            // Focus Mode suppresses the whole fallback family; otherwise its
+            // intentional status/chip hide would make these badges reappear.
+            let fallback_mode_badges_visible = self.input_state.fallback_mode_badges_visible();
             if self.input_state.frozen_active()
                 && !self.zoom.active
                 && self.config.ui.show_frozen_badge
                 && !self.input_state.show_status_bar
+                && fallback_mode_badges_visible
             {
                 crate::ui::render_frozen_badge(ctx, width, height);
             }
@@ -68,12 +72,13 @@ impl WaylandState {
             // zoom indicator/control whenever it is effectively visible, so the
             // passive top-corner zoom badge is suppressed then — otherwise the
             // chip and this badge would both show the zoom percentage. When the
-            // chip is absent (zoom actions off or runtime-hidden), this passive
+            // chip is absent (zoom actions off or master-hidden), this passive
             // badge remains the hidden-status-bar zoom indicator.
             let mut top_badge_offset = 0.0;
             if self.input_state.zoom_active()
                 && !self.input_state.show_status_bar
                 && !self.zoom_chip_visible()
+                && fallback_mode_badges_visible
             {
                 top_badge_offset += crate::ui::render_zoom_badge(
                     ctx,
@@ -87,6 +92,7 @@ impl WaylandState {
                 && self.input_state.boards.show_pan_badge()
                 && !self.input_state.board_is_transparent()
                 && !self.input_state.show_status_bar
+                && fallback_mode_badges_visible
             {
                 top_badge_offset += crate::ui::render_pan_badge(
                     ctx,
@@ -100,30 +106,26 @@ impl WaylandState {
             if matches!(self.input_state.state, DrawingState::TextInput { .. })
                 && self.input_state.text_edit_target.is_some()
                 && !self.input_state.show_status_bar
+                && fallback_mode_badges_visible
             {
                 crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);
             }
-            if self.input_state.show_floating_badge
-                && (!self.input_state.show_status_bar
-                    || self.input_state.show_floating_badge_always)
-            {
+            if self.input_state.floating_badge_visible() {
                 let board_count = self.input_state.boards.board_count();
                 let page_count = self.input_state.boards.page_count();
-                if board_count > 1 || page_count > 1 {
-                    let board_index = self.input_state.boards.active_index();
-                    let board_name = self.input_state.board_name();
-                    let page_index = self.input_state.boards.active_page_index();
-                    crate::ui::render_page_badge(
-                        ctx,
-                        width,
-                        height,
-                        board_index,
-                        board_count,
-                        board_name,
-                        page_index,
-                        page_count,
-                    );
-                }
+                let board_index = self.input_state.boards.active_index();
+                let board_name = self.input_state.board_name();
+                let page_index = self.input_state.boards.active_page_index();
+                crate::ui::render_page_badge(
+                    ctx,
+                    width,
+                    height,
+                    board_index,
+                    board_count,
+                    board_name,
+                    page_index,
+                    page_count,
+                );
             }
 
             // Render the status HUD if enabled (layout was cached for this
@@ -290,20 +292,22 @@ impl WaylandState {
     }
 
     /// The render/damage/hit-test gate for the interactive bottom-right zoom
-    /// chip: shown whenever zoom actions are enabled (the existing
-    /// `show_zoom_actions` toggle — no new config key) and the runtime
-    /// `Action::ToggleZoomChip` toggle has not hidden it. Like the status bar,
+    /// chip: shown whenever zoom actions and the persisted `show_zoom_chip`
+    /// master preference are enabled and the `zoom_chip_display` policy allows
+    /// it. Like the status bar,
     /// the chip is a PERSISTENT fixed-corner control, not a cursor-follower, so
     /// it is deliberately NOT gated on cursor focus or toolbar blocking: gating
     /// it that way regressed the zoom readout to nothing whenever the pointer
     /// sat over the toolbar or off-surface (e.g. while clicking the Canvas
     /// popover's Zoom buttons). Effective chip visibility is also the fallback
-    /// suppression gate, so exactly one zoom indicator shows in every state —
-    /// never zero, never two. Hiding the chip via `ToggleZoomChip` hands the
-    /// readout to the status-HUD badge when the bar is visible, or the passive
-    /// top-corner badge when it is hidden. Shared by the render pass, the damage
-    /// collector (which caches the layout), and the pointer/touch press guards,
-    /// so all three agree on whether the chip exists this frame.
+    /// suppression gate, so outside Focus Mode exactly one zoom indicator shows
+    /// in every state — never zero, never two. Focus Mode intentionally hides
+    /// both the chip and its fallback badges. Otherwise, hiding the chip via
+    /// `ToggleZoomChip` hands the readout to the status-HUD badge when the bar is
+    /// visible, or the passive top-corner badge when it is hidden. Shared by the
+    /// render pass, the damage collector (which caches the layout), and the
+    /// pointer/touch press guards, so all three agree on whether the chip exists
+    /// this frame.
     pub(in crate::backend::wayland) fn zoom_chip_visible(&self) -> bool {
         self.input_state.zoom_chip_enabled()
     }

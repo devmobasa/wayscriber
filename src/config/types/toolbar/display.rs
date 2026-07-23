@@ -33,6 +33,23 @@ impl TopDisplayMode {
     }
 }
 
+/// When the bottom-right zoom chip is shown (while `show_zoom_actions` is
+/// on and the persisted master preference has not been hidden via
+/// `Action::ToggleZoomChip`).
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ZoomChipDisplay {
+    /// Persistent fixed-corner control (the default): the chip is also the
+    /// mouse entry point for zooming in from 100%.
+    #[default]
+    Always,
+    /// Show the chip only while zoom is active. At 100% the corner stays
+    /// clean; zooming still works via keyboard/scroll bindings, and the
+    /// chip appears as soon as zoom engages.
+    WhileZoomed,
+}
+
 /// Where the side-palette functions live.
 ///
 /// `Pill` (the default) is the supported layout: the standalone side palette is

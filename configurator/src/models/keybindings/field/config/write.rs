@@ -82,6 +82,7 @@ impl KeybindingField {
             Self::ToggleStatusBar => config.ui.toggle_status_bar = value,
             Self::ToggleFloatingBadge => config.ui.toggle_floating_badge = value,
             Self::ToggleZoomChip => config.ui.toggle_zoom_chip = value,
+            Self::ToggleFocusMode => config.ui.toggle_focus_mode = value,
             Self::ToggleClickHighlight => config.ui.toggle_click_highlight = value,
             Self::ToggleToolbar => config.ui.toggle_toolbar = value,
             Self::CycleToolbarDisplay => config.ui.cycle_toolbar_display = value,
