@@ -36,8 +36,14 @@ const COMMAND_PALETTE_SHORTCUT_BADGE_RADIUS: f64 = 3.0;
 const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
 const COMMAND_PALETTE_INPUT_HINT: &str =
     "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
-/// Offset of the frame drop shadow below/right of the palette.
-const FRAME_SHADOW_OFFSET: f64 = 4.0;
+/// Maximum extent of the frame drop shadow below/right of the palette. Also
+/// the damage-region padding, so the softest (furthest) shadow layer is
+/// always covered — keep the layer offsets in `draw_command_palette_frame`
+/// at or below this.
+const FRAME_SHADOW_OFFSET: f64 = 12.0;
+/// Outer, softer layer of the two-layer drop shadow (lighter than the inner
+/// `SHADOW` layer; mirrors the help overlay frame).
+const FRAME_SHADOW_SOFT: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.22);
 const TOOLTIP_PADDING_X: f64 = 8.0;
 const TOOLTIP_PADDING_Y: f64 = 5.0;
 const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
@@ -350,11 +356,24 @@ fn draw_command_palette_frame(
     ctx.rectangle(0.0, 0.0, screen_width, screen_height);
     let _ = ctx.fill();
 
-    constants::set_color(ctx, SHADOW);
+    // Two-layer drop shadow for a softer edge: a lighter outer layer offset
+    // to the shadow's full extent, then the denser inner layer closer in.
+    constants::set_color(ctx, FRAME_SHADOW_SOFT);
     draw_rounded_rect(
         ctx,
         x + FRAME_SHADOW_OFFSET,
         y + FRAME_SHADOW_OFFSET,
+        palette_width,
+        height,
+        RADIUS_LG,
+    );
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, SHADOW);
+    draw_rounded_rect(
+        ctx,
+        x + FRAME_SHADOW_OFFSET * 0.5,
+        y + FRAME_SHADOW_OFFSET * 0.5,
         palette_width,
         height,
         RADIUS_LG,

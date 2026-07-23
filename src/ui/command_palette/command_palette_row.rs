@@ -2,10 +2,12 @@ use crate::config::KeybindingsConfig;
 use crate::config::action_meta::ActionMeta;
 use crate::input::InputState;
 use crate::input::state::COMMAND_PALETTE_ITEM_HEIGHT;
+use crate::input::state::query_tokens;
 use crate::input::state::{
     COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
     COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP, COMMAND_PALETTE_ROW_ICON_SIZE,
 };
+use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::super::constants::{self, BG_INPUT_SELECTION, RADIUS_SM, TEXT_DESCRIPTION, TEXT_WHITE};
@@ -83,6 +85,18 @@ pub(super) fn render_command_row(
         );
     }
     let label_x = inner_x + 10.0 + COMMAND_PALETTE_ROW_ICON_SIZE + COMMAND_PALETTE_ROW_ICON_GAP;
+
+    // Accent backdrop behind the label characters the query matched, so the
+    // user sees why a command surfaced. Drawn before the text so the glyphs
+    // sit on top; fuzzy-only (subsequence) matches draw nothing.
+    draw_label_match_highlights(
+        ctx,
+        &input_state.command_palette_query,
+        cmd.label,
+        label_x,
+        label_y,
+        styles.label.size,
+    );
 
     constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
     render_command_row_label(ctx, cmd.label, label_x, label_y, styles);
@@ -173,6 +187,36 @@ fn render_command_row_label(
     styles: &CommandPaletteRowStyle,
 ) {
     draw_text_baseline(ctx, styles.label, label, x, y, None);
+}
+
+/// Draw the accent match backdrop for each query token that appears in the
+/// label as a literal (case-insensitive) substring. The label text itself is
+/// drawn by the caller afterwards, over these boxes.
+fn draw_label_match_highlights(
+    ctx: &cairo::Context,
+    query: &str,
+    label: &str,
+    label_x: f64,
+    label_y: f64,
+    label_size: f64,
+) {
+    let query = query.trim();
+    if query.is_empty() {
+        return;
+    }
+    let query_lower = query.to_ascii_lowercase();
+    let (hr, hg, hb, ha) = constants::with_alpha(constants::ACCENT_PRIMARY, 0.30);
+    let style = HighlightStyle {
+        font_family: COMMAND_PALETTE_FONT_FAMILY,
+        font_size: label_size,
+        font_weight: cairo::FontWeight::Normal,
+        color: [hr, hg, hb, ha],
+    };
+    for token in query_tokens(&query_lower) {
+        if let Some(range) = find_match_range(label, token) {
+            draw_highlight(ctx, label_x, label_y, label, range, &style);
+        }
+    }
 }
 
 pub(super) fn render_command_row_shortcut_badge(

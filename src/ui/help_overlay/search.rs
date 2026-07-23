@@ -6,19 +6,11 @@ use super::types::Row;
 use crate::input::state::{action_meta_token_score, fuzzy_score, query_tokens};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
-const ELLIPSIS: &str = "\u{2026}";
+// Substring match highlighting is shared with the command palette; matching
+// itself is fuzzy (see [`row_matches`]), so a fuzzy-only match draws none.
+pub(crate) use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
 
-/// Substring range for match highlighting only; matching itself is fuzzy
-/// (see [`row_matches`]), so a fuzzy-only match simply draws no highlight.
-pub(crate) fn find_match_range(haystack: &str, needle_lower: &str) -> Option<(usize, usize)> {
-    if needle_lower.is_empty() {
-        return None;
-    }
-    let haystack_lower = haystack.to_ascii_lowercase();
-    haystack_lower
-        .find(needle_lower)
-        .map(|start| (start, start + needle_lower.len()))
-}
+const ELLIPSIS: &str = "\u{2026}";
 
 /// Fuzzy row match: every query token must fuzzy-match the shortcut string
 /// (`key`), the visible action description, or — for rows that carry an action
@@ -46,68 +38,6 @@ pub(crate) fn title_matches(title: &str, needle_lower: &str) -> bool {
         return false;
     }
     tokens.iter().all(|token| fuzzy_score(token, title) > 0)
-}
-
-pub(crate) struct HighlightStyle<'a> {
-    pub(crate) font_family: &'a str,
-    pub(crate) font_size: f64,
-    pub(crate) font_weight: cairo::FontWeight,
-    pub(crate) color: [f64; 4],
-}
-
-pub(crate) fn draw_highlight(
-    ctx: &cairo::Context,
-    x: f64,
-    baseline: f64,
-    text: &str,
-    range: (usize, usize),
-    style: &HighlightStyle<'_>,
-) {
-    let (start, end) = range;
-    if start >= end || end > text.len() {
-        return;
-    }
-    if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
-        return;
-    }
-    let prefix = &text[..start];
-    let matched = &text[start..end];
-    if matched.is_empty() {
-        return;
-    }
-
-    let prefix_extents = text_extents_for(
-        ctx,
-        style.font_family,
-        cairo::FontSlant::Normal,
-        style.font_weight,
-        style.font_size,
-        prefix,
-    );
-    let match_extents = text_extents_for(
-        ctx,
-        style.font_family,
-        cairo::FontSlant::Normal,
-        style.font_weight,
-        style.font_size,
-        matched,
-    );
-
-    let pad_x = 2.0;
-    let pad_y = 2.0;
-    let highlight_x = x + prefix_extents.width() - pad_x;
-    let highlight_y = baseline + match_extents.y_bearing() - pad_y;
-    let highlight_width = match_extents.width() + pad_x * 2.0;
-    let highlight_height = match_extents.height() + pad_y * 2.0;
-
-    ctx.set_source_rgba(
-        style.color[0],
-        style.color[1],
-        style.color[2],
-        style.color[3],
-    );
-    ctx.rectangle(highlight_x, highlight_y, highlight_width, highlight_height);
-    let _ = ctx.fill();
 }
 
 pub(crate) fn draw_segmented_text(

@@ -165,6 +165,22 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
 }
 
 #[test]
+fn render_command_palette_with_query_draws_content() {
+    // Exercises the match-highlight path: an open palette with a query that
+    // literally appears in some command labels must render without panicking
+    // and draw pixels (highlight boxes + rows).
+    let (mut surface, ctx) = surface_with_context(900, 700);
+    let mut input = make_input_state();
+    input.command_palette_open = true;
+    input.command_palette_query = "tool".to_string();
+
+    wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
+
+    drop(ctx);
+    assert!(surface_has_pixels(&mut surface));
+}
+
+#[test]
 fn render_keybinding_capture_draws_content() {
     let (mut surface, ctx) = surface_with_context(800, 600);
     let mut input = make_input_state();
