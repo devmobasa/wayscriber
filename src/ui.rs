@@ -13,6 +13,7 @@ mod primitives;
 mod properties_panel;
 mod radial_menu;
 mod status;
+mod text_highlight;
 pub mod theme;
 mod toasts;
 mod tour;
