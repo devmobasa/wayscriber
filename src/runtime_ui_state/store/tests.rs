@@ -116,8 +116,9 @@ fn replacing_same_bytes_with_a_new_inode_is_a_conflict() {
     fs::write(&path, &bytes).unwrap();
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
-    fs::remove_file(&path).unwrap();
-    fs::write(&path, &bytes).unwrap();
+    let replacement = temp.path().join("external-runtime-ui.toml");
+    fs::write(&replacement, &bytes).unwrap();
+    fs::rename(replacement, &path).unwrap();
 
     let result = store.execute_source_mutation(request(
         1,
