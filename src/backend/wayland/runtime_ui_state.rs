@@ -58,6 +58,12 @@ pub(in crate::backend::wayland) struct PreparedToolbarMutation {
     session: RuntimeUiPreviewSession,
 }
 
+impl PreparedToolbarMutation {
+    pub(in crate::backend::wayland) fn is_persistent_preview(&self) -> bool {
+        matches!(&self.session, RuntimeUiPreviewSession::Persistent(_))
+    }
+}
+
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct PreparedBoardPinMutation {
     board_id: String,

@@ -288,6 +288,7 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
     let prepared = runtime
         .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input)
         .expect("top-pin permit");
+    assert!(prepared.is_persistent_preview());
     input.toolbar_top_pinned = false;
     assert!(matches!(
         runtime.finish_toolbar_mutation(prepared, true, &input),
@@ -1092,6 +1093,7 @@ fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
     let prepared = runtime
         .begin_toolbar_mutation(target, &input)
         .expect("unsupported authority permits a live-only preview");
+    assert!(!prepared.is_persistent_preview());
     input.toolbar_top_minimized = true;
     assert!(matches!(
         runtime.finish_toolbar_mutation(prepared, true, &input),

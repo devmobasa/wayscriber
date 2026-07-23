@@ -15,6 +15,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 
+use super::feedback::ToolbarPinDurability;
+
 struct EnvGuard {
     _guard: MutexGuard<'static, ()>,
     xdg_data_home: Option<std::ffi::OsString>,
@@ -45,6 +47,61 @@ impl Drop for EnvGuard {
 
 fn persistence_for(event: &ToolbarEvent) -> ToolbarPersistence {
     ToolbarEventPolicy::for_event(event).persistence
+}
+
+#[test]
+fn pin_confirmations_distinguish_persistent_and_live_only_changes() {
+    let cases = [
+        (
+            ToolbarPinChange::Top(true),
+            ToolbarPinDurability::StartupPersistent,
+            "Top toolbar will open at startup",
+        ),
+        (
+            ToolbarPinChange::Top(false),
+            ToolbarPinDurability::StartupPersistent,
+            "Top toolbar will be hidden at startup",
+        ),
+        (
+            ToolbarPinChange::Side(true),
+            ToolbarPinDurability::StartupPersistent,
+            "Side toolbar will open at startup",
+        ),
+        (
+            ToolbarPinChange::Side(false),
+            ToolbarPinDurability::StartupPersistent,
+            "Side toolbar will be hidden at startup",
+        ),
+        (
+            ToolbarPinChange::Top(true),
+            ToolbarPinDurability::LiveOnly,
+            "Top toolbar pinned for this run only",
+        ),
+        (
+            ToolbarPinChange::Top(false),
+            ToolbarPinDurability::LiveOnly,
+            "Top toolbar unpinned for this run only",
+        ),
+        (
+            ToolbarPinChange::Side(true),
+            ToolbarPinDurability::LiveOnly,
+            "Side toolbar pinned for this run only",
+        ),
+        (
+            ToolbarPinChange::Side(false),
+            ToolbarPinDurability::LiveOnly,
+            "Side toolbar unpinned for this run only",
+        ),
+    ];
+
+    for (change, durability, expected) in cases {
+        assert_eq!(change.message(durability), expected);
+    }
+}
+
+#[test]
+fn unavailable_runtime_controller_uses_live_only_pin_confirmation() {
+    assert_eq!(pin_durability(None), ToolbarPinDurability::LiveOnly);
 }
 
 #[test]

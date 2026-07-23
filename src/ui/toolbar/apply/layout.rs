@@ -1,6 +1,5 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
 use crate::input::InputState;
-use crate::input::state::{Toast, ToastPriority};
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
@@ -105,20 +104,6 @@ impl InputState {
     pub(super) fn apply_toolbar_pin_top_toolbar(&mut self, pin: bool) -> bool {
         if self.toolbar_top_pinned != pin {
             self.toolbar_top_pinned = pin;
-            // Show toast explaining what pinning does
-            if pin {
-                self.push_toast(
-                    ToastPriority::Info,
-                    "toolbar",
-                    Toast::info("Top toolbar will open at startup"),
-                );
-            } else {
-                self.push_toast(
-                    ToastPriority::Info,
-                    "toolbar",
-                    Toast::info("Top toolbar will be hidden at startup"),
-                );
-            }
             true
         } else {
             false
@@ -128,20 +113,6 @@ impl InputState {
     pub(super) fn apply_toolbar_pin_side_toolbar(&mut self, pin: bool) -> bool {
         if self.toolbar_side_pinned != pin {
             self.toolbar_side_pinned = pin;
-            // Show toast explaining what pinning does
-            if pin {
-                self.push_toast(
-                    ToastPriority::Info,
-                    "toolbar",
-                    Toast::info("Side toolbar will open at startup"),
-                );
-            } else {
-                self.push_toast(
-                    ToastPriority::Info,
-                    "toolbar",
-                    Toast::info("Side toolbar will be hidden at startup"),
-                );
-            }
             true
         } else {
             false
@@ -646,6 +617,25 @@ mod tests {
         state.apply_toolbar_event(ToolbarEvent::SetSideMinimized(false));
         assert!(!state.toolbar_top_minimized);
         assert!(!state.toolbar_side_minimized);
+    }
+
+    #[test]
+    fn pin_application_defers_persistence_confirmation_to_backend() {
+        let mut state = make_test_input_state();
+        let top_pinned = !state.toolbar_top_pinned;
+        let side_pinned = !state.toolbar_side_pinned;
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::PinTopToolbar(top_pinned)));
+        assert!(
+            state.ui_toast.is_none(),
+            "input application does not yet know whether the runtime mutation is durable"
+        );
+
+        assert!(state.apply_toolbar_event(ToolbarEvent::PinSideToolbar(side_pinned)));
+        assert!(
+            state.ui_toast.is_none(),
+            "the backend emits persistence-aware pin feedback after finishing the mutation"
+        );
     }
 
     #[test]

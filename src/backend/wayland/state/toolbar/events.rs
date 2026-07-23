@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    backend::wayland::runtime_ui_state::ToolbarRuntimeFinish,
     input::InputState,
     onboarding::OnboardingState,
     ui::toolbar::model::{
@@ -9,12 +10,14 @@ use crate::{
 };
 use wayland_client::{Connection, QueueHandle};
 
+mod feedback;
 mod persistence;
 mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
 #[cfg(test)]
 use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersistenceTarget};
+use feedback::{ToolbarPinChange, pin_durability};
 #[cfg(test)]
 use persistence::{
     ToolbarPositions, apply_toolbar_config_target, apply_toolbar_ui_config_target,
@@ -423,6 +426,7 @@ impl WaylandState {
                 return;
             }
         }
+        let pin_change = ToolbarPinChange::from_event(&event);
         let prepared_runtime = if starts_item_drag {
             None
         } else if let Some(target) = runtime_target {
@@ -436,6 +440,7 @@ impl WaylandState {
         } else {
             None
         };
+        let pin_durability = pin_durability(prepared_runtime.as_ref());
 
         let applied = self.input_state.apply_toolbar_event(event);
         if applied {
@@ -473,11 +478,17 @@ impl WaylandState {
         if starts_item_drag && !applied {
             self.finish_toolbar_item_drag(false);
         }
+        let mut pin_confirmation_allowed = applied && prepared_runtime.is_none();
         if let Some(prepared) = prepared_runtime
             && let Some(runtime) = self.runtime_ui.as_mut()
         {
             let finish = runtime.finish_toolbar_mutation(prepared, applied, &self.input_state);
+            pin_confirmation_allowed =
+                applied && matches!(finish, ToolbarRuntimeFinish::KeepPreview);
             self.apply_toolbar_runtime_finish(finish);
+        }
+        if pin_confirmation_allowed && let Some(pin_change) = pin_change {
+            pin_change.notify(&mut self.input_state, pin_durability);
         }
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
