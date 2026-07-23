@@ -486,8 +486,8 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
     // toolbar directly. Suppressed while presenter mode owns toolbar
     // visibility (the toggle is a no-op there), and shed first when the
     // width budget binds.
-    if !input_state.toolbar_visible()
-        && !(input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
+    if !(input_state.toolbar_visible()
+        || input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
     {
         pieces.push(StatusHudPiece::text(
             toolbar_hint_label(input_state),
