@@ -143,6 +143,7 @@ impl InputState {
             false,
             Some(MenuCommand::OpenRadialMenu),
         ));
+        self.push_chrome_recovery_entries(&mut entries);
         entries.push(ContextMenuEntry::new(
             "Help",
             self.shortcut_for_action(Action::ToggleHelp),

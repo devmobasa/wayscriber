@@ -61,6 +61,8 @@ pub enum KeybindingField {
     ToggleHelp,
     ToggleQuickHelp,
     ToggleStatusBar,
+    ToggleFloatingBadge,
+    ToggleZoomChip,
     ToggleClickHighlight,
     ToggleToolbar,
     CycleToolbarDisplay,

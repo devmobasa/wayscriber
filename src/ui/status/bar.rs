@@ -71,8 +71,10 @@ pub enum StatusHudSegmentKind {
 /// One laid-out run of pill content on the shared single-line baseline.
 #[derive(Debug, Clone)]
 pub(crate) enum StatusHudRun {
-    /// A text run whose left edge sits at absolute screen `x`.
-    Text { text: String, x: f64 },
+    /// A text run whose left edge sits at absolute screen `x`. `accent`
+    /// underlines the run so it reads as actionable rather than
+    /// informational (the hidden-toolbar hint chip).
+    Text { text: String, x: f64, accent: bool },
     /// The color dot; `x` is the left edge of its bounding square.
     Dot { x: f64 },
 }
@@ -324,6 +326,7 @@ pub fn compute_status_hud_layout(
         runs.push(StatusHudRun::Text {
             text: SEGMENT_SEPARATOR.to_string(),
             x: cursor,
+            accent: false,
         });
         cursor += sep_advance;
         prefix
@@ -334,6 +337,7 @@ pub fn compute_status_hud_layout(
             runs.push(StatusHudRun::Text {
                 text: SEGMENT_SEPARATOR.to_string(),
                 x: cursor,
+                accent: false,
             });
             cursor += sep_advance;
         }
@@ -357,6 +361,12 @@ pub fn compute_status_hud_layout(
             Some(text) => runs.push(StatusHudRun::Text {
                 text: text.clone(),
                 x: cursor,
+                // The clickable-affordance underline must not advertise a
+                // click that a display-only HUD
+                // (`[ui] status_bar_interactive = false`) will reject; the
+                // chip itself still shows the recovery binding there.
+                accent: piece.kind == Some(StatusHudSegmentKind::Toolbar)
+                    && input_state.status_bar_interactive,
             }),
             None => runs.push(StatusHudRun::Dot { x: cursor }),
         }
@@ -483,11 +493,13 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
     // Hidden-toolbar hint: when every toolbar surface is gone (F9 toggle or
     // F2 cycle-hidden), point at the way back so an accidental hide is
     // recoverable from the status bar alone. Clicking the chip restores the
-    // toolbar directly. Suppressed while presenter mode owns toolbar
-    // visibility (the toggle is a no-op there), and shed first when the
+    // toolbar directly. Opt-out via `[ui] show_toolbar_hint = false` for
+    // deliberate toolbar-less setups; suppressed while presenter mode owns
+    // toolbar visibility (the toggle is a no-op there); shed first when the
     // width budget binds.
-    if !(input_state.toolbar_visible()
-        || input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
+    if input_state.show_toolbar_hint
+        && !(input_state.toolbar_visible()
+            || input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
     {
         pieces.push(StatusHudPiece::text(
             toolbar_hint_label(input_state),
@@ -720,12 +732,13 @@ fn layout_mode_badges(
             tint: FROZEN_BADGE_TINT,
         });
     }
-    // Reconciliation (M8): when zoom actions are enabled the bottom-right zoom
-    // chip is the canonical zoom indicator/control, so the HUD-stacked ZOOM
-    // badge is suppressed to avoid showing the zoom percentage twice. With zoom
-    // actions off (chip absent) the badge remains the HUD's zoom indicator, as
-    // before M8.
-    if input_state.zoom_active() && !input_state.show_zoom_actions {
+    // Reconciliation (M8): when the bottom-right zoom chip is effectively
+    // visible it is the canonical zoom indicator/control, so the HUD-stacked
+    // ZOOM badge is suppressed to avoid showing the zoom percentage twice.
+    // With the chip absent (zoom actions off, or hidden at runtime via
+    // ToggleZoomChip) the badge remains the HUD's zoom indicator, keeping
+    // exactly one indicator in every state.
+    if input_state.zoom_active() && !input_state.zoom_chip_enabled() {
         specs.push(StatusHudBadgeSpec {
             label: zoom_badge_label(input_state.zoom_scale(), input_state.zoom_locked()),
             hint: None,
@@ -860,13 +873,22 @@ pub fn render_status_bar(
     let dot_color = input_state.color_for_tool(tool);
     for run in &layout.runs {
         match run {
-            StatusHudRun::Text { text, x } => {
+            StatusHudRun::Text { text, x, accent } => {
                 ctx.set_source_rgba(r, g, b, a);
                 text_layout(ctx, text_style, text, None).show_at_baseline(
                     ctx,
                     *x,
                     layout.line_baseline,
                 );
+                if *accent && let Some(extents) = measure_text(text_style, text, None) {
+                    // Underline the actionable hint run so it reads as
+                    // clickable against the informational runs. Follows the
+                    // palette text color, so it holds up on any board
+                    // background.
+                    ctx.set_source_rgba(r, g, b, a * 0.55);
+                    ctx.rectangle(*x, layout.line_baseline + 2.0, extents.x_advance(), 1.0);
+                    let _ = ctx.fill();
+                }
             }
             StatusHudRun::Dot { x } => {
                 // Color dot: the sole indicator of the current draw color.
@@ -1237,6 +1259,12 @@ mod tests {
         // toggle that presenter mode suppresses.
         state.presenter_mode = true;
         assert!(!has_chip(&state));
+        state.presenter_mode = false;
+
+        // `[ui] show_toolbar_hint = false` opts deliberate toolbar-less
+        // setups out entirely.
+        state.show_toolbar_hint = false;
+        assert!(!has_chip(&state));
     }
 
     #[test]
@@ -1496,6 +1524,22 @@ mod tests {
         );
         // The unrelated FROZEN badge still stacks normally.
         assert!(layout.badges.iter().any(|badge| badge.label == "FROZEN"));
+
+        // Hiding the chip at runtime (ToggleZoomChip) while zoom actions
+        // stay on must hand the display back to the HUD badge — otherwise a
+        // zoomed session with a visible status bar has NO zoom indicator.
+        state.show_zoom_chip = false;
+        let chip_hidden =
+            compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
+                .expect("layout");
+        assert!(
+            chip_hidden
+                .badges
+                .iter()
+                .any(|badge| badge.label == "ZOOM 250%"),
+            "HUD ZOOM badge must return when the chip is runtime-hidden"
+        );
+        state.show_zoom_chip = true;
 
         // With zoom actions off the badge returns.
         state.show_zoom_actions = false;

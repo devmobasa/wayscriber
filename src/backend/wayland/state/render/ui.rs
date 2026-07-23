@@ -65,15 +65,15 @@ impl WaylandState {
             // height plus stacking gap) so stacked badges never overlap.
             //
             // Reconciliation (M8): the bottom-right zoom chip is the canonical
-            // zoom indicator/control whenever `show_zoom_actions` is on, so the
+            // zoom indicator/control whenever it is effectively visible, so the
             // passive top-corner zoom badge is suppressed then — otherwise the
-            // chip and this badge would both show the zoom percentage. When
-            // zoom actions are off (chip absent) this passive badge remains the
-            // hidden-status-bar zoom indicator, exactly as before M8.
+            // chip and this badge would both show the zoom percentage. When the
+            // chip is absent (zoom actions off or runtime-hidden), this passive
+            // badge remains the hidden-status-bar zoom indicator.
             let mut top_badge_offset = 0.0;
             if self.input_state.zoom_active()
                 && !self.input_state.show_status_bar
-                && !self.input_state.show_zoom_actions
+                && !self.zoom_chip_visible()
             {
                 top_badge_offset += crate::ui::render_zoom_badge(
                     ctx,
@@ -103,7 +103,10 @@ impl WaylandState {
             {
                 crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);
             }
-            if !self.input_state.show_status_bar || self.input_state.show_floating_badge_always {
+            if self.input_state.show_floating_badge
+                && (!self.input_state.show_status_bar
+                    || self.input_state.show_floating_badge_always)
+            {
                 let board_count = self.input_state.boards.board_count();
                 let page_count = self.input_state.boards.page_count();
                 if board_count > 1 || page_count > 1 {
@@ -288,20 +291,21 @@ impl WaylandState {
 
     /// The render/damage/hit-test gate for the interactive bottom-right zoom
     /// chip: shown whenever zoom actions are enabled (the existing
-    /// `show_zoom_actions` toggle — no new config key). Like the status bar,
+    /// `show_zoom_actions` toggle — no new config key) and the runtime
+    /// `Action::ToggleZoomChip` toggle has not hidden it. Like the status bar,
     /// the chip is a PERSISTENT fixed-corner control, not a cursor-follower, so
     /// it is deliberately NOT gated on cursor focus or toolbar blocking: gating
     /// it that way regressed the zoom readout to nothing whenever the pointer
     /// sat over the toolbar or off-surface (e.g. while clicking the Canvas
-    /// popover's Zoom buttons), because the fallback badges are suppressed for
-    /// the whole `show_zoom_actions` window. Keeping the chip visible for that
-    /// entire window makes chip-shown ⟺ fallbacks-suppressed, so exactly one
-    /// zoom indicator shows in every state — never zero, never two. Shared by
-    /// the render pass, the damage collector (which caches the layout), and the
-    /// pointer/touch press guards, so all three agree on whether the chip
-    /// exists this frame.
+    /// popover's Zoom buttons). Effective chip visibility is also the fallback
+    /// suppression gate, so exactly one zoom indicator shows in every state —
+    /// never zero, never two. Hiding the chip via `ToggleZoomChip` hands the
+    /// readout to the status-HUD badge when the bar is visible, or the passive
+    /// top-corner badge when it is hidden. Shared by the render pass, the damage
+    /// collector (which caches the layout), and the pointer/touch press guards,
+    /// so all three agree on whether the chip exists this frame.
     pub(in crate::backend::wayland) fn zoom_chip_visible(&self) -> bool {
-        self.input_state.show_zoom_actions
+        self.input_state.zoom_chip_enabled()
     }
 
     /// Damage the previous and current preview-bubble footprints and request a

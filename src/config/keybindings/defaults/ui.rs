@@ -10,6 +10,15 @@ pub(crate) fn default_toggle_status_bar() -> Vec<String> {
     vec!["F12".to_string(), "F4".to_string()]
 }
 
+// Palette-first actions: no default keys, bindable via config.
+pub(crate) fn default_toggle_floating_badge() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_toggle_zoom_chip() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
 }

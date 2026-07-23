@@ -134,6 +134,8 @@ impl InputState {
             }
         }
 
+        self.push_chrome_recovery_entries(&mut entries);
+
         entries
     }
 }

@@ -234,6 +234,7 @@ pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
     "clickable status bar segments",
     "show board label",
     "show page counter",
+    "show toolbar hint while toolbars are hidden",
     "show overlay badge with status bar",
     "show frozen badge",
     "status bar position",

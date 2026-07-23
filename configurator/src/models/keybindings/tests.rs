@@ -83,6 +83,38 @@ fn screen_eyedropper_keybinding_field_reads_and_writes_config() {
 }
 
 #[test]
+fn chrome_visibility_keybinding_fields_are_visible_and_in_ui_tab() {
+    assert!(KeybindingField::all().contains(&KeybindingField::ToggleFloatingBadge));
+    assert!(KeybindingField::all().contains(&KeybindingField::ToggleZoomChip));
+    assert_eq!(
+        KeybindingField::ToggleFloatingBadge.tab(),
+        KeybindingsTabId::UiModes
+    );
+    assert_eq!(
+        KeybindingField::ToggleZoomChip.tab(),
+        KeybindingsTabId::UiModes
+    );
+}
+
+#[test]
+fn chrome_visibility_keybinding_fields_read_and_write_config() {
+    let mut config = KeybindingsConfig::default();
+    // Unbound by default (palette-first actions), but a custom binding must
+    // survive the configurator's read → edit → write round trip.
+    assert!(KeybindingField::ToggleFloatingBadge.get(&config).is_empty());
+    assert!(KeybindingField::ToggleZoomChip.get(&config).is_empty());
+
+    KeybindingField::ToggleFloatingBadge.set(&mut config, vec!["Ctrl+Shift+B".to_string()]);
+    assert_eq!(
+        config.ui.toggle_floating_badge,
+        vec!["Ctrl+Shift+B".to_string()]
+    );
+
+    KeybindingField::ToggleZoomChip.set(&mut config, vec!["Ctrl+Shift+Z".to_string()]);
+    assert_eq!(config.ui.toggle_zoom_chip, vec!["Ctrl+Shift+Z".to_string()]);
+}
+
+#[test]
 fn board_pdf_export_keybinding_field_reads_and_writes_config() {
     let mut config = KeybindingsConfig::default();
     assert!(KeybindingField::ExportBoardPdfFile.get(&config).is_empty());

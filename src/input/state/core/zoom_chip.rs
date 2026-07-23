@@ -5,13 +5,14 @@
 //! rendering, damage geometry, and pointer hit-testing all read the same cache
 //! and can never disagree.
 //!
-//! Visibility and interactivity are gated on the existing `show_zoom_actions`
-//! toggle (the same one the Canvas popover's Zoom section uses) — there is no
-//! separate config key. Unlike a cursor-follower, the chip is a persistent
-//! fixed-corner control, so the backend's `zoom_chip_visible()` gate is just
-//! `show_zoom_actions`: it is deliberately NOT gated on cursor focus or
-//! toolbar blocking (see that method for why). Only an overlay rendering above
-//! the pill suppresses it, via `zoom_chip_contains`'s eclipse guard.
+//! Visibility and interactivity are gated on both the existing
+//! `show_zoom_actions` toggle (the same one the Canvas popover's Zoom section
+//! uses) and the runtime `Action::ToggleZoomChip` hide. Unlike a
+//! cursor-follower, the chip is a persistent fixed-corner control, so the
+//! backend's `zoom_chip_visible()` gate delegates to [`InputState::zoom_chip_enabled`]:
+//! it is deliberately NOT gated on cursor focus or toolbar blocking (see that
+//! method for why). Only an overlay rendering above the pill suppresses hit
+//! testing, via `zoom_chip_contains`'s eclipse guard.
 
 use crate::config::{Action, StatusBarStyle};
 use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress, compute_zoom_chip_layout};
@@ -23,15 +24,23 @@ impl InputState {
         self.zoom_chip_layout.as_ref()
     }
 
+    /// Effective zoom-chip visibility: the `show_zoom_actions` toolbar
+    /// toggle AND the runtime `Action::ToggleZoomChip` hide. Every chip
+    /// gate (layout cache, hit-testing, backend render/damage/press
+    /// guards) goes through this so they can never disagree.
+    pub fn zoom_chip_enabled(&self) -> bool {
+        self.show_zoom_actions && self.show_zoom_chip
+    }
+
     /// Recompute and cache the zoom chip layout for this frame. Clears the
-    /// cache when zoom actions are hidden.
+    /// cache when the chip is hidden.
     pub fn update_zoom_chip_layout(
         &mut self,
         style: &StatusBarStyle,
         screen_width: u32,
         screen_height: u32,
     ) {
-        self.zoom_chip_layout = if self.show_zoom_actions {
+        self.zoom_chip_layout = if self.zoom_chip_enabled() {
             compute_zoom_chip_layout(self, style, screen_width, screen_height)
         } else {
             None
@@ -45,13 +54,14 @@ impl InputState {
     /// True when the zoom chip pill is under (x, y): the press side of the
     /// press→release contract. Reports the hit without side effects;
     /// activation happens on release via [`check_zoom_chip_click`]. Gated on
-    /// `show_zoom_actions` (so the chip stays absent, and clicks pass through
-    /// to the canvas, when the toggle is off) and suppressed while an overlay
+    /// [`zoom_chip_enabled`] (so the chip stays absent, and clicks pass
+    /// through to the canvas, when hidden) and suppressed while an overlay
     /// renders above the pill.
     ///
     /// [`check_zoom_chip_click`]: InputState::check_zoom_chip_click
+    /// [`zoom_chip_enabled`]: InputState::zoom_chip_enabled
     pub(crate) fn zoom_chip_contains(&self, x: i32, y: i32) -> bool {
-        self.show_zoom_actions
+        self.zoom_chip_enabled()
             && !self.status_hud_eclipsed_by_overlay()
             && self
                 .zoom_chip_layout

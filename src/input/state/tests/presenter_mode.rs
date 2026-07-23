@@ -120,6 +120,9 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let mut state = create_test_input_state();
+    // Side-palette assertions below need the deprecated Panel escape hatch
+    // (the struct default is Pill, which retires the side surface).
+    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
     state.presenter_mode_config.hide_toolbars = true;
     state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
     state.toolbar_visible = true;

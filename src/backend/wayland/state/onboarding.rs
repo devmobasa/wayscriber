@@ -241,7 +241,9 @@ impl WaylandState {
         // bar) is only meaningful when the bar is interactive and there is more
         // than one board to switch between.
         let status_bar_entry = status_bar_board_picker_entry(&self.input_state);
-        let zoom_chip_present = self.input_state.show_zoom_actions;
+        // Effective visibility: the runtime ToggleZoomChip hide must not
+        // leave onboarding advertising nonexistent lower-right controls.
+        let zoom_chip_present = self.input_state.zoom_chip_enabled();
         // The Canvas popover opens from the top-strip "…" overflow, which is
         // only reachable when the top strip is shown (not toggled off via
         // ToggleToolbar) and in full display (not collapsed to the micro chip).

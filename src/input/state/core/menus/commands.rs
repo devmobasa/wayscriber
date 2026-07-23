@@ -343,6 +343,14 @@ impl InputState {
                 self.toggle_help_overlay();
                 self.close_context_menu();
             }
+            MenuCommand::ShowToolbar => {
+                self.close_context_menu();
+                self.handle_action(Action::ToggleToolbar);
+            }
+            MenuCommand::ShowStatusBar => {
+                self.close_context_menu();
+                self.handle_action(Action::ToggleStatusBar);
+            }
             MenuCommand::OpenCommandPalette => {
                 self.close_context_menu();
                 self.toggle_command_palette();

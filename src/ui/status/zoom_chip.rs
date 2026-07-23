@@ -250,7 +250,8 @@ struct ChipPiece {
 
 /// Compute the zoom chip layout headlessly (no rendering context; text goes
 /// through the shared measurement cache, so rendering agrees exactly).
-/// Callers gate on `show_zoom_actions`; this always lays out the visible chip.
+/// Callers gate on `InputState::zoom_chip_enabled`; this always lays out the
+/// effectively visible chip.
 pub fn compute_zoom_chip_layout(
     input_state: &InputState,
     style: &StatusBarStyle,
@@ -909,9 +910,9 @@ mod tests {
         );
     }
 
-    /// Regression (M8): the chip is a persistent control gated only on
-    /// `show_zoom_actions`, so in the default config it surfaces the zoom % no
-    /// matter where the pointer is — including over the toolbar, the case that
+    /// Regression (M8): the chip is a persistent control gated on its effective
+    /// visibility, so in the default config it surfaces the zoom % no matter
+    /// where the pointer is — including over the toolbar, the case that
     /// previously hid the chip while both fallback badges were suppressed,
     /// leaving no zoom % at all. The layout takes no pointer input, so its
     /// producing the % run is exactly that pointer-independence.
@@ -954,60 +955,66 @@ mod tests {
     }
 
     /// Reconciliation invariant (M8): exactly one zoom-% indicator shows while
-    /// zoomed in every {show_zoom_actions}×{show_status_bar} combination —
-    /// never zero (the regression), never two. The chip and the status-HUD
-    /// ZOOM badge come from their real layouts; the passive top-corner badge is
-    /// the backend render gate (`zoom_active && !show_status_bar &&
-    /// !show_zoom_actions`, see `backend/wayland/state/render/ui.rs`).
+    /// zoomed in every {show_zoom_actions}×{show_zoom_chip}×{show_status_bar}
+    /// combination — never zero (the regression), never two. The chip and the
+    /// status-HUD ZOOM badge come from their real layouts; the passive
+    /// top-corner badge follows the backend render gate (`zoom_active &&
+    /// !show_status_bar && !zoom_chip_enabled()`, see
+    /// `backend/wayland/state/render/ui.rs`).
     #[test]
     fn exactly_one_zoom_percent_indicator_while_zoomed() {
         let style = StatusBarStyle::default();
         let (w, h) = (1920_u32, 1080_u32);
 
         for show_zoom_actions in [true, false] {
-            for show_status_bar in [true, false] {
-                let mut state = make_state();
-                state.show_zoom_actions = show_zoom_actions;
-                state.show_status_bar = show_status_bar;
-                state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
+            for show_zoom_chip in [true, false] {
+                for show_status_bar in [true, false] {
+                    let mut state = make_state();
+                    state.show_zoom_actions = show_zoom_actions;
+                    state.show_zoom_chip = show_zoom_chip;
+                    state.show_status_bar = show_status_bar;
+                    state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
 
-                // Chip: present and showing the % exactly when zoom actions on.
-                state.update_zoom_chip_layout(&style, w, h);
-                let chip_pct = state.zoom_chip_layout().is_some_and(|layout| {
-                    layout
-                        .runs
+                    // Chip: present and showing the % exactly when effectively
+                    // enabled by both visibility controls.
+                    state.update_zoom_chip_layout(&style, w, h);
+                    let chip_pct = state.zoom_chip_layout().is_some_and(|layout| {
+                        layout
+                            .runs
+                            .iter()
+                            .any(|run| run.button.is_none() && run.text.ends_with('%'))
+                    });
+
+                    // Status-HUD ZOOM badge: only rendered while the bar is
+                    // shown, and only present when the chip does not own it.
+                    let hud_badge = show_status_bar
+                        && crate::ui::compute_status_hud_layout(
+                            &state,
+                            crate::config::StatusPosition::BottomLeft,
+                            &style,
+                            w,
+                            h,
+                        )
+                        .expect("hud layout")
+                        .badges
                         .iter()
-                        .any(|run| run.button.is_none() && run.text.ends_with('%'))
-                });
+                        .any(|badge| badge.label.contains("ZOOM"));
 
-                // Status-HUD ZOOM badge: only rendered while the bar is shown,
-                // and only present in the layout when the chip does not own it.
-                let hud_badge = show_status_bar
-                    && crate::ui::compute_status_hud_layout(
-                        &state,
-                        crate::config::StatusPosition::BottomLeft,
-                        &style,
-                        w,
-                        h,
-                    )
-                    .expect("hud layout")
-                    .badges
-                    .iter()
-                    .any(|badge| badge.label.contains("ZOOM"));
+                    // Passive top-corner badge: bar hidden and chip absent.
+                    let top_badge =
+                        state.zoom_active() && !show_status_bar && !state.zoom_chip_enabled();
 
-                // Passive top-corner badge: bar hidden and chip absent.
-                let top_badge = state.zoom_active() && !show_status_bar && !show_zoom_actions;
-
-                let count = [chip_pct, hud_badge, top_badge]
-                    .into_iter()
-                    .filter(|shown| *shown)
-                    .count();
-                assert_eq!(
-                    count, 1,
-                    "expected exactly one zoom % (chip={chip_pct}, hud={hud_badge}, \
-                     top={top_badge}) for show_zoom_actions={show_zoom_actions}, \
-                     show_status_bar={show_status_bar}"
-                );
+                    let count = [chip_pct, hud_badge, top_badge]
+                        .into_iter()
+                        .filter(|shown| *shown)
+                        .count();
+                    assert_eq!(
+                        count, 1,
+                        "expected exactly one zoom % (chip={chip_pct}, hud={hud_badge}, \
+                         top={top_badge}) for show_zoom_actions={show_zoom_actions}, \
+                         show_zoom_chip={show_zoom_chip}, show_status_bar={show_status_bar}"
+                    );
+                }
             }
         }
     }

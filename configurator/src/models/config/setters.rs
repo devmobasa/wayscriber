@@ -164,6 +164,7 @@ impl ConfigDraft {
             ToggleField::UiShowCapabilitiesWarning => self.ui_show_capabilities_warning = value,
             ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
             ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
+            ToggleField::UiShowToolbarHint => self.ui_show_toolbar_hint = value,
             ToggleField::UiShowPageBadgeWithStatusBar => {
                 self.ui_show_page_badge_with_status_bar = value;
             }

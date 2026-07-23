@@ -74,6 +74,8 @@ impl KeybindingField {
             Self::ToggleHelp,
             Self::ToggleQuickHelp,
             Self::ToggleStatusBar,
+            Self::ToggleFloatingBadge,
+            Self::ToggleZoomChip,
             Self::ToggleClickHighlight,
             Self::ToggleToolbar,
             Self::CycleToolbarDisplay,

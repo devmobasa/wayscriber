@@ -23,6 +23,37 @@ impl InputState {
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 self.mark_session_dirty();
+                if !self.show_status_bar {
+                    self.warn_if_all_chrome_hidden();
+                }
+                true
+            }
+            Action::ToggleFloatingBadge => {
+                self.show_floating_badge = !self.show_floating_badge;
+                info!(
+                    "Floating board/page badge {}",
+                    if self.show_floating_badge {
+                        "shown"
+                    } else {
+                        "hidden"
+                    }
+                );
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                true
+            }
+            Action::ToggleZoomChip => {
+                self.show_zoom_chip = !self.show_zoom_chip;
+                info!(
+                    "Zoom chip {}",
+                    if self.show_zoom_chip {
+                        "shown"
+                    } else {
+                        "hidden"
+                    }
+                );
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
                 true
             }
             Action::ToggleClickHighlight => {
@@ -50,6 +81,9 @@ impl InputState {
                         "Toolbar visibility {}",
                         if now_visible { "enabled" } else { "disabled" }
                     );
+                    if !now_visible {
+                        self.warn_if_all_chrome_hidden();
+                    }
                 }
                 true
             }
@@ -61,15 +95,26 @@ impl InputState {
                 }
                 let mode = self.cycle_top_toolbar_display();
                 self.pending_onboarding_usage.used_toolbar_toggle = true;
-                self.push_toast(
-                    ToastPriority::Info,
-                    "ui",
-                    Toast::info(match mode {
-                        crate::config::TopDisplayMode::Full => "Toolbar: full",
-                        crate::config::TopDisplayMode::Micro => "Toolbar: micro",
-                        crate::config::TopDisplayMode::Hidden => "Toolbar: hidden",
-                    }),
-                );
+                let toast = match mode {
+                    crate::config::TopDisplayMode::Full => Toast::info("Toolbar: full"),
+                    crate::config::TopDisplayMode::Micro => Toast::info("Toolbar: micro"),
+                    crate::config::TopDisplayMode::Hidden => {
+                        // The hidden rung teaches its own way back: another
+                        // cycle press always lands on Full (unlike
+                        // ToggleToolbar, which would hide a still-visible
+                        // side palette instead of restoring the strip).
+                        let label =
+                            match self.action_binding_primary_label(Action::CycleToolbarDisplay) {
+                                Some(binding) => format!("Show ({binding})"),
+                                None => "Show".to_string(),
+                            };
+                        Toast::info("Toolbar: hidden").action(label, Action::CycleToolbarDisplay)
+                    }
+                };
+                self.push_toast(ToastPriority::Info, "ui", toast);
+                if mode == crate::config::TopDisplayMode::Hidden {
+                    self.warn_if_all_chrome_hidden();
+                }
                 self.set_pending_backend_action(PendingBackendAction::PersistToolbarConfig);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;

@@ -116,6 +116,7 @@ impl ConfigDraft {
             ui_status_bar_interactive: config.ui.status_bar_interactive,
             ui_show_status_board_badge: config.ui.show_status_board_badge,
             ui_show_status_page_badge: config.ui.show_status_page_badge,
+            ui_show_toolbar_hint: config.ui.show_toolbar_hint,
             ui_show_page_badge_with_status_bar: config.ui.show_floating_badge_always,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_show_capabilities_warning: config.ui.show_capabilities_warning,

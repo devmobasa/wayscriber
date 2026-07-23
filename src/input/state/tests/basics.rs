@@ -3,6 +3,19 @@ use crate::config::{DragButtonConfig, MouseDragToolsConfig};
 use crate::input::{DragBinding, DragTool, DragToolBindings};
 
 #[test]
+fn toggle_floating_badge_action_flips_runtime_visibility() {
+    let mut state = create_test_input_state();
+    assert!(state.show_floating_badge, "badge visible by default");
+
+    state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    assert!(!state.show_floating_badge);
+    assert!(state.needs_redraw);
+
+    state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    assert!(state.show_floating_badge);
+}
+
+#[test]
 fn test_adjust_font_size_increase() {
     let mut state = create_test_input_state();
     assert_eq!(state.current_font_size, 32.0);
@@ -195,6 +208,9 @@ fn test_adjust_font_size_multiple_adjustments() {
 #[test]
 fn toolbar_toggle_handles_partial_visibility() {
     let mut state = create_test_input_state();
+    // Partial visibility is a side-palette scenario: opt into the
+    // deprecated Panel escape hatch (the struct default is Pill).
+    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
     // Simulate config: top pinned, side not pinned
     state.init_toolbar_from_config(
         crate::config::ToolbarLayoutMode::Regular,

@@ -11,6 +11,7 @@ impl ConfigDraft {
         config.ui.status_bar_interactive = self.ui_status_bar_interactive;
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;
+        config.ui.show_toolbar_hint = self.ui_show_toolbar_hint;
         config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.show_capabilities_warning = self.ui_show_capabilities_warning;

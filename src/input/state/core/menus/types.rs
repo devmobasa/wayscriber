@@ -72,6 +72,8 @@ pub enum MenuCommand {
     ReturnToTransparent,
     OpenRadialMenu,
     ToggleHelp,
+    ShowToolbar,
+    ShowStatusBar,
     OpenCommandPalette,
     OpenConfigFile,
 }

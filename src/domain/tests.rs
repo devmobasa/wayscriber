@@ -138,6 +138,8 @@ fn action_serialization_matches_established_contract() {
         (Action::ToggleHelp, "toggle_help"),
         (Action::ToggleQuickHelp, "toggle_quick_help"),
         (Action::ToggleStatusBar, "toggle_status_bar"),
+        (Action::ToggleFloatingBadge, "toggle_floating_badge"),
+        (Action::ToggleZoomChip, "toggle_zoom_chip"),
         (Action::ToggleClickHighlight, "toggle_click_highlight"),
         (Action::ToggleToolbar, "toggle_toolbar"),
         (Action::CycleToolbarDisplay, "cycle_toolbar_display"),

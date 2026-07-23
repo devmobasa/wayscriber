@@ -428,6 +428,10 @@ show_status_board_badge = true
 # Show page counter in the status bar
 show_status_page_badge = true
 
+# Show a clickable status-bar hint chip (e.g. "F9 Toolbar") while every
+# toolbar surface is hidden; set false if you run toolbar-less on purpose
+show_toolbar_hint = true
+
 # Show the floating board/page badge even when the status bar is visible
 show_floating_badge_always = false
 
@@ -1300,6 +1304,12 @@ toggle_quick_help = ["Shift+F1"]
 
 # Toggle status bar visibility
 toggle_status_bar = ["F12", "F4"]
+
+# Show/hide the floating board/page badge (unbound; also in the command palette)
+toggle_floating_badge = []
+
+# Show/hide the bottom-right zoom chip (unbound; also in the command palette)
+toggle_zoom_chip = []
 
 # Toggle toolbars (show/hide top and side together).
 # Note: F2 moved to cycle_toolbar_display; hiding is still reachable via

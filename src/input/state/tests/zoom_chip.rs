@@ -2,7 +2,8 @@
 //!
 //! Mirrors the status HUD tests: the press side reports a hit without side
 //! effects, activation happens on release-inside, releases outside are
-//! ignored, and visibility/interactivity are gated on `show_zoom_actions`.
+//! ignored, and visibility/interactivity are gated on the effective
+//! `zoom_chip_enabled()` state.
 
 use super::*;
 use crate::config::StatusBarStyle;
@@ -56,6 +57,28 @@ fn zoom_chip_layout_cleared_when_actions_hidden() {
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_none());
     assert!(!input.zoom_chip_contains(1270, 710));
+}
+
+#[test]
+fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
+    let mut input = create_test_input_state();
+    update_chip_layout(&mut input, 1280, 720);
+    assert!(input.zoom_chip_layout().is_some());
+
+    // The runtime toggle (palette/keybinding) hides the chip without
+    // touching the `show_zoom_actions` toolbar preference.
+    input.handle_action(crate::config::Action::ToggleZoomChip);
+    assert!(!input.zoom_chip_enabled());
+    assert!(input.show_zoom_actions, "toolbar preference untouched");
+    update_chip_layout(&mut input, 1280, 720);
+    assert!(input.zoom_chip_layout().is_none());
+    assert!(!input.zoom_chip_contains(1270, 710));
+
+    // Toggling again restores it.
+    input.handle_action(crate::config::Action::ToggleZoomChip);
+    assert!(input.zoom_chip_enabled());
+    update_chip_layout(&mut input, 1280, 720);
+    assert!(input.zoom_chip_layout().is_some());
 }
 
 #[test]
