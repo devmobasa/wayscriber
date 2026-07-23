@@ -12,7 +12,7 @@ use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
 use crate::models::{
     TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption, ZoomChipDisplayOption,
 };
 
 use super::super::widgets::{labeled_control, labeled_input, override_row, toggle_row};
@@ -33,6 +33,11 @@ impl ConfiguratorApp {
             ToolbarSideLayoutOption::list(),
             Some(self.draft.ui_toolbar_side_layout),
             Message::ToolbarSideLayoutChanged,
+        );
+        let zoom_chip_display = pick_list(
+            ZoomChipDisplayOption::list(),
+            Some(self.draft.ui_toolbar_zoom_chip_display),
+            Message::ToolbarZoomChipDisplayChanged,
         );
         let rebind_modifier = pick_list(
             ToolbarRebindModifierOption::ALL,
@@ -58,6 +63,19 @@ impl ConfiguratorApp {
                 side_layout.width(Length::Fill).into(),
                 self.defaults.ui_toolbar_side_layout.label().to_string(),
                 self.draft.ui_toolbar_side_layout != self.defaults.ui_toolbar_side_layout,
+            ),
+            labeled_control(
+                "Zoom chip",
+                zoom_chip_display.width(Length::Fill).into(),
+                self.defaults.ui_toolbar_zoom_chip_display.label().to_string(),
+                self.draft.ui_toolbar_zoom_chip_display
+                    != self.defaults.ui_toolbar_zoom_chip_display,
+            ),
+            toggle_row(
+                "Show zoom chip",
+                self.draft.ui_toolbar_show_zoom_chip,
+                self.defaults.ui_toolbar_show_zoom_chip,
+                ToggleField::UiToolbarShowZoomChip,
             ),
             text("Pill (the default) retires the side palette: drawing properties live in the top strip's style pill, canvas management in the status HUD and board picker, and Session/Settings in popovers on the top strip's overflow menu. Panel is the legacy escape hatch restoring the classic side palette; it is deprecated and planned for removal one release after the pill default.").size(12),
             labeled_control(

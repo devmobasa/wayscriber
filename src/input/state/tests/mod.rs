@@ -18,6 +18,7 @@ mod boards;
 mod delete_restore;
 mod drawing;
 mod erase;
+mod focus_mode;
 mod light_mode;
 mod menus;
 mod pages;

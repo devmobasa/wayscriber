@@ -90,6 +90,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::ToggleStatusBar
         | Action::ToggleFloatingBadge
         | Action::ToggleZoomChip
+        | Action::ToggleFocusMode
         | Action::ToggleClickHighlight
         | Action::ToggleToolbar
         | Action::CycleToolbarDisplay

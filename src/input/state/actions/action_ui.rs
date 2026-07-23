@@ -15,10 +15,28 @@ impl InputState {
                 self.toggle_quick_help();
                 true
             }
+            Action::ToggleFocusMode => {
+                // Presenter mode already owns chrome visibility and restores
+                // it on exit; a second snapshot layer would fight it.
+                if self.presenter_mode {
+                    return true;
+                }
+                self.toggle_focus_mode();
+                info!(
+                    "Focus mode {}",
+                    if self.focus_mode_active() {
+                        "on"
+                    } else {
+                        "off"
+                    }
+                );
+                true
+            }
             Action::ToggleStatusBar => {
                 if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
                     return true;
                 }
+                self.break_focus_mode();
                 self.show_status_bar = !self.show_status_bar;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
@@ -29,6 +47,7 @@ impl InputState {
                 true
             }
             Action::ToggleFloatingBadge => {
+                self.break_focus_mode();
                 self.show_floating_badge = !self.show_floating_badge;
                 info!(
                     "Floating board/page badge {}",
@@ -38,11 +57,17 @@ impl InputState {
                         "hidden"
                     }
                 );
+                // Explicit toggles persist (survive restarts); focus mode's
+                // transient hide/restore deliberately does not.
+                self.set_pending_backend_action(PendingBackendAction::PersistFloatingBadgeConfig(
+                    self.show_floating_badge,
+                ));
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
             }
             Action::ToggleZoomChip => {
+                self.break_focus_mode();
                 self.show_zoom_chip = !self.show_zoom_chip;
                 info!(
                     "Zoom chip {}",
@@ -52,6 +77,11 @@ impl InputState {
                         "hidden"
                     }
                 );
+                // Explicit toggles persist (survive restarts); focus mode's
+                // transient hide/restore deliberately does not.
+                self.set_pending_backend_action(PendingBackendAction::PersistZoomChipConfig(
+                    self.show_zoom_chip,
+                ));
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
@@ -73,6 +103,7 @@ impl InputState {
                 if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
                     return true;
                 }
+                self.break_focus_mode();
                 let now_visible = !self.toolbar_visible();
                 let changed = self.set_toolbar_visible(now_visible);
                 if changed {
@@ -93,6 +124,7 @@ impl InputState {
                 if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
                     return true;
                 }
+                self.break_focus_mode();
                 let mode = self.cycle_top_toolbar_display();
                 self.pending_onboarding_usage.used_toolbar_toggle = true;
                 let toast = match mode {

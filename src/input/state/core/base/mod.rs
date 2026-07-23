@@ -3,7 +3,7 @@ mod toast_queue;
 mod types;
 
 pub use state::InputState;
-pub(crate) use state::{LightModeRestore, PresenterRestore};
+pub(crate) use state::{FocusModeRestore, LightModeRestore, PresenterRestore};
 pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome, ToastQueue};
 pub use types::{
     BLOCKED_ACTION_DURATION_MS, BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS,

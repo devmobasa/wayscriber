@@ -879,6 +879,52 @@ fn config_draft_round_trips_toolbar_side_layout() {
 }
 
 #[test]
+fn config_draft_round_trips_zoom_chip_display() {
+    use super::super::fields::ZoomChipDisplayOption;
+    use wayscriber::config::ZoomChipDisplay;
+
+    let default_draft = ConfigDraft::from_config(&Config::default());
+    assert_eq!(
+        default_draft.ui_toolbar_zoom_chip_display,
+        ZoomChipDisplayOption::Always
+    );
+    let saved = default_draft
+        .to_config(&Config::default())
+        .expect("default draft should convert");
+    assert_eq!(saved.ui.toolbar.zoom_chip_display, ZoomChipDisplay::Always);
+
+    // The non-default option must survive the read → edit → write round
+    // trip instead of being silently reset.
+    let mut config = Config::default();
+    config.ui.toolbar.zoom_chip_display = ZoomChipDisplay::WhileZoomed;
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(
+        draft.ui_toolbar_zoom_chip_display,
+        ZoomChipDisplayOption::WhileZoomed
+    );
+    let saved = draft.to_config(&config).expect("draft should convert");
+    assert_eq!(
+        saved.ui.toolbar.zoom_chip_display,
+        ZoomChipDisplay::WhileZoomed
+    );
+}
+
+#[test]
+fn config_draft_round_trips_chrome_visibility_preferences() {
+    let mut config = Config::default();
+    config.ui.show_floating_badge = false;
+    config.ui.toolbar.show_zoom_chip = false;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_show_floating_badge);
+    assert!(!draft.ui_toolbar_show_zoom_chip);
+
+    let saved = draft.to_config(&config).expect("draft should convert");
+    assert!(!saved.ui.show_floating_badge);
+    assert!(!saved.ui.toolbar.show_zoom_chip);
+}
+
+#[test]
 fn config_draft_round_trips_presets_and_history() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 500;

@@ -1,5 +1,8 @@
 use super::create_test_input_state;
-use crate::config::{ColorSpec, PresenterToolBehavior, ToolPresetConfig};
+use crate::config::{
+    Action, ColorSpec, PresenterToolBehavior, PresenterToolbarMode, ToolPresetConfig,
+    TopDisplayMode,
+};
 use crate::input::{DragBinding, DragToolBindings, MouseButton, Tool};
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -15,6 +18,32 @@ fn presenter_mode_forces_click_highlight() {
 
     state.toggle_all_highlights();
     assert!(state.click_highlight_enabled());
+}
+
+#[test]
+fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
+    let mut state = create_test_input_state();
+    state.presenter_mode_config.hide_status_bar = true;
+    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+
+    state.handle_action(Action::ToggleFocusMode);
+    assert!(state.focus_mode_active());
+    assert!(!state.show_status_bar);
+
+    state.handle_action(Action::TogglePresenterMode);
+
+    assert!(state.presenter_mode);
+    assert!(
+        !state.focus_mode_active(),
+        "Presenter Mode must become the sole chrome snapshot owner"
+    );
+    assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
+
+    state.handle_action(Action::TogglePresenterMode);
+    assert!(!state.presenter_mode);
+    assert!(state.show_status_bar, "pre-Focus visibility must survive");
+    assert!(state.toolbar_visible(), "pre-Focus toolbar must survive");
 }
 
 #[test]

@@ -217,6 +217,9 @@ impl InputState {
         if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
             return false;
         }
+        // This is an explicit chrome control, so it takes ownership from
+        // Focus Mode just like the keyboard/palette toggle does.
+        self.break_focus_mode();
         if self.show_status_bar != show {
             self.show_status_bar = show;
             self.dirty_tracker.mark_full();

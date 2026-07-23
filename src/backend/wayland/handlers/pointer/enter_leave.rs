@@ -52,6 +52,11 @@ impl WaylandState {
             {
                 self.input_state.needs_redraw = true;
             }
+            let (x, y) = self.input_state.pointer_position();
+            self.input_state.update_status_hud_hover_from_pointer(x, y);
+            self.input_state.update_zoom_chip_hover_from_pointer(x, y);
+        } else {
+            self.input_state.clear_chrome_hover();
         }
         self.update_pointer_cursor(on_toolbar, conn);
         if inline_active {
@@ -108,6 +113,7 @@ impl WaylandState {
         if preview_was_eligible != self.mouse_tool_preview_eligible() {
             self.input_state.needs_redraw = true;
         }
+        self.input_state.clear_chrome_hover();
         self.current_pointer_shape = None;
         self.cursor_hidden = false;
     }

@@ -84,6 +84,55 @@ fn snapshot_uses_pre_light_mode_tool_state() {
 }
 
 #[test]
+fn snapshot_uses_pre_focus_mode_status_bar_visibility() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-focus");
+    options.restore_tool_state = true;
+
+    let mut input = dummy_input_state();
+    input.show_status_bar = true;
+    input.handle_action(Action::ToggleFocusMode);
+    assert!(input.focus_mode_active());
+    assert!(!input.show_status_bar);
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+    let tool_state = snapshot.tool_state.expect("tool state present");
+
+    assert!(
+        tool_state.show_status_bar,
+        "focus mode's transient hide must not become saved session state"
+    );
+}
+
+#[test]
+fn applying_session_tool_state_updates_focus_modes_restore_value() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-focus-apply");
+    options.restore_tool_state = true;
+
+    let mut source = dummy_input_state();
+    source.show_status_bar = false;
+    let snapshot = snapshot_from_input(&source, &options).expect("snapshot present");
+
+    let mut input = dummy_input_state();
+    input.show_status_bar = true;
+    input.handle_action(Action::ToggleFocusMode);
+    assert!(input.focus_mode_active());
+    assert!(!input.show_status_bar);
+
+    apply_snapshot(&mut input, snapshot, &options);
+    assert!(input.focus_mode_active());
+    assert!(
+        !input.show_status_bar,
+        "session restore must not reveal chrome through Focus Mode"
+    );
+
+    input.handle_action(Action::ToggleFocusMode);
+    assert!(
+        !input.show_status_bar,
+        "Focus restore must honor the session-authored status-bar value"
+    );
+}
+
+#[test]
 fn apply_snapshot_restores_tool_state() {
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-tools");
     options.restore_tool_state = true;

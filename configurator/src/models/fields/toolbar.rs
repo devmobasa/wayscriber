@@ -1,4 +1,6 @@
-use wayscriber::config::{ToolbarLayoutMode, ToolbarRebindModifier, ToolbarSideLayout};
+use wayscriber::config::{
+    ToolbarLayoutMode, ToolbarRebindModifier, ToolbarSideLayout, ZoomChipDisplay,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarRebindModifierOption {
@@ -136,6 +138,45 @@ impl ToolbarSideLayoutOption {
 }
 
 impl std::fmt::Display for ToolbarSideLayoutOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoomChipDisplayOption {
+    Always,
+    WhileZoomed,
+}
+
+impl ZoomChipDisplayOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Always, Self::WhileZoomed]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Always => "Always (default)",
+            Self::WhileZoomed => "Only while zoomed",
+        }
+    }
+
+    pub fn to_config(self) -> ZoomChipDisplay {
+        match self {
+            Self::Always => ZoomChipDisplay::Always,
+            Self::WhileZoomed => ZoomChipDisplay::WhileZoomed,
+        }
+    }
+
+    pub fn from_config(value: ZoomChipDisplay) -> Self {
+        match value {
+            ZoomChipDisplay::Always => Self::Always,
+            ZoomChipDisplay::WhileZoomed => Self::WhileZoomed,
+        }
+    }
+}
+
+impl std::fmt::Display for ZoomChipDisplayOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

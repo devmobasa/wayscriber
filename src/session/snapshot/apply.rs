@@ -126,7 +126,7 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     }
     input.polygon_sides = clamp_regular_sides(tool_state.polygon_sides);
     input.board_previous_color = tool_state.board_previous_color;
-    input.show_status_bar = tool_state.show_status_bar;
+    input.set_status_bar_visibility_preserving_focus(tool_state.show_status_bar);
     input.sync_step_marker_counter();
     input.needs_redraw = true;
 }

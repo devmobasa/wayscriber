@@ -1,6 +1,8 @@
 use std::f64::consts::PI;
 
-use super::super::primitives::{BADGE_STACK_GAP, BadgeAlign, draw_badge, draw_pill, measure_badge};
+use super::super::primitives::{
+    BADGE_STACK_GAP, BadgeAlign, draw_badge, draw_pill, draw_rounded_rect, measure_badge,
+};
 use super::super::theme::{self, overlay};
 use super::badges::{
     EDITING_BADGE_FONT_SIZE, EDITING_BADGE_HINT, EDITING_BADGE_LABEL, EDITING_BADGE_TINT,
@@ -735,7 +737,7 @@ fn layout_mode_badges(
     // Reconciliation (M8): when the bottom-right zoom chip is effectively
     // visible it is the canonical zoom indicator/control, so the HUD-stacked
     // ZOOM badge is suppressed to avoid showing the zoom percentage twice.
-    // With the chip absent (zoom actions off, or hidden at runtime via
+    // With the chip absent (zoom actions off, or master-hidden via
     // ToggleZoomChip) the badge remains the HUD's zoom indicator, keeping
     // exactly one indicator in every state.
     if input_state.zoom_active() && !input_state.zoom_chip_enabled() {
@@ -858,6 +860,24 @@ pub fn render_status_bar(
         layout.pill_height,
     );
     ctx.clip();
+
+    // Hover backdrop: a faint rounded fill behind the hovered interactive
+    // segment so clickable chips announce themselves on mouse-over
+    // (`status_hud_hover` is only ever set while the HUD is interactive).
+    if let Some(kind) = input_state.status_hud_hover
+        && let Some(segment) = layout.segments.iter().find(|segment| segment.kind == kind)
+    {
+        ctx.set_source_rgba(r, g, b, a * 0.12);
+        draw_rounded_rect(
+            ctx,
+            segment.x,
+            segment.y + 3.0,
+            segment.width,
+            (segment.height - 6.0).max(0.0),
+            6.0,
+        );
+        let _ = ctx.fill();
+    }
 
     if let Some(prefix) = &layout.prefix {
         // Center the (possibly wrapped) prefix block within the pill so a
@@ -1525,7 +1545,7 @@ mod tests {
         // The unrelated FROZEN badge still stacks normally.
         assert!(layout.badges.iter().any(|badge| badge.label == "FROZEN"));
 
-        // Hiding the chip at runtime (ToggleZoomChip) while zoom actions
+        // Hiding the chip through ToggleZoomChip while zoom actions
         // stay on must hand the display back to the HUD badge — otherwise a
         // zoomed session with a visible status bar has NO zoom indicator.
         state.show_zoom_chip = false;
@@ -1537,7 +1557,7 @@ mod tests {
                 .badges
                 .iter()
                 .any(|badge| badge.label == "ZOOM 250%"),
-            "HUD ZOOM badge must return when the chip is runtime-hidden"
+            "HUD ZOOM badge must return when the chip is master-hidden"
         );
         state.show_zoom_chip = true;
 

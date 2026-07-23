@@ -20,6 +20,9 @@ pub struct UiKeybindingsConfig {
     #[serde(default = "default_toggle_zoom_chip")]
     pub toggle_zoom_chip: Vec<String>,
 
+    #[serde(default = "default_toggle_focus_mode")]
+    pub toggle_focus_mode: Vec<String>,
+
     #[serde(default = "default_toggle_click_highlight")]
     pub toggle_click_highlight: Vec<String>,
 
@@ -74,6 +77,7 @@ impl Default for UiKeybindingsConfig {
             toggle_status_bar: default_toggle_status_bar(),
             toggle_floating_badge: default_toggle_floating_badge(),
             toggle_zoom_chip: default_toggle_zoom_chip(),
+            toggle_focus_mode: default_toggle_focus_mode(),
             toggle_click_highlight: default_toggle_click_highlight(),
             toggle_toolbar: default_toggle_toolbar(),
             cycle_toolbar_display: default_cycle_toolbar_display(),

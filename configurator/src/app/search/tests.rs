@@ -305,6 +305,7 @@ fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
         ("status bar position", UiTabId::StatusBar),
         ("clickable status bar segments", UiTabId::StatusBar),
         ("toolbar hint", UiTabId::StatusBar),
+        ("also show badge with status bar", UiTabId::StatusBar),
         ("click highlight radius", UiTabId::ClickHighlight),
     ];
 
@@ -323,6 +324,23 @@ fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
             ui.ui_tabs(),
             &[expected_tab],
             "query should show concrete nested UI tab: {query}",
+        );
+    }
+}
+
+#[test]
+fn zoom_chip_control_labels_expose_the_toolbar_settings_tab() {
+    for query in ["zoom chip", "show zoom chip"] {
+        let (mut app, _task) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let ui = summary.tab(TabId::Ui).expect("UI match");
+
+        assert_eq!(
+            ui.ui_tabs(),
+            &[UiTabId::Toolbar],
+            "visible zoom-chip control should expose Toolbar settings: {query}"
         );
     }
 }

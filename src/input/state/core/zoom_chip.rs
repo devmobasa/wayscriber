@@ -7,7 +7,8 @@
 //!
 //! Visibility and interactivity are gated on both the existing
 //! `show_zoom_actions` toggle (the same one the Canvas popover's Zoom section
-//! uses) and the runtime `Action::ToggleZoomChip` hide. Unlike a
+//! uses), the persisted `show_zoom_chip` master preference, and its display
+//! policy. Unlike a
 //! cursor-follower, the chip is a persistent fixed-corner control, so the
 //! backend's `zoom_chip_visible()` gate delegates to [`InputState::zoom_chip_enabled`]:
 //! it is deliberately NOT gated on cursor focus or toolbar blocking (see that
@@ -25,11 +26,17 @@ impl InputState {
     }
 
     /// Effective zoom-chip visibility: the `show_zoom_actions` toolbar
-    /// toggle AND the runtime `Action::ToggleZoomChip` hide. Every chip
-    /// gate (layout cache, hit-testing, backend render/damage/press
-    /// guards) goes through this so they can never disagree.
+    /// toggle AND the persisted `Action::ToggleZoomChip` master preference AND the
+    /// `zoom_chip_display` policy ("while-zoomed" keeps the corner clean at
+    /// 100%). Every chip gate (layout cache, hit-testing, backend
+    /// render/damage/press guards) goes through this so they can never
+    /// disagree. Outside Focus Mode, fallback zoom badges show exactly when
+    /// the chip does not; Focus Mode deliberately suppresses both.
     pub fn zoom_chip_enabled(&self) -> bool {
-        self.show_zoom_actions && self.show_zoom_chip
+        self.show_zoom_actions
+            && self.show_zoom_chip
+            && (self.zoom_chip_display == crate::config::ZoomChipDisplay::Always
+                || self.zoom_active())
     }
 
     /// Recompute and cache the zoom chip layout for this frame. Clears the
@@ -40,15 +47,55 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
+        self.update_zoom_chip_layout_for_pointer(style, screen_width, screen_height, true);
+    }
+
+    pub(crate) fn update_zoom_chip_layout_for_pointer(
+        &mut self,
+        style: &StatusBarStyle,
+        screen_width: u32,
+        screen_height: u32,
+        chrome_cursor_focused: bool,
+    ) {
         self.zoom_chip_layout = if self.zoom_chip_enabled() {
             compute_zoom_chip_layout(self, style, screen_width, screen_height)
         } else {
             None
         };
+        if chrome_cursor_focused {
+            // The right-anchored chip changes width when optional controls such as
+            // Lock appear or disappear. Reclassify from the stationary pointer so
+            // the highlight and cursor do not follow an old button identity into
+            // its new position after the layout shifts.
+            let (pointer_x, pointer_y) = self.pointer_position();
+            self.update_zoom_chip_hover_from_pointer(pointer_x, pointer_y);
+        } else if self.zoom_chip_hover.take().is_some() {
+            // Cached coordinates outlive pointer/stylus focus. Never resurrect
+            // a highlight while the cursor is off-surface or over a toolbar.
+            self.needs_redraw = true;
+        }
     }
 
     pub fn clear_zoom_chip_layout(&mut self) {
         self.zoom_chip_layout = None;
+        self.zoom_chip_hover = None;
+    }
+
+    /// Update the hovered chip button from idle pointer motion (same
+    /// contract as `update_status_hud_hover_from_pointer`: click gates +
+    /// idle pointer, redraw on transitions only).
+    pub(crate) fn update_zoom_chip_hover_from_pointer(&mut self, x: i32, y: i32) {
+        let new_hover = if matches!(self.state, crate::input::DrawingState::Idle)
+            && self.zoom_chip_contains(x, y)
+        {
+            self.zoom_chip_button_at(x, y)
+        } else {
+            None
+        };
+        if self.zoom_chip_hover != new_hover {
+            self.zoom_chip_hover = new_hover;
+            self.needs_redraw = true;
+        }
     }
 
     /// True when the zoom chip pill is under (x, y): the press side of the

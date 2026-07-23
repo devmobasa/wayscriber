@@ -9,6 +9,7 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.ui.toggle_status_bar, Action::ToggleStatusBar)?;
         inserter.insert_all(&self.ui.toggle_floating_badge, Action::ToggleFloatingBadge)?;
         inserter.insert_all(&self.ui.toggle_zoom_chip, Action::ToggleZoomChip)?;
+        inserter.insert_all(&self.ui.toggle_focus_mode, Action::ToggleFocusMode)?;
         inserter.insert_all(
             &self.ui.toggle_click_highlight,
             Action::ToggleClickHighlight,

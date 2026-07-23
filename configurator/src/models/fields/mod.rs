@@ -29,7 +29,7 @@ pub use toggles::{
 pub use tool::{DragColorOption, DragMouseButton, DragToolField, DragToolOption, ToolOption};
 pub use toolbar::{
     OverrideOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    ToolbarSideLayoutOption,
+    ToolbarSideLayoutOption, ZoomChipDisplayOption,
 };
 
 #[cfg(test)]

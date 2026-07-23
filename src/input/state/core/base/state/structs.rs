@@ -62,6 +62,19 @@ pub(crate) struct PresenterRestore {
     pub(crate) tool_override: Option<Option<Tool>>,
 }
 
+/// Chrome visibility snapshot taken when focus mode hides every persistent
+/// UI surface; restored exactly on the second `ToggleFocusMode` press.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FocusModeRestore {
+    pub(crate) show_status_bar: bool,
+    pub(crate) toolbar_visible: bool,
+    pub(crate) toolbar_top_visible: bool,
+    pub(crate) toolbar_side_visible: bool,
+    pub(crate) toolbar_top_display_mode: crate::config::TopDisplayMode,
+    pub(crate) show_floating_badge: bool,
+    pub(crate) show_zoom_chip: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LightModeRestore {
     pub(crate) show_status_bar: bool,
@@ -208,13 +221,16 @@ pub struct InputState {
     pub show_toolbar_hint: bool,
     /// Whether to show the board/page badge when the status bar is visible
     pub show_floating_badge_always: bool,
-    /// Whether the floating board/page badge may render at all (runtime
-    /// toggle via `Action::ToggleFloatingBadge`; not persisted)
+    /// Whether the floating board/page badge may render at all (persisted
+    /// toggle via `Action::ToggleFloatingBadge`)
     pub show_floating_badge: bool,
     /// Whether the bottom-right zoom chip may render while
-    /// `show_zoom_actions` is on (runtime toggle via
-    /// `Action::ToggleZoomChip`; not persisted)
+    /// `show_zoom_actions` is on (persisted toggle via
+    /// `Action::ToggleZoomChip`)
     pub show_zoom_chip: bool,
+    /// When the zoom chip shows: always, or only while zoom is active
+    /// (`[ui.toolbar] zoom_chip_display`)
+    pub zoom_chip_display: crate::config::ZoomChipDisplay,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
@@ -223,6 +239,13 @@ pub struct InputState {
     pub(crate) render_profiles: RenderProfileSet,
     /// Previous UI state to restore after presenter mode exits
     pub(crate) presenter_restore: Option<PresenterRestore>,
+    /// Chrome snapshot while focus mode is active (`Some` = active).
+    pub(crate) focus_mode_restore: Option<FocusModeRestore>,
+    /// Hovered status HUD segment (idle pointer only; drives the hover
+    /// backdrop and the pointer cursor over the pill)
+    pub status_hud_hover: Option<crate::ui::StatusHudSegmentKind>,
+    /// Hovered zoom chip button (idle pointer only; same affordance)
+    pub zoom_chip_hover: Option<crate::ui::ZoomChipButtonKind>,
     /// Whether passthrough light mode is currently enabled
     pub light_mode: bool,
     /// Whether light mode is temporarily accepting drawing input
@@ -336,8 +359,12 @@ pub struct InputState {
     pub(in crate::input::state::core) action_map: HashMap<KeyBinding, Action>,
     /// Ordered keybindings per action (as configured)
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
-    /// Pending backend output action (to be handled by WaylandState)
+    /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
+    /// Coalesced authored floating-badge preference waiting for persistence.
+    pub(in crate::input::state::core) pending_floating_badge_config: Option<bool>,
+    /// Coalesced authored zoom-chip preference waiting for persistence.
+    pub(in crate::input::state::core) pending_zoom_chip_config: Option<bool>,
     /// Pending output focus action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
     /// Pending zoom action (to be handled by WaylandState)

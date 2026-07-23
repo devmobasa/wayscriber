@@ -16,7 +16,7 @@
 //! readout is a passive display (it consumes clicks but triggers nothing), so
 //! no drag ever starts on the canvas beneath the chip.
 
-use super::super::primitives::draw_pill;
+use super::super::primitives::{draw_pill, draw_rounded_rect};
 use super::super::theme::{self, overlay};
 use crate::config::StatusBarStyle;
 use crate::input::{BoardBackground, InputState};
@@ -563,6 +563,25 @@ pub fn render_zoom_chip(
         layout.pill_height,
     );
     ctx.clip();
+
+    // Hover backdrop: a faint rounded fill behind the hovered button so the
+    // actionable pieces announce themselves on mouse-over
+    // (`zoom_chip_hover` is only ever set while the chip is interactive).
+    if let Some(kind) = input_state.zoom_chip_hover
+        && let Some(button) = layout.buttons.iter().find(|button| button.kind == kind)
+    {
+        ctx.set_source_rgba(r, g, b, a * 0.12);
+        draw_rounded_rect(
+            ctx,
+            button.x,
+            button.y + 3.0,
+            button.width,
+            (button.height - 6.0).max(0.0),
+            6.0,
+        );
+        let _ = ctx.fill();
+    }
+
     let m = layout.glyph_metrics;
     for run in &layout.runs {
         match run.button {
@@ -954,13 +973,14 @@ mod tests {
         );
     }
 
-    /// Reconciliation invariant (M8): exactly one zoom-% indicator shows while
-    /// zoomed in every {show_zoom_actions}×{show_zoom_chip}×{show_status_bar}
-    /// combination — never zero (the regression), never two. The chip and the
-    /// status-HUD ZOOM badge come from their real layouts; the passive
-    /// top-corner badge follows the backend render gate (`zoom_active &&
-    /// !show_status_bar && !zoom_chip_enabled()`, see
-    /// `backend/wayland/state/render/ui.rs`).
+    /// Reconciliation invariant (M8): outside Focus Mode, exactly one zoom-%
+    /// indicator shows while zoomed in every
+    /// {show_zoom_actions}×{show_zoom_chip}×{show_status_bar} combination —
+    /// never zero (the regression), never two. The chip and the status-HUD ZOOM
+    /// badge come from their real layouts; the passive top-corner badge follows
+    /// the backend render gate (`zoom_active && !show_status_bar &&
+    /// !zoom_chip_enabled()`, see `backend/wayland/state/render/ui.rs`). Focus
+    /// Mode intentionally makes all three absent.
     #[test]
     fn exactly_one_zoom_percent_indicator_while_zoomed() {
         let style = StatusBarStyle::default();

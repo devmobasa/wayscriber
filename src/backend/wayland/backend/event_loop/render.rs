@@ -57,6 +57,7 @@ fn handle_render_failure(
 
 pub(super) fn maybe_render(
     state: &mut WaylandState,
+    conn: &wayland_client::Connection,
     qh: &wayland_client::QueueHandle<WaylandState>,
     consecutive_render_failures: &mut u32,
     last_render_time: &mut Option<Instant>,
@@ -86,6 +87,10 @@ pub(super) fn maybe_render(
         );
         let render_start = Instant::now();
         state.begin_perf_render(render_start);
+        let chrome_hover_before = (
+            state.input_state.status_hud_hover,
+            state.input_state.zoom_chip_hover,
+        );
         match state.render(qh) {
             Ok(keep_rendering) => {
                 let render_end = Instant::now();
@@ -99,6 +104,19 @@ pub(super) fn maybe_render(
                 *last_render_time = Some(render_end);
                 state.input_state.needs_redraw =
                     keep_rendering || state.input_state.has_pending_history();
+                let chrome_hover_after = (
+                    state.input_state.status_hud_hover,
+                    state.input_state.zoom_chip_hover,
+                );
+                if chrome_hover_before != chrome_hover_after && state.has_pointer_focus() {
+                    // Layout can move under a stationary pointer (for example,
+                    // Fit removes the zoom-chip Lock button). The render pass
+                    // reclassifies hover; publish the matching Wayland cursor
+                    // now instead of waiting for another motion event. Pointer
+                    // focus is required so a leave-triggered redraw cannot
+                    // publish or cache a cursor for stale coordinates.
+                    state.update_pointer_cursor(state.pointer_over_toolbar(), conn);
+                }
                 state.record_perf_render_complete(
                     render_start,
                     render_end,

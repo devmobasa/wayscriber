@@ -44,6 +44,92 @@ fn status_hud_layout_cleared_when_bar_hidden() {
 }
 
 #[test]
+fn status_hud_hover_tracks_segments_and_requests_redraw() {
+    let mut input = create_test_input_state();
+    update_hud_layout(&mut input, 1280, 720);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
+
+    input.needs_redraw = false;
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+    assert!(input.needs_redraw, "hover transition requests a redraw");
+
+    input.needs_redraw = false;
+    input.zoom_chip_hover = Some(crate::ui::ZoomChipButtonKind::In);
+    input.clear_chrome_hover();
+    assert_eq!(input.status_hud_hover, None);
+    assert_eq!(input.zoom_chip_hover, None);
+    assert!(input.needs_redraw, "surface leave clears hover and redraws");
+
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+
+    // Moving off the pill clears hover (and redraws once more).
+    input.needs_redraw = false;
+    input.on_mouse_motion(5, 5);
+    assert_eq!(input.status_hud_hover, None);
+    assert!(input.needs_redraw);
+
+    // A display-only HUD (`status_bar_interactive = false`) never hovers:
+    // no affordance may advertise a click that would be rejected.
+    input.status_bar_interactive = false;
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.status_hud_hover, None);
+}
+
+#[test]
+fn status_hud_reclassifies_hover_after_toolbar_hint_relayouts_segments() {
+    let mut input = create_test_input_state();
+    update_hud_layout(&mut input, 1280, 720);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
+
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+
+    // Hiding the toolbar inserts its recovery segment before Help while the
+    // physical pointer remains stationary.
+    input.set_toolbar_visible(false);
+    update_hud_layout(&mut input, 1280, 720);
+    let segment_now_under_pointer = input
+        .status_hud_layout()
+        .and_then(|layout| layout.segment_at(x as f64, y as f64));
+    assert_eq!(
+        segment_now_under_pointer,
+        Some(StatusHudSegmentKind::Toolbar)
+    );
+    assert_eq!(
+        input.status_hud_hover, segment_now_under_pointer,
+        "hover must follow rebuilt HUD geometry, not the old segment identity"
+    );
+}
+
+#[test]
+fn status_hud_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
+    let mut input = create_test_input_state();
+    update_hud_layout(&mut input, 1280, 720);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+
+    // Pointer leave clears hover but retains the last coordinates. A redraw
+    // may rebuild different geometry at those stale coordinates.
+    input.clear_chrome_hover();
+    input.set_toolbar_visible(false);
+    input.update_status_hud_layout_for_pointer(
+        StatusPosition::BottomLeft,
+        &StatusBarStyle::default(),
+        1280,
+        720,
+        false,
+    );
+
+    assert_eq!(
+        input.status_hud_hover, None,
+        "layout rebuild must not restore hover without main-surface pointer focus"
+    );
+}
+
+#[test]
 fn status_hud_press_reports_hit_without_side_effect() {
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);

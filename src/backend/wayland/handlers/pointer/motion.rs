@@ -156,7 +156,6 @@ impl WaylandState {
             self.update_pointer_cursor(true, conn);
             return;
         }
-        self.update_pointer_cursor(false, conn);
         // Handle move drag that continues on the main surface after leaving toolbar
         if self.is_move_dragging() {
             if let Some(intent) = self.move_drag_intent(event.position.0, event.position.1) {
@@ -166,6 +165,7 @@ impl WaylandState {
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
+            self.update_pointer_cursor(false, conn);
             return;
         }
         if self.zoom.panning {
@@ -185,6 +185,7 @@ impl WaylandState {
             );
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
+            self.update_pointer_cursor(false, conn);
             return;
         }
         if self.board_panning_active() {
@@ -198,6 +199,7 @@ impl WaylandState {
                 wx,
                 wy,
             );
+            self.update_pointer_cursor(false, conn);
             return;
         }
         // Capture the pre-motion pointer so the idle tool-preview bubble can
@@ -218,10 +220,12 @@ impl WaylandState {
             );
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
+            self.update_pointer_cursor(false, conn);
             return;
         }
         // Block normal pointer motion while the tour modal is active.
         if self.input_state.tour_active {
+            self.update_pointer_cursor(false, conn);
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
@@ -237,6 +241,10 @@ impl WaylandState {
             wx,
             wy,
         );
+        // Hover classification above consumes the incoming coordinates. Pick
+        // the icon only now so entering or leaving a HUD/zoom-chip button is
+        // reflected by this same motion event, even when the pointer stops.
+        self.update_pointer_cursor(false, conn);
         // Idle pointer motion otherwise only refreshes cached coordinates, so
         // the trailing tool-preview bubble would freeze at its previous spot
         // (stroke/eraser hover redraws are handled above). Damage the old and

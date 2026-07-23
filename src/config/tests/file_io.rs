@@ -85,6 +85,38 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
 }
 
 #[test]
+fn targeted_runtime_update_preserves_newer_sibling_edit() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            "[ui]\nshow_floating_badge = true\n\n[performance]\nmax_fps_no_vsync = 120\n",
+        )
+        .unwrap();
+
+        // Simulate the running overlay's older in-memory snapshot, followed by
+        // an edit made through the configurator while the overlay remains up.
+        let _stale_runtime_config = Config::load().expect("load startup config").config;
+        fs::write(
+            &config_file,
+            "# Preserve this newer configurator edit.\n[ui]\nshow_floating_badge = true\n\n[performance]\nmax_fps_no_vsync = 60\n",
+        )
+        .unwrap();
+
+        Config::update_file(|config| config.ui.show_floating_badge = false)
+            .expect("save only the runtime-owned badge preference");
+
+        let saved = fs::read_to_string(&config_file).unwrap();
+        assert!(saved.contains("# Preserve this newer configurator edit."));
+        let reloaded = Config::load().expect("reload targeted update").config;
+        assert!(!reloaded.ui.show_floating_badge);
+        assert_eq!(reloaded.performance.max_fps_no_vsync, 60);
+    });
+}
+
+#[test]
 fn runtime_board_reorder_does_not_materialize_unchanged_item_preferences() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
@@ -389,6 +421,10 @@ fn config_example_parses_and_documents_current_user_facing_fields() {
         "toggle_command_palette",
         "toggle_floating_badge",
         "toggle_zoom_chip",
+        "toggle_focus_mode",
+        "zoom_chip_display",
+        "show_floating_badge",
+        "show_zoom_chip",
     ] {
         assert!(
             example.contains(&format!("{field} =")),

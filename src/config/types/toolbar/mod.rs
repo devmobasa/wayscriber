@@ -10,7 +10,7 @@ mod visibility;
 
 pub use backend::ToolbarBackendKind;
 pub use config::ToolbarConfig;
-pub use display::{ToolbarSideLayout, TopDisplayMode};
+pub use display::{ToolbarSideLayout, TopDisplayMode, ZoomChipDisplay};
 pub use items::{
     ResolvedToolbarItems, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition,
     ToolbarItemId, ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface,

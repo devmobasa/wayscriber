@@ -473,7 +473,11 @@ show_status_page_badge = true
 # toolbar surface is hidden; set false if you run toolbar-less on purpose
 show_toolbar_hint = true
 
-# Show the floating board/page badge even when the status bar is visible
+# Master visibility for the floating board/page badge. The
+# toggle_floating_badge palette/keyboard action flips and persists this.
+show_floating_badge = true
+
+# Also show the floating board/page badge when the status bar is visible
 show_floating_badge_always = false
 
 # Show a small "FROZEN" badge when frozen mode is active
@@ -727,6 +731,16 @@ show_actions_advanced = false
 
 # Show zoom actions (zoom in/out/reset/lock)
 show_zoom_actions = true
+
+# When the bottom-right zoom chip is shown
+# Options: "always" (default; the chip is also the mouse entry point for
+# zooming), "while-zoomed" (only while zoom is active — keeps the corner
+# clean at 100%; zooming still starts via keyboard/scroll bindings)
+zoom_chip_display = "always"
+
+# Master visibility for the bottom-right zoom chip. The toggle_zoom_chip
+# palette/keyboard action flips and persists this.
+show_zoom_chip = true
 
 # Show page controls section (prev/next/new/dup/del)
 show_pages_section = true
@@ -1351,6 +1365,10 @@ toggle_floating_badge = []
 
 # Show/hide the bottom-right zoom chip (unbound; also in the command palette)
 toggle_zoom_chip = []
+
+# Focus mode: hide all UI chrome at once, press again to restore exactly
+# (unbound; also in the command palette)
+toggle_focus_mode = []
 
 # Toggle toolbars (show/hide top and side together).
 # Note: F2 moved to cycle_toolbar_display; hiding is still reachable via

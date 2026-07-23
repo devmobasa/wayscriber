@@ -1,5 +1,4 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
-use super::super::super::fields::ToolbarSideLayoutOption;
 use super::super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
@@ -11,6 +10,7 @@ use super::super::super::fields::{
 use super::super::super::fields::{
     PressureThicknessEditModeOption, PressureThicknessEntryModeOption,
 };
+use super::super::super::fields::{ToolbarSideLayoutOption, ZoomChipDisplayOption};
 use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
 use super::super::boards::BoardsDraft;
@@ -117,6 +117,7 @@ impl ConfigDraft {
             ui_show_status_board_badge: config.ui.show_status_board_badge,
             ui_show_status_page_badge: config.ui.show_status_page_badge,
             ui_show_toolbar_hint: config.ui.show_toolbar_hint,
+            ui_show_floating_badge: config.ui.show_floating_badge,
             ui_show_page_badge_with_status_bar: config.ui.show_floating_badge_always,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_show_capabilities_warning: config.ui.show_capabilities_warning,
@@ -142,6 +143,10 @@ impl ConfigDraft {
             ui_toolbar_side_layout: ToolbarSideLayoutOption::from_config(
                 config.ui.toolbar.side_layout,
             ),
+            ui_toolbar_zoom_chip_display: ZoomChipDisplayOption::from_config(
+                config.ui.toolbar.zoom_chip_display,
+            ),
+            ui_toolbar_show_zoom_chip: config.ui.toolbar.show_zoom_chip,
             ui_toolbar_rebind_modifier: ToolbarRebindModifierOption::from_config(
                 config.ui.toolbar.rebind_modifier,
             ),

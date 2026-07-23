@@ -66,9 +66,10 @@ pub use types::{
     ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarItemsConfig,
     ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, ToolbarRebindModifier,
     ToolbarSectionFlag, ToolbarSectionVisibility, ToolbarSideLayout, TopDisplayMode, TrayConfig,
-    TrayIconStyle, UiConfig, fold_legacy_section_flags, resolve_section_visibility,
-    section_flag_for_item, set_section_visibility, toolbar_item_definitions, toolbar_item_ids,
-    toolbar_item_order_group, validate_pdf_label_template,
+    TrayIconStyle, UiConfig, ZoomChipDisplay, fold_legacy_section_flags,
+    resolve_section_visibility, section_flag_for_item, set_section_visibility,
+    toolbar_item_definitions, toolbar_item_ids, toolbar_item_order_group,
+    validate_pdf_label_template,
 };
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]

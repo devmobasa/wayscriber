@@ -374,6 +374,13 @@ pub struct ToolbarSnapshot {
     /// Height available to the side palette in pre-scale spec units, when
     /// known; the pane scrolls instead of growing the surface past this.
     pub side_viewport_max: Option<f64>,
+    /// Height available from the top toolbar surface origin to the output
+    /// bottom, in pre-scale spec units, when known. The open
+    /// Canvas/Session/Settings popover grows to fill the room actually below
+    /// its anchor (no needless scroll when the screen has room) but never past
+    /// the screen bottom (short screens scroll instead of clipping). `None`
+    /// (e.g. in unit tests) falls back to the fixed cap.
+    pub top_available_height: Option<f64>,
     /// Whether the Settings drawer is showing the toolbar item customization sub-panel.
     pub customize_items_open: bool,
     /// Selected toolbar item customization group in the Settings drawer sub-panel.

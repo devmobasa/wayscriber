@@ -242,6 +242,12 @@ impl InputState {
 
     /// Start the guided tour.
     pub fn start_tour(&mut self) {
+        if self.focus_mode_active() {
+            // The tour restores pinned chrome when it ends, so it must begin
+            // from Focus Mode's real baseline rather than nesting underneath
+            // that transient snapshot owner.
+            self.toggle_focus_mode();
+        }
         self.tour_active = true;
         self.tour_step = 0;
         // Close other overlays. Route help through the canonical closer so the
@@ -387,6 +393,28 @@ mod tests {
         assert!(palette.contains("edit"));
         assert!(palette.contains("unbind"));
         assert!(palette.contains("reset"));
+    }
+
+    #[test]
+    fn starting_tour_exits_focus_mode_before_tour_owns_chrome() {
+        let mut state = make_test_input_state();
+        state.handle_action(Action::ToggleFocusMode);
+        assert!(state.focus_mode_active());
+        assert!(!state.show_status_bar);
+
+        state.start_tour_replay();
+
+        assert!(state.tour_active);
+        assert!(
+            !state.focus_mode_active(),
+            "the tour and Focus Mode must not own chrome simultaneously"
+        );
+        state.end_tour();
+        assert!(state.show_status_bar, "pre-Focus chrome must be restored");
+        assert!(
+            state.toolbar_visible(),
+            "pinned toolbar must remain visible"
+        );
     }
 
     #[test]

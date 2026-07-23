@@ -82,6 +82,18 @@ pub(super) fn remaining_top_width(
     Some(((screen_width - base_x.max(0.0) - right_margin.max(0.0)) / scale).max(0.0))
 }
 
+pub(super) fn remaining_top_height(screen_height: f64, surface_y: f64, scale: f64) -> Option<f64> {
+    if screen_height <= 0.0 || !screen_height.is_finite() {
+        return None;
+    }
+    let scale = if scale.is_finite() {
+        scale.clamp(0.5, 3.0)
+    } else {
+        1.0
+    };
+    Some(((screen_height - surface_y.max(0.0)) / scale).max(0.0))
+}
+
 pub(super) fn clamp_toolbar_offsets(
     offsets: ToolbarOffsets,
     input: ToolbarClampInput,
@@ -225,6 +237,11 @@ mod tests {
     #[test]
     fn top_budget_does_not_claim_a_480_pixel_floor() {
         assert_eq!(remaining_top_width(400.0, 12.0, 12.0, 1.0), Some(376.0));
+    }
+
+    #[test]
+    fn top_height_budget_starts_at_the_dragged_surface_origin() {
+        assert_eq!(remaining_top_height(1080.0, 212.0, 2.0), Some(434.0));
     }
 
     #[test]

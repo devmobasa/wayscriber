@@ -165,6 +165,8 @@ impl ConfigDraft {
             ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
             ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
             ToggleField::UiShowToolbarHint => self.ui_show_toolbar_hint = value,
+            ToggleField::UiShowFloatingBadge => self.ui_show_floating_badge = value,
+            ToggleField::UiToolbarShowZoomChip => self.ui_toolbar_show_zoom_chip = value,
             ToggleField::UiShowPageBadgeWithStatusBar => {
                 self.ui_show_page_badge_with_status_bar = value;
             }

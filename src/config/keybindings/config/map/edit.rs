@@ -125,6 +125,7 @@ define_action_binding_accessors! {
     ToggleStatusBar => ui.toggle_status_bar,
     ToggleFloatingBadge => ui.toggle_floating_badge,
     ToggleZoomChip => ui.toggle_zoom_chip,
+    ToggleFocusMode => ui.toggle_focus_mode,
     ToggleClickHighlight => ui.toggle_click_highlight,
     ToggleToolbar => ui.toggle_toolbar,
     CycleToolbarDisplay => ui.cycle_toolbar_display,

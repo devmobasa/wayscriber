@@ -43,8 +43,13 @@ impl InputState {
     }
 
     pub(crate) fn session_show_status_bar(&self) -> bool {
-        self.light_mode_restore
-            .map_or(self.show_status_bar, |restore| restore.show_status_bar)
+        self.focus_mode_restore
+            .map(|restore| restore.show_status_bar)
+            .or_else(|| {
+                self.light_mode_restore
+                    .map(|restore| restore.show_status_bar)
+            })
+            .unwrap_or(self.show_status_bar)
     }
 
     pub(crate) fn toggle_light_mode(&mut self) -> bool {
@@ -139,6 +144,9 @@ impl InputState {
     }
 
     fn enter_light_mode(&mut self, drawing: bool) {
+        if self.focus_mode_active() {
+            self.toggle_focus_mode();
+        }
         if self.presenter_mode {
             self.toggle_presenter_mode();
         }

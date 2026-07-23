@@ -58,6 +58,9 @@ const MENU_ITEM_GAP: f64 = 4.0;
 /// under it (mirrors `overflow_height`'s trailing margins).
 const MENU_ANCHOR_GAP: f64 = 6.0;
 const MENU_BOTTOM_MARGIN: f64 = 4.0;
+/// Floor so a pathologically short output never collapses the popover to
+/// nothing (mirrors the side palette's `MIN_SIDE_VIEWPORT`).
+const MENU_MIN_VIEWPORT: f64 = 160.0;
 /// Gap between two Canvas-popover sections (Boards/Pages/Advanced/Zoom/Step).
 const CANVAS_SECTION_GAP: f64 = 8.0;
 const CANVAS_STEP_ROW_H: f64 = 24.0;
@@ -91,13 +94,46 @@ fn content_height(nodes: &[WidgetNode]) -> f64 {
         .fold(0.0, f64::max)
 }
 
+/// Vertical offset from the strip surface top to the top of the menu
+/// popover: the base band plus every row stacked above it (shapes grid,
+/// contextual highlight-ring row, style pill, overflow menu). Deliberately
+/// excludes the popover's own height, so it never depends on the cap it
+/// feeds — no circularity with `menu_popover_height`.
+fn menu_top_offset(snapshot: &ToolbarSnapshot) -> f64 {
+    super::build::base_band_height(snapshot)
+        + super::build::shape_popover_height(snapshot)
+        + super::build::ring_row_height(snapshot)
+        + super::build::style_pill_height(snapshot)
+        + super::build::overflow_height(snapshot)
+}
+
+/// Visible content-height cap for the open menu popover. Screen-aware when
+/// the output height is known: the popover fills the room actually below its
+/// anchor (so it never scrolls when the screen has space) but never runs
+/// past the screen bottom (short screens scroll instead of clipping the
+/// footer buttons). Falls back to the fixed `MENU_MAX_CONTENT_H` when the
+/// output height is unknown (unit tests), preserving the legacy behavior.
+fn menu_viewport_cap(snapshot: &ToolbarSnapshot) -> f64 {
+    match snapshot.top_available_height {
+        Some(available_h) => {
+            let available = available_h
+                - menu_top_offset(snapshot)
+                - MENU_ANCHOR_GAP
+                - MENU_PAD * 2.0
+                - MENU_BOTTOM_MARGIN;
+            available.max(MENU_MIN_VIEWPORT)
+        }
+        None => MENU_MAX_CONTENT_H,
+    }
+}
+
 /// Scroll bounds for the open Canvas/Session/Settings popover as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
 /// while no menu popover is open. Max scroll = (natural - viewport).max(0).
 pub(super) fn menu_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
     let (_, nodes) = open_menu_content(snapshot)?;
     let natural = content_height(&nodes);
-    Some((natural, natural.min(MENU_MAX_CONTENT_H)))
+    Some((natural, natural.min(menu_viewport_cap(snapshot))))
 }
 
 /// Extra surface height the open Canvas/Session/Settings popover needs below the
@@ -106,7 +142,7 @@ pub(super) fn menu_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
     let Some((_, nodes)) = open_menu_content(snapshot) else {
         return 0.0;
     };
-    let viewport = content_height(&nodes).min(MENU_MAX_CONTENT_H);
+    let viewport = content_height(&nodes).min(menu_viewport_cap(snapshot));
     MENU_ANCHOR_GAP + viewport + MENU_PAD * 2.0 + MENU_BOTTOM_MARGIN
 }
 
@@ -121,7 +157,7 @@ pub(super) fn push_menu_popover(
         return;
     };
     let natural = content_height(&nodes);
-    let viewport = natural.min(MENU_MAX_CONTENT_H);
+    let viewport = natural.min(menu_viewport_cap(snapshot));
     let max_scroll = (natural - viewport).max(0.0);
     let scroll = if max_scroll > 0.0 {
         snapshot.top_popover_scroll.clamp(0.0, max_scroll)
