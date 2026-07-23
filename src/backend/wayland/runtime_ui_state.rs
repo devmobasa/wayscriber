@@ -86,6 +86,78 @@ struct ActivePositionDrag {
     session: ConfigPositionPreviewSession,
 }
 
+#[derive(Debug, Default)]
+pub(in crate::backend::wayland) struct UnavailablePersistencePreviews {
+    item_drag: Option<PreviewRollbackSnapshot>,
+    position_drag: Option<(ConfigPositionTarget, PreviewRollbackSnapshot)>,
+}
+
+impl UnavailablePersistencePreviews {
+    fn begin_item_drag(&mut self, group: ToolbarItemOrderGroup, input: &InputState) -> bool {
+        if self.item_drag.is_some() {
+            return false;
+        }
+        let target = ToolbarRuntimeUiPersistenceTarget::ItemOrder(group);
+        let values = match toolbar_values(target, input) {
+            Ok(values) => values,
+            Err(error) => {
+                log::error!(
+                    "Unavailable-persistence item drag has invalid rollback values: {error:?}"
+                );
+                return false;
+            }
+        };
+        self.item_drag = Some(PreviewRollbackSnapshot {
+            values: values.values().clone(),
+        });
+        true
+    }
+
+    fn item_drag_update_allowed(&self) -> bool {
+        self.item_drag.is_some()
+    }
+
+    fn finish_item_drag(&mut self, commit: bool) -> ToolbarRuntimeFinish {
+        let Some(rollback) = self.item_drag.take() else {
+            return ToolbarRuntimeFinish::KeepPreview;
+        };
+        if commit {
+            ToolbarRuntimeFinish::KeepPreview
+        } else {
+            ToolbarRuntimeFinish::Rollback(rollback)
+        }
+    }
+
+    fn begin_position_drag(
+        &mut self,
+        target: ConfigPositionTarget,
+        positions: ToolbarPositionSnapshot,
+    ) -> bool {
+        if let Some((active_target, _)) = &self.position_drag {
+            return *active_target == target;
+        }
+        self.position_drag = Some((target, position_rollback(target, positions)));
+        true
+    }
+
+    fn position_drag_update_allowed(&self, target: ConfigPositionTarget) -> bool {
+        self.position_drag
+            .as_ref()
+            .is_some_and(|(active_target, _)| *active_target == target)
+    }
+
+    fn finish_position_drag(&mut self, commit: bool) -> (ToolbarRuntimeFinish, bool) {
+        let Some((_, rollback)) = self.position_drag.take() else {
+            return (ToolbarRuntimeFinish::KeepPreview, false);
+        };
+        if commit {
+            (ToolbarRuntimeFinish::KeepPreview, true)
+        } else {
+            (ToolbarRuntimeFinish::Rollback(rollback), false)
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct ToolbarRuntimeState {
     controller: RuntimeUiStateController,

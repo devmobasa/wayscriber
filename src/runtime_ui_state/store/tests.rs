@@ -324,6 +324,58 @@ fn preparation_failure_reports_an_untouched_failure() {
 }
 
 #[test]
+fn missing_source_install_error_with_unchanged_source_is_an_untouched_failure() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let path = temp.path().join("runtime-ui.toml");
+    let store = RuntimeUiStateStore::new(&path);
+    let mut controller = store
+        .inspect()
+        .unwrap()
+        .into_controller_bootstrap(seeds())
+        .controller;
+    let write = commit_top_pinned(&mut controller);
+    let mut removed_prepared_temp = false;
+
+    let result = store.execute_source_mutation_with_hook(write, &mut |point| {
+        if point != MutationPoint::BeforeInstall {
+            return;
+        }
+        for entry in fs::read_dir(temp.path()).unwrap() {
+            let entry = entry.unwrap();
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".runtime-ui.toml.wayscriber-tmp-")
+            {
+                fs::remove_file(entry.path()).unwrap();
+                removed_prepared_temp = true;
+            }
+        }
+    });
+
+    assert!(
+        removed_prepared_temp,
+        "prepared replacement temp was not found"
+    );
+    assert!(matches!(
+        &result,
+        SourceMutationResult::Failed {
+            active: Some(active),
+            path_effect: RuntimeStateFailurePathEffect::Known(
+                RuntimeStateObservedPathEffect::Untouched
+            ),
+            ..
+        } if active.revision.bytes().is_none()
+    ));
+    assert!(matches!(
+        controller.submit_source_mutation(result),
+        SubmitSourceMutationResult::PersistenceUnhealthy { .. }
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(!path.exists());
+}
+
+#[test]
 fn malformed_startup_enters_the_recovery_barrier() {
     let temp = crate::test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");

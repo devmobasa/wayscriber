@@ -419,11 +419,7 @@ impl WaylandState {
             let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
                 unreachable!("item drag start must carry its order-group runtime target");
             };
-            if self
-                .runtime_ui
-                .as_mut()
-                .is_some_and(|runtime| !runtime.begin_item_drag(group, &self.input_state))
-            {
+            if !self.begin_toolbar_item_drag_preview(group) {
                 return;
             }
         }

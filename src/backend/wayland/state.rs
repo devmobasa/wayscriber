@@ -193,6 +193,8 @@ pub(super) struct WaylandState {
     pub(super) config: Config,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
+    pub(super) runtime_ui_unavailable_previews:
+        crate::backend::wayland::runtime_ui_state::UnavailablePersistencePreviews,
 
     // Input state
     pub(super) input_state: InputState,

@@ -36,20 +36,35 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn finish_toolbar_item_drag(&mut self, commit: bool) {
-        let finish = self
-            .runtime_ui
-            .as_mut()
-            .map(|runtime| runtime.finish_item_drag(commit, &self.input_state));
+        let finish = match self.runtime_ui.as_mut() {
+            Some(runtime) => runtime.finish_item_drag(commit, &self.input_state),
+            None => self
+                .runtime_ui_unavailable_previews
+                .finish_item_drag(commit),
+        };
         self.input_state.clear_toolbar_item_drag();
-        if let Some(finish) = finish {
-            self.apply_toolbar_runtime_finish(finish);
+        self.apply_toolbar_runtime_finish(finish);
+    }
+
+    pub(in crate::backend::wayland) fn begin_toolbar_item_drag_preview(
+        &mut self,
+        group: ToolbarItemOrderGroup,
+    ) -> bool {
+        match self.runtime_ui.as_mut() {
+            Some(runtime) => runtime.begin_item_drag(group, &self.input_state),
+            None => self
+                .runtime_ui_unavailable_previews
+                .begin_item_drag(group, &self.input_state),
         }
     }
 
     pub(in crate::backend::wayland) fn toolbar_item_drag_update_allowed(&self) -> bool {
-        self.runtime_ui
-            .as_ref()
-            .is_none_or(ToolbarRuntimeState::item_drag_update_allowed)
+        match self.runtime_ui.as_ref() {
+            Some(runtime) => runtime.item_drag_update_allowed(),
+            None => self
+                .runtime_ui_unavailable_previews
+                .item_drag_update_allowed(),
+        }
     }
 
     pub(in crate::backend::wayland) fn toolbar_position_drag_update_allowed(
@@ -60,9 +75,12 @@ impl WaylandState {
             MoveDragKind::Top => ConfigPositionTarget::Top,
             MoveDragKind::Side => ConfigPositionTarget::Side,
         };
-        self.runtime_ui
-            .as_ref()
-            .is_none_or(|runtime| runtime.position_drag_update_allowed(target))
+        match self.runtime_ui.as_ref() {
+            Some(runtime) => runtime.position_drag_update_allowed(target),
+            None => self
+                .runtime_ui_unavailable_previews
+                .position_drag_update_allowed(target),
+        }
     }
 
     pub(in crate::backend::wayland) fn begin_toolbar_position_preview(
@@ -70,14 +88,16 @@ impl WaylandState {
         kind: MoveDragKind,
     ) -> bool {
         let positions = self.toolbar_position_snapshot();
-        let Some(runtime) = self.runtime_ui.as_mut() else {
-            return true;
-        };
         let target = match kind {
             MoveDragKind::Top => ConfigPositionTarget::Top,
             MoveDragKind::Side => ConfigPositionTarget::Side,
         };
-        runtime.begin_position_drag(target, positions)
+        match self.runtime_ui.as_mut() {
+            Some(runtime) => runtime.begin_position_drag(target, positions),
+            None => self
+                .runtime_ui_unavailable_previews
+                .begin_position_drag(target, positions),
+        }
     }
 
     pub(in crate::backend::wayland) fn finish_toolbar_position_preview(
@@ -87,9 +107,13 @@ impl WaylandState {
     ) {
         let positions = self.toolbar_position_snapshot();
         let Some(runtime) = self.runtime_ui.as_mut() else {
-            if commit {
+            let (finish, should_save) = self
+                .runtime_ui_unavailable_previews
+                .finish_position_drag(commit);
+            if should_save {
                 self.save_toolbar_position_config(kind);
             }
+            self.apply_toolbar_runtime_finish(finish);
             return;
         };
         let mut next_config = self.config.clone();

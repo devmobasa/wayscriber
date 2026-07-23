@@ -1280,6 +1280,70 @@ fn item_drag_commit_accepts_one_revision_and_cancel_accepts_none() {
 }
 
 #[test]
+fn unavailable_persistence_item_drag_cancel_restores_original_order() {
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut previews = UnavailablePersistencePreviews::default();
+    let original = input
+        .resolved_toolbar_items
+        .order
+        .ordered_ids(ToolbarItemOrderGroup::TopTools)
+        .to_vec();
+    let mut positions = ToolbarPositionSnapshot {
+        top: (0.0, 0.0),
+        side: (0.0, 0.0),
+    };
+
+    assert!(previews.begin_item_drag(ToolbarItemOrderGroup::TopTools, &input));
+    assert!(input.start_toolbar_item_drag(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN,));
+    assert!(input.drag_toolbar_item_over(ToolbarItemOrderGroup::TopTools, 5));
+    assert_ne!(
+        input
+            .resolved_toolbar_items
+            .order
+            .ordered_ids(ToolbarItemOrderGroup::TopTools),
+        original
+    );
+
+    let finish = previews.finish_item_drag(false);
+    input.clear_toolbar_item_drag();
+    apply_finish(&mut input, &mut positions, finish);
+
+    assert_eq!(
+        input
+            .resolved_toolbar_items
+            .order
+            .ordered_ids(ToolbarItemOrderGroup::TopTools),
+        original
+    );
+}
+
+#[test]
+fn unavailable_persistence_position_drag_cancel_restores_starting_offsets() {
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut previews = UnavailablePersistencePreviews::default();
+    let original = ToolbarPositionSnapshot {
+        top: (config.ui.toolbar.top_offset, config.ui.toolbar.top_offset_y),
+        side: (
+            config.ui.toolbar.side_offset_x,
+            config.ui.toolbar.side_offset,
+        ),
+    };
+    let mut positions = original;
+
+    assert!(previews.begin_position_drag(ConfigPositionTarget::Side, positions));
+    positions.top.0 = 42.0;
+    positions.side = (43.0, 44.0);
+
+    let (finish, should_save) = previews.finish_position_drag(false);
+    assert!(!should_save);
+    apply_finish(&mut input, &mut positions, finish);
+
+    assert_eq!(positions, original);
+}
+
+#[test]
 fn persistence_barrier_blocks_updates_without_consuming_untouched_drag_sessions() {
     let temp = crate::test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");

@@ -121,6 +121,7 @@ impl WaylandState {
             config,
             runtime_ui,
             runtime_ui_unavailable,
+            runtime_ui_unavailable_previews: Default::default(),
             input_state,
             palette_recents,
             clipboard_publish,

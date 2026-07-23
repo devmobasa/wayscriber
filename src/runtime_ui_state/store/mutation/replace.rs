@@ -35,6 +35,13 @@ impl RuntimeUiStateStore {
             store_fs::rename_noreplace(replacement.temp.path(), &target.operation_path)
         {
             return match self.inspect() {
+                Ok(active) if is_expected_missing(&active, &target.expected_path) => failed(
+                    id,
+                    format!("could not install runtime state: {error}"),
+                    Some(active.observation),
+                    Vec::new(),
+                    untouched(),
+                ),
                 Ok(active) => SourceMutationResult::SourceChangedBeforeMutation {
                     id,
                     active: active.observation,
