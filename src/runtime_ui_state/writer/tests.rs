@@ -99,8 +99,8 @@ fn a_panicking_completion_notifier_does_not_stop_the_writer() {
             ..
         })
     ));
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
     writer.shutdown();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
 
 #[test]
