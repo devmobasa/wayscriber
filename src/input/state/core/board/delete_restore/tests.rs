@@ -1,6 +1,7 @@
 use crate::domain::Action;
 use crate::draw::Frame;
 use crate::input::BOARD_ID_BLACKBOARD;
+use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::core::base::{
     BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PAGE_DELETE_CONFIRM_MS,
     PAGE_UNDO_EXPIRE_MS,
@@ -71,6 +72,12 @@ fn restore_deleted_board_expires_old_entries_with_supplied_now() {
 
     state.delete_active_board_at(requested_at);
     state.delete_active_board_at(confirmed_at);
+    let actions = state.take_pending_board_runtime_ui_actions();
+    assert!(matches!(
+        actions.as_slice(),
+        [PendingBoardRuntimeUiAction::IdentityDeleted { board_id }]
+            if board_id == BOARD_ID_BLACKBOARD
+    ));
     let board_count_after_delete = state.boards.board_count();
 
     state.restore_deleted_board_at(confirmed_at + Duration::from_millis(BOARD_UNDO_EXPIRE_MS + 1));
@@ -81,6 +88,7 @@ fn restore_deleted_board_expires_old_entries_with_supplied_now() {
         state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
         Some("No deleted board to restore.")
     );
+    assert!(state.take_pending_board_runtime_ui_actions().is_empty());
 }
 
 #[test]
@@ -268,6 +276,7 @@ fn delete_then_create_reused_id_tracks_distinct_identity_before_drain() {
     let _ = state
         .take_pending_board_config_update()
         .expect("initial board creation update");
+    let _ = state.take_pending_board_runtime_ui_actions();
 
     let requested_at = Instant::now();
     state.delete_active_board_at(requested_at);
@@ -281,6 +290,14 @@ fn delete_then_create_reused_id_tracks_distinct_identity_before_drain() {
     assert!(update.structure_changed);
     assert!(update.deleted_ids.contains(&reused_id));
     assert!(update.created_ids.contains(&reused_id));
+    let runtime_actions = state.take_pending_board_runtime_ui_actions();
+    assert!(matches!(
+        runtime_actions.as_slice(),
+        [
+            PendingBoardRuntimeUiAction::IdentityDeleted { board_id: deleted },
+            PendingBoardRuntimeUiAction::IdentityAvailable { board_id: created, .. }
+        ] if deleted == &reused_id && created == &reused_id
+    ));
 }
 
 #[test]
@@ -291,6 +308,7 @@ fn delete_then_restore_same_board_cancels_pending_identity_deletion() {
     let _ = state
         .take_pending_board_config_update()
         .expect("initial board creation update");
+    let _ = state.take_pending_board_runtime_ui_actions();
 
     let requested_at = Instant::now();
     let confirmed_at = requested_at + Duration::from_millis(1);
@@ -304,4 +322,12 @@ fn delete_then_restore_same_board_cancels_pending_identity_deletion() {
     assert!(update.structure_changed);
     assert!(!update.deleted_ids.contains(&restored_id));
     assert!(!update.created_ids.contains(&restored_id));
+    let runtime_actions = state.take_pending_board_runtime_ui_actions();
+    assert!(matches!(
+        runtime_actions.as_slice(),
+        [
+            PendingBoardRuntimeUiAction::IdentityDeleted { board_id: deleted },
+            PendingBoardRuntimeUiAction::IdentityAvailable { board_id: restored, .. }
+        ] if deleted == &restored_id && restored == &restored_id
+    ));
 }

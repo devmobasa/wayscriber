@@ -22,6 +22,50 @@ fn default_hidden_items_hide_screenshot_tool() {
     let resolved = ToolbarItemsConfig::default().resolved();
 
     assert!(resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
+    assert_eq!(
+        item_visibility_setting(&resolved, ids::TOP_UTILITY_SCREENSHOT),
+        ToolbarItemVisibilitySetting::Hidden
+    );
+}
+
+#[test]
+fn visibility_setting_is_hidden_first_and_known_mutation_canonicalizes_conflicts() {
+    let mut config = ToolbarItemsConfig {
+        hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
+        shown: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
+        order: ToolbarItemOrderConfig::default(),
+    };
+
+    assert_eq!(
+        item_visibility_setting(&config.resolved(), ids::TOP_TOOL_PEN),
+        ToolbarItemVisibilitySetting::Hidden
+    );
+    assert!(config.set_visibility_setting(ids::TOP_TOOL_PEN, ToolbarItemVisibilitySetting::Shown));
+    let resolved = config.resolved();
+    assert_eq!(
+        item_visibility_setting(&resolved, ids::TOP_TOOL_PEN),
+        ToolbarItemVisibilitySetting::Shown
+    );
+    assert!(!resolved.hidden.contains(&ids::TOP_TOOL_PEN));
+}
+
+#[test]
+fn resettable_visibility_ids_are_exactly_customizable_individual_items() {
+    let actual = resettable_individual_toolbar_item_ids().collect::<BTreeSet<_>>();
+    let expected = toolbar_item_definitions()
+        .iter()
+        .filter(|definition| toolbar_item_visibility_override_allowed(definition))
+        .filter(|definition| {
+            super::super::visibility::section_flag_for_item(definition.id).is_none()
+        })
+        .map(|definition| definition.id)
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(actual, expected);
+    assert!(actual.contains(&ids::TOP_TOOL_PEN));
+    assert!(actual.contains(&ids::TOP_UTILITY_SCREENSHOT));
+    assert!(!actual.contains(&ids::TOP_CHROME_OVERFLOW));
+    assert!(!actual.contains(&ids::SIDE_GROUP_SETTINGS));
 }
 
 #[test]

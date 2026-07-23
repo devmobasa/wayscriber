@@ -1,5 +1,6 @@
 use super::*;
 use crate::draw::{Frame, PageDeleteOutcome, ShapeId};
+use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
 use std::time::{Duration, Instant};
 
@@ -104,19 +105,32 @@ fn restore_deleted_board_renames_reused_generated_id() {
     let initial_count = state.boards.board_count();
     assert!(state.create_board());
     let deleted_id = state.board_id().to_string();
+    let _ = state.take_pending_board_runtime_ui_actions();
 
     state.delete_active_board();
     state.delete_active_board();
     assert_eq!(state.boards.board_count(), initial_count);
+    assert!(matches!(
+        state.take_pending_board_runtime_ui_actions().as_slice(),
+        [PendingBoardRuntimeUiAction::IdentityDeleted { board_id }]
+            if board_id == &deleted_id
+    ));
 
     assert!(state.create_board());
     assert_eq!(state.board_id(), deleted_id);
+    let _ = state.take_pending_board_runtime_ui_actions();
 
     state.restore_deleted_board();
 
     assert_eq!(state.boards.board_count(), initial_count + 2);
     assert_ne!(state.board_id(), deleted_id);
     assert!(state.board_id().starts_with(&format!("{deleted_id}-")));
+    let actual_restored_id = state.board_id().to_string();
+    assert!(matches!(
+        state.take_pending_board_runtime_ui_actions().as_slice(),
+        [PendingBoardRuntimeUiAction::IdentityAvailable { board_id, .. }]
+            if board_id == &actual_restored_id
+    ));
 
     let mut ids: Vec<_> = state
         .boards

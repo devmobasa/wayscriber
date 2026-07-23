@@ -120,7 +120,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_surface = Some(surface.clone());
                 state.stylus_on_overlay = on_overlay;
                 state.stylus_on_toolbar = on_toolbar;
+                state.finish_toolbar_item_drag(false);
                 state.set_toolbar_dragging(false);
+                state.cancel_toolbar_move_drag();
                 state.stylus_tip_down = false;
                 state.stylus_base_thickness = Some(state.input_state.current_thickness);
                 state.stylus_pressure_thickness = None;
@@ -165,8 +167,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_tip_down = false;
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
+                state.finish_toolbar_item_drag(false);
                 state.set_toolbar_dragging(false);
-                state.end_toolbar_move_drag();
+                state.cancel_toolbar_move_drag();
                 if let Some(surf) = state.stylus_surface.take()
                     && state.toolbar.is_toolbar_surface(&surf)
                 {
@@ -242,6 +245,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     return;
                 }
                 if state.stylus_on_toolbar {
+                    state.finish_toolbar_item_drag(true);
                     state.set_toolbar_dragging(false);
                     state.end_toolbar_move_drag();
                     return;

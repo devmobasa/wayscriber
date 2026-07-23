@@ -18,6 +18,7 @@ use crate::backend::wayland::toolbar::render::side_palette::session::{
 };
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use crate::ui_text::{UiTextStyle, measure_text};
 
 use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
 use super::super::popover;
@@ -37,6 +38,7 @@ const MENU_BUTTON_H: f64 = 24.0;
 const MENU_RECENT_H: f64 = 22.0;
 const MENU_TOGGLE_H: f64 = 24.0;
 const MENU_TOGGLE_GAP: f64 = 6.0;
+const MENU_NOTICE_PADDING_Y: f64 = 4.0;
 const MENU_SEGMENT_H: f64 = 22.0;
 const MENU_HEADER_H: f64 = 16.0;
 const MENU_NAME_H: f64 = 14.0;
@@ -409,6 +411,21 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
         y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
     }
 
+    for (index, notice) in model.notices().iter().enumerate() {
+        let bold = matches!(
+            notice.severity,
+            model::ToolbarSettingsNoticeSeverity::Warning
+                | model::ToolbarSettingsNoticeSeverity::Error
+        );
+        let notice_h = settings_notice_height(notice.text.as_ref(), bold);
+        nodes.push(WidgetNode::decor(
+            format!("top.menu.settings.notice.{index}"),
+            (0.0, y, MENU_CONTENT_W, notice_h),
+            WidgetKind::Label(LabelSpec::new(notice.text.as_ref(), MENU_META_FONT, bold).wrapped()),
+        ));
+        y += notice_h + MENU_TOGGLE_GAP;
+    }
+
     let buttons = model.buttons();
     if !buttons.is_empty() {
         let button_w = row_item_width(MENU_CONTENT_W, 2, MENU_TOGGLE_GAP);
@@ -427,7 +444,11 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
                 format!("top.menu.settings.button.{index}"),
                 (item.x, item.y, item.w, item.h),
                 LabelSpec::new(button.label.as_ref(), MENU_LABEL_FONT, true),
-                ButtonStyle::plain(),
+                if button.event.is_destructive() {
+                    ButtonStyle::destructive()
+                } else {
+                    ButtonStyle::plain()
+                },
                 Some(Interaction::click(
                     button.event.clone(),
                     button.tooltip.as_string(),
@@ -585,6 +606,23 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
     }
 
     Some(nodes)
+}
+
+fn settings_notice_height(text: &str, bold: bool) -> f64 {
+    let style = UiTextStyle {
+        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: if bold {
+            cairo::FontWeight::Bold
+        } else {
+            cairo::FontWeight::Normal
+        },
+        size: MENU_META_FONT,
+    };
+    measure_text(style, text, Some(MENU_CONTENT_W))
+        .map(|extents| extents.height() + MENU_NOTICE_PADDING_Y)
+        .unwrap_or(MENU_TOGGLE_H)
+        .max(MENU_TOGGLE_H)
 }
 
 /// Stable id suffix for a Canvas-popover command button; the row set comes

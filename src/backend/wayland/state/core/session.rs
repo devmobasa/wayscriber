@@ -59,6 +59,7 @@ impl WaylandState {
             candidate_snapshot,
             &candidate_options,
         )?;
+        self.refresh_runtime_ui_config_seeds();
         self.input_state
             .set_session_preflight_options(Some(candidate_options.clone()));
         self.input_state.clear_session_dirty();
@@ -234,6 +235,7 @@ impl WaylandState {
             empty_snapshot,
             &options,
         )?;
+        self.refresh_runtime_ui_config_seeds();
         self.input_state
             .set_session_preflight_options(Some(options));
         let _ = self.input_state.take_session_dirty();

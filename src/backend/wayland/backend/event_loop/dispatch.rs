@@ -29,6 +29,7 @@ fn route_woken_sources(
     signals: &mut OverlaySignalState,
 ) -> Result<(), anyhow::Error> {
     route_woken_persistence(state);
+    state.drain_runtime_ui_completions();
 
     if signals.exit_requested() {
         state.input_state.should_exit = true;

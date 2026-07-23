@@ -20,9 +20,9 @@ use super::widgets::constants::{
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
     draw_divider_vertical, draw_drag_handle, draw_group_card, draw_label_center,
-    draw_label_center_color, draw_label_left, draw_mini_checkbox, draw_minimize_button,
-    draw_panel_background, draw_pin_button, draw_popover_panel, draw_round_rect,
-    draw_segmented_control, point_in_rect, set_icon_color,
+    draw_label_center_color, draw_label_left, draw_label_left_wrapped, draw_mini_checkbox,
+    draw_minimize_button, draw_panel_background, draw_pin_button, draw_popover_panel,
+    draw_round_rect, draw_segmented_control, point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
@@ -219,7 +219,11 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         }
         WidgetKind::Label(label) => {
             let text_style = label_style(label.size, label.bold);
-            draw_label_left(ctx, text_style, x, y, w, h, &label.text);
+            if label.wrap {
+                draw_label_left_wrapped(ctx, text_style, x, y, w, h, &label.text);
+            } else {
+                draw_label_left(ctx, text_style, x, y, w, h, &label.text);
+            }
         }
         WidgetKind::MiniCheckbox { checked, label } => {
             draw_mini_checkbox(

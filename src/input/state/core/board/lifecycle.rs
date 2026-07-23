@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::input::boards::BoardConfigChange;
+use crate::input::boards::{BoardConfigChange, PendingBoardRuntimeUiAction};
 
 impl InputState {
     pub(super) fn mark_board_surface_dirty(&mut self) {
@@ -29,6 +29,28 @@ impl InputState {
                 snapshot, change,
             ));
         }
+    }
+
+    pub(super) fn queue_board_runtime_ui_action(&mut self, action: PendingBoardRuntimeUiAction) {
+        self.pending_board_runtime_ui.push(action);
+    }
+
+    pub(super) fn queue_board_identity_available(&mut self, board_id: &str) {
+        let Some(board) = self
+            .boards
+            .board_states()
+            .iter()
+            .find(|board| board.spec.id == board_id)
+        else {
+            return;
+        };
+        let pinned = board.spec.pinned;
+        let pin_seed = self.boards.pin_seed(board_id).unwrap_or(pinned);
+        self.queue_board_runtime_ui_action(PendingBoardRuntimeUiAction::IdentityAvailable {
+            board_id: board_id.to_string(),
+            pin_seed,
+            pinned,
+        });
     }
 
     pub(super) fn prepare_active_page_content_change(&mut self) {

@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::Color;
-use crate::input::boards::BoardConfigChange;
+use crate::input::boards::{BoardConfigChange, PendingBoardRuntimeUiAction};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BoardBackground, runtime_contrast_pen_color};
 
@@ -78,13 +78,39 @@ impl InputState {
         true
     }
 
-    pub(crate) fn toggle_board_pinned(&mut self, index: usize) -> bool {
-        let Some(board) = self.boards.board_state_mut(index) else {
+    pub(crate) fn request_board_pin_toggle(&mut self, index: usize) -> bool {
+        let Some(board) = self.boards.board_states().get(index) else {
             return false;
         };
-        board.spec.pinned = !board.spec.pinned;
         let board_id = board.spec.id.clone();
-        self.queue_board_config_save(BoardConfigChange::Pinned(board_id));
+        let pin_seed = self.boards.pin_seed(&board_id).unwrap_or(board.spec.pinned);
+        self.queue_board_runtime_ui_action(PendingBoardRuntimeUiAction::TogglePin {
+            board_id,
+            board_identity_generation: self.boards.board_identity_generation(),
+            pin_seed,
+        });
+        true
+    }
+
+    pub(crate) fn apply_board_pinned_runtime(&mut self, board_id: &str, pinned: bool) -> bool {
+        let Some(board_index) = self
+            .boards
+            .board_states()
+            .iter()
+            .position(|board| board.spec.id == board_id)
+        else {
+            return false;
+        };
+        if !self.boards.set_board_pinned_runtime(board_id, pinned) {
+            return false;
+        }
+        let selected_row = self.board_picker_row_for_board(board_index);
+        if let (Some(row), super::super::board_picker::BoardPickerState::Open { selected, .. }) =
+            (selected_row, &mut self.board_picker_state)
+        {
+            *selected = row;
+        }
+        self.board_picker_layout = None;
         self.mark_board_surface_dirty();
         true
     }

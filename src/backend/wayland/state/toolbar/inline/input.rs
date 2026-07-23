@@ -195,8 +195,9 @@ impl WaylandState {
         self.set_pointer_over_toolbar(false);
         // Don't clear drag state if we're in a move drag - the drag continues outside
         if !self.is_move_dragging() {
+            self.finish_toolbar_item_drag(false);
             self.set_toolbar_dragging(false);
-            self.end_toolbar_move_drag();
+            self.cancel_toolbar_move_drag();
         }
         if had_hover || had_focus {
             self.toolbar.mark_dirty();
@@ -228,6 +229,7 @@ impl WaylandState {
                 self.toolbar_dragging(),
                 self.pointer_over_toolbar()
             ));
+            self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
             self.end_toolbar_move_drag();

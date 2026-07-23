@@ -218,6 +218,7 @@ struct SettingsMenuContentKey {
     customize_items_open: bool,
     customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
     layout_mode: ToolbarLayoutMode,
+    runtime_ui_persistence: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
 }
 
 impl SettingsMenuContentKey {
@@ -241,6 +242,7 @@ impl SettingsMenuContentKey {
             customize_items_open: snapshot.customize_items_open,
             customize_items_group: snapshot.customize_items_group,
             layout_mode: snapshot.layout_mode,
+            runtime_ui_persistence: snapshot.runtime_ui_persistence.clone(),
         }
     }
 }

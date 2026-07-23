@@ -126,6 +126,15 @@ impl InputState {
             ToolbarEvent::ToggleDelaySliders(show) => self.apply_toolbar_toggle_delay_sliders(show),
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
+            ToolbarEvent::RequestRuntimeUiReset
+            | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+            | ToolbarEvent::CancelUnsupportedRuntimeUiReset
+            | ToolbarEvent::RetryRuntimeUiPersistence
+            | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+            | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+            | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
+            | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
+            | ToolbarEvent::CancelRuntimeUiRecovery => false,
             ToolbarEvent::OpenCommandPalette => self.apply_toolbar_open_command_palette(),
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
             ToolbarEvent::ToggleSessionPopover(open) => {

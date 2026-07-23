@@ -29,16 +29,19 @@ pub(crate) use control::{
 #[allow(unused_imports)]
 pub(crate) use event_policy::{
     ToolbarBackendRoute, ToolbarConfigPersistenceTarget, ToolbarEventPolicy, ToolbarPersistence,
-    ToolbarPersistenceTarget, ToolbarPreApplyEffect, ToolbarUiPersistenceTarget,
-    action_for_apply_preset, action_for_clear_preset, action_for_event, action_for_save_preset,
-    action_for_tool, short_label_for_event, tooltip_label_for_event,
+    ToolbarPersistenceTarget, ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget,
+    ToolbarUiPersistenceTarget, action_for_apply_preset, action_for_clear_preset, action_for_event,
+    action_for_save_preset, action_for_tool, short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
 pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
-pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
+pub(crate) use settings::{
+    ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsNotice,
+    ToolbarSettingsNoticeSeverity, ToolbarSettingsToggle,
+};
 #[allow(unused_imports)]
 pub(crate) use style_pill::{
     StylePillControl, StylePillCounter, StylePillRole, StylePillSegment, StylePillSpec,
@@ -70,7 +73,10 @@ mod tests {
         ToolbarGroupId, ToolbarLayoutMode, toolbar_item_definitions, toolbar_item_ids as ids,
     };
     use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::{SidePane, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
+    use crate::ui::toolbar::{
+        RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, SidePane, ToolbarBindingHints,
+        ToolbarEvent, ToolbarSnapshot,
+    };
 
     fn snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
@@ -306,27 +312,227 @@ mod tests {
         )));
     }
 
+    fn has_visibility_reset_button(snapshot: &ToolbarSnapshot) -> bool {
+        ToolbarSettingsModel::for_popover(snapshot).is_some_and(|model| {
+            model
+                .buttons()
+                .iter()
+                .any(|button| matches!(button.event, ToolbarEvent::ResetToolbarItemHiddenOverrides))
+        })
+    }
+
+    #[test]
+    fn factory_visibility_reset_button_tracks_only_eligible_tri_state_differences() {
+        use crate::config::ToolbarItemsConfig;
+
+        let mut snapshot = snapshot();
+        snapshot.resolved_toolbar_items = ToolbarItemsConfig::default().resolved();
+        assert!(snapshot.toolbar_item_hidden(ids::TOP_UTILITY_SCREENSHOT));
+        assert!(!has_visibility_reset_button(&snapshot));
+
+        let mut showing_screenshot = ToolbarItemsConfig::default();
+        showing_screenshot.set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
+        snapshot.resolved_toolbar_items = showing_screenshot.resolved();
+        assert!(has_visibility_reset_button(&snapshot));
+
+        let mut hidden_pen = ToolbarItemsConfig::default();
+        hidden_pen.set_hidden(ids::TOP_TOOL_PEN, true);
+        snapshot.resolved_toolbar_items = hidden_pen.resolved();
+        assert!(has_visibility_reset_button(&snapshot));
+
+        let mut shown_pen = ToolbarItemsConfig::default();
+        shown_pen.shown.push(ids::TOP_TOOL_PEN.as_str().to_string());
+        snapshot.resolved_toolbar_items = shown_pen.resolved();
+        assert!(has_visibility_reset_button(&snapshot));
+
+        let mut section_only = ToolbarItemsConfig::default();
+        section_only.set_hidden(crate::config::ToolbarSectionFlag::Actions.item_id(), false);
+        snapshot.resolved_toolbar_items = section_only.resolved();
+        assert!(!has_visibility_reset_button(&snapshot));
+
+        let mut chrome_only = ToolbarItemsConfig::default();
+        chrome_only.set_hidden(ids::TOP_CHROME_OVERFLOW, true);
+        chrome_only.set_hidden(ids::SIDE_GROUP_SETTINGS, true);
+        snapshot.resolved_toolbar_items = chrome_only.resolved();
+        assert!(!has_visibility_reset_button(&snapshot));
+
+        let mut unknown_only = ToolbarItemsConfig::default();
+        unknown_only.hidden.push("future.toolbar.item".to_string());
+        snapshot.resolved_toolbar_items = unknown_only.resolved();
+        assert!(!has_visibility_reset_button(&snapshot));
+
+        let mut mixed = unknown_only;
+        mixed.set_hidden(ids::TOP_TOOL_PEN, true);
+        snapshot.resolved_toolbar_items = mixed.resolved();
+        assert!(has_visibility_reset_button(&snapshot));
+    }
+
+    #[test]
+    fn factory_visibility_reset_button_uses_unambiguous_wording() {
+        let mut snapshot = snapshot();
+        let mut items = crate::config::ToolbarItemsConfig::default();
+        items.set_hidden(ids::TOP_TOOL_PEN, true);
+        snapshot.resolved_toolbar_items = items.resolved();
+
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        let button = model
+            .buttons()
+            .iter()
+            .find(|button| matches!(button.event, ToolbarEvent::ResetToolbarItemHiddenOverrides))
+            .expect("factory visibility reset");
+        assert_eq!(button.label.as_ref(), "Restore built-in visibility");
+        assert_eq!(
+            button.tooltip.as_string().as_deref(),
+            Some(
+                "Restore built-in visibility for individual toolbar items; section preferences are unchanged"
+            )
+        );
+    }
+
+    #[test]
+    fn factory_order_reset_button_uses_unambiguous_wording() {
+        let mut snapshot = snapshot();
+        let mut items = crate::config::ToolbarItemsConfig::default();
+        assert!(items.move_item_to_index(
+            crate::config::ToolbarItemOrderGroup::TopTools,
+            ids::TOP_TOOL_PEN,
+            5,
+        ));
+        snapshot.resolved_toolbar_items = items.resolved();
+        snapshot.customize_items_open = true;
+        snapshot.customize_items_group =
+            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        let button = model
+            .buttons()
+            .iter()
+            .find(|button| matches!(button.event, ToolbarEvent::ResetToolbarItemOrder(_)))
+            .expect("factory order reset");
+        assert_eq!(button.label.as_ref(), "Restore built-in order");
+        assert_eq!(
+            button.tooltip.as_string().as_deref(),
+            Some("Restore built-in order for this group; configured order is unchanged")
+        );
+    }
+
+    #[test]
+    fn runtime_persistence_controls_follow_status_and_preserve_complete_paths() {
+        let mut snapshot = snapshot();
+        let runtime_path = std::path::PathBuf::from(
+            "/a/very/long/runtime/state/location/whose/complete/path/must/remain/visible/runtime-ui.toml",
+        );
+        let artifact_path = std::path::PathBuf::from(
+            "/another/very/long/recovery/location/whose/complete/path/must/remain/visible/wayscriber-recovery.toml",
+        );
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+            path: runtime_path.clone(),
+            mode: RuntimeUiPersistenceMode::Unhealthy,
+            detail: Some("disk outcome is uncertain".to_string()),
+            recovery_artifacts: vec![artifact_path.clone()],
+        });
+
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        assert!(
+            model
+                .buttons()
+                .iter()
+                .any(|button| { matches!(button.event, ToolbarEvent::RetryRuntimeUiPersistence) })
+        );
+        assert!(model.buttons().iter().any(|button| {
+            matches!(
+                button.event,
+                ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+            )
+        }));
+        assert!(model.buttons().iter().any(|button| {
+            matches!(
+                button.event,
+                ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+            )
+        }));
+        let rendered = model
+            .notices()
+            .iter()
+            .map(|notice| notice.text.as_ref())
+            .collect::<String>();
+        assert!(rendered.contains(runtime_path.to_string_lossy().as_ref()));
+        assert!(rendered.contains(artifact_path.to_string_lossy().as_ref()));
+
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+            path: runtime_path,
+            mode: RuntimeUiPersistenceMode::AwaitingUnsupportedResetConfirmation {
+                version: Some(9),
+            },
+            detail: None,
+            recovery_artifacts: Vec::new(),
+        });
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        assert!(
+            model.buttons().iter().any(|button| matches!(
+                button.event,
+                ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
+            ))
+        );
+        assert!(
+            model.buttons().iter().any(|button| matches!(
+                button.event,
+                ToolbarEvent::CancelUnsupportedRuntimeUiReset
+            ))
+        );
+
+        snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+            path: std::path::PathBuf::from("/isolated/runtime-ui.toml"),
+            mode: RuntimeUiPersistenceMode::Unavailable,
+            detail: Some(
+                "writer startup failed; runtime-only toolbar and board changes are process-only"
+                    .to_string(),
+            ),
+            recovery_artifacts: Vec::new(),
+        });
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
+        assert!(!model.buttons().iter().any(|button| {
+            matches!(
+                button.event,
+                ToolbarEvent::RequestRuntimeUiReset
+                    | ToolbarEvent::RetryRuntimeUiPersistence
+                    | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
+                    | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
+            )
+        }));
+        let rendered = model
+            .notices()
+            .iter()
+            .map(|notice| notice.text.as_ref())
+            .collect::<String>();
+        assert!(rendered.contains("persistence is unavailable"));
+        assert!(rendered.contains("runtime-only toolbar and board changes are process-only"));
+        assert!(rendered.contains("/isolated/runtime-ui.toml"));
+    }
+
     #[test]
     fn event_policy_classifies_persistence_and_pre_apply_effects() {
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleStatusBar(false)).persistence,
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Ui(
+            ToolbarPersistence::Config(ToolbarPersistenceTarget::Ui(
                 ToolbarUiPersistenceTarget::StatusBar
             ))
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleCustomSection(true)).persistence,
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::History)
+            ToolbarPersistence::Config(ToolbarPersistenceTarget::History)
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetThickness(2.0)).persistence,
-            ToolbarPersistence::RuntimeOnly
+            ToolbarPersistence::Ephemeral
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas)).persistence,
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar(
-                ToolbarConfigPersistenceTarget::SidePane
-            ))
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::SidePane)
+        );
+        assert_eq!(
+            ToolbarEventPolicy::for_event(&ToolbarEvent::RetryRuntimeUiPersistence).persistence,
+            ToolbarPersistence::Ephemeral
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleSideSectionCollapsed(
@@ -334,16 +540,13 @@ mod tests {
                 true,
             ))
             .persistence,
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar(
-                ToolbarConfigPersistenceTarget::CollapsedSection {
-                    section: crate::ui::toolbar::ToolbarSideSection::Colors,
-                    collapsed: true,
-                }
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::CollapsedSection(
+                crate::ui::toolbar::ToolbarSideSection::Colors,
             ))
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ScrollSidePane(12.0)).persistence,
-            ToolbarPersistence::RuntimeOnly
+            ToolbarPersistence::Ephemeral
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas))

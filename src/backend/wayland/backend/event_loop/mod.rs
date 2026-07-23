@@ -296,6 +296,7 @@ pub(super) fn run_event_loop(
                 warn!("Failed to save session state: {}", err);
                 session_save::notify_session_failure(state, &err);
             }
+            state.shutdown_runtime_ui();
         },
         || match signals.as_mut() {
             Some(signal_state) => signal_state.stop_and_join(),

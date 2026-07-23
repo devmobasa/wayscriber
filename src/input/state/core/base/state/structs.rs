@@ -30,7 +30,9 @@ use crate::config::{
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
-use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest, PendingBoardConfigUpdate};
+use crate::input::boards::{
+    BoardRestoreRequest, PageRestoreRequest, PendingBoardConfigUpdate, PendingBoardRuntimeUiAction,
+};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     Key, MouseButton,
@@ -537,6 +539,8 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
     /// Pending boards config update (persisted by backend)
     pub(in crate::input::state::core) pending_board_config: Option<PendingBoardConfigUpdate>,
+    /// Ordered runtime UI actions for board pins and board identity changes.
+    pub(in crate::input::state::core) pending_board_runtime_ui: Vec<PendingBoardRuntimeUiAction>,
     /// Whether the guided tour is currently active
     pub tour_active: bool,
     /// Current step in the guided tour (0-indexed)

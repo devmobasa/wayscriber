@@ -1453,6 +1453,42 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
 }
 
 #[test]
+fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
+    let mut snapshot = snapshot();
+    snapshot.settings_popover_open = true;
+    let runtime_path =
+        std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
+    snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+        path: runtime_path.clone(),
+        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
+        detail: None,
+        recovery_artifacts: Vec::new(),
+    });
+
+    let tree = build(&snapshot);
+    let notices: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.menu.settings.notice."))
+        .collect();
+    assert_eq!(
+        notices.len(),
+        2,
+        "summary and path should remain logical rows instead of fixed character chunks"
+    );
+    let path_text = format!("Runtime state: {}", runtime_path.display());
+    let path_notice = notices
+        .iter()
+        .find(|node| matches!(&node.kind, WidgetKind::Label(label) if label.text == path_text))
+        .expect("complete runtime path notice");
+    assert_eq!(path_notice.rect.2, super::menus::MENU_CONTENT_W);
+    assert!(
+        path_notice.rect.3 > 24.0,
+        "the full path should wrap and contribute its measured height"
+    );
+}
+
+#[test]
 fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;

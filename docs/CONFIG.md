@@ -9,6 +9,47 @@ wayscriber supports customization through a TOML configuration file located at:
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
 
+### Configured defaults and runtime UI preferences
+
+`config.toml` is the authored source for configured defaults. Some direct overlay customizations are
+saved separately so moving through the UI does not rewrite unrelated configuration:
+
+- top/side toolbar pin and minimized state;
+- the active side pane and collapsed side sections;
+- individual toolbar item visibility and toolbar item order; and
+- per-board pin state.
+
+The generated file is `$XDG_DATA_HOME/wayscriber/runtime-ui.toml`, normally
+`~/.local/share/wayscriber/runtime-ui.toml`. It is not a second configuration file and should not
+be hand-edited. The configurator labels affected controls as configured defaults. On startup, and
+after a same-process config/session reload, Wayscriber treats those configured values as seeds and
+applies any retained runtime overrides on top. If a configured seed changes to match an override,
+the redundant override is removed.
+
+The current runtime-state format is version 1. Unknown fields in a supported version are preserved
+across writes, including unknown fields attached to a retained override. A newer version is loaded
+read-only and is never downgraded automatically. Resetting a newer or invalid file requires an
+explicit confirmation; the exact source bytes are moved to a recovery artifact before the reset,
+and the Settings panel shows the artifact's complete path.
+
+Runtime-state writes are conditional on the exact inspected source and parent-directory identity.
+Wayscriber does not overwrite an externally changed file, follow or replace the final path when it
+is a symlink, or continue through a retargeted parent. If another writer wins, its freshly inspected
+state becomes authoritative. Every accepted runtime preference change settles as persisted,
+superseded by a reset, won by the external source, changed after a claimed write, or failed.
+
+When persistence is uncertain, the Settings panel blocks further runtime preference mutations and
+offers incident-scoped actions: retry the pending save, discard pending changes and use the current
+disk state, or preserve an invalid file and reset after confirmation. Recovery can be cancelled
+while it is read-only; if a write has already started, Wayscriber waits for its real completion
+before reinspection. Diagnostic and recovery-artifact paths are shown without truncating their
+contents.
+
+If runtime-state inspection or its writer cannot start at all, the Settings panel reports
+persistence as unavailable instead of offering recovery actions that cannot run. Runtime-only
+toolbar and board changes remain process-only in that mode and leave the authored configuration
+unchanged.
+
 When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
 section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
 a configurator warning but remain in the file for forward compatibility. Known values are still

@@ -131,7 +131,9 @@ impl WaylandState {
         self.zoom.stop_pan();
         self.stop_board_pan();
         self.set_board_pan_key_held(false);
-        self.end_toolbar_move_drag();
+        // Entering a different modal interaction interrupts any unfinished
+        // toolbar move; it is not an accepted drop.
+        self.cancel_toolbar_move_drag();
         self.unlock_pointer();
 
         let decision = eyedropper_entry_decision(

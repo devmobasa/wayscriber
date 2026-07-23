@@ -201,6 +201,7 @@ impl WaylandState {
         }
         if on_toolbar || self.pointer_over_toolbar() {
             if button == BTN_LEFT {
+                self.finish_toolbar_item_drag(true);
                 self.set_toolbar_dragging(false);
             }
             drag_log(format!(
@@ -216,6 +217,7 @@ impl WaylandState {
         }
         // End move drag if released on the main surface
         if button == BTN_LEFT && self.is_move_dragging() {
+            self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
             drag_log(format!(
                 "pointer release: main surface end drag, pos=({:.3}, {:.3})",

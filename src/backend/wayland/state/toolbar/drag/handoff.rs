@@ -5,17 +5,23 @@ fn reset_gtk_drag_lifecycle(
     preview: &mut Option<crate::toolbar_gtk::GtkToolbarKind>,
     handoff_at: &mut Option<Instant>,
     frozen_top_base_x: &mut Option<f64>,
+    top_rebase: &mut Option<(f64, f64)>,
+    side_rebase: &mut Option<(f64, f64)>,
     top_blocked: &mut bool,
     side_blocked: &mut bool,
 ) -> bool {
     let had_state = preview.is_some()
         || handoff_at.is_some()
         || frozen_top_base_x.is_some()
+        || top_rebase.is_some()
+        || side_rebase.is_some()
         || *top_blocked
         || *side_blocked;
     *preview = None;
     *handoff_at = None;
     *frozen_top_base_x = None;
+    *top_rebase = None;
+    *side_rebase = None;
     *top_blocked = false;
     *side_blocked = false;
     had_state
@@ -97,13 +103,19 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cancel_gtk_toolbar_drag_lifecycle(&mut self) {
-        if self.data.gtk_drag_preview.is_some() {
-            self.reconcile_top_base_after_drag();
+        if let Some(kind) = self.data.gtk_drag_preview {
+            let kind = match kind {
+                crate::toolbar_gtk::GtkToolbarKind::Top => MoveDragKind::Top,
+                crate::toolbar_gtk::GtkToolbarKind::Side => MoveDragKind::Side,
+            };
+            self.finish_toolbar_position_preview(kind, false);
         }
         let had_state = reset_gtk_drag_lifecycle(
             &mut self.data.gtk_drag_preview,
             &mut self.data.toolbar_drag_handoff_at,
             &mut self.data.drag_top_base_x,
+            &mut self.data.gtk_top_drag_rebase,
+            &mut self.data.gtk_side_drag_rebase,
             &mut self.data.gtk_top_drag_blocked,
             &mut self.data.gtk_side_drag_blocked,
         );
@@ -118,7 +130,9 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
-    fn finish_toolbar_drag_handoff(&mut self) {
+    pub(in crate::backend::wayland::state::toolbar::drag) fn finish_toolbar_drag_handoff(
+        &mut self,
+    ) {
         self.data.toolbar_drag_handoff_at = None;
         if self.data.gtk_drag_preview.take().is_some() {
             drag_log("finish GTK drag handoff (reveal surface at final position)");
@@ -154,6 +168,8 @@ mod tests {
         let mut preview = Some(crate::toolbar_gtk::GtkToolbarKind::Top);
         let mut handoff_at = Some(Instant::now());
         let mut frozen_top_base_x = Some(42.0);
+        let mut top_rebase = Some((1.0, 2.0));
+        let mut side_rebase = Some((3.0, 4.0));
         let mut top_blocked = true;
         let mut side_blocked = true;
 
@@ -161,12 +177,16 @@ mod tests {
             &mut preview,
             &mut handoff_at,
             &mut frozen_top_base_x,
+            &mut top_rebase,
+            &mut side_rebase,
             &mut top_blocked,
             &mut side_blocked,
         ));
         assert_eq!(preview, None);
         assert_eq!(handoff_at, None);
         assert_eq!(frozen_top_base_x, None);
+        assert_eq!(top_rebase, None);
+        assert_eq!(side_rebase, None);
         assert!(!top_blocked);
         assert!(!side_blocked);
     }

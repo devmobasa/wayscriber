@@ -2,6 +2,7 @@ use anyhow::Result;
 use log::{info, warn};
 use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 use std::env;
+use std::path::Path;
 
 use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
@@ -53,6 +54,29 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    let runtime_ui_path = crate::paths::runtime_ui_state_file();
+    let (runtime_ui, runtime_ui_unavailable) =
+        match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
+            &config,
+            &input_state,
+            &runtime_ui_path,
+            runtime_wake.handle(),
+        ) {
+            Ok(runtime_ui) => {
+                runtime_ui.apply_startup_state(&mut input_state);
+                (Some(runtime_ui), None)
+            }
+            Err(error) => {
+                warn!(
+                    "Runtime UI persistence is unavailable at {}: {error:#}",
+                    runtime_ui_path.display()
+                );
+                (
+                    None,
+                    Some(runtime_ui_unavailable_snapshot(&runtime_ui_path, &error)),
+                )
+            }
+        };
     input_state.set_session_preflight_options(session_options.clone());
     let screencopy_supported = setup.screencopy_manager.is_some();
     let portal_freeze_supported = screenshot_portal_available(&backend.tokio_runtime);
@@ -157,6 +181,8 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         capture_manager,
         session_options,
         persistence,
+        runtime_ui,
+        runtime_ui_unavailable,
         runtime_wake: runtime_wake.handle(),
         tokio_handle,
         exit_after_capture_mode,
@@ -185,6 +211,20 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     })
 }
 
+fn runtime_ui_unavailable_snapshot(
+    path: &Path,
+    error: &anyhow::Error,
+) -> crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+    crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
+        path: path.to_path_buf(),
+        mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Unavailable,
+        detail: Some(format!(
+            "Runtime preference persistence could not start: {error:#}. Runtime-only toolbar and board changes apply only to this process."
+        )),
+        recovery_artifacts: Vec::new(),
+    }
+}
+
 fn apply_initial_mode(backend: &WaylandBackend, _config: &Config, input_state: &mut InputState) {
     // Apply initial board from CLI (if provided).
     if let Some(initial_id) = backend.initial_mode.clone() {
@@ -210,5 +250,31 @@ fn desktop_environment_from_env() -> DesktopEnvironment {
         DesktopEnvironment::Gnome
     } else {
         DesktopEnvironment::Unknown
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_ui_start_failure_remains_visible_to_toolbar_frontends() {
+        let path = Path::new("/isolated/runtime-ui.toml");
+        let snapshot = runtime_ui_unavailable_snapshot(
+            path,
+            &anyhow::anyhow!("writer channel could not start"),
+        );
+
+        assert_eq!(snapshot.path, path);
+        assert_eq!(
+            snapshot.mode,
+            crate::ui::toolbar::RuntimeUiPersistenceMode::Unavailable
+        );
+        let detail = snapshot.detail.expect("startup failure detail");
+        assert!(detail.contains("writer channel could not start"));
+        assert!(
+            detail.contains("Runtime-only toolbar and board changes apply only to this process")
+        );
+        assert!(snapshot.recovery_artifacts.is_empty());
     }
 }

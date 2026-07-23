@@ -5,7 +5,7 @@ use crate::domain::Action;
 use crate::input::boards::{
     BoardConfigChange, BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest,
     BoardDeleteTarget, BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection,
-    BoardRestoreRequest,
+    BoardRestoreRequest, PendingBoardRuntimeUiAction,
 };
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
@@ -159,11 +159,15 @@ impl InputState {
                 deleted_board,
                 deleted_id,
                 deleted_name,
+                deleted_pin_seed,
                 ..
             } => {
                 self.pending_board_delete = None;
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
                 self.remove_board_recent(&deleted_id);
+                self.queue_board_runtime_ui_action(PendingBoardRuntimeUiAction::IdentityDeleted {
+                    board_id: deleted_id.clone(),
+                });
                 self.queue_board_config_save(BoardConfigChange::IdentityDeleted(
                     deleted_id.clone(),
                 ));
@@ -171,6 +175,7 @@ impl InputState {
                     BoardRestoreRequest {
                         board: deleted_board,
                         preferred_index: deleted_index,
+                        pin_seed: deleted_pin_seed,
                     },
                     now,
                 ));
@@ -259,6 +264,7 @@ impl InputState {
                 ..
             } => {
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
+                self.queue_board_identity_available(&restored_id);
                 let change = if id_changed {
                     BoardConfigChange::IdentitiesCreated(vec![restored_id])
                 } else {

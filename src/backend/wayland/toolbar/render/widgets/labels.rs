@@ -82,6 +82,22 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_label_left(
     layout.show_at_baseline(ctx, x, ty);
 }
 
+pub(in crate::backend::wayland::toolbar::render) fn draw_label_left_wrapped(
+    ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    text: &str,
+) {
+    let layout = text_layout(ctx, style, text, Some(w));
+    let ext = layout.ink_extents();
+    let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
+    set_color(ctx, COLOR_TEXT_PRIMARY);
+    layout.show_at_baseline(ctx, x, ty);
+}
+
 pub(in crate::backend::wayland::toolbar::render) fn draw_section_label(
     ctx: &cairo::Context,
     style: UiTextStyle<'_>,

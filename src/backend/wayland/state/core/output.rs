@@ -569,6 +569,7 @@ impl WaylandState {
                 }
             }
         }
+        self.refresh_runtime_ui_config_seeds();
         self.mark_clean_after_session_load();
         Ok(())
     }
