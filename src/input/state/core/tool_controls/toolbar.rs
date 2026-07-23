@@ -9,7 +9,15 @@ pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 impl InputState {
     /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        let any_change = self.toolbar_visible != visible
+        // Showing must also count a cycle-hidden (F2) top strip as a
+        // change: under the default pill side layout every raw flag can be
+        // true while no surface is visible, and the raw-flag comparison
+        // alone would swallow the restore (F9, the onboarding toast's Show
+        // action, and the status-bar hint chip all dispatch ToggleToolbar
+        // into this setter).
+        let unhide_top = visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden;
+        let any_change = unhide_top
+            || self.toolbar_visible != visible
             || self.toolbar_top_visible != visible
             || self.toolbar_side_visible != visible;
 

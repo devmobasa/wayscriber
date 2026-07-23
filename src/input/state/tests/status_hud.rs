@@ -128,6 +128,75 @@ fn status_hud_click_help_segment_returns_toggle_help_action() {
 }
 
 #[test]
+fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
+    let mut input = create_test_input_state();
+
+    // The hint chip only exists while every toolbar surface is hidden.
+    update_hud_layout(&mut input, 1280, 720);
+    let layout = input.status_hud_layout().expect("status hud layout");
+    assert!(
+        !layout
+            .segments
+            .iter()
+            .any(|segment| segment.kind == StatusHudSegmentKind::Toolbar),
+        "toolbar hint must not show while the toolbar is visible"
+    );
+
+    input.set_toolbar_visible(false);
+    update_hud_layout(&mut input, 1280, 720);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Toolbar);
+
+    let (hit, action) = input.check_status_hud_click(x, y);
+    assert!(hit);
+    assert_eq!(action, Some(Action::ToggleToolbar));
+    // The action is dispatched by the backend; no surface opens here.
+    assert!(!input.is_board_picker_open());
+    assert!(!input.is_color_picker_popup_open());
+    assert!(!input.is_radial_menu_open());
+}
+
+/// End-to-end recovery in the shipping default state: pill side layout
+/// (side palette retired) with the top strip F2-cycled to Hidden leaves
+/// every raw visibility flag true while no surface is visible. The hint
+/// chip must appear there, and dispatching its returned action must
+/// actually restore the toolbar — the advertised recovery cannot be a
+/// no-op.
+#[test]
+fn status_hud_toolbar_hint_recovers_cycle_hidden_strip_under_pill_layout() {
+    let mut input = create_test_input_state();
+    input.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
+    input.handle_action(Action::CycleToolbarDisplay); // micro
+    input.handle_action(Action::CycleToolbarDisplay); // hidden
+    assert!(!input.toolbar_visible());
+
+    update_hud_layout(&mut input, 1280, 720);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Toolbar);
+    let (hit, action) = input.check_status_hud_click(x, y);
+    assert!(hit);
+    let action = action.expect("toolbar hint chip returns an action");
+    assert_eq!(action, Action::ToggleToolbar);
+
+    // Dispatch the returned action exactly as the backend does.
+    input.handle_action(action);
+    assert!(
+        input.toolbar_visible(),
+        "clicking the recovery chip must restore the toolbar"
+    );
+
+    // The hint disappears on the next layout pass.
+    update_hud_layout(&mut input, 1280, 720);
+    assert!(
+        !input
+            .status_hud_layout()
+            .expect("status hud layout")
+            .segments
+            .iter()
+            .any(|segment| segment.kind == StatusHudSegmentKind::Toolbar),
+        "hint must clear once the toolbar is back"
+    );
+}
+
+#[test]
 fn status_hud_click_between_segments_consumes_without_action() {
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);

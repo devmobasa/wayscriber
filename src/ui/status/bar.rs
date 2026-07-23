@@ -9,7 +9,7 @@ use super::badges::{
 };
 use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
-use crate::label_format::format_binding_labels;
+use crate::label_format::{format_binding_labels, join_binding_labels};
 use crate::ui::toolbar::bindings::action_for_tool;
 use crate::ui_text::{UiTextExtents, UiTextStyle, measure_text, text_layout};
 
@@ -63,6 +63,9 @@ pub enum StatusHudSegmentKind {
     Tool,
     /// Help hint chip: toggles the help overlay.
     Help,
+    /// Hidden-toolbar hint chip (shown only while no toolbar surface is
+    /// visible): restores the toolbar.
+    Toolbar,
 }
 
 /// One laid-out run of pill content on the shared single-line baseline.
@@ -473,6 +476,22 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
         pieces.push(StatusHudPiece::text(
             action_display_label(Action::SelectHighlightTool).to_string(),
             None,
+            true,
+        ));
+    }
+
+    // Hidden-toolbar hint: when every toolbar surface is gone (F9 toggle or
+    // F2 cycle-hidden), point at the way back so an accidental hide is
+    // recoverable from the status bar alone. Clicking the chip restores the
+    // toolbar directly. Suppressed while presenter mode owns toolbar
+    // visibility (the toggle is a no-op there), and shed first when the
+    // width budget binds.
+    if !input_state.toolbar_visible()
+        && !(input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
+    {
+        pieces.push(StatusHudPiece::text(
+            toolbar_hint_label(input_state),
+            Some(StatusHudSegmentKind::Toolbar),
             true,
         ));
     }
@@ -933,6 +952,17 @@ fn help_binding_label(input_state: &InputState) -> String {
     format_binding_labels(&labels)
 }
 
+/// Hidden-toolbar hint chip text, styled like the help chip: "{binding}
+/// Toolbar" (e.g. "F9 Toolbar"), or bare "Toolbar" when the toggle is
+/// unbound (the chip stays clickable either way).
+fn toolbar_hint_label(input_state: &InputState) -> String {
+    let labels = input_state.action_binding_labels(Action::ToggleToolbar);
+    match join_binding_labels(&labels) {
+        Some(binding) => format!("{binding} Toolbar"),
+        None => "Toolbar".to_string(),
+    }
+}
+
 fn tool_action_label(tool: Tool) -> &'static str {
     action_for_tool(tool)
         .map(action_display_label)
@@ -1168,6 +1198,45 @@ mod tests {
             "help chip should shed under a tight budget"
         );
         assert!(narrow.pill_width <= 400.0 * STATUS_BAR_MAX_WIDTH_FRACTION + 1e-6);
+    }
+
+    /// The hidden-toolbar hint chip appears only while no toolbar surface is
+    /// visible, carries the toggle binding, and never shows while presenter
+    /// mode owns toolbar visibility (the toggle is a no-op there).
+    #[test]
+    fn toolbar_hint_chip_appears_only_while_toolbar_hidden() {
+        let style = StatusBarStyle::default();
+        let mut state = make_state();
+
+        let has_chip = |state: &InputState| {
+            compute_status_hud_layout(state, StatusPosition::BottomLeft, &style, 1920, 1080)
+                .expect("layout")
+                .segments
+                .iter()
+                .any(|s| s.kind == StatusHudSegmentKind::Toolbar)
+        };
+
+        // Toolbars visible: no hint.
+        assert!(!has_chip(&state));
+
+        // All toolbar surfaces hidden: the hint appears with the F9 binding.
+        state.set_toolbar_visible(false);
+        assert!(has_chip(&state));
+        let layout =
+            compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
+                .expect("layout");
+        assert!(
+            layout.runs.iter().any(|run| matches!(
+                run,
+                StatusHudRun::Text { text, .. } if text == "F9 Toolbar"
+            )),
+            "expected the default-binding hint text"
+        );
+
+        // Presenter mode with hide_toolbars: the hint must not tease a
+        // toggle that presenter mode suppresses.
+        state.presenter_mode = true;
+        assert!(!has_chip(&state));
     }
 
     #[test]

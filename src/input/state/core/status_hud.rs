@@ -103,8 +103,8 @@ impl InputState {
     /// Check a release at (x, y) against the status HUD segments. On a
     /// segment hit, opens the matching surface directly (board picker, color
     /// picker popup, radial menu at the pointer) and/or returns the action
-    /// for the backend to dispatch (help). Returns `(hit, action)` mirroring
-    /// toast release resolver.
+    /// for the backend to dispatch (help, toolbar restore). Returns
+    /// `(hit, action)` mirroring toast release resolver.
     pub(crate) fn check_status_hud_click(&mut self, x: i32, y: i32) -> (bool, Option<Action>) {
         // `status_hud_contains` also applies the open-overlay guard, so a
         // release cannot activate a chip when an overlay opened between the
@@ -144,6 +144,7 @@ impl InputState {
                 (true, None)
             }
             StatusHudSegmentKind::Help => (true, Some(Action::ToggleHelp)),
+            StatusHudSegmentKind::Toolbar => (true, Some(Action::ToggleToolbar)),
         }
     }
 }

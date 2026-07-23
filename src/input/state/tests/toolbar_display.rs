@@ -75,6 +75,29 @@ fn toggle_toolbar_show_restores_a_cycle_hidden_top_strip() {
 }
 
 #[test]
+fn toggle_toolbar_restores_a_cycle_hidden_strip_under_pill_layout() {
+    let mut state = create_test_input_state();
+    // The shipping default: the side palette is retired by the pill layout,
+    // so a cycle-hidden top strip leaves NO visible toolbar surface while
+    // every raw visibility flag stays true. The raw-flag early return in
+    // set_toolbar_visible used to swallow the restore in exactly this
+    // state, leaving F9 (and everything else dispatching ToggleToolbar)
+    // dead.
+    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
+    state.handle_action(Action::CycleToolbarDisplay); // micro
+    state.handle_action(Action::CycleToolbarDisplay); // hidden
+    assert!(
+        !state.toolbar_visible(),
+        "cycle-hidden under pill must leave no visible surface"
+    );
+
+    // A single ToggleToolbar press must bring the strip back.
+    state.handle_action(Action::ToggleToolbar);
+    assert!(state.toolbar_visible());
+    assert_eq!(state.top_display_state(), TopDisplayMode::Full);
+}
+
+#[test]
 fn micro_form_survives_a_visibility_toggle() {
     let mut state = create_test_input_state();
     state.handle_action(Action::CycleToolbarDisplay); // micro
