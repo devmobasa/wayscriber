@@ -55,6 +55,7 @@ fn content(ctx: &mut SectionCtx, settings_model: &model::ToolbarSettingsModel) -
         let label = gtk4::Label::new(Some(notice.text.as_ref()));
         label.set_xalign(0.0);
         label.set_wrap(true);
+        label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
         label.set_selectable(true);
         match notice.severity {
             model::ToolbarSettingsNoticeSeverity::Info => {}

@@ -446,17 +446,17 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         ),
     };
     let mut notices = Vec::new();
-    push_wrapped_notice(&mut notices, summary, severity);
+    push_notice(&mut notices, summary, severity);
     if let Some(detail) = &runtime.detail {
-        push_wrapped_notice(&mut notices, detail, severity);
+        push_notice(&mut notices, detail, severity);
     }
-    push_wrapped_notice(
+    push_notice(
         &mut notices,
         &format!("Runtime state: {}", runtime.path.display()),
         ToolbarSettingsNoticeSeverity::Info,
     );
     for path in &runtime.recovery_artifacts {
-        push_wrapped_notice(
+        push_notice(
             &mut notices,
             &format!("Preserved recovery file: {}", path.display()),
             ToolbarSettingsNoticeSeverity::Warning,
@@ -465,27 +465,13 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     notices
 }
 
-fn push_wrapped_notice(
+fn push_notice(
     notices: &mut Vec<ToolbarSettingsNotice>,
     text: &str,
     severity: ToolbarSettingsNoticeSeverity,
 ) {
-    // The Cairo settings renderers ellipsize individual rows. Conservative
-    // fixed-size character chunks keep all diagnostic and artifact path text
-    // visible across rows instead of silently dropping the tail.
-    const MAX_NOTICE_CHARS: usize = 20;
-    let chars: Vec<char> = text.chars().collect();
-    if chars.is_empty() {
-        notices.push(ToolbarSettingsNotice {
-            text: Cow::Borrowed(""),
-            severity,
-        });
-        return;
-    }
-    for chunk in chars.chunks(MAX_NOTICE_CHARS) {
-        notices.push(ToolbarSettingsNotice {
-            text: Cow::Owned(chunk.iter().collect()),
-            severity,
-        });
-    }
+    notices.push(ToolbarSettingsNotice {
+        text: Cow::Owned(text.to_string()),
+        severity,
+    });
 }

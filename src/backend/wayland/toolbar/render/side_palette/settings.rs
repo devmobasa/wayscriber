@@ -138,22 +138,19 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     }
     notices_y += toggle_gap;
     for notice in settings_model.notices() {
-        let display = ellipsize_to_width(
-            ctx,
-            button_label_style(),
-            notice.text.as_ref(),
-            content_width,
-        );
-        draw_label_left(
+        let notice_h = layout
+            .spec
+            .side_settings_notice_height(notice, content_width);
+        draw_label_left_wrapped(
             ctx,
             button_label_style(),
             x,
             notices_y,
             content_width,
-            toggle_h,
-            &display,
+            notice_h,
+            notice.text.as_ref(),
         );
-        notices_y += toggle_h + toggle_gap;
+        notices_y += notice_h + toggle_gap;
     }
 
     let buttons_y = notices_y;

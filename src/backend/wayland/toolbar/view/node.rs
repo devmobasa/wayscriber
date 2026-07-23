@@ -74,6 +74,7 @@ pub struct LabelSpec {
     pub text: String,
     pub size: f64,
     pub bold: bool,
+    pub wrap: bool,
 }
 
 impl LabelSpec {
@@ -82,7 +83,13 @@ impl LabelSpec {
             text: text.into(),
             size,
             bold,
+            wrap: false,
         }
+    }
+
+    pub fn wrapped(mut self) -> Self {
+        self.wrap = true;
+        self
     }
 }
 
