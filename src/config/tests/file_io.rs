@@ -387,6 +387,8 @@ fn config_example_parses_and_documents_current_user_facing_fields() {
         "board_picker",
         "toggle_quick_help",
         "toggle_command_palette",
+        "toggle_floating_badge",
+        "toggle_zoom_chip",
     ] {
         assert!(
             example.contains(&format!("{field} =")),

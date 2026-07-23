@@ -110,6 +110,11 @@ pub enum Action {
     ToggleHelp,
     ToggleQuickHelp,
     ToggleStatusBar,
+    /// Show/hide the floating board/page badge (the pill that appears when
+    /// the status bar is hidden or `show_floating_badge_always` is set).
+    ToggleFloatingBadge,
+    /// Show/hide the bottom-right zoom chip.
+    ToggleZoomChip,
     ToggleClickHighlight,
     ToggleToolbar,
     /// Cycle the top toolbar's display: full strip → micro chip → hidden.

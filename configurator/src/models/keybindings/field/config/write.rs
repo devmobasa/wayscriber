@@ -80,6 +80,8 @@ impl KeybindingField {
             Self::ToggleHelp => config.ui.toggle_help = value,
             Self::ToggleQuickHelp => config.ui.toggle_quick_help = value,
             Self::ToggleStatusBar => config.ui.toggle_status_bar = value,
+            Self::ToggleFloatingBadge => config.ui.toggle_floating_badge = value,
+            Self::ToggleZoomChip => config.ui.toggle_zoom_chip = value,
             Self::ToggleClickHighlight => config.ui.toggle_click_highlight = value,
             Self::ToggleToolbar => config.ui.toggle_toolbar = value,
             Self::CycleToolbarDisplay => config.ui.cycle_toolbar_display = value,

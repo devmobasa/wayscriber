@@ -53,6 +53,28 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ToggleFloatingBadge,
+        "Toggle Board/Page Badge",
+        None,
+        "Show/hide the floating board/page badge",
+        UI,
+        true,
+        true,
+        false,
+        &["hide badge", "board badge", "page badge"]
+    ),
+    meta!(
+        ToggleZoomChip,
+        "Toggle Zoom Chip",
+        None,
+        "Show/hide the bottom-right zoom chip",
+        UI,
+        true,
+        true,
+        false,
+        &["hide zoom", "zoom controls"]
+    ),
+    meta!(
         TogglePresenterMode,
         "Presenter Mode",
         None,

@@ -203,8 +203,18 @@ pub struct InputState {
     pub show_status_board_badge: bool,
     /// Whether to show the page counter in the status bar
     pub show_status_page_badge: bool,
+    /// Whether to show the hidden-toolbar hint chip in the status bar
+    /// (`[ui] show_toolbar_hint`)
+    pub show_toolbar_hint: bool,
     /// Whether to show the board/page badge when the status bar is visible
     pub show_floating_badge_always: bool,
+    /// Whether the floating board/page badge may render at all (runtime
+    /// toggle via `Action::ToggleFloatingBadge`; not persisted)
+    pub show_floating_badge: bool,
+    /// Whether the bottom-right zoom chip may render while
+    /// `show_zoom_actions` is on (runtime toggle via
+    /// `Action::ToggleZoomChip`; not persisted)
+    pub show_zoom_chip: bool,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration

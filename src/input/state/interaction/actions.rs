@@ -88,6 +88,8 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         Action::ToggleHelp
         | Action::ToggleQuickHelp
         | Action::ToggleStatusBar
+        | Action::ToggleFloatingBadge
+        | Action::ToggleZoomChip
         | Action::ToggleClickHighlight
         | Action::ToggleToolbar
         | Action::CycleToolbarDisplay

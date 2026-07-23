@@ -602,6 +602,10 @@ mod tests {
     #[test]
     fn minimize_keeps_bars_visible_and_close_is_an_alias() {
         let mut state = make_test_input_state();
+        // The side-palette visibility assertion below needs the deprecated
+        // Panel escape hatch (the struct default is Pill, which retires the
+        // side surface).
+        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
 
         // The deprecated Close events now minimize: the surface stays
         // visible as a restore tab instead of vanishing.

@@ -45,6 +45,12 @@ impl ConfiguratorApp {
                 ToggleField::UiShowStatusPageBadge,
             ),
             toggle_row(
+                "Show toolbar hint while toolbars are hidden",
+                self.draft.ui_show_toolbar_hint,
+                self.defaults.ui_show_toolbar_hint,
+                ToggleField::UiShowToolbarHint,
+            ),
+            toggle_row(
                 "Show overlay badge with status bar",
                 self.draft.ui_show_page_badge_with_status_bar,
                 self.defaults.ui_show_page_badge_with_status_bar,

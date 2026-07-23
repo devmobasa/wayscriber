@@ -45,6 +45,11 @@ pub struct UiConfig {
     #[serde(default = "default_show_status_page_badge")]
     pub show_status_page_badge: bool,
 
+    /// Show a clickable status-bar hint chip (e.g. "F9 Toolbar") while every
+    /// toolbar surface is hidden; disable if you run toolbar-less on purpose
+    #[serde(default = "default_show_toolbar_hint")]
+    pub show_toolbar_hint: bool,
+
     /// Show the board/page badge even when the status bar is visible
     /// (renamed from show_page_badge_with_status_bar for clarity)
     #[serde(
@@ -134,6 +139,7 @@ impl Default for UiConfig {
             status_bar_interactive: default_status_bar_interactive(),
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),
+            show_toolbar_hint: default_show_toolbar_hint(),
             show_floating_badge_always: default_show_page_badge_with_status_bar(),
             show_frozen_badge: default_show_frozen_badge(),
             status_bar_position: default_status_position(),
@@ -168,6 +174,10 @@ fn default_show_status_board_badge() -> bool {
 }
 
 fn default_show_status_page_badge() -> bool {
+    true
+}
+
+fn default_show_toolbar_hint() -> bool {
     true
 }
 

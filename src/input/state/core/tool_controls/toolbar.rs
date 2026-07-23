@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use crate::config::{
-    ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, TopDisplayMode,
-    factory_individual_toolbar_item_visibility_settings,
+    RadialMenuMouseBinding, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting,
+    ToolbarSideLayout, TopDisplayMode, factory_individual_toolbar_item_visibility_settings,
 };
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
@@ -40,6 +40,75 @@ impl InputState {
         true
     }
 
+    /// After hiding a chrome surface: if nothing interactive remains on
+    /// screen (no toolbar surface, no status bar), teach the way back right
+    /// now — the status-bar hint chip cannot help once the status bar
+    /// itself is gone. Skipped only when presenter mode will restore a
+    /// surface that was visible before it took ownership of that surface.
+    pub(crate) fn warn_if_all_chrome_hidden(&mut self) {
+        if self.toolbar_visible()
+            || self.show_status_bar
+            || self.presenter_will_restore_visible_chrome()
+        {
+            return;
+        }
+        let mut parts = Vec::new();
+        if let Some(binding) = self.action_binding_primary_label(Action::ToggleToolbar) {
+            parts.push(format!("{binding} toolbar"));
+        }
+        if let Some(binding) = self.action_binding_primary_label(Action::ToggleStatusBar) {
+            parts.push(format!("{binding} status bar"));
+        }
+        let message = if parts.is_empty() && self.right_click_chrome_recovery_available() {
+            "All UI hidden — right-click to restore".to_string()
+        } else if parts.is_empty() {
+            "All UI hidden — select the recovery action".to_string()
+        } else {
+            format!("All UI hidden — {}", parts.join(" · "))
+        };
+        let (action_label, recovery_action) =
+            if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+                ("Show status bar", Action::ToggleStatusBar)
+            } else {
+                ("Show toolbar", Action::ToggleToolbar)
+            };
+        // Same key as the routine chrome toasts ("Toolbar: hidden"), so this
+        // supersedes them in place instead of queueing behind them. The
+        // action chip gives one-click recovery even when the context menu is
+        // unavailable; the message covers the bindings for both.
+        self.push_toast(
+            ToastPriority::Info,
+            "ui",
+            Toast::info(message).action(action_label, recovery_action),
+        );
+    }
+
+    fn right_click_chrome_recovery_available(&self) -> bool {
+        self.context_menu_enabled()
+            && !self.zoom_active()
+            && self.radial_menu_mouse_binding != RadialMenuMouseBinding::Right
+    }
+
+    fn presenter_will_restore_visible_chrome(&self) -> bool {
+        if !self.presenter_mode {
+            return false;
+        }
+        let Some(restore) = self.presenter_restore.as_ref() else {
+            return false;
+        };
+
+        let restores_status_bar = restore.show_status_bar == Some(true);
+        let restored_top_mode = restore
+            .toolbar_top_display_mode
+            .unwrap_or(self.toolbar_top_display_mode);
+        let restores_top_toolbar = restore.toolbar_top_visible == Some(true)
+            && restored_top_mode != TopDisplayMode::Hidden;
+        let restores_side_toolbar = restore.toolbar_side_visible == Some(true)
+            && self.toolbar_side_layout == ToolbarSideLayout::Panel;
+
+        restores_status_bar || restores_top_toolbar || restores_side_toolbar
+    }
+
     /// Returns whether any toolbar surface is effectively visible: the top
     /// strip (not cycle-hidden) or the side palette (not retired by
     /// `side_layout = "pill"`). Raw visibility flags that cannot produce a
@@ -62,9 +131,10 @@ impl InputState {
     /// visibility toggles. The deprecated `"panel"` escape hatch keeps the
     /// classic behavior.
     ///
-    /// Invariant: the `InputState` struct-field default stays `Panel` (for
-    /// side-palette test ergonomics) while the *config* default is `Pill`;
-    /// startup init applies the config value via
+    /// Invariant: the `InputState` struct-field default matches the config
+    /// default (`Pill`), so tests exercise the shipping layout unless they
+    /// opt into the deprecated `Panel` escape hatch explicitly; startup
+    /// still applies the configured value via
     /// [`Self::init_toolbar_side_layout_from_config`].
     pub fn toolbar_side_visible(&self) -> bool {
         self.toolbar_side_visible
@@ -509,23 +579,20 @@ mod tests {
     #[test]
     fn pill_side_layout_retires_the_side_surface_and_panel_restores_it() {
         let mut state = make_test_input_state();
-        // The struct-field default stays Panel for side-palette test
-        // ergonomics; the *config* default is Pill and startup init applies
-        // it via init_toolbar_side_layout_from_config.
+        // The struct-field default matches the config default (Pill), so
+        // tests exercise the shipping layout unless they opt into the
+        // deprecated Panel escape hatch explicitly.
         assert_eq!(
             state.toolbar_side_layout,
-            crate::config::ToolbarSideLayout::Panel
+            crate::config::ToolbarSideLayout::Pill
         );
         assert_eq!(
             crate::config::ToolbarSideLayout::default(),
-            crate::config::ToolbarSideLayout::Pill,
-            "the config default is pill; the struct default is test ergonomics only"
+            crate::config::ToolbarSideLayout::Pill
         );
-        assert!(state.toolbar_side_visible());
 
         // The default Pill layout retires the side surface: it never
         // reports visible, even through the plain visibility toggles.
-        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
         assert!(!state.toolbar_side_visible());
         state.set_toolbar_visible(true);
         assert!(!state.toolbar_side_visible());

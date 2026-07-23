@@ -123,6 +123,8 @@ define_action_binding_accessors! {
     ToggleHelp => ui.toggle_help,
     ToggleQuickHelp => ui.toggle_quick_help,
     ToggleStatusBar => ui.toggle_status_bar,
+    ToggleFloatingBadge => ui.toggle_floating_badge,
+    ToggleZoomChip => ui.toggle_zoom_chip,
     ToggleClickHighlight => ui.toggle_click_highlight,
     ToggleToolbar => ui.toggle_toolbar,
     CycleToolbarDisplay => ui.cycle_toolbar_display,
