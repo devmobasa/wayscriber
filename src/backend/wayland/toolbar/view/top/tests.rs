@@ -1049,6 +1049,29 @@ fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
     ));
 }
 
+#[test]
+fn runtime_sized_menu_popovers_do_not_reenter_strip_planning() {
+    for name in ["canvas", "session", "settings"] {
+        let mut snapshot = snapshot();
+        snapshot.top_viewport_max = Some(1280.0);
+        snapshot.top_available_height = Some(720.0);
+        match name {
+            "canvas" => snapshot.canvas_popover_open = true,
+            "session" => snapshot.session_popover_open = true,
+            "settings" => snapshot.settings_popover_open = true,
+            _ => unreachable!(),
+        }
+
+        let (width, height) = top_size(&snapshot);
+        let tree = build_top_view(&snapshot, width as f64, height as f64);
+        assert!(
+            tree.node_by_id(&format!("top.menu.{name}.panel").into())
+                .is_some(),
+            "{name} popover should build under runtime width and height constraints"
+        );
+    }
+}
+
 fn canvas_tree_has_event(tree: &WidgetTree, event: &ToolbarEvent) -> bool {
     tree.nodes().iter().any(|node| {
         node.id.as_str().starts_with("top.menu.canvas.")

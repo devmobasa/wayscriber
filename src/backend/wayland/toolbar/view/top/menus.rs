@@ -98,13 +98,15 @@ fn content_height(nodes: &[WidgetNode]) -> f64 {
 /// popover: the base band plus every row stacked above it (shapes grid,
 /// contextual highlight-ring row, style pill, overflow menu). Deliberately
 /// excludes the popover's own height, so it never depends on the cap it
-/// feeds — no circularity with `menu_popover_height`.
-fn menu_top_offset(snapshot: &ToolbarSnapshot) -> f64 {
+/// feeds — no circularity with `menu_popover_height`. The caller-provided
+/// plan is also intentional: this helper runs while a planned tree is being
+/// built, so re-planning here would recurse through that same tree build.
+fn menu_top_offset(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> f64 {
     super::build::base_band_height(snapshot)
-        + super::build::shape_popover_height(snapshot)
-        + super::build::ring_row_height(snapshot)
-        + super::build::style_pill_height(snapshot)
-        + super::build::overflow_height(snapshot)
+        + super::build::shape_popover_height_planned(snapshot, plan)
+        + super::build::ring_row_height_planned(snapshot, plan)
+        + super::build::style_pill_height_planned(snapshot, plan)
+        + super::build::overflow_height_planned(snapshot, plan)
 }
 
 /// Visible content-height cap for the open menu popover. Screen-aware when
@@ -113,11 +115,11 @@ fn menu_top_offset(snapshot: &ToolbarSnapshot) -> f64 {
 /// past the screen bottom (short screens scroll instead of clipping the
 /// footer buttons). Falls back to the fixed `MENU_MAX_CONTENT_H` when the
 /// output height is unknown (unit tests), preserving the legacy behavior.
-fn menu_viewport_cap(snapshot: &ToolbarSnapshot) -> f64 {
+fn menu_viewport_cap(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> f64 {
     match snapshot.top_available_height {
         Some(available_h) => {
             let available = available_h
-                - menu_top_offset(snapshot)
+                - menu_top_offset(snapshot, plan)
                 - MENU_ANCHOR_GAP
                 - MENU_PAD * 2.0
                 - MENU_BOTTOM_MARGIN;
@@ -130,19 +132,25 @@ fn menu_viewport_cap(snapshot: &ToolbarSnapshot) -> f64 {
 /// Scroll bounds for the open Canvas/Session/Settings popover as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
 /// while no menu popover is open. Max scroll = (natural - viewport).max(0).
-pub(super) fn menu_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
+pub(super) fn menu_scroll_bounds_planned(
+    snapshot: &ToolbarSnapshot,
+    plan: &super::TopStripPlan,
+) -> Option<(f64, f64)> {
     let (_, nodes) = open_menu_content(snapshot)?;
     let natural = content_height(&nodes);
-    Some((natural, natural.min(menu_viewport_cap(snapshot))))
+    Some((natural, natural.min(menu_viewport_cap(snapshot, plan))))
 }
 
 /// Extra surface height the open Canvas/Session/Settings popover needs below the
 /// band (mirrors `overflow_height`).
-pub(super) fn menu_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
+pub(super) fn menu_popover_height_planned(
+    snapshot: &ToolbarSnapshot,
+    plan: &super::TopStripPlan,
+) -> f64 {
     let Some((_, nodes)) = open_menu_content(snapshot) else {
         return 0.0;
     };
-    let viewport = content_height(&nodes).min(menu_viewport_cap(snapshot));
+    let viewport = content_height(&nodes).min(menu_viewport_cap(snapshot, plan));
     MENU_ANCHOR_GAP + viewport + MENU_PAD * 2.0 + MENU_BOTTOM_MARGIN
 }
 
@@ -150,6 +158,7 @@ pub(super) fn menu_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
 pub(super) fn push_menu_popover(
     tree: &mut WidgetTree,
     snapshot: &ToolbarSnapshot,
+    plan: &super::TopStripPlan,
     anchor: (f64, f64, f64, f64),
     bounds: (f64, f64),
 ) {
@@ -157,7 +166,7 @@ pub(super) fn push_menu_popover(
         return;
     };
     let natural = content_height(&nodes);
-    let viewport = natural.min(menu_viewport_cap(snapshot));
+    let viewport = natural.min(menu_viewport_cap(snapshot, plan));
     let max_scroll = (natural - viewport).max(0.0);
     let scroll = if max_scroll > 0.0 {
         snapshot.top_popover_scroll.clamp(0.0, max_scroll)
