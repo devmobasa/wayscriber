@@ -20,11 +20,12 @@ impl InputState {
                     self.text_input_mode = TextInputMode::Plain;
                     self.text_edit_target = None;
                     self.text_wrap_width = None;
-                    self.state = DrawingState::TextInput {
-                        x: (self.screen_width / 2) as i32,
-                        y: (self.screen_height / 2) as i32,
-                        buffer: String::new(),
-                    };
+                    self.begin_text_input_session();
+                    self.state = DrawingState::text_input(
+                        (self.screen_width / 2) as i32,
+                        (self.screen_height / 2) as i32,
+                        String::new(),
+                    );
                     self.last_text_preview_bounds = None;
                     self.update_text_preview_dirty();
                     self.needs_redraw = true;
@@ -36,11 +37,12 @@ impl InputState {
                     self.text_input_mode = TextInputMode::StickyNote;
                     self.text_edit_target = None;
                     self.text_wrap_width = None;
-                    self.state = DrawingState::TextInput {
-                        x: (self.screen_width / 2) as i32,
-                        y: (self.screen_height / 2) as i32,
-                        buffer: String::new(),
-                    };
+                    self.begin_text_input_session();
+                    self.state = DrawingState::text_input(
+                        (self.screen_width / 2) as i32,
+                        (self.screen_height / 2) as i32,
+                        String::new(),
+                    );
                     self.last_text_preview_bounds = None;
                     self.update_text_preview_dirty();
                     self.needs_redraw = true;

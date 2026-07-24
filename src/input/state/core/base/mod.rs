@@ -19,7 +19,8 @@ pub(crate) use types::{
     DelayedHistory, HistoryMode, PasteAnchor, PendingBackendAction, PendingBoardDelete,
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PolygonClickState, PresetFeedbackState,
-    SelectionPublishState, TextClickState, TextEditEntryFeedback, ToastPress,
+    SelectionPublishState, TextBlockDrag, TextClickState, TextClipboardRequest, TextCutTarget,
+    TextEditEntryFeedback, TextPasteEdit, TextPasteTarget, ToastPress,
     WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};

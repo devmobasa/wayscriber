@@ -170,8 +170,15 @@ impl InputState {
 
     /// Cancels the current text input session and restores any edited shape.
     pub(crate) fn cancel_text_input(&mut self) {
-        self.ime = crate::input::state::ImeCompositionState::default();
         self.cancel_text_edit();
+        self.end_text_input_session();
+    }
+
+    /// Tears down the transient editor state shared by every text-input exit.
+    pub(crate) fn end_text_input_session(&mut self) {
+        self.ime = crate::input::state::ImeCompositionState::default();
+        self.pending_text_paste.clear();
+        self.end_pointer_drag();
         self.clear_text_preview_dirty();
         self.last_text_preview_bounds = None;
         self.text_wrap_width = None;
@@ -193,6 +200,8 @@ impl InputState {
 
     /// Cancels any in-progress interaction without exiting the application.
     pub(crate) fn cancel_active_interaction(&mut self) {
+        // A canceled interaction never leaves a dangling block-move drag.
+        self.text_block_drag = None;
         match &self.state {
             DrawingState::TextInput { .. } => {
                 self.cancel_text_input();
@@ -330,11 +339,7 @@ mod tests {
     fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
         let mut state = make_test_input_state();
         state.text_wrap_width = Some(240);
-        state.state = DrawingState::TextInput {
-            x: 10,
-            y: 20,
-            buffer: "hello".to_string(),
-        };
+        state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.needs_redraw = false;
 
         state.cancel_text_input();
@@ -342,6 +347,21 @@ mod tests {
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(state.text_wrap_width.is_none());
         assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn cancel_text_input_releases_an_active_block_drag() {
+        let mut state = make_test_input_state();
+        state.state = DrawingState::text_input(10, 20, "hello".to_string());
+        state.modifiers.alt = true;
+        state.on_mouse_press_with_canvas(MouseButton::Left, 12, 20, 12, 20);
+        assert!(state.text_block_drag_active());
+        assert!(state.has_active_pointer_interaction());
+
+        state.cancel_text_input();
+
+        assert!(!state.text_block_drag_active());
+        assert!(!state.has_active_pointer_interaction());
     }
 
     #[test]

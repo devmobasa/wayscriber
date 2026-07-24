@@ -130,9 +130,16 @@ impl InputState {
                 self.state = other_state;
             }
         }
+        // An Alt+drag block move keeps us in TextInput; end that drag explicitly
+        // since the Idle-based cleanup below only fires for interactions that
+        // return to Idle. `end_pointer_drag` clears the block-drag flag itself.
+        let ended_block_drag = self.text_block_drag.is_some();
         if matches!(self.state, DrawingState::Idle) {
             self.end_pointer_drag();
             self.sync_current_settings_from_active_tool();
+        } else if ended_block_drag {
+            self.end_pointer_drag();
+            self.needs_redraw = true;
         }
     }
 }

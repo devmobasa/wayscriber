@@ -183,15 +183,19 @@ impl InputState {
             return;
         }
 
+        // A left click in text mode positions the caret (Shift extends the
+        // selection) via glyph hit-testing, rather than relocating the block.
+        // Holding Alt turns the drag into a move of the whole block, which frees
+        // plain-drag for text selection later.
+        if button == MouseButton::Left
+            && self.handle_text_input_left_press(coords.canvas_x, coords.canvas_y, color)
+        {
+            return;
+        }
+
         match &mut self.state {
             DrawingState::Idle => {
                 self.handle_idle_tool_click(button, tool, color, coords.canvas_x, coords.canvas_y)
-            }
-            DrawingState::TextInput { x: tx, y: ty, .. } if button == MouseButton::Left => {
-                *tx = coords.canvas_x;
-                *ty = coords.canvas_y;
-                self.update_text_preview_dirty();
-                self.needs_redraw = true;
             }
             DrawingState::BuildingPolygon { .. } if button == MouseButton::Left => {
                 self.handle_building_polygon_left_click(coords.canvas_x, coords.canvas_y);
@@ -204,6 +208,143 @@ impl InputState {
             | DrawingState::PendingTextClick { .. }
             | DrawingState::ResizingText { .. }
             | DrawingState::ResizingSelection { .. } => {}
+        }
+    }
+
+    /// Apply the editor-owned meaning of a left press independently of drawing
+    /// tool bindings: click positions/extends the caret, Alt+drag moves the
+    /// block. Returns whether an active text editor consumed the press.
+    pub(in crate::input::state) fn handle_text_input_left_press(
+        &mut self,
+        canvas_x: i32,
+        canvas_y: i32,
+        color: Option<crate::draw::Color>,
+    ) -> bool {
+        if !matches!(self.state, DrawingState::TextInput { .. }) {
+            return false;
+        }
+        if self.modifiers.alt {
+            self.begin_text_block_drag(canvas_x, canvas_y, color);
+        } else if !self.modifiers.shift
+            && self.text_edit_target.is_none()
+            && matches!(&self.state, DrawingState::TextInput { buffer, .. } if buffer.is_empty())
+        {
+            // A newly selected text tool is seeded at the screen center so its
+            // caret can render immediately. Preserve the established first
+            // click workflow by moving that still-empty draft to the click;
+            // existing shapes and populated drafts use caret hit-testing.
+            if let DrawingState::TextInput {
+                x,
+                y,
+                caret,
+                selection_anchor,
+                ..
+            } = &mut self.state
+            {
+                *x = canvas_x;
+                *y = canvas_y;
+                *caret = 0;
+                *selection_anchor = None;
+            }
+            self.needs_redraw = true;
+            self.update_text_preview_dirty_from_editor();
+        } else {
+            self.place_text_caret_at_canvas(canvas_x, canvas_y, self.modifiers.shift);
+        }
+        true
+    }
+
+    /// Position the text caret from a canvas-space click by hit-testing the
+    /// rendered glyphs. With `extend` (Shift held), grows the selection from
+    /// the current caret instead of collapsing it. Both plain text and sticky
+    /// notes render their glyph run at the stored `(x, y)` baseline origin, so
+    /// one formula covers both. Active IME composition is hit-tested against
+    /// the same effective preview as rendering, then mapped back to committed
+    /// buffer coordinates.
+    fn place_text_caret_at_canvas(&mut self, canvas_x: i32, canvas_y: i32, extend: bool) {
+        let offset = {
+            let DrawingState::TextInput { x, y, .. } = &self.state else {
+                return;
+            };
+            let cursor_glyph = if self.text_edit_target.is_some() {
+                "|"
+            } else {
+                "_"
+            };
+            let Some(preview) = self.text_input_preview(cursor_glyph) else {
+                return;
+            };
+            let font = self.font_descriptor.to_pango_string(self.current_font_size);
+            let Some(preview_offset) = crate::draw::shape::hit_test_text(
+                &preview.text,
+                &font,
+                self.text_wrap_width,
+                (canvas_x - *x) as f64,
+                (canvas_y - *y) as f64,
+            ) else {
+                return;
+            };
+            preview.buffer_offset_for_preview_offset(preview_offset)
+        };
+
+        if let DrawingState::TextInput {
+            caret,
+            selection_anchor,
+            ..
+        } = &mut self.state
+        {
+            if extend {
+                if selection_anchor.is_none() {
+                    *selection_anchor = Some(*caret);
+                }
+            } else {
+                *selection_anchor = None;
+            }
+            *caret = offset;
+            self.needs_redraw = true;
+            self.update_text_preview_dirty_from_editor();
+        }
+    }
+
+    /// Begin an Alt+left-drag that moves the whole active text block. Records
+    /// the grab offset so the block tracks the cursor exactly under the grabbed
+    /// point, and arms the pointer drag so motion/release route back here.
+    fn begin_text_block_drag(
+        &mut self,
+        canvas_x: i32,
+        canvas_y: i32,
+        color: Option<crate::draw::Color>,
+    ) {
+        let DrawingState::TextInput { x, y, .. } = &self.state else {
+            return;
+        };
+        let drag = crate::input::state::core::TextBlockDrag {
+            grab_dx: canvas_x - *x,
+            grab_dy: canvas_y - *y,
+        };
+        self.text_block_drag = Some(drag);
+        self.begin_pointer_drag(MouseButton::Left, color);
+        self.needs_redraw = true;
+    }
+
+    /// Whether an Alt+drag block move is in progress. The motion and release
+    /// routers use this to keep the (otherwise passive) `TextInput` state
+    /// draggable while the flag is set.
+    pub(in crate::input::state) fn text_block_drag_active(&self) -> bool {
+        self.text_block_drag.is_some()
+    }
+
+    /// Update the active text block's origin from a canvas-space pointer during
+    /// an Alt+drag, preserving the grab offset. No-op when not dragging.
+    pub(in crate::input::state) fn drag_text_block_to(&mut self, canvas_x: i32, canvas_y: i32) {
+        let Some(drag) = self.text_block_drag else {
+            return;
+        };
+        if let DrawingState::TextInput { x, y, .. } = &mut self.state {
+            *x = canvas_x - drag.grab_dx;
+            *y = canvas_y - drag.grab_dy;
+            self.update_text_preview_dirty();
+            self.needs_redraw = true;
         }
     }
 

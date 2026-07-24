@@ -39,6 +39,8 @@ impl SeatHandler for WaylandState {
                 self.text_input_enabled = false;
                 self.text_input_serial = 0;
                 self.text_input_cursor_update_pending = false;
+                self.text_input_external_change_pending = false;
+                self.text_input_cursor_update_blocked_until = None;
                 debug!("text-input-v3 object created for seat");
             }
         }
@@ -137,7 +139,11 @@ impl WaylandState {
         self.text_input_enabled = false;
         self.text_input_serial = 0;
         self.text_input_cursor_update_pending = false;
+        self.text_input_external_change_pending = false;
+        self.text_input_cursor_update_blocked_until = None;
         self.input_state.ime_clear();
+        self.input_state.take_text_input_cursor_rect_dirty();
+        self.input_state.take_text_input_external_change_dirty();
 
         let fallback = self.seat_state.seats().find(|seat| {
             seat != removed_seat

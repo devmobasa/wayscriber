@@ -225,11 +225,7 @@ fn duplicate_board_cancels_text_input_through_lifecycle_transition() {
     state.switch_board(BOARD_ID_WHITEBOARD);
     let initial_count = state.boards.board_count();
     state.text_wrap_width = Some(240);
-    state.state = DrawingState::TextInput {
-        x: 10,
-        y: 20,
-        buffer: "draft".to_string(),
-    };
+    state.state = DrawingState::text_input(10, 20, "draft".to_string());
     state.needs_redraw = false;
 
     state.duplicate_board();

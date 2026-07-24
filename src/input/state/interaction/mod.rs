@@ -62,11 +62,7 @@ mod tests {
             Some(ActiveInteractionKind::Drawing)
         );
 
-        state.state = crate::input::state::DrawingState::TextInput {
-            x: 1,
-            y: 2,
-            buffer: String::new(),
-        };
+        state.state = crate::input::state::DrawingState::text_input(1, 2, String::new());
         assert_eq!(
             active_interaction_kind(&state),
             Some(ActiveInteractionKind::TextInput)

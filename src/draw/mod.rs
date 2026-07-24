@@ -23,12 +23,13 @@ pub use font::FontDescriptor;
 pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
+pub(crate) use render::render_sticky_note_preview;
 #[allow(unused_imports)]
 pub use render::{
     BlurRectParams, EraserReplayContext, render_blur_rect, render_board_background,
     render_click_highlight, render_freehand_borrowed, render_marker_stroke_borrowed,
     render_selection_halo, render_selection_handles, render_shape, render_sticky_note, render_text,
-    selection_handle_rects,
+    selection_handle_rects, sticky_note_foreground, text_outline_color,
 };
 #[allow(unused_imports)]
 pub use shape::{

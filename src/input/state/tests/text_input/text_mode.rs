@@ -5,11 +5,7 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
     let mut state = create_test_input_state();
 
     // Enter text mode
-    state.state = DrawingState::TextInput {
-        x: 100,
-        y: 100,
-        buffer: String::new(),
-    };
+    state.state = DrawingState::text_input(100, 100, String::new());
 
     // Type 'r' - should add to buffer, not change color
     let original_color = state.current_color;
@@ -44,11 +40,7 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
 fn test_text_mode_allows_symbol_keys_without_modifiers() {
     let mut state = create_test_input_state();
 
-    state.state = DrawingState::TextInput {
-        x: 0,
-        y: 0,
-        buffer: String::new(),
-    };
+    state.state = DrawingState::text_input(0, 0, String::new());
 
     for key in ['-', '+', '=', '_', '!', '@', '#', '$'] {
         state.on_key_press(Key::Char(key));
@@ -66,11 +58,7 @@ fn test_text_mode_ctrl_keys_trigger_actions() {
     let mut state = create_test_input_state();
 
     // Enter text mode
-    state.state = DrawingState::TextInput {
-        x: 100,
-        y: 100,
-        buffer: String::from("test"),
-    };
+    state.state = DrawingState::text_input(100, 100, String::from("test"));
 
     // Press Ctrl (modifier)
     state.on_key_press(Key::Ctrl);
@@ -99,11 +87,7 @@ fn test_text_mode_ctrl_keys_trigger_actions() {
 fn test_text_mode_respects_length_cap() {
     let mut state = create_test_input_state();
 
-    state.state = DrawingState::TextInput {
-        x: 0,
-        y: 0,
-        buffer: "a".repeat(10_000),
-    };
+    state.state = DrawingState::text_input(0, 0, "a".repeat(10_000));
 
     state.on_key_press(Key::Char('b'));
 
@@ -132,11 +116,7 @@ fn test_text_mode_escape_exits() {
     let mut state = create_test_input_state();
 
     // Enter text mode
-    state.state = DrawingState::TextInput {
-        x: 100,
-        y: 100,
-        buffer: String::from("test"),
-    };
+    state.state = DrawingState::text_input(100, 100, String::from("test"));
 
     // Press Escape (should cancel text input)
     state.on_key_press(Key::Escape);
@@ -151,11 +131,7 @@ fn test_text_mode_f10_shows_help() {
     let mut state = create_test_input_state();
 
     // Enter text mode
-    state.state = DrawingState::TextInput {
-        x: 100,
-        y: 100,
-        buffer: String::new(),
-    };
+    state.state = DrawingState::text_input(100, 100, String::new());
 
     assert!(!state.show_help);
 

@@ -44,6 +44,8 @@ schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 flate2 = "1.0"
 zune-jpeg = "0.5"
+# Grapheme/word segmentation for the text-editor caret and selection.
+unicode-segmentation = "1"
 
 # Daemon mode
 ksni = { version = "0.3", optional = true }

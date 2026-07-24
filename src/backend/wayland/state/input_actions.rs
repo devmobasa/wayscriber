@@ -73,6 +73,12 @@ impl WaylandState {
         if let Some(target) = self.input_state.take_pending_paste_hex_request() {
             self.handle_paste_hex_color(target);
         }
+        while let Some(request) = self.input_state.take_pending_text_copy() {
+            self.handle_copy_text(request);
+        }
+        while let Some(target) = self.input_state.take_pending_text_paste() {
+            self.handle_paste_text(target);
+        }
         self.drain_clipboard_requests();
     }
 
