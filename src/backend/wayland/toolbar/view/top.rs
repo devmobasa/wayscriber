@@ -250,11 +250,12 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.top_minimized || snapshot.top_micro_active() {
         return 0.0;
     }
-    build::shape_popover_height(snapshot)
-        + build::ring_row_height(snapshot)
-        + build::style_pill_height(snapshot)
-        + build::overflow_height(snapshot)
-        + menus::menu_popover_height(snapshot)
+    let plan = plan_top_strip(snapshot);
+    build::shape_popover_height_planned(snapshot, &plan)
+        + build::ring_row_height_planned(snapshot, &plan)
+        + build::style_pill_height_planned(snapshot, &plan)
+        + build::overflow_height_planned(snapshot, &plan)
+        + menus::menu_popover_height_planned(snapshot, &plan)
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
@@ -262,7 +263,8 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
 /// while no menu popover is open. The wheel path scrolls against these the
 /// way `side_scroll_bounds` served the retired side palette.
 pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
-    menus::menu_scroll_bounds(snapshot)
+    let plan = plan_top_strip(snapshot);
+    menus::menu_scroll_bounds_planned(snapshot, &plan)
 }
 
 /// Natural width of the strip: the left-to-right content walk plus the

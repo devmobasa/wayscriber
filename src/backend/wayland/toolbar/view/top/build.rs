@@ -18,8 +18,8 @@ use super::super::tree::WidgetTree;
 use super::{
     MINI_LABEL_FONT_SIZE, TOP_CHIP_SIZE, TOP_COMPACT_CHROME, TOP_COMPACT_GAP,
     TOP_COMPACT_MARGIN_RIGHT, TOP_DIVIDER_SPAN, TOP_LABEL_FONT_SIZE, TOP_SWATCH_GAP,
-    TOP_SWATCH_SIZE, TopStripPlan, bar_band_height, base_bar_height, plan_top_strip,
-    planned_button_size, planned_gap, planned_island_metrics, planned_use_icons,
+    TOP_SWATCH_SIZE, TopStripPlan, bar_band_height, base_bar_height, planned_button_size,
+    planned_gap, planned_island_metrics, planned_use_icons,
 };
 
 pub(super) fn build_top_view_planned(
@@ -384,7 +384,7 @@ pub(super) fn build_top_view_planned(
     // --- Canvas/Session/Settings popovers: the re-hosted side panes ----------
     if let Some(anchor) = overflow_anchor {
         let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
-        super::menus::push_menu_popover(&mut tree, snapshot, popover_anchor, (width, height));
+        super::menus::push_menu_popover(&mut tree, snapshot, plan, popover_anchor, (width, height));
     }
 
     tree
@@ -554,14 +554,13 @@ fn push_option_row(
     }
 }
 
-pub(super) fn shape_popover_height(snapshot: &ToolbarSnapshot) -> f64 {
+pub(super) fn shape_popover_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
     if !snapshot.shape_picker_open || !model::TopToolbarSpec::shape_picker_visible(snapshot) {
         return 0.0;
     }
-    let plan = plan_top_strip(snapshot);
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    let (_, btn_h) = planned_button_size(snapshot, &plan);
-    let gap = planned_gap(&plan);
+    let (_, btn_h) = planned_button_size(snapshot, plan);
+    let gap = planned_gap(plan);
     let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
     let rows = model::visible_shape_picker_rows(snapshot, is_simple);
     let option_rows = shape_option_rows(snapshot);
@@ -896,11 +895,6 @@ pub(super) fn base_band_height(snapshot: &ToolbarSnapshot) -> f64 {
     }
 }
 
-pub(super) fn style_pill_height(snapshot: &ToolbarSnapshot) -> f64 {
-    let plan = plan_top_strip(snapshot);
-    style_pill_height_planned(snapshot, &plan)
-}
-
 pub(super) fn style_pill_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
     if !model::StylePillSpec::visible(snapshot, plan) {
         return 0.0;
@@ -910,11 +904,6 @@ pub(super) fn style_pill_height_planned(snapshot: &ToolbarSnapshot, plan: &TopSt
 
 /// The highlight ring row grows the bar only while the highlight tool is
 /// active — the lane is no longer permanently reserved.
-pub(super) fn ring_row_height(snapshot: &ToolbarSnapshot) -> f64 {
-    let plan = plan_top_strip(snapshot);
-    ring_row_height_planned(snapshot, &plan)
-}
-
 pub(super) fn ring_row_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
     if !model::TopToolbarSpec::contextual_highlight_ring_visible(snapshot, plan) {
         return 0.0;
@@ -951,19 +940,18 @@ fn popover_anchor_below_ring(
     (anchor.0, bottom - anchor.3, anchor.2, anchor.3)
 }
 
-pub(super) fn overflow_height(snapshot: &ToolbarSnapshot) -> f64 {
+pub(super) fn overflow_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
     if !snapshot.top_overflow_open {
         return 0.0;
     }
-    let plan = plan_top_strip(snapshot);
-    let dropped_count = model::TopToolbarSpec::overflow_control_count(snapshot, &plan);
+    let dropped_count = model::TopToolbarSpec::overflow_control_count(snapshot, plan);
     if dropped_count == 0 {
         return 0.0;
     }
-    let (_, btn_h) = planned_button_size(snapshot, &plan);
+    let (_, btn_h) = planned_button_size(snapshot, plan);
     let cols = dropped_count.min(5);
     let rows = dropped_count.div_ceil(cols) as f64;
-    rows * btn_h + (rows - 1.0) * planned_gap(&plan) + 8.0 * 2.0 + 6.0 + 4.0
+    rows * btn_h + (rows - 1.0) * planned_gap(plan) + 8.0 * 2.0 + 6.0 + 4.0
 }
 
 fn tool_button_node(

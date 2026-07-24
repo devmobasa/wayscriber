@@ -1993,12 +1993,30 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     );
 
     let mut settings_snapshot = regular.clone();
+    settings_snapshot.layout_mode = ToolbarLayoutMode::Advanced;
     settings_snapshot.settings_popover_open = true;
+    settings_snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+        path: "/home/user/.local/share/wayscriber/runtime-ui.toml".into(),
+        mode: RuntimeUiPersistenceMode::Supported,
+        detail: None,
+        recovery_artifacts: Vec::new(),
+    });
     let settings_model =
         model::ToolbarSettingsModel::for_popover(&settings_snapshot).expect("settings model");
     let settings_content = menu_top.build_settings_popover_content(&settings_snapshot, 1.0);
+    let settings_scroller = settings_content
+        .clone()
+        .downcast::<gtk4::ScrolledWindow>()
+        .expect("settings popover scroll viewport");
     let settings_panel = find_widget_named(&settings_content, "top.menu.settings.panel")
         .expect("settings popover panel box");
+    let (_, settings_natural_height, _, _) =
+        settings_panel.measure(gtk4::Orientation::Vertical, -1);
+    assert!(
+        settings_natural_height <= settings_scroller.max_content_height(),
+        "Advanced settings runtime footer should fit without clipping: natural={settings_natural_height}, cap={}",
+        settings_scroller.max_content_height()
+    );
 
     // Toggle parity: one check button per pane toggle, same order/state.
     let mut checks: Vec<gtk4::CheckButton> = Vec::new();
