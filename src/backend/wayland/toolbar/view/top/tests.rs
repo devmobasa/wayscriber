@@ -1263,6 +1263,7 @@ fn canvas_popover_step_section_carries_toggles_steppers_and_delay_sliders() {
 fn canvas_popover_scrolls_when_all_sections_exceed_the_viewport() {
     let mut snapshot = snapshot();
     snapshot.canvas_popover_open = true;
+    snapshot.top_available_height = Some(360.0);
     snapshot.show_boards_section = true;
     snapshot.show_pages_section = true;
     snapshot.show_zoom_actions = true;
@@ -1588,9 +1589,14 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
     let mut snapshot = snapshot();
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
-    // The Top controls group lists enough rows to exceed the cap.
     snapshot.customize_items_group =
         Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    // An explicitly short output exercises internal scrolling independently
+    // of how much content fits under the normal-screen fallback cap.
+    snapshot.top_available_height = Some(360.0);
+
+    let (natural, viewport) = top_popover_scroll_bounds(&snapshot).expect("settings scroll bounds");
+    assert!(natural > viewport, "short output must cap tall content");
 
     let (w, h) = top_size(&snapshot);
     let tree = build_top_view(&snapshot, w as f64, h as f64);
@@ -1598,7 +1604,7 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
         .node_by_id(&"top.menu.settings.panel".into())
         .expect("settings popover panel");
     assert!(
-        panel.rect.3 <= super::menus::MENU_MAX_CONTENT_H + 2.0 * 10.0 + 1e-9,
+        panel.rect.3 <= viewport + 2.0 * 10.0 + 1e-9,
         "panel height capped: {}",
         panel.rect.3
     );
@@ -1667,7 +1673,7 @@ fn tall_content_fills_a_tall_screen_without_scrolling() {
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
     snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::SideSections);
 
     // Without a known output height, the fixed fallback cap still scrolls.
     let (natural, capped) =
@@ -1772,16 +1778,12 @@ fn top_popover_scroll_bounds_serve_the_wheel_path() {
     snapshot.customize_items_open = true;
     snapshot.customize_items_group =
         Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
+    snapshot.top_available_height = Some(360.0);
     let (natural, viewport) =
         top_popover_scroll_bounds(&snapshot).expect("bounds while the settings popover is open");
-    assert_eq!(
-        viewport,
-        super::menus::MENU_MAX_CONTENT_H,
-        "tall content caps at the viewport"
-    );
     assert!(
         natural > viewport,
-        "the Top-controls list overflows the cap"
+        "the Top-controls list overflows a short-screen viewport"
     );
 
     // The wheel bounds and the scrollbar the tree builds agree on the exact

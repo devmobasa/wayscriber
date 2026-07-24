@@ -606,9 +606,10 @@ pub mod toolbar {
     /// the GTK canvas popover sizes its viewport from it, so they cannot drift.
     pub const CANVAS_MENU_CONTENT_W: f64 = 292.0;
     /// Cap on the Session/Settings popover's visible content height, in
-    /// spec units; taller content scrolls internally. Shared by the builtin
-    /// scroll viewport and the GTK `ScrolledWindow` max content height.
-    pub const MENU_MAX_CONTENT_H: f64 = 420.0;
+    /// spec units. This fits the default Advanced settings controls and
+    /// runtime-state footer; taller content still scrolls internally. Shared
+    /// by the builtin scroll viewport and the GTK `ScrolledWindow` cap.
+    pub const MENU_MAX_CONTENT_H: f64 = 500.0;
     /// Checkbox indicator square size
     pub const CHECKBOX_SIZE: f64 = 14.0;
     /// Boxed shortcut badge font size
