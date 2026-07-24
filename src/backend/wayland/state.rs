@@ -38,6 +38,9 @@ use wayland_protocols::wp::{
         zwp_locked_pointer_v1::ZwpLockedPointerV1, zwp_pointer_constraints_v1,
     },
     relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
+    text_input::zv3::client::{
+        zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
+    },
 };
 
 #[cfg(feature = "tablet-input")]
@@ -58,7 +61,7 @@ use crate::{
     },
     config::{Action, Config},
     input::state::ClipboardPasteRequest,
-    input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
+    input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
@@ -160,6 +163,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub main_surface_uses_overlay_layer: bool,
     pub pending_freeze_on_start: bool,
     pub screencopy_manager: Option<ScreencopyManager>,
+    pub text_input_manager: Option<ZwpTextInputManagerV3>,
     #[cfg(feature = "tablet-input")]
     pub tablet_manager: Option<ZwpTabletManagerV2>,
 }
@@ -232,6 +236,27 @@ pub(super) struct WaylandState {
     pub(super) current_pointer_shape: Option<CursorIcon>,
     pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
     pub(super) cursor_hidden: bool,
+
+    // Manual key repeat. The keyboard is created without sctk's calloop-based
+    // repeat (this loop is a manual poll), so `repeat_key` never fires; this
+    // synthesizes repeats for the held key from the event loop instead.
+    pub(super) key_repeat_key: Option<Key>,
+    pub(super) key_repeat_next_tick: Option<Instant>,
+
+    // IME / text-input-v3. The manager is bound at startup; one seat-bound
+    // `text_input` object is created for the first keyboard seat.
+    // `focused` tracks compositor text-input focus (Enter/Leave); `enabled`
+    // tracks whether we have an active enable() outstanding; `serial` counts
+    // our commit() calls to match against Done events.
+    pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
+    pub(super) text_input: Option<ZwpTextInputV3>,
+    pub(super) text_input_seat: Option<wl_seat::WlSeat>,
+    pub(super) text_input_focused: bool,
+    pub(super) text_input_enabled: bool,
+    pub(super) text_input_serial: u32,
+    /// A visible editor change received against a stale `done` serial. The
+    /// resulting cursor rectangle must be published after a matching `done`.
+    pub(super) text_input_cursor_update_pending: bool,
 
     // Tablet / stylus (feature-gated)
     #[cfg(feature = "tablet-input")]

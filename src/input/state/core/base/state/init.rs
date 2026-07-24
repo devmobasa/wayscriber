@@ -253,6 +253,7 @@ impl InputState {
             last_board_picker_click: None,
             text_edit_target: None,
             text_edit_entry_feedback: None,
+            ime: crate::input::state::ImeCompositionState::default(),
             pending_history: None,
             context_menu_layout: None,
             board_picker_layout: None,

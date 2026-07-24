@@ -192,6 +192,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         main_surface_uses_overlay_layer: output_prefs.main_surface_uses_overlay_layer,
         pending_freeze_on_start: freeze_on_start,
         screencopy_manager: setup.screencopy_manager,
+        text_input_manager: setup.text_input_manager,
         #[cfg(feature = "tablet-input")]
         tablet_manager,
     });

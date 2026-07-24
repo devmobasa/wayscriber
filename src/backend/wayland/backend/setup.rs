@@ -14,6 +14,7 @@ use smithay_client_toolkit::{
     shm::Shm,
 };
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
@@ -33,6 +34,7 @@ pub(super) struct WaylandSetup {
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
     pub(super) state_globals: WaylandGlobals,
     pub(super) screencopy_manager: Option<ZwlrScreencopyManagerV1>,
+    pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
     pub(super) layer_shell_available: bool,
 }
 
@@ -133,6 +135,23 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         }
     };
 
+    // IME / text-input-v3 for the text and sticky-note tools. Optional: when
+    // the compositor lacks it, editing falls back to the raw keysym path
+    // (single-key characters only).
+    let text_input_manager = match globals.bind::<ZwpTextInputManagerV3, _, _>(&qh, 1..=1, ()) {
+        Ok(manager) => {
+            debug!("Bound zwp_text_input_manager_v3");
+            Some(manager)
+        }
+        Err(err) => {
+            debug!(
+                "zwp_text_input_manager_v3 not available; IME disabled: {}",
+                err
+            );
+            None
+        }
+    };
+
     let layer_shell_available = layer_shell.is_some();
 
     let state_globals = WaylandGlobals {
@@ -156,6 +175,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         qh,
         state_globals,
         screencopy_manager,
+        text_input_manager,
         layer_shell_available,
     })
 }

@@ -27,6 +27,20 @@ impl SeatHandler for WaylandState {
             if self.seat_state.get_keyboard(qh, &seat, None).is_ok() {
                 debug!("Keyboard initialized");
             }
+            // IME: create the single supported text-input object alongside the
+            // first physical keyboard seat. Driven by enable()/disable()
+            // reconcile; see the explicit single-seat scope in text_input.rs.
+            if self.text_input.is_none()
+                && let Some(manager) = &self.text_input_manager
+            {
+                self.text_input = Some(manager.get_text_input(&seat, qh, ()));
+                self.text_input_seat = Some(seat.clone());
+                self.text_input_focused = false;
+                self.text_input_enabled = false;
+                self.text_input_serial = 0;
+                self.text_input_cursor_update_pending = false;
+                debug!("text-input-v3 object created for seat");
+            }
         }
 
         if capability == Capability::Pointer {
@@ -79,12 +93,13 @@ impl SeatHandler for WaylandState {
     fn remove_capability(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _seat: wl_seat::WlSeat,
+        qh: &QueueHandle<Self>,
+        seat: wl_seat::WlSeat,
         capability: Capability,
     ) {
         if capability == Capability::Keyboard {
             info!("Keyboard capability removed");
+            self.remove_owned_text_input(&seat, qh);
         }
         if capability == Capability::Pointer {
             info!("Pointer capability removed");
@@ -99,7 +114,42 @@ impl SeatHandler for WaylandState {
         }
     }
 
-    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: wl_seat::WlSeat) {
+    fn remove_seat(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
+        self.remove_owned_text_input(&seat, qh);
         debug!("Seat removed");
+    }
+}
+
+impl WaylandState {
+    /// Retire the singleton only when its owning seat disappears, then fail
+    /// over to another physical-keyboard seat if one is already advertised.
+    /// Every new protocol object starts its own commit serial at zero.
+    fn remove_owned_text_input(&mut self, removed_seat: &wl_seat::WlSeat, qh: &QueueHandle<Self>) {
+        if self.text_input_seat.as_ref() != Some(removed_seat) {
+            return;
+        }
+
+        if let Some(ti) = self.text_input.take() {
+            ti.destroy();
+        }
+        self.text_input_seat = None;
+        self.text_input_focused = false;
+        self.text_input_enabled = false;
+        self.text_input_serial = 0;
+        self.text_input_cursor_update_pending = false;
+        self.input_state.ime_clear();
+
+        let fallback = self.seat_state.seats().find(|seat| {
+            seat != removed_seat
+                && self
+                    .seat_state
+                    .info(seat)
+                    .is_some_and(|info| info.has_keyboard)
+        });
+        if let (Some(seat), Some(manager)) = (fallback, &self.text_input_manager) {
+            self.text_input = Some(manager.get_text_input(&seat, qh, ()));
+            self.text_input_seat = Some(seat);
+            debug!("text-input-v3 object failed over to another keyboard seat");
+        }
     }
 }

@@ -54,6 +54,9 @@ impl InputState {
 
         // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
         if matches!(key, Key::Return) && !self.modifiers.shift {
+            // The edit is ending: any in-progress composition is dropped (the
+            // backend also disables the text-input, which discards preedit).
+            self.ime = crate::input::state::ImeCompositionState::default();
             let (x, y, text) = if let DrawingState::TextInput { x, y, buffer } = &self.state {
                 (*x, *y, buffer.clone())
             } else {
@@ -172,7 +175,7 @@ impl InputState {
         }
     }
 
-    fn push_text_char(buffer: &mut String, ch: char) -> bool {
+    pub(in crate::input::state) fn push_text_char(buffer: &mut String, ch: char) -> bool {
         let additional = ch.len_utf8();
         if buffer.len() + additional <= MAX_TEXT_LENGTH {
             buffer.push(ch);

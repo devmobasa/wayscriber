@@ -170,6 +170,7 @@ impl InputState {
 
     /// Cancels the current text input session and restores any edited shape.
     pub(crate) fn cancel_text_input(&mut self) {
+        self.ime = crate::input::state::ImeCompositionState::default();
         self.cancel_text_edit();
         self.clear_text_preview_dirty();
         self.last_text_preview_bounds = None;

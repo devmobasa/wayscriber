@@ -3,7 +3,7 @@ mod translate;
 
 use log::{debug, warn};
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, KeyboardHandler, Modifiers, RawModifiers};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use wayland_client::{
     Connection, QueueHandle,
     protocol::{wl_keyboard, wl_surface},
@@ -63,6 +63,7 @@ impl KeyboardHandler for WaylandState {
         // focus loss.
         self.input_state.reset_modifiers();
         self.input_state.clear_command_palette_repeat();
+        self.clear_key_repeat();
         self.set_board_pan_key_held(false);
         self.stop_board_pan();
 
@@ -107,6 +108,9 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        // Any fresh key press ends the previous auto-repeat; a repeatable one
+        // re-arms it at the end of this handler.
+        self.clear_key_repeat();
         if self.input_state.eyedropper_is_engaged() {
             if matches!(key, Key::Escape)
                 || self.input_state.action_for_key(key) == Some(Action::PickScreenColor)
@@ -169,9 +173,8 @@ impl KeyboardHandler for WaylandState {
             }
         }
         debug!("Key pressed: {:?}", key);
-        let modal_capture = self.input_state.command_palette_is_engaged()
-            || self.input_state.is_color_picker_popup_open()
-            || self.input_state.is_precision_entry_open();
+        let modal_capture = self.input_state.modal_owns_text_input();
+        let modal_blocks_repeat = self.input_state.modal_blocks_canvas_key_repeat();
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
@@ -179,6 +182,15 @@ impl KeyboardHandler for WaylandState {
         }
 
         self.apply_input_key(key);
+
+        // Arm auto-repeat for editing/navigation keys that reached normal
+        // dispatch. Some dedicated entry modals manage or intentionally block
+        // repeat themselves; other routed overlays (for example Help search)
+        // still use this timer even though they disable the canvas IME.
+        if !modal_blocks_repeat && Self::is_repeatable_key(key) && self.has_keyboard_focus() {
+            self.key_repeat_key = Some(key);
+            self.key_repeat_next_tick = Some(Instant::now() + Self::KEY_REPEAT_INITIAL_DELAY);
+        }
     }
 
     fn release_key(
@@ -191,6 +203,10 @@ impl KeyboardHandler for WaylandState {
     ) {
         let key = keysym_to_key(event.keysym);
         debug!("Key released: {:?}", key);
+        // Stop auto-repeat once the held key comes up.
+        if self.key_repeat_key == Some(key) {
+            self.clear_key_repeat();
+        }
         if self.input_state.eyedropper_is_engaged() {
             return;
         }
@@ -230,11 +246,99 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
         event: KeyEvent,
     ) {
-        // Block keybinds until overlay is fully ready
+        // sctk only calls this with a calloop-driven repeat keyboard, which
+        // this manual poll loop does not use; the loop's `tick_key_repeat`
+        // drives repeats through the same path instead. Kept for parity.
+        self.dispatch_key_repeat(keysym_to_key(event.keysym), conn, qh);
+    }
+}
+
+/// Delay before a held key begins repeating.
+const KEY_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(400);
+/// Interval between repeats once repeating (≈25/s).
+const KEY_REPEAT_INTERVAL: Duration = Duration::from_millis(40);
+
+impl WaylandState {
+    pub(in crate::backend::wayland) const KEY_REPEAT_INITIAL_DELAY: Duration =
+        KEY_REPEAT_INITIAL_DELAY;
+
+    /// Keys that auto-repeat while held: text entry, deletion, and
+    /// navigation. Action/toggle keys (Return, Escape, Tab, F-keys) are left
+    /// out so holding them never spams their one-shot effect.
+    fn is_repeatable_key(key: Key) -> bool {
+        matches!(
+            key,
+            Key::Char(_)
+                | Key::Backspace
+                | Key::Delete
+                | Key::Space
+                | Key::Left
+                | Key::Right
+                | Key::Up
+                | Key::Down
+                | Key::Home
+                | Key::End
+                | Key::PageUp
+                | Key::PageDown
+        )
+    }
+
+    pub(in crate::backend::wayland) fn clear_key_repeat(&mut self) {
+        self.key_repeat_key = None;
+        self.key_repeat_next_tick = None;
+    }
+
+    /// Duration until the next repeat fires, for the event-loop timeout. The
+    /// loop otherwise sleeps until a real event and would never wake to
+    /// repeat a held key.
+    pub(in crate::backend::wayland) fn key_repeat_timeout(&self, now: Instant) -> Option<Duration> {
+        if !self.has_keyboard_focus() {
+            return None;
+        }
+        self.key_repeat_next_tick
+            .map(|next| next.saturating_duration_since(now))
+    }
+
+    /// Fire a repeat if one is due, then reschedule from `now` (so a long
+    /// block does not burst-catch-up). Called once per event-loop iteration.
+    pub(in crate::backend::wayland) fn tick_key_repeat(
+        &mut self,
+        now: Instant,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        if !self.has_keyboard_focus() {
+            self.clear_key_repeat();
+            return;
+        }
+        if self.input_state.modal_blocks_canvas_key_repeat() {
+            // A modal can open from pointer/toolbar input while a canvas key is
+            // still held. Retire that timer before it starts feeding the new
+            // focus owner (or duplicates the command palette's own repeat).
+            self.clear_key_repeat();
+            return;
+        }
+        let Some(key) = self.key_repeat_key else {
+            return;
+        };
+        let Some(next) = self.key_repeat_next_tick else {
+            return;
+        };
+        if now < next {
+            return;
+        }
+        self.dispatch_key_repeat(key, conn, qh);
+        self.key_repeat_next_tick = Some(now + KEY_REPEAT_INTERVAL);
+    }
+
+    /// Re-dispatch a held key through the same routing a fresh press uses
+    /// (overlay-ready gate, eyedropper/zoom/pan guards, toolbar routing, then
+    /// `apply_input_key`). Shared by the manual repeat tick and sctk's
+    /// `repeat_key`.
+    fn dispatch_key_repeat(&mut self, key: Key, conn: &Connection, qh: &QueueHandle<Self>) {
         if !self.is_overlay_ready() {
             return;
         }
-        let key = keysym_to_key(event.keysym);
         if self.input_state.eyedropper_is_engaged() {
             return;
         }
@@ -276,16 +380,12 @@ impl KeyboardHandler for WaylandState {
         if self.input_state.command_palette_open && matches!(key, Key::Up | Key::Down) {
             return;
         }
-        let modal_capture = self.input_state.command_palette_is_engaged()
-            || self.input_state.is_color_picker_popup_open()
-            || self.input_state.is_precision_entry_open();
+        let modal_capture = self.input_state.modal_owns_text_input();
         if should_try_toolbar_key(key, modal_capture)
             && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
             return;
         }
-        debug!("Key repeated: {:?}", key);
-
         self.apply_input_key(key);
     }
 }
@@ -315,5 +415,27 @@ mod tests {
         assert!(should_try_toolbar_key(Key::Space, false));
         assert!(should_try_toolbar_key(Key::Escape, false));
         assert!(!should_try_toolbar_key(Key::Down, false));
+    }
+
+    #[test]
+    fn text_and_navigation_keys_auto_repeat() {
+        // The reported case (hold Backspace to delete) plus the rest of the
+        // editing/navigation set.
+        assert!(WaylandState::is_repeatable_key(Key::Backspace));
+        assert!(WaylandState::is_repeatable_key(Key::Delete));
+        assert!(WaylandState::is_repeatable_key(Key::Char('a')));
+        assert!(WaylandState::is_repeatable_key(Key::Space));
+        for key in [Key::Left, Key::Right, Key::Up, Key::Down] {
+            assert!(WaylandState::is_repeatable_key(key));
+        }
+    }
+
+    #[test]
+    fn one_shot_keys_do_not_auto_repeat() {
+        // Holding these must never spam their effect.
+        assert!(!WaylandState::is_repeatable_key(Key::Return));
+        assert!(!WaylandState::is_repeatable_key(Key::Escape));
+        assert!(!WaylandState::is_repeatable_key(Key::Tab));
+        assert!(!WaylandState::is_repeatable_key(Key::F10));
     }
 }

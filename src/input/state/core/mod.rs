@@ -7,6 +7,7 @@ mod dirty;
 mod eyedropper;
 mod highlight_controls;
 mod history;
+mod ime;
 mod index;
 mod menus;
 mod properties;
@@ -54,6 +55,7 @@ pub use command_palette::{
     COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint, CommandPaletteListRow,
 };
 pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
+pub use ime::{ImeCompositionState, ImePreedit};
 #[allow(unused_imports)]
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,

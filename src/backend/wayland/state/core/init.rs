@@ -24,6 +24,7 @@ impl WaylandState {
             main_surface_uses_overlay_layer,
             pending_freeze_on_start,
             screencopy_manager,
+            text_input_manager,
             #[cfg(feature = "tablet-input")]
             tablet_manager,
         } = init;
@@ -145,6 +146,15 @@ impl WaylandState {
             locked_pointer: None,
             relative_pointer: None,
             cursor_hidden: false,
+            key_repeat_key: None,
+            key_repeat_next_tick: None,
+            text_input_manager,
+            text_input: None,
+            text_input_seat: None,
+            text_input_focused: false,
+            text_input_enabled: false,
+            text_input_serial: 0,
+            text_input_cursor_update_pending: false,
             #[cfg(feature = "tablet-input")]
             tablet_manager,
             #[cfg(feature = "tablet-input")]
