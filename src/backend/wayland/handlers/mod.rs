@@ -37,5 +37,6 @@ mod seat;
 mod shm;
 #[cfg(feature = "tablet-input")]
 mod tablet;
+mod text_input;
 mod touch;
 mod xdg;

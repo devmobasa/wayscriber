@@ -1,5 +1,9 @@
+mod ime;
+
 use super::super::super::*;
 use crate::draw::Shape;
+use ime::{build_text_preview, paint_preedit_selection};
+use std::ops::Range;
 
 impl WaylandState {
     pub(super) fn render_text_input_preview(&self, ctx: &cairo::Context) {
@@ -16,13 +20,15 @@ impl WaylandState {
                 self.render_text_edit_entry_animation(ctx, *x, *y, progress);
             }
 
-            // Use vertical bar cursor when editing existing text, underscore for new text
-            let cursor = if is_editing_existing { "|" } else { "_" };
-            let preview_text = if buffer.is_empty() {
-                cursor.to_string()
-            } else {
-                format!("{}{}", buffer, cursor)
-            };
+            // Use vertical bar cursor when editing existing text, underscore
+            // for new text.
+            let cursor_glyph = if is_editing_existing { "|" } else { "_" };
+
+            // In-progress IME composition is transient. A collapsed cursor is
+            // represented by the editor caret, a range by a highlight, and
+            // -1/-1 hides it exactly as text-input-v3 requests.
+            let (preview_text, preedit_selection) =
+                build_text_preview(buffer, self.input_state.ime_preedit(), cursor_glyph);
             match self.input_state.text_input_mode {
                 crate::input::TextInputMode::Plain => {
                     crate::draw::render_text(
@@ -36,6 +42,25 @@ impl WaylandState {
                         self.input_state.text_background_enabled,
                         self.input_state.text_wrap_width,
                     );
+                    self.render_preedit_selection(
+                        ctx,
+                        *x,
+                        *y,
+                        &preview_text,
+                        preedit_selection.as_ref(),
+                    );
+                    // Underline only the composition text, not an injected
+                    // caret glyph used for a collapsed preedit cursor.
+                    self.render_preedit_underline(
+                        ctx,
+                        *x,
+                        *y,
+                        buffer,
+                        self.input_state
+                            .ime_preedit()
+                            .map(|preedit| preedit.text.as_str())
+                            .unwrap_or(""),
+                    );
                 }
                 crate::input::TextInputMode::StickyNote => {
                     crate::draw::render_sticky_note(
@@ -48,9 +73,98 @@ impl WaylandState {
                         &self.input_state.font_descriptor,
                         self.input_state.text_wrap_width,
                     );
+                    self.render_preedit_selection(
+                        ctx,
+                        *x,
+                        *y,
+                        &preview_text,
+                        preedit_selection.as_ref(),
+                    );
                 }
             }
         }
+    }
+
+    /// Underline the IME preedit span for plain text so composing text reads
+    /// as distinct from committed text. Single-line only: skipped when the
+    /// buffer/preedit wraps or contains newlines, where a straight underline
+    /// would land on the wrong line (the preedit still renders as text).
+    fn render_preedit_underline(
+        &self,
+        ctx: &cairo::Context,
+        x: i32,
+        y: i32,
+        buffer: &str,
+        composed: &str,
+    ) {
+        if composed.is_empty()
+            || self.input_state.text_wrap_width.is_some()
+            || buffer.contains('\n')
+            || composed.contains('\n')
+        {
+            return;
+        }
+        let size = self.input_state.current_font_size;
+        let font_desc = self.input_state.font_descriptor.to_pango_string(size);
+        // Right edge of a rendered prefix (ink offset + width), matching how
+        // render_text lays glyphs left-to-right from the baseline origin.
+        let right_edge = |text: &str| -> f64 {
+            if text.is_empty() {
+                return 0.0;
+            }
+            crate::draw::shape::measure_text_with_context(ctx, text, &font_desc, size, None)
+                .map(|m| m.ink_x + m.ink_width)
+                .unwrap_or(0.0)
+        };
+        let start_x = x as f64 + right_edge(buffer);
+        let end_x = x as f64 + right_edge(&format!("{buffer}{composed}"));
+        if end_x <= start_x {
+            return;
+        }
+        // The text baseline sits at `y`; drop the underline just below it.
+        let underline_y = y as f64 + size * 0.12;
+        let color = self.input_state.current_color;
+        ctx.save().ok();
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        ctx.set_line_width((size * 0.05).max(1.0));
+        ctx.move_to(start_x, underline_y);
+        ctx.line_to(end_x, underline_y);
+        let _ = ctx.stroke();
+        ctx.restore().ok();
+    }
+
+    /// Overlay a Pango-backed highlight for a non-collapsed preedit cursor
+    /// range. Rendering the same layout preserves byte indices, wrapping, and
+    /// line placement for both plain text and sticky-note previews.
+    fn render_preedit_selection(
+        &self,
+        ctx: &cairo::Context,
+        x: i32,
+        y: i32,
+        preview_text: &str,
+        selection: Option<&Range<usize>>,
+    ) {
+        let Some(selection) = selection else {
+            return;
+        };
+        if selection.is_empty() || selection.end > preview_text.len() {
+            return;
+        }
+        let (Ok(start), Ok(end)) = (u32::try_from(selection.start), u32::try_from(selection.end))
+        else {
+            return;
+        };
+
+        let size = self.input_state.current_font_size;
+        paint_preedit_selection(
+            ctx,
+            x,
+            y,
+            preview_text,
+            start..end,
+            &self.input_state.font_descriptor.to_pango_string(size),
+            self.input_state.text_wrap_width,
+        );
     }
 
     /// Renders the original text as a semi-transparent ghost during editing.

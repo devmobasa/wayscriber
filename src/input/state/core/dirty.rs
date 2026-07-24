@@ -159,6 +159,10 @@ impl InputState {
     fn compute_text_preview_bounds(&self) -> Option<Rect> {
         if let DrawingState::TextInput { x, y, buffer } = &self.state {
             let mut preview = buffer.clone();
+            // Include the IME preedit so damage covers the composition run.
+            if let Some(preedit) = self.ime_preedit() {
+                preview.push_str(&preedit.text);
+            }
             preview.push('_');
             match self.text_input_mode {
                 TextInputMode::Plain => bounding_box_for_text(

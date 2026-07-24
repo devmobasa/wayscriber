@@ -483,6 +483,9 @@ pub struct InputState {
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// Animation state for text edit mode entry (teal glow pulse)
     pub(crate) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
+    /// Input-method composition state (preedit + pending IME batch) for the
+    /// active text/note edit.
+    pub(crate) ime: super::super::super::ime::ImeCompositionState,
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu

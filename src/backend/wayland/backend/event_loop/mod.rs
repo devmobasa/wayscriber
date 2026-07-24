@@ -160,6 +160,8 @@ pub(super) fn run_event_loop(
         // A radial menu waiting out its paint delay must appear without
         // further input events.
         let timeout = min_timeout(timeout, state.input_state.radial_menu_paint_timeout(now));
+        // A held key must wake the loop to fire its next auto-repeat.
+        let timeout = min_timeout(timeout, state.key_repeat_timeout(now));
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -247,6 +249,11 @@ pub(super) fn run_event_loop(
             state.input_state.needs_redraw = true;
         }
 
+        // Synthesize auto-repeat for a held key (sctk's calloop repeat is not
+        // wired to this manual loop). `dispatch_key_repeat` sets needs_redraw
+        // as its routed action requires.
+        state.tick_key_repeat(Instant::now(), conn, qh);
+
         if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
             state.input_state.needs_redraw = true;
         }
@@ -274,6 +281,14 @@ pub(super) fn run_event_loop(
 
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
             warn!("Failed to autosave session state: {}", err);
+        }
+
+        // Reconcile after every input mutation in this pass, including GTK
+        // toolbar actions and synthesized repeats, so a newly opened modal or
+        // completed text edit cannot leave the canvas IME enabled until a
+        // later event-loop iteration.
+        if !state.input_state.should_exit {
+            state.reconcile_text_input();
         }
 
         // Advance the top-strip idle fade before the snapshot consumers
