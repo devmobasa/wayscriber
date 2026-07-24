@@ -75,26 +75,22 @@ impl Dispatch<ZwpTextInputV3, ()> for WaylandState {
             // Compositor text-input focus gained/lost. Only our overlay
             // surface counts; enable() is driven from the reconcile below,
             // which also requires an active text edit.
-            Event::Enter { surface } => {
-                if state.surface.is_surface(&surface) {
-                    state.text_input_focused = true;
-                    state.reconcile_text_input();
-                }
+            Event::Enter { surface } if state.surface.is_surface(&surface) => {
+                state.text_input_focused = true;
+                state.reconcile_text_input();
             }
-            Event::Leave { surface } => {
-                if state.surface.is_surface(&surface) {
-                    // Leave invalidates the focused surface and compositor
-                    // state. Requests are ignored until the next Enter, so
-                    // clear only local state and preserve the commit serial.
-                    state.text_input_focused = false;
-                    apply_text_input_local_transition(
-                        &mut state.text_input_enabled,
-                        &mut state.text_input_serial,
-                        &mut state.text_input_cursor_update_pending,
-                        TextInputLocalTransition::Leave,
-                    );
-                    state.input_state.ime_clear();
-                }
+            Event::Leave { surface } if state.surface.is_surface(&surface) => {
+                // Leave invalidates the focused surface and compositor
+                // state. Requests are ignored until the next Enter, so
+                // clear only local state and preserve the commit serial.
+                state.text_input_focused = false;
+                apply_text_input_local_transition(
+                    &mut state.text_input_enabled,
+                    &mut state.text_input_serial,
+                    &mut state.text_input_cursor_update_pending,
+                    TextInputLocalTransition::Leave,
+                );
+                state.input_state.ime_clear();
             }
             // Batched composition events: accumulate, apply on Done.
             Event::PreeditString {
