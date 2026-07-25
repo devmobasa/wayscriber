@@ -34,7 +34,14 @@ impl KeybindingField {
             | Self::SelectRectTool
             | Self::SelectEllipseTool
             | Self::SelectArrowTool
+            | Self::SelectTriangleTool
+            | Self::SelectParallelogramTool
+            | Self::SelectRhombusTool
+            | Self::SelectRegularPolygonTool
+            | Self::SelectFreeformPolygonTool
             | Self::SelectBlurTool
+            | Self::SelectSpotlightTool
+            | Self::CycleBlurStyle
             | Self::SelectHighlightTool
             | Self::ToggleHighlightTool
             | Self::ResetArrowLabels
@@ -80,6 +87,8 @@ impl KeybindingField {
             | Self::Board8
             | Self::Board9
             | Self::BoardNext
+            | Self::FocusNextOutput
+            | Self::FocusPrevOutput
             | Self::BoardPrev
             | Self::BoardNew
             | Self::BoardDuplicate
@@ -93,6 +102,9 @@ impl KeybindingField {
             | Self::ToggleFocusMode
             | Self::ToggleClickHighlight
             | Self::ToggleToolbar
+            | Self::ToggleLightMode
+            | Self::ToggleLightModeDrawing
+            | Self::ToggleRadialMenu
             | Self::CycleToolbarDisplay
             | Self::TogglePresenterMode
             | Self::RenderProfileNext
