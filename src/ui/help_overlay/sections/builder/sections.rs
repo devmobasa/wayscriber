@@ -14,6 +14,7 @@ pub(super) struct MainSections {
     pub(super) drawing: Section,
     pub(super) selection: Section,
     pub(super) pen_text: Section,
+    pub(super) text_editing: Section,
     pub(super) zoom: Section,
     pub(super) actions: Section,
     pub(super) screenshots: Option<Section>,
@@ -157,6 +158,28 @@ pub(super) fn build_main_sections(
         icon: Some(toolbar_icons::draw_icon_text),
     };
 
+    // While a text block or sticky note is being edited these keys belong to
+    // the editor, ahead of the action layer, so they are fixed rather than
+    // configurable bindings.
+    let text_editing = Section {
+        title: "Text editing",
+        rows: vec![
+            row("Click", "Place caret"),
+            row("Shift+Click / Shift+Arrows", "Select text"),
+            row("Alt+Drag", "Move the text block"),
+            row("Left/Right, Ctrl+Left/Right", "Move by character/word"),
+            row("Home/End, Ctrl+Home/End", "Line start/end, text start/end"),
+            row("Ctrl+A", "Select all text"),
+            row("Ctrl+C / Ctrl+X / Ctrl+V", "Copy / cut / paste selection"),
+            row("Backspace/Delete, +Ctrl", "Delete character/word"),
+            row("Shift+Enter", "New line"),
+            row("Enter", "Finish editing"),
+            row("Escape", "Cancel editing"),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_text),
+    };
+
     let zoom = Section {
         title: "Zoom",
         rows: vec![
@@ -281,6 +304,7 @@ pub(super) fn build_main_sections(
         drawing,
         selection,
         pen_text,
+        text_editing,
         zoom,
         actions,
         screenshots,

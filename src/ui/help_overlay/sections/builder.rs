@@ -33,6 +33,7 @@ pub(crate) fn build_section_sets(
         sections.drawing.clone(),
         sections.actions.clone(),
         sections.pen_text.clone(),
+        sections.text_editing.clone(),
         sections.zoom.clone(),
         sections.selection.clone(),
         sections.pages.clone(),
@@ -53,7 +54,12 @@ pub(crate) fn build_section_sets(
         page1_sections.insert(2, section);
     }
 
-    let mut page2_sections = vec![sections.pages, sections.zoom, sections.selection];
+    let mut page2_sections = vec![
+        sections.pages,
+        sections.text_editing,
+        sections.zoom,
+        sections.selection,
+    ];
     if let Some(section) = sections.screenshots.take() {
         page2_sections.push(section);
     }
