@@ -37,6 +37,9 @@ packaging/**
 !packaging/icons/
 !packaging/icons/*.png
 !packaging/icons/*.svg
+!packaging/nixpkgs/
+!packaging/nixpkgs/package.nix
+!packaging/nixpkgs/README.md
 !packaging/wayscriber.desktop
 !packaging/wayscriber-configurator.desktop
 
