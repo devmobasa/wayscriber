@@ -158,7 +158,10 @@ pub(crate) fn render_polygon_preview(
     let _ = ctx.restore();
 }
 
-/// Render an arrow (line with arrowhead pointing towards the tip)
+/// Render an arrow: a tapered shaft fused into an arrowhead pointing at the tip.
+///
+/// Shaft and head are one filled path, so there is no shoulder step where they
+/// meet and a semi-transparent color paints at an even opacity throughout.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_arrow(
     ctx: &cairo::Context,
@@ -179,7 +182,7 @@ pub(super) fn render_arrow(
         (x1, y1, x2, y2)
     };
 
-    let Some(geometry) = util::calculate_arrowhead_triangle_custom(
+    let Some(outline) = util::calculate_arrow_outline(
         tip_x,
         tip_y,
         tail_x,
@@ -190,31 +193,16 @@ pub(super) fn render_arrow(
     ) else {
         return;
     };
-    let (tip_x, tip_y) = geometry.tip;
-    let (base_x, base_y) = geometry.base;
-    let (left_x, left_y) = geometry.left;
-    let (right_x, right_y) = geometry.right;
-    let (tail_x, tail_y) = (tail_x as f64, tail_y as f64);
 
-    // Draw the shaft line, stopping at the arrowhead base to avoid overlap
     ctx.save().ok();
+    ctx.new_path();
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-    ctx.set_line_width(thick);
-    ctx.set_line_cap(cairo::LineCap::Butt);
 
-    if head_at_end {
-        ctx.move_to(tail_x, tail_y);
-        ctx.line_to(base_x, base_y);
-    } else {
-        ctx.move_to(base_x, base_y);
-        ctx.line_to(tail_x, tail_y);
+    let [first, rest @ ..] = &outline.points;
+    ctx.move_to(first.0, first.1);
+    for &(x, y) in rest {
+        ctx.line_to(x, y);
     }
-    let _ = ctx.stroke();
-
-    // Draw filled arrowhead triangle
-    ctx.move_to(tip_x, tip_y);
-    ctx.line_to(left_x, left_y);
-    ctx.line_to(right_x, right_y);
     ctx.close_path();
     let _ = ctx.fill();
     ctx.restore().ok();
@@ -258,6 +246,90 @@ mod tests {
         assert!(
             alpha_at(&mut surface, 25, 35) > 0,
             "open polygon preview edge should still render"
+        );
+    }
+
+    fn painted_column_height(surface: &mut ImageSurface, x: i32, height: i32) -> i32 {
+        (0..height)
+            .filter(|&y| alpha_at(surface, x, y) > 0)
+            .count()
+            .try_into()
+            .unwrap_or(i32::MAX)
+    }
+
+    #[test]
+    fn arrow_shaft_tapers_from_tail_to_arrowhead() {
+        let (mut surface, ctx) = surface_with_context(220, 120);
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        // Horizontal arrow, tip at x = 180. Shoulder lands at x = 130.
+        render_arrow(&ctx, 20, 60, 180, 60, red, 20.0, 30.0, 30.0, true);
+
+        drop(ctx);
+        let near_tail = painted_column_height(&mut surface, 25, 120);
+        let near_shoulder = painted_column_height(&mut surface, 128, 120);
+        let across_head = painted_column_height(&mut surface, 135, 120);
+
+        assert!(near_tail > 0, "tail should still paint");
+        assert!(
+            near_tail < near_shoulder,
+            "shaft should widen toward the head: tail {near_tail} vs shoulder {near_shoulder}"
+        );
+        assert!(
+            across_head > near_shoulder,
+            "arrowhead should be wider than the shaft: head {across_head} vs shoulder {near_shoulder}"
+        );
+    }
+
+    #[test]
+    fn arrow_is_one_connected_fill_with_no_gap_at_the_shoulder() {
+        let (mut surface, ctx) = surface_with_context(220, 120);
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        render_arrow(&ctx, 20, 60, 180, 60, red, 20.0, 30.0, 30.0, true);
+
+        drop(ctx);
+        // Every column between tail and tip must carry paint on the centre line.
+        for x in 21..=178 {
+            assert!(
+                alpha_at(&mut surface, x, 60) > 0,
+                "arrow centre line has a gap at x = {x}"
+            );
+        }
+    }
+
+    #[test]
+    fn arrow_does_not_connect_to_existing_current_path() {
+        let (mut surface, ctx) = surface_with_context(220, 140);
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        ctx.move_to(10.0, 130.0);
+        render_arrow(&ctx, 120, 40, 200, 40, red, 8.0, 20.0, 30.0, true);
+
+        drop(ctx);
+        assert_eq!(
+            alpha_at(&mut surface, 60, 100),
+            0,
+            "arrow fill must not absorb a prior current point into its polygon"
+        );
+        assert!(
+            alpha_at(&mut surface, 190, 40) > 0,
+            "arrow should still render"
         );
     }
 
