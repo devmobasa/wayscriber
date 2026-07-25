@@ -90,6 +90,7 @@ define_action_binding_accessors! {
     SelectFreeformPolygonTool => tools.select_freeform_polygon_tool,
     SelectArrowTool => tools.select_arrow_tool,
     SelectBlurTool => tools.select_blur_tool,
+    SelectSpotlightTool => tools.select_spotlight_tool,
     SelectHighlightTool => tools.select_highlight_tool,
     ToggleHighlightTool => tools.toggle_highlight_tool,
     IncreaseFontSize => tools.increase_font_size,

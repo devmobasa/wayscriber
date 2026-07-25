@@ -127,6 +127,7 @@ pub(crate) fn top_toolbar_icon_painter(
         I::Tool(T::FreeformPolygon) => draw_icon_freeform_polygon,
         I::Tool(T::Arrow) => draw_icon_arrow,
         I::Tool(T::Blur) => draw_icon_blur,
+        I::Tool(T::Spotlight) => draw_icon_spotlight,
         I::Tool(T::Marker) => draw_icon_marker,
         I::Tool(T::Highlight) => draw_icon_highlight,
         I::Tool(T::StepMarker) => draw_icon_step_marker,

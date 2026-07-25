@@ -1,6 +1,7 @@
 use crate::canvas_export::{
     BoardPdfExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportRect,
-    CanvasPageExportSnapshot, PdfPageExportSnapshot, PdfPageMetadata, resolve_pdf_page_layout,
+    CanvasPageExportSnapshot, PdfPageExportSnapshot, PdfPageMetadata, SpotlightPassSnapshot,
+    resolve_pdf_page_layout,
 };
 use crate::config::{Action, PdfFitMode};
 use crate::draw::Frame;
@@ -40,6 +41,10 @@ impl WaylandState {
             scope,
             config: &self.config.export.pdf,
             desktop_backdrop,
+            spotlight: SpotlightPassSnapshot {
+                dim_opacity: self.input_state.spotlight_dim_opacity,
+                feather: self.input_state.spotlight_feather,
+            },
         })
     }
 
@@ -70,6 +75,7 @@ struct BoardPdfExportBuildContext<'a> {
     scope: PdfExportScope,
     config: &'a crate::config::PdfExportConfig,
     desktop_backdrop: Option<CanvasExportBackdropSnapshot>,
+    spotlight: SpotlightPassSnapshot,
 }
 
 fn build_board_pdf_export_snapshot(
@@ -84,6 +90,7 @@ fn build_board_pdf_export_snapshot(
         scope,
         config,
         desktop_backdrop,
+        spotlight,
     } = context;
 
     let app_board_count = boards.len();
@@ -131,6 +138,7 @@ fn build_board_pdf_export_snapshot(
                     viewport_height: logical_height,
                     origin_x,
                     origin_y,
+                    spotlight,
                 },
                 metadata: PdfPageMetadata::new(
                     app_board_index,
@@ -160,6 +168,7 @@ fn build_board_pdf_export_snapshot(
                 viewport_height: logical_height,
                 origin_x: 0,
                 origin_y: 0,
+                spotlight,
             },
             metadata: PdfPageMetadata::new(
                 0,

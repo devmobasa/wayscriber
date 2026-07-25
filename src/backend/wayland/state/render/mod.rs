@@ -431,6 +431,10 @@ impl WaylandState {
             Some(FullDamageReason::Zoom)
         } else if self.canvas_transform_active() {
             Some(FullDamageReason::BoardPan)
+        } else if self.input_state.has_spotlight() {
+            // A spotlight darkens every pixel outside itself, so no partial
+            // damage rect can describe adding, moving, or removing one.
+            Some(FullDamageReason::Spotlight)
         } else {
             None
         }

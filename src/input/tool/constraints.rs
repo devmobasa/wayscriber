@@ -56,6 +56,7 @@ pub(crate) fn constrain_drag(
         ToolDrawingBehavior::Rect
         | ToolDrawingBehavior::Ellipse
         | ToolDrawingBehavior::BlurRect
+        | ToolDrawingBehavior::Spotlight
         | ToolDrawingBehavior::Polygon(_) => {
             let end = if constraints.proportional {
                 equalize_extent(start, end)

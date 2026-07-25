@@ -4,6 +4,7 @@ mod highlight;
 pub(crate) mod interaction;
 mod mouse;
 mod render;
+mod spotlight;
 #[cfg(test)]
 mod tests;
 

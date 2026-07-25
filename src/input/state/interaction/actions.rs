@@ -53,6 +53,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectFreeformPolygonTool
         | Action::SelectArrowTool
         | Action::SelectBlurTool
+        | Action::SelectSpotlightTool
         | Action::SelectHighlightTool
         | Action::IncreaseFontSize
         | Action::DecreaseFontSize

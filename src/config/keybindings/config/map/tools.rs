@@ -50,6 +50,10 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.tools.select_arrow_tool, Action::SelectArrowTool)?;
         inserter.insert_all(&self.tools.select_blur_tool, Action::SelectBlurTool)?;
         inserter.insert_all(
+            &self.tools.select_spotlight_tool,
+            Action::SelectSpotlightTool,
+        )?;
+        inserter.insert_all(
             &self.tools.select_highlight_tool,
             Action::SelectHighlightTool,
         )?;

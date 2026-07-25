@@ -175,6 +175,7 @@ fn pdf_page(
             viewport_height: 100,
             origin_x: 0,
             origin_y: 0,
+            spotlight: Default::default(),
         },
         metadata: PdfPageMetadata::new(
             0,

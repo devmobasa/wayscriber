@@ -33,6 +33,9 @@ impl InputState {
                     info!("Eraser mode set to {:?}", self.eraser_mode);
                 }
             }
+            Action::SelectSpotlightTool => {
+                self.set_tool_override(Some(Tool::Spotlight));
+            }
             Action::CycleBlurStyle => {
                 if self.cycle_blur_style() {
                     let label = self.blur_style.label();

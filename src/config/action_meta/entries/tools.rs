@@ -215,6 +215,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectSpotlightTool,
+        "Spotlight Tool",
+        None,
+        "Dim everything but a region",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         CycleBlurStyle,
         "Cycle Blur Style",
         None,

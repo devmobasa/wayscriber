@@ -192,6 +192,15 @@ impl Tool {
                     style: snapshot.blur_style,
                 }
             }),
+            ToolDrawingBehavior::Spotlight => finish_shape(snapshot, usage, |snapshot| {
+                let (cx, cy, rx, ry) = util::ellipse_bounds(
+                    snapshot.start.0,
+                    snapshot.start.1,
+                    snapshot.end.0,
+                    snapshot.end.1,
+                );
+                Shape::Spotlight { cx, cy, rx, ry }
+            }),
             ToolDrawingBehavior::StepMarker => {
                 let usage = ToolUsage {
                     bump_step_marker: true,
@@ -317,6 +326,15 @@ impl Tool {
                     style: snapshot.blur_style,
                     cacheable: false,
                 })
+            }
+            ToolDrawingBehavior::Spotlight => {
+                let (cx, cy, rx, ry) = util::ellipse_bounds(
+                    snapshot.start.0,
+                    snapshot.start.1,
+                    snapshot.current.0,
+                    snapshot.current.1,
+                );
+                ProvisionalToolStroke::Shape(Shape::Spotlight { cx, cy, rx, ry })
             }
             ToolDrawingBehavior::StepMarker => ProvisionalToolStroke::Shape(Shape::StepMarker {
                 x: snapshot.current.0,

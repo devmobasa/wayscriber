@@ -84,6 +84,11 @@ pub(crate) fn default_select_blur_tool() -> Vec<String> {
     Vec::new()
 }
 
+/// Unbound by default, like the blur tool.
+pub(crate) fn default_select_spotlight_tool() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_highlight_tool() -> Vec<String> {
     Vec::new()
 }

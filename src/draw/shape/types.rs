@@ -236,6 +236,20 @@ pub enum Shape {
         #[serde(default)]
         style: BlurStyle,
     },
+    /// Region that stays bright while the spotlight pass dims everything else.
+    ///
+    /// Draws nothing on its own; it is consumed by the spotlight compositing
+    /// pass, which needs every region at once to build a single dim layer.
+    Spotlight {
+        /// Center X coordinate
+        cx: i32,
+        /// Center Y coordinate
+        cy: i32,
+        /// Horizontal radius in pixels
+        rx: i32,
+        /// Vertical radius in pixels
+        ry: i32,
+    },
     /// Numbered step marker bubble.
     StepMarker {
         /// Center X coordinate
@@ -369,6 +383,9 @@ impl Shape {
                 thick,
                 ..
             } => bounding_box_for_ellipse(*cx, *cy, *rx, *ry, *thick),
+            Shape::Spotlight { cx, cy, rx, ry } => {
+                bounding_box_for_ellipse(*cx, *cy, *rx, *ry, 0.0)
+            }
             Shape::Polygon { points, thick, .. } => bounding_box_for_polygon(points, *thick),
             Shape::Arrow {
                 x1,
@@ -439,6 +456,7 @@ impl Shape {
             Shape::Line { .. } => "Line",
             Shape::Rect { .. } => "Rectangle",
             Shape::Ellipse { .. } => "Ellipse",
+            Shape::Spotlight { .. } => "Spotlight",
             Shape::Polygon { kind, .. } => kind.label(),
             Shape::Arrow { .. } => "Arrow",
             Shape::BlurRect { .. } => "Blur",

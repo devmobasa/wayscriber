@@ -58,6 +58,7 @@ pub enum Action {
     SelectFreeformPolygonTool,
     SelectArrowTool,
     SelectBlurTool,
+    SelectSpotlightTool,
     SelectHighlightTool,
     IncreaseFontSize,
     DecreaseFontSize,

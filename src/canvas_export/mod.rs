@@ -3,7 +3,9 @@ mod pdf;
 mod pdf_labels;
 mod png;
 
-pub use page::{CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot};
+pub use page::{
+    CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, SpotlightPassSnapshot,
+};
 #[allow(unused_imports)]
 pub use pdf::{
     BoardPdfExportSnapshot, PdfPageExportSnapshot, PdfPageLayout, PdfPageMetadata,
@@ -28,6 +30,7 @@ mod tests {
             backdrop: CanvasExportBackdropSnapshot::Transparent,
             board: BoardExportSnapshot { frame },
             render_profile: None,
+            spotlight: Default::default(),
         }
     }
 
@@ -39,6 +42,7 @@ mod tests {
             viewport_height: 20,
             origin_x: 0,
             origin_y: 0,
+            spotlight: Default::default(),
         }
     }
 

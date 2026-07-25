@@ -8,6 +8,7 @@ mod pressure_strokes;
 mod primitives;
 mod selection;
 mod shapes;
+mod spotlight;
 mod strokes;
 mod text;
 mod types;
@@ -21,6 +22,9 @@ pub(crate) use pressure_strokes::render_freehand_pressure_preview_borrowed;
 pub(crate) use primitives::render_polygon_preview;
 pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
 pub use shapes::render_shape;
+pub use spotlight::{
+    SpotlightPass, SpotlightRegion, render_spotlight_outline, render_spotlight_pass,
+};
 pub(crate) use strokes::render_eraser_stroke;
 pub use strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 pub(crate) use text::render_sticky_note_preview;

@@ -91,6 +91,8 @@ impl InputState {
             eraser_mode,
             marker_opacity,
             blur_style: BlurStyle::default(),
+            spotlight_dim_opacity: 0.6,
+            spotlight_feather: 0.35,
             current_font_size: font_size,
             font_descriptor,
             text_background_enabled,

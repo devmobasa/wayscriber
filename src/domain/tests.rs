@@ -103,6 +103,7 @@ fn action_serialization_matches_established_contract() {
         ),
         (Action::SelectArrowTool, "select_arrow_tool"),
         (Action::SelectBlurTool, "select_blur_tool"),
+        (Action::SelectSpotlightTool, "select_spotlight_tool"),
         (Action::SelectHighlightTool, "select_highlight_tool"),
         (Action::IncreaseFontSize, "increase_font_size"),
         (Action::DecreaseFontSize, "decrease_font_size"),

@@ -99,7 +99,12 @@ fn drag_tools_round_trip_through_descriptor_table() {
             assert_ne!(drag_tool, DragTool::Default);
             assert_eq!(drag_tool.as_tool(), Some(tool));
         } else {
-            assert_eq!(tool, Tool::FreeformPolygon);
+            // Tools with no modifier-drag binding: freeform polygon needs
+            // click-to-add vertices, and the spotlight is selected explicitly.
+            assert!(
+                matches!(tool, Tool::FreeformPolygon | Tool::Spotlight),
+                "{tool:?} unexpectedly has no drag binding"
+            );
         }
     }
     assert_eq!(DragTool::Default.as_tool(), None);

@@ -65,6 +65,10 @@ impl InputState {
                 *cx += dx;
                 *cy += dy;
             }
+            Shape::Spotlight { cx, cy, .. } => {
+                *cx += dx;
+                *cy += dy;
+            }
             Shape::Polygon { points, .. } => {
                 for point in points {
                     point.0 += dx;

@@ -97,6 +97,8 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 # Toggle eraser behavior mode
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Select the spotlight tool (unbound by default)
+select_spotlight_tool = []
 # Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
 cycle_blur_style = []
 select_line_tool = []
@@ -1153,6 +1155,17 @@ head_at_end = false
 # ═══════════════════════════════════════════════════════════════════════════════
 # PERFORMANCE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Spotlight tool: dims the whole overlay except the regions you draw, so
+# attention lands where you point. Select the tool from the toolbar or bind
+# `select_spotlight_tool`.
+[spotlight]
+# How strongly the area outside every spotlight is dimmed (0.1 - 0.95)
+dim_opacity = 0.6
+
+# Fraction of each spotlight radius spent fading out at the edge (0.0 - 0.9).
+# 0.0 gives a hard-edged opening.
+feather = 0.35
 
 [performance]
 # Number of buffers for rendering (2, 3, or 4)

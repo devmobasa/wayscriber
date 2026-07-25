@@ -29,6 +29,7 @@ mod properties_panel;
 mod radial_menu;
 mod selection;
 mod session_preflight;
+mod spotlight;
 mod status_hud;
 mod step_markers;
 mod text_edit;

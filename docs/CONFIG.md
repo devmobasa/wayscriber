@@ -288,6 +288,17 @@ head_at_end = false
 Configure 3-5 tool presets that you can apply or update via hotkeys or the toolbar strip.
 
 ```toml
+# Spotlight tool: dims the whole overlay except the regions you draw, so
+# attention lands where you point. Select the tool from the toolbar or bind
+# `select_spotlight_tool`.
+[spotlight]
+# How strongly the area outside every spotlight is dimmed (0.1 - 0.95)
+dim_opacity = 0.6
+
+# Fraction of each spotlight radius spent fading out at the edge (0.0 - 0.9).
+# 0.0 gives a hard-edged opening.
+feather = 0.35
+
 [presets]
 slot_count = 5
 
@@ -1318,6 +1329,7 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out
+select_spotlight_tool = []         # dim everything except a region
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []

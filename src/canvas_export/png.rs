@@ -3,7 +3,9 @@ use crate::draw::Frame;
 use crate::render_profiles::RenderColorProfile;
 use crate::util::Rect;
 
-use super::page::{CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, draw_canvas_page};
+use super::page::{
+    CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, SpotlightPassSnapshot, draw_canvas_page,
+};
 
 #[derive(Debug, Clone)]
 pub struct CanvasExportSnapshot {
@@ -11,6 +13,8 @@ pub struct CanvasExportSnapshot {
     pub backdrop: CanvasExportBackdropSnapshot,
     pub board: BoardExportSnapshot,
     pub render_profile: Option<RenderColorProfile>,
+    /// Spotlight appearance, mirrored from the live overlay.
+    pub spotlight: SpotlightPassSnapshot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,5 +116,6 @@ fn canvas_page_from_snapshot(snapshot: &CanvasExportSnapshot) -> CanvasPageExpor
         viewport_height: snapshot.viewport.logical_height,
         origin_x: snapshot.viewport.origin_x,
         origin_y: snapshot.viewport.origin_y,
+        spotlight: snapshot.spotlight,
     }
 }

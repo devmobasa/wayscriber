@@ -51,6 +51,10 @@ pub fn draw_icon_blur(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_blur(ctx, x, y, size);
 }
 
+pub fn draw_icon_spotlight(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_spotlight(ctx, x, y, size);
+}
+
 pub fn draw_icon_eraser(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_eraser(ctx, x, y, size);
 }

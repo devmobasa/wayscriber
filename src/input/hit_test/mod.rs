@@ -68,6 +68,10 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             thick,
             ..
         } => shapes::ellipse_outline_hit(*cx, *cy, *rx, *ry, *thick, point, tolerance),
+        Shape::Spotlight { cx, cy, rx, ry } => {
+            // No stroke to aim at, so the whole opening is the target.
+            shapes::ellipse_fill_hit(*cx, *cy, *rx, *ry, point)
+        }
         Shape::Polygon { points, thick, .. } => {
             shapes::polygon_outline_hit(points, *thick, point, tolerance)
         }

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::capture::CaptureError;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, Shape, render_blur_rect,
-    render_eraser_stroke, render_shape,
+    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, SpotlightRegion,
+    render_blur_rect, render_eraser_stroke, render_shape, render_spotlight_pass,
 };
 
 #[derive(Debug, Clone)]
@@ -14,6 +14,24 @@ pub struct CanvasPageExportSnapshot {
     pub viewport_height: u32,
     pub origin_x: i32,
     pub origin_y: i32,
+    /// Dim/feather settings for the spotlight pass, mirroring the live overlay.
+    pub spotlight: SpotlightPassSnapshot,
+}
+
+/// Spotlight appearance carried into an export.
+#[derive(Debug, Clone, Copy)]
+pub struct SpotlightPassSnapshot {
+    pub dim_opacity: f64,
+    pub feather: f64,
+}
+
+impl Default for SpotlightPassSnapshot {
+    fn default() -> Self {
+        Self {
+            dim_opacity: 0.6,
+            feather: 0.35,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -231,6 +249,23 @@ impl ExportBackdrop {
     }
 }
 
+/// Openings the spotlight pass leaves bright, gathered before drawing begins.
+fn spotlight_regions_for(frame: &Frame) -> Vec<SpotlightRegion> {
+    frame
+        .shapes
+        .iter()
+        .filter_map(|drawn| match &drawn.shape {
+            Shape::Spotlight { cx, cy, rx, ry } => Some(SpotlightRegion {
+                cx: f64::from(*cx),
+                cy: f64::from(*cy),
+                rx: f64::from(*rx),
+                ry: f64::from(*ry),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 fn draw_canvas_page_contents(
     ctx: &cairo::Context,
     page: &CanvasPageExportSnapshot,
@@ -241,6 +276,19 @@ fn draw_canvas_page_contents(
         backdrop.paint(ctx);
     }
     let replay_ctx = backdrop.replay_context();
+
+    // Runs regardless of `paint_backdrop`: a PDF page with a solid backdrop has
+    // already been filled page-wide, but it still needs dimming.
+    let spotlight_regions = spotlight_regions_for(&page.frame);
+    render_spotlight_pass(
+        ctx,
+        &spotlight_regions,
+        SpotlightPass {
+            dim_opacity: page.spotlight.dim_opacity,
+            feather: page.spotlight.feather,
+        },
+    );
+
     for drawn_shape in &page.frame.shapes {
         match &drawn_shape.shape {
             Shape::EraserStroke { points, brush } => {

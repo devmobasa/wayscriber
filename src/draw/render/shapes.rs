@@ -146,6 +146,10 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 render_black_out_rect(ctx, *x, *y, *w, *h);
             }
         }
+        Shape::Spotlight { .. } => {
+            // Nothing to draw per-shape: the spotlight pass paints one dim layer
+            // for every region at once, before annotations are drawn.
+        }
         Shape::Text {
             x,
             y,

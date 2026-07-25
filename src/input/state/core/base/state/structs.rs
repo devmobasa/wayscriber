@@ -120,6 +120,10 @@ pub struct InputState {
     pub marker_opacity: f64,
     /// How the blur tool obscures the region it covers
     pub blur_style: BlurStyle,
+    /// Alpha of the dim layer outside every spotlight
+    pub spotlight_dim_opacity: f64,
+    /// Fraction of each spotlight radius spent fading out at the edge
+    pub spotlight_feather: f64,
     /// Current font size for text mode (from config)
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)

@@ -64,6 +64,23 @@ impl WaylandState {
 
         let replay_ctx = eraser_ctx.replay_context();
 
+        // Spotlights dim everything around themselves, so they cannot be drawn in
+        // z-order like other shapes. One pass, here: after the background so the
+        // dim sits on top of it, before the annotations so those stay bright.
+        let spotlight_cursor = {
+            let (screen_x, screen_y) = self.current_mouse();
+            self.canvas_world_coords(screen_x as f64, screen_y as f64)
+        };
+        let spotlight_regions = self.input_state.spotlight_regions(spotlight_cursor);
+        crate::draw::render_spotlight_pass(
+            ctx,
+            &spotlight_regions,
+            crate::draw::SpotlightPass {
+                dim_opacity: self.input_state.spotlight_dim_opacity,
+                feather: self.input_state.spotlight_feather,
+            },
+        );
+
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
         if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
             // Board background and committed shapes came from the baked layer.
