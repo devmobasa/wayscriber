@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
+use crate::draw::BlurStyle;
 use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
@@ -44,6 +45,30 @@ fn blur_tool_override_requests_frozen_capture_when_needed() {
 
     assert!(state.set_tool_override(Some(Tool::Blur)));
     assert_eq!(state.tool_override(), Some(Tool::Blur));
+    assert!(state.take_pending_frozen_toggle());
+}
+
+#[test]
+fn black_out_tool_override_does_not_request_frozen_capture() {
+    let mut state = create_test_input_state();
+    assert!(state.set_blur_style(BlurStyle::BlackOut));
+
+    assert!(state.set_tool_override(Some(Tool::Blur)));
+
+    assert_eq!(state.tool_override(), Some(Tool::Blur));
+    assert!(!state.take_pending_frozen_toggle());
+}
+
+#[test]
+fn cycling_from_black_out_to_sampling_blur_requests_frozen_capture() {
+    let mut state = create_test_input_state();
+    assert!(state.set_blur_style(BlurStyle::BlackOut));
+    assert!(state.set_tool_override(Some(Tool::Blur)));
+    assert!(!state.take_pending_frozen_toggle());
+
+    assert!(state.cycle_blur_style());
+
+    assert_eq!(state.blur_style, BlurStyle::Gaussian);
     assert!(state.take_pending_frozen_toggle());
 }
 

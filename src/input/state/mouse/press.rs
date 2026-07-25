@@ -493,7 +493,11 @@ impl InputState {
                 request_blur_capture,
             } => {
                 self.mark_draw_activity();
-                if request_blur_capture && !self.frozen_active() && !self.pending_frozen_toggle() {
+                if request_blur_capture
+                    && self.blur_style.needs_backdrop()
+                    && !self.frozen_active()
+                    && !self.pending_frozen_toggle()
+                {
                     self.request_frozen_toggle();
                 }
                 self.sync_current_settings_for_tool(tool);

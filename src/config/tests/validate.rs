@@ -576,6 +576,22 @@ fn validate_and_clamp_resets_non_finite_toolbar_scale() {
 }
 
 #[test]
+fn validate_and_clamp_resets_non_finite_spotlight_settings() {
+    let defaults = Config::default().spotlight;
+
+    for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut config = Config::default();
+        config.spotlight.dim_opacity = invalid;
+        config.spotlight.feather = invalid;
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.spotlight.dim_opacity, defaults.dim_opacity);
+        assert_eq!(config.spotlight.feather, defaults.feather);
+    }
+}
+
+#[test]
 fn legacy_command_palette_and_capture_defaults_migrate_as_a_pair() {
     let mut config = Config {
         config_revision: 0,

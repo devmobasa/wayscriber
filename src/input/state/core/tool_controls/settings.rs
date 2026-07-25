@@ -176,7 +176,11 @@ impl InputState {
         self.tool_override = tool;
         self.active_preset_slot = None;
 
-        if tool == Some(Tool::Blur) && !self.frozen_active && !self.pending_frozen_toggle {
+        if tool == Some(Tool::Blur)
+            && self.blur_style.needs_backdrop()
+            && !self.frozen_active
+            && !self.pending_frozen_toggle
+        {
             self.request_frozen_toggle();
             self.push_toast(
                 ToastPriority::Info,
@@ -387,7 +391,19 @@ impl InputState {
 
     /// Steps to the next blur style, wrapping around.
     pub fn cycle_blur_style(&mut self) -> bool {
-        self.set_blur_style(self.blur_style.next())
+        if !self.set_blur_style(self.blur_style.next()) {
+            return false;
+        }
+
+        if self.blur_style.needs_backdrop()
+            && self.active_tool() == Tool::Blur
+            && !self.frozen_active
+            && !self.pending_frozen_toggle
+        {
+            self.request_frozen_toggle();
+        }
+
+        true
     }
 
     /// Sets the font descriptor used for text rendering. Returns true if changed.
