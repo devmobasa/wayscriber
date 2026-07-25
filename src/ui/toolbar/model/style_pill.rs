@@ -20,7 +20,7 @@ use crate::config::{
 };
 use crate::draw::FontDescriptor;
 use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
-use crate::label_format::format_binding_label;
+use crate::label_format::{format_binding_label, format_quick_color_tooltip};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
 use super::{ToolbarSliderSpec, TopStripPlan, toolbar_item_visible};
@@ -364,6 +364,7 @@ impl StylePillControl {
                 ToolbarEvent::SetQuickColor {
                     color: entry.color,
                     action: QuickColorPalette::action_for_index(index),
+                    index,
                 }
             }
             Self::ThicknessSlider => ToolbarEvent::SetThickness(snapshot.thickness),
@@ -485,7 +486,7 @@ impl StylePillControl {
                 let entry = &snapshot.quick_colors.rendered_entries()[index];
                 let binding = QuickColorPalette::action_for_index(index)
                     .and_then(|action| snapshot.binding_hints.binding_for_action(action));
-                Some(format_binding_label(&entry.label, binding))
+                Some(format_quick_color_tooltip(&entry.label, binding))
             }
             Self::ThicknessValue => Some(
                 ToolContext::from_snapshot(snapshot)
@@ -739,6 +740,7 @@ mod tests {
             Some(ToolbarEvent::SetQuickColor {
                 color: entry.color,
                 action: QuickColorPalette::action_for_index(0),
+                index: 0,
             })
         );
 

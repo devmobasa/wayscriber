@@ -203,6 +203,7 @@ fn palette_swatch((index, entry): (usize, &QuickColorPaletteEntry)) -> ColorSwat
         entry.color,
         entry.label.clone(),
         QuickColorPalette::action_for_index(index),
+        index,
     )
 }
 
@@ -249,7 +250,7 @@ mod tests {
         let swatches = compact_palette_swatches(&QuickColorPalette::default());
         let labels = swatches
             .iter()
-            .map(|(_, label, _)| label.as_str())
+            .map(|(_, label, _, _)| label.as_str())
             .collect::<Vec<_>>();
 
         assert_eq!(labels, ["Red", "Green", "Blue", "Yellow", "White", "Black"]);
@@ -257,6 +258,14 @@ mod tests {
         assert_eq!(swatches[3].2, Some(crate::config::Action::SetColorYellow));
         assert_eq!(swatches[4].2, Some(crate::config::Action::SetColorWhite));
         assert_eq!(swatches[5].2, Some(crate::config::Action::SetColorBlack));
+
+        // The compact row reorders the palette, so each swatch must carry the
+        // slot it actually renders for the recolor gesture to hit the right one.
+        let indices = swatches
+            .iter()
+            .map(|(_, _, _, index)| *index)
+            .collect::<Vec<_>>();
+        assert_eq!(indices, COMPACT_PALETTE_INDICES);
     }
 
     #[test]
@@ -264,13 +273,18 @@ mod tests {
         let swatches = expanded_palette_swatches(&QuickColorPalette::default());
         let labels = swatches
             .iter()
-            .map(|(_, label, _)| label.as_str())
+            .map(|(_, label, _, _)| label.as_str())
             .collect::<Vec<_>>();
 
         assert_eq!(labels, ["Orange", "Pink", "Cyan", "Purple", "Gray"]);
         assert_eq!(swatches[0].2, Some(crate::config::Action::SetColorOrange));
         assert_eq!(swatches[1].2, Some(crate::config::Action::SetColorPink));
         assert_eq!(swatches[2].2, None);
+
+        // Expanded rows start past the compact slots; an action-less slot
+        // still knows its palette index.
+        assert_eq!(swatches[0].3, 4);
+        assert_eq!(swatches[2].3, 8);
     }
 
     #[test]

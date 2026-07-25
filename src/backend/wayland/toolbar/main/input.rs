@@ -22,6 +22,23 @@ impl ToolbarSurfaceManager {
         None
     }
 
+    /// The quick-color slot under the pointer, if the press landed on a
+    /// palette swatch. Secondary click reads the same hit regions as the
+    /// primary path, so the recolor gesture cannot drift from what is drawn.
+    pub fn quick_color_slot_at(
+        &self,
+        surface: &wl_surface::WlSurface,
+        position: (f64, f64),
+    ) -> Option<usize> {
+        if self.top.is_surface(surface) {
+            return self.top.quick_color_slot_at(position.0, position.1);
+        }
+        if self.side.is_surface(surface) {
+            return self.side.quick_color_slot_at(position.0, position.1);
+        }
+        None
+    }
+
     pub fn pointer_motion(
         &mut self,
         surface: &wl_surface::WlSurface,

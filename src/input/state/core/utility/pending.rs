@@ -1,7 +1,7 @@
 use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputState, OutputFocusAction,
-    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, SelectionPublishState,
-    ZoomAction,
+    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, QuickColorEdit,
+    SelectionPublishState, ZoomAction,
 };
 use crate::config::BoardsConfig;
 use crate::input::boards::{PendingBoardConfigUpdate, PendingBoardRuntimeUiAction};
@@ -70,6 +70,12 @@ impl InputState {
     /// Takes and clears any pending preset save/clear action.
     pub fn take_pending_preset_action(&mut self) -> Option<PresetAction> {
         self.pending_preset_action.take()
+    }
+
+    /// Takes and clears any accepted quick-color recolor awaiting its config
+    /// write. The runtime palette already shows the new color.
+    pub fn take_pending_quick_color_edit(&mut self) -> Option<QuickColorEdit> {
+        self.pending_quick_color_edit.take()
     }
 
     /// Takes and clears any pending board config update.

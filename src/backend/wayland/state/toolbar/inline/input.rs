@@ -31,6 +31,51 @@ impl WaylandState {
         None
     }
 
+    /// The quick-color slot an inline-toolbar secondary press targets, read
+    /// from the same hit regions as the primary path.
+    fn inline_quick_color_slot_at(&self, position: (f64, f64)) -> Option<usize> {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            return None;
+        }
+        if self.toolbar.is_top_visible()
+            && point_in_surface(self.data.inline_top_rect, position)
+            && let Some(index) = self
+                .data
+                .inline_top_hits
+                .iter()
+                .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1))
+        {
+            return Some(index);
+        }
+        if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
+        {
+            return self
+                .data
+                .inline_side_hits
+                .iter()
+                .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1));
+        }
+        None
+    }
+
+    /// Secondary press on an inline-toolbar swatch: opens the picker bound to
+    /// that palette slot, mirroring the layer-shell surfaces' gesture.
+    pub(in crate::backend::wayland) fn inline_toolbar_secondary_press(
+        &mut self,
+        position: (f64, f64),
+        conn: Option<&wayland_client::Connection>,
+        qh: Option<&wayland_client::QueueHandle<Self>>,
+    ) -> bool {
+        let Some(index) = self.inline_quick_color_slot_at(position) else {
+            return false;
+        };
+        self.handle_toolbar_event(ToolbarEvent::EditQuickColor { index }, conn, qh);
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+        self.set_pointer_over_toolbar(true);
+        true
+    }
+
     fn inline_toolbar_drag_at(
         &self,
         position: (f64, f64),

@@ -30,7 +30,8 @@ pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
 pub use drawing::{
     DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,
-    QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorsConfig,
+    QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorWrite,
+    QuickColorsConfig, default_quick_color_for_index,
 };
 pub use export::{
     ExportConfig, PDF_LABEL_APP_BOARD, PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME,

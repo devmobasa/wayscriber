@@ -7,6 +7,7 @@ use std::time::Duration;
 use super::*;
 use crate::config::KeyBinding;
 use crate::input::state::test_support::make_test_input_state;
+use crate::toolbar_gtk::widgets::{emit_secondary_press, secondary_click_gesture};
 use crate::ui::toolbar::{
     RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarBindingHints,
 };
@@ -1863,10 +1864,10 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             rebind_requested: false,
         }
     );
-    pill_widget(&event_top, "top.style.swatch.1")
+    let swatch = pill_widget(&event_top, "top.style.swatch.1")
         .downcast::<gtk4::Button>()
-        .expect("swatch button")
-        .emit_clicked();
+        .expect("swatch button");
+    swatch.emit_clicked();
     assert_eq!(
         rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK swatch event"),
@@ -1874,9 +1875,26 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             event: ToolbarEvent::SetQuickColor {
                 color: pen.quick_colors.rendered_entries()[1].color,
                 action: crate::config::QuickColorPalette::action_for_index(1),
+                index: 1,
             },
             rebind_requested: false,
         }
+    );
+    // A GTK Button activates on the primary button only, so the recolor
+    // gesture is a controller of its own; it must target the same slot.
+    emit_secondary_press(swatch.upcast_ref());
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("GTK swatch recolor event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::EditQuickColor { index: 1 },
+            rebind_requested: false,
+        }
+    );
+    // The chip is not a palette slot, so it has nothing to recolor.
+    assert!(
+        secondary_click_gesture(pill_widget(&event_top, "top.style.color-chip").upcast_ref())
+            .is_none()
     );
     let mut churned = pen.clone();
     churned.thickness += 3.0;

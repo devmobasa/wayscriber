@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::QuickColorWrite;
 use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersistenceTarget};
 
 pub(super) fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) -> bool {
@@ -269,6 +270,53 @@ impl WaylandState {
             self.input_state.highlight_tool_ring_enabled();
         if let Err(err) = self.config.save() {
             log::warn!("Failed to persist click highlight preferences: {}", err);
+        }
+    }
+
+    /// Flush durable edits that are queued but not yet written. Pointer-driven
+    /// accepts (the color picker's OK button) queue their config write from the
+    /// release handler, which is not itself a drain site, so the exit path calls
+    /// this before the process goes away.
+    pub(in crate::backend::wayland) fn persist_pending_config_edits(&mut self) {
+        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
+            self.handle_quick_color_edit(edit);
+        }
+    }
+
+    /// Persist an accepted quick-color recolor. The runtime palette already
+    /// shows the color; this writes `drawing.quick_colors` through the same
+    /// reload-and-save guard the other runtime-owned config edits use, so a
+    /// long-lived snapshot cannot overwrite newer edits from the configurator
+    /// or the file itself.
+    pub(in crate::backend::wayland) fn handle_quick_color_edit(
+        &mut self,
+        edit: crate::input::state::QuickColorEdit,
+    ) {
+        let crate::input::state::QuickColorEdit { index, color } = edit;
+        let mut outcome = QuickColorWrite::SlotMissing;
+        let save_result = crate::config::Config::update_file(|config| {
+            outcome = config.drawing.quick_colors.set_color_at(index, color);
+        });
+        match (save_result, outcome) {
+            // The document is reloaded before the edit applies, so a palette
+            // that shrank underneath the overlay (configurator, hand edit) no
+            // longer has this slot. Nothing was written: say so instead of
+            // reporting a save, and leave the config baseline alone so it keeps
+            // matching the file the runtime swatch will be reconciled against.
+            (Ok(()), QuickColorWrite::SlotMissing) => log::warn!(
+                "Quick color slot {index} is no longer in config.toml; recolor was not saved"
+            ),
+            (Ok(()), written) => {
+                self.config.drawing.quick_colors.set_color_at(index, color);
+                match written {
+                    QuickColorWrite::Written => log::debug!("Saved quick color slot {index}"),
+                    QuickColorWrite::Unchanged => {
+                        log::debug!("Quick color slot {index} already held that color");
+                    }
+                    QuickColorWrite::SlotMissing => {}
+                }
+            }
+            (Err(err), _) => log::warn!("Failed to save quick color slot {index}: {err}"),
         }
     }
 

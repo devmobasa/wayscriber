@@ -40,6 +40,11 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
                 state.close_color_picker_popup(true);
                 state.request_eyedropper_toggle();
             }
+            // Restoring stages the built-in color like any other pick, so the
+            // popup stays open and OK/Cancel still decide the outcome.
+            ColorPickerPopupAction::RestoreDefault => {
+                state.color_picker_popup_restore_default();
+            }
             ColorPickerPopupAction::Ok => state.apply_color_picker_popup(),
             ColorPickerPopupAction::Cancel => state.close_color_picker_popup(true),
         }

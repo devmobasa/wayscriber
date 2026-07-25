@@ -302,6 +302,7 @@ impl InputState {
             active_preset_slot: None,
             preset_feedback: vec![None; PRESET_SLOTS_MAX],
             pending_preset_action: None,
+            pending_quick_color_edit: None,
             pending_board_config: None,
             pending_board_runtime_ui: Vec::new(),
             tour_active: false,

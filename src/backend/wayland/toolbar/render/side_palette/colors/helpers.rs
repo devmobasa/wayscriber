@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use crate::backend::wayland::toolbar::events::HitKind;
-use crate::backend::wayland::toolbar::format_binding_label;
+use crate::backend::wayland::toolbar::format_quick_color_tooltip;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::Action;
@@ -37,7 +37,10 @@ const COLOR_COPY_ICON_IDLE: Rgba = (0.6, 0.6, 0.6, 0.5);
 /// Hex value text: dimmer than COLOR_ICON_DEFAULT — kept as-is.
 const COLOR_HEX_TEXT: Rgba = (0.85, 0.85, 0.85, 1.0);
 
-pub(super) type ColorSwatch = (Color, String, Option<Action>);
+/// `(color, label, bound quick-color action, palette slot index)`. The index
+/// travels with the swatch so a secondary click can recolor that exact slot,
+/// including the slots past the eighth that carry no action.
+pub(super) type ColorSwatch = (Color, String, Option<Action>, usize);
 pub(super) type ColorToggleIconFn = fn(&cairo::Context, f64, f64, f64);
 
 #[derive(Clone)]
@@ -377,7 +380,7 @@ pub(super) fn draw_color_swatch_row(
     toggle: Option<ColorSwatchToggle>,
 ) {
     let mut x = layout.start_x;
-    for (color, name, action) in colors {
+    for (color, name, action, index) in colors {
         draw_swatch(
             ctx,
             x,
@@ -387,13 +390,14 @@ pub(super) fn draw_color_swatch_row(
             *color == snapshot.color,
         );
         let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
-        let tooltip = format_binding_label(name, binding);
+        let tooltip = format_quick_color_tooltip(name, binding);
         hits.push(HitRegion {
             focus_id: None,
             rect: (x, layout.row_y, layout.swatch, layout.swatch),
             event: ToolbarEvent::SetQuickColor {
                 color: *color,
                 action: *action,
+                index: *index,
             },
             kind: HitKind::Click,
             tooltip: Some(tooltip),

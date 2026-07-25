@@ -255,6 +255,15 @@ pub enum PresetAction {
     },
 }
 
+/// An accepted quick-color recolor awaiting the backend's config write. The
+/// runtime palette is already updated; this only carries what `config.toml`
+/// still needs (`drawing.quick_colors[index].color`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QuickColorEdit {
+    pub index: usize,
+    pub color: Color,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresetFeedbackKind {
     Apply,

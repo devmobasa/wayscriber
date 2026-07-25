@@ -1031,6 +1031,13 @@ text_background_enabled = false
 # arrays. The hex values below are the tuned built-in defaults; named colors
 # ("red", "green", ...) resolve to these same tuned values, so named entries,
 # the default pen color, and board auto-adjust pens all match these swatches.
+#
+# Right-clicking a swatch in the overlay opens the color picker for that slot
+# and saves the accepted color back here as an RGB array, keeping the slot's
+# label and shortcut. The first such edit writes the whole list, so a palette
+# left out of this file stops tracking future built-in defaults. That picker's
+# "Default" button loads the color shipped for the slot again (built-in slots
+# only), still requiring OK to save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"

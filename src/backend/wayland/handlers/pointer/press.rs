@@ -108,6 +108,14 @@ impl WaylandState {
             );
         }
         if inline_active {
+            // Inline bars share the canvas surface, so their swatch recolor
+            // gesture is resolved here rather than in the `on_toolbar` branch.
+            if button == BTN_RIGHT
+                && self.inline_toolbar_secondary_press(event.position, Some(_conn), Some(qh))
+            {
+                self.refresh_keyboard_interactivity();
+                return;
+            }
             if button == BTN_LEFT
                 && self.inline_toolbar_press(event.position, Some(_conn), Some(qh))
             {
@@ -131,6 +139,24 @@ impl WaylandState {
             }
         }
         if on_toolbar {
+            // Secondary click on a quick-color swatch opens the picker bound to
+            // that palette slot. Every other toolbar control ignores the button,
+            // so the press is consumed only when it lands on a swatch.
+            if button == BTN_RIGHT
+                && let Some(index) = self
+                    .toolbar
+                    .quick_color_slot_at(&event.surface, event.position)
+            {
+                self.handle_toolbar_event(
+                    ToolbarEvent::EditQuickColor { index },
+                    Some(_conn),
+                    Some(qh),
+                );
+                self.toolbar.mark_dirty();
+                self.input_state.needs_redraw = true;
+                self.refresh_keyboard_interactivity();
+                return;
+            }
             let mut handled = false;
             if button == BTN_LEFT
                 && let Some((intent, drag)) =

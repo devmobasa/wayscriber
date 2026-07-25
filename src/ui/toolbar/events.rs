@@ -218,9 +218,19 @@ pub enum ToolbarEvent {
     SetColor(Color),
     /// Set a configured quick-color slot while preserving which binding the
     /// clicked swatch represents, even when multiple slots share an RGB value.
+    /// `index` is the palette slot the swatch renders, which secondary-click
+    /// recoloring needs because slots past the eighth carry no action.
     SetQuickColor {
         color: Color,
         action: Option<Action>,
+        index: usize,
+    },
+    /// Recolor a quick-color slot: opens the color picker popup bound to that
+    /// palette slot, so accepting it rewrites the swatch (and `config.toml`)
+    /// instead of only the active tool's color. Emitted by secondary-clicking
+    /// a swatch in the style pill or the side palette.
+    EditQuickColor {
+        index: usize,
     },
     /// Set the color from the side palette's HSV picker. Carries the full
     /// triple so hue survives gray colors (where RGB alone loses it).

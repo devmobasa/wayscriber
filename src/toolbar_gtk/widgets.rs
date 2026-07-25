@@ -118,6 +118,45 @@ pub(super) fn send_event(sender: &FeedbackSender, event: ToolbarEvent) {
     });
 }
 
+/// Secondary-click recolor gesture for a quick-color swatch: right-clicking
+/// the swatch opens the picker popup bound to that palette slot, so accepting
+/// it rewrites the swatch instead of only the active tool's color. A GTK
+/// `Button` activates on the primary button alone, so the gesture is explicit;
+/// it claims the sequence so no ancestor controller also reacts to the press.
+pub(super) fn install_quick_color_recolor(
+    button: &gtk4::Button,
+    index: usize,
+    feedback: &FeedbackSender,
+) {
+    let gesture = gtk4::GestureClick::new();
+    gesture.set_button(gtk4::gdk::BUTTON_SECONDARY);
+    let feedback = feedback.clone();
+    gesture.connect_pressed(move |gesture, _, _, _| {
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        send_event(&feedback, ToolbarEvent::EditQuickColor { index });
+    });
+    button.add_controller(gesture);
+}
+
+/// The secondary-click gesture installed on a widget, if it has one.
+#[cfg(test)]
+pub(super) fn secondary_click_gesture(widget: &gtk4::Widget) -> Option<gtk4::GestureClick> {
+    let controllers = widget.observe_controllers();
+    (0..controllers.n_items())
+        .filter_map(|index| controllers.item(index))
+        .filter_map(|controller| controller.downcast::<gtk4::GestureClick>().ok())
+        .find(|gesture| gesture.button() == gtk4::gdk::BUTTON_SECONDARY)
+}
+
+/// Drive a widget's secondary-click gesture the way `emit_clicked` drives a
+/// button, so tests can assert the resulting feedback without a compositor
+/// delivering real pointer events.
+#[cfg(test)]
+pub(super) fn emit_secondary_press(widget: &gtk4::Widget) {
+    let gesture = secondary_click_gesture(widget).expect("secondary-click gesture");
+    gesture.emit_by_name::<()>("pressed", &[&1i32, &0.0f64, &0.0f64]);
+}
+
 /// Capture click modifiers on a widget subtree that lives outside the
 /// toolbar window's own capture controller (popovers are separate GTK
 /// natives, so the window-level gesture never sees their clicks).

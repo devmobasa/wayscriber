@@ -309,6 +309,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }
+        // Opening the recolor popup persists nothing; accepting it writes the
+        // palette through the popup's own pending-edit path.
+        | ToolbarEvent::EditQuickColor { .. }
         | ToolbarEvent::SetColorHsv { .. }
         | ToolbarEvent::SetThickness(_)
         | ToolbarEvent::NudgeThickness(_)
@@ -435,10 +438,12 @@ mod tests {
         let first = ToolbarEvent::SetQuickColor {
             color: RED,
             action: Some(Action::SetColorRed),
+            index: 0,
         };
         let duplicate = ToolbarEvent::SetQuickColor {
             color: RED,
             action: Some(Action::SetColorGreen),
+            index: 1,
         };
 
         assert_eq!(action_for_event(&first), Some(Action::SetColorRed));
@@ -451,6 +456,7 @@ mod tests {
             action_for_event(&ToolbarEvent::SetQuickColor {
                 color: RED,
                 action: None,
+                index: 9,
             }),
             None
         );

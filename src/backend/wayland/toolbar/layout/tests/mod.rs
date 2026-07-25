@@ -511,6 +511,39 @@ fn side_color_picker_offers_sat_val_area_and_hue_bar() {
 }
 
 #[test]
+fn side_palette_swatch_hits_carry_their_own_palette_slot() {
+    let mut state = create_test_input_state();
+    state.show_more_colors = true;
+    let snapshot = snapshot_from_state(&state);
+
+    let mut slots = rendered_side_hits(&snapshot)
+        .into_iter()
+        .filter_map(|hit| match hit.event {
+            ToolbarEvent::SetQuickColor { index, color, .. } => Some((index, color)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(!slots.is_empty(), "expanded palette renders swatches");
+
+    // Recoloring targets a slot, so every swatch must report a distinct index
+    // that matches the color it draws — the compact row reorders the palette.
+    let mut indices = slots.iter().map(|(index, _)| *index).collect::<Vec<_>>();
+    indices.sort_unstable();
+    let unique = indices.len();
+    indices.dedup();
+    assert_eq!(indices.len(), unique, "each swatch owns one slot");
+
+    slots.sort_by_key(|(index, _)| *index);
+    for (index, color) in slots {
+        assert_eq!(
+            snapshot.quick_colors.color_for_index(index),
+            Some(color),
+            "swatch for slot {index} draws that slot's color"
+        );
+    }
+}
+
+#[test]
 fn canvas_pane_right_aligns_destructive_buttons() {
     let mut state = create_test_input_state();
     state.toolbar_side_pane = SidePane::Canvas;
