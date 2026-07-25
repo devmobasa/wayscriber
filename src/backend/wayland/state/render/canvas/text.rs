@@ -111,10 +111,12 @@ impl WaylandState {
         let top = y as f64 + geom.y_from_baseline;
         let bottom = top + geom.height;
         ctx.save().ok();
-        let line_width = (size * 0.06).max(1.5);
+        // Widths come from the draw layer so the damage tracker sizes the
+        // caret's repaint rectangle from the exact same numbers.
+        let line_width = crate::draw::caret_line_width(size);
         let outline = crate::draw::text_outline_color(color);
         ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
-        ctx.set_line_width(line_width + 2.0);
+        ctx.set_line_width(crate::draw::caret_outline_width(size));
         ctx.move_to(caret_x, top);
         ctx.line_to(caret_x, bottom);
         let _ = ctx.stroke();

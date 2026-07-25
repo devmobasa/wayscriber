@@ -15,6 +15,12 @@ const APPEND_ONLY_DAMAGE_MAX_SPAN: f64 = 128.0;
 /// that.
 const GHOST_DAMAGE_PADDING: i32 = 6;
 
+/// Anti-aliasing margin around the live text preview, matching the margin the
+/// moving UI effects already carry (`UI_EFFECT_DAMAGE_MARGIN` in the render
+/// layer). The preview is dragged under the pointer, so a shortfall of even one
+/// pixel is repeated at every step and shows up as a trail of stray dots.
+const TEXT_PREVIEW_DAMAGE_MARGIN: i32 = 2;
+
 impl InputState {
     /// Clears any cached provisional shape bounds and marks their damage region.
     pub(crate) fn clear_provisional_dirty(&mut self) {
@@ -218,16 +224,22 @@ impl InputState {
         // The caret is a full-line-height vertical bar that can extend past the
         // glyph ink box (above ascenders, below the baseline) and, mid-line,
         // sits inside it — either way its exact rect must be part of the damage,
-        // or dragging the block leaves a trail of un-erased caret pixels. A
-        // selection highlight covers Pango's logical cells (whitespace included),
-        // which reach beyond the ink box, so damage its full logical extent too.
+        // or dragging the block leaves a trail of un-erased caret pixels. The
+        // Pango decorations (selection background, preedit underline) are painted
+        // over logical cells that reach beyond the ink box, so damage the full
+        // logical extent whenever one of them is showing.
         let mut live_bounds = text_bounds;
         let caret_bounds = preview
             .caret
             .and_then(|caret| self.caret_damage_rect(&preview.text, *x, *y, caret));
-        let highlight_bounds =
-            self.highlight_damage_rect(&preview.text, *x, *y, preview.highlight.as_ref());
-        for extra in [caret_bounds, highlight_bounds].into_iter().flatten() {
+        let decoration_bounds = self.pango_decoration_damage_rect(
+            &preview.text,
+            *x,
+            *y,
+            preview.highlight.as_ref(),
+            preview.underline.as_ref(),
+        );
+        for extra in [caret_bounds, decoration_bounds].into_iter().flatten() {
             live_bounds = Some(match live_bounds {
                 Some(base) => union_rect(base, extra).unwrap_or(base),
                 None => extra,
@@ -238,11 +250,17 @@ impl InputState {
         // spot, away from the live text. Fold its bounds in so the ghost is
         // erased on move-back and on commit (otherwise it lingers there).
         let ghost_bounds = self.text_edit_ghost_damage_bounds();
-        match (live_bounds, ghost_bounds) {
+        let bounds = match (live_bounds, ghost_bounds) {
             (Some(live), Some(ghost)) => union_rect(live, ghost).or(Some(live)),
             (Some(live), None) => Some(live),
             (None, ghost) => ghost,
-        }
+        }?;
+        // The preview is the one canvas element that moves under the pointer, so
+        // any sub-pixel shortfall is re-committed at every drag step and reads as
+        // a trail of stray dots. Carry the same anti-aliasing margin the moving
+        // UI effects use (see `UI_EFFECT_DAMAGE_MARGIN`); over-damaging a few
+        // pixels around one block is far cheaper than the artifacts.
+        bounds.inflated(TEXT_PREVIEW_DAMAGE_MARGIN).or(Some(bounds))
     }
 
     /// Whether the edit ghost (the faded original of a text/note being edited)
@@ -277,15 +295,22 @@ impl InputState {
     /// Exact damage rectangle for the caret line at `caret` (a byte offset into
     /// `buffer`), in canvas coordinates, with a small margin covering the stroke
     /// width. Mirrors `render_caret_line`'s geometry so repaints erase it fully.
+    ///
+    /// The caret's centre is kept in floating point until the very last step:
+    /// rounding it first and then subtracting a whole-pixel half-width can move
+    /// the rectangle off the leftmost column the stroke actually touches.
     fn caret_damage_rect(&self, buffer: &str, x: i32, y: i32, caret: usize) -> Option<Rect> {
-        let font = self.font_descriptor.to_pango_string(self.current_font_size);
+        let size = self.current_font_size;
+        let font = self.font_descriptor.to_pango_string(size);
         let geom =
             crate::draw::shape::caret_geometry_text(buffer, &font, self.text_wrap_width, caret)?;
-        let half_w = ((self.current_font_size * 0.06).max(1.5) / 2.0).ceil() as i32 + 1;
-        let caret_x = x + geom.x.round() as i32;
+        let half_w = crate::draw::caret_outline_width(size) / 2.0;
+        let caret_x = f64::from(x) + geom.x;
+        let left = (caret_x - half_w).floor() as i32 - 1;
+        let right = (caret_x + half_w).ceil() as i32 + 1;
         let top = y + geom.y_from_baseline.floor() as i32 - 1;
         let bottom = y + (geom.y_from_baseline + geom.height).ceil() as i32 + 1;
-        Rect::from_min_max(caret_x - half_w, top, caret_x + half_w + 1, bottom)
+        Rect::from_min_max(left, top, right, bottom)
     }
 
     /// The caret's rectangle in canvas coordinates — a thin strip at the caret
@@ -318,20 +343,25 @@ impl InputState {
         Rect::from_min_max(caret_x, top, caret_x + 2, top + height)
     }
 
-    /// Damage bounds for an active selection highlight. Pango paints the
-    /// background over logical cells (including whitespace) that reach past the
-    /// ink box, so a selection of leading/trailing spaces would otherwise be
-    /// clipped; the text's full logical box is a safe superset of any selection.
-    /// `None` when nothing is selected.
-    fn highlight_damage_rect(
+    /// Damage bounds for the Pango-painted decorations: the selection background
+    /// and the IME preedit underline. Both are laid out against logical cells
+    /// (whitespace included) that reach past the glyph ink box — the underline
+    /// in particular sits *below* the baseline, outside the ink box entirely for
+    /// text without descenders — so the text's full logical box is used as a safe
+    /// superset. `None` when neither decoration is showing.
+    fn pango_decoration_damage_rect(
         &self,
         preview_text: &str,
         x: i32,
         y: i32,
         highlight: Option<&std::ops::Range<usize>>,
+        underline: Option<&std::ops::Range<usize>>,
     ) -> Option<Rect> {
-        let range = highlight?;
-        if range.start >= range.end {
+        let showing = [highlight, underline]
+            .into_iter()
+            .flatten()
+            .any(|range| range.start < range.end);
+        if !showing {
             return None;
         }
         let font = self.font_descriptor.to_pango_string(self.current_font_size);
@@ -492,6 +522,97 @@ mod tests {
             bounds.x <= 100,
             "selection damage reaches the origin (logical left), got x={}",
             bounds.x
+        );
+    }
+
+    #[test]
+    fn a_preedit_underline_is_damaged_below_the_baseline() {
+        // Pango draws the composition underline *below* the baseline. With text
+        // that has no descenders the ink box stops at the baseline, so damage
+        // built from ink alone leaves the underline behind when the block moves.
+        let mut state = make_test_input_state();
+        state.state = DrawingState::text_input(100, 100, String::new());
+        state.ime_queue_preedit(Some("kako".to_string()), 4, 4);
+        assert!(state.ime_apply_done());
+
+        let bounds = state
+            .compute_text_preview_bounds()
+            .expect("a composing block has preview bounds");
+        let ink = bounding_box_for_text(
+            100,
+            100,
+            "kako",
+            state.current_font_size,
+            &state.font_descriptor,
+            state.text_background_enabled,
+            state.text_wrap_width,
+        )
+        .expect("non-empty preedit measures");
+        // Past the ink box *and* past the plain anti-aliasing margin, i.e. only
+        // satisfied by folding in the logical box the underline is drawn against.
+        assert!(
+            bounds.y + bounds.height > ink.y + ink.height + TEXT_PREVIEW_DAMAGE_MARGIN,
+            "damage must reach past the ink box for the underline: \
+             damage bottom {} vs ink bottom {}",
+            bounds.y + bounds.height,
+            ink.y + ink.height
+        );
+    }
+
+    #[test]
+    fn preview_damage_carries_the_antialiasing_margin() {
+        // The preview is dragged under the pointer, so it damages a margin
+        // around its exact geometry; a shortfall would trail stray pixels.
+        let mut state = make_test_input_state();
+        state.state = DrawingState::text_input(100, 100, "kako".to_string());
+        let bounds = state
+            .compute_text_preview_bounds()
+            .expect("active text input has preview bounds");
+        let ink = bounding_box_for_text(
+            100,
+            100,
+            "kako",
+            state.current_font_size,
+            &state.font_descriptor,
+            state.text_background_enabled,
+            state.text_wrap_width,
+        )
+        .expect("non-empty text measures");
+        assert!(
+            bounds.x <= ink.x - TEXT_PREVIEW_DAMAGE_MARGIN
+                && bounds.y <= ink.y - TEXT_PREVIEW_DAMAGE_MARGIN
+                && bounds.x + bounds.width >= ink.x + ink.width + TEXT_PREVIEW_DAMAGE_MARGIN
+                && bounds.y + bounds.height >= ink.y + ink.height + TEXT_PREVIEW_DAMAGE_MARGIN,
+            "preview damage {bounds:?} must clear the glyph box {ink:?} on every side"
+        );
+    }
+
+    #[test]
+    fn caret_damage_covers_the_stroke_around_a_fractional_caret_position() {
+        // The caret is stroked centred on its position: rounding the centre to a
+        // pixel before subtracting a whole-pixel half-width can drop the leftmost
+        // column the stroke touches, which is a 1px sliver per drag step.
+        let mut state = make_test_input_state();
+        state.state = DrawingState::text_input(100, 100, "hi".to_string());
+        let font = state
+            .font_descriptor
+            .to_pango_string(state.current_font_size);
+        let geom = crate::draw::shape::caret_geometry_text("hi", &font, None, 1).unwrap();
+        let rect = state
+            .caret_damage_rect("hi", 100, 100, 1)
+            .expect("caret has a damage rect");
+        let half = crate::draw::caret_outline_width(state.current_font_size) / 2.0;
+        let painted_left = 100.0 + geom.x - half;
+        let painted_right = 100.0 + geom.x + half;
+        assert!(
+            f64::from(rect.x) <= painted_left,
+            "damage left {} must cover the stroke at {painted_left}",
+            rect.x
+        );
+        assert!(
+            f64::from(rect.x + rect.width) >= painted_right,
+            "damage right {} must cover the stroke at {painted_right}",
+            rect.x + rect.width
         );
     }
 

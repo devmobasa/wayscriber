@@ -33,6 +33,8 @@ pub struct ImePreedit {
 struct ImePending {
     commit: Option<String>,
     preedit: Option<ImePreedit>,
+    /// Distinguishes a nullable preedit event from no event in this batch.
+    preedit_received: bool,
     delete_before: u32,
     delete_after: u32,
 }
@@ -240,8 +242,10 @@ impl InputState {
     }
 
     /// Queue the in-progress composition (`preedit_string`) for the next
-    /// `done`. `text = None` clears the preedit.
+    /// `done`. `text = None` clears the preedit but still carries the event's
+    /// selection-removal semantics.
     pub fn ime_queue_preedit(&mut self, text: Option<String>, cursor_begin: i32, cursor_end: i32) {
+        self.ime.pending.preedit_received = true;
         self.ime.pending.preedit = text.map(|text| ImePreedit {
             text,
             cursor_begin,
@@ -345,9 +349,18 @@ impl InputState {
             {
                 buffer_changed = true;
             }
+
+            // 3) A new preedit starts at the cursor after the committed edits.
+            //    Its text remains transient, but text-input-v3 requires any
+            //    remaining selected committed text to be removed immediately.
+            if pending.preedit_received
+                && caret_edit::delete_selection(buffer, caret, selection_anchor)
+            {
+                buffer_changed = true;
+            }
         }
 
-        // 3) preedit: replace the active composition (absent → cleared).
+        // 4) preedit: replace the active composition (absent → cleared).
         let preedit_changed = self.ime.preedit != pending.preedit;
         self.ime.preedit = pending.preedit;
 

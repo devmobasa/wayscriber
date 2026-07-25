@@ -360,6 +360,85 @@ fn preedit_replacing_a_forward_selection_has_one_effective_preview_and_cursor() 
 }
 
 #[test]
+fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
+    let mut state = create_test_input_state();
+    state.state = DrawingState::text_input(0, 0, "hello world".to_string());
+    if let DrawingState::TextInput {
+        caret,
+        selection_anchor,
+        ..
+    } = &mut state.state
+    {
+        *selection_anchor = Some(0);
+        *caret = 5;
+    }
+
+    state.modifiers.ctrl = true;
+    state.on_key_press(Key::Char('v'));
+    state.modifiers.ctrl = false;
+    let stale_paste = state
+        .take_pending_text_paste()
+        .expect("Ctrl+V captures the selected buffer revision");
+    let initial_revision = state.text_input_revision;
+
+    state.ime_queue_preedit(Some("X".to_string()), 1, 1);
+    assert!(state.ime_apply_done());
+
+    assert_eq!(buffer(&state), " world");
+    if let DrawingState::TextInput {
+        caret,
+        selection_anchor,
+        ..
+    } = &state.state
+    {
+        assert_eq!(*caret, 0, "the caret collapses to the selection start");
+        assert_eq!(*selection_anchor, None);
+    } else {
+        panic!("expected TextInput");
+    }
+    assert_eq!(
+        state.text_input_revision,
+        initial_revision.wrapping_add(1),
+        "removing selected committed text invalidates deferred clipboard work"
+    );
+
+    state.ime_queue_preedit(None, 0, 0);
+    assert!(state.ime_apply_done());
+    assert_eq!(
+        buffer(&state),
+        " world",
+        "canceling the preedit must not restore the removed selection"
+    );
+    assert!(
+        state.apply_text_paste(stale_paste, "stale").is_none(),
+        "the paste captured before composition must remain invalid"
+    );
+}
+
+#[test]
+fn null_preedit_event_still_removes_the_existing_selection() {
+    let mut state = create_test_input_state();
+    state.state = DrawingState::text_input(0, 0, "hello".to_string());
+    if let DrawingState::TextInput {
+        caret,
+        selection_anchor,
+        ..
+    } = &mut state.state
+    {
+        *selection_anchor = Some(1);
+        *caret = 4;
+    }
+    let initial_revision = state.text_input_revision;
+
+    state.ime_queue_preedit(None, 0, 0);
+    assert!(state.ime_apply_done());
+
+    assert_eq!(buffer(&state), "ho");
+    assert!(state.ime_preedit().is_none());
+    assert_eq!(state.text_input_revision, initial_revision.wrapping_add(1));
+}
+
+#[test]
 fn ime_events_are_ignored_outside_text_mode() {
     let mut state = create_test_input_state();
     // Not in text mode.

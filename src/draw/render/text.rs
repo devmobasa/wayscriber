@@ -127,6 +127,20 @@ pub fn render_text(
     ctx.restore().ok();
 }
 
+/// Stroke width of the editor's standalone caret line at `size`.
+pub fn caret_line_width(size: f64) -> f64 {
+    (size * 0.06).max(1.5)
+}
+
+/// Width of the contrasting outline stroked beneath the caret line. The caret
+/// is painted centred on its position, so it reaches `caret_outline_width / 2`
+/// to either side. The damage tracker sizes the caret's repaint rectangle from
+/// this, which is why the value lives here next to the code that paints it —
+/// duplicating the constant is how the caret used to leave a trail on drags.
+pub fn caret_outline_width(size: f64) -> f64 {
+    caret_line_width(size) + 2.0
+}
+
 /// Opaque contrasting color used to outline plain text and its separate caret.
 pub fn text_outline_color(color: Color) -> Color {
     let brightness = color.r * 0.299 + color.g * 0.587 + color.b * 0.114;
@@ -288,8 +302,8 @@ fn draw_round_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64)
 #[cfg(test)]
 mod tests {
     use super::{
-        Color, FontDescriptor, render_sticky_note, render_sticky_note_preview, render_text,
-        sticky_note_foreground, text_outline_color,
+        Color, FontDescriptor, caret_outline_width, render_sticky_note, render_sticky_note_preview,
+        render_text, sticky_note_foreground, text_outline_color,
     };
 
     fn alpha_at(surface: &mut cairo::ImageSurface, x: i32, y: i32) -> u8 {
@@ -438,5 +452,110 @@ mod tests {
             alpha_at(&mut surface, sample_x, sample_y) > 0,
             "the live note must extend under the end caret after trailing spaces"
         );
+    }
+
+    /// Bounding box of every pixel a render call actually touched.
+    fn painted_extents(surface: &mut cairo::ImageSurface) -> Option<(i32, i32, i32, i32)> {
+        surface.flush();
+        let width = surface.width();
+        let height = surface.height();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let (mut min_x, mut min_y) = (i32::MAX, i32::MAX);
+        let (mut max_x, mut max_y) = (i32::MIN, i32::MIN);
+        for y in 0..height {
+            for x in 0..width {
+                if data[y as usize * stride + x as usize * 4 + 3] != 0 {
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+                    max_y = max_y.max(y);
+                }
+            }
+        }
+        (min_x <= max_x).then_some((min_x, min_y, max_x, max_y))
+    }
+
+    #[test]
+    fn text_damage_box_covers_every_painted_pixel() {
+        // `bounding_box_for_text` is what the dirty tracker repaints when a block
+        // moves. Anything render_text paints outside it survives the clear and
+        // trails behind the drag, so the two must never drift apart.
+        let font = FontDescriptor::default();
+        for (text, size, background) in [
+            ("kako", 32.0, false),
+            ("sta ima", 48.0, false),
+            ("gjpqy", 24.0, false),
+            ("kako", 32.0, true),
+            ("Multi\nline", 28.0, false),
+        ] {
+            let origin = (150, 220);
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 600, 420).unwrap();
+            {
+                let ctx = cairo::Context::new(&surface).unwrap();
+                render_text(
+                    &ctx,
+                    origin.0,
+                    origin.1,
+                    text,
+                    Color::new(1.0, 0.5, 0.1, 1.0),
+                    size,
+                    &font,
+                    background,
+                    None,
+                );
+            }
+            let (min_x, min_y, max_x, max_y) =
+                painted_extents(&mut surface).expect("text paints something");
+            let bounds = crate::draw::shape::bounding_box_for_text(
+                origin.0, origin.1, text, size, &font, background, None,
+            )
+            .expect("non-empty text has damage bounds");
+            assert!(
+                min_x >= bounds.x
+                    && min_y >= bounds.y
+                    && max_x < bounds.x + bounds.width
+                    && max_y < bounds.y + bounds.height,
+                "{text:?} size={size} bg={background}: painted \
+                 ({min_x},{min_y})..({max_x},{max_y}) escapes damage box {bounds:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn caret_stroke_stays_within_its_advertised_width() {
+        // The damage tracker sizes the caret's repaint from `caret_outline_width`;
+        // the stroke is centred, so it must not reach further than half of it.
+        let font = FontDescriptor::default();
+        for size in [16.0_f64, 20.0, 32.0, 48.0] {
+            let color = Color::new(1.0, 0.5, 0.1, 1.0);
+            let geom =
+                crate::draw::shape::caret_geometry_text("hi", &font.to_pango_string(size), None, 1)
+                    .unwrap();
+            let origin = (150, 220);
+            let caret_x = f64::from(origin.0) + geom.x;
+            let top = f64::from(origin.1) + geom.y_from_baseline;
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 600, 420).unwrap();
+            {
+                let ctx = cairo::Context::new(&surface).unwrap();
+                let outline = text_outline_color(color);
+                ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
+                ctx.set_line_width(caret_outline_width(size));
+                ctx.move_to(caret_x, top);
+                ctx.line_to(caret_x, top + geom.height);
+                let _ = ctx.stroke();
+            }
+            let (min_x, _, max_x, _) =
+                painted_extents(&mut surface).expect("the caret paints something");
+            let half = caret_outline_width(size) / 2.0;
+            assert!(
+                f64::from(min_x) >= (caret_x - half).floor()
+                    && f64::from(max_x) <= (caret_x + half).ceil(),
+                "size={size}: caret painted {min_x}..{max_x}, advertised \
+                 {}..{}",
+                caret_x - half,
+                caret_x + half
+            );
+        }
     }
 }

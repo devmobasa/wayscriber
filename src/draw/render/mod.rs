@@ -24,5 +24,8 @@ pub use shapes::render_shape;
 pub(crate) use strokes::render_eraser_stroke;
 pub use strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 pub(crate) use text::render_sticky_note_preview;
-pub use text::{render_sticky_note, render_text, sticky_note_foreground, text_outline_color};
+pub use text::{
+    caret_line_width, caret_outline_width, render_sticky_note, render_text, sticky_note_foreground,
+    text_outline_color,
+};
 pub use types::EraserReplayContext;

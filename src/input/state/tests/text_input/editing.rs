@@ -568,8 +568,8 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
 
     assert_eq!(
         caret(&state),
-        7,
-        "the preview position between c/d maps past the replaced WXYZ selection"
+        3,
+        "the preview position between c/d maps into the buffer after IME removed the selection"
     );
 }
 
