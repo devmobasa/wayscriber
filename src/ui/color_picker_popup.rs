@@ -215,6 +215,20 @@ pub fn render_color_picker_popup(
         current_color,
     );
 
+    // Alpha bar: the current colour ramped from transparent to opaque over a
+    // checkerboard, so the swatch under the pointer previews the result.
+    let alpha = input_state.color_picker_popup_alpha().unwrap_or(1.0);
+    draw_alpha_bar(
+        ctx,
+        layout.alpha_x,
+        layout.alpha_y,
+        layout.alpha_w,
+        layout.alpha_h,
+        current_color,
+    );
+    let alpha_marker_x = layout.alpha_x + alpha * layout.alpha_w;
+    draw_bar_marker(ctx, alpha_marker_x, layout.alpha_y, layout.alpha_h);
+
     // Recent colors, most-recent-first. Empty until something has been
     // applied, so a fresh session shows no strip rather than dead slots.
     let recents = input_state.recent_colors();
@@ -440,7 +454,10 @@ fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
 
 /// Draw one recent-color swatch, ringed when it matches the live color.
 fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, selected: bool) {
-    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
+    if color.a < 1.0 {
+        draw_checkerboard(ctx, x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
+    }
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
     ctx.rectangle(x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
     let _ = ctx.fill();
 
@@ -463,6 +480,47 @@ fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, select
             RECENT_SWATCH_SIZE - 1.0,
         );
     }
+    let _ = ctx.stroke();
+}
+
+/// Draw a checkerboard across a rectangle, so translucency reads as such
+/// rather than as a dark colour.
+fn draw_checkerboard(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
+    let check = 6.0;
+    constants::set_color(ctx, CHECKER_LIGHT);
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, CHECKER_DARK);
+    let mut cy = y;
+    let mut row = 0;
+    while cy < y + h {
+        let mut cx = x + if row % 2 == 0 { 0.0 } else { check };
+        while cx < x + w {
+            ctx.rectangle(cx, cy, (x + w - cx).min(check), (y + h - cy).min(check));
+            cx += check * 2.0;
+        }
+        cy += check;
+        row += 1;
+    }
+    let _ = ctx.fill();
+}
+
+/// Draw the alpha bar for one colour: transparent on the left, opaque on the
+/// right, over a checkerboard.
+fn draw_alpha_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, color: Color) {
+    draw_checkerboard(ctx, x, y, w, h);
+
+    let ramp = cairo::LinearGradient::new(x, y, x + w, y);
+    ramp.add_color_stop_rgba(0.0, color.r, color.g, color.b, 0.0);
+    ramp.add_color_stop_rgba(1.0, color.r, color.g, color.b, 1.0);
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.set_source(&ramp);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, GRADIENT_BORDER);
+    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
+    ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 }
 

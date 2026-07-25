@@ -748,3 +748,39 @@ fn drawing_drag_tool_defaults_match_legacy_mapping() {
         crate::input::DragBindableTool::Ellipse
     );
 }
+
+/// Adding alpha must not rewrite anyone's config: an opaque color has to keep
+/// serializing in exactly the form it did before `Rgba` existed.
+#[test]
+fn opaque_colors_still_serialize_without_an_alpha_component() {
+    use crate::config::ColorSpec;
+    use crate::draw::Color;
+
+    let opaque = Color {
+        r: 1.0,
+        g: 0.5,
+        b: 0.0,
+        a: 1.0,
+    };
+    assert_eq!(ColorSpec::from(opaque), ColorSpec::Rgb([255, 128, 0]));
+
+    let translucent = Color { a: 0.5, ..opaque };
+    assert_eq!(
+        ColorSpec::from(translucent),
+        ColorSpec::Rgba([255, 128, 0, 128])
+    );
+}
+
+#[test]
+fn color_spec_round_trips_alpha_through_hex_and_arrays() {
+    use crate::config::ColorSpec;
+
+    let from_hex = ColorSpec::Name("#FF800080".to_string()).to_color();
+    assert!((from_hex.a - 128.0 / 255.0).abs() < 1e-9);
+    assert!((from_hex.r - 1.0).abs() < 1e-9);
+
+    // Six-digit hex and three-component arrays stay fully opaque.
+    assert!((ColorSpec::Name("#FF8000".to_string()).to_color().a - 1.0).abs() < 1e-9);
+    assert!((ColorSpec::Rgb([255, 128, 0]).to_color().a - 1.0).abs() < 1e-9);
+    assert!((ColorSpec::Rgba([255, 128, 0, 64]).to_color().a - 64.0 / 255.0).abs() < 1e-9);
+}

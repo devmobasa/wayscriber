@@ -1057,6 +1057,67 @@ fn empty_recents_have_no_clickable_swatches() {
 }
 
 #[test]
+fn picker_alpha_bar_sets_translucency_without_touching_hue() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_hue(0.5);
+    state.color_picker_popup_set_from_gradient(1.0, 0.0);
+
+    state.color_picker_popup_set_alpha(0.4);
+
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!((color.a - 0.4).abs() < 1e-9, "alpha not applied: {color:?}");
+    assert!(
+        color.g > 0.9 && color.b > 0.9 && color.r < 0.1,
+        "hue changed"
+    );
+}
+
+/// `hsv_to_rgb` is always opaque, so every move on the square or the hue bar
+/// has to carry the alpha across or translucency silently vanishes.
+#[test]
+fn picker_keeps_alpha_across_square_and_hue_moves() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_alpha(0.25);
+
+    state.color_picker_popup_set_from_gradient(0.6, 0.3);
+    assert!(
+        (state.color_picker_popup_current_color().expect("open").a - 0.25).abs() < 1e-9,
+        "square drag reset the alpha"
+    );
+
+    state.color_picker_popup_set_hue(0.8);
+    assert!(
+        (state.color_picker_popup_current_color().expect("open").a - 0.25).abs() < 1e-9,
+        "hue drag reset the alpha"
+    );
+}
+
+#[test]
+fn picker_hex_round_trips_alpha_only_when_translucent() {
+    use crate::input::state::{color_to_hex, parse_hex_color};
+
+    let opaque = Color {
+        r: 1.0,
+        g: 0.5,
+        b: 0.0,
+        a: 1.0,
+    };
+    assert_eq!(color_to_hex(opaque), "#FF8000", "opaque stays six digits");
+
+    let translucent = Color { a: 0.5, ..opaque };
+    let hex = color_to_hex(translucent);
+    assert_eq!(hex, "#FF800080");
+
+    let parsed = parse_hex_color(&hex).expect("eight-digit hex parses");
+    assert!((parsed.a - translucent.a).abs() < 0.01, "alpha round-trip");
+
+    // Six-digit input still means fully opaque.
+    assert!((parse_hex_color("#FF8000").expect("six digits").a - 1.0).abs() < 1e-9);
+}
+
+#[test]
 fn color_picker_copy_button_requests_copy_and_keeps_popup_open() {
     let mut state = create_test_input_state();
     state.open_color_picker_popup();

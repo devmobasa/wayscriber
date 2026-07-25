@@ -358,6 +358,9 @@ pub(crate) fn handle_color_picker_motion(
             PickerDrag::Hue => {
                 state.color_picker_popup_set_hue(layout.hue_from_point(fx));
             }
+            PickerDrag::Alpha => {
+                state.color_picker_popup_set_alpha(layout.alpha_from_point(fx));
+            }
         }
         state.color_picker_popup_set_hover(None);
     } else {

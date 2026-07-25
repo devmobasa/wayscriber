@@ -100,6 +100,10 @@ impl InputState {
                         self.color_picker_popup_set_dragging(Some(PickerDrag::Hue));
                         self.color_picker_popup_set_hue(layout.hue_from_point(fx));
                         self.color_picker_popup_set_hex_editing(false);
+                    } else if layout.point_in_alpha(fx, fy) {
+                        self.color_picker_popup_set_dragging(Some(PickerDrag::Alpha));
+                        self.color_picker_popup_set_alpha(layout.alpha_from_point(fx));
+                        self.color_picker_popup_set_hex_editing(false);
                     }
                 }
             }

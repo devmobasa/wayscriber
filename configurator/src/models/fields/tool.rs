@@ -348,7 +348,7 @@ impl DragColorOption {
     pub fn from_color(color: Option<&ColorSpec>) -> Self {
         match color {
             None => Self::Current,
-            Some(ColorSpec::Rgb(_)) => Self::Custom,
+            Some(ColorSpec::Rgb(_) | ColorSpec::Rgba(_)) => Self::Custom,
             Some(ColorSpec::Name(name)) => match name.trim().to_lowercase().as_str() {
                 "red" => Self::Red,
                 "green" => Self::Green,

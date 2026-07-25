@@ -119,6 +119,11 @@ pub enum ColorSpec {
     Name(String),
     /// RGB color as [red, green, blue] where each component is 0-255
     Rgb([u8; 3]),
+    /// RGBA color as [red, green, blue, alpha] where each component is 0-255.
+    ///
+    /// Only written for colors that are actually translucent, so an opaque
+    /// palette serializes exactly as it did before alpha existed.
+    Rgba([u8; 4]),
 }
 
 impl ColorSpec {
@@ -148,14 +153,29 @@ impl ColorSpec {
                 b: *b as f64 / 255.0,
                 a: 1.0,
             },
+            ColorSpec::Rgba([r, g, b, a]) => Color {
+                r: *r as f64 / 255.0,
+                g: *g as f64 / 255.0,
+                b: *b as f64 / 255.0,
+                a: *a as f64 / 255.0,
+            },
         }
     }
 }
 
 impl From<Color> for ColorSpec {
+    /// Opaque colors keep the three-component form they have always had, so
+    /// adding alpha rewrites nobody's config file. Only a genuinely translucent
+    /// color produces the four-component form.
     fn from(color: Color) -> Self {
         let clamp = |v: f64| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round().min(255.0) as u8 };
-        ColorSpec::Rgb([clamp(color.r), clamp(color.g), clamp(color.b)])
+        let (r, g, b) = (clamp(color.r), clamp(color.g), clamp(color.b));
+        let alpha = clamp(color.a);
+        if alpha == u8::MAX {
+            ColorSpec::Rgb([r, g, b])
+        } else {
+            ColorSpec::Rgba([r, g, b, alpha])
+        }
     }
 }
 

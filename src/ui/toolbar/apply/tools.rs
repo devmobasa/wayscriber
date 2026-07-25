@@ -68,7 +68,15 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_set_color_hsv(&mut self, h: f64, s: f64, v: f64) -> bool {
-        let changed = self.apply_color_from_ui(crate::draw::color::hsv_to_rgb(h, s, v));
+        // `hsv_to_rgb` is always opaque, so carry the live alpha across or the
+        // inline picker would silently flatten a translucent color every time
+        // the user nudged its hue or saturation.
+        let alpha = self.color_for_active_tool().a;
+        let color = Color {
+            a: alpha,
+            ..crate::draw::color::hsv_to_rgb(h, s, v)
+        };
+        let changed = self.apply_color_from_ui(color);
         // Remember the picker position even when the color collapses to a
         // gray/black RGB value that cannot express hue or saturation.
         if self.toolbar_picker_hsv != Some((h, s, v)) {

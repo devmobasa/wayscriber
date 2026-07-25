@@ -12,7 +12,9 @@ use super::{
 };
 
 fn hex_is_complete_for_live_preview(value: &str) -> bool {
-    value.strip_prefix('#').unwrap_or(value).len() == 6
+    // Six digits is a complete opaque color and eight a complete translucent
+    // one. Seven is mid-alpha-pair, so it must not flash a provisional color.
+    matches!(value.strip_prefix('#').unwrap_or(value).len(), 6 | 8)
 }
 
 /// Upper bound on the characters a title carries out of an authored label. This
@@ -354,9 +356,46 @@ impl InputState {
         let saturation = norm_x.clamp(0.0, 1.0);
         let value = (1.0 - norm_y).clamp(0.0, 1.0);
         let hue = self.color_picker_popup_hsv().map_or(0.0, |(h, _, _)| h);
-        let color = hsv_to_rgb(hue, saturation, value);
+        let color = self.color_picker_popup_with_alpha(hsv_to_rgb(hue, saturation, value));
         self.color_picker_popup_remember_hsv((hue, saturation, value));
         self.color_picker_popup_set_color_internal(color);
+    }
+
+    /// Re-applies the live alpha to a color rebuilt from HSV.
+    ///
+    /// `hsv_to_rgb` always returns an opaque color, so without this every drag
+    /// on the square or the hue bar would silently reset a translucent color to
+    /// fully opaque.
+    fn color_picker_popup_with_alpha(&self, color: Color) -> Color {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { current_color, .. } => Color {
+                a: current_color.a,
+                ..color
+            },
+            ColorPickerPopupState::Hidden => color,
+        }
+    }
+
+    /// Sets the color's alpha from a position on the alpha bar.
+    pub fn color_picker_popup_set_alpha(&mut self, norm_x: f64) {
+        let alpha = norm_x.clamp(0.0, 1.0);
+        let ColorPickerPopupState::Open { current_color, .. } = &self.color_picker_popup_state
+        else {
+            return;
+        };
+        let color = Color {
+            a: alpha,
+            ..*current_color
+        };
+        self.color_picker_popup_set_color_internal(color);
+    }
+
+    /// The live color's alpha, if the popup is open.
+    pub fn color_picker_popup_alpha(&self) -> Option<f64> {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { current_color, .. } => Some(current_color.a),
+            ColorPickerPopupState::Hidden => None,
+        }
     }
 
     /// Commits a color the picker computed itself: updates the live color and
@@ -506,8 +545,8 @@ impl InputState {
                 return;
             }
 
-            // Max length is 7 with # prefix or 6 without
-            let max_len = if hex_buffer.starts_with('#') { 7 } else { 6 };
+            // Eight digits so an alpha pair can be typed, plus the # prefix.
+            let max_len = if hex_buffer.starts_with('#') { 9 } else { 8 };
             if hex_buffer.len() >= max_len {
                 return;
             }
@@ -667,7 +706,7 @@ impl InputState {
     pub fn color_picker_popup_set_hue(&mut self, norm_x: f64) {
         let hue = norm_x.clamp(0.0, 1.0);
         let (_, saturation, value) = self.color_picker_popup_hsv().unwrap_or((0.0, 1.0, 1.0));
-        let color = hsv_to_rgb(hue, saturation, value);
+        let color = self.color_picker_popup_with_alpha(hsv_to_rgb(hue, saturation, value));
         self.color_picker_popup_remember_hsv((hue, saturation, value));
         self.color_picker_popup_set_color_internal(color);
     }

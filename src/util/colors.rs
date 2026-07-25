@@ -46,7 +46,7 @@ pub fn parse_config_hex_color(value: &str) -> Result<Color, ConfigHexColorError>
     let Some(hex) = trimmed.strip_prefix('#') else {
         return Err(ConfigHexColorError::MissingHash);
     };
-    if hex.len() != 6 {
+    if hex.len() != 6 && hex.len() != 8 {
         return Err(ConfigHexColorError::InvalidLength);
     }
     if !hex.as_bytes().iter().all(|byte| byte.is_ascii_hexdigit()) {
@@ -55,11 +55,16 @@ pub fn parse_config_hex_color(value: &str) -> Result<Color, ConfigHexColorError>
     let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| ConfigHexColorError::InvalidDigits)?;
     let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| ConfigHexColorError::InvalidDigits)?;
     let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| ConfigHexColorError::InvalidDigits)?;
+    let a = if hex.len() == 8 {
+        u8::from_str_radix(&hex[6..8], 16).map_err(|_| ConfigHexColorError::InvalidDigits)?
+    } else {
+        u8::MAX
+    };
     Ok(Color {
         r: f64::from(r) / 255.0,
         g: f64::from(g) / 255.0,
         b: f64::from(b) / 255.0,
-        a: 1.0,
+        a: f64::from(a) / 255.0,
     })
 }
 

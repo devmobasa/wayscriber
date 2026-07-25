@@ -28,6 +28,15 @@ impl ColorInput {
                 rgb: [r.to_string(), g.to_string(), b.to_string()],
                 selected_named: NamedColorOption::Custom,
             },
+            // The configurator's RGB fields carry no alpha channel, so a
+            // translucent color is shown as its hex form rather than being
+            // silently flattened to opaque by the three RGB boxes.
+            ColorSpec::Rgba(_) => Self {
+                mode: ColorMode::Named,
+                name: wayscriber::input::state::color_to_hex(spec.to_color()),
+                rgb: color_to_rgb_strings(spec.to_color()),
+                selected_named: NamedColorOption::Custom,
+            },
         }
     }
 

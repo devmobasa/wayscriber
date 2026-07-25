@@ -64,6 +64,12 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return true;
     }
 
+    if layout.point_in_alpha(fx, fy) {
+        state.color_picker_popup_set_alpha(layout.alpha_from_point(fx));
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
+
     // Recent-color swatch: adopt it as the live color, same as a hex paste.
     let recent_count = state.recent_colors().len();
     if let Some(index) = layout.recent_swatch_at(fx, fy, recent_count)

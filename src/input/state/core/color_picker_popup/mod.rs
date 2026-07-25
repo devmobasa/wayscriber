@@ -11,13 +11,15 @@ use crate::input::Tool;
 /// Width of the popup panel.
 pub const POPUP_WIDTH: f64 = 300.0;
 /// Height of the popup panel.
-pub const POPUP_HEIGHT: f64 = 372.0;
+pub const POPUP_HEIGHT: f64 = 394.0;
 /// Width of the saturation/value square and the hue bar below it.
 pub const GRADIENT_WIDTH: f64 = 260.0;
 /// Height of the saturation/value square.
 pub const SV_HEIGHT: f64 = 150.0;
 /// Height of the hue bar.
 pub const HUE_HEIGHT: f64 = 14.0;
+/// Height of the alpha bar.
+pub const ALPHA_HEIGHT: f64 = 14.0;
 /// Gap between the square and the bar beneath it.
 pub const SLIDER_GAP: f64 = 8.0;
 /// Edge length of a recent-color swatch.
@@ -71,6 +73,8 @@ pub enum PickerDrag {
     SatVal,
     /// The hue bar.
     Hue,
+    /// The alpha bar.
+    Alpha,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +142,14 @@ pub struct ColorPickerPopupLayout {
     pub sv_w: f64,
     /// Height of the saturation/value square.
     pub sv_h: f64,
+    /// X position of the alpha bar.
+    pub alpha_x: f64,
+    /// Y position of the alpha bar.
+    pub alpha_y: f64,
+    /// Width of the alpha bar.
+    pub alpha_w: f64,
+    /// Height of the alpha bar.
+    pub alpha_h: f64,
     /// Y position of the recent-color strip.
     pub recents_y: f64,
     /// X position of the recent-color strip's first swatch.
@@ -217,9 +229,11 @@ impl ColorPickerPopupLayout {
         let sv_y = content_y;
         let hue_x = sv_x;
         let hue_y = sv_y + SV_HEIGHT + SLIDER_GAP;
+        let alpha_x = sv_x;
+        let alpha_y = hue_y + HUE_HEIGHT + SLIDER_GAP;
 
         // Preview row (preview swatch + hex input)
-        let preview_row_y = hue_y + HUE_HEIGHT + ELEMENT_GAP;
+        let preview_row_y = alpha_y + ALPHA_HEIGHT + ELEMENT_GAP;
         let preview_x = content_x;
         let preview_y = preview_row_y;
 
@@ -270,6 +284,10 @@ impl ColorPickerPopupLayout {
             sv_y,
             sv_w: GRADIENT_WIDTH,
             sv_h: SV_HEIGHT,
+            alpha_x,
+            alpha_y,
+            alpha_w: GRADIENT_WIDTH,
+            alpha_h: ALPHA_HEIGHT,
             recents_y,
             recents_x,
             hue_x,
@@ -322,6 +340,19 @@ impl ColorPickerPopupLayout {
     /// Hue the bar would yield for a pointer position.
     pub fn hue_from_point(&self, x: f64) -> f64 {
         ((x - self.hue_x) / self.hue_w).clamp(0.0, 1.0)
+    }
+
+    /// Check if a point is within the alpha bar.
+    pub fn point_in_alpha(&self, x: f64, y: f64) -> bool {
+        x >= self.alpha_x
+            && x <= self.alpha_x + self.alpha_w
+            && y >= self.alpha_y
+            && y <= self.alpha_y + self.alpha_h
+    }
+
+    /// Alpha the bar would yield for a pointer position.
+    pub fn alpha_from_point(&self, x: f64) -> f64 {
+        ((x - self.alpha_x) / self.alpha_w).clamp(0.0, 1.0)
     }
 
     /// Top-left of the recent-color swatch at `index`.
@@ -464,7 +495,7 @@ impl ColorPickerPopupLayout {
     pub fn cursor_hint_at(&self, x: f64, y: f64) -> ColorPickerCursorHint {
         if self.point_in_hex_input(x, y) {
             ColorPickerCursorHint::Text
-        } else if self.point_in_sv(x, y) || self.point_in_hue(x, y) {
+        } else if self.point_in_sv(x, y) || self.point_in_hue(x, y) || self.point_in_alpha(x, y) {
             ColorPickerCursorHint::Crosshair
         } else if self.point_in_ok_button(x, y)
             || self.point_in_cancel_button(x, y)
@@ -498,12 +529,20 @@ pub use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
 
 /// Convert a color to hex string (e.g., "#FF8040").
 pub fn color_to_hex(color: Color) -> String {
-    format!(
+    let alpha = (color.a.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let rgb = format!(
         "#{:02X}{:02X}{:02X}",
         (color.r * 255.0).round() as u8,
         (color.g * 255.0).round() as u8,
         (color.b * 255.0).round() as u8
-    )
+    );
+    // Only widen to eight digits when the alpha carries information, so an
+    // opaque color still round-trips through the familiar six-digit form.
+    if alpha == u8::MAX {
+        rgb
+    } else {
+        format!("{rgb}{alpha:02X}")
+    }
 }
 
 /// Parse a hex color string (e.g., "#FF8040" or "FF8040").
@@ -512,7 +551,7 @@ pub fn parse_hex_color(value: &str) -> Option<Color> {
     if hex.starts_with('#') {
         hex = &hex[1..];
     }
-    if hex.len() != 6 && hex.len() != 3 {
+    if !matches!(hex.len(), 3 | 6 | 8) {
         return None;
     }
     if !hex.as_bytes().iter().all(|byte| byte.is_ascii_hexdigit()) {
@@ -531,10 +570,15 @@ pub fn parse_hex_color(value: &str) -> Option<Color> {
     let r = u8::from_str_radix(&expanded[0..2], 16).ok()?;
     let g = u8::from_str_radix(&expanded[2..4], 16).ok()?;
     let b = u8::from_str_radix(&expanded[4..6], 16).ok()?;
+    let a = if expanded.len() == 8 {
+        u8::from_str_radix(&expanded[6..8], 16).ok()?
+    } else {
+        u8::MAX
+    };
     Some(Color {
         r: r as f64 / 255.0,
         g: g as f64 / 255.0,
         b: b as f64 / 255.0,
-        a: 1.0,
+        a: a as f64 / 255.0,
     })
 }

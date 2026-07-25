@@ -90,8 +90,8 @@ Controls the default appearance of annotations.
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
 # (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
-# Or #RRGGBB hex: "#FFB3BA"
-# Or RGB array: [255, 0, 0]
+# Or #RRGGBB hex: "#FFB3BA" (or #RRGGBBAA for alpha: "#FFB3BA80")
+# Or RGB array: [255, 0, 0] (or RGBA: [255, 0, 0, 128])
 default_color = "red"
 
 # Default pen thickness in pixels (1.0 - 50.0)
@@ -225,8 +225,9 @@ drag_tool = "default"
 
 **Color Options:**
 - **Named colors**: `"red"` (`#F5333F`), `"green"` (`#2EC27E`), `"blue"` (`#3584E4`), `"yellow"` (`#F6D32D`), `"orange"` (`#FF7800`), `"pink"` (`#C061CB`), `"white"` (`#FFFFFF`), `"black"` (`#241F31`) — named colors resolve to the tuned quick color palette
-- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
-- **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
+- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`, or `"#RRGGBBAA"` such as `"#FFB3BA80"` to carry alpha. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
+- **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc. A fourth component sets alpha: `[255, 0, 0, 128]`.
+- **Alpha**: colors are opaque unless an alpha component says otherwise, and opaque colors are written back in the three-component form they have always used — so adding alpha never rewrites an existing palette. The marker and highlighter multiply their own opacity on top of any color alpha rather than replacing it.
 
 **Quick Colors:**
 - `[[drawing.quick_colors]]` entries define an ordered palette.

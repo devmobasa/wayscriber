@@ -925,7 +925,7 @@ backup_retention = 1
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
 # (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
-# Or #RRGGBB hex: "#FFB3BA"
+# Or #RRGGBB hex: "#FFB3BA", or #RRGGBBAA for alpha: "#FFB3BA80"
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
