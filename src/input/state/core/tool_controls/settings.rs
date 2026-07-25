@@ -3,8 +3,8 @@ use crate::draw::{Color, FontDescriptor, clamp_regular_sides};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
-    modifiers::DragToolBindings,
-    tool::{EraserMode, PerToolDrawingSettings, Tool},
+    modifiers::{DragModifier, DragToolBindings},
+    tool::{DragConstraints, EraserMode, PerToolDrawingSettings, Tool, constrain_drag},
 };
 use crate::ui::toolbar::model::ToolbarSliderSpec;
 
@@ -250,9 +250,37 @@ impl InputState {
         self.active_drag_color = color;
     }
 
+    /// Constraints the currently held modifiers request for the in-flight drag.
+    ///
+    /// A modifier that selected this drag's tool keeps that job for the whole
+    /// drag, so a legacy Shift-drag line stays free-angle. Hold Shift after the
+    /// drag has begun — or with a tool picked explicitly — to constrain instead.
+    /// Alt never selects a drawing tool, so it always means center-out.
+    pub(crate) fn active_drag_constraints(&self) -> DragConstraints {
+        let shift_chose_tool = matches!(
+            self.drag_tool_modifier,
+            DragModifier::Shift | DragModifier::CtrlShift
+        );
+        DragConstraints {
+            proportional: self.modifiers.shift && !shift_chose_tool,
+            from_center: self.modifiers.alt,
+        }
+    }
+
+    /// Applies the in-flight drag's modifier constraints to its endpoints.
+    pub(crate) fn constrained_drag(
+        &self,
+        tool: Tool,
+        start: (i32, i32),
+        end: (i32, i32),
+    ) -> ((i32, i32), (i32, i32)) {
+        constrain_drag(tool, start, end, self.active_drag_constraints())
+    }
+
     pub(crate) fn end_pointer_drag(&mut self) {
         self.active_drag_button = None;
         self.active_drag_color = None;
+        self.drag_tool_modifier = DragModifier::None;
         // A block-move drag (Alt+drag in text mode) rides on the pointer drag,
         // so tearing the drag down always clears it.
         self.text_block_drag = None;

@@ -634,6 +634,21 @@ The polygon tools are available from the toolbar picker; their default keybindin
 </details>
 
 <details>
+<summary>Shape constraints while drawing</summary>
+
+Hold these **during** a drag to constrain the shape. The preview always shows exactly what releasing would commit.
+
+| Constraint | Key | Applies to |
+|------------|-----|------------|
+| Snap to 15° steps | Hold <kbd>Shift</kbd> | Line, arrow |
+| Lock to square / circle | Hold <kbd>Shift</kbd> | Rectangle, ellipse, blur, polygons |
+| Draw from the centre out | Hold <kbd>Alt</kbd> | Rectangle, ellipse, blur, polygons |
+
+A modifier only has one job per drag. If it picked the tool at press — <kbd>Shift</kbd>-drag for a line, <kbd>Ctrl+Shift</kbd>-drag for an arrow — it keeps that job and does not also constrain, so existing drag mappings behave exactly as before. To snap a line, select the line tool first (or press <kbd>Shift</kbd> after the drag has started). <kbd>Alt</kbd> is never a drag-tool modifier, so it always means centre-out; press it after the drag begins, since <kbd>Alt</kbd> held at press starts a selection instead.
+
+</details>
+
+<details>
 <summary>Text editing</summary>
 
 While a text block or sticky note is being edited, these keys belong to the editor and are not configurable. Everything else — undo, tool switching, board navigation, capture — still reaches its usual binding.

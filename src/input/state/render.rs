@@ -29,11 +29,15 @@ impl InputState {
             return ProvisionalToolStroke::None;
         };
 
+        // Constrain once, so the preview shows exactly what a release would commit.
+        let (start, current) =
+            self.constrained_drag(*tool, (*start_x, *start_y), (current_x, current_y));
+
         if tool.polygon_template().is_some() {
             let snapshot = PolygonProvisionalSnapshot {
                 tool: *tool,
-                start: (*start_x, *start_y),
-                current: (current_x, current_y),
+                start,
+                current,
                 color: self.active_drag_color_or_current(),
                 size: self.thickness_for_tool(*tool),
                 fill_enabled: self.fill_enabled,
@@ -44,8 +48,8 @@ impl InputState {
 
         let snapshot = ProvisionalToolSnapshot {
             tool: *tool,
-            start: (*start_x, *start_y),
-            current: (current_x, current_y),
+            start,
+            current,
             points,
             point_thicknesses,
             color: self.active_drag_color_or_current(),

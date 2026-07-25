@@ -1,6 +1,7 @@
 //! Drawing tool selection and catalog metadata.
 
 mod catalog;
+mod constraints;
 mod drawing;
 mod profile;
 mod settings;
@@ -18,6 +19,7 @@ pub(crate) use catalog::{
     ToolDrawingBehavior, ToolMotionBehavior, ToolMotionSizeSource, ToolPathKind, ToolPressBehavior,
     ToolPressureBehavior,
 };
+pub(crate) use constraints::{DragConstraints, constrain_drag};
 #[expect(
     unused_imports,
     reason = "FinishedToolStroke exposes usage metadata to crate callers"

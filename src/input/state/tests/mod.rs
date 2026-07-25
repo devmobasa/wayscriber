@@ -16,6 +16,7 @@ mod basics;
 mod board_picker;
 mod boards;
 mod delete_restore;
+mod draw_constraints;
 mod drawing;
 mod erase;
 mod focus_mode;

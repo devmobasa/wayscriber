@@ -121,6 +121,8 @@ pub(super) fn build_main_sections(
                 ),
                 "Adjust thickness",
             ),
+            row("Shift while dragging", "Snap 15° / square"),
+            row("Alt while dragging", "Draw from center"),
         ],
         badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_pen),

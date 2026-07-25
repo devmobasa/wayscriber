@@ -14,7 +14,7 @@ use crate::draw::{DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFA
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{
     BoardManager,
-    modifiers::{DragToolBindings, Modifiers},
+    modifiers::{DragModifier, DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings},
 };
 use std::collections::HashMap;
@@ -103,6 +103,7 @@ impl InputState {
             drag_tool_bindings: DragToolBindings::default(),
             active_drag_button: None,
             active_drag_color: None,
+            drag_tool_modifier: DragModifier::None,
             state: DrawingState::Idle,
             should_exit: false,
             needs_redraw: true,

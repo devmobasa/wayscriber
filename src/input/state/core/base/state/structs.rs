@@ -37,7 +37,7 @@ use crate::input::boards::{
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     Key, MouseButton,
-    modifiers::{DragToolBindings, Modifiers},
+    modifiers::{DragModifier, DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
 use crate::render_profiles::RenderProfileSet;
@@ -148,6 +148,11 @@ pub struct InputState {
     pub(crate) active_drag_button: Option<MouseButton>,
     /// Per-drag color override, if the current drag binding configured one.
     pub(crate) active_drag_color: Option<Color>,
+    /// Modifier combination that selected the in-flight drawing drag's tool.
+    ///
+    /// A modifier keeps one job for the whole drag: if it chose the tool, it does
+    /// not also constrain the shape. Any other held modifier is free to.
+    pub(crate) drag_tool_modifier: DragModifier,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
