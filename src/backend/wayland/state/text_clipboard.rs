@@ -259,9 +259,11 @@ fn queue_text_paste(
     if controller.is_active() {
         return Ok(());
     }
-    let target = pending
-        .pop_front()
-        .expect("pending paste target was just queued");
+    // Submit from the front so queued requests keep their arrival order; the
+    // target just pushed is the only entry whenever the controller is idle.
+    let Some(target) = pending.pop_front() else {
+        return Ok(());
+    };
     start_text_paste(controller, target, operation)
 }
 

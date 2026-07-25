@@ -224,6 +224,52 @@ fn ctrl_c_captures_the_selection_without_editing() {
 }
 
 #[test]
+fn ctrl_c_without_a_selection_reaches_its_configured_action() {
+    // With a collapsed caret there is nothing to publish, so the editor must
+    // not swallow the key — otherwise the default screen-capture binding is
+    // unreachable for as long as a text block is open.
+    let mut state = text_state("hello");
+    state.modifiers.ctrl = true;
+    assert_eq!(
+        state.find_action("c"),
+        Some(Action::CaptureClipboardFull),
+        "the default Ctrl+C action is configured"
+    );
+
+    state.on_key_press(Key::Char('c'));
+    state.modifiers.ctrl = false;
+
+    assert!(
+        state.take_pending_text_copy().is_none(),
+        "a collapsed caret has nothing to copy"
+    );
+    assert_eq!(
+        buffer(&state),
+        "hello",
+        "the fall-through must not insert the character either"
+    );
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardFull
+        )),
+        "the configured capture action still fires"
+    );
+}
+
+#[test]
+fn ctrl_x_without_a_selection_falls_through_without_editing() {
+    let mut state = text_state("hello");
+
+    state.modifiers.ctrl = true;
+    state.on_key_press(Key::Char('x'));
+    state.modifiers.ctrl = false;
+
+    assert!(state.take_pending_text_copy().is_none());
+    assert_eq!(buffer(&state), "hello");
+}
+
+#[test]
 fn ctrl_x_deletes_the_selection_only_after_clipboard_publication() {
     let mut state = text_state("hello");
     state.modifiers.shift = true;

@@ -170,16 +170,15 @@ impl InputState {
         // Clipboard shortcuts need InputState-level access (pending requests and
         // selection deletion), so handle them before borrowing the buffer. The
         // backend fulfills the pending copy/paste against the system clipboard.
+        //
+        // Copy and cut only claim the key when there is something to publish:
+        // with a collapsed caret they have no work to do, and swallowing them
+        // would make configured Ctrl+C/Ctrl+X actions (screen capture by
+        // default) silently unreachable for as long as an editor is open.
         if ctrl && !alt && self.is_text_input_active() {
             match key {
-                Key::Char('c' | 'C') => {
-                    self.copy_text_selection();
-                    return true;
-                }
-                Key::Char('x' | 'X') => {
-                    self.cut_text_selection();
-                    return true;
-                }
+                Key::Char('c' | 'C') if self.copy_text_selection() => return true,
+                Key::Char('x' | 'X') if self.cut_text_selection() => return true,
                 Key::Char('v' | 'V') => {
                     if let Some(target) = self.capture_text_paste_target() {
                         self.pending_text_paste.push_back(target);
@@ -330,19 +329,22 @@ impl InputState {
     }
 
     /// Capture the selection for a pending copy to the system clipboard.
-    fn copy_text_selection(&mut self) {
-        if let Some((_, text)) = self.selected_text() {
-            self.pending_text_copy
-                .push_back(TextClipboardRequest { text, cut: None });
-        }
+    /// Returns whether there was a selection to publish.
+    fn copy_text_selection(&mut self) -> bool {
+        let Some((_, text)) = self.selected_text() else {
+            return false;
+        };
+        self.pending_text_copy
+            .push_back(TextClipboardRequest { text, cut: None });
+        true
     }
 
     /// Capture the selection for the clipboard. Deletion is deferred until the
     /// backend confirms successful publication, so a failed copy cannot lose
-    /// the user's text.
-    fn cut_text_selection(&mut self) {
+    /// the user's text. Returns whether there was a selection to publish.
+    fn cut_text_selection(&mut self) -> bool {
         let Some((range, text)) = self.selected_text() else {
-            return;
+            return false;
         };
         self.pending_text_copy.push_back(TextClipboardRequest {
             text,
@@ -352,6 +354,7 @@ impl InputState {
                 range,
             }),
         });
+        true
     }
 
     /// Insert clipboard text at the caret (replacing any selection). Multi-line

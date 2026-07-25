@@ -180,14 +180,16 @@ impl WaylandState {
         let Some(ti) = self.text_input.clone() else {
             return;
         };
-        // Stay disabled while another routed interaction owns keyboard input,
-        // or while the complete selection cannot fit the protocol's bounded
-        // surrounding-text request. Disabling clears stale context without
-        // applying an empty value that some compositors treat as permanently
-        // unsupported; collapsing the selection enables again with fresh data.
+        // Stay disabled while another routed interaction owns keyboard input:
         // an enabled IME would commit composed text straight into the hidden
         // canvas buffer instead of Help search, the command palette, or the
         // active modal.
+        //
+        // Also stay disabled while the complete selection cannot fit the
+        // protocol's bounded surrounding-text request. Disabling clears stale
+        // context without applying an empty value that some compositors treat
+        // as permanently unsupported; collapsing the selection enables again
+        // with fresh data.
         let desired = self.text_input_focused
             && self.input_state.is_text_input_active()
             && !self.input_state.modal_owns_text_input()
