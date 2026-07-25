@@ -6,7 +6,7 @@ use super::super::outcome::{
 };
 use crate::draw::Shape;
 use crate::input::MouseButton;
-use crate::input::state::core::MenuCommand;
+use crate::input::state::core::{MenuCommand, PickerDrag};
 use crate::input::state::{ContextMenuKind, DrawingState, InputState};
 
 pub(crate) fn update_pointer_positions(state: &mut InputState, points: PointerPoints) {
@@ -343,14 +343,22 @@ pub(crate) fn handle_color_picker_motion(
         return None;
     }
     let screen = points.screen();
-    if state.color_picker_popup_is_dragging()
+    if let Some(target) = state.color_picker_popup_drag_target()
         && let Some(layout) = state.color_picker_popup_layout()
     {
         let fx = screen.x() as f64;
         let fy = screen.y() as f64;
-        let norm_x = ((fx - layout.gradient_x) / layout.gradient_w).clamp(0.0, 1.0);
-        let norm_y = ((fy - layout.gradient_y) / layout.gradient_h).clamp(0.0, 1.0);
-        state.color_picker_popup_set_from_gradient(norm_x, norm_y);
+        // The drag keeps steering the area it started on, even once the
+        // pointer leaves that area's bounds.
+        match target {
+            PickerDrag::SatVal => {
+                let (saturation, value) = layout.sv_from_point(fx, fy);
+                state.color_picker_popup_set_from_gradient(saturation, 1.0 - value);
+            }
+            PickerDrag::Hue => {
+                state.color_picker_popup_set_hue(layout.hue_from_point(fx));
+            }
+        }
         state.color_picker_popup_set_hover(None);
     } else {
         state.color_picker_popup_set_hover(Some((screen.x() as f64, screen.y() as f64)));

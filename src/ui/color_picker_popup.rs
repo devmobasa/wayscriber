@@ -187,21 +187,21 @@ pub fn render_color_picker_popup(
         None,
     );
 
-    // Gradient picker
-    draw_color_gradient(
-        ctx,
-        layout.gradient_x,
-        layout.gradient_y,
-        layout.gradient_w,
-        layout.gradient_h,
-    );
+    // Saturation/value square, tinted by the hue the picker remembers rather
+    // than by the current color: grey and black carry no hue of their own.
+    let hue = input_state.color_picker_popup_hue_position().unwrap_or(0.0);
+    draw_sat_val_square(ctx, layout.sv_x, layout.sv_y, layout.sv_w, layout.sv_h, hue);
 
-    // Draw color indicator on gradient
     if let Some((norm_x, norm_y)) = input_state.color_picker_popup_gradient_position() {
-        let indicator_x = layout.gradient_x + norm_x * layout.gradient_w;
-        let indicator_y = layout.gradient_y + norm_y * layout.gradient_h;
+        let indicator_x = layout.sv_x + norm_x * layout.sv_w;
+        let indicator_y = layout.sv_y + norm_y * layout.sv_h;
         draw_color_indicator(ctx, indicator_x, indicator_y, current_color);
     }
+
+    // Hue bar
+    draw_hue_bar(ctx, layout.hue_x, layout.hue_y, layout.hue_w, layout.hue_h);
+    let hue_marker_x = layout.hue_x + hue * layout.hue_w;
+    draw_bar_marker(ctx, hue_marker_x, layout.hue_y, layout.hue_h);
 
     // Preview swatch
     draw_preview_swatch(
@@ -380,34 +380,61 @@ fn fit_title_to_panel(
 }
 
 /// Draw the HSV color gradient.
-fn draw_color_gradient(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
-    // Horizontal hue gradient
-    let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
-    hue_grad.add_color_stop_rgba(0.0, 1.0, 0.0, 0.0, 1.0); // Red
-    hue_grad.add_color_stop_rgba(0.17, 1.0, 1.0, 0.0, 1.0); // Yellow
-    hue_grad.add_color_stop_rgba(0.33, 0.0, 1.0, 0.0, 1.0); // Green
-    hue_grad.add_color_stop_rgba(0.5, 0.0, 1.0, 1.0, 1.0); // Cyan
-    hue_grad.add_color_stop_rgba(0.66, 0.0, 0.0, 1.0, 1.0); // Blue
-    hue_grad.add_color_stop_rgba(0.83, 1.0, 0.0, 1.0, 1.0); // Magenta
-    hue_grad.add_color_stop_rgba(1.0, 1.0, 0.0, 0.0, 1.0); // Red
+/// Draw the saturation (x) by value (y) square for one hue.
+///
+/// White-to-hue horizontally, then black over the top vertically — the standard
+/// construction, and the one the toolbar's inline picker already uses. Both
+/// axes are real: unlike the previous hue-by-value gradient, every point here
+/// maps to the colour actually produced by clicking it.
+fn draw_sat_val_square(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, hue: f64) {
+    let full = crate::draw::color::hsv_to_rgb(hue, 1.0, 1.0);
 
+    let sat_grad = cairo::LinearGradient::new(x, y, x + w, y);
+    sat_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 1.0);
+    sat_grad.add_color_stop_rgba(1.0, full.r, full.g, full.b, 1.0);
     ctx.rectangle(x, y, w, h);
-    let _ = ctx.set_source(&hue_grad);
+    let _ = ctx.set_source(&sat_grad);
     let _ = ctx.fill();
 
-    // Vertical value gradient (white at top, black at bottom)
     let val_grad = cairo::LinearGradient::new(x, y, x, y + h);
-    val_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.0); // Transparent white
-    val_grad.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.65); // Black with alpha
-
+    val_grad.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
+    val_grad.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 1.0);
     ctx.rectangle(x, y, w, h);
     let _ = ctx.set_source(&val_grad);
     let _ = ctx.fill();
 
-    // Border
     constants::set_color(ctx, GRADIENT_BORDER);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw the horizontal hue bar.
+fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
+    let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
+    for step in 0..=6 {
+        let t = f64::from(step) / 6.0;
+        let color = crate::draw::color::hsv_to_rgb(t, 1.0, 1.0);
+        hue_grad.add_color_stop_rgba(t, color.r, color.g, color.b, 1.0);
+    }
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.set_source(&hue_grad);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, GRADIENT_BORDER);
+    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw the position marker for a horizontal bar.
+fn draw_bar_marker(ctx: &cairo::Context, x: f64, y: f64, h: f64) {
+    constants::set_color(ctx, INDICATOR_OUTLINE);
+    ctx.rectangle(x - 2.5, y - 1.5, 5.0, h + 3.0);
+    ctx.set_line_width(3.0);
+    let _ = ctx.stroke_preserve();
+    constants::set_color(ctx, INDICATOR_RING);
+    ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 }
 

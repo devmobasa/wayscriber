@@ -11,11 +11,15 @@ use crate::input::Tool;
 /// Width of the popup panel.
 pub const POPUP_WIDTH: f64 = 300.0;
 /// Height of the popup panel.
-pub const POPUP_HEIGHT: f64 = 340.0;
-/// Width of the gradient picker.
+pub const POPUP_HEIGHT: f64 = 332.0;
+/// Width of the saturation/value square and the hue bar below it.
 pub const GRADIENT_WIDTH: f64 = 260.0;
-/// Height of the gradient picker.
-pub const GRADIENT_HEIGHT: f64 = 180.0;
+/// Height of the saturation/value square.
+pub const SV_HEIGHT: f64 = 150.0;
+/// Height of the hue bar.
+pub const HUE_HEIGHT: f64 = 14.0;
+/// Gap between the square and the bar beneath it.
+pub const SLIDER_GAP: f64 = 8.0;
 /// Size of the preview swatch.
 pub const PREVIEW_SIZE: f64 = 32.0;
 /// Width of the hex input field.
@@ -50,6 +54,18 @@ pub(crate) enum ColorPickerPopupAction {
     Cancel,
 }
 
+/// Which picker area a pointer drag is currently steering.
+///
+/// The square and the bar sample different axes, so a drag that starts on one
+/// must keep steering that one even after the pointer leaves its bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickerDrag {
+    /// The saturation (x) by value (y) square.
+    SatVal,
+    /// The hue bar.
+    Hue,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HexPasteTarget {
     ActiveTool,
@@ -81,8 +97,14 @@ pub enum ColorPickerPopupState {
         hex_editing: bool,
         /// Text buffer for hex input field.
         hex_buffer: String,
-        /// Whether we're currently dragging on the gradient.
-        dragging: bool,
+        /// Which picker area a drag is steering, if any.
+        dragging: Option<PickerDrag>,
+        /// Hue/saturation/value the picker is showing.
+        ///
+        /// Kept alongside the RGB color because grey, black and white all
+        /// collapse to a hue of zero: without this, dragging value down to
+        /// black and back up would silently reset the hue to red.
+        picker_hsv: (f64, f64, f64),
         /// Whether the hex text is selected (first keystroke replaces all).
         hex_selected: bool,
         /// Current hover position (for button hover states).
@@ -101,14 +123,22 @@ pub struct ColorPickerPopupLayout {
     pub width: f64,
     /// Height of the popup panel.
     pub height: f64,
-    /// X position of the gradient picker.
-    pub gradient_x: f64,
-    /// Y position of the gradient picker.
-    pub gradient_y: f64,
-    /// Width of the gradient picker.
-    pub gradient_w: f64,
-    /// Height of the gradient picker.
-    pub gradient_h: f64,
+    /// X position of the saturation/value square.
+    pub sv_x: f64,
+    /// Y position of the saturation/value square.
+    pub sv_y: f64,
+    /// Width of the saturation/value square.
+    pub sv_w: f64,
+    /// Height of the saturation/value square.
+    pub sv_h: f64,
+    /// X position of the hue bar.
+    pub hue_x: f64,
+    /// Y position of the hue bar.
+    pub hue_y: f64,
+    /// Width of the hue bar.
+    pub hue_w: f64,
+    /// Height of the hue bar.
+    pub hue_h: f64,
     /// X position of the preview swatch.
     pub preview_x: f64,
     /// Y position of the preview swatch.
@@ -170,12 +200,15 @@ impl ColorPickerPopupLayout {
         let content_x = origin_x + PADDING;
         let content_y = origin_y + PADDING + TITLE_HEIGHT;
 
-        // Gradient picker (centered horizontally)
-        let gradient_x = origin_x + (width - GRADIENT_WIDTH) / 2.0;
-        let gradient_y = content_y;
+        // Saturation/value square with the hue bar stacked under it, both
+        // centered horizontally.
+        let sv_x = origin_x + (width - GRADIENT_WIDTH) / 2.0;
+        let sv_y = content_y;
+        let hue_x = sv_x;
+        let hue_y = sv_y + SV_HEIGHT + SLIDER_GAP;
 
         // Preview row (preview swatch + hex input)
-        let preview_row_y = gradient_y + GRADIENT_HEIGHT + ELEMENT_GAP;
+        let preview_row_y = hue_y + HUE_HEIGHT + ELEMENT_GAP;
         let preview_x = content_x;
         let preview_y = preview_row_y;
 
@@ -216,10 +249,14 @@ impl ColorPickerPopupLayout {
             origin_y,
             width,
             height,
-            gradient_x,
-            gradient_y,
-            gradient_w: GRADIENT_WIDTH,
-            gradient_h: GRADIENT_HEIGHT,
+            sv_x,
+            sv_y,
+            sv_w: GRADIENT_WIDTH,
+            sv_h: SV_HEIGHT,
+            hue_x,
+            hue_y,
+            hue_w: GRADIENT_WIDTH,
+            hue_h: HUE_HEIGHT,
             preview_x,
             preview_y,
             hex_input_x,
@@ -243,12 +280,29 @@ impl ColorPickerPopupLayout {
         }
     }
 
-    /// Check if a point is within the gradient picker.
-    pub fn point_in_gradient(&self, x: f64, y: f64) -> bool {
-        x >= self.gradient_x
-            && x <= self.gradient_x + self.gradient_w
-            && y >= self.gradient_y
-            && y <= self.gradient_y + self.gradient_h
+    /// Check if a point is within the saturation/value square.
+    pub fn point_in_sv(&self, x: f64, y: f64) -> bool {
+        x >= self.sv_x && x <= self.sv_x + self.sv_w && y >= self.sv_y && y <= self.sv_y + self.sv_h
+    }
+
+    /// Check if a point is within the hue bar.
+    pub fn point_in_hue(&self, x: f64, y: f64) -> bool {
+        x >= self.hue_x
+            && x <= self.hue_x + self.hue_w
+            && y >= self.hue_y
+            && y <= self.hue_y + self.hue_h
+    }
+
+    /// Saturation/value the square would yield for a pointer position.
+    pub fn sv_from_point(&self, x: f64, y: f64) -> (f64, f64) {
+        let saturation = ((x - self.sv_x) / self.sv_w).clamp(0.0, 1.0);
+        let value = 1.0 - ((y - self.sv_y) / self.sv_h).clamp(0.0, 1.0);
+        (saturation, value)
+    }
+
+    /// Hue the bar would yield for a pointer position.
+    pub fn hue_from_point(&self, x: f64) -> f64 {
+        ((x - self.hue_x) / self.hue_w).clamp(0.0, 1.0)
     }
 
     /// Check if a point is within the hex input field.
@@ -373,7 +427,7 @@ impl ColorPickerPopupLayout {
     pub fn cursor_hint_at(&self, x: f64, y: f64) -> ColorPickerCursorHint {
         if self.point_in_hex_input(x, y) {
             ColorPickerCursorHint::Text
-        } else if self.point_in_gradient(x, y) {
+        } else if self.point_in_sv(x, y) || self.point_in_hue(x, y) {
             ColorPickerCursorHint::Crosshair
         } else if self.point_in_ok_button(x, y)
             || self.point_in_cancel_button(x, y)

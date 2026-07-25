@@ -309,7 +309,7 @@ mod tests {
 
         let mut state = make_test_input_state();
         state.open_color_picker_popup();
-        state.color_picker_popup_set_dragging(true);
+        state.color_picker_popup_set_dragging(Some(crate::input::state::PickerDrag::SatVal));
         assert!(state.has_active_pointer_interaction());
     }
 

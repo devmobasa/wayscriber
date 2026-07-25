@@ -1318,7 +1318,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
     let original = input.color_for_tool(Tool::Pen);
     input.open_color_picker_popup();
     input.color_picker_popup_set_from_gradient(0.6, 0.1);
-    input.color_picker_popup_set_dragging(true);
+    input.color_picker_popup_set_dragging(Some(crate::input::state::PickerDrag::SatVal));
     assert_ne!(input.color_for_tool(Tool::Pen), original);
     input.mark_session_dirty();
     let mut session_state = SessionState::new(Some(current_options.clone()));

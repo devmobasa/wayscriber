@@ -889,6 +889,90 @@ fn toolbar_edit_quick_color_event_opens_the_popup_on_that_slot() {
     assert!(!state.is_color_picker_popup_open());
 }
 
+/// The square used to be hue-by-value with saturation pinned at 1.0, so no
+/// pastel or muted colour was reachable by mouse and the rendered white top row
+/// handed back a fully saturated colour.
+#[test]
+fn picker_square_reaches_desaturated_colors() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    // Left edge of the square is saturation 0: a pure grey ramp.
+    state.color_picker_popup_set_from_gradient(0.0, 0.25);
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        (color.r - color.g).abs() < 1e-6 && (color.g - color.b).abs() < 1e-6,
+        "saturation 0 should give a grey, got {color:?}"
+    );
+    assert!(color.r > 0.7, "value 0.75 should be light, got {color:?}");
+}
+
+#[test]
+fn picker_square_and_hue_bar_are_independent_axes() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    state.color_picker_popup_set_hue(0.5);
+    state.color_picker_popup_set_from_gradient(1.0, 0.0);
+    let cyan = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        cyan.g > 0.9 && cyan.b > 0.9 && cyan.r < 0.1,
+        "hue 0.5 at full saturation/value should be cyan, got {cyan:?}"
+    );
+
+    // Moving within the square must not disturb the hue.
+    state.color_picker_popup_set_from_gradient(0.5, 0.5);
+    let (hue, saturation, value) = state.color_picker_popup_hsv().expect("popup is open");
+    assert!((hue - 0.5).abs() < 1e-6, "hue drifted to {hue}");
+    assert!((saturation - 0.5).abs() < 1e-6);
+    assert!((value - 0.5).abs() < 1e-6);
+}
+
+/// Grey, black and white all convert back to a hue of zero, so without the
+/// remembered triple, dragging value to black and back would silently reset the
+/// hue to red.
+#[test]
+fn picker_keeps_its_hue_through_black() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    state.color_picker_popup_set_hue(0.75);
+    state.color_picker_popup_set_from_gradient(1.0, 1.0); // drag to black
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        color.r < 1e-6 && color.g < 1e-6 && color.b < 1e-6,
+        "expected black"
+    );
+
+    let hue = state.color_picker_popup_hue_position().expect("open");
+    assert!(
+        (hue - 0.75).abs() < 1e-6,
+        "hue was lost through black: {hue}"
+    );
+
+    // Coming back up returns the original hue, not red.
+    state.color_picker_popup_set_from_gradient(1.0, 0.0);
+    let restored = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        restored.b > 0.9 && restored.r > 0.4,
+        "expected the violet back, got {restored:?}"
+    );
+}
+
+#[test]
+fn picker_square_position_round_trips() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    state.color_picker_popup_set_hue(0.33);
+    state.color_picker_popup_set_from_gradient(0.4, 0.3);
+    let (x, y) = state
+        .color_picker_popup_gradient_position()
+        .expect("popup is open");
+    assert!((x - 0.4).abs() < 1e-6, "saturation round-trip lost: {x}");
+    assert!((y - 0.3).abs() < 1e-6, "value round-trip lost: {y}");
+}
+
 #[test]
 fn color_picker_copy_button_requests_copy_and_keeps_popup_open() {
     let mut state = create_test_input_state();

@@ -12,7 +12,7 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
     }
 
     // Stop dragging on release
-    state.color_picker_popup_set_dragging(false);
+    state.color_picker_popup_set_dragging(None);
 
     let layout = match state.color_picker_popup_layout() {
         Some(layout) => layout,
@@ -51,12 +51,15 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return true;
     }
 
-    // Check gradient click
-    if layout.point_in_gradient(fx, fy) {
-        let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
-        let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
-        state.color_picker_popup_set_from_gradient(norm_x, norm_y);
-        // Unfocus hex input when clicking gradient
+    if layout.point_in_sv(fx, fy) {
+        let (saturation, value) = layout.sv_from_point(fx, fy);
+        state.color_picker_popup_set_from_gradient(saturation, 1.0 - value);
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
+
+    if layout.point_in_hue(fx, fy) {
+        state.color_picker_popup_set_hue(layout.hue_from_point(fx));
         state.color_picker_popup_set_hex_editing(false);
         return true;
     }

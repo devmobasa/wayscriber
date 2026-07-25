@@ -367,9 +367,21 @@ mod tests {
         let damage = color_picker_effect_rect(&input, 1920, 1080).expect("popup damage");
 
         // Before targeted popup damage, an ordinary key used the renderer's
-        // 1920x1080 empty-damage fallback (2,073,600 pixels). The 300x340
-        // panel plus the standard two-pixel safety margin is 104,576 pixels.
-        assert_eq!(damage, Rect::new(808, 368, 304, 344).unwrap());
+        // 1920x1080 empty-damage fallback (2,073,600 pixels). Now it is the
+        // centered panel plus the standard two-pixel safety margin. Derived
+        // from the layout constants rather than hard-coded, so changing the
+        // panel's size does not fail this test for the wrong reason.
+        const MARGIN: i32 = 2;
+        let panel_w = crate::input::state::COLOR_PICKER_POPUP_WIDTH as i32;
+        let panel_h = crate::input::state::COLOR_PICKER_POPUP_HEIGHT as i32;
+        let expected = Rect::new(
+            (1920 - panel_w) / 2 - MARGIN,
+            (1080 - panel_h) / 2 - MARGIN,
+            panel_w + MARGIN * 2,
+            panel_h + MARGIN * 2,
+        )
+        .expect("panel rect");
+        assert_eq!(damage, expected);
         assert!(damage.width * damage.height < 1920 * 1080 / 10);
     }
 
