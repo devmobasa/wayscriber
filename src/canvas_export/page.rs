@@ -252,6 +252,7 @@ fn draw_canvas_page_contents(
                 w,
                 h,
                 strength,
+                style,
             } => render_blur_rect(
                 ctx,
                 BlurRectParams {
@@ -260,6 +261,7 @@ fn draw_canvas_page_contents(
                     w: *w,
                     h: *h,
                     strength: *strength,
+                    style: *style,
                     cacheable: false,
                 },
                 &replay_ctx,

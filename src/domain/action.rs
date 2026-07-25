@@ -46,6 +46,7 @@ pub enum Action {
     SelectStepMarkerTool,
     SelectEraserTool,
     ToggleEraserMode,
+    CycleBlurStyle,
     SelectPenTool,
     SelectLineTool,
     SelectRectTool,

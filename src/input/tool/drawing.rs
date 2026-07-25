@@ -1,5 +1,5 @@
 use crate::draw::shape::{bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points};
-use crate::draw::{ArrowLabel, BlurRectParams, Color, EraserBrush, EraserKind, Shape};
+use crate::draw::{ArrowLabel, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, Shape};
 use crate::input::tool::{
     EraserMode, Tool, ToolDrawingBehavior, ToolPathKind, ToolPressureBehavior,
 };
@@ -20,6 +20,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) size: f64,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
+    pub(crate) blur_style: BlurStyle,
     pub(crate) arrow_length: f64,
     pub(crate) arrow_angle: f64,
     pub(crate) arrow_head_at_end: bool,
@@ -66,6 +67,7 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) eraser_size: f64,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
+    pub(crate) blur_style: BlurStyle,
     pub(crate) arrow_length: f64,
     pub(crate) arrow_angle: f64,
     pub(crate) arrow_head_at_end: bool,
@@ -187,6 +189,7 @@ impl Tool {
                     w,
                     h,
                     strength: snapshot.size,
+                    style: snapshot.blur_style,
                 }
             }),
             ToolDrawingBehavior::StepMarker => {
@@ -311,6 +314,7 @@ impl Tool {
                     w,
                     h,
                     strength: snapshot.size,
+                    style: snapshot.blur_style,
                     cacheable: false,
                 })
             }

@@ -103,6 +103,13 @@ default_eraser_size = 12.0
 # Default eraser mode ("brush" or "stroke")
 default_eraser_mode = "brush"
 
+# How the blur tool obscures its region by default
+# "gaussian"  - softens detail (historical behavior)
+# "pixelate"  - coarse mosaic of averaged blocks; block size follows the tool size
+# "secure"    - collapses the region to one averaged color; no detail survives
+# "black-out" - opaque black fill; needs no captured background
+default_blur_style = "gaussian"
+
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
@@ -234,6 +241,7 @@ drag_tool = "default"
 - **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-50px)
 - **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-50px)
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
+- **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Regular polygon sides**: Use the side toolbar Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -1309,6 +1317,7 @@ select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+cycle_blur_style = []              # blur -> pixelate -> secure -> black out
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []

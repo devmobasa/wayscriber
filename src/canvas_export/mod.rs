@@ -19,7 +19,7 @@ mod tests {
     use crate::canvas_export::page::draw_canvas_page;
     use crate::canvas_export::png::render_canvas_surface;
     use crate::config::{PdfExportConfig, RenderColorMappingConfig, RenderProfileConfig};
-    use crate::draw::{BLACK, Frame, RED, Shape, WHITE};
+    use crate::draw::{BLACK, BlurStyle, Frame, RED, Shape, WHITE};
     use crate::render_profiles::RenderColorProfile;
 
     fn snapshot(frame: Frame, viewport: CanvasExportViewport) -> CanvasExportSnapshot {
@@ -292,6 +292,7 @@ mod tests {
             w: 8,
             h: 8,
             strength: 12.0,
+            style: BlurStyle::Gaussian,
         });
         let mut surface = render_canvas_surface(&snapshot(
             frame,
@@ -331,6 +332,7 @@ mod tests {
             w: 8,
             h: 8,
             strength: 12.0,
+            style: BlurStyle::Gaussian,
         });
         let mut export = snapshot(
             frame,

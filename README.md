@@ -118,6 +118,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Freehand pen, highlighter, eraser (circle/rect)
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows with optional auto-numbered labels; step markers for walkthroughs
+- Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
 - Multiline text and sticky notes with smoothing
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo

@@ -70,6 +70,7 @@ fn sample_tool_state() -> ToolStateSnapshot {
         eraser_size: 12.0,
         eraser_kind: crate::draw::EraserKind::Circle,
         eraser_mode: EraserMode::Brush,
+        blur_style: Default::default(),
         marker_opacity: Some(0.32),
         fill_enabled: Some(false),
         tool_override: None,

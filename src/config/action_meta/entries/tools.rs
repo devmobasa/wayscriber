@@ -214,4 +214,14 @@ pub const ENTRIES: &[ActionMeta] = &[
         false,
         true
     ),
+    meta!(
+        CycleBlurStyle,
+        "Cycle Blur Style",
+        None,
+        "Blur, pixelate, secure, black out",
+        Tools,
+        true,
+        true,
+        true
+    ),
 ];

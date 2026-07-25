@@ -220,6 +220,7 @@ impl InputState {
                 w,
                 h,
                 strength,
+                style,
             } => {
                 let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
                 let nw = Self::scale_size(*w, scale_x);
@@ -230,6 +231,7 @@ impl InputState {
                     w: nw.max(1),
                     h: nh.max(1),
                     strength: *strength,
+                    style: *style,
                 }
             }
             Shape::Image { x, y, w, h, data } => {

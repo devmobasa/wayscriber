@@ -97,6 +97,8 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 # Toggle eraser behavior mode
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
+cycle_blur_style = []
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []
@@ -933,6 +935,13 @@ default_eraser_size = 12.0
 
 # Default eraser mode: "brush" (pixel erase) or "stroke" (erase whole stroke)
 default_eraser_mode = "brush"
+
+# How the blur tool obscures its region by default
+# "gaussian"  - softens detail (historical behavior)
+# "pixelate"  - coarse mosaic of averaged blocks; block size follows the tool size
+# "secure"    - collapses the region to one averaged color; no detail survives
+# "black-out" - opaque black fill; needs no captured background
+default_blur_style = "gaussian"
 
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32

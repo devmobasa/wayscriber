@@ -1,5 +1,5 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::draw::{Color, FontDescriptor, clamp_regular_sides};
+use crate::draw::{BlurStyle, Color, FontDescriptor, clamp_regular_sides};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
@@ -399,6 +399,23 @@ impl InputState {
 
     pub(crate) fn eraser_hit_radius(&self) -> f64 {
         (self.eraser_size / 2.0).max(1.0)
+    }
+
+    /// Sets how the blur tool obscures its region. Returns true if changed.
+    pub fn set_blur_style(&mut self, style: BlurStyle) -> bool {
+        if self.blur_style == style {
+            return false;
+        }
+        self.blur_style = style;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.mark_session_dirty();
+        true
+    }
+
+    /// Steps to the next blur style, wrapping around.
+    pub fn cycle_blur_style(&mut self) -> bool {
+        self.set_blur_style(self.blur_style.next())
     }
 
     /// Sets the font descriptor used for text rendering. Returns true if changed.

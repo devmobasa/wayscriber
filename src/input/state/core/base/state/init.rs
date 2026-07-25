@@ -10,7 +10,9 @@ use super::structs::InputState;
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding,
 };
-use crate::draw::{DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES};
+use crate::draw::{
+    BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
+};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{
     BoardManager,
@@ -88,6 +90,7 @@ impl InputState {
             eraser_kind: EraserKind::Circle,
             eraser_mode,
             marker_opacity,
+            blur_style: BlurStyle::default(),
             current_font_size: font_size,
             font_descriptor,
             text_background_enabled,
