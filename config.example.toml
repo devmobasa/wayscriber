@@ -1142,12 +1142,12 @@ show_status_bar = true
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [arrow]
-# Arrowhead length in pixels
+# Minimum arrowhead length in pixels. The head also scales with stroke width
+# (three times the thickness), so this acts as the floor for thin strokes.
 length = 20.0
 
-# Arrowhead angle in degrees (15-60)
-# 30 degrees gives a nice balanced arrow
-angle_degrees = 30.0
+# Arrowhead half-angle in degrees (15-60). Smaller is a sharper, narrower head.
+angle_degrees = 24.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = false

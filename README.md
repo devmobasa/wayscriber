@@ -625,30 +625,20 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Rectangle | <kbd>Ctrl</kbd> + drag |
 | Ellipse/Circle | <kbd>Tab</kbd> + drag |
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
-| Triangle / parallelogram / rhombus / regular polygon | Toolbar Polygons picker (bindable) |
-| Freeform polygon | Toolbar Polygons picker, then click vertices; <kbd>Enter</kbd> or double-click to finish |
+| Triangle / parallelogram / rhombus / regular polygon | **Shape picker** in the top strip (bindable) |
+| Freeform polygon | **Shape picker**, then click vertices; <kbd>Enter</kbd> or double-click to finish |
+| Blur | **Shape picker** (bindable) — drag a region; style via **Cycle Blur Style** |
+| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
-| Spotlight | Toolbar (bindable) — drag an ellipse; everything else dims |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-The polygon tools are available from the toolbar picker; their default keybindings are intentionally empty. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. What sits inline depends on the strip mode: the simple strip keeps Select, Pen, Marker, Step marker, and Eraser inline, while the full strip adds Line and Arrow. Everything else — rectangle, ellipse, blur, spotlight, and the polygons — is one click away inside the picker.
 
-</details>
+Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
 
-<details>
-<summary>Shape constraints while drawing</summary>
-
-Hold these **during** a drag to constrain the shape. The preview always shows exactly what releasing would commit.
-
-| Constraint | Key | Applies to |
-|------------|-----|------------|
-| Snap to 15° steps | Hold <kbd>Shift</kbd> | Line, arrow |
-| Lock to square / circle | Hold <kbd>Shift</kbd> | Rectangle, ellipse, blur, polygons |
-| Draw from the centre out | Hold <kbd>Alt</kbd> | Rectangle, ellipse, blur, polygons |
-
-A modifier only has one job per drag. If it picked the tool at press — <kbd>Shift</kbd>-drag for a line, <kbd>Ctrl+Shift</kbd>-drag for an arrow — it keeps that job and does not also constrain, so existing drag mappings behave exactly as before. To snap a line, select the line tool first (or press <kbd>Shift</kbd> after the drag has started). <kbd>Alt</kbd> is never a drag-tool modifier, so it always means centre-out; press it after the drag begins, since <kbd>Alt</kbd> held at press starts a selection instead.
+These tools' default keybindings are intentionally empty; bind them under `[keybindings.tools]` if you reach for them often. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
 
 </details>
 
