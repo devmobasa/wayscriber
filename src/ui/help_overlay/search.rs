@@ -1,4 +1,3 @@
-use super::super::primitives::text_extents_for;
 use super::types::Row;
 // The palette's fuzzy scorer/tokenizer and its shared static search-model
 // scorer, reused directly so help search and the command palette rank
@@ -9,8 +8,9 @@ use crate::ui_text::{UiTextStyle, draw_text_baseline};
 // Substring match highlighting is shared with the command palette; matching
 // itself is fuzzy (see [`row_matches`]), so a fuzzy-only match draws none.
 pub(crate) use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
-
-const ELLIPSIS: &str = "\u{2026}";
+// Measured trimming lives with the other shared text primitives so surfaces
+// outside this overlay (the color picker's title) use the same implementation.
+pub(crate) use crate::ui::primitives::ellipsize_to_fit;
 
 /// Fuzzy row match: every query token must fuzzy-match the shortcut string
 /// (`key`), the visible action description, or — for rows that carry an action
@@ -61,63 +61,6 @@ pub(crate) fn draw_segmented_text(
         let extents = draw_text_baseline(ctx, style, text, cursor_x, baseline, None);
         cursor_x += extents.width();
     }
-}
-
-pub(crate) fn ellipsize_to_fit(
-    ctx: &cairo::Context,
-    text: &str,
-    font_family: &str,
-    font_size: f64,
-    weight: cairo::FontWeight,
-    max_width: f64,
-) -> String {
-    let extents = text_extents_for(
-        ctx,
-        font_family,
-        cairo::FontSlant::Normal,
-        weight,
-        font_size,
-        text,
-    );
-    if extents.width() <= max_width {
-        return text.to_string();
-    }
-
-    let ellipsis = ELLIPSIS;
-    let ellipsis_extents = text_extents_for(
-        ctx,
-        font_family,
-        cairo::FontSlant::Normal,
-        weight,
-        font_size,
-        ellipsis,
-    );
-    if ellipsis_extents.width() > max_width {
-        return String::new();
-    }
-
-    let mut end = text.len();
-    while end > 0 {
-        if !text.is_char_boundary(end) {
-            end -= 1;
-            continue;
-        }
-        let candidate = format!("{}{}", &text[..end], ellipsis);
-        let candidate_extents = text_extents_for(
-            ctx,
-            font_family,
-            cairo::FontSlant::Normal,
-            weight,
-            font_size,
-            &candidate,
-        );
-        if candidate_extents.width() <= max_width {
-            return candidate;
-        }
-        end -= 1;
-    }
-
-    ellipsis.to_string()
 }
 
 #[cfg(test)]
