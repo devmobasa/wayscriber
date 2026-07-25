@@ -49,6 +49,7 @@ pub(crate) enum ToolDrawingBehavior {
     Polygon(PolygonTemplate),
     Arrow,
     BlurRect,
+    Spotlight,
     StepMarker,
     Eraser,
 }
@@ -81,7 +82,7 @@ const fn profile(
     }
 }
 
-const DESCRIPTORS: [ToolDescriptor; 16] = [
+const DESCRIPTORS: [ToolDescriptor; 17] = [
     ToolDescriptor {
         tool: Tool::Select,
         short_label: "Select",
@@ -300,6 +301,27 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
         drawing: ToolDrawingBehavior::BlurRect,
     },
     ToolDescriptor {
+        tool: Tool::Spotlight,
+        short_label: "Spotlight",
+        display_label: "Spotlight Tool",
+        action: Some(Action::SelectSpotlightTool),
+        profile: profile(
+            // A spotlight's geometry comes entirely from the drag and it has no
+            // stroke, so it borrows the blur slot rather than adding a settings
+            // slot with nothing in it, and shows no colour/thickness controls.
+            ToolSettingsSlot::Blur,
+            ToolSizeSource::DrawingThickness,
+            ToolControlGroup::None,
+            false,
+            "Spotlight",
+        ),
+        press: ToolPressBehavior::StartDrawing {
+            request_blur_capture: false,
+        },
+        motion: ToolMotionBehavior::NoPathAccumulation,
+        drawing: ToolDrawingBehavior::Spotlight,
+    },
+    ToolDescriptor {
         tool: Tool::Marker,
         short_label: "Marker",
         display_label: "Marker Tool",
@@ -379,7 +401,7 @@ const DESCRIPTORS: [ToolDescriptor; 16] = [
 ];
 
 impl Tool {
-    pub(crate) const ALL: [Self; 16] = [
+    pub(crate) const ALL: [Self; 17] = [
         Self::Select,
         Self::Pen,
         Self::Line,
@@ -392,6 +414,7 @@ impl Tool {
         Self::FreeformPolygon,
         Self::Arrow,
         Self::Blur,
+        Self::Spotlight,
         Self::Marker,
         Self::Highlight,
         Self::StepMarker,
@@ -412,10 +435,11 @@ impl Tool {
             Self::FreeformPolygon => &DESCRIPTORS[9],
             Self::Arrow => &DESCRIPTORS[10],
             Self::Blur => &DESCRIPTORS[11],
-            Self::Marker => &DESCRIPTORS[12],
-            Self::Highlight => &DESCRIPTORS[13],
-            Self::StepMarker => &DESCRIPTORS[14],
-            Self::Eraser => &DESCRIPTORS[15],
+            Self::Spotlight => &DESCRIPTORS[12],
+            Self::Marker => &DESCRIPTORS[13],
+            Self::Highlight => &DESCRIPTORS[14],
+            Self::StepMarker => &DESCRIPTORS[15],
+            Self::Eraser => &DESCRIPTORS[16],
         }
     }
 

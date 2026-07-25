@@ -118,6 +118,8 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Freehand pen, highlighter, eraser (circle/rect)
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows with optional auto-numbered labels; step markers for walkthroughs
+- Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
+- Spotlight tool: dims everything except the regions you draw
 - Multiline text and sticky notes with smoothing
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
@@ -172,6 +174,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
 - Light passthrough (layer-shell): draw while input passes through to the app underneath — see [Light passthrough mode](#light-passthrough-mode)
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. On GNOME, this uses the screenshot portal when available
+- Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Dim strength and edge softness are configurable under `[spotlight]`
 
 ### Callouts and zoom
 - **Numbered callouts:** auto-numbered arrow labels and step markers; reset arrow labels with <kbd>Ctrl+Shift+R</kbd>
@@ -622,14 +625,20 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Rectangle | <kbd>Ctrl</kbd> + drag |
 | Ellipse/Circle | <kbd>Tab</kbd> + drag |
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
-| Triangle / parallelogram / rhombus / regular polygon | Toolbar Polygons picker (bindable) |
-| Freeform polygon | Toolbar Polygons picker, then click vertices; <kbd>Enter</kbd> or double-click to finish |
+| Triangle / parallelogram / rhombus / regular polygon | **Shape picker** in the top strip (bindable) |
+| Freeform polygon | **Shape picker**, then click vertices; <kbd>Enter</kbd> or double-click to finish |
+| Blur | **Shape picker** (bindable) — drag a region; style via **Cycle Blur Style** |
+| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-The polygon tools are available from the toolbar picker; their default keybindings are intentionally empty. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. What sits inline depends on the strip mode: the simple strip keeps Select, Pen, Marker, Step marker, and Eraser inline, while the full strip adds Line and Arrow. Everything else — rectangle, ellipse, blur, spotlight, and the polygons — is one click away inside the picker.
+
+Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
+
+These tools' default keybindings are intentionally empty; bind them under `[keybindings.tools]` if you reach for them often. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
 
 </details>
 

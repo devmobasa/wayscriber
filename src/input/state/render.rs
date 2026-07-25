@@ -53,6 +53,7 @@ impl InputState {
             eraser_size: self.eraser_size,
             marker_opacity: self.marker_opacity,
             fill_enabled: self.fill_enabled,
+            blur_style: self.blur_style,
             arrow_length: self.arrow_length,
             arrow_angle: self.arrow_angle,
             arrow_head_at_end: self.arrow_head_at_end,
@@ -119,6 +120,7 @@ impl InputState {
                         w: params.w,
                         h: params.h,
                         strength: params.strength,
+                        style: params.style,
                     },
                 );
                 true

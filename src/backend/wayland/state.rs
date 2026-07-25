@@ -196,6 +196,12 @@ pub(super) struct WaylandState {
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
     /// Baked committed-shapes layer for panned canvas rendering.
     pub(super) canvas_layer_cache: canvas_layer::CanvasLayerCache,
+    /// Whether the frame just rendered carried a spotlight dim layer.
+    ///
+    /// Removing the last spotlight makes `has_spotlight()` false, but the buffer
+    /// on screen still holds the full-screen dim. One more full-damage frame is
+    /// needed to wash it out, so the decision looks at the previous frame too.
+    pub(super) spotlight_dimmed_last_frame: bool,
 
     // Configuration
     pub(super) config: Config,

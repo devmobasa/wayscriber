@@ -37,6 +37,57 @@ pub enum EraserKind {
     Rect,
 }
 
+/// How a blur rectangle obscures whatever sits beneath it.
+///
+/// The variants form a ladder of increasing information loss. `Gaussian` softens
+/// detail and is the historical behavior; `Pixelate` averages fixed blocks;
+/// `Secure` and `BlackOut` retain no detail from the source region at all, which
+/// is what makes them suitable for redacting exported captures.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum BlurStyle {
+    /// Multi-pass downsample and resample. Softens detail without erasing it.
+    #[default]
+    Gaussian,
+    /// Coarse mosaic of averaged blocks.
+    Pixelate,
+    /// Whole region collapsed to a single averaged color. No detail survives.
+    Secure,
+    /// Opaque black fill. Ignores the backdrop entirely.
+    BlackOut,
+}
+
+impl BlurStyle {
+    /// Every style, in the order the toolbar and cycling action step through them.
+    pub const ALL: [Self; 4] = [Self::Gaussian, Self::Pixelate, Self::Secure, Self::BlackOut];
+
+    /// Short human-readable name for toolbars, menus, and toasts.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Gaussian => "Blur",
+            Self::Pixelate => "Pixelate",
+            Self::Secure => "Secure",
+            Self::BlackOut => "Black out",
+        }
+    }
+
+    /// Next style in [`Self::ALL`] order, wrapping at the end.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Gaussian => Self::Pixelate,
+            Self::Pixelate => Self::Secure,
+            Self::Secure => Self::BlackOut,
+            Self::BlackOut => Self::Gaussian,
+        }
+    }
+
+    /// Whether the style needs the captured backdrop to render.
+    pub fn needs_backdrop(self) -> bool {
+        !matches!(self, Self::BlackOut)
+    }
+}
+
 /// Label metadata for numbered arrows.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ArrowLabel {
@@ -180,6 +231,24 @@ pub enum Shape {
         h: i32,
         /// Blur strength, reusing the tool size slider semantics
         strength: f64,
+        /// How the region is obscured. Absent in sessions written before styles
+        /// existed, which deserialize as the historical Gaussian blur.
+        #[serde(default)]
+        style: BlurStyle,
+    },
+    /// Region that stays bright while the spotlight pass dims everything else.
+    ///
+    /// Draws nothing on its own; it is consumed by the spotlight compositing
+    /// pass, which needs every region at once to build a single dim layer.
+    Spotlight {
+        /// Center X coordinate
+        cx: i32,
+        /// Center Y coordinate
+        cy: i32,
+        /// Horizontal radius in pixels
+        rx: i32,
+        /// Vertical radius in pixels
+        ry: i32,
     },
     /// Numbered step marker bubble.
     StepMarker {
@@ -314,6 +383,9 @@ impl Shape {
                 thick,
                 ..
             } => bounding_box_for_ellipse(*cx, *cy, *rx, *ry, *thick),
+            Shape::Spotlight { cx, cy, rx, ry } => {
+                bounding_box_for_ellipse(*cx, *cy, *rx, *ry, 0.0)
+            }
             Shape::Polygon { points, thick, .. } => bounding_box_for_polygon(points, *thick),
             Shape::Arrow {
                 x1,
@@ -384,6 +456,7 @@ impl Shape {
             Shape::Line { .. } => "Line",
             Shape::Rect { .. } => "Rectangle",
             Shape::Ellipse { .. } => "Ellipse",
+            Shape::Spotlight { .. } => "Spotlight",
             Shape::Polygon { kind, .. } => kind.label(),
             Shape::Arrow { .. } => "Arrow",
             Shape::BlurRect { .. } => "Blur",

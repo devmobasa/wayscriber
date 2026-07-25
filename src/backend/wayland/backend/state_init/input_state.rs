@@ -53,6 +53,9 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
     input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
     input_state.polygon_sides = clamp_regular_sides(config.drawing.polygon_sides);
+    input_state.blur_style = config.drawing.default_blur_style;
+    input_state.spotlight_dim_opacity = config.spotlight.dim_opacity;
+    input_state.spotlight_feather = config.spotlight.feather;
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
     input_state.status_bar_interactive = config.ui.status_bar_interactive;
     input_state.show_status_board_badge = config.ui.show_status_board_badge;

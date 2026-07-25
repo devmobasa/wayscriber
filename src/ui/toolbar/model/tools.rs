@@ -16,6 +16,7 @@ pub(crate) enum SemanticToolIcon {
     FreeformPolygon,
     Arrow,
     Blur,
+    Spotlight,
     Marker,
     Highlight,
     StepMarker,
@@ -41,10 +42,11 @@ const FULL_TOOL_BUTTONS: [Tool; 7] = [
 ];
 
 /// Full-mode shape picker: everything the strip no longer shows inline.
-const FULL_SHAPE_PICKER_TOOLS: [Tool; 8] = [
+const FULL_SHAPE_PICKER_TOOLS: [Tool; 9] = [
     Tool::Rect,
     Tool::Ellipse,
     Tool::Blur,
+    Tool::Spotlight,
     Tool::Triangle,
     Tool::Parallelogram,
     Tool::Rhombus,
@@ -52,12 +54,13 @@ const FULL_SHAPE_PICKER_TOOLS: [Tool; 8] = [
     Tool::FreeformPolygon,
 ];
 
-const SHAPE_TOOLS: [Tool; 10] = [
+const SHAPE_TOOLS: [Tool; 11] = [
     Tool::Line,
     Tool::Rect,
     Tool::Ellipse,
     Tool::Arrow,
     Tool::Blur,
+    Tool::Spotlight,
     Tool::Triangle,
     Tool::Parallelogram,
     Tool::Rhombus,
@@ -191,6 +194,7 @@ pub(crate) fn toolbar_item_id_for_tool(tool: Tool) -> ToolbarItemId {
         Tool::FreeformPolygon => ids::TOP_TOOL_FREEFORM_POLYGON,
         Tool::Arrow => ids::TOP_TOOL_ARROW,
         Tool::Blur => ids::TOP_TOOL_BLUR,
+        Tool::Spotlight => ids::TOP_TOOL_SPOTLIGHT,
         Tool::Marker => ids::TOP_TOOL_MARKER,
         Tool::Highlight => ids::TOP_UTILITY_HIGHLIGHT,
         Tool::StepMarker => ids::TOP_TOOL_STEP_MARKER,
@@ -212,6 +216,7 @@ fn tool_for_toolbar_item_id(id: ToolbarItemId) -> Option<Tool> {
         (ids::TOP_TOOL_FREEFORM_POLYGON, Tool::FreeformPolygon),
         (ids::TOP_TOOL_ARROW, Tool::Arrow),
         (ids::TOP_TOOL_BLUR, Tool::Blur),
+        (ids::TOP_TOOL_SPOTLIGHT, Tool::Spotlight),
         (ids::TOP_TOOL_MARKER, Tool::Marker),
         (ids::TOP_TOOL_STEP_MARKER, Tool::StepMarker),
         (ids::TOP_TOOL_ERASER, Tool::Eraser),
@@ -407,6 +412,7 @@ pub(crate) fn semantic_icon_for_tool(tool: Tool) -> SemanticToolIcon {
         Tool::FreeformPolygon => SemanticToolIcon::FreeformPolygon,
         Tool::Arrow => SemanticToolIcon::Arrow,
         Tool::Blur => SemanticToolIcon::Blur,
+        Tool::Spotlight => SemanticToolIcon::Spotlight,
         Tool::Marker => SemanticToolIcon::Marker,
         Tool::Highlight => SemanticToolIcon::Highlight,
         Tool::StepMarker => SemanticToolIcon::StepMarker,

@@ -104,6 +104,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
             w,
             h,
             strength,
+            style,
         } => {
             crate::draw::render_blur_rect(
                 ctx,
@@ -113,6 +114,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
                     w: *w,
                     h: *h,
                     strength: *strength,
+                    style: *style,
                     cacheable: true,
                 },
                 replay_ctx,

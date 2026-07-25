@@ -445,6 +445,18 @@ fn draw_blur(ctx: &Context) {
     }
 }
 
+fn draw_spotlight(ctx: &Context) {
+    // A frame (the dimmed screen) with a bright circular opening inside it.
+    rounded_rect(ctx, 3.0, 4.0, 18.0, 16.0, 3.0);
+    stroke(ctx);
+    ctx.new_sub_path();
+    ctx.arc(12.0, 12.0, 4.6, 0.0, std::f64::consts::TAU);
+    stroke(ctx);
+    ctx.new_sub_path();
+    ctx.arc(12.0, 12.0, 1.8, 0.0, std::f64::consts::TAU);
+    fill(ctx);
+}
+
 fn draw_triangle(ctx: &Context) {
     ctx.move_to(12.0, 4.0);
     ctx.line_to(20.0, 19.0);
@@ -579,6 +591,7 @@ renderers!(
     (render_rect, draw_rectangle),
     (render_circle, draw_ellipse),
     (render_blur, draw_blur),
+    (render_spotlight, draw_spotlight),
     (render_triangle, draw_triangle),
     (render_parallelogram, draw_parallelogram),
     (render_rhombus, draw_rhombus),
@@ -596,7 +609,7 @@ mod tests {
     type IconRender = fn(&Context, f64, f64, f64);
 
     const SIZES: [i32; 5] = [18, 20, 22, 24, 28];
-    const ICONS: [(&str, IconRender); 33] = [
+    const ICONS: [(&str, IconRender); 34] = [
         ("drag", render_drag),
         ("select", render_select),
         ("pen", render_pen),
@@ -623,6 +636,7 @@ mod tests {
         ("rectangle", render_rect),
         ("ellipse", render_circle),
         ("blur", render_blur),
+        ("spotlight", render_spotlight),
         ("triangle", render_triangle),
         ("parallelogram", render_parallelogram),
         ("rhombus", render_rhombus),

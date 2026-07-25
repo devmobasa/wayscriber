@@ -34,6 +34,12 @@ pub(crate) fn default_toggle_eraser_mode() -> Vec<String> {
     vec!["Ctrl+Shift+E".to_string()]
 }
 
+/// Unbound by default, like the blur tool itself; reachable from the command
+/// palette until the user binds a chord.
+pub(crate) fn default_cycle_blur_style() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_pen_tool() -> Vec<String> {
     vec!["F".to_string()]
 }
@@ -75,6 +81,11 @@ pub(crate) fn default_select_arrow_tool() -> Vec<String> {
 }
 
 pub(crate) fn default_select_blur_tool() -> Vec<String> {
+    Vec::new()
+}
+
+/// Unbound by default, like the blur tool.
+pub(crate) fn default_select_spotlight_tool() -> Vec<String> {
     Vec::new()
 }
 

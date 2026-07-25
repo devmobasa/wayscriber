@@ -29,7 +29,7 @@ use crate::config::{
     ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
+use crate::draw::{BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
 use crate::input::boards::{
     BoardRestoreRequest, PageRestoreRequest, PendingBoardConfigUpdate, PendingBoardRuntimeUiAction,
@@ -118,6 +118,12 @@ pub struct InputState {
     pub eraser_mode: EraserMode,
     /// Opacity multiplier for marker tool strokes
     pub marker_opacity: f64,
+    /// How the blur tool obscures the region it covers
+    pub blur_style: BlurStyle,
+    /// Alpha of the dim layer outside every spotlight
+    pub spotlight_dim_opacity: f64,
+    /// Fraction of each spotlight radius spent fading out at the edge
+    pub spotlight_feather: f64,
     /// Current font size for text mode (from config)
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)

@@ -127,6 +127,7 @@ impl WaylandState {
             data,
             buffer_damage: BufferDamageTracker::new(buffer_count),
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
+            spotlight_dimmed_last_frame: false,
             config,
             runtime_ui,
             runtime_ui_unavailable,

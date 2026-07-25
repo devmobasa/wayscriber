@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 use log::info;
 
@@ -30,6 +31,20 @@ impl InputState {
             Action::ToggleEraserMode => {
                 if self.toggle_eraser_mode() {
                     info!("Eraser mode set to {:?}", self.eraser_mode);
+                }
+            }
+            Action::SelectSpotlightTool => {
+                self.set_tool_override(Some(Tool::Spotlight));
+            }
+            Action::CycleBlurStyle => {
+                if self.cycle_blur_style() {
+                    let label = self.blur_style.label();
+                    info!("Blur style set to {label}");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "blur-style",
+                        Toast::info(format!("Blur style: {label}")),
+                    );
                 }
             }
             Action::IncreaseFontSize => {

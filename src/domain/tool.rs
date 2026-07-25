@@ -32,6 +32,8 @@ pub enum Tool {
     Arrow,
     /// Privacy blur rectangle over the captured background
     Blur,
+    /// Spotlight region that dims everything outside it
+    Spotlight,
     /// Semi-transparent marker stroke for highlighting text
     Marker,
     /// Highlight-only tool (no drawing, emits click highlight)
@@ -174,6 +176,8 @@ impl DragBindableTool {
             Tool::FreeformPolygon => None,
             Tool::Arrow => Some(Self::Arrow),
             Tool::Blur => Some(Self::Blur),
+            // Not offered as a modifier-drag binding; select it explicitly.
+            Tool::Spotlight => None,
             Tool::Marker => Some(Self::Marker),
             Tool::Highlight => Some(Self::Highlight),
             Tool::StepMarker => Some(Self::StepMarker),

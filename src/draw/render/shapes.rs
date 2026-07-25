@@ -1,4 +1,4 @@
-use super::blur::render_blur_placeholder;
+use super::blur::{render_black_out_rect, render_blur_placeholder};
 use super::highlight::render_click_highlight;
 use super::image::render_image_shape;
 use super::pressure_strokes::render_freehand_pressure_borrowed;
@@ -136,8 +136,19 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             w,
             h,
             strength: _,
+            style,
         } => {
-            render_blur_placeholder(ctx, *x, *y, *w, *h, false);
+            // Without a captured backdrop the sampling styles can only stand in
+            // with a placeholder, but a black out is already its final form.
+            if style.needs_backdrop() {
+                render_blur_placeholder(ctx, *x, *y, *w, *h, false);
+            } else {
+                render_black_out_rect(ctx, *x, *y, *w, *h);
+            }
+        }
+        Shape::Spotlight { .. } => {
+            // Nothing to draw per-shape: the spotlight pass paints one dim layer
+            // for every region at once, before annotations are drawn.
         }
         Shape::Text {
             x,

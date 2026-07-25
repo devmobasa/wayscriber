@@ -10,7 +10,7 @@ mod colors;
 mod geometry;
 mod text;
 
-pub(crate) use arrow::calculate_arrowhead_triangle_custom;
+pub(crate) use arrow::{calculate_arrow_outline, calculate_arrowhead_triangle_custom};
 pub use colors::{ConfigHexColorError, color_to_name, name_to_color, parse_config_hex_color};
 pub use geometry::{Rect, ellipse_bounds};
 pub use text::truncate_with_ellipsis;

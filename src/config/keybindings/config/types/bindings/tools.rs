@@ -32,6 +32,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_toggle_eraser_mode")]
     pub toggle_eraser_mode: Vec<String>,
 
+    #[serde(default = "default_cycle_blur_style")]
+    pub cycle_blur_style: Vec<String>,
+
     #[serde(default = "default_select_pen_tool")]
     pub select_pen_tool: Vec<String>,
 
@@ -65,6 +68,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_select_blur_tool")]
     pub select_blur_tool: Vec<String>,
 
+    #[serde(default = "default_select_spotlight_tool")]
+    pub select_spotlight_tool: Vec<String>,
+
     #[serde(default = "default_select_highlight_tool")]
     pub select_highlight_tool: Vec<String>,
 
@@ -96,6 +102,7 @@ impl Default for ToolKeybindingsConfig {
             select_step_marker_tool: default_select_step_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),
+            cycle_blur_style: default_cycle_blur_style(),
             select_pen_tool: default_select_pen_tool(),
             select_line_tool: default_select_line_tool(),
             select_rect_tool: default_select_rect_tool(),
@@ -107,6 +114,7 @@ impl Default for ToolKeybindingsConfig {
             select_freeform_polygon_tool: default_select_freeform_polygon_tool(),
             select_arrow_tool: default_select_arrow_tool(),
             select_blur_tool: default_select_blur_tool(),
+            select_spotlight_tool: default_select_spotlight_tool(),
             select_highlight_tool: default_select_highlight_tool(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
             increase_font_size: default_increase_font_size(),

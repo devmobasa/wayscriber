@@ -24,6 +24,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     item(ids::TOP_TOOL_ELLIPSE, "Ellipse", Top, Tool, None),
     item(ids::TOP_TOOL_ARROW, "Arrow", Top, Tool, None),
     item(ids::TOP_TOOL_BLUR, "Blur", Top, Tool, None),
+    item(ids::TOP_TOOL_SPOTLIGHT, "Spotlight", Top, Tool, None),
     item(ids::TOP_TOOL_TRIANGLE, "Triangle", Top, Tool, None),
     item(
         ids::TOP_TOOL_PARALLELOGRAM,
