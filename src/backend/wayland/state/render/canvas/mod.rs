@@ -64,23 +64,6 @@ impl WaylandState {
 
         let replay_ctx = eraser_ctx.replay_context();
 
-        // Spotlights dim everything around themselves, so they cannot be drawn in
-        // z-order like other shapes. One pass, here: after the background so the
-        // dim sits on top of it, before the annotations so those stay bright.
-        let spotlight_cursor = {
-            let (screen_x, screen_y) = self.current_mouse();
-            self.canvas_world_coords(screen_x as f64, screen_y as f64)
-        };
-        let spotlight_regions = self.input_state.spotlight_regions(spotlight_cursor);
-        crate::draw::render_spotlight_pass(
-            ctx,
-            &spotlight_regions,
-            crate::draw::SpotlightPass {
-                dim_opacity: self.input_state.spotlight_dim_opacity,
-                feather: self.input_state.spotlight_feather,
-            },
-        );
-
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
         if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
             // Board background and committed shapes came from the baked layer.
@@ -209,6 +192,30 @@ impl WaylandState {
                 .completed_shapes
                 .saturating_add(Instant::now().saturating_duration_since(completed_shapes_start));
         }
+
+        // Spotlights dim everything around themselves, so they cannot be drawn in
+        // z-order like other shapes: one pass covering every region at once.
+        //
+        // It has to run *after* the committed shapes, not before them. Eraser
+        // strokes clear their path and replay the original backdrop into it, so a
+        // dim layer painted earlier would be punched away and every past erasure
+        // would show as a bright trail outside the openings.
+        let spotlight_cursor = {
+            let (screen_x, screen_y) = self.current_mouse();
+            self.canvas_world_coords(screen_x as f64, screen_y as f64)
+        };
+        let spotlight_regions = self.input_state.spotlight_regions(spotlight_cursor);
+        // Remember for the next frame's damage decision: once the last spotlight
+        // is gone this buffer still carries its dim until a full repaint.
+        self.spotlight_dimmed_last_frame = !spotlight_regions.is_empty();
+        crate::draw::render_spotlight_pass(
+            ctx,
+            &spotlight_regions,
+            crate::draw::SpotlightPass {
+                dim_opacity: self.input_state.spotlight_dim_opacity,
+                feather: self.input_state.spotlight_feather,
+            },
+        );
 
         self.render_selection_overlays(ctx);
 

@@ -24,6 +24,7 @@ pub use selection::{render_selection_halo, render_selection_handles, selection_h
 pub use shapes::render_shape;
 pub use spotlight::{
     SpotlightPass, SpotlightRegion, render_spotlight_outline, render_spotlight_pass,
+    spotlight_regions_for_frame,
 };
 pub(crate) use strokes::render_eraser_stroke;
 pub use strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};

@@ -2,8 +2,13 @@
 //!
 //! Unlike every other shape, a spotlight does not paint itself — it darkens
 //! everything *around* itself. So it cannot be a per-shape draw call; it is one
-//! pass over the whole canvas that runs after the background and before the
-//! annotations, leaving anything drawn later at full brightness.
+//! pass over the whole canvas.
+//!
+//! It runs *after* the committed shapes. Eraser strokes clear their path and
+//! replay the original backdrop into it, so a dim layer painted before them
+//! would be punched away and past erasures would show as bright trails. Running
+//! last also means the committed canvas dims as a whole, while the live preview,
+//! selection handles, click highlights, and UI drawn afterwards stay bright.
 
 /// One elliptical opening left bright by the pass, in logical canvas coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,6 +26,26 @@ pub struct SpotlightPass {
     pub dim_opacity: f64,
     /// Fraction of each radius spent fading out. 0.0 is a hard edge.
     pub feather: f64,
+}
+
+/// Every spotlight opening on a frame, in the order the shapes were added.
+///
+/// The pass needs all regions at once, so each surface that renders a frame —
+/// the live canvas, exports, and board thumbnails — collects them the same way.
+pub fn spotlight_regions_for_frame(frame: &crate::draw::Frame) -> Vec<SpotlightRegion> {
+    frame
+        .shapes
+        .iter()
+        .filter_map(|drawn| match &drawn.shape {
+            crate::draw::Shape::Spotlight { cx, cy, rx, ry } => Some(SpotlightRegion {
+                cx: f64::from(*cx),
+                cy: f64::from(*cy),
+                rx: f64::from(*rx),
+                ry: f64::from(*ry),
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Dims the current clip except inside `regions`.
@@ -93,14 +118,20 @@ pub fn render_spotlight_outline(
     let rx = region.rx.max(1.0);
     let ry = region.ry.max(1.0);
 
+    // Build the ellipse under a scaled transform, then drop the transform before
+    // stroking so the line width is not scaled with it. Cairo keeps the path
+    // across restore, but not the source or line width — so both are set after
+    // the restore, or the stroke would inherit whatever the caller left behind.
+    ctx.new_path();
     let _ = ctx.save();
-    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-    ctx.set_line_width(thick);
     ctx.translate(region.cx, region.cy);
     ctx.scale(rx, ry);
     ctx.new_sub_path();
     ctx.arc(0.0, 0.0, 1.0, 0.0, std::f64::consts::TAU);
     let _ = ctx.restore();
+
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.set_line_width(thick);
     let _ = ctx.stroke();
 }
 
@@ -318,6 +349,61 @@ mod tests {
         assert!(
             alpha_at(&mut surface, 145, 60) > 150,
             "the gap between two spotlights stays dimmed"
+        );
+    }
+
+    #[test]
+    fn selection_outline_ignores_whatever_styling_the_caller_left_behind() {
+        let (mut surface, ctx) = surface_with_context(200, 200);
+        // A caller mid-render leaves a source and width set; the outline must
+        // use its own, not inherit these.
+        ctx.set_source_rgba(0.0, 1.0, 0.0, 1.0);
+        ctx.set_line_width(1.0);
+
+        render_spotlight_outline(
+            &ctx,
+            CENTERED,
+            crate::draw::Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            6.0,
+        );
+        drop(ctx);
+
+        // On the ellipse's right edge (cx + rx = 140, cy = 100).
+        assert!(
+            alpha_at(&mut surface, 140, 100) > 0,
+            "the outline must actually stroke"
+        );
+        let (r, g, _b) = rgb_at(&mut surface, 140, 100);
+        assert!(
+            r > 200 && g < 60,
+            "outline should use its own red, not the caller's green: rgb ({r}, {g}, _)"
+        );
+    }
+
+    #[test]
+    fn selection_outline_leaves_no_dimming_behind() {
+        let (mut surface, ctx) = surface_with_context(200, 200);
+        render_spotlight_outline(
+            &ctx,
+            CENTERED,
+            crate::draw::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            4.0,
+        );
+        drop(ctx);
+        assert_eq!(
+            alpha_at(&mut surface, 100, 100),
+            0,
+            "the outline is a stroke only; it must not fill or dim"
         );
     }
 

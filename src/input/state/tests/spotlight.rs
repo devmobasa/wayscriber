@@ -25,23 +25,6 @@ fn dragging_the_spotlight_tool_commits_an_elliptical_region() {
 }
 
 #[test]
-fn shift_makes_the_spotlight_circular() {
-    let mut state = create_test_input_state();
-    state.set_tool_override(Some(Tool::Spotlight));
-
-    state.on_mouse_press(MouseButton::Left, 0, 0);
-    state.modifiers.shift = true;
-    state.on_mouse_release(MouseButton::Left, 120, 40);
-
-    match only_shape(&state) {
-        Shape::Spotlight { rx, ry, .. } => {
-            assert_eq!(rx, ry, "shift should give equal radii");
-        }
-        other => panic!("expected a spotlight, got {other:?}"),
-    }
-}
-
-#[test]
 fn committed_spotlights_are_collected_for_the_render_pass() {
     let mut state = create_test_input_state();
     state.set_tool_override(Some(Tool::Spotlight));

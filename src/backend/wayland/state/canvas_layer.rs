@@ -139,12 +139,7 @@ impl WaylandState {
     /// a board pan transform without zoom or a frozen backdrop image (whose
     /// screen-anchored transforms make world-space baking unsound).
     pub(in crate::backend::wayland) fn canvas_layer_cache_usable(&self) -> bool {
-        self.canvas_transform_active()
-            && !self.zoom.active
-            && self.frozen.image().is_none()
-            // The cache bakes background and shapes into one blit, leaving no
-            // seam for the spotlight pass to run between them.
-            && !self.input_state.has_spotlight()
+        self.canvas_transform_active() && !self.zoom.active && self.frozen.image().is_none()
     }
 
     /// Ensures the layer cache covers the current view with current content,

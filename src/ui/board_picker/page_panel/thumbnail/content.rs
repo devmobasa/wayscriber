@@ -1,4 +1,7 @@
-use crate::draw::{EraserReplayContext, render_eraser_stroke, render_shape};
+use crate::draw::{
+    EraserReplayContext, SpotlightPass, render_eraser_stroke, render_shape, render_spotlight_pass,
+    spotlight_regions_for_frame,
+};
 use crate::input::BoardBackground;
 use crate::input::state::{PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
 use crate::ui::constants::{self, RADIUS_STD, TEXT_HINT, TEXT_TERTIARY};
@@ -10,6 +13,11 @@ use super::types::PageContentArgs;
 
 /// Transparent-board thumbnail backdrop: faint white tint plus a cross-hatch
 /// stroke (no matching theme token; kept from the pre-theme literals).
+/// Spotlight dimming for thumbnails: enough to read as a spotlight at preview
+/// size without turning the card black.
+const THUMBNAIL_SPOTLIGHT_DIM: f64 = 0.55;
+const THUMBNAIL_SPOTLIGHT_FEATHER: f64 = 0.35;
+
 const TRANSPARENT_TINT: Rgba = (1.0, 1.0, 1.0, 0.06);
 const TRANSPARENT_CROSS: Rgba = (1.0, 1.0, 1.0, 0.08);
 
@@ -92,6 +100,22 @@ fn render_frame_shapes(
             }
         }
     }
+
+    // Spotlights paint nothing per-shape, so without this pass a page holding
+    // only spotlights would thumbnail as an empty page. Runs after the shapes to
+    // match the canvas and export ordering.
+    //
+    // The thumbnail chain carries no config, and a strong configured dim would
+    // render a postage-stamp preview almost black, so previews use a fixed,
+    // gentler appearance rather than the live values.
+    render_spotlight_pass(
+        ctx,
+        &spotlight_regions_for_frame(frame),
+        SpotlightPass {
+            dim_opacity: THUMBNAIL_SPOTLIGHT_DIM,
+            feather: THUMBNAIL_SPOTLIGHT_FEATHER,
+        },
+    );
 }
 
 pub(super) fn render_page_name_label(
