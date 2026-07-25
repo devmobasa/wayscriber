@@ -5,7 +5,10 @@
 
 use crate::draw::Color;
 use crate::input::InputState;
-use crate::input::state::{COLOR_PICKER_PREVIEW_SIZE, ColorPickerPopupLayout};
+use crate::input::state::{
+    COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_RECENT_SWATCH_COUNT as RECENT_SWATCH_COUNT,
+    COLOR_PICKER_RECENT_SWATCH_SIZE as RECENT_SWATCH_SIZE, ColorPickerPopupLayout,
+};
 use crate::ui::primitives::{draw_rounded_rect, ellipsize_to_fit, text_extents_for};
 use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
@@ -211,6 +214,14 @@ pub fn render_color_picker_popup(
         COLOR_PICKER_PREVIEW_SIZE,
         current_color,
     );
+
+    // Recent colors, most-recent-first. Empty until something has been
+    // applied, so a fresh session shows no strip rather than dead slots.
+    let recents = input_state.recent_colors();
+    for (index, color) in recents.iter().take(RECENT_SWATCH_COUNT).enumerate() {
+        let (sx, sy) = layout.recent_swatch_origin(index);
+        draw_recent_swatch(ctx, sx, sy, *color, *color == current_color);
+    }
 
     // Check if hex value is valid (for validation feedback)
     let hex_valid = input_state.color_picker_popup_hex_valid();
@@ -424,6 +435,34 @@ fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
     constants::set_color(ctx, GRADIENT_BORDER);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw one recent-color swatch, ringed when it matches the live color.
+fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, selected: bool) {
+    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
+    ctx.rectangle(x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
+    let _ = ctx.fill();
+
+    if selected {
+        constants::set_color(ctx, INDICATOR_RING);
+        ctx.set_line_width(2.0);
+        ctx.rectangle(
+            x - 1.0,
+            y - 1.0,
+            RECENT_SWATCH_SIZE + 2.0,
+            RECENT_SWATCH_SIZE + 2.0,
+        );
+    } else {
+        constants::set_color(ctx, GRADIENT_BORDER);
+        ctx.set_line_width(1.0);
+        ctx.rectangle(
+            x + 0.5,
+            y + 0.5,
+            RECENT_SWATCH_SIZE - 1.0,
+            RECENT_SWATCH_SIZE - 1.0,
+        );
+    }
     let _ = ctx.stroke();
 }
 

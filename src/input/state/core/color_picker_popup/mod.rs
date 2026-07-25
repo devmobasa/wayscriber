@@ -11,7 +11,7 @@ use crate::input::Tool;
 /// Width of the popup panel.
 pub const POPUP_WIDTH: f64 = 300.0;
 /// Height of the popup panel.
-pub const POPUP_HEIGHT: f64 = 332.0;
+pub const POPUP_HEIGHT: f64 = 372.0;
 /// Width of the saturation/value square and the hue bar below it.
 pub const GRADIENT_WIDTH: f64 = 260.0;
 /// Height of the saturation/value square.
@@ -20,6 +20,13 @@ pub const SV_HEIGHT: f64 = 150.0;
 pub const HUE_HEIGHT: f64 = 14.0;
 /// Gap between the square and the bar beneath it.
 pub const SLIDER_GAP: f64 = 8.0;
+/// Edge length of a recent-color swatch.
+pub const RECENT_SWATCH_SIZE: f64 = 24.0;
+/// Gap between recent-color swatches.
+pub const RECENT_SWATCH_GAP: f64 = 6.0;
+/// Most recent colors the strip shows. Matches the recents cap so the strip
+/// never has to elide entries.
+pub const RECENT_SWATCH_COUNT: usize = 6;
 /// Size of the preview swatch.
 pub const PREVIEW_SIZE: f64 = 32.0;
 /// Width of the hex input field.
@@ -131,6 +138,10 @@ pub struct ColorPickerPopupLayout {
     pub sv_w: f64,
     /// Height of the saturation/value square.
     pub sv_h: f64,
+    /// Y position of the recent-color strip.
+    pub recents_y: f64,
+    /// X position of the recent-color strip's first swatch.
+    pub recents_x: f64,
     /// X position of the hue bar.
     pub hue_x: f64,
     /// Y position of the hue bar.
@@ -229,6 +240,12 @@ impl ColorPickerPopupLayout {
         let paste_btn_y = preview_row_y;
         let eyedropper_btn_y = preview_row_y;
 
+        // Recent-color strip sits between the action row and the buttons.
+        let recents_y = preview_row_y + PREVIEW_SIZE + ELEMENT_GAP;
+        let recents_width = RECENT_SWATCH_SIZE * RECENT_SWATCH_COUNT as f64
+            + RECENT_SWATCH_GAP * (RECENT_SWATCH_COUNT as f64 - 1.0);
+        let recents_x = origin_x + (width - recents_width) / 2.0;
+
         // Buttons at the bottom (centered as a group, so the optional
         // "Default" button widens the row instead of crowding one edge).
         let btn_row_y = origin_y + height - PADDING - BUTTON_HEIGHT;
@@ -253,6 +270,8 @@ impl ColorPickerPopupLayout {
             sv_y,
             sv_w: GRADIENT_WIDTH,
             sv_h: SV_HEIGHT,
+            recents_y,
+            recents_x,
             hue_x,
             hue_y,
             hue_w: GRADIENT_WIDTH,
@@ -303,6 +322,24 @@ impl ColorPickerPopupLayout {
     /// Hue the bar would yield for a pointer position.
     pub fn hue_from_point(&self, x: f64) -> f64 {
         ((x - self.hue_x) / self.hue_w).clamp(0.0, 1.0)
+    }
+
+    /// Top-left of the recent-color swatch at `index`.
+    pub fn recent_swatch_origin(&self, index: usize) -> (f64, f64) {
+        let x = self.recents_x + index as f64 * (RECENT_SWATCH_SIZE + RECENT_SWATCH_GAP);
+        (x, self.recents_y)
+    }
+
+    /// Index of the recent-color swatch under a point, if any. `count` bounds
+    /// the search so an empty tail is not clickable.
+    pub fn recent_swatch_at(&self, x: f64, y: f64, count: usize) -> Option<usize> {
+        if y < self.recents_y || y > self.recents_y + RECENT_SWATCH_SIZE {
+            return None;
+        }
+        (0..count.min(RECENT_SWATCH_COUNT)).find(|index| {
+            let (sx, _) = self.recent_swatch_origin(*index);
+            x >= sx && x <= sx + RECENT_SWATCH_SIZE
+        })
     }
 
     /// Check if a point is within the hex input field.
@@ -435,6 +472,7 @@ impl ColorPickerPopupLayout {
             || self.point_in_copy_button(x, y)
             || self.point_in_paste_button(x, y)
             || self.point_in_eyedropper_button(x, y)
+            || self.recent_swatch_at(x, y, RECENT_SWATCH_COUNT).is_some()
         {
             ColorPickerCursorHint::Pointer
         } else {

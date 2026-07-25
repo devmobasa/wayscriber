@@ -218,6 +218,7 @@ fn sample_tool_state() -> stored_session::ToolStateSnapshot {
         eraser_kind: EraserKind::Circle,
         eraser_mode: EraserMode::Brush,
         blur_style: Default::default(),
+        recent_colors: Vec::new(),
         marker_opacity: Some(0.32),
         fill_enabled: Some(false),
         tool_override: None,

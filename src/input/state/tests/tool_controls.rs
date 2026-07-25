@@ -973,6 +973,89 @@ fn picker_square_position_round_trips() {
     assert!((y - 0.3).abs() < 1e-6, "value round-trip lost: {y}");
 }
 
+/// A hand-edited session file must not be able to grow the list past its cap or
+/// smuggle duplicates in. (The live dedupe/cap path is covered in the radial
+/// menu tests; this covers the restore path, which is new.)
+#[test]
+fn restoring_recent_colors_reapplies_the_cap_and_dedupe() {
+    let mut state = create_test_input_state();
+    let red = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    let mut oversized = vec![red, red];
+    for value in 0..10u8 {
+        oversized.push(Color {
+            r: 0.0,
+            g: f64::from(value) / 16.0,
+            b: 0.0,
+            a: 1.0,
+        });
+    }
+
+    state.restore_recent_colors(oversized);
+
+    let recents = state.recent_colors();
+    assert_eq!(recents.len(), 6, "cap survives a hand-edited session");
+    assert_eq!(recents[0], red);
+    assert_eq!(
+        recents.iter().filter(|c| **c == red).count(),
+        1,
+        "duplicates from the file are collapsed"
+    );
+}
+
+#[test]
+fn recent_swatches_are_hit_testable_in_the_popup() {
+    let mut state = create_test_input_state();
+    let stashed = Color {
+        r: 0.25,
+        g: 0.5,
+        b: 0.875,
+        a: 1.0,
+    };
+    state.apply_color_from_ui(stashed);
+    state.apply_color_from_ui(Color {
+        r: 1.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    });
+
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+
+    let index = state
+        .recent_colors()
+        .iter()
+        .position(|c| *c == stashed)
+        .expect("stashed color is in recents");
+    let (sx, sy) = layout.recent_swatch_origin(index);
+
+    assert_eq!(
+        layout.recent_swatch_at(sx + 2.0, sy + 2.0, state.recent_colors().len()),
+        Some(index)
+    );
+}
+
+#[test]
+fn empty_recents_have_no_clickable_swatches() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let (sx, sy) = layout.recent_swatch_origin(0);
+
+    assert_eq!(
+        layout.recent_swatch_at(sx + 2.0, sy + 2.0, 0),
+        None,
+        "a fresh session shows no strip, so nothing is clickable"
+    );
+}
+
 #[test]
 fn color_picker_copy_button_requests_copy_and_keeps_popup_open() {
     let mut state = create_test_input_state();

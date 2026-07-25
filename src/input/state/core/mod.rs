@@ -47,7 +47,9 @@ pub use color_picker_popup::PickerDrag;
 pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
     POPUP_HEIGHT as COLOR_PICKER_POPUP_HEIGHT, POPUP_WIDTH as COLOR_PICKER_POPUP_WIDTH,
-    PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,
+    PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE,
+    RECENT_SWATCH_COUNT as COLOR_PICKER_RECENT_SWATCH_COUNT,
+    RECENT_SWATCH_SIZE as COLOR_PICKER_RECENT_SWATCH_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,
 };
 pub(crate) use command_palette::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
