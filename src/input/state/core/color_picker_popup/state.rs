@@ -1,7 +1,10 @@
 //! Color picker popup state methods for InputState.
 
+use std::borrow::Cow;
+
 use crate::draw::Color;
 use crate::input::state::InputState;
+use crate::input::state::core::base::QuickColorEdit;
 
 use super::{
     ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
@@ -10,6 +13,27 @@ use super::{
 
 fn hex_is_complete_for_live_preview(value: &str) -> bool {
     value.strip_prefix('#').unwrap_or(value).len() == 6
+}
+
+/// Upper bound on the characters a title carries out of an authored label. This
+/// is not a visual fit — glyph widths vary far too much for a character budget
+/// to bound a rendered width, so the renderer trims the shaped title to the
+/// panel. The cap only stops a pathological label from making that measurement
+/// walk a huge string every frame.
+const TITLE_LABEL_MAX_CHARS: usize = 64;
+
+/// Flatten an authored label into one line of title text: a TOML label may hold
+/// newlines, tabs, or runs of spaces, none of which a single-line title can
+/// render (and a line break would draw straight out of the popup's damage).
+fn single_line_slot_label(label: &str) -> String {
+    let flattened = label
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(TITLE_LABEL_MAX_CHARS)
+        .collect::<String>();
+    flattened.trim_end().to_string()
 }
 
 impl InputState {
@@ -23,6 +47,40 @@ impl InputState {
 
     /// Opens the color picker popup with the current color.
     pub fn open_color_picker_popup(&mut self) {
+        self.discard_open_color_picker_recolor();
+        let color = self.color_for_tool(self.active_tool());
+        self.open_color_picker_popup_for(None, color);
+    }
+
+    /// Opens the color picker popup bound to a quick-color slot, so editing it
+    /// recolors that swatch instead of the tool's color. Returns false when the
+    /// index is past the palette — a stale click on a snapshot rendered before
+    /// the palette shrank, which must open nothing.
+    pub fn open_color_picker_popup_for_quick_color(&mut self, index: usize) -> bool {
+        if self.quick_colors.entry(index).is_none() {
+            return false;
+        }
+        // Abandon a live recolor first, so the color read below is the slot's
+        // saved value even when the same swatch is right-clicked twice.
+        self.discard_open_color_picker_recolor();
+        let Some(color) = self.quick_colors.color_for_index(index) else {
+            return false;
+        };
+        self.open_color_picker_popup_for(Some(index), color);
+        true
+    }
+
+    /// Reopening the picker — a second swatch, or the tool's own color chip —
+    /// abandons an open recolor, so revert its live palette change instead of
+    /// dropping the state and leaving the swatch changed but unsaved. A
+    /// tool-color preview is left in place, as reopening has always done.
+    fn discard_open_color_picker_recolor(&mut self) {
+        if self.color_picker_popup_slot().is_some() {
+            self.close_color_picker_popup(true);
+        }
+    }
+
+    fn open_color_picker_popup_for(&mut self, slot: Option<usize>, color: Color) {
         self.cancel_pending_color_picker_paste();
         self.close_radial_menu();
         if self.show_help {
@@ -34,7 +92,6 @@ impl InputState {
         self.close_board_picker();
 
         let tool = self.active_tool();
-        let color = self.color_for_tool(tool);
         let hex = color_to_hex(color);
 
         self.color_picker_popup_generation = self.color_picker_popup_generation.wrapping_add(1);
@@ -42,6 +99,7 @@ impl InputState {
 
         self.color_picker_popup_state = ColorPickerPopupState::Open {
             tool,
+            slot,
             original_color: color,
             current_color: color,
             hex_editing: false,
@@ -55,21 +113,73 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    /// Title for the open popup: the slot being recolored is named so the
+    /// target is never ambiguous. This is the semantic title; the renderer
+    /// trims the shaped text to the panel it draws into.
+    pub fn color_picker_popup_title(&self) -> Cow<'static, str> {
+        let ColorPickerPopupState::Open {
+            slot: Some(index), ..
+        } = &self.color_picker_popup_state
+        else {
+            return Cow::Borrowed("Select Color");
+        };
+        match self.quick_colors.entry(*index) {
+            Some(entry) => Cow::Owned(format!("Recolor {}", single_line_slot_label(&entry.label))),
+            None => Cow::Borrowed("Recolor swatch"),
+        }
+    }
+
+    /// The quick-color slot the open popup edits, if any.
+    pub fn color_picker_popup_slot(&self) -> Option<usize> {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { slot, .. } => *slot,
+            ColorPickerPopupState::Hidden => None,
+        }
+    }
+
+    /// Show a candidate color on the popup's edit target: the swatch it
+    /// recolors, or the tool's color. Live palette updates keep the toolbar
+    /// swatch in step with the gradient drag; they are reverted on cancel and
+    /// persisted on accept.
+    fn color_picker_popup_preview(&mut self, color: Color) {
+        match self.color_picker_popup_state {
+            ColorPickerPopupState::Open {
+                slot: Some(index), ..
+            } => {
+                if self.quick_colors.set_color_for_index(index, color) {
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
+            }
+            ColorPickerPopupState::Open {
+                tool, slot: None, ..
+            } => {
+                let _ = self.preview_color_for_tool(tool, color);
+            }
+            ColorPickerPopupState::Hidden => {}
+        }
+    }
+
     /// Closes the color picker popup, optionally restoring the original color.
     pub fn close_color_picker_popup(&mut self, restore_original: bool) {
         self.cancel_pending_color_picker_paste();
         let mut restored_color = None;
         if let ColorPickerPopupState::Open {
-            tool,
+            slot,
             original_color,
             ..
         } = &self.color_picker_popup_state
-            && restore_original
+            // A recolor edits durable config, so even an implicit close (light
+            // mode, session restore) must not leave the palette changed and
+            // unsaved. A tool-color preview stays put, as callers expect.
+            && (restore_original || slot.is_some())
         {
-            restored_color = Some((*tool, *original_color));
+            restored_color = Some(*original_color);
         }
-        if let Some((tool, color)) = restored_color {
-            let _ = self.preview_color_for_tool(tool, color);
+        if let Some(color) = restored_color {
+            // Restores whichever target the popup was editing, so a cancelled
+            // recolor puts the swatch's own color back.
+            self.color_picker_popup_preview(color);
         }
         self.color_picker_popup_state = ColorPickerPopupState::Hidden;
         self.color_picker_popup_layout = None;
@@ -84,6 +194,7 @@ impl InputState {
         let mut applied_color = None;
         if let ColorPickerPopupState::Open {
             tool,
+            slot,
             original_color,
             current_color,
             hex_buffer,
@@ -103,14 +214,32 @@ impl InputState {
             {
                 *current_color = color;
             }
-            applied_color = Some((*tool, *original_color, *current_color));
+            applied_color = Some((*tool, *slot, *original_color, *current_color));
         }
-        if let Some((tool, original_color, color)) = applied_color
+        if let Some((tool, slot, original_color, color)) = applied_color
             && original_color != color
         {
-            let _ = self.preview_color_for_tool(tool, color);
-            self.active_preset_slot = None;
-            self.mark_session_dirty();
+            // Commit on the popup's own target, which also catches a
+            // three-digit hex first parsed just above.
+            self.color_picker_popup_preview(color);
+            match slot {
+                Some(index) => {
+                    self.pending_quick_color_edit = Some(QuickColorEdit { index, color });
+                    // The swatch the tool was already painting with follows its
+                    // own recolor, so the palette's selection ring and the live
+                    // color cannot disagree. Recoloring any other slot leaves
+                    // the current color alone.
+                    if self.color_for_tool(tool) == original_color {
+                        let _ = self.preview_color_for_tool(tool, color);
+                        self.active_preset_slot = None;
+                        self.mark_session_dirty();
+                    }
+                }
+                None => {
+                    self.active_preset_slot = None;
+                    self.mark_session_dirty();
+                }
+            }
         }
         self.color_picker_popup_state = ColorPickerPopupState::Hidden;
         self.color_picker_popup_layout = None;
@@ -178,8 +307,36 @@ impl InputState {
             self.color_picker_popup_layout = None;
             return;
         }
-        self.color_picker_popup_layout =
-            Some(ColorPickerPopupLayout::compute(screen_width, screen_height));
+        self.color_picker_popup_layout = Some(ColorPickerPopupLayout::compute(
+            screen_width,
+            screen_height,
+            self.color_picker_popup_shows_default_button(),
+        ));
+    }
+
+    /// Whether the popup offers its "Default" button: only while recoloring a
+    /// quick-color slot the shipped palette defines. Slots a user added past
+    /// the built-in palette have no default to restore, and the tool-color
+    /// popup edits a value the palette does not own.
+    pub fn color_picker_popup_shows_default_button(&self) -> bool {
+        self.color_picker_popup_default_color().is_some()
+    }
+
+    /// The built-in color of the slot being recolored, when there is one.
+    pub fn color_picker_popup_default_color(&self) -> Option<Color> {
+        let index = self.color_picker_popup_slot()?;
+        crate::config::default_quick_color_for_index(index)
+    }
+
+    /// Load the slot's built-in color as the live candidate. The popup stays
+    /// open, so the change still goes through OK (or backs out via Cancel)
+    /// like any other pick. Returns false when there is no default to restore.
+    pub fn color_picker_popup_restore_default(&mut self) -> bool {
+        let Some(color) = self.color_picker_popup_default_color() else {
+            return false;
+        };
+        self.color_picker_popup_set_color(color);
+        true
     }
 
     /// Clears the cached color picker popup layout.
@@ -195,7 +352,6 @@ impl InputState {
 
         let mut live_color = None;
         if let ColorPickerPopupState::Open {
-            tool,
             current_color,
             hex_buffer,
             ..
@@ -203,10 +359,10 @@ impl InputState {
         {
             *current_color = color;
             *hex_buffer = color_to_hex(color);
-            live_color = Some((*tool, color));
+            live_color = Some(color);
         }
-        if let Some((tool, color)) = live_color {
-            let _ = self.preview_color_for_tool(tool, color);
+        if let Some(color) = live_color {
+            self.color_picker_popup_preview(color);
         }
         self.needs_redraw = true;
     }
@@ -218,7 +374,6 @@ impl InputState {
     pub fn color_picker_popup_set_color(&mut self, color: Color) {
         let mut live_color = None;
         if let ColorPickerPopupState::Open {
-            tool,
             current_color,
             hex_buffer,
             hex_editing,
@@ -230,10 +385,10 @@ impl InputState {
             *hex_buffer = color_to_hex(color);
             *hex_editing = false;
             *hex_selected = false;
-            live_color = Some((*tool, color));
+            live_color = Some(color);
         }
-        if let Some((tool, color)) = live_color {
-            let _ = self.preview_color_for_tool(tool, color);
+        if let Some(color) = live_color {
+            self.color_picker_popup_preview(color);
         }
         self.needs_redraw = true;
     }
@@ -306,7 +461,6 @@ impl InputState {
         let mut live_color = None;
         {
             let ColorPickerPopupState::Open {
-                tool,
                 hex_buffer,
                 hex_editing,
                 hex_selected,
@@ -352,12 +506,12 @@ impl InputState {
                     && let Some(color) = parse_hex_color(hex_buffer)
                 {
                     *current_color = color;
-                    live_color = Some((*tool, color));
+                    live_color = Some(color);
                 }
             }
         }
-        if let Some((tool, color)) = live_color {
-            let _ = self.preview_color_for_tool(tool, color);
+        if let Some(color) = live_color {
+            self.color_picker_popup_preview(color);
         }
     }
 
@@ -366,7 +520,6 @@ impl InputState {
         let mut live_color = None;
         {
             if let ColorPickerPopupState::Open {
-                tool,
                 hex_buffer,
                 hex_editing,
                 hex_selected,
@@ -390,12 +543,12 @@ impl InputState {
                     && let Some(color) = parse_hex_color(hex_buffer)
                 {
                     *current_color = color;
-                    live_color = Some((*tool, color));
+                    live_color = Some(color);
                 }
             }
         }
-        if let Some((tool, color)) = live_color {
-            let _ = self.preview_color_for_tool(tool, color);
+        if let Some(color) = live_color {
+            self.color_picker_popup_preview(color);
         }
     }
 
@@ -403,7 +556,6 @@ impl InputState {
     pub fn color_picker_popup_commit_hex(&mut self) -> bool {
         let parsed_color = {
             let ColorPickerPopupState::Open {
-                tool,
                 hex_buffer,
                 hex_editing,
                 current_color,
@@ -422,7 +574,7 @@ impl InputState {
                 *hex_buffer = color_to_hex(color);
                 *hex_editing = false;
                 self.needs_redraw = true;
-                Some((*tool, color))
+                Some(color)
             } else {
                 // Reset buffer to current color
                 *hex_buffer = color_to_hex(*current_color);
@@ -432,8 +584,8 @@ impl InputState {
             }
         };
 
-        if let Some((tool, color)) = parsed_color {
-            let _ = self.preview_color_for_tool(tool, color);
+        if let Some(color) = parsed_color {
+            self.color_picker_popup_preview(color);
             true
         } else {
             false

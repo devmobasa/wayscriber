@@ -187,6 +187,19 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
     Some((ToolbarIntent(event), start_drag))
 }
 
+/// The quick-color slot a secondary press targets. Quick-color swatches are
+/// the only controls that answer the secondary button, so every other hit
+/// resolves to `None` and lets the press fall through untouched.
+pub fn quick_color_slot_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<usize> {
+    if !hit.contains(x, y) {
+        return None;
+    }
+    match (&hit.kind, &hit.event) {
+        (HitKind::Click, ToolbarEvent::SetQuickColor { index, .. }) => Some(*index),
+        _ => None,
+    }
+}
+
 pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarIntent> {
     if !hit.contains(x, y) {
         return None;
@@ -606,6 +619,28 @@ mod tests {
             }
             other => panic!("unexpected event: {other:?}"),
         }
+    }
+
+    #[test]
+    fn secondary_press_resolves_only_quick_color_swatches() {
+        let swatch = click(ToolbarEvent::SetQuickColor {
+            color: crate::draw::color::RED,
+            action: Some(crate::config::Action::SetColorRed),
+            index: 6,
+        });
+
+        assert_eq!(quick_color_slot_for_hit(&swatch, 20.0, 30.0), Some(6));
+        // Outside the (inflated) rect there is nothing to recolor.
+        assert_eq!(quick_color_slot_for_hit(&swatch, 200.0, 30.0), None);
+        // Any other control ignores the secondary button.
+        assert_eq!(
+            quick_color_slot_for_hit(&click(ToolbarEvent::Undo), 20.0, 30.0),
+            None
+        );
+        assert_eq!(
+            quick_color_slot_for_hit(&thickness_slider(), 200.0, 10.0),
+            None
+        );
     }
 
     #[test]

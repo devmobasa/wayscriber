@@ -24,6 +24,8 @@ pub const HEX_INPUT_WIDTH: f64 = 100.0;
 pub const BUTTON_HEIGHT: f64 = 28.0;
 /// Button width.
 pub const BUTTON_WIDTH: f64 = 70.0;
+/// Gap between the bottom-row buttons.
+pub const BUTTON_GAP: f64 = 12.0;
 /// Padding inside the popup.
 pub const PADDING: f64 = 20.0;
 /// Title bar height.
@@ -41,6 +43,9 @@ pub(crate) enum ColorPickerPopupAction {
     Copy,
     Paste,
     Eyedropper,
+    /// Load the slot's built-in color as the candidate. Only offered while
+    /// recoloring a quick-color slot the shipped palette defines.
+    RestoreDefault,
     Ok,
     Cancel,
 }
@@ -61,7 +66,14 @@ pub enum ColorPickerPopupState {
     Open {
         /// Tool whose color is being edited.
         tool: Tool,
-        /// Original color when popup was opened (for cancel restoration).
+        /// Quick-color slot being recolored, when the popup was opened by
+        /// secondary-clicking a swatch. `None` edits the tool's own color.
+        /// The slot is the edit target for both live preview and accept, so a
+        /// recolor never hijacks what the tool is currently painting with.
+        slot: Option<usize>,
+        /// Original color when popup was opened (for cancel restoration). This
+        /// is the edit target's color: the tool's, or the slot's when
+        /// recoloring.
         original_color: Color,
         /// Currently selected color (live updates).
         current_color: Color,
@@ -123,6 +135,11 @@ pub struct ColorPickerPopupLayout {
     pub eyedropper_btn_y: f64,
     /// Size of the square action buttons (copy / paste / eyedropper).
     pub action_btn_size: f64,
+    /// Top-left of the "Default" button, present only while recoloring a
+    /// quick-color slot that the shipped palette defines. It shares the
+    /// button row with OK/Cancel, which is why its absence has to change the
+    /// row's centering rather than leave a hole.
+    pub default_btn: Option<(f64, f64)>,
     /// X position of the OK button.
     pub ok_btn_x: f64,
     /// Y position of the OK button.
@@ -138,8 +155,10 @@ pub struct ColorPickerPopupLayout {
 }
 
 impl ColorPickerPopupLayout {
-    /// Compute the layout for given screen dimensions.
-    pub fn compute(screen_width: u32, screen_height: u32) -> Self {
+    /// Compute the layout for given screen dimensions. `show_default_button`
+    /// comes from the popup's target: recoloring a slot with a built-in color
+    /// adds a third button to the bottom row.
+    pub fn compute(screen_width: u32, screen_height: u32, show_default_button: bool) -> Self {
         let width = POPUP_WIDTH;
         let height = POPUP_HEIGHT;
 
@@ -177,12 +196,20 @@ impl ColorPickerPopupLayout {
         let paste_btn_y = preview_row_y;
         let eyedropper_btn_y = preview_row_y;
 
-        // Buttons at the bottom (centered)
+        // Buttons at the bottom (centered as a group, so the optional
+        // "Default" button widens the row instead of crowding one edge).
         let btn_row_y = origin_y + height - PADDING - BUTTON_HEIGHT;
-        let total_btn_width = BUTTON_WIDTH * 2.0 + 12.0;
+        let btn_count = if show_default_button { 3.0 } else { 2.0 };
+        let total_btn_width = BUTTON_WIDTH * btn_count + BUTTON_GAP * (btn_count - 1.0);
         let btn_start_x = origin_x + (width - total_btn_width) / 2.0;
-        let ok_btn_x = btn_start_x;
-        let cancel_btn_x = btn_start_x + BUTTON_WIDTH + 12.0;
+        let default_btn = show_default_button.then_some((btn_start_x, btn_row_y));
+        let primary_start_x = if show_default_button {
+            btn_start_x + BUTTON_WIDTH + BUTTON_GAP
+        } else {
+            btn_start_x
+        };
+        let ok_btn_x = primary_start_x;
+        let cancel_btn_x = primary_start_x + BUTTON_WIDTH + BUTTON_GAP;
 
         Self {
             origin_x,
@@ -206,6 +233,7 @@ impl ColorPickerPopupLayout {
             eyedropper_btn_x,
             eyedropper_btn_y,
             action_btn_size,
+            default_btn,
             ok_btn_x,
             ok_btn_y: btn_row_y,
             cancel_btn_x,
@@ -263,6 +291,15 @@ impl ColorPickerPopupLayout {
             && y <= self.eyedropper_btn_y + self.action_btn_size
     }
 
+    /// Check if a point is within the "Default" button. Always false when the
+    /// popup is not recoloring a slot with a built-in color.
+    pub fn point_in_default_button(&self, x: f64, y: f64) -> bool {
+        let Some((btn_x, btn_y)) = self.default_btn else {
+            return false;
+        };
+        x >= btn_x && x <= btn_x + self.btn_width && y >= btn_y && y <= btn_y + self.btn_height
+    }
+
     /// Check if a point is within the Cancel button.
     pub fn point_in_cancel_button(&self, x: f64, y: f64) -> bool {
         x >= self.cancel_btn_x
@@ -278,6 +315,8 @@ impl ColorPickerPopupLayout {
             Some(ColorPickerPopupAction::Paste)
         } else if self.point_in_eyedropper_button(x, y) {
             Some(ColorPickerPopupAction::Eyedropper)
+        } else if self.point_in_default_button(x, y) {
+            Some(ColorPickerPopupAction::RestoreDefault)
         } else if self.point_in_ok_button(x, y) {
             Some(ColorPickerPopupAction::Ok)
         } else if self.point_in_cancel_button(x, y) {
@@ -338,6 +377,7 @@ impl ColorPickerPopupLayout {
             ColorPickerCursorHint::Crosshair
         } else if self.point_in_ok_button(x, y)
             || self.point_in_cancel_button(x, y)
+            || self.point_in_default_button(x, y)
             || self.point_in_copy_button(x, y)
             || self.point_in_paste_button(x, y)
             || self.point_in_eyedropper_button(x, y)

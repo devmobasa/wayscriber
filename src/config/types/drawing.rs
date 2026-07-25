@@ -202,6 +202,31 @@ impl QuickColorsConfig {
         self.entries = entries;
     }
 
+    /// Recolor one slot in place, keeping its authored label: the runtime
+    /// counterpart of [`QuickColorPalette::set_color_for_index`], used when a
+    /// swatch is recolored from the toolbar. The stored list is materialized
+    /// from [`Self::effective_entries`] first, so recoloring a slot that was
+    /// only implied by the defaults writes a complete palette rather than a
+    /// hole.
+    ///
+    /// The outcome is reported rather than returned as a plain "changed" flag
+    /// because a caller writing to disk has to tell an idempotent write apart
+    /// from a slot that is not in the palette at all.
+    #[allow(dead_code)]
+    pub fn set_color_at(&mut self, index: usize, color: Color) -> QuickColorWrite {
+        let spec = ColorSpec::from(color);
+        let mut entries = self.effective_entries();
+        match entries.get_mut(index) {
+            Some(entry) if entry.color == spec => QuickColorWrite::Unchanged,
+            Some(entry) => {
+                entry.color = spec;
+                self.set_entries(entries);
+                QuickColorWrite::Written
+            }
+            None => QuickColorWrite::SlotMissing,
+        }
+    }
+
     #[allow(dead_code)]
     pub fn replace_entries_preserving_source(&mut self, entries: Vec<QuickColorConfig>) {
         self.entries = entries;
@@ -210,6 +235,17 @@ impl QuickColorsConfig {
     pub fn is_implicit_default(&self) -> bool {
         self.configured_entry_count.is_none() && self.entries == default_quick_color_entries()
     }
+}
+
+/// What a [`QuickColorsConfig::set_color_at`] call did to the palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuickColorWrite {
+    /// The slot now holds the requested color.
+    Written,
+    /// The slot already held it, so the document is untouched.
+    Unchanged,
+    /// The palette has no such slot; nothing could be written.
+    SlotMissing,
 }
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
@@ -388,6 +424,20 @@ impl QuickColorPalette {
 
     pub fn entry(&self, index: usize) -> Option<&QuickColorPaletteEntry> {
         self.entries.get(index)
+    }
+
+    /// Recolor one slot in place, keeping its label and shortcut identity: a
+    /// slot is "the red key", so changing what color it paints does not rename
+    /// it. Returns false when the index is past the palette, which is how a
+    /// stale click on a shrunken palette resolves to no change.
+    pub fn set_color_for_index(&mut self, index: usize, color: Color) -> bool {
+        match self.entries.get_mut(index) {
+            Some(entry) if entry.color != color => {
+                entry.color = color;
+                true
+            }
+            _ => false,
+        }
     }
 
     pub fn color_for_action(&self, action: Action) -> Option<Color> {
@@ -727,6 +777,14 @@ fn default_shortcut_quick_color_entries() -> Vec<QuickColorConfig> {
         color: ColorSpec::Name(color.to_string()),
     })
     .collect()
+}
+
+/// The color the built-in palette ships for a quick-color slot. Slots past the
+/// built-in palette were added by the user, so they have no default to restore.
+pub fn default_quick_color_for_index(index: usize) -> Option<Color> {
+    default_quick_color_entries()
+        .get(index)
+        .map(|entry| entry.color.to_color())
 }
 
 fn default_quick_color_entries() -> Vec<QuickColorConfig> {

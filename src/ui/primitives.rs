@@ -25,6 +25,69 @@ pub(crate) fn text_extents_for(
     layout.ink_extents().to_cairo()
 }
 
+/// Ellipsis used when text is trimmed to fit a measured width.
+pub(crate) const ELLIPSIS: &str = "\u{2026}";
+
+/// Trim `text` to `max_width` logical pixels, appending an ellipsis. The
+/// complete string is measured as it will be shaped, so wide glyphs and
+/// non-Latin scripts cannot slip past a per-character budget.
+pub(crate) fn ellipsize_to_fit(
+    ctx: &cairo::Context,
+    text: &str,
+    font_family: &str,
+    font_size: f64,
+    weight: cairo::FontWeight,
+    max_width: f64,
+) -> String {
+    let extents = text_extents_for(
+        ctx,
+        font_family,
+        cairo::FontSlant::Normal,
+        weight,
+        font_size,
+        text,
+    );
+    if extents.width() <= max_width {
+        return text.to_string();
+    }
+
+    let ellipsis = ELLIPSIS;
+    let ellipsis_extents = text_extents_for(
+        ctx,
+        font_family,
+        cairo::FontSlant::Normal,
+        weight,
+        font_size,
+        ellipsis,
+    );
+    if ellipsis_extents.width() > max_width {
+        return String::new();
+    }
+
+    let mut end = text.len();
+    while end > 0 {
+        if !text.is_char_boundary(end) {
+            end -= 1;
+            continue;
+        }
+        let candidate = format!("{}{}", &text[..end], ellipsis);
+        let candidate_extents = text_extents_for(
+            ctx,
+            font_family,
+            cairo::FontSlant::Normal,
+            weight,
+            font_size,
+            &candidate,
+        );
+        if candidate_extents.width() <= max_width {
+            return candidate;
+        }
+        end -= 1;
+    }
+
+    ellipsis.to_string()
+}
+
 pub(crate) fn draw_rounded_rect(
     ctx: &cairo::Context,
     x: f64,

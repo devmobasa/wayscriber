@@ -122,6 +122,7 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
                 a: 1.0,
             },
             action: Some(crate::config::Action::SetColorRed),
+            index: 0,
         },
         ToolbarEvent::SetThickness(8.0),
         ToolbarEvent::NudgeThickness(1.0),

@@ -145,6 +145,13 @@ tab_drag_tool = "ellipse"
 # arrays. The hex values below are the tuned built-in defaults; named colors
 # ("red", "green", ...) resolve to these same tuned values, so named entries,
 # the default pen color, and board auto-adjust pens all match these swatches.
+#
+# Right-clicking a swatch in the overlay opens the color picker for that slot
+# and saves the accepted color back here as an RGB array, keeping the slot's
+# label and shortcut. The first such edit writes the whole list, so a palette
+# left out of this file stops tracking future built-in defaults. That picker's
+# "Default" button loads the color shipped for the slot again (built-in slots
+# only), still requiring OK to save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"
@@ -873,6 +880,8 @@ side_sections = [
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings surface (the side palette's Settings pane under the legacy panel layout, the Settings popover under pill).
 - **Clear canvas**: Clear lives in the top strip's overflow (⋯) menu. A plain click clears and shows a short "Cleared — Undo?" toast; Shift+click clears instantly without the toast. The `clear_canvas` keyboard action is always instant and shows no toast.
+- **Recoloring a swatch**: right-clicking any quick-color swatch (style pill or side palette) opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK saves the color to `drawing.quick_colors` in `config.toml`, and Cancel/Escape restores it. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
+- **Restoring a swatch's shipped color**: while recoloring a slot, the picker adds a **Default** button next to OK/Cancel that loads the color wayscriber ships for that slot. It stages the color like any other pick — the swatch previews it, OK saves it, Cancel backs out — so it is not a separate destructive action. The button only appears for the eleven built-in slots; extra slots you added past them have no shipped default, and the tool-color picker never shows it. Restoring writes the built-in value into your palette rather than deleting the entry, so the slot stays explicit in `config.toml`.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 

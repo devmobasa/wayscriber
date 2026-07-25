@@ -451,6 +451,127 @@ fn drawing_quick_colors_missing_shortcut_slots_backfill_defaults() {
 }
 
 #[test]
+fn quick_colors_set_color_at_keeps_labels_and_materializes_defaults() {
+    // A single authored entry: recoloring a backfilled slot must write the
+    // whole effective palette so no slot is left implied.
+    let mut config: Config =
+        toml::from_str("[[drawing.quick_colors]]\nlabel = 'Only'\ncolor = 'blue'\n")
+            .expect("short quick color list should parse");
+    let crimson = crate::draw::Color {
+        r: 220.0 / 255.0,
+        g: 20.0 / 255.0,
+        b: 60.0 / 255.0,
+        a: 1.0,
+    };
+
+    assert_eq!(
+        config.drawing.quick_colors.set_color_at(2, crimson),
+        QuickColorWrite::Written
+    );
+
+    let entries = &config.drawing.quick_colors.entries;
+    assert_eq!(entries.len(), 8, "backfilled slots become explicit");
+    assert_eq!(entries[0].label, "Only", "authored labels survive");
+    assert_eq!(
+        entries[2].label, "Blue",
+        "a recolored slot keeps its slot identity instead of being renamed"
+    );
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+    assert!(color_approx_eq(
+        &palette.color_for_index(2).unwrap(),
+        &crimson
+    ));
+
+    // Rewriting the same color is not a change, so it cannot churn the file —
+    // and it is reported apart from a slot that is not there at all, because a
+    // caller writing to disk must not mistake one for the other.
+    assert_eq!(
+        config.drawing.quick_colors.set_color_at(2, crimson),
+        QuickColorWrite::Unchanged
+    );
+    // A slot past the effective palette is a stale click, not a new entry.
+    assert_eq!(
+        config.drawing.quick_colors.set_color_at(8, crimson),
+        QuickColorWrite::SlotMissing
+    );
+    assert_eq!(config.drawing.quick_colors.entries.len(), 8);
+}
+
+#[test]
+fn quick_colors_set_color_at_starts_from_defaults_when_unconfigured() {
+    let mut config = Config::default();
+    assert!(config.drawing.quick_colors.is_implicit_default());
+    let teal = crate::draw::Color {
+        r: 0.0,
+        g: 128.0 / 255.0,
+        b: 128.0 / 255.0,
+        a: 1.0,
+    };
+
+    assert_eq!(
+        config.drawing.quick_colors.set_color_at(10, teal),
+        QuickColorWrite::Written
+    );
+
+    // The palette is now authored, so it stops tracking default changes.
+    assert!(!config.drawing.quick_colors.is_implicit_default());
+    let palette = QuickColorPalette::from_config(&config.drawing.quick_colors);
+    assert_eq!(palette.len(), 11);
+    assert!(color_approx_eq(
+        &palette.color_for_index(10).unwrap(),
+        &teal
+    ));
+    assert_eq!(
+        palette.entry(10).map(|entry| entry.label.as_str()),
+        Some("Gray")
+    );
+}
+
+#[test]
+fn shipped_quick_color_defaults_cover_only_the_built_in_palette() {
+    use crate::config::default_quick_color_for_index;
+
+    // The values a "Default" restore puts back are the tuned built-ins, so
+    // they must match the palette wayscriber ships.
+    assert!(color_approx_eq(
+        &default_quick_color_for_index(0).expect("built-in red"),
+        &tuned_default("#F5333F")
+    ));
+    assert!(color_approx_eq(
+        &default_quick_color_for_index(10).expect("built-in gray"),
+        &tuned_default("#666666")
+    ));
+    // Slots past the built-in palette are user-added and have no default.
+    assert_eq!(default_quick_color_for_index(11), None);
+    assert_eq!(
+        default_quick_color_for_index(QuickColorPalette::default().len()),
+        None
+    );
+}
+
+#[test]
+fn palette_set_color_for_index_recolors_in_place() {
+    let mut palette = QuickColorPalette::default();
+    let label = palette.entry(1).map(|entry| entry.label.clone());
+    let color = crate::draw::Color {
+        r: 0.25,
+        g: 0.5,
+        b: 0.75,
+        a: 1.0,
+    };
+
+    assert!(palette.set_color_for_index(1, color));
+    assert_eq!(palette.color_for_index(1), Some(color));
+    assert_eq!(palette.entry(1).map(|entry| entry.label.clone()), label);
+
+    assert!(!palette.set_color_for_index(1, color), "no-op recolor");
+    assert!(
+        !palette.set_color_for_index(palette.len(), color),
+        "index past the palette cannot grow it"
+    );
+}
+
+#[test]
 fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     let palette = QuickColorPalette::default();
 

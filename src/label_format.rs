@@ -26,6 +26,16 @@ pub(crate) fn format_binding_label(label: &str, binding: Option<&str>) -> String
     }
 }
 
+/// Quick-color swatch tooltip: the slot label with its shortcut, plus the
+/// secondary-click recolor hint. Shared by the style pill and both frontends'
+/// side palettes so the gesture is advertised identically everywhere.
+#[allow(dead_code)]
+pub(crate) fn format_quick_color_tooltip(label: &str, binding: Option<&str>) -> String {
+    format!("{} — {RECOLOR_HINT}", format_binding_label(label, binding))
+}
+
+const RECOLOR_HINT: &str = "right-click to recolor";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,5 +71,18 @@ mod tests {
             "Undo (Ctrl+Z)"
         );
         assert_eq!(format_binding_label("Undo", None), "Undo");
+    }
+
+    #[test]
+    fn quick_color_tooltip_advertises_the_recolor_gesture() {
+        assert_eq!(
+            format_quick_color_tooltip("Pink", Some("P")),
+            "Pink (P) — right-click to recolor"
+        );
+        // Slots past the eighth have no shortcut but the same gesture.
+        assert_eq!(
+            format_quick_color_tooltip("Cyan", None),
+            "Cyan — right-click to recolor"
+        );
     }
 }

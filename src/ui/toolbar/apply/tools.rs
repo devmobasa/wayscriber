@@ -188,6 +188,13 @@ impl InputState {
         true
     }
 
+    /// Open the color picker popup bound to a quick-color slot, so accepting
+    /// it recolors that swatch. An index past the palette is a stale snapshot
+    /// (the palette shrank between render and click) and opens nothing.
+    pub(super) fn apply_toolbar_edit_quick_color(&mut self, index: usize) -> bool {
+        self.open_color_picker_popup_for_quick_color(index)
+    }
+
     /// Open the color picker popup ready for typing: the hex field is
     /// focused and its content selected, so the first keystroke replaces it.
     pub(super) fn apply_toolbar_edit_hex_color(&mut self) -> bool {

@@ -497,6 +497,374 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
 }
 
 #[test]
+fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
+    let mut state = create_test_input_state();
+    let tool_color = state.color_for_tool(Tool::Pen);
+    let slot_color = state.quick_colors.color_for_index(1).expect("slot 1");
+    assert_ne!(tool_color, slot_color, "fixture needs distinct colors");
+    state.session_dirty = false;
+
+    assert!(state.open_color_picker_popup_for_quick_color(1));
+    assert_eq!(state.color_picker_popup_slot(), Some(1));
+    // The popup starts on the slot's own color, not the tool's.
+    assert_eq!(state.color_picker_popup_current_color(), Some(slot_color));
+
+    state.color_picker_popup_set_from_gradient(0.6, 0.1);
+    let picked = state
+        .color_picker_popup_current_color()
+        .expect("picked color");
+    // The swatch tracks the drag so the toolbar shows the candidate...
+    assert_eq!(state.quick_colors.color_for_index(1), Some(picked));
+    // ...while the color being painted with is untouched.
+    assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
+
+    state.close_color_picker_popup(true);
+    assert_eq!(state.quick_colors.color_for_index(1), Some(slot_color));
+    assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
+    assert!(!state.session_dirty);
+    assert!(state.take_pending_quick_color_edit().is_none());
+}
+
+#[test]
+fn accepting_a_recolor_keeps_the_swatch_and_queues_the_config_write() {
+    let mut state = create_test_input_state();
+    let tool_color = state.color_for_tool(Tool::Pen);
+    state.active_preset_slot = Some(1);
+    state.session_dirty = false;
+
+    assert!(state.open_color_picker_popup_for_quick_color(2));
+    state.color_picker_popup_set_from_gradient(0.35, 0.25);
+    let picked = state
+        .color_picker_popup_current_color()
+        .expect("picked color");
+    state.apply_color_picker_popup();
+
+    assert!(!state.is_color_picker_popup_open());
+    assert_eq!(state.quick_colors.color_for_index(2), Some(picked));
+    assert_eq!(
+        state.take_pending_quick_color_edit(),
+        Some(crate::input::state::QuickColorEdit {
+            index: 2,
+            color: picked,
+        })
+    );
+    // An unselected swatch's recolor is not a drawing change.
+    assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
+    assert_eq!(state.active_preset_slot, Some(1));
+    assert!(!state.session_dirty);
+}
+
+#[test]
+fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
+    let mut state = create_test_input_state();
+    let slot_color = state.quick_colors.color_for_index(3).expect("slot 3");
+    assert!(state.apply_color_from_ui(slot_color));
+    state.active_preset_slot = Some(2);
+    state.session_dirty = false;
+
+    assert!(state.open_color_picker_popup_for_quick_color(3));
+    state.color_picker_popup_set_from_gradient(0.8, 0.4);
+    let picked = state
+        .color_picker_popup_current_color()
+        .expect("picked color");
+    state.apply_color_picker_popup();
+
+    // The selection ring cannot disagree with the live color, so the swatch
+    // being painted with follows its own recolor.
+    assert_eq!(state.quick_colors.color_for_index(3), Some(picked));
+    assert_eq!(state.color_for_tool(Tool::Pen), picked);
+    assert_eq!(state.current_color, picked);
+    assert_eq!(state.active_preset_slot, None);
+    assert!(state.session_dirty);
+}
+
+#[test]
+fn reopening_the_picker_abandons_an_unsaved_recolor() {
+    let mut state = create_test_input_state();
+    let first = state.quick_colors.color_for_index(0).expect("slot 0");
+    let second = state.quick_colors.color_for_index(1).expect("slot 1");
+
+    // Moving on to another swatch reverts the one left behind.
+    assert!(state.open_color_picker_popup_for_quick_color(0));
+    state.color_picker_popup_set_from_gradient(0.5, 0.5);
+    assert!(state.open_color_picker_popup_for_quick_color(1));
+    assert_eq!(state.quick_colors.color_for_index(0), Some(first));
+    assert_eq!(state.color_picker_popup_slot(), Some(1));
+    assert_eq!(state.color_picker_popup_current_color(), Some(second));
+
+    // Right-clicking the same swatch again restarts from its saved color
+    // rather than adopting the abandoned candidate as the new baseline.
+    state.color_picker_popup_set_from_gradient(0.2, 0.7);
+    assert!(state.open_color_picker_popup_for_quick_color(1));
+    assert_eq!(state.quick_colors.color_for_index(1), Some(second));
+    assert_eq!(state.color_picker_popup_current_color(), Some(second));
+
+    // The tool chip does the same when it takes over the popup.
+    state.color_picker_popup_set_from_gradient(0.9, 0.3);
+    state.open_color_picker_popup();
+    assert_eq!(state.quick_colors.color_for_index(1), Some(second));
+    assert_eq!(state.color_picker_popup_slot(), None);
+    assert!(state.take_pending_quick_color_edit().is_none());
+}
+
+#[test]
+fn a_recolor_never_survives_an_implicit_close_unsaved() {
+    let mut state = create_test_input_state();
+    let slot_color = state.quick_colors.color_for_index(0).expect("slot 0");
+
+    assert!(state.open_color_picker_popup_for_quick_color(0));
+    state.color_picker_popup_set_from_gradient(0.5, 0.5);
+    assert_ne!(state.quick_colors.color_for_index(0), Some(slot_color));
+
+    // Light mode and session restore close the popup without restoring; the
+    // palette is durable config, so it still reverts.
+    state.close_color_picker_popup(false);
+
+    assert_eq!(state.quick_colors.color_for_index(0), Some(slot_color));
+    assert!(state.take_pending_quick_color_edit().is_none());
+}
+
+#[test]
+fn recolor_hex_entry_lands_on_the_swatch() {
+    let mut state = create_test_input_state();
+    let tool_color = state.color_for_tool(Tool::Pen);
+
+    assert!(state.open_color_picker_popup_for_quick_color(4));
+    state.color_picker_popup_set_hex_editing(true);
+    for ch in "1A2B3C".chars() {
+        state.color_picker_popup_hex_append(ch);
+    }
+    assert!(state.color_picker_popup_commit_hex());
+
+    let expected = crate::input::state::parse_hex_color("#1A2B3C").expect("hex");
+    assert_eq!(state.quick_colors.color_for_index(4), Some(expected));
+    assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
+}
+
+#[test]
+fn default_button_appears_only_for_slots_the_shipped_palette_defines() {
+    let mut state = create_test_input_state();
+
+    // The tool-color popup edits a value the palette does not own.
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let tool_layout = state.color_picker_popup_layout().expect("tool layout");
+    assert!(!state.color_picker_popup_shows_default_button());
+    assert!(tool_layout.default_btn.is_none());
+    state.close_color_picker_popup(true);
+
+    assert!(state.open_color_picker_popup_for_quick_color(1));
+    state.update_color_picker_popup_layout(1920, 1080);
+    let slot_layout = state.color_picker_popup_layout().expect("slot layout");
+    let (default_x, default_y) = slot_layout.default_btn.expect("default button");
+    assert_eq!(default_y, slot_layout.ok_btn_y, "shares the button row");
+    // The row stays centered as a group, so the third button pushes OK/Cancel
+    // right instead of overlapping them or leaving the panel.
+    assert!(default_x + slot_layout.btn_width < slot_layout.ok_btn_x);
+    assert!(slot_layout.ok_btn_x > tool_layout.ok_btn_x);
+    assert!(default_x > slot_layout.origin_x);
+    assert!(
+        slot_layout.cancel_btn_x + slot_layout.btn_width < slot_layout.origin_x + slot_layout.width
+    );
+    assert!(slot_layout.point_in_default_button(default_x + 1.0, default_y + 1.0));
+    assert!(!tool_layout.point_in_default_button(default_x + 1.0, default_y + 1.0));
+    state.close_color_picker_popup(true);
+
+    // A slot the user added past the built-in palette has no default to offer.
+    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(
+        (0..13)
+            .map(|index| crate::config::QuickColorPaletteEntry {
+                label: format!("Custom {index}"),
+                color: crate::draw::color::RED,
+            })
+            .collect(),
+    ));
+    assert!(state.open_color_picker_popup_for_quick_color(12));
+    state.update_color_picker_popup_layout(1920, 1080);
+    assert!(!state.color_picker_popup_shows_default_button());
+    assert!(
+        state
+            .color_picker_popup_layout()
+            .expect("layout")
+            .default_btn
+            .is_none()
+    );
+}
+
+#[test]
+fn default_button_stages_the_shipped_color_for_ok_to_accept() {
+    let mut state = create_test_input_state();
+    let shipped = crate::config::default_quick_color_for_index(1).expect("built-in slot 1");
+    let customized = crate::draw::Color {
+        r: 0.1,
+        g: 0.2,
+        b: 0.9,
+        a: 1.0,
+    };
+    assert!(state.quick_colors.set_color_for_index(1, customized));
+
+    assert!(state.open_color_picker_popup_for_quick_color(1));
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("layout");
+    let (btn_x, btn_y) = layout.default_btn.expect("default button");
+    let x = (btn_x + layout.btn_width / 2.0) as i32;
+    let y = (btn_y + layout.btn_height / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
+    assert!(state.handle_color_picker_popup_release_at(x, y));
+
+    // Restoring stages a candidate like any other pick: the swatch previews it
+    // and the popup stays open so OK/Cancel still decide.
+    assert!(state.is_color_picker_popup_open());
+    assert_eq!(state.color_picker_popup_current_color(), Some(shipped));
+    assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
+    assert!(state.take_pending_quick_color_edit().is_none());
+
+    state.apply_color_picker_popup();
+    assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
+    assert_eq!(
+        state.take_pending_quick_color_edit(),
+        Some(crate::input::state::QuickColorEdit {
+            index: 1,
+            color: shipped,
+        })
+    );
+}
+
+#[test]
+fn canceling_after_default_keeps_the_customized_color() {
+    let mut state = create_test_input_state();
+    let customized = crate::draw::Color {
+        r: 0.4,
+        g: 0.1,
+        b: 0.3,
+        a: 1.0,
+    };
+    assert!(state.quick_colors.set_color_for_index(2, customized));
+
+    assert!(state.open_color_picker_popup_for_quick_color(2));
+    assert!(state.color_picker_popup_restore_default());
+    assert_ne!(state.quick_colors.color_for_index(2), Some(customized));
+
+    state.close_color_picker_popup(true);
+
+    assert_eq!(state.quick_colors.color_for_index(2), Some(customized));
+    assert!(state.take_pending_quick_color_edit().is_none());
+}
+
+#[test]
+fn accepting_a_recolor_from_the_popup_release_queues_the_write() {
+    // The OK button is clicked with the pointer, so the release path must be
+    // the one that queues the config write (the backend drains it per loop).
+    let mut state = create_test_input_state();
+
+    assert!(state.open_color_picker_popup_for_quick_color(0));
+    state.color_picker_popup_set_from_gradient(0.45, 0.35);
+    let picked = state
+        .color_picker_popup_current_color()
+        .expect("picked color");
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("layout");
+    let x = (layout.ok_btn_x + layout.btn_width / 2.0) as i32;
+    let y = (layout.ok_btn_y + layout.btn_height / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, x, y));
+    assert!(state.handle_color_picker_popup_release_at(x, y));
+
+    assert!(!state.is_color_picker_popup_open());
+    assert_eq!(
+        state.take_pending_quick_color_edit(),
+        Some(crate::input::state::QuickColorEdit {
+            index: 0,
+            color: picked,
+        })
+    );
+}
+
+#[test]
+fn restoring_a_default_is_inert_without_a_slot() {
+    let mut state = create_test_input_state();
+    let tool_color = state.color_for_tool(Tool::Pen);
+
+    state.open_color_picker_popup();
+
+    assert!(!state.color_picker_popup_restore_default());
+    assert_eq!(state.color_picker_popup_current_color(), Some(tool_color));
+}
+
+#[test]
+fn recolor_popup_rejects_a_slot_past_the_palette() {
+    let mut state = create_test_input_state();
+    let len = state.quick_colors.len();
+
+    assert!(!state.open_color_picker_popup_for_quick_color(len));
+    assert!(!state.is_color_picker_popup_open());
+}
+
+#[test]
+fn popup_title_names_the_slot_being_recolored() {
+    let mut state = create_test_input_state();
+
+    state.open_color_picker_popup();
+    assert_eq!(state.color_picker_popup_title(), "Select Color");
+    assert_eq!(state.color_picker_popup_slot(), None);
+
+    let label = state
+        .quick_colors
+        .entry(1)
+        .map(|entry| entry.label.clone())
+        .expect("slot 1");
+    assert!(state.open_color_picker_popup_for_quick_color(1));
+    assert_eq!(state.color_picker_popup_title(), format!("Recolor {label}"));
+}
+
+#[test]
+fn popup_title_flattens_and_bounds_an_authored_label() {
+    let mut state = create_test_input_state();
+    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(vec![
+        crate::config::QuickColorPaletteEntry {
+            label: "  Ünreasonable\n\tlabel   with breaks  ".to_string(),
+            color: crate::draw::color::RED,
+        },
+    ]));
+
+    assert!(state.open_color_picker_popup_for_quick_color(0));
+
+    // The title is one unwrapped line, so newlines, tabs and space runs are
+    // flattened; a line break would otherwise draw outside the popup's damage.
+    assert_eq!(
+        state.color_picker_popup_title(),
+        "Recolor Ünreasonable label with breaks"
+    );
+
+    // A pathological label is bounded so the renderer's width measurement never
+    // walks a huge string. Fitting it to the panel stays the renderer's job.
+    state.close_color_picker_popup(true);
+    state.set_quick_colors(crate::config::QuickColorPalette::from_entries(vec![
+        crate::config::QuickColorPaletteEntry {
+            label: "W".repeat(5_000),
+            color: crate::draw::color::RED,
+        },
+    ]));
+    assert!(state.open_color_picker_popup_for_quick_color(0));
+    assert!(state.color_picker_popup_title().chars().count() < 128);
+}
+
+#[test]
+fn toolbar_edit_quick_color_event_opens_the_popup_on_that_slot() {
+    let mut state = create_test_input_state();
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::EditQuickColor { index: 5 }));
+    assert!(state.is_color_picker_popup_open());
+    assert_eq!(state.color_picker_popup_slot(), Some(5));
+
+    state.close_color_picker_popup(true);
+    let stale = state.quick_colors.len() + 3;
+    assert!(!state.apply_toolbar_event(ToolbarEvent::EditQuickColor { index: stale }));
+    assert!(!state.is_color_picker_popup_open());
+}
+
+#[test]
 fn color_picker_copy_button_requests_copy_and_keeps_popup_open() {
     let mut state = create_test_input_state();
     state.open_color_picker_popup();

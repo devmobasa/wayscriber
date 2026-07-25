@@ -85,7 +85,7 @@ use super::{
     surface::SurfaceState,
     toolbar::{
         ToolbarSurfaceManager,
-        hit::{drag_intent_for_hit, intent_for_hit},
+        hit::{drag_intent_for_hit, intent_for_hit, quick_color_slot_for_hit},
         layout::{side_size, top_size},
         render::{render_side_palette, render_top_strip},
     },

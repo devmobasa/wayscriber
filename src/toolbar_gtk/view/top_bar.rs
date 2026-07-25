@@ -38,8 +38,8 @@ use model::TopStripPlan;
 use super::super::icons::IconWidget;
 use super::super::widgets::{
     FeedbackSender, SliderRow, SwatchButton, add_button_shortcut_hint, icon_button,
-    install_click_modifier_capture, install_shortcut_focus_policy, send_event, set_active_class,
-    sized_button, text_button,
+    install_click_modifier_capture, install_quick_color_recolor, install_shortcut_focus_policy,
+    send_event, set_active_class, sized_button, text_button,
 };
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
 

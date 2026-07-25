@@ -49,6 +49,7 @@ impl InputState {
             ToolbarEvent::SelectTool(tool) => self.apply_toolbar_select_tool(tool),
             ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
             ToolbarEvent::SetQuickColor { color, .. } => self.apply_toolbar_set_color(color),
+            ToolbarEvent::EditQuickColor { index } => self.apply_toolbar_edit_quick_color(index),
             ToolbarEvent::SetColorHsv { h, s, v } => self.apply_toolbar_set_color_hsv(h, s, v),
             ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),

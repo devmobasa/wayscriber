@@ -21,3 +21,7 @@ pub enum ToolbarFocusTarget {
 pub fn format_binding_label(label: &str, binding: Option<&str>) -> String {
     crate::label_format::format_binding_label(label, binding)
 }
+
+pub fn format_quick_color_tooltip(label: &str, binding: Option<&str>) -> String {
+    crate::label_format::format_quick_color_tooltip(label, binding)
+}

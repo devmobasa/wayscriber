@@ -856,6 +856,10 @@ Drag modifier mappings are configurable via `[drawing]` (`drag_tool`, `shift_dra
 
 The quick color palette is configurable with ordered `[[drawing.quick_colors]]` entries. The first eight entries map to the <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd> shortcuts; if fewer are configured by hand, missing shortcut positions use the built-in defaults. The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors while the radial menu keeps its original first-eight color ring. Explicit entries beyond the first eight have no shortcut action binding and opt those extra colors into dense palette UIs, capped to the first 24 colors.
 
+You can also recolor the palette without touching the file: **right-click any swatch** to open the color picker for that slot. The swatch updates live as you drag, OK saves the color to `config.toml`, and Cancel restores it. The slot keeps its label and shortcut, so <kbd>R</kbd> still selects the red slot after you point it at a different red. Recoloring the swatch you are drawing with moves the live color along with it. Left-click still just selects a swatch, and the leftmost chip still opens the picker for the active tool's own color.
+
+Changed your mind? The recolor picker carries a **Default** button that loads the color wayscriber ships for that slot. It stages the color like any other pick, so the swatch previews it and OK/Cancel still decide. It appears only for the eleven built-in slots — extra colors you added yourself have no shipped default to restore.
+
 ### Session manager and persistence
 
 Session persistence is enabled by default. Manage it via the configurator (<kbd>F11</kbd> → Session tab), CLI flags, or the tray checkmark (writes to config).

@@ -18,9 +18,10 @@ use super::super::types::{
     DelayedHistory, DrawingState, OutputFocusAction, PendingBackendAction, PendingBoardDelete,
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PolygonClickState, PresetAction, PresetFeedbackState,
-    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionPublishState,
-    StatusChangeHighlight, TextBlockDrag, TextClickState, TextClipboardRequest,
-    TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState, ZoomAction,
+    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
+    SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
+    TextClipboardRequest, TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState,
+    ZoomAction,
 };
 use crate::config::{
     Action, KeyBinding, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding,
@@ -597,6 +598,8 @@ pub struct InputState {
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence
     pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
+    /// Accepted quick-color recolor awaiting the backend's `config.toml` write
+    pub(in crate::input::state::core) pending_quick_color_edit: Option<QuickColorEdit>,
     /// Pending boards config update (persisted by backend)
     pub(in crate::input::state::core) pending_board_config: Option<PendingBoardConfigUpdate>,
     /// Ordered runtime UI actions for board pins and board identity changes.

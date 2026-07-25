@@ -316,6 +316,12 @@ pub(super) fn run_event_loop(
     finalize_event_loop(
         &mut loop_error,
         || {
+            // Every exit path breaks out above before the per-iteration
+            // pending-action drain, so a config edit accepted in the same
+            // dispatch cycle as the quit (an OK click followed by a tray or
+            // compositor close) would otherwise be dropped. Durable edits are
+            // flushed here, alongside the final session save.
+            state.persist_pending_config_edits();
             if let Err(err) = session_save::persist_session(state) {
                 warn!("Failed to save session state: {}", err);
                 session_save::notify_session_failure(state, &err);

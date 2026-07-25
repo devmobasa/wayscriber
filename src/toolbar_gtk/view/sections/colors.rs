@@ -14,7 +14,7 @@ use crate::config::{Action, QuickColorPalette, QuickColorPaletteEntry};
 use crate::draw::Color;
 use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
 use crate::input::state::{color_to_hex, parse_hex_color};
-use crate::label_format::format_binding_label;
+use crate::label_format::format_quick_color_tooltip;
 use crate::toolbar_icons;
 use crate::ui::theme::toolbar::COLOR_TEXT_SECONDARY;
 use crate::ui::theme::{Rgba, SHADOW_RGBA, set_color};
@@ -23,7 +23,7 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
 use super::super::super::icons::IconPainter;
 use super::super::super::widgets::{
     COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, FeedbackSender, icon_button,
-    rounded_rect_path, send_event, sized_button,
+    install_quick_color_recolor, rounded_rect_path, send_event, sized_button,
 };
 use super::{SectionCtx, scoped_title, section_card};
 
@@ -56,8 +56,9 @@ const SWATCHES_PER_ROW: usize = 6;
 /// Body spacing already contributed by `section_card` between rows.
 const BODY_SPACING: f64 = 6.0;
 
-/// `(color, label, bound quick-color action)` like the built-in swatch rows.
-type ColorSwatch = (Color, String, Option<Action>);
+/// `(color, label, bound quick-color action, palette slot index)` like the
+/// built-in swatch rows.
+type ColorSwatch = (Color, String, Option<Action>, usize);
 
 #[derive(Default)]
 struct HexPasteRequests {
@@ -601,18 +602,27 @@ fn swatch_row(
     tracked: &mut Vec<(Color, Rc<Cell<bool>>, gtk4::DrawingArea)>,
 ) -> gtk4::Box {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(SWATCH_GAP));
-    for (color, name, action) in colors {
+    for (color, name, action, index) in colors {
         let action = *action;
+        let index = *index;
         let binding =
             action.and_then(|action| ctx.snapshot.binding_hints.binding_for_action(action));
-        let tooltip = format_binding_label(name, binding);
+        let tooltip = format_quick_color_tooltip(name, binding);
         let color = *color;
         let (button, selected, area) =
             rect_swatch(ctx, color, color == ctx.snapshot.color, &tooltip);
         let sender = ctx.feedback.clone();
         button.connect_clicked(move |_| {
-            send_event(&sender, ToolbarEvent::SetQuickColor { color, action });
+            send_event(
+                &sender,
+                ToolbarEvent::SetQuickColor {
+                    color,
+                    action,
+                    index,
+                },
+            );
         });
+        install_quick_color_recolor(&button, index, &ctx.feedback);
         row.append(&button);
         tracked.push((color, selected, area));
     }
@@ -737,30 +747,9 @@ fn palette_swatch((index, entry): (usize, &QuickColorPaletteEntry)) -> ColorSwat
         entry.color,
         entry.label.clone(),
         QuickColorPalette::action_for_index(index),
+        index,
     )
 }
 
 #[cfg(test)]
-mod tests {
-    use super::HexPasteRequests;
-
-    #[test]
-    fn newer_hex_paste_request_supersedes_pending_callback() {
-        let requests = HexPasteRequests::default();
-        let older = requests.begin();
-        let newer = requests.begin();
-
-        assert!(!requests.is_current(older));
-        assert!(requests.is_current(newer));
-    }
-
-    #[test]
-    fn editing_hex_text_invalidates_pending_paste_callback() {
-        let requests = HexPasteRequests::default();
-        let pending = requests.begin();
-
-        requests.invalidate();
-
-        assert!(!requests.is_current(pending));
-    }
-}
+mod tests;

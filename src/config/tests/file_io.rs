@@ -116,6 +116,75 @@ fn targeted_runtime_update_preserves_newer_sibling_edit() {
     });
 }
 
+/// The write a toolbar swatch recolor performs: one slot's color changes and
+/// nothing else in the file moves.
+#[test]
+fn runtime_quick_color_recolor_rewrites_one_slot_and_keeps_the_rest() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            r##"# Keep this palette comment.
+[[drawing.quick_colors]]
+label = "Red"
+color = "#FF0000"
+
+[[drawing.quick_colors]]
+label = "Green"
+color = "#00FF00"
+"##,
+        )
+        .unwrap();
+
+        Config::update_file(|config| {
+            let crimson = crate::draw::Color {
+                r: 220.0 / 255.0,
+                g: 20.0 / 255.0,
+                b: 60.0 / 255.0,
+                a: 1.0,
+            };
+            assert_eq!(
+                config.drawing.quick_colors.set_color_at(1, crimson),
+                crate::config::QuickColorWrite::Written
+            );
+        })
+        .expect("save the recolored quick color");
+
+        let saved = fs::read_to_string(&config_file).unwrap();
+        assert!(saved.contains("# Keep this palette comment."));
+
+        let reloaded = Config::load().expect("reload recolored palette").config;
+        let palette = QuickColorPalette::from_config(&reloaded.drawing.quick_colors);
+        assert_eq!(
+            palette.color_for_index(1),
+            Some(crate::draw::Color {
+                r: 220.0 / 255.0,
+                g: 20.0 / 255.0,
+                b: 60.0 / 255.0,
+                a: 1.0,
+            })
+        );
+        // The recolored slot keeps its label, the untouched slot keeps both,
+        // and the backfilled shortcut slots are now explicit.
+        assert_eq!(
+            palette.entry(1).map(|entry| entry.label.as_str()),
+            Some("Green")
+        );
+        assert_eq!(
+            palette.color_for_index(0),
+            Some(crate::draw::Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+        assert_eq!(palette.len(), 8);
+    });
+}
+
 #[test]
 fn runtime_board_reorder_does_not_materialize_unchanged_item_preferences() {
     with_temp_config_home(|config_root| {

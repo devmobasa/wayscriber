@@ -671,9 +671,10 @@ fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
     let entry = &snapshot.quick_colors.rendered_entries()[0];
     assert!(matches!(
         swatch.interact.as_ref().unwrap().event,
-        ToolbarEvent::SetQuickColor { color, action }
+        ToolbarEvent::SetQuickColor { color, action, index }
             if color == entry.color
                 && action == crate::config::QuickColorPalette::action_for_index(0)
+                && index == 0
     ));
 
     let slider = tree

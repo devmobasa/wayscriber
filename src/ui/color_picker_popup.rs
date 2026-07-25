@@ -6,7 +6,7 @@
 use crate::draw::Color;
 use crate::input::InputState;
 use crate::input::state::{COLOR_PICKER_PREVIEW_SIZE, ColorPickerPopupLayout};
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::primitives::{draw_rounded_rect, ellipsize_to_fit, text_extents_for};
 use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
@@ -51,6 +51,8 @@ const TOOLTIP_PADDING_Y: f64 = 5.0;
 const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
 const TOOLTIP_SCREEN_MARGIN: f64 = 6.0;
 const TOOLTIP_SHADOW_OFFSET: f64 = 2.0;
+/// Left inset of the title, mirrored on the right as its trim margin.
+const TITLE_INSET: f64 = 20.0;
 
 /// Bounds of every pixel the color picker may change while it stays open.
 /// The full-screen dimmer is stable between open and close; those transitions
@@ -65,7 +67,11 @@ pub fn color_picker_popup_visual_geometry(
         return None;
     }
 
-    let layout = ColorPickerPopupLayout::compute(screen_width, screen_height);
+    let layout = ColorPickerPopupLayout::compute(
+        screen_width,
+        screen_height,
+        input_state.color_picker_popup_shows_default_button(),
+    );
     let mut bounds = (
         layout.origin_x,
         layout.origin_y,
@@ -162,11 +168,21 @@ pub fn render_color_picker_popup(
     };
     constants::set_color(ctx, TEXT_PRIMARY);
     let title_y = layout.origin_y + 20.0 + 16.0;
+    // Names the swatch when the popup was opened to recolor one, so the target
+    // of OK is never ambiguous. A recolor title carries a user-authored label,
+    // so it is trimmed to the panel: unwrapped text wider than the panel would
+    // draw outside the bounds this popup reports as damaged.
+    let title = fit_title_to_panel(
+        ctx,
+        title_style,
+        &input_state.color_picker_popup_title(),
+        &layout,
+    );
     draw_text_baseline(
         ctx,
         title_style,
-        "Select Color",
-        layout.origin_x + 20.0,
+        &title,
+        layout.origin_x + TITLE_INSET,
         title_y,
         None,
     );
@@ -262,6 +278,25 @@ pub fn render_color_picker_popup(
         .map(|(hx, hy)| layout.point_in_cancel_button(hx, hy))
         .unwrap_or(false);
 
+    // "Default" button: only while recoloring a slot the shipped palette
+    // defines. It stages the built-in color instead of committing, so it is a
+    // secondary action next to OK/Cancel.
+    if let Some((default_x, default_y)) = layout.default_btn {
+        let default_hover = hover_pos
+            .map(|(hx, hy)| layout.point_in_default_button(hx, hy))
+            .unwrap_or(false);
+        draw_button(
+            ctx,
+            default_x,
+            default_y,
+            layout.btn_width,
+            layout.btn_height,
+            "Default",
+            false, // secondary
+            default_hover,
+        );
+    }
+
     // OK button
     draw_button(
         ctx,
@@ -322,6 +357,26 @@ pub fn render_color_picker_popup(
     }
 
     let _ = ctx.restore();
+}
+
+/// Trim the popup title to the panel's content width. Slot labels come from
+/// `config.toml`, so no character budget can bound the shaped width; the real
+/// text is measured instead.
+fn fit_title_to_panel(
+    ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
+    title: &str,
+    layout: &ColorPickerPopupLayout,
+) -> String {
+    let max_width = (layout.width - TITLE_INSET * 2.0).max(0.0);
+    ellipsize_to_fit(
+        ctx,
+        title,
+        style.family,
+        style.size,
+        style.weight,
+        max_width,
+    )
 }
 
 /// Draw the HSV color gradient.
@@ -692,4 +747,67 @@ fn draw_button(
     let text_x = x + (w - extents.width()) / 2.0;
     let text_y = y + h / 2.0 + extents.height() / 2.0;
     draw_text_baseline(ctx, label_style, label, text_x, text_y, None);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_context() -> cairo::Context {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1920, 1080)
+            .expect("test image surface");
+        cairo::Context::new(&surface).expect("test cairo context")
+    }
+
+    fn title_style() -> UiTextStyle<'static> {
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: 16.0,
+        }
+    }
+
+    fn measured_width(ctx: &cairo::Context, text: &str) -> f64 {
+        let style = title_style();
+        text_extents_for(
+            ctx,
+            style.family,
+            style.slant,
+            style.weight,
+            style.size,
+            text,
+        )
+        .width()
+    }
+
+    #[test]
+    fn wide_titles_are_trimmed_to_the_panel_not_a_character_budget() {
+        let ctx = test_context();
+        let layout = ColorPickerPopupLayout::compute(1920, 1080, true);
+        let content_width = layout.width - TITLE_INSET * 2.0;
+
+        // Wide glyphs: few characters, far more pixels than a Latin label of
+        // the same length, which is why the budget has to be measured.
+        let wide = format!("Recolor {}", "W".repeat(40));
+        let fitted = fit_title_to_panel(&ctx, title_style(), &wide, &layout);
+        assert!(
+            measured_width(&ctx, &wide) > content_width,
+            "fixture is wide"
+        );
+        assert!(measured_width(&ctx, &fitted) <= content_width);
+        assert!(fitted.len() < wide.len());
+
+        // Non-Latin scripts take the same path.
+        let cjk = format!("Recolor {}", "測".repeat(40));
+        let fitted_cjk = fit_title_to_panel(&ctx, title_style(), &cjk, &layout);
+        assert!(measured_width(&ctx, &fitted_cjk) <= content_width);
+
+        // A title that already fits is left exactly as composed.
+        let short = "Recolor Pink";
+        assert_eq!(
+            fit_title_to_panel(&ctx, title_style(), short, &layout),
+            short
+        );
+    }
 }

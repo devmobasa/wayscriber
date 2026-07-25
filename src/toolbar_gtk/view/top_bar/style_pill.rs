@@ -108,6 +108,7 @@ impl TopBar {
                     swatch.button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });
+                    install_quick_color_recolor(&swatch.button, index, &self.feedback);
                     swatch.button.set_valign(gtk4::Align::Center);
                     let is_last = index + 1 == swatch_count;
                     append_gap(
