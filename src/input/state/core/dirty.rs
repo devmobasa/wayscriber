@@ -1,7 +1,8 @@
 use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::Shape;
 use crate::draw::shape::{
-    bounding_box_for_points, bounding_box_for_sticky_note_preview, bounding_box_for_text,
+    CaretGeometry, LogicalBounds, bounding_box_for_points, bounding_box_for_sticky_note_preview,
+    bounding_box_for_text,
 };
 use crate::input::tool::{
     PROVISIONAL_POLYGON_DAMAGE_PADDING, ToolMotionBehavior, ToolMotionSizeSource,
@@ -229,21 +230,34 @@ impl InputState {
         // over logical cells that reach beyond the ink box, so damage the full
         // logical extent whenever one of them is showing.
         let mut live_bounds = text_bounds;
-        let caret_bounds = preview
-            .caret
-            .and_then(|caret| self.caret_damage_rect(&preview.text, *x, *y, caret));
-        let decoration_bounds = self.pango_decoration_damage_rect(
-            &preview.text,
-            *x,
-            *y,
-            preview.highlight.as_ref(),
-            preview.underline.as_ref(),
-        );
-        for extra in [caret_bounds, decoration_bounds].into_iter().flatten() {
-            live_bounds = Some(match live_bounds {
-                Some(base) => union_rect(base, extra).unwrap_or(base),
-                None => extra,
-            });
+        let decorations_showing = [preview.highlight.as_ref(), preview.underline.as_ref()]
+            .into_iter()
+            .flatten()
+            .any(|range| range.start < range.end);
+        // Caret and decoration damage read the same layout, so resolve them
+        // together: with a selection or composition showing that is one layout
+        // instead of two. Skipped entirely when neither is present.
+        if preview.caret.is_some() || decorations_showing {
+            let font = self.font_descriptor.to_pango_string(self.current_font_size);
+            if let Some(geometry) = crate::draw::shape::text_preview_geometry(
+                &preview.text,
+                &font,
+                self.text_wrap_width,
+                preview.caret,
+            ) {
+                let caret_bounds = geometry
+                    .caret
+                    .and_then(|geom| caret_damage_rect(geom, *x, *y, self.current_font_size));
+                let decoration_bounds = decorations_showing
+                    .then(|| pango_decoration_damage_rect(geometry.logical, *x, *y))
+                    .flatten();
+                for extra in [caret_bounds, decoration_bounds].into_iter().flatten() {
+                    live_bounds = Some(match live_bounds {
+                        Some(base) => union_rect(base, extra).unwrap_or(base),
+                        None => extra,
+                    });
+                }
+            }
         }
 
         // When the block has been moved, the ghost renders at the *original*
@@ -293,24 +307,16 @@ impl InputState {
     }
 
     /// Exact damage rectangle for the caret line at `caret` (a byte offset into
-    /// `buffer`), in canvas coordinates, with a small margin covering the stroke
-    /// width. Mirrors `render_caret_line`'s geometry so repaints erase it fully.
-    ///
-    /// The caret's centre is kept in floating point until the very last step:
-    /// rounding it first and then subtracting a whole-pixel half-width can move
-    /// the rectangle off the leftmost column the stroke actually touches.
-    fn caret_damage_rect(&self, buffer: &str, x: i32, y: i32, caret: usize) -> Option<Rect> {
+    /// `buffer`), measuring the layout itself. `compute_text_preview_bounds`
+    /// shares a layout instead; this stands alone for callers that have only a
+    /// buffer and an offset.
+    #[cfg(test)]
+    fn caret_damage_rect_for(&self, buffer: &str, x: i32, y: i32, caret: usize) -> Option<Rect> {
         let size = self.current_font_size;
         let font = self.font_descriptor.to_pango_string(size);
         let geom =
             crate::draw::shape::caret_geometry_text(buffer, &font, self.text_wrap_width, caret)?;
-        let half_w = crate::draw::caret_outline_width(size) / 2.0;
-        let caret_x = f64::from(x) + geom.x;
-        let left = (caret_x - half_w).floor() as i32 - 1;
-        let right = (caret_x + half_w).ceil() as i32 + 1;
-        let top = y + geom.y_from_baseline.floor() as i32 - 1;
-        let bottom = y + (geom.y_from_baseline + geom.height).ceil() as i32 + 1;
-        Rect::from_min_max(left, top, right, bottom)
+        caret_damage_rect(geom, x, y, size)
     }
 
     /// The caret's rectangle in canvas coordinates — a thin strip at the caret
@@ -342,37 +348,36 @@ impl InputState {
         let height = geom.height.ceil().max(1.0) as i32;
         Rect::from_min_max(caret_x, top, caret_x + 2, top + height)
     }
+}
 
-    /// Damage bounds for the Pango-painted decorations: the selection background
-    /// and the IME preedit underline. Both are laid out against logical cells
-    /// (whitespace included) that reach past the glyph ink box — the underline
-    /// in particular sits *below* the baseline, outside the ink box entirely for
-    /// text without descenders — so the text's full logical box is used as a safe
-    /// superset. `None` when neither decoration is showing.
-    fn pango_decoration_damage_rect(
-        &self,
-        preview_text: &str,
-        x: i32,
-        y: i32,
-        highlight: Option<&std::ops::Range<usize>>,
-        underline: Option<&std::ops::Range<usize>>,
-    ) -> Option<Rect> {
-        let showing = [highlight, underline]
-            .into_iter()
-            .flatten()
-            .any(|range| range.start < range.end);
-        if !showing {
-            return None;
-        }
-        let font = self.font_descriptor.to_pango_string(self.current_font_size);
-        let (lx, ly, w, h) =
-            crate::draw::shape::text_logical_bounds(preview_text, &font, self.text_wrap_width)?;
-        let left = x + lx.floor() as i32 - 1;
-        let top = y + ly.floor() as i32 - 1;
-        let right = x + (lx + w).ceil() as i32 + 1;
-        let bottom = y + (ly + h).ceil() as i32 + 1;
-        Rect::from_min_max(left, top, right, bottom)
-    }
+/// Exact damage rectangle for a caret line, in canvas coordinates, with a small
+/// margin covering the stroke width. Mirrors `render_caret_line`'s geometry so
+/// repaints erase it fully.
+///
+/// The caret's centre is kept in floating point until the very last step:
+/// rounding it first and then subtracting a whole-pixel half-width can move the
+/// rectangle off the leftmost column the stroke actually touches.
+fn caret_damage_rect(geom: CaretGeometry, x: i32, y: i32, size: f64) -> Option<Rect> {
+    let half_w = crate::draw::caret_outline_width(size) / 2.0;
+    let caret_x = f64::from(x) + geom.x;
+    let left = (caret_x - half_w).floor() as i32 - 1;
+    let right = (caret_x + half_w).ceil() as i32 + 1;
+    let top = y + geom.y_from_baseline.floor() as i32 - 1;
+    let bottom = y + (geom.y_from_baseline + geom.height).ceil() as i32 + 1;
+    Rect::from_min_max(left, top, right, bottom)
+}
+
+/// Damage bounds for the Pango-painted decorations: the selection background and
+/// the IME preedit underline. Both are laid out against logical cells
+/// (whitespace included) that reach past the glyph ink box — the underline in
+/// particular sits *below* the baseline, outside the ink box entirely for text
+/// without descenders — so the text's full logical box is a safe superset.
+fn pango_decoration_damage_rect(logical: LogicalBounds, x: i32, y: i32) -> Option<Rect> {
+    let left = x + logical.x.floor() as i32 - 1;
+    let top = y + logical.y_from_baseline.floor() as i32 - 1;
+    let right = x + (logical.x + logical.width).ceil() as i32 + 1;
+    let bottom = y + (logical.y_from_baseline + logical.height).ceil() as i32 + 1;
+    Rect::from_min_max(left, top, right, bottom)
 }
 
 /// Whether the active text block has moved from its original position — the
@@ -599,7 +604,7 @@ mod tests {
             .to_pango_string(state.current_font_size);
         let geom = crate::draw::shape::caret_geometry_text("hi", &font, None, 1).unwrap();
         let rect = state
-            .caret_damage_rect("hi", 100, 100, 1)
+            .caret_damage_rect_for("hi", 100, 100, 1)
             .expect("caret has a damage rect");
         let half = crate::draw::caret_outline_width(state.current_font_size) / 2.0;
         let painted_left = 100.0 + geom.x - half;
@@ -679,7 +684,7 @@ mod tests {
             .compute_text_preview_bounds()
             .expect("an active text input has preview bounds");
         let caret = state
-            .caret_damage_rect("hi", 100, 100, 2)
+            .caret_damage_rect_for("hi", 100, 100, 2)
             .expect("the caret has geometry");
 
         // The caret's exact rect (mirroring the renderer) must fall inside the

@@ -24,10 +24,10 @@ pub(crate) use text::{
     sticky_note_layout_text, sticky_note_text_layout,
 };
 pub(crate) use text_cache::{
-    TextMeasurement, VisualCaretDirection, VisualLineDirection, VisualLineEdge,
-    caret_at_visual_selection_edge, caret_geometry_text, caret_on_adjacent_visual_line,
-    caret_on_adjacent_visual_position, caret_on_visual_line_edge, hit_test_text,
-    measure_text_with_context, text_logical_bounds,
+    CaretGeometry, LogicalBounds, TextMeasurement, VisualCaretDirection, VisualLineDirection,
+    VisualLineEdge, caret_at_visual_selection_edge, caret_geometry_text,
+    caret_on_adjacent_visual_line, caret_on_adjacent_visual_position, caret_on_visual_line_edge,
+    configured_layout, hit_test_text, measure_text_with_context, text_preview_geometry,
 };
 
 #[cfg(test)]

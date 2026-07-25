@@ -195,7 +195,15 @@ impl InputState {
             Key::Backspace | Key::Delete => true,
             _ => false,
         };
-        let font = self.font_descriptor.to_pango_string(self.current_font_size);
+        // Only Pango-resolved navigation needs a font string; building one for
+        // every key would allocate on each Escape, F-key, and unbound shortcut
+        // that merely passes through text mode.
+        let font_for_navigation = matches!(
+            key,
+            Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End
+        )
+        .then(|| self.font_descriptor.to_pango_string(self.current_font_size));
+        let font = font_for_navigation.as_deref().unwrap_or_default();
         let wrap_width = self.text_wrap_width;
 
         let DrawingState::TextInput {
@@ -239,7 +247,7 @@ impl InputState {
             Key::Delete => caret_edit::delete_forward(buffer, caret, anchor),
             Key::Left => move_horizontal_caret(
                 buffer,
-                &font,
+                font,
                 wrap_width,
                 caret,
                 anchor,
@@ -249,7 +257,7 @@ impl InputState {
             ),
             Key::Right => move_horizontal_caret(
                 buffer,
-                &font,
+                font,
                 wrap_width,
                 caret,
                 anchor,
@@ -259,7 +267,7 @@ impl InputState {
             ),
             Key::Up => caret_on_adjacent_visual_line(
                 buffer,
-                &font,
+                font,
                 wrap_width,
                 *caret,
                 VisualLineDirection::Up,
@@ -268,7 +276,7 @@ impl InputState {
             .unwrap_or_else(|| caret_edit::move_up(buffer, caret, anchor, shift)),
             Key::Down => caret_on_adjacent_visual_line(
                 buffer,
-                &font,
+                font,
                 wrap_width,
                 *caret,
                 VisualLineDirection::Down,
@@ -277,13 +285,13 @@ impl InputState {
             .unwrap_or_else(|| caret_edit::move_down(buffer, caret, anchor, shift)),
             Key::Home if ctrl => caret_edit::move_document_start(caret, anchor, shift),
             Key::Home => {
-                caret_on_visual_line_edge(buffer, &font, wrap_width, *caret, VisualLineEdge::Start)
+                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::Start)
                     .map(|new| caret_edit::move_to_offset(caret, anchor, shift, new))
                     .unwrap_or_else(|| caret_edit::move_line_home(buffer, caret, anchor, shift))
             }
             Key::End if ctrl => caret_edit::move_document_end(buffer, caret, anchor, shift),
             Key::End => {
-                caret_on_visual_line_edge(buffer, &font, wrap_width, *caret, VisualLineEdge::End)
+                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::End)
                     .map(|new| caret_edit::move_to_offset(caret, anchor, shift, new))
                     .unwrap_or_else(|| caret_edit::move_line_end(buffer, caret, anchor, shift))
             }

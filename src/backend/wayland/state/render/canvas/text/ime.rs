@@ -55,20 +55,16 @@ pub(super) fn paint_preedit_underline(
     wrap_width: Option<i32>,
     color: crate::draw::Color,
 ) {
-    if range.is_empty() || usize::try_from(range.end).map_or(true, |end| end > text.len()) {
+    let Ok(end) = usize::try_from(range.end) else {
+        return;
+    };
+    if range.is_empty() || end > text.len() {
         return;
     }
 
-    let layout = pangocairo::functions::create_layout(ctx);
-    let font_desc = pango::FontDescription::from_string(font_desc);
-    layout.set_font_description(Some(&font_desc));
-    layout.set_text(text);
-    if let Some(width) = wrap_width {
-        let width = width.max(1);
-        let width_pango = (i64::from(width) * i64::from(pango::SCALE)).min(i64::from(i32::MAX));
-        layout.set_width(width_pango as i32);
-        layout.set_wrap(pango::WrapMode::WordChar);
-    }
+    // Same layout configuration as measurement and rendering, so the underline
+    // lands on the glyph run the caret and damage were computed against.
+    let layout = crate::draw::shape::configured_layout(ctx, text, font_desc, wrap_width);
 
     let attrs = pango::AttrList::new();
     let mut underline = pango::AttrInt::new_underline(pango::Underline::Single);

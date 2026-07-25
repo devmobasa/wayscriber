@@ -146,6 +146,41 @@ where
     })
 }
 
+/// Build a Pango layout configured exactly like the measurement and render
+/// paths: same font description, same text, same wrap mode and width clamp.
+/// Every caret, hit-test, and decoration helper goes through this, so their
+/// geometry cannot drift from what `measure_text_cached` and the renderer see.
+pub(crate) fn configured_layout(
+    ctx: &cairo::Context,
+    text: &str,
+    font_desc_str: &str,
+    wrap_width: Option<i32>,
+) -> pango::Layout {
+    let layout = pangocairo::functions::create_layout(ctx);
+    let font_desc = pango::FontDescription::from_string(font_desc_str);
+    layout.set_font_description(Some(&font_desc));
+    layout.set_text(text);
+    if let Some(width) = wrap_width {
+        let width = width.max(1);
+        let width_pango =
+            (i64::from(width) * i64::from(pango::SCALE)).min(i64::from(i32::MAX)) as i32;
+        layout.set_width(width_pango);
+        layout.set_wrap(pango::WrapMode::WordChar);
+    }
+    layout
+}
+
+/// Snap `byte` down to the nearest UTF-8 char boundary at or below it (and to
+/// the string length), so Pango is never handed an index that splits a
+/// multi-byte character.
+fn snap_char_boundary(text: &str, byte: usize) -> usize {
+    let mut index = byte.min(text.len());
+    while index > 0 && !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
+}
+
 /// Measure text using Pango, with caching.
 /// Returns cached measurement if available, otherwise measures and caches.
 pub(crate) fn measure_text_cached(
@@ -168,18 +203,7 @@ pub(crate) fn measure_text_cached(
 
     // Measure using shared context
     let measurement = with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
         let (ink_rect, logical_rect) = layout.extents();
         let scale = pango::SCALE as f64;
@@ -241,16 +265,7 @@ pub(crate) fn hit_test_text(
         return Some(0);
     }
     with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
         let scale = pango::SCALE as f64;
         // Convert the baseline-relative y into the layout's top-left frame.
@@ -297,21 +312,9 @@ pub(crate) fn caret_on_adjacent_visual_position(
     direction: VisualCaretDirection,
 ) -> Option<usize> {
     with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
-        let mut index = byte_index.min(text.len());
-        while index > 0 && !text.is_char_boundary(index) {
-            index -= 1;
-        }
+        let index = snap_char_boundary(text, byte_index);
         let old_index = i32::try_from(index).unwrap_or(i32::MAX);
         let direction = match direction {
             VisualCaretDirection::Left => -1,
@@ -340,16 +343,7 @@ pub(crate) fn caret_at_visual_selection_edge(
     direction: VisualCaretDirection,
 ) -> Option<usize> {
     with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
         let start = start.min(text.len());
         let end = end.min(text.len());
@@ -382,21 +376,9 @@ pub(crate) fn caret_on_visual_line_edge(
     edge: VisualLineEdge,
 ) -> Option<usize> {
     with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
-        let mut index = byte_index.min(text.len());
-        while index > 0 && !text.is_char_boundary(index) {
-            index -= 1;
-        }
+        let index = snap_char_boundary(text, byte_index);
         let (line_index, _) =
             layout.index_to_line_x(i32::try_from(index).unwrap_or(i32::MAX), false);
         let Some(line) = layout.line_readonly(line_index) else {
@@ -428,21 +410,9 @@ pub(crate) fn caret_on_adjacent_visual_line(
     direction: VisualLineDirection,
 ) -> Option<usize> {
     with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
-        let mut index = byte_index.min(text.len());
-        while index > 0 && !text.is_char_boundary(index) {
-            index -= 1;
-        }
+        let index = snap_char_boundary(text, byte_index);
         let index_i32 = i32::try_from(index).unwrap_or(i32::MAX);
         let (line_index, x) = layout.index_to_line_x(index_i32, false);
         let target_line = match direction {
@@ -499,67 +469,76 @@ pub(crate) fn caret_geometry_text(
     byte_index: usize,
 ) -> Option<CaretGeometry> {
     with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
+        caret_geometry_in(&layout, text, byte_index)
+    })
+}
 
-        let scale = pango::SCALE as f64;
-        // Snap to a char boundary at or below the requested byte so Pango is
-        // never handed an index that splits a multi-byte character.
-        let mut index = byte_index.min(text.len());
-        while index > 0 && !text.is_char_boundary(index) {
-            index -= 1;
-        }
-        let index_i32 = i32::try_from(index).unwrap_or(i32::MAX);
-        let (strong, _weak) = layout.cursor_pos(index_i32);
-        let baseline = layout.baseline() as f64 / scale;
-        CaretGeometry {
-            x: strong.x() as f64 / scale,
-            y_from_baseline: strong.y() as f64 / scale - baseline,
-            height: strong.height() as f64 / scale,
+/// Full logical bounds of a text run — the advance width and line-box height,
+/// including the leading/trailing whitespace and empty trailing advance that
+/// the ink box omits — in pixels, relative to the stored `(x, y)` baseline
+/// origin. Pango paints selection backgrounds and preedit underlines over these
+/// logical cells, so damage for either must cover this box, not just the ink.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LogicalBounds {
+    pub x: f64,
+    pub y_from_baseline: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// Everything the damage tracker needs about a preview's geometry, resolved
+/// from a single layout.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TextPreviewGeometry {
+    /// Present only when a caret offset was requested.
+    pub caret: Option<CaretGeometry>,
+    pub logical: LogicalBounds,
+}
+
+/// Resolve caret geometry and logical bounds together. The damage tracker needs
+/// both for the same text whenever a selection or composition is showing, so
+/// sharing one layout saves building a second one for those states. Text bounds
+/// still go through `measure_text_cached`, which lays out again on a cache miss;
+/// this only removes the duplicate pass, it does not make damage layout-free.
+pub(crate) fn text_preview_geometry(
+    text: &str,
+    font_desc_str: &str,
+    wrap_width: Option<i32>,
+    byte_index: Option<usize>,
+) -> Option<TextPreviewGeometry> {
+    with_measurement_context(|ctx| {
+        let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
+        TextPreviewGeometry {
+            caret: byte_index.map(|byte_index| caret_geometry_in(&layout, text, byte_index)),
+            logical: logical_bounds_in(&layout),
         }
     })
 }
 
-/// Full logical bounds of `text` — the advance width and line-box height,
-/// including leading/trailing whitespace and empty trailing advance that the ink
-/// box omits — in pixels, relative to the stored `(x, y)` baseline origin:
-/// `(x_offset, y_from_baseline, width, height)`. Pango paints selection
-/// backgrounds over these logical cells, so damage for a selection must cover
-/// this box, not just the ink extents. Returns `None` when no context exists.
-pub(crate) fn text_logical_bounds(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-) -> Option<(f64, f64, f64, f64)> {
-    with_measurement_context(|ctx| {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = pango::FontDescription::from_string(font_desc_str);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            let width = width.max(1);
-            let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-            layout.set_width(width_pango);
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
-        let scale = pango::SCALE as f64;
-        let (_ink, logical) = layout.extents();
-        let baseline = layout.baseline() as f64 / scale;
-        (
-            logical.x() as f64 / scale,
-            logical.y() as f64 / scale - baseline,
-            logical.width() as f64 / scale,
-            logical.height() as f64 / scale,
-        )
-    })
+fn caret_geometry_in(layout: &pango::Layout, text: &str, byte_index: usize) -> CaretGeometry {
+    let scale = pango::SCALE as f64;
+    let index = snap_char_boundary(text, byte_index);
+    let index_i32 = i32::try_from(index).unwrap_or(i32::MAX);
+    let (strong, _weak) = layout.cursor_pos(index_i32);
+    let baseline = layout.baseline() as f64 / scale;
+    CaretGeometry {
+        x: strong.x() as f64 / scale,
+        y_from_baseline: strong.y() as f64 / scale - baseline,
+        height: strong.height() as f64 / scale,
+    }
+}
+
+fn logical_bounds_in(layout: &pango::Layout) -> LogicalBounds {
+    let scale = pango::SCALE as f64;
+    let (_ink, logical) = layout.extents();
+    let baseline = layout.baseline() as f64 / scale;
+    LogicalBounds {
+        x: logical.x() as f64 / scale,
+        y_from_baseline: logical.y() as f64 / scale - baseline,
+        width: logical.width() as f64 / scale,
+        height: logical.height() as f64 / scale,
+    }
 }
 
 /// Clear the text measurement cache.
