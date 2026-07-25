@@ -2,16 +2,22 @@ mod ime;
 
 use super::super::super::*;
 use crate::draw::Shape;
-use ime::{build_text_preview, paint_preedit_selection};
+use ime::{paint_preedit_selection, paint_preedit_underline};
 use std::ops::Range;
 
 impl WaylandState {
     pub(super) fn render_text_input_preview(&self, ctx: &cairo::Context) {
-        if let DrawingState::TextInput { x, y, buffer } = &self.input_state.state {
+        if let DrawingState::TextInput { x, y, .. } = &self.input_state.state {
             let is_editing_existing = self.input_state.text_edit_target.is_some();
 
-            // If editing an existing text shape, render the original as a ghost preview
-            if let Some((_, snapshot)) = &self.input_state.text_edit_target {
+            // The faded original ("ghost") is a "where it was" reference, useful
+            // only once the block has been repositioned. While editing in place
+            // (origin unchanged) it overlaps the live text and reads as undeleted
+            // text, so it stays hidden until the block actually moves. The input
+            // layer owns this predicate so the damage bounds and the render agree.
+            if self.input_state.text_edit_ghost_visible()
+                && let Some((_, snapshot)) = &self.input_state.text_edit_target
+            {
                 self.render_text_edit_ghost(ctx, &snapshot.shape);
             }
 
@@ -24,119 +30,144 @@ impl WaylandState {
             // for new text.
             let cursor_glyph = if is_editing_existing { "|" } else { "_" };
 
-            // In-progress IME composition is transient. A collapsed cursor is
-            // represented by the editor caret, a range by a highlight, and
-            // -1/-1 hides it exactly as text-input-v3 requests.
-            let (preview_text, preedit_selection) =
-                build_text_preview(buffer, self.input_state.ime_preedit(), cursor_glyph);
+            // Compose the preview from the buffer, the caret, the selection, and
+            // any in-progress IME composition. The caret glyph is placed at the
+            // caret byte offset; a selection is drawn as a highlight (no glyph);
+            // a preedit is inserted at the caret with its own cursor/underline.
+            let Some(preview) = self.input_state.text_input_preview(cursor_glyph) else {
+                return;
+            };
+            let decoration_color = text_preview_decoration_color(
+                self.input_state.text_input_mode,
+                self.input_state.current_color,
+            );
             match self.input_state.text_input_mode {
                 crate::input::TextInputMode::Plain => {
                     crate::draw::render_text(
                         ctx,
                         *x,
                         *y,
-                        &preview_text,
+                        &preview.text,
                         self.input_state.current_color,
                         self.input_state.current_font_size,
                         &self.input_state.font_descriptor,
                         self.input_state.text_background_enabled,
                         self.input_state.text_wrap_width,
                     );
-                    self.render_preedit_selection(
-                        ctx,
-                        *x,
-                        *y,
-                        &preview_text,
-                        preedit_selection.as_ref(),
-                    );
-                    // Underline only the composition text, not an injected
-                    // caret glyph used for a collapsed preedit cursor.
-                    self.render_preedit_underline(
-                        ctx,
-                        *x,
-                        *y,
-                        buffer,
-                        self.input_state
-                            .ime_preedit()
-                            .map(|preedit| preedit.text.as_str())
-                            .unwrap_or(""),
-                    );
                 }
                 crate::input::TextInputMode::StickyNote => {
-                    crate::draw::render_sticky_note(
+                    crate::draw::render_sticky_note_preview(
                         ctx,
                         *x,
                         *y,
-                        &preview_text,
+                        &preview.text,
                         self.input_state.current_color,
                         self.input_state.current_font_size,
                         &self.input_state.font_descriptor,
                         self.input_state.text_wrap_width,
                     );
-                    self.render_preedit_selection(
-                        ctx,
-                        *x,
-                        *y,
-                        &preview_text,
-                        preedit_selection.as_ref(),
-                    );
                 }
             }
+            self.render_selection_highlight(ctx, *x, *y, &preview.text, preview.highlight.as_ref());
+            self.render_preedit_underline(
+                ctx,
+                *x,
+                *y,
+                &preview.text,
+                preview.underline.as_ref(),
+                decoration_color,
+            );
+            self.render_caret_line(ctx, *x, *y, &preview.text, preview.caret, decoration_color);
         }
     }
 
-    /// Underline the IME preedit span for plain text so composing text reads
-    /// as distinct from committed text. Single-line only: skipped when the
-    /// buffer/preedit wraps or contains newlines, where a straight underline
-    /// would land on the wrong line (the preedit still renders as text).
+    /// Draw the caret as a thin vertical line at `caret` (a byte offset into
+    /// `preview_text`). Unlike injecting a glyph, this leaves the text run —
+    /// and the ghost of any original text being edited — unshifted, and Pango's
+    /// cursor position keeps it correct on wrapped and multiline text.
+    fn render_caret_line(
+        &self,
+        ctx: &cairo::Context,
+        x: i32,
+        y: i32,
+        preview_text: &str,
+        caret: Option<usize>,
+        color: crate::draw::Color,
+    ) {
+        let Some(caret) = caret else {
+            return;
+        };
+        let size = self.input_state.current_font_size;
+        let font_desc = self.input_state.font_descriptor.to_pango_string(size);
+        let Some(geom) = crate::draw::shape::caret_geometry_text(
+            preview_text,
+            &font_desc,
+            self.input_state.text_wrap_width,
+            caret,
+        ) else {
+            return;
+        };
+        let caret_x = x as f64 + geom.x;
+        let top = y as f64 + geom.y_from_baseline;
+        let bottom = top + geom.height;
+        ctx.save().ok();
+        // Widths come from the draw layer so the damage tracker sizes the
+        // caret's repaint rectangle from the exact same numbers.
+        let line_width = crate::draw::caret_line_width(size);
+        let outline = crate::draw::text_outline_color(color);
+        ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
+        ctx.set_line_width(crate::draw::caret_outline_width(size));
+        ctx.move_to(caret_x, top);
+        ctx.line_to(caret_x, bottom);
+        let _ = ctx.stroke();
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        ctx.set_line_width(line_width);
+        ctx.move_to(caret_x, top);
+        ctx.line_to(caret_x, bottom);
+        let _ = ctx.stroke();
+        ctx.restore().ok();
+    }
+
+    /// Underline the IME preedit span (a byte range into `preview_text`) so
+    /// composing text reads as distinct from committed text. Pango owns the
+    /// range placement so bidi, contextual shaping, wrapping, and newlines use
+    /// the same full layout as the text itself.
     fn render_preedit_underline(
         &self,
         ctx: &cairo::Context,
         x: i32,
         y: i32,
-        buffer: &str,
-        composed: &str,
+        preview_text: &str,
+        range: Option<&Range<usize>>,
+        color: crate::draw::Color,
     ) {
-        if composed.is_empty()
-            || self.input_state.text_wrap_width.is_some()
-            || buffer.contains('\n')
-            || composed.contains('\n')
-        {
+        let Some(range) = range else {
+            return;
+        };
+        if range.start >= range.end || range.end > preview_text.len() {
             return;
         }
+        let (Ok(start), Ok(end)) = (u32::try_from(range.start), u32::try_from(range.end)) else {
+            return;
+        };
         let size = self.input_state.current_font_size;
         let font_desc = self.input_state.font_descriptor.to_pango_string(size);
-        // Right edge of a rendered prefix (ink offset + width), matching how
-        // render_text lays glyphs left-to-right from the baseline origin.
-        let right_edge = |text: &str| -> f64 {
-            if text.is_empty() {
-                return 0.0;
-            }
-            crate::draw::shape::measure_text_with_context(ctx, text, &font_desc, size, None)
-                .map(|m| m.ink_x + m.ink_width)
-                .unwrap_or(0.0)
-        };
-        let start_x = x as f64 + right_edge(buffer);
-        let end_x = x as f64 + right_edge(&format!("{buffer}{composed}"));
-        if end_x <= start_x {
-            return;
-        }
-        // The text baseline sits at `y`; drop the underline just below it.
-        let underline_y = y as f64 + size * 0.12;
-        let color = self.input_state.current_color;
-        ctx.save().ok();
-        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-        ctx.set_line_width((size * 0.05).max(1.0));
-        ctx.move_to(start_x, underline_y);
-        ctx.line_to(end_x, underline_y);
-        let _ = ctx.stroke();
-        ctx.restore().ok();
+        paint_preedit_underline(
+            ctx,
+            (x, y),
+            preview_text,
+            start..end,
+            &font_desc,
+            self.input_state.text_wrap_width,
+            color,
+        );
     }
 
-    /// Overlay a Pango-backed highlight for a non-collapsed preedit cursor
-    /// range. Rendering the same layout preserves byte indices, wrapping, and
-    /// line placement for both plain text and sticky-note previews.
-    fn render_preedit_selection(
+    /// Overlay a Pango-backed highlight for a byte range into `preview_text` —
+    /// either the editor's text selection or a non-collapsed preedit cursor.
+    /// Rendering the same layout preserves byte indices, wrapping, and line
+    /// placement for both plain text and sticky-note previews.
+    fn render_selection_highlight(
         &self,
         ctx: &cairo::Context,
         x: i32,
@@ -284,5 +315,43 @@ impl WaylandState {
         let _ = ctx.fill();
 
         let _ = ctx.restore();
+    }
+}
+
+fn text_preview_decoration_color(
+    mode: crate::input::TextInputMode,
+    current_color: crate::draw::Color,
+) -> crate::draw::Color {
+    match mode {
+        crate::input::TextInputMode::Plain => current_color,
+        crate::input::TextInputMode::StickyNote => {
+            crate::draw::sticky_note_foreground(current_color)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::text_preview_decoration_color;
+    use crate::draw::Color;
+    use crate::input::TextInputMode;
+
+    #[test]
+    fn sticky_note_preedit_decorations_use_the_note_foreground() {
+        let background = Color {
+            r: 0.95,
+            g: 0.9,
+            b: 0.2,
+            a: 1.0,
+        };
+
+        assert_eq!(
+            text_preview_decoration_color(TextInputMode::StickyNote, background),
+            crate::draw::sticky_note_foreground(background)
+        );
+        assert_eq!(
+            text_preview_decoration_color(TextInputMode::Plain, background),
+            background
+        );
     }
 }

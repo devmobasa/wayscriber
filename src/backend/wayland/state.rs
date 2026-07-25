@@ -21,7 +21,10 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
-use std::time::{Duration, Instant};
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 use wayland_client::{
     Proxy, QueueHandle,
     protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface, wl_touch},
@@ -60,7 +63,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, Config},
-    input::state::ClipboardPasteRequest,
+    input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
     input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -108,6 +111,7 @@ mod onboarding;
 mod pdf_export;
 mod perf;
 mod render;
+mod text_clipboard;
 mod toolbar;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::clamp_floating_axis_offset;
@@ -207,6 +211,17 @@ pub(super) struct WaylandState {
         ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
     pub(super) clipboard_hex_copy: ClipboardOperationController<String, Result<(), String>>,
     pub(super) pending_hex_copy: Option<String>,
+    /// Async wl-copy pipeline for text-editor selections (Ctrl+C / Ctrl+X).
+    pub(super) clipboard_text_copy:
+        ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
+    pub(super) pending_text_copy: VecDeque<TextClipboardRequest>,
+    /// Async wl-paste pipeline for text-editor paste requests (Ctrl+V).
+    pub(super) clipboard_text_paste:
+        ClipboardOperationController<TextPasteTarget, Result<Option<String>, String>>,
+    /// Text paste requests waiting behind an active read. Repeated requests in
+    /// the current edit generation remain distinct; a new generation replaces
+    /// stale queued requests from the old edit session.
+    pub(super) pending_text_paste: VecDeque<TextPasteTarget>,
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
     pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,
@@ -257,6 +272,12 @@ pub(super) struct WaylandState {
     /// A visible editor change received against a stale `done` serial. The
     /// resulting cursor rectangle must be published after a matching `done`.
     pub(super) text_input_cursor_update_pending: bool,
+    /// The pending cursor/surrounding-text update was authored outside the
+    /// input method and must carry text-input-v3's `Other` change cause.
+    pub(super) text_input_external_change_pending: bool,
+    /// Commit serial that must be acknowledged before another cursor-only
+    /// update is sent. Set only after observing a stale `done`.
+    pub(super) text_input_cursor_update_blocked_until: Option<u32>,
 
     // Tablet / stylus (feature-gated)
     #[cfg(feature = "tablet-input")]

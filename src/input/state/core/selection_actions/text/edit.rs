@@ -111,7 +111,8 @@ impl InputState {
         self.text_edit_entry_feedback = Some(TextEditEntryFeedback {
             started: Instant::now(),
         });
-        self.state = DrawingState::TextInput { x, y, buffer: text };
+        self.begin_text_input_session();
+        self.state = DrawingState::text_input(x, y, text);
         self.last_text_preview_bounds = None;
         self.update_text_preview_dirty();
 

@@ -626,10 +626,37 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Freeform polygon | Toolbar Polygons picker, then click vertices; <kbd>Enter</kbd> or double-click to finish |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
-| Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
+| Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
 The polygon tools are available from the toolbar picker; their default keybindings are intentionally empty. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
+
+</details>
+
+<details>
+<summary>Text editing</summary>
+
+While a text block or sticky note is being edited, these keys belong to the editor and are not configurable. Everything else — undo, tool switching, board navigation, capture — still reaches its usual binding.
+
+| Action | Key/Mouse |
+|--------|-----------|
+| Place the caret | <kbd>Click</kbd> |
+| Select text | <kbd>Shift</kbd> + <kbd>Click</kbd>, or <kbd>Shift</kbd> + arrows |
+| Select all text | <kbd>Ctrl+A</kbd> |
+| Move the whole block | <kbd>Alt</kbd> + drag |
+| Move by character | <kbd>←</kbd> / <kbd>→</kbd> |
+| Move by word | <kbd>Ctrl</kbd> + <kbd>←</kbd>/<kbd>→</kbd> |
+| Move by line | <kbd>↑</kbd> / <kbd>↓</kbd> |
+| Line start / end | <kbd>Home</kbd> / <kbd>End</kbd> |
+| Text start / end | <kbd>Ctrl+Home</kbd> / <kbd>Ctrl+End</kbd> |
+| Copy / cut / paste | <kbd>Ctrl+C</kbd> / <kbd>Ctrl+X</kbd> / <kbd>Ctrl+V</kbd> |
+| Delete character | <kbd>Backspace</kbd> / <kbd>Delete</kbd> |
+| Delete word | <kbd>Ctrl+Backspace</kbd> / <kbd>Ctrl+Delete</kbd> |
+| New line | <kbd>Shift+Enter</kbd> |
+| Finish editing | <kbd>Enter</kbd> |
+| Cancel editing | <kbd>Escape</kbd> |
+
+Caret movement and selection follow the rendered layout, so they behave correctly in wrapped text and in right-to-left or mixed-direction scripts. <kbd>Ctrl+C</kbd> and <kbd>Ctrl+X</kbd> only apply to a selection; with no selection they fall through to whatever those keys are bound to. Copy, cut, and paste use the system clipboard via `wl-copy`/`wl-paste`.
 
 </details>
 

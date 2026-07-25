@@ -158,7 +158,14 @@ pub(crate) fn handle_tool_button_press(
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let binding = state.drag_binding_for_button(button);
-    let tool = state.tool_for_button_press(button, binding.tool)?;
+    // Text-editor left presses have editor semantics even when the user's left
+    // drawing binding resolves to `Default` (no tool).
+    let tool = state
+        .tool_for_button_press(button, binding.tool)
+        .or_else(|| {
+            (button == MouseButton::Left && matches!(state.state, DrawingState::TextInput { .. }))
+                .then(|| state.active_tool())
+        })?;
     let before = active_interaction_kind(state);
     let screen = points.screen();
     let canvas = points.canvas();
@@ -192,15 +199,17 @@ pub(crate) fn handle_unbound_left_press(
         return RoutingOutcome::Consumed(ConsumedBy::ContextMenu);
     }
 
+    if state.handle_text_input_left_press(canvas.x(), canvas.y(), None) {
+        return if state.text_block_drag_active() {
+            RoutingOutcome::Started(ActiveInteractionKind::TextInput)
+        } else {
+            RoutingOutcome::Consumed(ConsumedBy::TextInput)
+        };
+    }
+
     match &mut state.state {
         DrawingState::Idle => RoutingOutcome::NoRoute(NoRouteReason::NoPointerBinding),
-        DrawingState::TextInput { x, y, .. } => {
-            *x = canvas.x();
-            *y = canvas.y();
-            state.update_text_preview_dirty();
-            state.needs_redraw = true;
-            RoutingOutcome::Consumed(ConsumedBy::TextInput)
-        }
+        DrawingState::TextInput { .. } => RoutingOutcome::Consumed(ConsumedBy::TextInput),
         DrawingState::BuildingPolygon { .. } => {
             state.handle_building_polygon_left_click(canvas.x(), canvas.y());
             RoutingOutcome::Continued(ActiveInteractionKind::BuildingPolygon)

@@ -19,8 +19,8 @@ use super::super::types::{
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PolygonClickState, PresetAction, PresetFeedbackState,
     PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionPublishState,
-    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, UiToastState,
-    ZoomAction,
+    StatusChangeHighlight, TextBlockDrag, TextClickState, TextClipboardRequest,
+    TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState, ZoomAction,
 };
 use crate::config::{
     Action, KeyBinding, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding,
@@ -43,7 +43,7 @@ use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
 use crate::ui::toolbar::ToolbarSideSection;
 use crate::util::Rect;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -355,6 +355,19 @@ pub struct InputState {
     pub(crate) last_provisional_bounds: Option<Rect>,
     /// Cached bounds for live text preview/caret (if any)
     pub(crate) last_text_preview_bounds: Option<Rect>,
+    /// Coalesced request for the Wayland backend to publish the current text
+    /// caret rectangle to text-input-v3.
+    pub(crate) text_input_cursor_rect_dirty: bool,
+    /// Whether the coalesced text-input update was caused outside the input
+    /// method (keyboard editing, pointer placement, or clipboard completion).
+    pub(crate) text_input_external_change_dirty: bool,
+    /// Identity of the current text-edit session. Async clipboard completions
+    /// use this to avoid pasting into a later edit.
+    pub(crate) text_input_generation: u64,
+    /// Buffer mutation revision within the current text-edit session. Deferred
+    /// cuts use it to reject completions after any intervening edit, even when
+    /// the same bytes and selection are later restored.
+    pub(crate) text_input_revision: u64,
     /// Keybinding action map for efficient lookup
     pub(in crate::input::state::core) action_map: HashMap<KeyBinding, Action>,
     /// Ordered keybindings per action (as configured)
@@ -375,6 +388,11 @@ pub struct InputState {
     pub(crate) pending_copy_hex: Option<Color>,
     /// Destination owned by the newest pending paste-hex request.
     pub(crate) pending_paste_hex: Option<HexPasteTarget>,
+    /// Selected text captured for pending copy/cut publications. Multiple key
+    /// events can arrive in one Wayland dispatch cycle, before backend draining.
+    pub(crate) pending_text_copy: VecDeque<TextClipboardRequest>,
+    /// Exact text-edit locations awaiting paste-from-clipboard submission.
+    pub(crate) pending_text_paste: VecDeque<TextPasteTarget>,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
@@ -481,6 +499,8 @@ pub struct InputState {
     pub(crate) last_board_picker_click: Option<BoardPickerClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
+    /// In-progress Alt+left-drag that repositions the active text block.
+    pub(crate) text_block_drag: Option<TextBlockDrag>,
     /// Animation state for text edit mode entry (teal glow pulse)
     pub(crate) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
     /// Input-method composition state (preedit + pending IME batch) for the

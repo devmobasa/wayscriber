@@ -100,7 +100,15 @@ impl WaylandState {
             clipboard_operation_ids.clone(),
             runtime_wake.clone(),
         );
-        let clipboard_hex_copy =
+        let clipboard_hex_copy = ClipboardOperationController::new(
+            clipboard_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
+        let clipboard_text_copy = ClipboardOperationController::new(
+            clipboard_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
+        let clipboard_text_paste =
             ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
 
         Self {
@@ -129,6 +137,10 @@ impl WaylandState {
             clipboard_paste,
             clipboard_hex_copy,
             pending_hex_copy: None,
+            clipboard_text_copy,
+            pending_text_copy: Default::default(),
+            clipboard_text_paste,
+            pending_text_paste: Default::default(),
             gtk_toolbar: None,
             onboarding,
             ui_animation_next_tick: None,
@@ -155,6 +167,8 @@ impl WaylandState {
             text_input_enabled: false,
             text_input_serial: 0,
             text_input_cursor_update_pending: false,
+            text_input_external_change_pending: false,
+            text_input_cursor_update_blocked_until: None,
             #[cfg(feature = "tablet-input")]
             tablet_manager,
             #[cfg(feature = "tablet-input")]

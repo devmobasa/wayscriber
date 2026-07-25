@@ -1,4 +1,4 @@
-use super::base::{DrawingState, InputState, TextEditEntryFeedback, TextInputMode};
+use super::base::{DrawingState, InputState, TextBlockDrag, TextEditEntryFeedback, TextInputMode};
 use super::index::SpatialGrid;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
 use crate::draw::frame::ShapeSnapshot;
@@ -36,6 +36,9 @@ struct ActiveInteractionRollback {
     dirty_tracker: DirtyTracker,
     last_provisional_bounds: Option<Rect>,
     last_text_preview_bounds: Option<Rect>,
+    text_input_cursor_rect_dirty: bool,
+    text_input_external_change_dirty: bool,
+    text_block_drag: Option<TextBlockDrag>,
     last_polygon_click: Option<PolygonClickState>,
     hit_test_cache: HashMap<ShapeId, Rect>,
     spatial_index: Option<SpatialGrid>,
@@ -68,6 +71,9 @@ impl ActiveInteractionRollback {
             dirty_tracker: input.dirty_tracker.clone(),
             last_provisional_bounds: input.last_provisional_bounds,
             last_text_preview_bounds: input.last_text_preview_bounds,
+            text_input_cursor_rect_dirty: input.text_input_cursor_rect_dirty,
+            text_input_external_change_dirty: input.text_input_external_change_dirty,
+            text_block_drag: input.text_block_drag,
             last_polygon_click: input.last_polygon_click,
             hit_test_cache: input.hit_test_cache.clone(),
             spatial_index: input.spatial_index.clone(),
@@ -98,6 +104,9 @@ impl ActiveInteractionRollback {
         input.dirty_tracker = self.dirty_tracker;
         input.last_provisional_bounds = self.last_provisional_bounds;
         input.last_text_preview_bounds = self.last_text_preview_bounds;
+        input.text_input_cursor_rect_dirty = self.text_input_cursor_rect_dirty;
+        input.text_input_external_change_dirty = self.text_input_external_change_dirty;
+        input.text_block_drag = self.text_block_drag;
         input.last_polygon_click = self.last_polygon_click;
         input.hit_test_cache = self.hit_test_cache;
         input.spatial_index = self.spatial_index;
@@ -203,6 +212,7 @@ impl InputState {
 mod tests {
     use crate::draw::frame::ShapeSnapshot;
     use crate::draw::{BLACK, Shape};
+    use crate::input::state::core::TextBlockDrag;
     use crate::input::state::core::board_picker::{BoardPickerDrag, BoardPickerPageDrag};
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::{BOARD_ID_BLACKBOARD, DrawingState, MouseButton, SelectionHandle, Tool};
@@ -323,6 +333,27 @@ mod tests {
 
         assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
         assert!(!state.has_pending_board_delete());
+    }
+
+    #[test]
+    fn session_capture_rollback_preserves_text_block_drag_release_contract() {
+        let mut state = make_test_input_state();
+        state.state = DrawingState::text_input(100, 100, "drag me".to_string());
+        state.text_block_drag = Some(TextBlockDrag {
+            grab_dx: 5,
+            grab_dy: 7,
+        });
+        state.begin_pointer_drag(MouseButton::Left, None);
+
+        state.with_active_interaction_canceled_for_capture(|input| {
+            assert!(!input.has_active_pointer_interaction());
+        });
+
+        assert!(state.text_block_drag_active());
+        assert!(state.pointer_drag_button_matches(MouseButton::Left));
+        state.on_mouse_release(MouseButton::Left, 120, 130);
+        assert!(!state.text_block_drag_active());
+        assert!(!state.has_active_pointer_interaction());
     }
 
     fn test_shape_snapshot() -> ShapeSnapshot {

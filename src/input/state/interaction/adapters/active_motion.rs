@@ -13,6 +13,13 @@ pub(crate) fn handle_active_motion(
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let canvas = points.canvas();
+    // An Alt+drag moves the active text block; keep TextInput draggable while
+    // the flag is set (it is otherwise a passive, non-draggable state).
+    if state.text_block_drag_active() && matches!(state.state, DrawingState::TextInput { .. }) {
+        state.drag_text_block_to(canvas.x(), canvas.y());
+        return Some(RoutingOutcome::Continued(ActiveInteractionKind::TextInput));
+    }
+
     if let DrawingState::ResizingText {
         shape_id,
         base_x,
@@ -177,9 +184,12 @@ pub(crate) fn releasable_active_kind(state: &InputState) -> Option<ActiveInterac
         DrawingState::PendingTextClick { .. } => Some(ActiveInteractionKind::PendingTextClick),
         DrawingState::ResizingText { .. } => Some(ActiveInteractionKind::ResizingText),
         DrawingState::ResizingSelection { .. } => Some(ActiveInteractionKind::ResizingSelection),
-        DrawingState::Idle
-        | DrawingState::TextInput { .. }
-        | DrawingState::BuildingPolygon { .. } => None,
+        // TextInput is passive except while an Alt+drag block move is in flight,
+        // whose release must finish the drag.
+        DrawingState::TextInput { .. } => state
+            .text_block_drag_active()
+            .then_some(ActiveInteractionKind::TextInput),
+        DrawingState::Idle | DrawingState::BuildingPolygon { .. } => None,
     }
 }
 

@@ -12,6 +12,8 @@ pub(crate) use core::board_picker::BoardPickerFocus;
 pub(crate) use core::board_picker::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
+#[cfg(test)]
+pub(crate) use core::build_text_input_preview;
 pub use core::color_picker_popup::{color_to_hex, parse_hex_color};
 #[allow(unused_imports)]
 pub use core::{
@@ -43,7 +45,8 @@ pub(crate) use core::{
 pub(crate) use core::{
     ClipboardFingerprint, ClipboardPasteRequest, HelpOverlayPressSource, HexPasteTarget,
     KeybindingEditOperation, KeybindingEditRequest, PasteAnchor, PendingBackendAction,
-    PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState, ToastPress,
+    PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
+    TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastPress,
     WayscriberClipboardSelection,
 };
 pub use highlight::ClickHighlightSettings;

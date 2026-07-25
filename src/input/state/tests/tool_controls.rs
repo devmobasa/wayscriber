@@ -28,17 +28,13 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
 #[test]
 fn set_tool_override_preserves_text_input_state() {
     let mut state = create_test_input_state();
-    state.state = DrawingState::TextInput {
-        x: 4,
-        y: 5,
-        buffer: "hello".to_string(),
-    };
+    state.state = DrawingState::text_input(4, 5, "hello".to_string());
 
     assert!(state.set_tool_override(Some(Tool::Rect)));
     assert_eq!(state.tool_override(), Some(Tool::Rect));
     assert!(matches!(
         &state.state,
-        DrawingState::TextInput { x: 4, y: 5, buffer } if buffer == "hello"
+        DrawingState::TextInput { x: 4, y: 5, buffer, .. } if buffer == "hello"
     ));
 }
 

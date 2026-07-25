@@ -15,11 +15,11 @@ impl WaylandState {
         log::info!("Hex copy requested: {}", hex);
         self.suppress_focus_exit_for(Duration::from_millis(1500));
 
-        if let Err(err) = queue_latest_hex_copy(
+        if let Err(err) = queue_latest_clipboard_copy(
             &mut self.clipboard_hex_copy,
             &mut self.pending_hex_copy,
             hex,
-            copy_hex_via_command,
+            copy_text_via_command,
         ) {
             log::warn!("Failed to start hex clipboard copy: {err}");
             self.input_state.push_toast(
@@ -81,10 +81,10 @@ impl WaylandState {
     }
 
     fn start_pending_hex_copy_if_idle(&mut self) {
-        if let Err(err) = submit_pending_hex_copy_if_idle(
+        if let Err(err) = submit_pending_clipboard_copy_if_idle(
             &mut self.clipboard_hex_copy,
             &mut self.pending_hex_copy,
-            copy_hex_via_command,
+            copy_text_via_command,
         ) {
             log::warn!("Failed to start pending hex clipboard copy: {err}");
             self.input_state.push_toast(
@@ -168,7 +168,7 @@ impl WaylandState {
     }
 }
 
-fn start_hex_copy(
+fn start_clipboard_copy(
     controller: &mut ClipboardOperationController<String, Result<(), String>>,
     hex: String,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
@@ -180,17 +180,17 @@ fn start_hex_copy(
         .map_err(|failure| failure.into_parts().0.to_string())
 }
 
-fn queue_latest_hex_copy(
+pub(super) fn queue_latest_clipboard_copy(
     controller: &mut ClipboardOperationController<String, Result<(), String>>,
     pending: &mut Option<String>,
     hex: String,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
     *pending = Some(hex);
-    submit_pending_hex_copy_if_idle(controller, pending, operation)
+    submit_pending_clipboard_copy_if_idle(controller, pending, operation)
 }
 
-fn submit_pending_hex_copy_if_idle(
+pub(super) fn submit_pending_clipboard_copy_if_idle(
     controller: &mut ClipboardOperationController<String, Result<(), String>>,
     pending: &mut Option<String>,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
@@ -201,22 +201,22 @@ fn submit_pending_hex_copy_if_idle(
     let Some(hex) = pending.take() else {
         return Ok(());
     };
-    start_hex_copy(controller, hex, operation)
+    start_clipboard_copy(controller, hex, operation)
 }
 
-enum ClipboardTextError {
+pub(super) enum ClipboardTextError {
     Empty,
     Other(String),
 }
 
-fn copy_hex_via_command(hex: &str) -> Result<(), String> {
+pub(super) fn copy_text_via_command(text: &str) -> Result<(), String> {
     let output = crate::process_broker::current()
         .and_then(|broker| {
             broker.publish(
                 crate::process_broker::HelperKind::WlCopy,
                 OsStr::new("wl-copy"),
                 [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
-                hex.as_bytes().to_vec(),
+                text.as_bytes().to_vec(),
                 Duration::from_secs(5),
             )
         })
@@ -235,13 +235,13 @@ fn copy_hex_via_command(hex: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
+pub(super) fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
     let output = crate::process_broker::current()
         .and_then(|broker| {
             broker.run(
                 crate::process_broker::HelperKind::WlPaste,
                 OsStr::new("wl-paste"),
-                [OsStr::new("--no-newline")],
+                clipboard_text_read_args(),
                 Vec::new(),
                 Duration::from_secs(5),
                 1024 * 1024,
@@ -270,6 +270,14 @@ fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
     }
 }
 
+fn clipboard_text_read_args() -> [&'static OsStr; 3] {
+    [
+        OsStr::new("--no-newline"),
+        OsStr::new("--type"),
+        OsStr::new("text"),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
@@ -280,6 +288,18 @@ mod tests {
     use crate::backend::wayland::clipboard::ClipboardOperationIdSource;
 
     #[test]
+    fn clipboard_text_read_requests_only_a_text_mime() {
+        assert_eq!(
+            clipboard_text_read_args(),
+            [
+                OsStr::new("--no-newline"),
+                OsStr::new("--type"),
+                OsStr::new("text"),
+            ]
+        );
+    }
+
+    #[test]
     fn hex_copy_submission_stays_off_the_event_thread_until_completion() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
@@ -287,7 +307,7 @@ mod tests {
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
-        start_hex_copy(&mut controller, "#123456".to_string(), move |hex| {
+        start_clipboard_copy(&mut controller, "#123456".to_string(), move |hex| {
             assert_eq!(hex, "#123456");
             started_tx.send(()).unwrap();
             release_rx
@@ -323,7 +343,7 @@ mod tests {
         let (first_started_tx, first_started_rx) = mpsc::channel();
         let (first_release_tx, first_release_rx) = mpsc::channel();
 
-        queue_latest_hex_copy(
+        queue_latest_clipboard_copy(
             &mut controller,
             &mut pending,
             "#111111".to_string(),
@@ -341,14 +361,14 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .unwrap();
 
-        queue_latest_hex_copy(
+        queue_latest_clipboard_copy(
             &mut controller,
             &mut pending,
             "#222222".to_string(),
             |_| -> Result<(), String> { panic!("busy submission must not run") },
         )
         .unwrap();
-        queue_latest_hex_copy(
+        queue_latest_clipboard_copy(
             &mut controller,
             &mut pending,
             "#333333".to_string(),
@@ -371,7 +391,7 @@ mod tests {
 
         let (newest_started_tx, newest_started_rx) = mpsc::channel();
         let (newest_release_tx, newest_release_rx) = mpsc::channel();
-        submit_pending_hex_copy_if_idle(&mut controller, &mut pending, move |hex| {
+        submit_pending_clipboard_copy_if_idle(&mut controller, &mut pending, move |hex| {
             newest_started_tx.send(hex.to_string()).unwrap();
             newest_release_rx
                 .recv_timeout(Duration::from_secs(1))

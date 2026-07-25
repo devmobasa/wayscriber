@@ -1,4 +1,5 @@
 pub(in crate::input::state) mod bindings;
+pub(in crate::input::state) mod caret_edit;
 mod panels;
 mod text_input;
 

@@ -3178,6 +3178,7 @@ dependencies = [
  "tokio",
  "toml",
  "toml_edit",
+ "unicode-segmentation",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",

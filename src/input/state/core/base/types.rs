@@ -21,8 +21,8 @@ use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::time::Instant;
+use std::{ops::Range, sync::Arc};
 
 /// Current drawing mode state machine.
 ///
@@ -66,6 +66,14 @@ pub enum DrawingState {
         y: i32,
         /// Accumulated text buffer
         buffer: String,
+        /// Caret position as a byte offset into `buffer` (always on a UTF-8
+        /// char boundary). Insertions, deletions, and navigation act here
+        /// rather than only at the end.
+        caret: usize,
+        /// Selection anchor as a byte offset into `buffer`. The selected span
+        /// is `min(anchor, caret)..max(anchor, caret)`; `None` means no
+        /// selection (a plain caret).
+        selection_anchor: Option<usize>,
     },
     /// Pending click on text/note to detect double-click editing
     PendingTextClick {
@@ -123,6 +131,22 @@ pub enum DrawingState {
     },
 }
 
+impl DrawingState {
+    /// Build a [`DrawingState::TextInput`] with the caret at the end of
+    /// `buffer` and no selection — the common entry point for both new text and
+    /// resuming an edit of existing text.
+    pub fn text_input(x: i32, y: i32, buffer: String) -> Self {
+        let caret = buffer.len();
+        DrawingState::TextInput {
+            x,
+            y,
+            buffer,
+            caret,
+            selection_anchor: None,
+        }
+    }
+}
+
 /// Which selection handle is being interacted with
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionHandle {
@@ -141,6 +165,42 @@ pub enum SelectionHandle {
 pub enum TextInputMode {
     Plain,
     StickyNote,
+}
+
+/// Clipboard publication requested by the text editor. A cut carries the
+/// exact selection that may be deleted after publication succeeds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TextClipboardRequest {
+    pub(crate) text: String,
+    pub(crate) cut: Option<TextCutTarget>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TextCutTarget {
+    pub(crate) generation: u64,
+    pub(crate) revision: u64,
+    pub(crate) range: Range<usize>,
+}
+
+/// Exact editor location owned by an asynchronous Ctrl+V request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TextPasteTarget {
+    pub(crate) generation: u64,
+    pub(crate) revision: u64,
+    pub(crate) caret: usize,
+    pub(crate) selection_anchor: Option<usize>,
+}
+
+/// Buffer edit produced when a clipboard completion is applied. Queued paste
+/// targets use this to follow earlier requests without following unrelated
+/// caret movement or buffer edits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TextPasteEdit {
+    pub(crate) generation: u64,
+    pub(crate) previous_revision: u64,
+    pub(crate) revision: u64,
+    pub(crate) replaced: Range<usize>,
+    pub(crate) inserted_len: usize,
 }
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
@@ -263,6 +323,15 @@ pub(crate) struct TextClickState {
     pub x: i32,
     pub y: i32,
     pub at: Instant,
+}
+
+/// Tracks an in-progress Alt+left-drag that repositions the active text block.
+/// Stores the grab offset (pointer minus block origin) so the block follows the
+/// cursor exactly under the grabbed point rather than snapping its origin there.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TextBlockDrag {
+    pub grab_dx: i32,
+    pub grab_dy: i32,
 }
 
 #[derive(Debug, Clone, Copy)]

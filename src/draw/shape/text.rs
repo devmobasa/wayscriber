@@ -2,22 +2,14 @@ use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
-use super::text_cache::measure_text_cached;
-
-pub(crate) struct TextLayoutMetrics {
-    pub(crate) ink_x: f64,
-    pub(crate) ink_y: f64,
-    pub(crate) ink_width: f64,
-    pub(crate) ink_height: f64,
-    pub(crate) baseline: f64,
-}
+use super::text_cache::{TextContentExtents, TextMeasurement, measure_text_cached};
 
 pub(super) fn text_layout_metrics(
     text: &str,
     size: f64,
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
-) -> Option<TextLayoutMetrics> {
+) -> Option<TextMeasurement> {
     if text.is_empty() {
         return None;
     }
@@ -26,19 +18,13 @@ pub(super) fn text_layout_metrics(
     let font_desc_str = font_descriptor.to_pango_string(size);
     let measurement = measure_text_cached(text, &font_desc_str, size, wrap_width)?;
 
-    Some(TextLayoutMetrics {
-        ink_x: measurement.ink_x,
-        ink_y: measurement.ink_y,
-        ink_width: measurement.ink_width,
-        ink_height: measurement.ink_height,
-        baseline: measurement.baseline,
-    })
+    Some(measurement)
 }
 
 pub(super) fn text_bounds_from_metrics(
     x: f64,
     y: f64,
-    metrics: &TextLayoutMetrics,
+    metrics: &TextMeasurement,
     size: f64,
     background_enabled: bool,
     wrap_width: Option<i32>,
@@ -57,7 +43,7 @@ pub(super) fn text_bounds_from_metrics(
     let mut min_y = base_y + metrics.ink_y;
     let mut max_y = min_y + metrics.ink_height;
 
-    let effective_ink_width = effective_max - metrics.ink_x;
+    let content = metrics.content_extents(wrap_width);
 
     let stroke_padding = (size * 0.06) / 2.0;
     min_x -= stroke_padding;
@@ -71,12 +57,12 @@ pub(super) fn text_bounds_from_metrics(
     max_x = max_x.max(base_x + effective_max + shadow_offset + stroke_padding);
     max_y = max_y.max(base_y + metrics.ink_y + metrics.ink_height + shadow_offset + stroke_padding);
 
-    if background_enabled && effective_ink_width > 0.0 && metrics.ink_height > 0.0 {
+    if background_enabled && content.width > 0.0 && content.height > 0.0 {
         let padding = size * 0.15;
-        let bg_min_x = base_x + metrics.ink_x - padding;
-        let bg_min_y = base_y + metrics.ink_y - padding;
-        let bg_max_x = base_x + effective_max + padding;
-        let bg_max_y = base_y + metrics.ink_y + metrics.ink_height + padding;
+        let bg_min_x = base_x + content.x - padding;
+        let bg_min_y = base_y + content.y - padding;
+        let bg_max_x = base_x + content.x + content.width + padding;
+        let bg_max_y = base_y + content.y + content.height + padding;
 
         min_x = min_x.min(bg_min_x);
         min_y = min_y.min(bg_min_y);
@@ -116,6 +102,12 @@ const NOTE_SHADOW_OFFSET_MIN: f64 = 3.0;
 const NOTE_CORNER_RADIUS_RATIO: f64 = 0.2;
 const NOTE_CORNER_RADIUS_MIN: f64 = 4.0;
 
+/// Measurement-only glyph that gives an empty live note the same useful
+/// minimum body it had when the editor injected its caret into the text run.
+pub(crate) fn sticky_note_layout_text(text: &str) -> &str {
+    if text.is_empty() { "_" } else { text }
+}
+
 pub(crate) struct StickyNoteLayout {
     pub note_x: f64,
     pub note_y: f64,
@@ -127,10 +119,7 @@ pub(crate) struct StickyNoteLayout {
 
 pub(crate) struct StickyNoteTextLayout {
     pub layout: pango::Layout,
-    pub ink_x: f64,
-    pub ink_y: f64,
-    pub ink_width: f64,
-    pub ink_height: f64,
+    pub content: TextContentExtents,
     pub baseline: f64,
 }
 
@@ -189,24 +178,29 @@ pub(crate) fn sticky_note_text_layout(
     {
         StickyNoteTextLayout {
             layout,
-            ink_x: measurement.ink_x,
-            ink_y: measurement.ink_y,
-            ink_width: measurement.ink_width,
-            ink_height: measurement.ink_height,
+            content: measurement.content_extents(wrap_width),
             baseline: measurement.baseline,
         }
     } else {
         // Fallback: measure directly (shouldn't happen for non-empty text)
-        let (ink_rect, _logical_rect) = layout.extents();
+        let (ink_rect, logical_rect) = layout.extents();
         let scale = pango::SCALE as f64;
         let baseline = layout.baseline() as f64 / scale;
-
-        StickyNoteTextLayout {
-            layout,
+        let measurement = TextMeasurement {
             ink_x: ink_rect.x() as f64 / scale,
             ink_y: ink_rect.y() as f64 / scale,
             ink_width: ink_rect.width() as f64 / scale,
             ink_height: ink_rect.height() as f64 / scale,
+            logical_x: logical_rect.x() as f64 / scale,
+            logical_y: logical_rect.y() as f64 / scale,
+            logical_width: logical_rect.width() as f64 / scale,
+            logical_height: logical_rect.height() as f64 / scale,
+            baseline,
+        };
+
+        StickyNoteTextLayout {
+            layout,
+            content: measurement.content_extents(wrap_width),
             baseline,
         }
     }
@@ -223,27 +217,49 @@ pub(crate) fn bounding_box_for_sticky_note(
     if text.is_empty() {
         return None;
     }
+    bounding_box_for_sticky_note_layout(x, y, text, size, font_descriptor, wrap_width)
+}
 
+pub(crate) fn bounding_box_for_sticky_note_preview(
+    x: i32,
+    y: i32,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
+) -> Option<Rect> {
+    bounding_box_for_sticky_note_layout(
+        x,
+        y,
+        sticky_note_layout_text(text),
+        size,
+        font_descriptor,
+        wrap_width,
+    )
+}
+
+fn bounding_box_for_sticky_note_layout(
+    x: i32,
+    y: i32,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
+) -> Option<Rect> {
     // Use cached text measurement instead of creating a new surface each time
     let font_desc_str = font_descriptor.to_pango_string(size);
     let measurement = measure_text_cached(text, &font_desc_str, size, wrap_width)?;
 
     let base_x = x as f64;
     let base_y = y as f64 - measurement.baseline;
-    let ink_max = measurement.ink_x + measurement.ink_width;
-    let effective_max = if let Some(width) = wrap_width {
-        ink_max.max(width.max(1) as f64)
-    } else {
-        ink_max
-    };
-    let effective_ink_width = effective_max - measurement.ink_x;
+    let content = measurement.content_extents(wrap_width);
     let layout = sticky_note_layout(
         base_x,
         base_y,
-        measurement.ink_x,
-        measurement.ink_y,
-        effective_ink_width,
-        measurement.ink_height,
+        content.x,
+        content.y,
+        content.width,
+        content.height,
         size,
     );
 

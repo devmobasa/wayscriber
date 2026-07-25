@@ -20,7 +20,7 @@
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::text_input::zv3::client::{
     zwp_text_input_manager_v3::ZwpTextInputManagerV3,
-    zwp_text_input_v3::{self, ContentHint, ContentPurpose, ZwpTextInputV3},
+    zwp_text_input_v3::{self, ChangeCause, ContentHint, ContentPurpose, ZwpTextInputV3},
 };
 
 use crate::backend::wayland::state::WaylandState;
@@ -39,6 +39,8 @@ fn apply_text_input_local_transition(
     enabled: &mut bool,
     committed_serial: &mut u32,
     cursor_update_pending: &mut bool,
+    external_change_pending: &mut bool,
+    cursor_update_blocked_until: &mut Option<u32>,
     transition: TextInputLocalTransition,
 ) {
     *enabled = matches!(transition, TextInputLocalTransition::EnableCommitted);
@@ -46,6 +48,8 @@ fn apply_text_input_local_transition(
         *committed_serial = committed_serial.wrapping_add(1);
     }
     *cursor_update_pending = false;
+    *external_change_pending = false;
+    *cursor_update_blocked_until = None;
 }
 
 impl Dispatch<ZwpTextInputManagerV3, ()> for WaylandState {
@@ -88,9 +92,13 @@ impl Dispatch<ZwpTextInputV3, ()> for WaylandState {
                     &mut state.text_input_enabled,
                     &mut state.text_input_serial,
                     &mut state.text_input_cursor_update_pending,
+                    &mut state.text_input_external_change_pending,
+                    &mut state.text_input_cursor_update_blocked_until,
                     TextInputLocalTransition::Leave,
                 );
                 state.input_state.ime_clear();
+                state.input_state.take_text_input_cursor_rect_dirty();
+                state.input_state.take_text_input_external_change_dirty();
             }
             // Batched composition events: accumulate, apply on Done.
             Event::PreeditString {
@@ -135,9 +143,13 @@ impl WaylandState {
     /// it would only pile on out-of-order updates.
     fn on_ime_done(&mut self, serial: u32) {
         let editor_changed = self.input_state.ime_apply_done();
+        let cursor_dirty = self.input_state.take_text_input_cursor_rect_dirty();
+        self.text_input_external_change_pending |=
+            self.input_state.take_text_input_external_change_dirty();
         if !cursor_update_ready_after_done(
             &mut self.text_input_cursor_update_pending,
-            editor_changed,
+            &mut self.text_input_cursor_update_blocked_until,
+            editor_changed || cursor_dirty,
             self.text_input_enabled,
             serial,
             self.text_input_serial,
@@ -147,10 +159,13 @@ impl WaylandState {
         let Some(ti) = self.text_input.clone() else {
             return;
         };
-        self.report_text_cursor_rectangle(&ti);
+        if !self.report_text_cursor_rectangle(&ti, self.text_input_external_change_pending) {
+            return;
+        }
         ti.commit();
         self.text_input_serial = self.text_input_serial.wrapping_add(1);
         self.text_input_cursor_update_pending = false;
+        self.text_input_external_change_pending = false;
     }
 
     /// Reconcile the text-input enable state against compositor focus and the
@@ -158,6 +173,10 @@ impl WaylandState {
     /// and cheap to call per frame (see the event loop) so entering/leaving
     /// text mode toggles the IME without hooking every edit-mode transition.
     pub(in crate::backend::wayland) fn reconcile_text_input(&mut self) {
+        self.text_input_cursor_update_pending |=
+            self.input_state.take_text_input_cursor_rect_dirty();
+        self.text_input_external_change_pending |=
+            self.input_state.take_text_input_external_change_dirty();
         let Some(ti) = self.text_input.clone() else {
             return;
         };
@@ -165,33 +184,54 @@ impl WaylandState {
         // an enabled IME would commit composed text straight into the hidden
         // canvas buffer instead of Help search, the command palette, or the
         // active modal.
+        //
+        // Also stay disabled while the complete selection cannot fit the
+        // protocol's bounded surrounding-text request. Disabling clears stale
+        // context without applying an empty value that some compositors treat
+        // as permanently unsupported; collapsing the selection enables again
+        // with fresh data.
         let desired = self.text_input_focused
             && self.input_state.is_text_input_active()
-            && !self.input_state.modal_owns_text_input();
-        if desired == self.text_input_enabled {
-            return;
-        }
-        if desired {
+            && !self.input_state.modal_owns_text_input()
+            && self.input_state.text_input_surrounding_available();
+        if desired != self.text_input_enabled && desired {
             ti.enable();
             ti.set_content_type(ContentHint::empty(), ContentPurpose::Normal);
-            self.report_text_cursor_rectangle(&ti);
+            self.report_text_cursor_rectangle(&ti, false);
             ti.commit();
             apply_text_input_local_transition(
                 &mut self.text_input_enabled,
                 &mut self.text_input_serial,
                 &mut self.text_input_cursor_update_pending,
+                &mut self.text_input_external_change_pending,
+                &mut self.text_input_cursor_update_blocked_until,
                 TextInputLocalTransition::EnableCommitted,
             );
-        } else {
+        } else if desired != self.text_input_enabled {
             ti.disable();
             ti.commit();
             apply_text_input_local_transition(
                 &mut self.text_input_enabled,
                 &mut self.text_input_serial,
                 &mut self.text_input_cursor_update_pending,
+                &mut self.text_input_external_change_pending,
+                &mut self.text_input_cursor_update_blocked_until,
                 TextInputLocalTransition::DisableCommitted,
             );
             self.input_state.ime_clear();
+            self.input_state.take_text_input_cursor_rect_dirty();
+            self.input_state.take_text_input_external_change_dirty();
+        } else if cursor_update_ready_to_commit(
+            self.text_input_cursor_update_pending,
+            self.text_input_enabled,
+            self.text_input_cursor_update_blocked_until,
+        ) && self
+            .report_text_cursor_rectangle(&ti, self.text_input_external_change_pending)
+        {
+            ti.commit();
+            self.text_input_serial = self.text_input_serial.wrapping_add(1);
+            self.text_input_cursor_update_pending = false;
+            self.text_input_external_change_pending = false;
         }
     }
 
@@ -199,26 +239,43 @@ impl WaylandState {
     /// candidate popup near the composition. `set_cursor_rectangle` takes
     /// surface-local coordinates, but the cached preview bounds are in canvas
     /// space, so convert them through the active zoom/pan transform first.
-    fn report_text_cursor_rectangle(&self, ti: &ZwpTextInputV3) {
+    fn report_text_cursor_rectangle(&self, ti: &ZwpTextInputV3, external_change: bool) -> bool {
+        if external_change {
+            ti.set_text_change_cause(ChangeCause::Other);
+        }
+        if let Some((text, cursor, anchor)) = self.input_state.text_input_surrounding_state()
+            && let (Ok(cursor), Ok(anchor)) = (i32::try_from(cursor), i32::try_from(anchor))
+        {
+            ti.set_surrounding_text(text, cursor, anchor);
+        }
+
+        // Prefer the exact caret position so the candidate popup sits at the
+        // composition point — correct mid-buffer and in wrapped/multiline text.
+        if let Some(caret_canvas) = self.input_state.caret_cursor_rect_canvas()
+            && let Some(rect) = self.input_state.screen_rect_for_canvas(caret_canvas)
+        {
+            ti.set_cursor_rectangle(rect.x, rect.y, rect.width.clamp(1, 4), rect.height.max(1));
+            return true;
+        }
+
+        // Fallback: the right edge of the cached preview bounds, kept within the
+        // transformed preview even when a small zoom rounds it to one pixel.
         let Some(canvas_rect) = self.input_state.last_text_preview_bounds else {
-            return;
+            return false;
         };
         let Some(rect) = self.input_state.screen_rect_for_canvas(canvas_rect) else {
-            return;
+            return false;
         };
         let width = rect.width.max(1);
         let height = rect.height.max(1);
         let caret_width = width.min(2);
-        // A thin caret strip at the right edge (the caret is always at the
-        // end of the buffer in this append-only editor). Keep it within the
-        // transformed preview even when a small zoom rounds that preview down
-        // to a single surface pixel.
         ti.set_cursor_rectangle(
             rect.x.saturating_add(width - caret_width),
             rect.y,
             caret_width,
             height,
         );
+        true
     }
 }
 
@@ -227,19 +284,30 @@ impl WaylandState {
 /// batch therefore defers rather than loses its caret update.
 fn cursor_update_ready_after_done(
     pending: &mut bool,
+    blocked_until: &mut Option<u32>,
     editor_changed: bool,
     enabled: bool,
     done_serial: u32,
     committed_serial: u32,
 ) -> bool {
     *pending |= editor_changed;
-    enabled && done_serial == committed_serial && *pending
+    note_done_serial(blocked_until, done_serial, committed_serial);
+    cursor_update_ready_to_commit(*pending, enabled, *blocked_until)
+}
+
+fn note_done_serial(blocked_until: &mut Option<u32>, done_serial: u32, committed_serial: u32) {
+    *blocked_until = (done_serial != committed_serial).then_some(committed_serial);
+}
+
+fn cursor_update_ready_to_commit(pending: bool, enabled: bool, blocked_until: Option<u32>) -> bool {
+    pending && enabled && blocked_until.is_none()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        TextInputLocalTransition, apply_text_input_local_transition, cursor_update_ready_after_done,
+        TextInputLocalTransition, apply_text_input_local_transition,
+        cursor_update_ready_after_done, cursor_update_ready_to_commit, note_done_serial,
     };
 
     #[test]
@@ -247,16 +315,22 @@ mod tests {
         let mut enabled = true;
         let mut committed_serial = 4;
         let mut cursor_update_pending = true;
+        let mut external_change_pending = true;
+        let mut cursor_update_blocked_until = Some(4);
 
         apply_text_input_local_transition(
             &mut enabled,
             &mut committed_serial,
             &mut cursor_update_pending,
+            &mut external_change_pending,
+            &mut cursor_update_blocked_until,
             TextInputLocalTransition::Leave,
         );
 
         assert!(!enabled, "leave clears the local enabled state");
         assert!(!cursor_update_pending, "leave invalidates the old caret");
+        assert!(!external_change_pending, "leave invalidates the old cause");
+        assert_eq!(cursor_update_blocked_until, None);
         assert_eq!(
             committed_serial, 4,
             "requests after leave are ignored and must not advance the serial"
@@ -266,6 +340,8 @@ mod tests {
             &mut enabled,
             &mut committed_serial,
             &mut cursor_update_pending,
+            &mut external_change_pending,
+            &mut cursor_update_blocked_until,
             TextInputLocalTransition::EnableCommitted,
         );
         assert_eq!(
@@ -277,9 +353,11 @@ mod tests {
     #[test]
     fn stale_done_defers_cursor_update_until_a_matching_serial() {
         let mut pending = false;
+        let mut blocked_until = None;
 
         assert!(!cursor_update_ready_after_done(
             &mut pending,
+            &mut blocked_until,
             true,
             true,
             2,
@@ -292,6 +370,7 @@ mod tests {
 
         assert!(cursor_update_ready_after_done(
             &mut pending,
+            &mut blocked_until,
             false,
             true,
             3,
@@ -302,14 +381,34 @@ mod tests {
     #[test]
     fn disabled_text_input_retains_update_until_it_can_be_reconciled() {
         let mut pending = false;
+        let mut blocked_until = None;
 
         assert!(!cursor_update_ready_after_done(
             &mut pending,
+            &mut blocked_until,
             true,
             false,
             4,
             4
         ));
         assert!(pending);
+    }
+
+    #[test]
+    fn bare_caret_move_is_ready_without_waiting_for_done() {
+        assert!(cursor_update_ready_to_commit(true, true, None));
+    }
+
+    #[test]
+    fn stale_done_blocks_bare_caret_updates_until_the_matching_serial() {
+        let mut blocked_until = None;
+
+        note_done_serial(&mut blocked_until, 2, 3);
+        assert_eq!(blocked_until, Some(3));
+        assert!(!cursor_update_ready_to_commit(true, true, blocked_until));
+
+        note_done_serial(&mut blocked_until, 3, 3);
+        assert_eq!(blocked_until, None);
+        assert!(cursor_update_ready_to_commit(true, true, blocked_until));
     }
 }

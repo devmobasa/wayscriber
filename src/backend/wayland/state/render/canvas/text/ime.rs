@@ -1,51 +1,5 @@
 use std::ops::Range;
 
-use crate::input::state::ImePreedit;
-
-/// Construct the preview and optional absolute byte range used to display the
-/// compositor's preedit cursor. Protocol offsets are clamped down to valid
-/// UTF-8 boundaries before slicing.
-pub(super) fn build_text_preview(
-    buffer: &str,
-    preedit: Option<&ImePreedit>,
-    cursor_glyph: &str,
-) -> (String, Option<Range<usize>>) {
-    let Some(preedit) = preedit else {
-        return (format!("{buffer}{cursor_glyph}"), None);
-    };
-
-    if preedit.cursor_begin == -1 && preedit.cursor_end == -1 {
-        return (format!("{buffer}{}", preedit.text), None);
-    }
-
-    let begin = usize::try_from(preedit.cursor_begin)
-        .ok()
-        .map(|offset| clamp_char_boundary(&preedit.text, offset));
-    let end = usize::try_from(preedit.cursor_end)
-        .ok()
-        .map(|offset| clamp_char_boundary(&preedit.text, offset));
-
-    match (begin, end) {
-        (Some(begin), Some(end)) if begin != end => {
-            let start = begin.min(end);
-            let end = begin.max(end);
-            (
-                format!("{buffer}{}", preedit.text),
-                Some(buffer.len() + start..buffer.len() + end),
-            )
-        }
-        (Some(cursor), _) | (None, Some(cursor)) => (
-            format!(
-                "{buffer}{}{cursor_glyph}{}",
-                &preedit.text[..cursor],
-                &preedit.text[cursor..]
-            ),
-            None,
-        ),
-        (None, None) => (format!("{buffer}{}", preedit.text), None),
-    }
-}
-
 /// Paint a Pango-backed highlight for a non-collapsed preedit cursor range.
 pub(super) fn paint_preedit_selection(
     ctx: &cairo::Context,
@@ -88,34 +42,105 @@ pub(super) fn paint_preedit_selection(
     ctx.restore().ok();
 }
 
-/// Clamp `byte` to the nearest UTF-8 char boundary at or below it (and to
-/// the string length), so slicing the preedit at an IME cursor offset never
-/// splits a multi-byte character.
-fn clamp_char_boundary(s: &str, byte: usize) -> usize {
-    let mut idx = byte.min(s.len());
-    while idx > 0 && !s.is_char_boundary(idx) {
-        idx -= 1;
+/// Paint a preedit underline using the complete Pango layout. Applying the
+/// attribute to byte indices in that layout keeps it attached to the intended
+/// glyph run for RTL, mixed-direction, context-shaped, wrapped, and multiline
+/// text. The glyph source stays transparent so this pass adds only decoration.
+pub(super) fn paint_preedit_underline(
+    ctx: &cairo::Context,
+    origin: (i32, i32),
+    text: &str,
+    range: Range<u32>,
+    font_desc: &str,
+    wrap_width: Option<i32>,
+    color: crate::draw::Color,
+) {
+    let Ok(end) = usize::try_from(range.end) else {
+        return;
+    };
+    if range.is_empty() || end > text.len() {
+        return;
     }
-    idx
+
+    // Same layout configuration as measurement and rendering, so the underline
+    // lands on the glyph run the caret and damage were computed against.
+    let layout = crate::draw::shape::configured_layout(ctx, text, font_desc, wrap_width);
+
+    let attrs = pango::AttrList::new();
+    let mut underline = pango::AttrInt::new_underline(pango::Underline::Single);
+    underline.set_start_index(range.start);
+    underline.set_end_index(range.end);
+    attrs.insert(underline);
+    let channel = |value: f64| (value.clamp(0.0, 1.0) * f64::from(u16::MAX)).round() as u16;
+    let mut underline_color =
+        pango::AttrColor::new_underline_color(channel(color.r), channel(color.g), channel(color.b));
+    underline_color.set_start_index(range.start);
+    underline_color.set_end_index(range.end);
+    attrs.insert(underline_color);
+    let mut foreground_alpha = pango::AttrInt::new_foreground_alpha(0);
+    foreground_alpha.set_start_index(0);
+    foreground_alpha.set_end_index(u32::try_from(text.len()).unwrap_or(u32::MAX));
+    attrs.insert(foreground_alpha);
+    layout.set_attributes(Some(&attrs));
+
+    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+    ctx.save().ok();
+    ctx.move_to(origin.0 as f64, origin.1 as f64 - baseline);
+    ctx.set_source_rgba(0.0, 0.0, 0.0, color.a.clamp(0.0, 1.0));
+    pangocairo::functions::show_layout(ctx, &layout);
+    ctx.restore().ok();
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build_text_preview, paint_preedit_selection};
-    use crate::input::state::ImePreedit;
+    use super::{paint_preedit_selection, paint_preedit_underline};
+    use crate::draw::Color;
+    use crate::input::state::{ImePreedit, build_text_input_preview as build_text_preview};
 
     #[test]
-    fn collapsed_preedit_cursor_is_inserted_at_its_utf8_byte_offset() {
+    fn plain_caret_leaves_the_text_intact_and_reports_its_offset() {
+        // The caret is a separate line, never injected into the run, so the
+        // buffer text is unchanged and its byte offset is reported.
+        let p = build_text_preview("ac", 1, None, None, "_");
+        assert_eq!(p.text, "ac");
+        assert_eq!(p.caret, Some(1));
+        assert_eq!(p.highlight, None);
+        assert_eq!(p.underline, None);
+    }
+
+    #[test]
+    fn plain_caret_snaps_off_boundary_offsets_down() {
+        // A caret at byte 2 inside the 3-byte '你' must snap down to a boundary.
+        let p = build_text_preview("你a", 2, None, None, "_");
+        assert_eq!(p.text, "你a");
+        assert_eq!(p.caret, Some(0));
+    }
+
+    #[test]
+    fn a_selection_highlights_the_span_and_reports_the_caret_edge() {
+        let p = build_text_preview("hello", 4, Some(1..4), None, "_");
+        assert_eq!(
+            p.text, "hello",
+            "no caret glyph is injected under a selection"
+        );
+        assert_eq!(p.highlight, Some(1..4));
+        assert_eq!(p.caret, Some(4), "the caret sits at the selection edge");
+    }
+
+    #[test]
+    fn collapsed_preedit_cursor_is_inserted_at_the_caret_offset() {
         let preedit = ImePreedit {
             text: "你a".to_string(),
             cursor_begin: 3,
             cursor_end: 3,
         };
 
-        assert_eq!(
-            build_text_preview("base", Some(&preedit), "|"),
-            ("base你|a".to_string(), None)
-        );
+        // Buffer "base|end" composing at the caret (byte 4).
+        let p = build_text_preview("baseend", 4, None, Some(&preedit), "|");
+        assert_eq!(p.text, "base你|aend");
+        assert_eq!(p.highlight, None);
+        // Underline spans the composition plus the injected caret glyph.
+        assert_eq!(p.underline, Some(4..4 + "你a".len() + 1));
     }
 
     #[test]
@@ -126,9 +151,36 @@ mod tests {
             cursor_end: 1,
         };
 
-        assert_eq!(
-            build_text_preview("xy", Some(&preedit), "|"),
-            ("xyabcd".to_string(), Some(3..6))
+        let p = build_text_preview("xy", 2, None, Some(&preedit), "|");
+        assert_eq!(p.text, "xyabcd");
+        assert_eq!(p.highlight, Some(3..6));
+        assert_eq!(p.underline, Some(2..6));
+    }
+
+    #[test]
+    fn preedit_over_a_selection_replaces_the_selected_text() {
+        let preedit = ImePreedit {
+            text: "X".to_string(),
+            cursor_begin: 1,
+            cursor_end: 1,
+        };
+        // "hello world" with "hello" selected, composing "X": the composition
+        // takes the selection's place instead of appearing beside it.
+        let p = build_text_preview("hello world", 0, Some(0..5), Some(&preedit), "|");
+        assert!(
+            p.text.starts_with('X'),
+            "composition sits where the selection was: {}",
+            p.text
+        );
+        assert!(
+            !p.text.contains("hello"),
+            "the selected text is removed from the preview: {}",
+            p.text
+        );
+        assert!(
+            p.text.contains("world"),
+            "unselected text remains: {}",
+            p.text
         );
     }
 
@@ -140,10 +192,10 @@ mod tests {
             cursor_end: -1,
         };
 
-        assert_eq!(
-            build_text_preview("base", Some(&preedit), "|"),
-            ("basecompose".to_string(), None)
-        );
+        let p = build_text_preview("base", 4, None, Some(&preedit), "|");
+        assert_eq!(p.text, "basecompose");
+        assert_eq!(p.highlight, None);
+        assert_eq!(p.underline, Some(4..4 + "compose".len()));
     }
 
     #[test]
@@ -159,6 +211,38 @@ mod tests {
         assert!(
             data.iter().any(|byte| *byte != 0),
             "the range background must paint even though the duplicate glyph source is transparent"
+        );
+    }
+
+    #[test]
+    fn preedit_underline_paints_a_mixed_direction_range_from_the_full_layout() {
+        let text = "abc אבג xyz";
+        let start = text.find('א').unwrap();
+        let end = text.find(" xyz").unwrap();
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 240, 80).unwrap();
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            paint_preedit_underline(
+                &ctx,
+                (8, 48),
+                text,
+                u32::try_from(start).unwrap()..u32::try_from(end).unwrap(),
+                "Sans 24",
+                None,
+                Color {
+                    r: 0.9,
+                    g: 0.2,
+                    b: 0.1,
+                    a: 1.0,
+                },
+            );
+        }
+        surface.flush();
+        let data = surface.data().unwrap();
+
+        assert!(
+            data.iter().any(|byte| *byte != 0),
+            "the full Pango layout must paint the RTL preedit underline"
         );
     }
 }

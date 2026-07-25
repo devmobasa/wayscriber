@@ -31,7 +31,10 @@ pub use base::{
     ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
-pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState, ToastPress};
+pub(crate) use base::{
+    BoardPickerClickState, PolygonClickState, TextBlockDrag, TextClickState, TextClipboardRequest,
+    TextCutTarget, TextPasteEdit, TextPasteTarget, ToastPress,
+};
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,
     PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
@@ -55,6 +58,8 @@ pub use command_palette::{
     COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint, CommandPaletteListRow,
 };
 pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
+#[cfg(test)]
+pub(crate) use ime::build_text_input_preview;
 pub use ime::{ImeCompositionState, ImePreedit};
 #[allow(unused_imports)]
 pub use menus::{
