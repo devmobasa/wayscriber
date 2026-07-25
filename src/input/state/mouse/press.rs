@@ -499,9 +499,6 @@ impl InputState {
                 self.sync_current_settings_for_tool(tool);
                 let drawing_thickness = self.thickness_for_tool(tool);
                 self.begin_pointer_drag(button, color);
-                // Remember which modifier picked this tool so it is not also
-                // read as a shape constraint for the rest of the drag.
-                self.drag_tool_modifier = self.modifiers.active_drag_modifier();
                 self.state = DrawingState::Drawing {
                     tool,
                     start_x: x,

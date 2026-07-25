@@ -18,8 +18,6 @@ pub(super) struct DrawingRelease {
 
 pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: DrawingRelease) {
     state.mark_draw_activity();
-    // Same rewrite the preview used, so what was shown is what gets committed.
-    let (start, end) = state.constrained_drag(tool, release.start, release.end);
     let drawing_color = state.active_drag_color_or_tool(tool);
     let drawing_thickness = state.thickness_for_tool(tool);
     let pressure_preview_exceeds_final_width = pressure_preview_exceeds_final_freehand_width(
@@ -30,8 +28,8 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
     let finished = if tool.polygon_template().is_some() {
         let snapshot = PolygonStrokeSnapshot {
             tool,
-            start,
-            end,
+            start: release.start,
+            end: release.end,
             color: drawing_color,
             size: drawing_thickness,
             fill_enabled: state.fill_enabled,
@@ -41,8 +39,8 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
     } else {
         let snapshot = ToolStrokeSnapshot {
             tool,
-            start,
-            end,
+            start: release.start,
+            end: release.end,
             points: release.points,
             point_thicknesses: release.point_thicknesses,
             color: drawing_color,
