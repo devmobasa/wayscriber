@@ -7,6 +7,7 @@ cd "$REPO_ROOT"
 
 bash tools/check-version-consistency.sh
 bash tools/test-package-repo-layout.sh
+./tools/check-nixpkgs-recipe.py
 ./tools/check-rust-source-coverage.py
 ./tools/check-process-sites.py
 cargo fmt --all -- --check

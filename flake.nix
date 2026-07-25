@@ -11,6 +11,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+        servicePath = pkgs.lib.makeBinPath [ pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
       in {
         packages = {
           wayscriber = pkgs.rustPlatform.buildRustPackage {
@@ -20,7 +21,10 @@
 
             cargoLock.lockFile = ./Cargo.lock;
 
-            nativeBuildInputs = with pkgs; [ pkg-config ];
+            nativeBuildInputs = with pkgs; [
+              pkg-config
+              wrapGAppsHook4
+            ];
 
             buildInputs = with pkgs; [
               cairo
@@ -34,6 +38,11 @@
             postInstall = ''
               install -Dm644 packaging/wayscriber.desktop $out/share/applications/wayscriber.desktop
               install -Dm644 packaging/wayscriber.service $out/lib/systemd/user/wayscriber.service
+              substituteInPlace $out/lib/systemd/user/wayscriber.service \
+                --replace-fail "/bin/sh" "${pkgs.runtimeShell}" \
+                --replace-fail "/usr/bin/wayscriber" "$out/bin/wayscriber" \
+                --replace-fail "/usr/local/bin:/usr/bin:/bin" \
+                  "${servicePath}:/run/current-system/sw/bin:/etc/profiles/per-user/%u/bin:%h/.nix-profile/bin"
               for size in 16 19 22 24 38 64 128; do
                 for category in apps status; do
                   install -Dm644 packaging/icons/wayscriber-$size.png \

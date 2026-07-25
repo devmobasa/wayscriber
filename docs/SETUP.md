@@ -64,7 +64,13 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 systemctl --user enable --now wayscriber.service
 ```
 
-Add the toggle keybinding to `~/.config/hypr/hyprland.conf`:
+For Hyprland Lua, add the toggle to `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + D", "Toggle Wayscriber", "wayscriber --daemon-toggle")
+```
+
+For a traditional Hyprland config, add it to `~/.config/hypr/hyprland.conf`:
 
 ```conf
 # wayscriber - Screen annotation daemon (Super+D to toggle)
@@ -76,7 +82,17 @@ If your shortcut environment does not resolve `wayscriber` from `PATH`, use the 
 
 ### Method 2: Daemon autostart via compositor (no systemd)
 
-Add to `~/.config/hypr/hyprland.conf`:
+For Hyprland Lua, add these to the matching files:
+
+```lua
+-- ~/.config/hypr/autostart.lua
+o.launch_on_start("wayscriber --daemon")
+
+-- ~/.config/hypr/bindings.lua
+o.bind("SUPER + D", "Toggle Wayscriber", "wayscriber --daemon-toggle")
+```
+
+For a traditional Hyprland config, add this to `~/.config/hypr/hyprland.conf`:
 
 ```conf
 # wayscriber - Screen annotation daemon (Super+D to toggle)
@@ -96,7 +112,18 @@ Now press <kbd>Super+D</kbd> to toggle the overlay on/off!
 Light passthrough needs compositor/global shortcuts because Wayscriber deliberately passes keyboard and pointer input to the app below while passthrough is active.
 The default <kbd>F6</kbd> binding is a Wayscriber in-overlay shortcut, not an OS-level shortcut; do not rely on it to exit after passthrough starts. Use the bindings below for reliable control.
 
-The configurator can install a native Hyprland include file for this. Manual equivalent for Arch + Hyprland:
+For Hyprland Lua, add the manual bindings to `~/.config/hypr/bindings.lua`:
+
+```lua
+local wayscriber = "wayscriber"
+
+o.bind("F6", "Toggle Wayscriber light passthrough", wayscriber .. " --light-toggle")
+o.bind("XF86Tools", "Toggle Wayscriber light passthrough", wayscriber .. " --light-toggle")
+o.bind("SUPER + ALT + D", "Toggle Wayscriber light drawing", wayscriber .. " --light-draw-toggle")
+```
+
+The configurator can install a native include file for traditional Hyprland
+configs. Its manual equivalent is:
 
 ```conf
 # wayscriber - light passthrough controls
@@ -115,7 +142,7 @@ bind = , mouse:275, exec, $wayscriber --light-toggle
 ```
 
 Use `--light-draw-on` on key/button press and `--light-draw-off` on release for draw-while-held.
-The `unbind` lines prevent duplicate manual bindings for these same keys from firing twice.
+In the traditional config example, the `unbind` lines prevent duplicate manual bindings for these same keys from firing twice.
 If your shortcut environment does not resolve `wayscriber`, replace it with the absolute path from `command -v wayscriber`.
 
 ### Light passthrough on KDE Plasma / Fedora KDE
@@ -227,7 +254,7 @@ Press <kbd>Escape</kbd> (should hide overlay)
 - Restart terminal after PATH change
 
 **Want different key?**
-- Edit hyprland.conf
+- Edit `bindings.lua` or `hyprland.conf`, depending on your Hyprland config format
 - Examples:
   - `SUPER, D` → <kbd>Super+D</kbd>
   - `ALT, D` → <kbd>Alt+D</kbd>
@@ -237,7 +264,7 @@ Press <kbd>Escape</kbd> (should hide overlay)
 
 ```bash
 rm ~/.local/bin/wayscriber
-# Remove keybind from hyprland.conf
+# Remove the keybind from bindings.lua or hyprland.conf
 ```
 
 ## Recommended Setup
@@ -245,11 +272,7 @@ rm ~/.local/bin/wayscriber
 **Best setup (daemon mode):**
 
 1. Install: `./tools/install.sh`
-2. Add to hyprland.conf:
-   ```conf
-   exec-once = wayscriber --daemon
-   bind = SUPER, D, exec, wayscriber --daemon-toggle
-   ```
+2. Add the daemon autostart and toggle binding using [Method 2](#method-2-daemon-autostart-via-compositor-no-systemd) above.
 3. Reload: `hyprctl reload`
 4. Use: Press <kbd>Super+D</kbd> to toggle overlay
 

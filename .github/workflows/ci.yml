@@ -68,6 +68,9 @@ jobs:
       - name: Check package repository layout
         run: bash tools/test-package-repo-layout.sh
 
+      - name: Check nixpkgs recipe dependencies
+        run: ./tools/check-nixpkgs-recipe.py
+
       - name: Check Rust source coverage
         run: ./tools/check-rust-source-coverage.py
 
