@@ -818,6 +818,19 @@ fn assert_gtk_style_widget(
     }
 }
 
+/// True when `widget` carries a capture-phase click gesture, i.e. the controller
+/// `install_click_modifier_capture` adds. A popover is its own GTK native, so
+/// without one the toolbar window never sees the rebind chord for clicks inside.
+fn has_capture_phase_click_gesture(widget: &gtk4::Widget) -> bool {
+    let controllers = widget.observe_controllers();
+    (0..controllers.n_items()).any(|index| {
+        controllers
+            .item(index)
+            .and_then(|object| object.downcast::<gtk4::GestureClick>().ok())
+            .is_some_and(|gesture| gesture.propagation_phase() == gtk4::PropagationPhase::Capture)
+    })
+}
+
 fn detach_test_popovers(top: &mut TopBar) {
     if let Some(popover) = top.shapes_popover.take() {
         popover.unparent();
@@ -1527,6 +1540,11 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         ICON_SIZE,
         true,
         1.0,
+    );
+    assert!(
+        has_capture_phase_click_gesture(shape_content.upcast_ref()),
+        "the shapes popover must capture click modifiers, or Ctrl+Shift+click \
+         cannot rebind any tool inside the picker"
     );
     let shape_tools = model::visible_shape_picker_rows(&shapes, false)
         .into_iter()

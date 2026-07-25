@@ -42,10 +42,11 @@ const FULL_TOOL_BUTTONS: [Tool; 7] = [
 ];
 
 /// Full-mode shape picker: everything the strip no longer shows inline.
-const FULL_SHAPE_PICKER_TOOLS: [Tool; 8] = [
+const FULL_SHAPE_PICKER_TOOLS: [Tool; 9] = [
     Tool::Rect,
     Tool::Ellipse,
     Tool::Blur,
+    Tool::Spotlight,
     Tool::Triangle,
     Tool::Parallelogram,
     Tool::Rhombus,
@@ -53,12 +54,13 @@ const FULL_SHAPE_PICKER_TOOLS: [Tool; 8] = [
     Tool::FreeformPolygon,
 ];
 
-const SHAPE_TOOLS: [Tool; 10] = [
+const SHAPE_TOOLS: [Tool; 11] = [
     Tool::Line,
     Tool::Rect,
     Tool::Ellipse,
     Tool::Arrow,
     Tool::Blur,
+    Tool::Spotlight,
     Tool::Triangle,
     Tool::Parallelogram,
     Tool::Rhombus,
