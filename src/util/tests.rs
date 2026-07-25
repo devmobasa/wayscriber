@@ -70,10 +70,22 @@ fn rect_inflated_returns_none_when_degenerate() {
 }
 
 #[test]
-fn arrowhead_triangle_respects_minimum_length_for_thick_strokes() {
-    let geometry = calculate_arrowhead_triangle_custom(100, 0, 0, 0, 10.0, 1.0, 30.0)
+fn arrowhead_triangle_scales_the_head_with_stroke_width() {
+    // A stub head on a thick stroke reads as a line with a nub, so the head
+    // grows with the stroke: 10px thick -> 30px head, past `arrow_length`.
+    // The line is long enough that the 40%-of-length cap does not bite.
+    let geometry = calculate_arrowhead_triangle_custom(400, 0, 0, 0, 10.0, 1.0, 24.0)
         .expect("non-degenerate line should yield geometry");
-    assert!((distance(geometry.tip, head_base(&geometry)) - 25.0).abs() < 1e-9);
+    assert!((distance(geometry.tip, head_base(&geometry)) - 30.0).abs() < 1e-9);
+}
+
+#[test]
+fn arrow_length_is_the_floor_for_thin_strokes() {
+    // Below the scaled size, `arrow.length` still decides, so hairline strokes
+    // keep a visible head.
+    let geometry = calculate_arrowhead_triangle_custom(400, 0, 0, 0, 1.0, 20.0, 24.0)
+        .expect("non-degenerate line should yield geometry");
+    assert!((distance(geometry.tip, head_base(&geometry)) - 20.0).abs() < 1e-9);
 }
 
 #[test]

@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn arrow_shaft_tapers_from_tail_to_arrowhead() {
-        let (mut surface, ctx) = surface_with_context(220, 120);
+        let (mut surface, ctx) = surface_with_context(460, 120);
         let red = Color {
             r: 1.0,
             g: 0.0,
@@ -267,13 +267,15 @@ mod tests {
             a: 1.0,
         };
 
-        // Horizontal arrow, tip at x = 180. Shoulder lands at x = 130.
-        render_arrow(&ctx, 20, 60, 180, 60, red, 20.0, 30.0, 30.0, true);
+        // Horizontal arrow of length 400 at 10px thick: the head is 3x the stroke
+        // (30px), so the shoulder sits at x = 390 and the sample points below fall
+        // clearly on the tail, the shaft, and the head.
+        render_arrow(&ctx, 20, 60, 420, 60, red, 10.0, 20.0, 24.0, true);
 
         drop(ctx);
         let near_tail = painted_column_height(&mut surface, 25, 120);
-        let near_shoulder = painted_column_height(&mut surface, 128, 120);
-        let across_head = painted_column_height(&mut surface, 135, 120);
+        let near_shoulder = painted_column_height(&mut surface, 385, 120);
+        let across_head = painted_column_height(&mut surface, 398, 120);
 
         assert!(near_tail > 0, "tail should still paint");
         assert!(

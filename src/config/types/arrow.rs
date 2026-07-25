@@ -35,7 +35,9 @@ fn default_arrow_length() -> f64 {
 }
 
 fn default_arrow_angle() -> f64 {
-    30.0
+    // tan(24 deg) ~= 0.45. Sharper than the old 30 deg squat triangle, while
+    // staying wide enough to read as an arrowhead at small sizes.
+    24.0
 }
 
 fn default_arrow_head_at_end() -> bool {

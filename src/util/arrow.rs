@@ -1,7 +1,18 @@
 /// Half-width of the shaft at the tail, as a fraction of its half-width where it
 /// meets the arrowhead. The taper is what makes an arrow read as directional
-/// rather than as a plain line with a triangle stuck on the end.
-const TAIL_TAPER_RATIO: f64 = 0.34;
+/// rather than as a plain line with a triangle stuck on the end — but it stays
+/// mild, so the shaft keeps real weight along its length instead of thinning to
+/// a wire behind the head.
+const TAIL_TAPER_RATIO: f64 = 0.55;
+
+/// Head length as a multiple of stroke width.
+///
+/// The head has to grow with the stroke, or a thick arrow ends up with a stub
+/// head that reads as a thin line with a nub on the end. Kept modest, though:
+/// past roughly three times the stroke the head starts to overpower the shaft.
+/// `arrow.length` stays meaningful as the floor, so hairline strokes still get a
+/// visible head.
+const HEAD_LENGTH_PER_THICKNESS: f64 = 3.0;
 
 /// Floor for the tapered tail so thin arrows keep a visible tail instead of
 /// fading into sub-pixel coverage.
@@ -67,7 +78,7 @@ fn arrow_axis(
     let uy = dir_y / line_length;
 
     // Keep heads visible for thick strokes but avoid oversized heads on short lines.
-    let scaled_length = arrow_length.max(thick * 2.5);
+    let scaled_length = arrow_length.max(thick * HEAD_LENGTH_PER_THICKNESS);
     let head_length = scaled_length.min(line_length * 0.4);
 
     let angle_rad = arrow_angle.to_radians();
