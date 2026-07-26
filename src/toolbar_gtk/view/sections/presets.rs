@@ -319,7 +319,7 @@ fn clear_badge(ctx: &SectionCtx, slot: usize) -> gtk4::Button {
 /// and redraw instead of rebuilding the widget tree.
 struct FilledFace {
     area: gtk4::DrawingArea,
-    color: Rc<Cell<(f64, f64, f64)>>,
+    color: Rc<Cell<(f64, f64, f64, f64)>>,
     thickness: Rc<Cell<f64>>,
     painter: Rc<Cell<IconPainter>>,
     feedback: FeedbackTint,
@@ -328,7 +328,12 @@ struct FilledFace {
 impl FilledFace {
     fn new(preset: &PresetSlotSnapshot, slot: usize, size: f64) -> Self {
         let area = slot_area(size);
-        let color = Rc::new(Cell::new((preset.color.r, preset.color.g, preset.color.b)));
+        let color = Rc::new(Cell::new((
+            preset.color.r,
+            preset.color.g,
+            preset.color.b,
+            preset.color.a,
+        )));
         let thickness = Rc::new(Cell::new(preset.size));
         let painter = Rc::new(Cell::new(tool_icon_painter(preset.tool)));
         let feedback: FeedbackTint = Rc::new(Cell::new(None));
@@ -340,8 +345,11 @@ impl FilledFace {
         area.set_draw_func(move |_, ctx, width, height| {
             let s = width.min(height) as f64;
             let k = s / SLOT_SIZE;
-            let (r, g, b) = draw_color.get();
-            // Preset color tint over the button base.
+            let (r, g, b, a) = draw_color.get();
+            // Preset color tint over the button base. The tint keeps its own
+            // fixed alphas rather than folding in the color's: it identifies
+            // the slot, and a barely-there color would leave it unreadable.
+            // The corner swatch below is what shows the color faithfully.
             set_color_alpha(ctx, (r, g, b), PRESET_TINT_FILL_ALPHA);
             rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
             let _ = ctx.fill();
@@ -360,11 +368,15 @@ impl FilledFace {
             ctx.move_to(4.0 * k, s - 6.0 * k);
             ctx.line_to(s - 4.0 * k, s - 6.0 * k);
             let _ = ctx.stroke();
-            // Color swatch in the bottom-right corner.
+            // Color swatch in the bottom-right corner, over the checkerboard
+            // when translucent so it previews the color the preset applies.
             let sw = (s * 0.35).round();
             let (sx, sy) = (s - sw - 4.0 * k, s - sw - 4.0 * k);
-            ctx.set_source_rgba(r, g, b, 1.0);
-            rounded_rect_path(ctx, sx, sy, sw, sw, 4.0 * k);
+            let swatch_path =
+                |ctx: &cairo::Context| rounded_rect_path(ctx, sx, sy, sw, sw, 4.0 * k);
+            crate::ui::checkerboard_behind(ctx, a, swatch_path);
+            ctx.set_source_rgba(r, g, b, a);
+            swatch_path(ctx);
             let _ = ctx.fill();
             let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
             if luminance < 0.3 {
@@ -390,8 +402,12 @@ impl FilledFace {
     }
 
     fn apply(&self, preset: &PresetSlotSnapshot) {
-        self.color
-            .set((preset.color.r, preset.color.g, preset.color.b));
+        self.color.set((
+            preset.color.r,
+            preset.color.g,
+            preset.color.b,
+            preset.color.a,
+        ));
         self.thickness.set(preset.size);
         self.painter.set(tool_icon_painter(preset.tool));
         self.area.queue_draw();

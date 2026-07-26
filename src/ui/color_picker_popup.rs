@@ -9,7 +9,10 @@ use crate::input::state::{
     COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_RECENT_SWATCH_COUNT as RECENT_SWATCH_COUNT,
     COLOR_PICKER_RECENT_SWATCH_SIZE as RECENT_SWATCH_SIZE, ColorPickerPopupLayout,
 };
-use crate::ui::primitives::{draw_rounded_rect, ellipsize_to_fit, text_extents_for};
+use crate::ui::primitives::{
+    checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, ellipsize_to_fit,
+    text_extents_for,
+};
 use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
@@ -27,9 +30,6 @@ const GRADIENT_BORDER: Rgba = (1.0, 1.0, 1.0, 0.4);
 const INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.95);
 /// Dark outline outside the indicator ring (contrast on light hues).
 const INDICATOR_OUTLINE: Rgba = (0.0, 0.0, 0.0, 0.4);
-/// Alpha-checkerboard tiles behind the preview swatch.
-const CHECKER_LIGHT: Rgba = (0.6, 0.6, 0.6, 1.0);
-const CHECKER_DARK: Rgba = (0.4, 0.4, 0.4, 1.0);
 /// Preview swatch border on dark colors (light gray) / light colors (dark).
 /// TODO(theme-consolidation): dark variant duplicates
 /// `theme::toolbar::COLOR_SWATCH_HAIRLINE_DARK`.
@@ -455,7 +455,7 @@ fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
 /// Draw one recent-color swatch, ringed when it matches the live color.
 fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, selected: bool) {
     if color.a < 1.0 {
-        draw_checkerboard(ctx, x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
+        draw_alpha_checkerboard(ctx, x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
     }
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
     ctx.rectangle(x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
@@ -483,33 +483,10 @@ fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, select
     let _ = ctx.stroke();
 }
 
-/// Draw a checkerboard across a rectangle, so translucency reads as such
-/// rather than as a dark colour.
-fn draw_checkerboard(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
-    let check = 6.0;
-    constants::set_color(ctx, CHECKER_LIGHT);
-    ctx.rectangle(x, y, w, h);
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, CHECKER_DARK);
-    let mut cy = y;
-    let mut row = 0;
-    while cy < y + h {
-        let mut cx = x + if row % 2 == 0 { 0.0 } else { check };
-        while cx < x + w {
-            ctx.rectangle(cx, cy, (x + w - cx).min(check), (y + h - cy).min(check));
-            cx += check * 2.0;
-        }
-        cy += check;
-        row += 1;
-    }
-    let _ = ctx.fill();
-}
-
 /// Draw the alpha bar for one colour: transparent on the left, opaque on the
 /// right, over a checkerboard.
 fn draw_alpha_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, color: Color) {
-    draw_checkerboard(ctx, x, y, w, h);
+    draw_alpha_checkerboard(ctx, x, y, w, h);
 
     let ramp = cairo::LinearGradient::new(x, y, x + w, y);
     ramp.add_color_stop_rgba(0.0, color.r, color.g, color.b, 0.0);
@@ -558,27 +535,11 @@ fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: Color) {
 
 /// Draw the preview swatch.
 fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color) {
-    // Draw checkered background for transparency preview
-    let check_size = 6.0;
-    constants::set_color(ctx, CHECKER_LIGHT);
-    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, CHECKER_DARK);
-    let mut cy = y;
-    let mut row = 0;
-    while cy < y + size {
-        let mut cx = x + if row % 2 == 0 { 0.0 } else { check_size };
-        while cx < x + size {
-            let w = (x + size - cx).min(check_size);
-            let h = (y + size - cy).min(check_size);
-            ctx.rectangle(cx, cy, w, h);
-            let _ = ctx.fill();
-            cx += check_size * 2.0;
-        }
-        cy += check_size;
-        row += 1;
-    }
+    // Checkered background for transparency preview, clipped to the rounded
+    // swatch so tiles cannot spill past its corners.
+    checkerboard_behind(ctx, color.a, |ctx| {
+        draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
+    });
 
     // Draw color
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);

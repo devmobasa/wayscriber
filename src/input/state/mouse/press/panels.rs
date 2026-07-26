@@ -91,18 +91,18 @@ impl InputState {
                 if !action_pressed && let Some(layout) = self.color_picker_popup_layout() {
                     let fx = x as f64;
                     let fy = y as f64;
-                    if layout.point_in_sv(fx, fy) {
-                        self.color_picker_popup_set_dragging(Some(PickerDrag::SatVal));
-                        let (saturation, value) = layout.sv_from_point(fx, fy);
-                        self.color_picker_popup_set_from_gradient(saturation, 1.0 - value);
-                        self.color_picker_popup_set_hex_editing(false);
+                    let target = if layout.point_in_sv(fx, fy) {
+                        Some(PickerDrag::SatVal)
                     } else if layout.point_in_hue(fx, fy) {
-                        self.color_picker_popup_set_dragging(Some(PickerDrag::Hue));
-                        self.color_picker_popup_set_hue(layout.hue_from_point(fx));
-                        self.color_picker_popup_set_hex_editing(false);
+                        Some(PickerDrag::Hue)
                     } else if layout.point_in_alpha(fx, fy) {
-                        self.color_picker_popup_set_dragging(Some(PickerDrag::Alpha));
-                        self.color_picker_popup_set_alpha(layout.alpha_from_point(fx));
+                        Some(PickerDrag::Alpha)
+                    } else {
+                        None
+                    };
+                    if let Some(target) = target {
+                        self.color_picker_popup_set_dragging(Some(target));
+                        self.color_picker_popup_apply_drag(target, fx, fy);
                         self.color_picker_popup_set_hex_editing(false);
                     }
                 }

@@ -39,8 +39,10 @@ pub fn name_to_color(name: &str) -> Option<Color> {
 
 /// Parses config-facing hex colors.
 ///
-/// Config hex intentionally accepts only `#RRGGBB`. Runtime UI helpers may
-/// support looser input forms, but config files should stay predictable.
+/// Config hex accepts `#RRGGBB`, or `#RRGGBBAA` to carry alpha; six digits mean
+/// fully opaque. The leading `#` is required and the three-digit shorthand is
+/// not accepted: runtime UI helpers may support looser input forms, but config
+/// files should stay predictable.
 pub fn parse_config_hex_color(value: &str) -> Result<Color, ConfigHexColorError> {
     let trimmed = value.trim();
     let Some(hex) = trimmed.strip_prefix('#') else {
@@ -161,16 +163,27 @@ mod tests {
     }
 
     #[test]
-    fn parse_config_hex_color_accepts_hash_rrggbb_only() {
-        let color = parse_config_hex_color("#FF8040").expect("valid hex color");
+    fn parse_config_hex_color_accepts_six_and_eight_digit_hash_forms() {
+        let opaque = parse_config_hex_color("#FF8040").expect("valid hex color");
         assert_eq!(
-            color,
+            opaque,
             Color {
                 r: 1.0,
                 g: 128.0 / 255.0,
                 b: 64.0 / 255.0,
                 a: 1.0,
-            }
+            },
+            "six digits mean fully opaque"
+        );
+
+        let translucent = parse_config_hex_color("#FF804080").expect("valid hex color with alpha");
+        assert_eq!(
+            translucent,
+            Color {
+                a: 128.0 / 255.0,
+                ..opaque
+            },
+            "eight digits carry alpha in the last pair"
         );
     }
 

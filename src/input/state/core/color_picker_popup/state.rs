@@ -235,11 +235,18 @@ impl InputState {
                     if self.color_for_tool(tool) == original_color {
                         let _ = self.preview_color_for_tool(tool, color);
                         self.active_preset_slot = None;
+                        self.note_recent_color(color);
                         self.mark_session_dirty();
                     }
                 }
                 None => {
                     self.active_preset_slot = None;
+                    // Accepting is where a mixed color becomes the color in
+                    // use, so it belongs in recents. This commits on the
+                    // popup's own target rather than through
+                    // `apply_color_from_ui`, which is what records every other
+                    // UI color source.
+                    self.note_recent_color(color);
                     self.mark_session_dirty();
                 }
             }
@@ -459,6 +466,36 @@ impl InputState {
     /// Whether any picker drag is in flight.
     pub fn color_picker_popup_is_dragging(&self) -> bool {
         self.color_picker_popup_drag_target().is_some()
+    }
+
+    /// Takes the in-flight drag target, ending the drag.
+    pub(in crate::input::state) fn color_picker_popup_take_drag_target(
+        &mut self,
+    ) -> Option<PickerDrag> {
+        let target = self.color_picker_popup_drag_target();
+        if target.is_some() {
+            self.color_picker_popup_set_dragging(None);
+        }
+        target
+    }
+
+    /// Steers one picker control from a pointer position.
+    ///
+    /// Shared by press, drag-motion and release so all three read the pointer
+    /// the same way: whichever control the gesture started on keeps steering,
+    /// even once the pointer leaves that control's bounds.
+    pub(crate) fn color_picker_popup_apply_drag(&mut self, target: PickerDrag, x: f64, y: f64) {
+        let Some(layout) = self.color_picker_popup_layout() else {
+            return;
+        };
+        match target {
+            PickerDrag::SatVal => {
+                let (saturation, value) = layout.sv_from_point(x, y);
+                self.color_picker_popup_set_from_gradient(saturation, 1.0 - value);
+            }
+            PickerDrag::Hue => self.color_picker_popup_set_hue(layout.hue_from_point(x)),
+            PickerDrag::Alpha => self.color_picker_popup_set_alpha(layout.alpha_from_point(x)),
+        }
     }
 
     /// The picker area a drag is steering, if one is in flight.

@@ -341,7 +341,11 @@ impl DragColorOption {
             Self::Pink => "Pink",
             Self::White => "White",
             Self::Black => "Black",
-            Self::Custom => "Custom RGB",
+            // Covers every spec that is not a palette name: RGB and RGBA
+            // arrays, and hex strings in either length. Selecting it keeps
+            // whatever the file already holds, so naming one form would be
+            // wrong for the others.
+            Self::Custom => "Custom",
         }
     }
 

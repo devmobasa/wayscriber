@@ -13,6 +13,10 @@ const COLOR_INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.9);
 /// hit rect, a subtle inner hairline keeps every fill defined against the
 /// panel (boosted for dark colors), and the active state draws a 2px accent
 /// ring with a ~2px gap around the fill.
+///
+/// A translucent color is painted at its own alpha over the checkerboard, so
+/// the swatch shows the transparency the canvas will draw with instead of
+/// presenting it as an opaque color.
 pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     ctx: &cairo::Context,
     x: f64,
@@ -21,8 +25,11 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     color: Color,
     active: bool,
 ) {
-    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
-    draw_round_rect(ctx, x + 1.0, y + 1.0, size - 2.0, size - 2.0, 5.0);
+    let fill_path =
+        |ctx: &cairo::Context| draw_round_rect(ctx, x + 1.0, y + 1.0, size - 2.0, size - 2.0, 5.0);
+    crate::ui::checkerboard_behind(ctx, color.a, fill_path);
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    fill_path(ctx);
     let _ = ctx.fill();
 
     let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
@@ -105,7 +112,8 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_hue_bar(
     let _ = ctx.stroke();
 }
 
-/// Draw a color indicator dot on the gradient picker.
+/// Draw a color indicator dot on the gradient picker. Painted opaque on
+/// purpose: it marks a position on the gradient, not the color's alpha.
 pub(in crate::backend::wayland::toolbar::render) fn draw_color_indicator(
     ctx: &cairo::Context,
     x: f64,
@@ -129,4 +137,53 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_color_indicator(
     ctx.set_line_width(1.0);
     ctx.arc(x, y, radius + 1.5, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.stroke();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cairo::{Context, Format, ImageSurface};
+
+    /// `(r, g, b)` of one pixel, 0-255. Rgb24 packs pixels as native-endian
+    /// 32-bit words, so on little-endian the byte order is B, G, R, unused.
+    fn pixel_at(surface: &mut ImageSurface, x: i32, y: i32) -> (u8, u8, u8) {
+        let stride = surface.stride() as usize;
+        let offset = y as usize * stride + x as usize * 4;
+        let data = surface.data().expect("pixel data");
+        (data[offset + 2], data[offset + 1], data[offset])
+    }
+
+    /// Paint one swatch of `color` on white and sample its middle.
+    fn swatch_center(color: Color) -> (u8, u8, u8) {
+        let size = 24.0;
+        let surface = ImageSurface::create(Format::Rgb24, 32, 32).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            let _ = ctx.paint();
+            draw_swatch(&ctx, 4.0, 4.0, size, color, false);
+        }
+        let mut surface = surface;
+        pixel_at(&mut surface, 4 + size as i32 / 2, 4 + size as i32 / 2)
+    }
+
+    #[test]
+    fn a_translucent_swatch_shows_its_transparency() {
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+        assert_eq!(swatch_center(red), (255, 0, 0), "opaque fills stay exact");
+
+        // Half-alpha red over the checkerboard lets the gray through, so the
+        // swatch cannot be mistaken for the opaque color.
+        let (r, g, b) = swatch_center(Color { a: 0.5, ..red });
+        assert!(r < 255, "translucent swatch painted at full red: {r}");
+        assert!(
+            g > 0 && b > 0,
+            "checkerboard did not show through: ({r}, {g}, {b})"
+        );
+    }
 }

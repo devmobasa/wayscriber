@@ -481,9 +481,15 @@ impl SwatchButton {
             let (r, g, b, a) = draw_color.get();
             // Rounded square with a subtle inner hairline, matching the
             // built-in bars. The fill is inset so the selected accent ring
-            // (2px stroke, ~2px gap) fits inside the drawing area.
+            // (2px stroke, ~2px gap) fits inside the drawing area. A
+            // translucent color sits on the checkerboard, as the built-in
+            // bars paint it.
+            let swatch_path = |ctx: &cairo::Context| {
+                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0)
+            };
+            crate::ui::checkerboard_behind(ctx, a, swatch_path);
             ctx.set_source_rgba(r, g, b, a);
-            rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+            swatch_path(ctx);
             let _ = ctx.fill();
             set_color(ctx, COLOR_SWATCH_HAIRLINE);
             ctx.set_line_width(1.0);

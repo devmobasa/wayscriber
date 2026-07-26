@@ -13,8 +13,9 @@ pub const QUICK_COLOR_RENDER_LIMIT: usize = 24;
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingConfig {
-    /// Default pen color - either a named color (red, green, blue, yellow, orange, pink, white, black)
-    /// or an RGB array like `[255, 0, 0]` for red
+    /// Default pen color - a named color (red, green, blue, yellow, orange, pink, white,
+    /// black), a `#RRGGBB` or `#RRGGBBAA` hex string, or an RGB(A) array like
+    /// `[255, 0, 0]` / `[255, 0, 0, 128]`. See [`ColorSpec`] for the accepted forms.
     #[serde(default = "default_color")]
     pub default_color: ColorSpec,
 
@@ -832,13 +833,19 @@ fn quick_color_label(entry: &QuickColorConfig, index: usize) -> String {
     }
 }
 
+/// Fingerprint of one palette color for [`QuickColorPalette::cache_key`].
+///
+/// Alpha is always included: the radial menu caches its static surface by this
+/// key, so an alpha-only recolor of an inactive slot must still invalidate it.
+/// This never reaches a config file, so widening it costs no compatibility.
 fn color_cache_key(color: Color) -> String {
     let clamp = |v: f64| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round().min(255.0) as u8 };
     format!(
-        "#{:02X}{:02X}{:02X}",
+        "#{:02X}{:02X}{:02X}{:02X}",
         clamp(color.r),
         clamp(color.g),
-        clamp(color.b)
+        clamp(color.b),
+        clamp(color.a)
     )
 }
 

@@ -40,7 +40,7 @@ impl InputState {
 
     /// Record a UI-applied color in the recents list:
     /// most-recent-first, deduped, capped. Persisted with the session.
-    fn note_recent_color(&mut self, color: Color) {
+    pub(in crate::input::state) fn note_recent_color(&mut self, color: Color) {
         self.recent_colors.retain(|recent| *recent != color);
         self.recent_colors.insert(0, color);
         self.recent_colors.truncate(RECENT_COLORS_CAP);

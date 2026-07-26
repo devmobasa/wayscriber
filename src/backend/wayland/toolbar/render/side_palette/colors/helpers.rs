@@ -37,6 +37,26 @@ const COLOR_COPY_ICON_IDLE: Rgba = (0.6, 0.6, 0.6, 0.5);
 /// Hex value text: dimmer than COLOR_ICON_DEFAULT — kept as-is.
 const COLOR_HEX_TEXT: Rgba = (0.85, 0.85, 0.85, 1.0);
 
+/// Copy-icon box inside the hex chip, and its inset from the chip's right
+/// edge. The remaining width is what the hex text is centered in, so the chip
+/// width has to cover both (pinned by a test against the widest hex string).
+const HEX_ICON_SIZE: f64 = 10.0;
+const HEX_ICON_PAD: f64 = 4.0;
+
+fn hex_text_style() -> UiTextStyle<'static> {
+    UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: FONT_SIZE_SECONDARY,
+    }
+}
+
+/// Width the hex value is centered in: the chip minus its copy icon.
+fn hex_text_area_width() -> f64 {
+    ToolbarLayoutSpec::SIDE_COLOR_HEX_INPUT_WIDTH - HEX_ICON_SIZE - HEX_ICON_PAD
+}
+
 /// `(color, label, bound quick-color action, palette slot index)`. The index
 /// travels with the swatch so a secondary click can recolor that exact slot,
 /// including the slots past the eighth that carry no action.
@@ -216,19 +236,14 @@ pub(super) fn draw_hex_input(
     preview_size: f64,
     hex: &str,
 ) {
-    let hex_style = UiTextStyle {
-        family: FONT_FAMILY_DEFAULT,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: FONT_SIZE_SECONDARY,
-    };
+    let hex_style = hex_text_style();
 
     let hex_input_x = x + preview_size + 8.0;
     let hex_input_h = ToolbarLayoutSpec::SIDE_COLOR_HEX_INPUT_HEIGHT;
     let hex_input_y = preview_row_y + (preview_size - hex_input_h) / 2.0;
     let hex_input_w = ToolbarLayoutSpec::SIDE_COLOR_HEX_INPUT_WIDTH;
-    let hex_icon_size = 10.0;
-    let hex_icon_pad = 4.0;
+    let hex_icon_size = HEX_ICON_SIZE;
+    let hex_icon_pad = HEX_ICON_PAD;
 
     let hex_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, hex_input_x, hex_input_y, hex_input_w, hex_input_h))
@@ -271,7 +286,7 @@ pub(super) fn draw_hex_input(
     set_color(ctx, COLOR_HEX_TEXT);
     let hex_layout = crate::ui_text::text_layout(ctx, hex_style, hex, None);
     let hex_extents = hex_layout.ink_extents();
-    let text_area_w = hex_input_w - hex_icon_size - hex_icon_pad;
+    let text_area_w = hex_text_area_width();
     hex_layout.show_at_baseline(
         ctx,
         hex_input_x + (text_area_w - hex_extents.width()) / 2.0,
@@ -439,9 +454,32 @@ pub(super) fn draw_color_swatch_row(
 
 #[cfg(test)]
 mod tests {
-    use super::effective_hsv;
+    use super::{effective_hsv, hex_text_area_width, hex_text_style};
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
+
+    /// The chip shows `#RRGGBBAA` for a translucent color, so it must be wide
+    /// enough for nine characters beside its copy icon. Too narrow and the
+    /// centered value runs under that icon.
+    #[test]
+    fn the_hex_chip_fits_the_widest_hex_value() {
+        let style = hex_text_style();
+        let area = hex_text_area_width();
+        for digit in "0123456789ABCDEF".chars() {
+            let widest = format!("#{}", digit.to_string().repeat(8));
+            assert_eq!(
+                widest.chars().count(),
+                crate::input::state::HEX_INPUT_MAX_CHARS
+            );
+            let extents =
+                crate::ui_text::measure_text(style, &widest, None).expect("hex value measures");
+            assert!(
+                extents.width() <= area,
+                "{widest} needs {:.1}px but the chip only offers {area:.1}px",
+                extents.width()
+            );
+        }
+    }
 
     #[test]
     fn effective_hsv_prefers_matching_memory_and_rejects_stale() {

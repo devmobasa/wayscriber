@@ -492,7 +492,11 @@ impl ColorPickerPopupLayout {
 
     /// Determine the cursor type for a given point within the popup.
     /// Returns the cursor hint for different UI regions.
-    pub fn cursor_hint_at(&self, x: f64, y: f64) -> ColorPickerCursorHint {
+    ///
+    /// `recent_count` is the number of recent colors actually shown, the same
+    /// count rendering and activation use. Passing the maximum instead would
+    /// promise a clickable swatch over the empty positions of a fresh session.
+    pub fn cursor_hint_at(&self, x: f64, y: f64, recent_count: usize) -> ColorPickerCursorHint {
         if self.point_in_hex_input(x, y) {
             ColorPickerCursorHint::Text
         } else if self.point_in_sv(x, y) || self.point_in_hue(x, y) || self.point_in_alpha(x, y) {
@@ -503,7 +507,7 @@ impl ColorPickerPopupLayout {
             || self.point_in_copy_button(x, y)
             || self.point_in_paste_button(x, y)
             || self.point_in_eyedropper_button(x, y)
-            || self.recent_swatch_at(x, y, RECENT_SWATCH_COUNT).is_some()
+            || self.recent_swatch_at(x, y, recent_count).is_some()
         {
             ColorPickerCursorHint::Pointer
         } else {
@@ -526,6 +530,11 @@ pub enum ColorPickerCursorHint {
 }
 
 pub use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
+
+/// Longest string [`color_to_hex`] can produce (`#RRGGBBAA`). Toolbar hex
+/// fields size and length-limit themselves by this, so a translucent color's
+/// eight-digit form is neither truncated on display nor rejected on input.
+pub const HEX_INPUT_MAX_CHARS: usize = 9;
 
 /// Convert a color to hex string (e.g., "#FF8040").
 pub fn color_to_hex(color: Color) -> String {

@@ -11,8 +11,17 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return false;
     }
 
-    // Stop dragging on release
-    state.color_picker_popup_set_dragging(None);
+    // A drag ends on the control it started on, so the release position is
+    // read by that control too. Hit-testing the release point instead would
+    // let a saturation drag released over the hue bar, the alpha bar, or a
+    // recent swatch apply there as a fresh click.
+    let fx = x as f64;
+    let fy = y as f64;
+    if let Some(target) = state.color_picker_popup_take_drag_target() {
+        state.color_picker_popup_apply_drag(target, fx, fy);
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
 
     let layout = match state.color_picker_popup_layout() {
         Some(layout) => layout,
@@ -22,9 +31,6 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
             return true;
         }
     };
-
-    let fx = x as f64;
-    let fy = y as f64;
 
     // Popup actions use a same-button press/release contract. A press that
     // starts elsewhere (including a gradient drag), or moves to another

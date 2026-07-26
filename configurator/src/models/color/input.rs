@@ -82,7 +82,7 @@ impl ColorInput {
                 if value.is_empty() {
                     return Err(FormError::new(
                         field.to_string(),
-                        "Please enter a color name or #RRGGBB hex color.",
+                        "Please enter a color name or #RRGGBB / #RRGGBBAA hex color.",
                     ));
                 }
 
@@ -92,7 +92,7 @@ impl ColorInput {
                     Err(_) => {
                         return Err(FormError::new(
                             field.to_string(),
-                            "Expected #RRGGBB hex color.",
+                            "Expected #RRGGBB or #RRGGBBAA hex color.",
                         ));
                     }
                 }
@@ -102,7 +102,7 @@ impl ColorInput {
                 } else {
                     Err(FormError::new(
                         field.to_string(),
-                        "Expected a known color name or #RRGGBB hex color.",
+                        "Expected a known color name or #RRGGBB / #RRGGBBAA hex color.",
                     ))
                 }
             }

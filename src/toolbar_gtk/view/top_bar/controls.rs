@@ -252,7 +252,12 @@ impl TopBar {
             let painter = top_toolbar_icon_painter(model::TopToolbarIcon::Tool(
                 model::semantic_icon_for_tool(preset.tool),
             ));
-            let (r, g, b) = (preset.color.r, preset.color.g, preset.color.b);
+            let (r, g, b, a) = (
+                preset.color.r,
+                preset.color.g,
+                preset.color.b,
+                preset.color.a,
+            );
             let scale = effective_scale(snapshot);
             let area = gtk4::DrawingArea::new();
             area.set_content_width(button_size.0.round().max(1.0) as i32);
@@ -275,8 +280,13 @@ impl TopBar {
                 let radius = PRESET_SLOT_SWATCH_RADIUS * scale;
                 let sx = fw - sw - inset;
                 let sy = fh - sw - inset;
-                ctx.set_source_rgba(r, g, b, 1.0);
-                rounded_rect_path(ctx, sx, sy, sw, sw, radius);
+                // A translucent preset paints at its own alpha over the
+                // checkerboard, so the slot previews what it will apply.
+                let swatch_path =
+                    |ctx: &cairo::Context| rounded_rect_path(ctx, sx, sy, sw, sw, radius);
+                crate::ui::checkerboard_behind(ctx, a, swatch_path);
+                ctx.set_source_rgba(r, g, b, a);
+                swatch_path(ctx);
                 let _ = ctx.fill();
                 let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
                 set_color(
