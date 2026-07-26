@@ -122,6 +122,8 @@ mod zoom;
 mod tests;
 
 type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+type VirtualPointer =
+    wayland_protocols_wlr::virtual_pointer::v1::client::zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1;
 
 pub(in crate::backend::wayland) use self::buffer_damage::FullDamageReason;
 pub(in crate::backend::wayland) use self::perf::{
@@ -169,6 +171,9 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub main_surface_uses_overlay_layer: bool,
     pub pending_freeze_on_start: bool,
     pub screencopy_manager: Option<ScreencopyManager>,
+    /// Created once at startup when the compositor offers the wlr virtual
+    /// pointer protocol; step capture forwards intercepted clicks through it.
+    pub virtual_pointer: Option<VirtualPointer>,
     pub text_input_manager: Option<ZwpTextInputManagerV3>,
     #[cfg(feature = "tablet-input")]
     pub tablet_manager: Option<ZwpTabletManagerV2>,
@@ -209,6 +214,7 @@ pub(super) struct WaylandState {
     pub(super) config: Config,
     /// Channel-owned writer for runtime-authored config preferences.
     pub(super) config_writer: super::config_writer::ConfigWriter,
+    pub(super) virtual_pointer: Option<VirtualPointer>,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:

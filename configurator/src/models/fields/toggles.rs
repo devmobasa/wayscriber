@@ -58,6 +58,7 @@ pub enum ToggleField {
     CaptureEnabled,
     CaptureCopyToClipboard,
     CaptureExitAfter,
+    CaptureStepClickCapture,
     ExportPdfLabelsEnabled,
     ExportPdfLabelBackgroundEnabled,
     SessionPersistTransparent,

@@ -16,6 +16,7 @@ use smithay_client_toolkit::{
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+use wayland_protocols_wlr::virtual_pointer::v1::client::zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1;
 
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
@@ -25,6 +26,9 @@ use super::super::state::{WaylandGlobals, WaylandState};
 // Version 3 can negotiate linux-dmabuf-only frames on newer wlroots/NVIDIA stacks, so
 // bind through v2 until dmabuf capture is implemented.
 const MAX_SHM_SCREENCOPY_VERSION: u32 = 2;
+/// Both released revisions of zwlr_virtual_pointer_v1 speak the same button
+/// request; v2 only adds output-bound creation, which forwarding never uses.
+const MAX_VIRTUAL_POINTER_VERSION: u32 = 2;
 
 pub(super) struct WaylandSetup {
     pub(super) conn: Connection,
@@ -34,6 +38,7 @@ pub(super) struct WaylandSetup {
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
     pub(super) state_globals: WaylandGlobals,
     pub(super) screencopy_manager: Option<ZwlrScreencopyManagerV1>,
+    pub(super) virtual_pointer_manager: Option<ZwlrVirtualPointerManagerV1>,
     pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
     pub(super) layer_shell_available: bool,
 }
@@ -135,6 +140,27 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         }
     };
 
+    // Virtual pointer for step capture's click forwarding. Optional: without
+    // it the armed session still captures, but intercepted canvas clicks are
+    // not forwarded to the application underneath.
+    let virtual_pointer_manager = match globals.bind::<ZwlrVirtualPointerManagerV1, _, _>(
+        &qh,
+        1..=MAX_VIRTUAL_POINTER_VERSION,
+        (),
+    ) {
+        Ok(manager) => {
+            debug!("Bound zwlr_virtual_pointer_manager_v1");
+            Some(manager)
+        }
+        Err(err) => {
+            warn!(
+                "zwlr_virtual_pointer_manager_v1 not available; step-capture click forwarding disabled: {}",
+                err
+            );
+            None
+        }
+    };
+
     // IME / text-input-v3 for the text and sticky-note tools. Optional: when
     // the compositor lacks it, editing falls back to the raw keysym path
     // (single-key characters only).
@@ -175,6 +201,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         qh,
         state_globals,
         screencopy_manager,
+        virtual_pointer_manager,
         text_input_manager,
         layer_shell_available,
     })

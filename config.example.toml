@@ -1344,6 +1344,11 @@ copy_to_clipboard = true
 # Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
 
+# While step capture is armed, a plain left click on the canvas captures the
+# step and is forwarded to the application underneath (needs compositor
+# virtual-pointer support; off by default because the click reaches another app)
+step_click_capture = false
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXPORT SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════

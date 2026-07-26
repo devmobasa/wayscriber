@@ -59,6 +59,12 @@ impl ConfiguratorApp {
                     self.draft.capture_exit_after,
                     self.defaults.capture_exit_after,
                     ToggleField::CaptureExitAfter,
+                ))
+                .push(toggle_row(
+                    "Step capture: canvas clicks capture and pass through",
+                    self.draft.capture_step_click_capture,
+                    self.defaults.capture_step_click_capture,
+                    ToggleField::CaptureStepClickCapture,
                 ));
         }
 

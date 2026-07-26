@@ -244,6 +244,20 @@ impl WaylandState {
             return;
         }
 
+        // Guide-mode click capture: while the step-capture session is armed
+        // with `[capture] step_click_capture`, a left press that fell through
+        // every chrome gate becomes the next step instead of a stroke. The
+        // matching release is swallowed, and the click is re-sent beneath the
+        // overlay once the frame is captured.
+        if button == BTN_LEFT
+            && self.config.capture.step_click_capture
+            && self.input_state.step_capture_armed()
+        {
+            self.set_suppress_next_release(true);
+            self.handle_step_capture_click();
+            return;
+        }
+
         let mb = match button {
             BTN_LEFT => MouseButton::Left,
             BTN_MIDDLE => MouseButton::Middle,

@@ -49,6 +49,9 @@ pub(in crate::backend::wayland) struct PendingStepCapture {
     pub marker: Option<(i32, i32)>,
     pub logical_width: i32,
     pub logical_height: i32,
+    /// The step came from an intercepted canvas click; re-send it beneath
+    /// the overlay once the frame is captured.
+    pub forward_click: bool,
 }
 
 /// Tracks capture manager state and in-progress flag.

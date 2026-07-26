@@ -238,6 +238,7 @@ impl ConfigDraft {
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
             capture_exit_after: config.capture.exit_after_capture,
+            capture_step_click_capture: config.capture.step_click_capture,
             export_pdf_filename_template: config
                 .export
                 .pdf

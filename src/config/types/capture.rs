@@ -31,6 +31,15 @@ pub struct CaptureConfig {
     /// When false, clipboard-only captures still auto-exit by default.
     #[serde(default = "default_capture_exit_after")]
     pub exit_after_capture: bool,
+
+    /// While step capture is armed, a plain left click on the canvas captures
+    /// the step and is then forwarded to the application underneath through
+    /// the compositor's virtual-pointer protocol. Requires compositor support
+    /// (wlroots, Hyprland, KWin); without it the capture-step action still
+    /// works. Off by default because the forwarded click reaches another
+    /// application.
+    #[serde(default = "default_step_click_capture")]
+    pub step_click_capture: bool,
 }
 
 impl Default for CaptureConfig {
@@ -42,6 +51,7 @@ impl Default for CaptureConfig {
             format: default_capture_format(),
             copy_to_clipboard: default_capture_clipboard(),
             exit_after_capture: default_capture_exit_after(),
+            step_click_capture: default_step_click_capture(),
         }
     }
 }
@@ -67,5 +77,9 @@ fn default_capture_clipboard() -> bool {
 }
 
 fn default_capture_exit_after() -> bool {
+    false
+}
+
+fn default_step_click_capture() -> bool {
     false
 }

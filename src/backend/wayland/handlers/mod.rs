@@ -39,4 +39,5 @@ mod shm;
 mod tablet;
 mod text_input;
 mod touch;
+mod virtual_pointer;
 mod xdg;

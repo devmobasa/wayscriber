@@ -346,6 +346,10 @@ pub(super) const CAPTURE_FILE_TERMS: &[&str] = &[
     "clipboard",
     "copy to clipboard",
     "always exit overlay after capture",
+    "step capture",
+    "step click capture",
+    "click through capture",
+    "guide",
     "format",
 ];
 pub(super) const CAPTURE_PDF_TERMS: &[&str] = &[

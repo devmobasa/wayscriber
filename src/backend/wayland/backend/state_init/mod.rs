@@ -152,6 +152,13 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
     let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
     let config_writer = crate::backend::wayland::config_writer::ConfigWriter::new();
+    // One virtual pointer for the app lifetime, seat-bound when a seat is
+    // already known. Step capture forwards intercepted clicks through it;
+    // without the protocol the armed session still captures.
+    let virtual_pointer = setup.virtual_pointer_manager.as_ref().map(|manager| {
+        let seat = setup.state_globals.seat_state.seats().next();
+        manager.create_virtual_pointer(seat.as_ref(), &setup.qh, ())
+    });
 
     apply_initial_mode(backend, &config, &mut input_state);
 
@@ -194,6 +201,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         main_surface_uses_overlay_layer: output_prefs.main_surface_uses_overlay_layer,
         pending_freeze_on_start: freeze_on_start,
         screencopy_manager: setup.screencopy_manager,
+        virtual_pointer,
         text_input_manager: setup.text_input_manager,
         #[cfg(feature = "tablet-input")]
         tablet_manager,

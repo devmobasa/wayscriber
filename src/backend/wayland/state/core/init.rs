@@ -25,6 +25,7 @@ impl WaylandState {
             main_surface_uses_overlay_layer,
             pending_freeze_on_start,
             screencopy_manager,
+            virtual_pointer,
             text_input_manager,
             #[cfg(feature = "tablet-input")]
             tablet_manager,
@@ -131,6 +132,7 @@ impl WaylandState {
             spotlight_dimmed_last_frame: false,
             config,
             config_writer,
+            virtual_pointer,
             runtime_ui,
             runtime_ui_unavailable,
             runtime_ui_unavailable_previews: Default::default(),

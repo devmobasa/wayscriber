@@ -7,12 +7,24 @@ use crate::canvas_export::{GuideStep, guide_image_file_stem, render_guide_markdo
 use crate::capture::{DocumentAttachment, DocumentDeliveryRequest, RenderedDocument};
 use crate::draw::EmbeddedImage;
 use crate::input::state::{STEP_CAPTURE_BOARD_ID, StepCaptureFrame, Toast, ToastPriority};
+use smithay_client_toolkit::seat::pointer::BTN_LEFT;
+use wayland_client::protocol::wl_pointer;
 
 impl WaylandState {
     /// Captures the screen as the next step page. The pointer position is
     /// recorded before suppression so the marker lands where the user was
     /// pointing, not where the cursor drifted during the capture.
     pub(in crate::backend::wayland) fn handle_step_capture_action(&mut self) {
+        self.begin_step_capture(false);
+    }
+
+    /// Guide-mode variant: the press that reached the canvas becomes the
+    /// step, and the click is re-sent beneath the overlay after capture.
+    pub(in crate::backend::wayland) fn handle_step_capture_click(&mut self) {
+        self.begin_step_capture(true);
+    }
+
+    fn begin_step_capture(&mut self, forward_click: bool) {
         if self.capture.is_in_progress() {
             log::warn!("Step capture requested while another image operation is running; ignoring");
             self.input_state.push_toast(
@@ -41,6 +53,7 @@ impl WaylandState {
             marker,
             logical_width: self.surface.width() as i32,
             logical_height: self.surface.height() as i32,
+            forward_click,
         });
         log::info!(
             "Queued step capture (step {}); waiting for suppression frame",
@@ -105,6 +118,40 @@ impl WaylandState {
                 );
             }
         }
+
+        if pending.forward_click {
+            self.forward_intercepted_click();
+        }
+    }
+
+    /// Re-send the intercepted click through the compositor's virtual
+    /// pointer. Runs right after capture completion: suppression has been
+    /// released in state but the commit restoring the overlay's input region
+    /// has not happened yet, so the compositor still routes the click to the
+    /// application beneath. The pointer is physically at the intercepted
+    /// position, so no motion is needed.
+    fn forward_intercepted_click(&mut self) {
+        let Some(pointer) = self.virtual_pointer.as_ref() else {
+            log::warn!("Step click captured but the compositor offers no virtual pointer");
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                "steps.forward",
+                Toast::info("Click forwarding is unavailable on this compositor"),
+            );
+            return;
+        };
+        let time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u32)
+            .unwrap_or_default();
+        pointer.button(time, BTN_LEFT, wl_pointer::ButtonState::Pressed);
+        pointer.frame();
+        pointer.button(
+            time.saturating_add(1),
+            BTN_LEFT,
+            wl_pointer::ButtonState::Released,
+        );
+        pointer.frame();
     }
 
     /// Exports the Steps board as a Markdown guide bundle: one directory
