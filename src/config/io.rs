@@ -116,10 +116,9 @@ impl Config {
         Ok(backup_path)
     }
 
-    /// Reloads the active document, applies one runtime-owned mutation to
-    /// that fresh typed value, and saves it through the same revision guard.
-    /// This prevents a long-lived runtime snapshot from overwriting newer
-    /// edits made through the configurator or directly in `config.toml`.
+    /// Test-only convenience for exercising the revision-guarded document
+    /// update path without constructing a runtime persistence worker.
+    #[cfg(test)]
     pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
         let config_path = Self::get_config_path()?;
         let document = ConfigDocument::load_from_path(&config_path)?;
