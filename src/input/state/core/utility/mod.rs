@@ -10,7 +10,7 @@ mod light_mode;
 mod pending;
 mod presenter_mode;
 mod render_profiles;
-mod step_markers;
+pub(in crate::input::state::core) mod step_markers;
 mod toasts;
 
 pub(crate) use help_overlay::HelpOverlayPressSource;

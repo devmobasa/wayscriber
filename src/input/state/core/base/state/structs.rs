@@ -549,6 +549,9 @@ pub struct InputState {
     /// the status HUD (tablet and other paths that bypass the backend's own
     /// press→release flag); the matching release activates the chip.
     pub(in crate::input::state) status_hud_press_pending: bool,
+    /// Whether the step-capture session is armed: each capture hotkey press
+    /// appends a captured frame as a numbered page on the Steps board.
+    pub(in crate::input::state) step_capture_armed: bool,
     /// Cached layout details for the interactive bottom-right zoom chip
     pub zoom_chip_layout: Option<crate::ui::ZoomChipLayout>,
     /// The chip press a left press recorded, set when the internal

@@ -280,6 +280,7 @@ impl InputState {
             status_hud_layout: None,
             status_hud_rebuild_inputs: None,
             status_hud_press_pending: false,
+            step_capture_armed: false,
             zoom_chip_layout: None,
             zoom_chip_press_pending: crate::ui::ZoomChipPress::None,
             spatial_index: None,
