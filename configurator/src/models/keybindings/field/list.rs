@@ -128,6 +128,7 @@ impl KeybindingField {
             Self::ExportAllBoardsPdfFile,
             Self::ToggleStepCapture,
             Self::CaptureStep,
+            Self::ExportStepsMarkdown,
             Self::OpenCaptureFolder,
             Self::ToggleFrozenMode,
             Self::ZoomIn,

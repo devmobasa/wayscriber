@@ -50,6 +50,10 @@ impl KeybindingsConfig {
         )?;
         inserter.insert_all(&self.capture.toggle_step_capture, Action::ToggleStepCapture)?;
         inserter.insert_all(&self.capture.capture_step, Action::CaptureStep)?;
+        inserter.insert_all(
+            &self.capture.export_steps_markdown,
+            Action::ExportStepsMarkdown,
+        )?;
         inserter.insert_all(&self.capture.open_capture_folder, Action::OpenCaptureFolder)?;
         Ok(())
     }

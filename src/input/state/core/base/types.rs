@@ -448,6 +448,8 @@ pub enum PendingBackendAction {
     /// Capture the screen as the next numbered step page while the
     /// step-capture session is armed.
     StepCapture,
+    /// Export the Steps board as a Markdown guide bundle.
+    StepsMarkdownExport,
     ClearSavedToolState,
     EditKeybinding(KeybindingEditRequest),
     /// Persist the top-display preference changed by its keyboard action;

@@ -81,6 +81,12 @@ impl InputState {
                 self.reset_modifiers();
                 true
             }
+            Action::ExportStepsMarkdown => {
+                log::debug!("Steps markdown export pending for backend");
+                self.set_pending_backend_action(PendingBackendAction::StepsMarkdownExport);
+                self.reset_modifiers();
+                true
+            }
             Action::ToggleFrozenMode => {
                 log::info!("Toggle frozen mode requested");
                 self.request_frozen_toggle();

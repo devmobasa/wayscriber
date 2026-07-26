@@ -162,6 +162,7 @@ impl WaylandState {
                 extension: "pdf".to_string(),
                 mime_type: "application/pdf".to_string(),
             },
+            attachments: Vec::new(),
             destination: CaptureDestination::FileOnly,
             save_config: Some(save_config),
             operation,

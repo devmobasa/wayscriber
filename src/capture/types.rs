@@ -11,6 +11,7 @@ pub enum ImageOperationKind {
     BoardPdfExport,
     AllBoardsPdfExport,
     StepCapture,
+    StepsGuideExport,
 }
 
 impl ImageOperationKind {
@@ -21,6 +22,7 @@ impl ImageOperationKind {
             Self::BoardPdfExport => "Board exported",
             Self::AllBoardsPdfExport => "Boards exported",
             Self::StepCapture => "Step captured",
+            Self::StepsGuideExport => "Guide exported",
         }
     }
 
@@ -31,6 +33,7 @@ impl ImageOperationKind {
             Self::BoardPdfExport => "Board PDF export failed",
             Self::AllBoardsPdfExport => "All boards PDF export failed",
             Self::StepCapture => "Step capture failed",
+            Self::StepsGuideExport => "Guide export failed",
         }
     }
 
@@ -41,6 +44,7 @@ impl ImageOperationKind {
             Self::BoardPdfExport => "Board PDF clipboard failed",
             Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
             Self::StepCapture => "Step capture clipboard failed",
+            Self::StepsGuideExport => "Guide export clipboard failed",
         }
     }
 
@@ -51,6 +55,7 @@ impl ImageOperationKind {
             Self::BoardPdfExport => "Board PDF clipboard failed",
             Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
             Self::StepCapture => "Step capture clipboard failed",
+            Self::StepsGuideExport => "Guide export clipboard failed",
         }
     }
 
@@ -61,6 +66,7 @@ impl ImageOperationKind {
             Self::BoardPdfExport => "Board PDF export",
             Self::AllBoardsPdfExport => "All boards PDF export",
             Self::StepCapture => "Step capture",
+            Self::StepsGuideExport => "Steps guide export",
         }
     }
 
@@ -111,6 +117,14 @@ impl ImageOperationKind {
                 CaptureError::Cancelled(reason) => format!("Step capture cancelled: {reason}"),
                 other => other.to_string(),
             },
+            Self::StepsGuideExport => match err {
+                CaptureError::SaveError(err) => format!("Failed to save steps guide: {err}"),
+                CaptureError::ImageError(err) => format!("Steps guide export failed: {err}"),
+                CaptureError::Cancelled(reason) => {
+                    format!("Steps guide export cancelled: {reason}")
+                }
+                other => other.to_string(),
+            },
         }
     }
 }
@@ -154,9 +168,22 @@ pub struct RenderedDocument {
     pub mime_type: String,
 }
 
+/// A named file saved beside a delivered document inside its bundle
+/// directory (the Markdown guide's page images).
+#[derive(Debug, Clone)]
+pub struct DocumentAttachment {
+    pub file_stem: String,
+    pub extension: String,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Debug, Clone)]
 pub struct DocumentDeliveryRequest {
     pub document: RenderedDocument,
+    /// When non-empty, the document and attachments are saved together in a
+    /// fresh uniquely-named subdirectory of the save directory, each under
+    /// its fixed name, so relative references inside the document hold.
+    pub attachments: Vec<DocumentAttachment>,
     pub destination: CaptureDestination,
     pub save_config: Option<crate::capture::file::FileSaveConfig>,
     pub operation: ImageOperationKind,

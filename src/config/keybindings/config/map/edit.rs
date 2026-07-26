@@ -169,6 +169,7 @@ define_action_binding_accessors! {
     ExportAllBoardsPdfFile => capture.export_all_boards_pdf_file,
     ToggleStepCapture => capture.toggle_step_capture,
     CaptureStep => capture.capture_step,
+    ExportStepsMarkdown => capture.export_steps_markdown,
     OpenCaptureFolder => capture.open_capture_folder,
     ToggleFrozenMode => zoom.toggle_frozen_mode,
     ZoomIn => zoom.zoom_in,

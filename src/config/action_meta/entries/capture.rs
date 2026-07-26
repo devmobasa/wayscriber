@@ -181,6 +181,17 @@ pub const ENTRIES: &[ActionMeta] = &[
         &["capture step", "next step", "step"]
     ),
     meta!(
+        ExportStepsMarkdown,
+        "Export Steps as Markdown",
+        Some("Steps to Markdown"),
+        "Export the Steps board as a Markdown guide with page images",
+        Capture,
+        true,
+        true,
+        false,
+        &["export steps", "markdown", "guide export", "steps guide"]
+    ),
+    meta!(
         OpenCaptureFolder,
         "Open Capture Folder",
         None,

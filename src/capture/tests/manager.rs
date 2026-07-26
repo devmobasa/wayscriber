@@ -454,6 +454,7 @@ async fn desktop_backdrop_completion_releases_the_manager_for_pdf_delivery() {
 
     let document_id = manager
         .request_document_delivery(DocumentDeliveryRequest {
+            attachments: Vec::new(),
             document: rendered_pdf(b"%PDF-".to_vec()),
             destination: CaptureDestination::FileOnly,
             save_config: Some(FileSaveConfig::default()),
@@ -556,6 +557,7 @@ async fn request_document_delivery_reports_board_pdf_success() {
 
     manager
         .request_document_delivery(DocumentDeliveryRequest {
+            attachments: Vec::new(),
             document: rendered_pdf(b"%PDF-".to_vec()),
             destination: CaptureDestination::FileOnly,
             save_config: Some(FileSaveConfig::default()),
@@ -667,6 +669,7 @@ async fn request_document_delivery_records_board_pdf_save_failure() {
 
     manager
         .request_document_delivery(DocumentDeliveryRequest {
+            attachments: Vec::new(),
             document: rendered_pdf(b"%PDF-".to_vec()),
             destination: CaptureDestination::FileOnly,
             save_config: Some(FileSaveConfig::default()),

@@ -1119,6 +1119,7 @@ mappings = [
 **Step capture actions:**
 - `toggle_step_capture` - arm/disarm step capture; disarming jumps to the Steps board for review
 - `capture_step` - capture the screen as the next numbered page on the Steps board (unbound by default; also available from the command palette)
+- `export_steps_markdown` - export the Steps board as a Markdown guide: a `steps_guide_<timestamp>/` folder in the capture save directory containing `guide.md` plus one `step-NN.png` per page
 
 ### `[capture]` - Screenshot Capture
 
@@ -1544,6 +1545,7 @@ export_all_boards_pdf_file = []
 # Step capture: arm the session, then capture one numbered guide page per step
 toggle_step_capture = []
 capture_step = []
+export_steps_markdown = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

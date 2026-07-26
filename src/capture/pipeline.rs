@@ -5,8 +5,8 @@ use crate::capture::{
     file::FileSaveConfig,
     types::{
         CaptureDestination, CaptureError, CaptureResult, CaptureType,
-        DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentDeliveryRequest,
-        ImageDeliveryRequest, ImageOperationKind,
+        DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentAttachment,
+        DocumentDeliveryRequest, ImageDeliveryRequest, ImageOperationKind, RenderedDocument,
     },
 };
 use tokio::task;
@@ -294,6 +294,17 @@ pub(crate) async fn deliver_document(
         ));
     }
 
+    if !request.attachments.is_empty() {
+        return deliver_document_bundle(
+            request.document,
+            request.attachments,
+            request.operation,
+            save_config,
+            dependencies,
+        )
+        .await;
+    }
+
     save_config.format = request.document.extension.clone();
     let document_bytes = request.document.bytes;
     let saved_path = save_bytes(
@@ -311,6 +322,80 @@ pub(crate) async fn deliver_document(
         copied_to_clipboard: false,
     })
 }
+
+/// Save a document together with its attachments in a fresh uniquely-named
+/// subdirectory, each file under a fixed name so relative references inside
+/// the document keep resolving.
+async fn deliver_document_bundle(
+    document: RenderedDocument,
+    attachments: Vec<DocumentAttachment>,
+    operation: ImageOperationKind,
+    save_config: FileSaveConfig,
+    dependencies: Arc<CaptureDependencies>,
+) -> Result<CaptureResult, CaptureError> {
+    let bundle_dir = task::spawn_blocking(move || create_unique_bundle_directory(&save_config))
+        .await
+        .map_err(|err| {
+            CaptureError::ImageError(format!("Bundle directory task failed: {err}"))
+        })??;
+
+    let main_config = FileSaveConfig {
+        save_directory: bundle_dir.clone(),
+        filename_template: "guide".to_string(),
+        format: document.extension.clone(),
+    };
+    let document_bytes = document.bytes;
+    let saved_path = save_bytes(
+        Arc::clone(&dependencies.saver),
+        document_bytes.clone(),
+        main_config,
+    )
+    .await?;
+
+    for attachment in attachments {
+        let config = FileSaveConfig {
+            save_directory: bundle_dir.clone(),
+            filename_template: attachment.file_stem,
+            format: attachment.extension,
+        };
+        save_bytes(Arc::clone(&dependencies.saver), attachment.bytes, config).await?;
+    }
+
+    Ok(CaptureResult {
+        image_data: document_bytes,
+        operation,
+        fallback_format_override: None,
+        saved_path: Some(saved_path),
+        copied_to_clipboard: false,
+    })
+}
+
+fn create_unique_bundle_directory(save_config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {
+    let base = &save_config.save_directory;
+    std::fs::create_dir_all(base).map_err(CaptureError::SaveError)?;
+    let stem = crate::time_utils::format_with_template(
+        crate::time_utils::now_local(),
+        &save_config.filename_template,
+    );
+    for attempt in 0..UNIQUE_BUNDLE_ATTEMPTS {
+        let name = if attempt == 0 {
+            stem.clone()
+        } else {
+            format!("{stem}_{attempt}")
+        };
+        let candidate = base.join(name);
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(CaptureError::SaveError(err)),
+        }
+    }
+    Err(CaptureError::ImageError(format!(
+        "Could not find a free bundle directory name under {base:?}"
+    )))
+}
+
+const UNIQUE_BUNDLE_ATTEMPTS: u32 = 100;
 
 async fn save_bytes(
     saver: Arc<dyn CaptureFileSaver>,

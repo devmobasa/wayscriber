@@ -136,6 +136,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::ExportAllBoardsPdfFile
         | Action::ToggleStepCapture
         | Action::CaptureStep
+        | Action::ExportStepsMarkdown
         | Action::ToggleFrozenMode
         | Action::ZoomIn
         | Action::ZoomOut

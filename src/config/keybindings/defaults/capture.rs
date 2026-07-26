@@ -65,3 +65,7 @@ pub(crate) fn default_toggle_step_capture() -> Vec<String> {
 pub(crate) fn default_capture_step() -> Vec<String> {
     Vec::new()
 }
+
+pub(crate) fn default_export_steps_markdown() -> Vec<String> {
+    Vec::new()
+}

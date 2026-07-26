@@ -186,6 +186,7 @@ async fn deliver_document_file_only_saves_pdf_bytes_with_pdf_extension() {
         clipboard: Arc::new(clipboard.clone()),
     };
     let request = DocumentDeliveryRequest {
+        attachments: Vec::new(),
         document: rendered_pdf(b"%PDF-".to_vec()),
         destination: CaptureDestination::FileOnly,
         save_config: Some(FileSaveConfig {
@@ -227,6 +228,7 @@ async fn deliver_document_rejects_clipboard_destinations() {
         }),
     };
     let request = DocumentDeliveryRequest {
+        attachments: Vec::new(),
         document: rendered_pdf(Vec::new()),
         destination: CaptureDestination::ClipboardOnly,
         save_config: Some(FileSaveConfig::default()),
@@ -264,6 +266,7 @@ async fn deliver_document_requires_save_config() {
         }),
     };
     let request = DocumentDeliveryRequest {
+        attachments: Vec::new(),
         document: rendered_pdf(Vec::new()),
         destination: CaptureDestination::FileOnly,
         save_config: None,
@@ -301,6 +304,7 @@ async fn deliver_document_requires_save_directory() {
         }),
     };
     let request = DocumentDeliveryRequest {
+        attachments: Vec::new(),
         document: rendered_pdf(Vec::new()),
         destination: CaptureDestination::FileOnly,
         save_config: Some(FileSaveConfig {

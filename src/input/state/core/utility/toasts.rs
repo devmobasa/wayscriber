@@ -211,6 +211,7 @@ impl InputState {
                             ImageOperationKind::BoardPdfExport => "Board exported",
                             ImageOperationKind::AllBoardsPdfExport => "Boards exported",
                             ImageOperationKind::StepCapture => "Step captured",
+                            ImageOperationKind::StepsGuideExport => "Guide exported",
                         }),
                     );
                 }

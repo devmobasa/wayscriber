@@ -1,8 +1,10 @@
+mod markdown;
 mod page;
 mod pdf;
 mod pdf_labels;
 mod png;
 
+pub use markdown::{GuideStep, guide_image_file_stem, render_guide_markdown};
 pub use page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, SpotlightPassSnapshot,
 };

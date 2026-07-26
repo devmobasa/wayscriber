@@ -171,6 +171,7 @@ pub enum Action {
     ExportAllBoardsPdfFile,
     ToggleStepCapture,
     CaptureStep,
+    ExportStepsMarkdown,
     OpenCaptureFolder,
     ToggleFrozenMode,
     ZoomIn,

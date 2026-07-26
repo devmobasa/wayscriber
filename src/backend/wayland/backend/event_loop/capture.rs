@@ -112,6 +112,9 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::StepCapture => {
                 state.handle_step_capture_action();
             }
+            PendingBackendAction::StepsMarkdownExport => {
+                state.handle_steps_guide_export_action();
+            }
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
@@ -309,6 +312,9 @@ fn handle_capture_results(state: &mut WaylandState) {
                         }
                         crate::capture::ImageOperationKind::StepCapture => {
                             "Step captured".to_string()
+                        }
+                        crate::capture::ImageOperationKind::StepsGuideExport => {
+                            "Guide exported".to_string()
                         }
                     }
                 } else {
