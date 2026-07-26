@@ -159,6 +159,28 @@ pub const ENTRIES: &[ActionMeta] = &[
         ]
     ),
     meta!(
+        ToggleStepCapture,
+        "Toggle Step Capture",
+        Some("Step Capture"),
+        "Arm step capture: every captured step becomes a numbered guide page",
+        Capture,
+        true,
+        true,
+        false,
+        &["step capture", "steps", "guide", "record steps", "tutorial"]
+    ),
+    meta!(
+        CaptureStep,
+        "Capture Step",
+        None,
+        "Capture the screen as the next numbered step page",
+        Capture,
+        true,
+        true,
+        false,
+        &["capture step", "next step", "step"]
+    ),
+    meta!(
         OpenCaptureFolder,
         "Open Capture Folder",
         None,

@@ -48,6 +48,8 @@ impl KeybindingsConfig {
             &self.capture.export_all_boards_pdf_file,
             Action::ExportAllBoardsPdfFile,
         )?;
+        inserter.insert_all(&self.capture.toggle_step_capture, Action::ToggleStepCapture)?;
+        inserter.insert_all(&self.capture.capture_step, Action::CaptureStep)?;
         inserter.insert_all(&self.capture.open_capture_folder, Action::OpenCaptureFolder)?;
         Ok(())
     }

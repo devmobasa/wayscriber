@@ -192,6 +192,8 @@ fn action_serialization_matches_established_contract() {
         ),
         (Action::ExportBoardPdfFile, "export_board_pdf_file"),
         (Action::ExportAllBoardsPdfFile, "export_all_boards_pdf_file"),
+        (Action::ToggleStepCapture, "toggle_step_capture"),
+        (Action::CaptureStep, "capture_step"),
         (Action::OpenCaptureFolder, "open_capture_folder"),
         (Action::ToggleFrozenMode, "toggle_frozen_mode"),
         (Action::ZoomIn, "zoom_in"),

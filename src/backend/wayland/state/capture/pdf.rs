@@ -198,7 +198,7 @@ impl WaylandState {
             && self.board_pdf_export_scope_has_transparent_pages(action)
     }
 
-    fn desktop_backdrop_capture_request(
+    pub(super) fn desktop_backdrop_capture_request(
         &self,
         operation: ImageOperationKind,
     ) -> DesktopBackdropCaptureRequest {

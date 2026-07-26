@@ -169,6 +169,8 @@ pub enum Action {
     ExportCanvasClipboardAndFile,
     ExportBoardPdfFile,
     ExportAllBoardsPdfFile,
+    ToggleStepCapture,
+    CaptureStep,
     OpenCaptureFolder,
     ToggleFrozenMode,
     ZoomIn,

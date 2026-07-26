@@ -290,6 +290,8 @@ pub(super) fn build_main_sections(
         ),
         action_row(bindings, Action::ExportBoardPdfFile, NOT_BOUND_LABEL),
         action_row(bindings, Action::ExportAllBoardsPdfFile, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleStepCapture, NOT_BOUND_LABEL),
+        action_row(bindings, Action::CaptureStep, NOT_BOUND_LABEL),
         action_row(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
     ]);
     let screenshots = Some(Section {

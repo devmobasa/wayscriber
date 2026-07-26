@@ -71,6 +71,12 @@ impl InputState {
         self.last_pointer_position
     }
 
+    /// The last pointer position, or `None` before any pointer event. Step
+    /// capture places its marker only when the position is meaningful.
+    pub(crate) fn pointer_position_if_seen(&self) -> Option<(i32, i32)> {
+        self.pointer_seen.then_some(self.last_pointer_position)
+    }
+
     /// Returns the last known pointer position in canvas/world coordinates.
     #[allow(dead_code)]
     pub(crate) fn canvas_pointer_position(&self) -> (i32, i32) {

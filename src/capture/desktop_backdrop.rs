@@ -6,6 +6,7 @@ use crate::capture::{
     dependencies::CaptureDependencies,
     types::{
         CaptureError, CaptureType, DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult,
+        ImageOperationKind,
     },
 };
 use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
@@ -40,7 +41,48 @@ fn decode_desktop_backdrop(
         CaptureError::ImageError(format!("Failed to decode desktop backdrop: {err}"))
     })?;
     let argb = rgba_to_cairo_argb(&decoded.rgba)?;
-    desktop_backdrop_from_argb(argb, decoded.width, decoded.height, &request)
+    let mut result = desktop_backdrop_from_argb(argb, decoded.width, decoded.height, &request)?;
+    if request.operation == ImageOperationKind::StepCapture {
+        result.encoded_png = Some(encode_backdrop_png(&result)?);
+    }
+    Ok(result)
+}
+
+/// Re-encode the cropped premultiplied-BGRA frame as RGBA PNG for consumers
+/// that embed the frame as shape data. Runs on the capture worker's blocking
+/// task, never on the dispatch thread.
+fn encode_backdrop_png(result: &DesktopBackdropCaptureResult) -> Result<Vec<u8>, CaptureError> {
+    let width = u32::try_from(result.width)
+        .map_err(|_| CaptureError::ImageError("Step capture frame width is invalid".into()))?;
+    let height = u32::try_from(result.height)
+        .map_err(|_| CaptureError::ImageError("Step capture frame height is invalid".into()))?;
+
+    let mut rgba = Vec::with_capacity(result.data.len());
+    for pixel in result.data.chunks_exact(4) {
+        let (pb, pg, pr, a) = (pixel[0], pixel[1], pixel[2], pixel[3]);
+        let unmultiply = |channel: u8| -> u8 {
+            if a == 0 {
+                0
+            } else {
+                ((u16::from(channel) * 255 + u16::from(a) / 2) / u16::from(a)).min(255) as u8
+            }
+        };
+        rgba.extend_from_slice(&[unmultiply(pr), unmultiply(pg), unmultiply(pb), a]);
+    }
+
+    let mut encoded = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut encoded, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|err| CaptureError::ImageError(format!("Step capture PNG header: {err}")))?;
+        writer
+            .write_image_data(&rgba)
+            .map_err(|err| CaptureError::ImageError(format!("Step capture PNG encode: {err}")))?;
+    }
+    Ok(encoded)
 }
 
 fn rgba_to_cairo_argb(rgba: &[u8]) -> Result<Vec<u8>, CaptureError> {
@@ -224,5 +266,6 @@ fn desktop_backdrop_result(
         stride,
         logical_to_image_scale_x: width as f64 / logical_width as f64,
         logical_to_image_scale_y: height as f64 / logical_height as f64,
+        encoded_png: None,
     })
 }

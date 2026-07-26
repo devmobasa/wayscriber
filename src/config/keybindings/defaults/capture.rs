@@ -57,3 +57,11 @@ pub(crate) fn default_export_all_boards_pdf_file() -> Vec<String> {
 pub(crate) fn default_open_capture_folder() -> Vec<String> {
     vec!["Ctrl+Alt+O".to_string()]
 }
+
+pub(crate) fn default_toggle_step_capture() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_capture_step() -> Vec<String> {
+    Vec::new()
+}

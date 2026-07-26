@@ -10,6 +10,7 @@ pub enum ImageOperationKind {
     CanvasExport,
     BoardPdfExport,
     AllBoardsPdfExport,
+    StepCapture,
 }
 
 impl ImageOperationKind {
@@ -19,6 +20,7 @@ impl ImageOperationKind {
             Self::CanvasExport => "Canvas exported",
             Self::BoardPdfExport => "Board exported",
             Self::AllBoardsPdfExport => "Boards exported",
+            Self::StepCapture => "Step captured",
         }
     }
 
@@ -28,6 +30,7 @@ impl ImageOperationKind {
             Self::CanvasExport => "Canvas export failed",
             Self::BoardPdfExport => "Board PDF export failed",
             Self::AllBoardsPdfExport => "All boards PDF export failed",
+            Self::StepCapture => "Step capture failed",
         }
     }
 
@@ -37,6 +40,7 @@ impl ImageOperationKind {
             Self::CanvasExport => "Canvas clipboard failed",
             Self::BoardPdfExport => "Board PDF clipboard failed",
             Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
+            Self::StepCapture => "Step capture clipboard failed",
         }
     }
 
@@ -46,6 +50,7 @@ impl ImageOperationKind {
             Self::CanvasExport => "Canvas clipboard failed",
             Self::BoardPdfExport => "Board PDF clipboard failed",
             Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
+            Self::StepCapture => "Step capture clipboard failed",
         }
     }
 
@@ -55,6 +60,7 @@ impl ImageOperationKind {
             Self::CanvasExport => "Canvas export",
             Self::BoardPdfExport => "Board PDF export",
             Self::AllBoardsPdfExport => "All boards PDF export",
+            Self::StepCapture => "Step capture",
         }
     }
 
@@ -98,6 +104,11 @@ impl ImageOperationKind {
                 CaptureError::Cancelled(reason) => {
                     format!("All boards PDF export cancelled: {reason}")
                 }
+                other => other.to_string(),
+            },
+            Self::StepCapture => match err {
+                CaptureError::ImageError(err) => format!("Step capture failed: {err}"),
+                CaptureError::Cancelled(reason) => format!("Step capture cancelled: {reason}"),
                 other => other.to_string(),
             },
         }
@@ -346,6 +357,9 @@ pub struct DesktopBackdropCaptureResult {
     pub stride: i32,
     pub logical_to_image_scale_x: f64,
     pub logical_to_image_scale_y: f64,
+    /// PNG re-encoding of the cropped frame, produced on the capture worker
+    /// only for consumers that embed the frame (step capture).
+    pub encoded_png: Option<Vec<u8>>,
 }
 
 /// Type of screenshot capture to perform.

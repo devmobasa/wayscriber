@@ -1116,6 +1116,10 @@ mappings = [
 - `export_board_pdf_file`
 - `export_all_boards_pdf_file`
 
+**Step capture actions:**
+- `toggle_step_capture` - arm/disarm step capture; disarming jumps to the Steps board for review
+- `capture_step` - capture the screen as the next numbered page on the Steps board (unbound by default; also available from the command palette)
+
 ### `[capture]` - Screenshot Capture
 
 Configures how screenshots are stored and shared.
@@ -1536,6 +1540,10 @@ export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
 export_board_pdf_file = []
 export_all_boards_pdf_file = []
+
+# Step capture: arm the session, then capture one numbered guide page per step
+toggle_step_capture = []
+capture_step = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

@@ -127,6 +127,8 @@ impl KeybindingField {
             | Self::ExportCanvasClipboardAndFile
             | Self::ExportBoardPdfFile
             | Self::ExportAllBoardsPdfFile
+            | Self::ToggleStepCapture
+            | Self::CaptureStep
             | Self::OpenCaptureFolder
             | Self::ToggleFrozenMode
             | Self::ZoomIn

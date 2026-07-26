@@ -111,6 +111,8 @@ pub enum KeybindingField {
     ExportCanvasClipboardAndFile,
     ExportBoardPdfFile,
     ExportAllBoardsPdfFile,
+    ToggleStepCapture,
+    CaptureStep,
     OpenCaptureFolder,
     ToggleFrozenMode,
     ZoomIn,

@@ -5,6 +5,7 @@ use crate::input::state::{Toast, ToastPriority};
 mod backdrop;
 mod barrier;
 mod pdf;
+mod steps;
 
 pub(super) use barrier::OverlayCaptureBarrier;
 
@@ -352,6 +353,7 @@ impl WaylandState {
         log::error!("Failed to submit {}: {error}", operation.saved_log_label());
         self.capture.clear_preflight();
         self.capture.clear_pending_pdf_export();
+        self.capture.clear_pending_step_capture();
         self.show_overlay();
         self.capture.clear_in_progress();
         self.capture.clear_exit_on_success();

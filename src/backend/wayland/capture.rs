@@ -42,6 +42,15 @@ pub(in crate::backend::wayland) struct PendingPdfExport {
     pub save_config: FileSaveConfig,
 }
 
+/// A step capture waiting for its desktop-backdrop frame: the recorded
+/// pointer position becomes the step marker on the appended page.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::backend::wayland) struct PendingStepCapture {
+    pub marker: Option<(i32, i32)>,
+    pub logical_width: i32,
+    pub logical_height: i32,
+}
+
 /// Tracks capture manager state and in-progress flag.
 pub struct CaptureState {
     manager: CaptureManager,
@@ -51,6 +60,7 @@ pub struct CaptureState {
     preflight: CapturePreflight,
     pending_request: Option<CapturePreflightRequest>,
     pending_pdf_export: Option<PendingPdfExport>,
+    pending_step_capture: Option<PendingStepCapture>,
 }
 
 impl CaptureState {
@@ -64,6 +74,7 @@ impl CaptureState {
             preflight: CapturePreflight::None,
             pending_request: None,
             pending_pdf_export: None,
+            pending_step_capture: None,
         }
     }
 
@@ -121,6 +132,22 @@ impl CaptureState {
 
     pub fn clear_pending_pdf_export(&mut self) {
         self.pending_pdf_export = None;
+    }
+
+    pub fn set_pending_step_capture(&mut self, request: PendingStepCapture) {
+        self.pending_step_capture = Some(request);
+    }
+
+    pub fn take_pending_step_capture(&mut self) -> Option<PendingStepCapture> {
+        self.pending_step_capture.take()
+    }
+
+    pub fn has_pending_step_capture(&self) -> bool {
+        self.pending_step_capture.is_some()
+    }
+
+    pub fn clear_pending_step_capture(&mut self) {
+        self.pending_step_capture = None;
     }
 
     /// Marks capture as started.

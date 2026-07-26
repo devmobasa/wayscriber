@@ -445,6 +445,9 @@ pub enum PendingBackendAction {
     Screenshot(Action),
     CanvasExport(Action),
     BoardPdfExport(Action),
+    /// Capture the screen as the next numbered step page while the
+    /// step-capture session is armed.
+    StepCapture,
     ClearSavedToolState,
     EditKeybinding(KeybindingEditRequest),
     /// Persist the top-display preference changed by its keyboard action;

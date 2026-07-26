@@ -134,6 +134,8 @@ impl KeybindingField {
             }
             Self::ExportBoardPdfFile => config.capture.export_board_pdf_file = value,
             Self::ExportAllBoardsPdfFile => config.capture.export_all_boards_pdf_file = value,
+            Self::ToggleStepCapture => config.capture.toggle_step_capture = value,
+            Self::CaptureStep => config.capture.capture_step = value,
             Self::OpenCaptureFolder => config.capture.open_capture_folder = value,
             Self::ToggleFrozenMode => config.zoom.toggle_frozen_mode = value,
             Self::ZoomIn => config.zoom.zoom_in = value,

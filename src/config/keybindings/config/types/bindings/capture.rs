@@ -46,6 +46,10 @@ pub struct CaptureKeybindingsConfig {
 
     #[serde(default = "default_export_all_boards_pdf_file")]
     pub export_all_boards_pdf_file: Vec<String>,
+    #[serde(default = "default_toggle_step_capture")]
+    pub toggle_step_capture: Vec<String>,
+    #[serde(default = "default_capture_step")]
+    pub capture_step: Vec<String>,
 
     #[serde(default = "default_open_capture_folder")]
     pub open_capture_folder: Vec<String>,
@@ -68,6 +72,8 @@ impl Default for CaptureKeybindingsConfig {
             export_canvas_clipboard_and_file: default_export_canvas_clipboard_and_file(),
             export_board_pdf_file: default_export_board_pdf_file(),
             export_all_boards_pdf_file: default_export_all_boards_pdf_file(),
+            toggle_step_capture: default_toggle_step_capture(),
+            capture_step: default_capture_step(),
             open_capture_folder: default_open_capture_folder(),
         }
     }

@@ -109,6 +109,9 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::BoardPdfExport(action) => {
                 state.handle_board_pdf_export_action(action);
             }
+            PendingBackendAction::StepCapture => {
+                state.handle_step_capture_action();
+            }
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
@@ -304,6 +307,9 @@ fn handle_capture_results(state: &mut WaylandState) {
                         crate::capture::ImageOperationKind::AllBoardsPdfExport => {
                             "Boards exported".to_string()
                         }
+                        crate::capture::ImageOperationKind::StepCapture => {
+                            "Step captured".to_string()
+                        }
                     }
                 } else {
                     message_parts.join(" - ")
@@ -334,10 +340,17 @@ fn handle_capture_results(state: &mut WaylandState) {
             }
         }
         CaptureOutcome::DesktopBackdropSuccess(backdrop) => {
-            state.finish_pending_board_pdf_export_with_backdrop(backdrop, exit_after_capture);
+            // The result type carries no consumer tag; the populated pending
+            // slot decides which flow the frame belongs to.
+            if state.capture.has_pending_step_capture() {
+                state.finish_pending_step_capture(backdrop);
+            } else {
+                state.finish_pending_board_pdf_export_with_backdrop(backdrop, exit_after_capture);
+            }
         }
         CaptureOutcome::Failed { operation, message } => {
             state.capture.clear_pending_pdf_export();
+            state.capture.clear_pending_step_capture();
             let friendly_error =
                 if matches!(operation, crate::capture::ImageOperationKind::Screenshot) {
                     friendly_capture_error(&message)
@@ -361,6 +374,7 @@ fn handle_capture_results(state: &mut WaylandState) {
         }
         CaptureOutcome::Cancelled { operation, reason } => {
             state.capture.clear_pending_pdf_export();
+            state.capture.clear_pending_step_capture();
             info!("{} cancelled: {}", operation.saved_log_label(), reason);
         }
     }
@@ -376,6 +390,7 @@ fn handle_capture_manager_failure(
 ) {
     state.capture.clear_preflight();
     state.capture.clear_pending_pdf_export();
+    state.capture.clear_pending_step_capture();
     state.show_overlay();
     state.capture.clear_in_progress();
     state.capture.clear_exit_on_success();

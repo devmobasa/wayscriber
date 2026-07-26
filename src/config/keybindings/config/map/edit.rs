@@ -167,6 +167,8 @@ define_action_binding_accessors! {
     ExportCanvasClipboardAndFile => capture.export_canvas_clipboard_and_file,
     ExportBoardPdfFile => capture.export_board_pdf_file,
     ExportAllBoardsPdfFile => capture.export_all_boards_pdf_file,
+    ToggleStepCapture => capture.toggle_step_capture,
+    CaptureStep => capture.capture_step,
     OpenCaptureFolder => capture.open_capture_folder,
     ToggleFrozenMode => zoom.toggle_frozen_mode,
     ZoomIn => zoom.zoom_in,
