@@ -589,6 +589,11 @@ Canvas export commands are available in the command palette and keybindings. `ex
 - **Quick reference:** <kbd>Shift+F1</kbd>
 - **Command palette:** <kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd> (search `monitor` or `display` for output actions)
 - **About window:** `wayscriber --about`
+- **Check for a newer release:** `wayscriber --check-update` (Wayscriber never installs
+  updates itself; it points at the instructions for your install method). Turn the
+  background check off with `[updates] check = false` or
+  `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` — see
+  https://wayscriber.com/docs/getting-started/updating.html
 - **Full docs:** https://wayscriber.com/docs/
 
 ---
