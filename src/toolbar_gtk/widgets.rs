@@ -280,6 +280,21 @@ fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
     }
 }
 
+/// Whether a focus-widget change should drop the toolbar window's keyboard
+/// mode. Entries keep it: the editable hex field needs the keys it captures.
+/// Focus inside a popover keeps it too, for a different reason: the popover
+/// is an xdg_popup holding a keyboard grab on its own surface. Dropping the
+/// parent layer surface's keyboard mode there makes the compositor pull
+/// keyboard focus from the grabbing popup between a click's press and
+/// release, and that broken grab stalls the release — a Settings checkbox
+/// then takes seconds to toggle. The grab already returns keyboard focus to
+/// the compositor when the popover closes.
+fn focus_change_releases_keyboard(focus: &gtk4::Widget) -> bool {
+    let entry_focused = focus.ancestor(gtk4::Entry::static_type()).is_some();
+    let popover_focused = focus.ancestor(gtk4::Popover::static_type()).is_some();
+    !entry_focused && !popover_focused
+}
+
 /// Drop keyboard ownership when GTK focuses any non-entry control. Buttons
 /// also release from their clicked handler because they are non-focusable and
 /// may leave a previously focused entry as the logical focus widget.
@@ -288,9 +303,7 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &Fe
         let Some(focus) = gtk4::prelude::GtkWindowExt::focus(window) else {
             return;
         };
-        let entry_focused =
-            focus.is::<gtk4::Entry>() || focus.ancestor(gtk4::Entry::static_type()).is_some();
-        if !entry_focused {
+        if focus_change_releases_keyboard(&focus) {
             release_window_keyboard_focus(window);
         }
     });
@@ -679,52 +692,4 @@ pub(super) fn rounded_rect_path(ctx: &cairo::Context, x: f64, y: f64, w: f64, h:
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn gtk_feedback_carries_rebind_state_once() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let sender = FeedbackSender::new(tx);
-        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
-        sender.capture_click_modifiers(
-            gtk4::gdk::ModifierType::CONTROL_MASK | gtk4::gdk::ModifierType::SHIFT_MASK,
-        );
-        send_event(&sender, ToolbarEvent::Undo);
-        send_event(&sender, ToolbarEvent::Redo);
-
-        assert_eq!(
-            rx.recv().unwrap(),
-            GtkToolbarFeedback::Event {
-                event: ToolbarEvent::Undo,
-                rebind_requested: true,
-            }
-        );
-        assert_eq!(
-            rx.recv().unwrap(),
-            GtkToolbarFeedback::Event {
-                event: ToolbarEvent::Redo,
-                rebind_requested: false,
-            }
-        );
-    }
-
-    #[test]
-    fn backend_modifier_latch_survives_focus_reset_during_click() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let sender = FeedbackSender::new(tx);
-        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
-        sender.capture_click_modifiers(gtk4::gdk::ModifierType::empty());
-        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, false);
-
-        send_event(&sender, ToolbarEvent::Undo);
-
-        assert_eq!(
-            rx.recv().unwrap(),
-            GtkToolbarFeedback::Event {
-                event: ToolbarEvent::Undo,
-                rebind_requested: true,
-            }
-        );
-    }
-}
+mod tests;
