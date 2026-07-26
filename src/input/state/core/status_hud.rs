@@ -306,6 +306,7 @@ impl InputState {
             StatusHudSegmentKind::Help => (true, Some(Action::ToggleHelp)),
             StatusHudSegmentKind::Toolbar => (true, Some(Action::ToggleToolbar)),
             StatusHudSegmentKind::About => (true, Some(Action::OpenAbout)),
+            StatusHudSegmentKind::Steps => (true, Some(Action::ToggleStepCapture)),
         }
     }
 }

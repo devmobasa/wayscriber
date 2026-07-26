@@ -65,6 +65,8 @@ pub enum StatusHudSegmentKind {
     Tool,
     /// Active tool size chip: opens the radial menu at the pointer.
     Size,
+    /// Armed step-capture chip: click disarms and reviews the Steps board.
+    Steps,
     /// Help hint chip: toggles the help overlay.
     Help,
     /// Hidden-toolbar hint chip (shown only while no toolbar surface is
@@ -533,6 +535,18 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
     // deliberate toolbar-less setups; suppressed while presenter mode owns
     // toolbar visibility (the toggle is a no-op there); shed first when the
     // width budget binds.
+    // Armed step-capture indicator: a mode this consequential (every capture
+    // press appends a page) must be visible whenever it is on. Dynamic, not
+    // an authored content item, so it ignores the per-item preferences;
+    // clicking it disarms and jumps to the Steps board for review.
+    if input_state.step_capture_armed() {
+        pieces.push(StatusHudPiece::text(
+            format!("REC step {}", input_state.next_step_number()),
+            Some(StatusHudSegmentKind::Steps),
+            false,
+        ));
+    }
+
     if input_state.show_toolbar_hint
         && !(input_state.toolbar_visible()
             || input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
@@ -1274,6 +1288,24 @@ mod tests {
                 .iter()
                 .any(|piece| piece.text.as_deref() == Some(label))
         );
+    }
+
+    #[test]
+    fn armed_step_capture_shows_a_mandatory_chip_regardless_of_item_prefs() {
+        let mut state = make_state();
+        for item in StatusBarItem::ALL {
+            state.set_status_bar_item_visible(item, false);
+        }
+        assert!(build_cluster_pieces(&state).is_empty());
+
+        assert!(state.toggle_step_capture());
+        let pieces = build_cluster_pieces(&state);
+        let chip = pieces
+            .iter()
+            .find(|piece| piece.kind == Some(StatusHudSegmentKind::Steps))
+            .expect("armed session shows the steps chip");
+        assert_eq!(chip.text.as_deref(), Some("REC step 1"));
+        assert!(!chip.optional, "a mode indicator must not be width-shed");
     }
 
     #[test]
