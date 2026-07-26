@@ -50,6 +50,7 @@ pub mod ui;
 pub(crate) mod ui_text;
 #[cfg(unix)]
 mod unix_signals;
+mod update_check;
 pub mod util;
 #[cfg(feature = "portal")]
 pub(crate) mod zbus_stream;

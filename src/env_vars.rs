@@ -13,6 +13,8 @@ pub const NO_TRAY_ENV: &str = "WAYSCRIBER_NO_TRAY";
 pub(crate) const OVERLAY_CHILD_GENERATION_ENV: &str = "WAYSCRIBER_OVERLAY_CHILD_GENERATION";
 pub(crate) const DAEMON_WATCHDOG_FD_ENV: &str = "WAYSCRIBER_INTERNAL_DAEMON_WATCHDOG_FD";
 pub const CATALOG_HOOKS_TEST_ENV: &str = "WAYSCRIBER_ENABLE_CATALOG_HOOKS_IN_TESTS";
+/// Disables the periodic update check regardless of `[updates] check`.
+pub const DISABLE_UPDATE_CHECK_ENV: &str = "WAYSCRIBER_DISABLE_UPDATE_CHECK";
 pub const FORCE_INLINE_TOOLBARS_ENV: &str = "WAYSCRIBER_FORCE_INLINE_TOOLBARS";
 /// Overrides `ui.toolbar.backend` ("auto", "gtk", or "builtin").
 pub const TOOLBAR_BACKEND_ENV: &str = "WAYSCRIBER_TOOLBAR_BACKEND";
@@ -43,6 +45,7 @@ pub const XDG_CURRENT_DESKTOP_ENV: &str = "XDG_CURRENT_DESKTOP";
 pub const XDG_SESSION_DESKTOP_ENV: &str = "XDG_SESSION_DESKTOP";
 pub const DESKTOP_SESSION_ENV: &str = "DESKTOP_SESSION";
 pub const XDG_ACTIVATION_TOKEN_ENV: &str = "XDG_ACTIVATION_TOKEN";
+pub const XDG_CACHE_HOME_ENV: &str = "XDG_CACHE_HOME";
 pub const XDG_CONFIG_HOME_ENV: &str = "XDG_CONFIG_HOME";
 pub const XDG_DATA_HOME_ENV: &str = "XDG_DATA_HOME";
 pub const XDG_PICTURES_DIR_ENV: &str = "XDG_PICTURES_DIR";

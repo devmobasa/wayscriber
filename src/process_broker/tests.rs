@@ -71,6 +71,19 @@ fn configurator_manifest_preserves_arbitrary_explicit_override_name() {
 }
 
 #[test]
+fn update_fetcher_manifest_allows_only_curl_and_wget() {
+    for program in ["/usr/bin/curl", "/usr/bin/wget"] {
+        let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+        super::manifest::validate(HelperKind::UpdateFetcher, &program, &[], &[], &[]).unwrap();
+    }
+
+    let unrelated = super::wire::OsWire::from_os(OsStr::new("/usr/bin/sh")).unwrap();
+    assert!(
+        super::manifest::validate(HelperKind::UpdateFetcher, &unrelated, &[], &[], &[]).is_err()
+    );
+}
+
+#[test]
 fn prelock_broker_runs_bounded_helpers_and_owns_reaping() {
     let guard = start_for_runtime().unwrap();
     let output = guard
@@ -249,6 +262,29 @@ fn broker_rejects_output_that_exceeds_the_requested_cap() {
         4,
     );
     assert!(result.is_err(), "broker returned silently truncated output");
+}
+
+#[test]
+fn broker_stops_an_endless_stream_when_it_reaches_the_output_cap() {
+    let guard = start_for_runtime().unwrap();
+    let started = Instant::now();
+    let result = guard.broker().run(
+        HelperKind::TestShell,
+        OsStr::new("sh"),
+        [
+            OsStr::new("-c"),
+            OsStr::new("while :; do printf 1234567890; done"),
+        ],
+        Vec::new(),
+        Duration::from_secs(5),
+        1024,
+    );
+
+    assert!(result.is_err(), "broker accepted an endless response");
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "broker waited for the operation timeout instead of stopping at the cap"
+    );
 }
 
 #[test]

@@ -37,6 +37,7 @@ pub(crate) enum HelperKind {
     Configurator,
     About,
     DesktopOpen,
+    UpdateFetcher,
     #[cfg(test)]
     TestSleep,
     #[cfg(test)]

@@ -68,6 +68,7 @@ pub(super) fn validate(
                 |configured| configured == program,
             ),
         HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open" | "cmd"),
+        HelperKind::UpdateFetcher => matches!(basename.as_str(), "curl" | "wget"),
         #[cfg(test)]
         HelperKind::TestSleep => basename == "sleep",
         #[cfg(test)]

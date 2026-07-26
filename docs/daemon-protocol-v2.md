@@ -36,11 +36,12 @@ discriminator fields never fall back to the permissive legacy parser when strict
 
 ## Process ownership
 
-Daemon and active-overlay runs create an authenticated process broker before acquiring a
-Wayscriber singleton lock. Runtime code uses closed helper kinds with bounded arguments,
-environment changes, input, output, and deadlines. The broker alone creates and reaps runtime
-children. The daemon retains an opaque broker handle, generation, display-only PID, and pidfd for
-each overlay child; tray and shortcut producers never carry a PID.
+Daemon, active-overlay, About, and explicit update-check runs create an authenticated process
+broker before acquiring locks or starting threads. Runtime code uses closed helper kinds with
+bounded arguments, environment changes, input, output, and deadlines. The broker alone creates and
+reaps runtime children, including the update check's allowlisted `curl`/`wget` client. The daemon
+retains an opaque broker handle, generation, display-only PID, and pidfd for each overlay child;
+tray and shortcut producers never carry a PID.
 
 Each broker also owns an out-of-band shutdown socket. Closing or signaling that channel preempts
 an active bounded helper, kills its process group, and reaps owned children without waiting for the
