@@ -36,6 +36,7 @@ impl InputState {
         if visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden {
             self.toolbar_top_display_mode = TopDisplayMode::Full;
         }
+        self.refresh_status_hud_layout();
         self.needs_redraw = true;
         true
     }
@@ -293,6 +294,7 @@ impl InputState {
     /// the strip's menus, like minimize does.
     pub(crate) fn set_top_display_mode(&mut self, mode: TopDisplayMode) {
         self.toolbar_top_display_mode = mode;
+        self.refresh_status_hud_layout();
         match mode {
             TopDisplayMode::Full => {
                 self.show_top_strip_surface();

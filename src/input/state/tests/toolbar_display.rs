@@ -213,7 +213,10 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
         state.status_hud_layout().is_some(),
         "enabling content refreshes an empty cache before the next frame"
     );
-    assert!(state.status_hud_effectively_visible());
+    assert!(
+        state.status_hud_effectively_visible(),
+        "policy sees the synchronously refreshed measured cache"
+    );
     assert!(state.set_status_bar_item_visible(StatusBarItem::About, false));
 
     state.handle_action(Action::ToggleToolbar);
@@ -223,6 +226,36 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     assert_eq!(
         toast.action.as_ref().map(|action| action.action),
         Some(Action::ToggleToolbar)
+    );
+}
+
+/// An About-only HUD on an 80px-wide output is shed entirely by the width
+/// budget (`shedding_the_last_optional_piece_does_not_leave_an_empty_pill`).
+/// The policy predicate must agree immediately after the content toggle, so a
+/// floating badge or all-chrome recovery warning is never suppressed for a
+/// HUD the next frame will not draw.
+#[test]
+fn width_shed_content_never_reports_an_effectively_visible_hud() {
+    let mut state = create_test_input_state();
+    for item in StatusBarItem::ALL {
+        state.set_status_bar_item_visible(item, false);
+    }
+    state.update_status_hud_layout(
+        StatusPosition::BottomLeft,
+        &StatusBarStyle::default(),
+        80,
+        60,
+    );
+    assert!(state.status_hud_layout().is_none());
+
+    assert!(state.set_status_bar_item_visible(StatusBarItem::About, true));
+    assert!(
+        state.status_hud_layout().is_none(),
+        "the narrow output sheds the About-only HUD entirely"
+    );
+    assert!(
+        !state.status_hud_effectively_visible(),
+        "policy must not report a HUD the width budget has shed"
     );
 }
 

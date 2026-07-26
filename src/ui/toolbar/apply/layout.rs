@@ -227,7 +227,7 @@ impl InputState {
         self.break_focus_mode();
         if self.show_status_bar != show {
             self.show_status_bar = show;
-            self.dirty_tracker.mark_full();
+            self.refresh_status_hud_layout();
             self.needs_redraw = true;
             true
         } else {
@@ -241,7 +241,6 @@ impl InputState {
         }
         self.status_bar_interactive = interactive;
         self.status_hud_hover = None;
-        self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
     }
