@@ -1,8 +1,5 @@
 //! Shared widget constructors for the GTK toolbars.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 use gtk4_layer_shell::{KeyboardMode, LayerShell};
 
@@ -20,102 +17,53 @@ pub(super) use crate::ui::theme::toolbar::{COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_H
 /// COLOR_SEGMENT_ACTIVE).
 const COLOR_TRACK_FILL: Rgba = rgba(ACCENT_RGB, 0.55);
 
-/// Sender the view hands to every control closure. Clones share the configured
-/// rebind chord and modifier state captured from the actual GTK click.
+/// Sender the view hands to every control closure. Clones publish ordered
+/// intents to the one feedback-mailbox owner; no widget owns a state mirror.
 #[derive(Clone)]
 pub(super) struct FeedbackSender {
-    sink: Rc<dyn FeedbackSink>,
-    rebind_modifier: Rc<Cell<ToolbarRebindModifier>>,
-    backend_rebind_active: Rc<Cell<bool>>,
-    click_rebind_requested: Rc<Cell<bool>>,
-    click_in_progress: Rc<Cell<bool>>,
-    /// Shift state captured from the current GTK click; consumed by
-    /// `send_event` to upgrade Clear to its instant (no-toast) variant.
-    click_shift: Rc<Cell<bool>>,
+    publisher: FeedbackPublisher,
 }
 
-pub(super) trait FeedbackSink {
-    fn publish(&self, feedback: GtkToolbarFeedback) -> bool;
-}
+impl FeedbackSender {
+    pub(super) fn new(publisher: FeedbackPublisher) -> Self {
+        Self { publisher }
+    }
 
-impl FeedbackSink for FeedbackPublisher {
-    fn publish(&self, feedback: GtkToolbarFeedback) -> bool {
-        self.publish(feedback).is_ok()
+    pub(super) fn set_rebind_state(
+        &self,
+        modifier: ToolbarRebindModifier,
+        active: bool,
+    ) -> Result<(), ()> {
+        self.publisher
+            .set_rebind_state(modifier, active)
+            .map_err(|_| ())
+    }
+
+    fn capture_click_modifiers(&self, state: gtk4::gdk::ModifierType) {
+        let _ = self.publisher.capture_click_modifiers(
+            state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
+            state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
+            state.contains(gtk4::gdk::ModifierType::ALT_MASK),
+        );
+    }
+
+    fn finish_pointer_click(&self) {
+        let _ = self.publisher.finish_pointer_click();
+    }
+
+    pub(super) fn send(&self, feedback: GtkToolbarFeedback) -> Result<(), ()> {
+        self.publisher.publish(feedback).map_err(|_| ())
     }
 }
 
 #[cfg(test)]
-impl FeedbackSink for std::sync::mpsc::Sender<GtkToolbarFeedback> {
-    fn publish(&self, feedback: GtkToolbarFeedback) -> bool {
-        self.send(feedback).is_ok()
-    }
-}
-
-impl FeedbackSender {
-    pub(super) fn new(sink: impl FeedbackSink + 'static) -> Self {
-        Self {
-            sink: Rc::new(sink),
-            rebind_modifier: Rc::new(Cell::new(ToolbarRebindModifier::default())),
-            backend_rebind_active: Rc::new(Cell::new(false)),
-            click_rebind_requested: Rc::new(Cell::new(false)),
-            click_in_progress: Rc::new(Cell::new(false)),
-            click_shift: Rc::new(Cell::new(false)),
-        }
-    }
-
-    pub(super) fn set_rebind_state(&self, modifier: ToolbarRebindModifier, active: bool) {
-        self.rebind_modifier.set(modifier);
-        self.backend_rebind_active.set(active);
-        if active {
-            self.click_rebind_requested.set(true);
-        } else if !self.click_in_progress.get() {
-            self.click_rebind_requested.set(false);
-        }
-    }
-
-    fn capture_click_modifiers(&self, state: gtk4::gdk::ModifierType) {
-        self.click_in_progress.set(true);
-        self.click_shift
-            .set(state.contains(gtk4::gdk::ModifierType::SHIFT_MASK));
-        if self.rebind_modifier.get().matches(
-            state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
-            state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
-            state.contains(gtk4::gdk::ModifierType::ALT_MASK),
-        ) {
-            self.click_rebind_requested.set(true);
-        }
-    }
-
-    fn finish_pointer_click(&self) {
-        self.click_in_progress.set(false);
-        self.click_shift.set(false);
-        if !self.backend_rebind_active.get() {
-            self.click_rebind_requested.set(false);
-        }
-    }
-
-    pub(super) fn send(&self, feedback: GtkToolbarFeedback) -> Result<(), ()> {
-        self.sink.publish(feedback).then_some(()).ok_or(())
-    }
+pub(super) fn test_feedback_channel() -> (FeedbackSender, super::bridge::TestMailbox) {
+    let mailbox = super::bridge::publisher_channel();
+    (FeedbackSender::new(mailbox.publisher()), mailbox)
 }
 
 pub(super) fn send_event(sender: &FeedbackSender, event: ToolbarEvent) {
-    let rebind_requested = sender.click_rebind_requested.replace(false);
-    let shift_click = sender.click_shift.replace(false);
-    sender.click_in_progress.set(false);
-    // GTK runs on its own Wayland connection, so the backend cannot read
-    // this click's modifiers; resolve the Shift = instant-clear upgrade at
-    // capture time and forward the resolved variant.
-    let event = match event {
-        ToolbarEvent::ClearCanvas { instant } => ToolbarEvent::ClearCanvas {
-            instant: instant || shift_click,
-        },
-        other => other,
-    };
-    let _ = sender.send(GtkToolbarFeedback::Event {
-        event,
-        rebind_requested,
-    });
+    let _ = sender.publisher.publish_event(event);
 }
 
 /// Secondary-click recolor gesture for a quick-color swatch: right-clicking
@@ -328,36 +276,32 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &Fe
 
     let drag = gtk4::GestureDrag::new();
     drag.set_propagation_phase(gtk4::PropagationPhase::Capture);
-    let entry_drag = Rc::new(Cell::new(false));
-    let begin_entry_drag = entry_drag.clone();
     let weak = window.downgrade();
-    drag.connect_drag_begin(move |_, x, y| {
-        let entry_target = weak
-            .upgrade()
-            .and_then(|window| window.pick(x, y, gtk4::PickFlags::DEFAULT))
-            .is_some_and(|target| {
-                target.is::<gtk4::Entry>() || target.ancestor(gtk4::Entry::static_type()).is_some()
-            });
-        begin_entry_drag.set(entry_target);
-    });
-    let end_entry_drag = entry_drag.clone();
-    let weak = window.downgrade();
-    drag.connect_drag_end(move |_, _, _| {
-        if !end_entry_drag.replace(false)
-            && let Some(window) = weak.upgrade()
+    drag.connect_drag_end(move |gesture, _, _| {
+        if let Some(window) = weak.upgrade()
+            && !gesture_started_on_entry(gesture, &window)
         {
             release_window_keyboard_focus(&window);
         }
     });
     let weak = window.downgrade();
-    drag.connect_cancel(move |_, _| {
-        if !entry_drag.replace(false)
-            && let Some(window) = weak.upgrade()
+    drag.connect_cancel(move |gesture, _| {
+        if let Some(window) = weak.upgrade()
+            && !gesture_started_on_entry(gesture, &window)
         {
             release_window_keyboard_focus(&window);
         }
     });
     window.add_controller(drag);
+}
+
+fn gesture_started_on_entry(gesture: &gtk4::GestureDrag, window: &gtk4::Window) -> bool {
+    gesture
+        .start_point()
+        .and_then(|(x, y)| window.pick(x, y, gtk4::PickFlags::DEFAULT))
+        .is_some_and(|target| {
+            target.is::<gtk4::Entry>() || target.ancestor(gtk4::Entry::static_type()).is_some()
+        })
 }
 
 pub(super) struct IconButton {
@@ -457,8 +401,6 @@ pub(super) fn set_active_class(widget: &impl IsA<gtk4::Widget>, active: bool) {
 /// Cairo exactly like the built-in bars draw them.
 pub(super) struct SwatchButton {
     pub(super) button: gtk4::Button,
-    color: Rc<Cell<(f64, f64, f64, f64)>>,
-    selected: Rc<Cell<bool>>,
     area: gtk4::DrawingArea,
 }
 
@@ -467,64 +409,55 @@ impl SwatchButton {
         let button = sized_button(diameter, diameter);
         button.add_css_class("swatch");
         button.set_tooltip_text(Some(tooltip));
-        let color_cell = Rc::new(Cell::new((color.r, color.g, color.b, color.a)));
-        let selected_cell = Rc::new(Cell::new(selected));
         let area = gtk4::DrawingArea::new();
         let size = diameter.round() as i32;
         area.set_content_width(size);
         area.set_content_height(size);
         area.set_can_target(false);
-        let draw_color = color_cell.clone();
-        let draw_selected = selected_cell.clone();
-        area.set_draw_func(move |_, ctx, width, height| {
-            let size = width.min(height) as f64;
-            let (r, g, b, a) = draw_color.get();
-            // Rounded square with a subtle inner hairline, matching the
-            // built-in bars. The fill is inset so the selected accent ring
-            // (2px stroke, ~2px gap) fits inside the drawing area. A
-            // translucent color sits on the checkerboard, as the built-in
-            // bars paint it.
-            let swatch_path = |ctx: &cairo::Context| {
-                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0)
-            };
-            crate::ui::checkerboard_behind(ctx, a, swatch_path);
-            ctx.set_source_rgba(r, g, b, a);
-            swatch_path(ctx);
-            let _ = ctx.fill();
-            set_color(ctx, COLOR_SWATCH_HAIRLINE);
-            ctx.set_line_width(1.0);
-            rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
-            let _ = ctx.stroke();
-            if draw_selected.get() {
-                set_color(ctx, super::css::ACCENT);
-                ctx.set_line_width(2.0);
-                rounded_rect_path(ctx, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
-                let _ = ctx.stroke();
-            }
-        });
+        set_active_class(&area, selected);
+        install_swatch_draw(&area, color);
         button.set_child(Some(&area));
-        Self {
-            button,
-            color: color_cell,
-            selected: selected_cell,
-            area,
-        }
+        Self { button, area }
     }
 
     pub(super) fn set_selected(&self, selected: bool) {
-        if self.selected.get() != selected {
-            self.selected.set(selected);
+        if self.area.has_css_class("active") != selected {
+            set_active_class(&self.area, selected);
             self.area.queue_draw();
         }
     }
 
     pub(super) fn set_color(&self, color: Color) {
-        let value = (color.r, color.g, color.b, color.a);
-        if self.color.get() != value {
-            self.color.set(value);
-            self.area.queue_draw();
-        }
+        install_swatch_draw(&self.area, color);
+        self.area.queue_draw();
     }
+}
+
+fn install_swatch_draw(area: &gtk4::DrawingArea, color: Color) {
+    area.set_draw_func(move |area, ctx, width, height| {
+        let size = width.min(height) as f64;
+        let (r, g, b, a) = (color.r, color.g, color.b, color.a);
+        // Rounded square with a subtle inner hairline, matching the built-in
+        // bars. The fill is inset so the selected accent ring (2px stroke,
+        // ~2px gap) fits inside the drawing area. A translucent color sits on
+        // the checkerboard, as the built-in bars paint it.
+        let swatch_path =
+            |ctx: &cairo::Context| rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+        crate::ui::checkerboard_behind(ctx, a, swatch_path);
+        ctx.set_source_rgba(r, g, b, a);
+        swatch_path(ctx);
+        let _ = ctx.fill();
+        set_color(ctx, COLOR_SWATCH_HAIRLINE);
+        ctx.set_line_width(1.0);
+        rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
+        let _ = ctx.stroke();
+        if area.has_css_class("active") {
+            set_color(ctx, super::css::ACCENT);
+            ctx.set_line_width(2.0);
+            rounded_rect_path(ctx, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
+            let _ = ctx.stroke();
+        }
+    });
 }
 
 /// Custom slider matching the built-in track + knob (a `DrawingArea` with
@@ -533,16 +466,9 @@ impl SwatchButton {
 pub(super) struct SliderRow {
     pub(super) root: gtk4::Box,
     value_label: gtk4::Label,
-    area: gtk4::DrawingArea,
-    state: Rc<SliderState>,
-    format: fn(f64) -> String,
-}
-
-pub(super) struct SliderState {
-    min: f64,
-    max: f64,
-    value: Cell<f64>,
-    dragging: Cell<bool>,
+    adjustment: gtk4::Adjustment,
+    drag: gtk4::GestureDrag,
+    feedback_handler: gtk4::glib::SignalHandlerId,
 }
 
 impl SliderRow {
@@ -555,26 +481,22 @@ impl SliderRow {
         on_change: impl Fn(f64) + 'static,
     ) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Horizontal, (6.0 * scale).round() as i32);
-        let state = Rc::new(SliderState {
-            min,
-            max,
-            value: Cell::new(initial.clamp(min, max)),
-            dragging: Cell::new(false),
-        });
+        let adjustment = gtk4::Adjustment::new(initial.clamp(min, max), min, max, 0.0, 0.0, 0.0);
 
         let area = gtk4::DrawingArea::new();
         area.set_content_height((16.0 * scale).round() as i32);
         area.set_hexpand(true);
         area.set_valign(gtk4::Align::Center);
-        let draw_state = state.clone();
+        let draw_adjustment = adjustment.clone();
         area.set_draw_func(move |_, ctx, width, height| {
             let w = width as f64;
             let h = height as f64;
             let track_h = (h * 0.5).min(8.0);
             let track_y = (h - track_h) / 2.0;
             let radius = track_h / 2.0;
-            let t = ((draw_state.value.get() - draw_state.min) / (draw_state.max - draw_state.min))
-                .clamp(0.0, 1.0);
+            let t = ((draw_adjustment.value() - draw_adjustment.lower())
+                / (draw_adjustment.upper() - draw_adjustment.lower()))
+            .clamp(0.0, 1.0);
             // Track
             rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
             set_color(ctx, super::css::TRACK_BACKGROUND);
@@ -591,49 +513,42 @@ impl SliderRow {
             let _ = ctx.fill();
         });
 
-        let value_label = gtk4::Label::new(Some(&format(initial)));
+        let value_label = gtk4::Label::new(Some(&format(adjustment.value())));
         value_label.set_width_chars(5);
         value_label.set_xalign(1.0);
 
+        let presentation_area = area.clone();
+        let presentation_label = value_label.clone();
+        adjustment.connect_value_changed(move |adjustment| {
+            presentation_label.set_text(&format(adjustment.value()));
+            presentation_area.queue_draw();
+        });
+        let feedback_handler = adjustment.connect_value_changed(move |adjustment| {
+            on_change(adjustment.value());
+        });
+
         let drag = gtk4::GestureDrag::new();
-        let drag_state = state.clone();
-        let drag_area = area.clone();
-        let start_value = Rc::new(Cell::new((0.0f64, 0.0f64)));
-        let begin_start = start_value.clone();
-        let begin_label = value_label.clone();
+        let begin_adjustment = adjustment.clone();
         drag.connect_drag_begin(move |gesture, x, _| {
-            drag_state.dragging.set(true);
             // Jump the knob to the pressed position, like the built-in track.
             let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
             let t = (x / width).clamp(0.0, 1.0);
-            let value = drag_state.min + t * (drag_state.max - drag_state.min);
-            drag_state.value.set(value);
-            begin_label.set_text(&format(value));
-            begin_start.set((x, value));
-            drag_area.queue_draw();
+            let value = begin_adjustment.lower()
+                + t * (begin_adjustment.upper() - begin_adjustment.lower());
+            begin_adjustment.set_value(value);
         });
-        let update_state = state.clone();
-        let update_area = area.clone();
-        let update_start = start_value.clone();
-        let update_label = value_label.clone();
-        let change = Rc::new(on_change);
-        let update_change = change.clone();
+        let update_adjustment = adjustment.clone();
         drag.connect_drag_update(move |gesture, dx, _| {
+            let Some((start_x, _)) = gesture.start_point() else {
+                return;
+            };
             let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
-            let (sx, _) = update_start.get();
-            let t = ((sx + dx) / width).clamp(0.0, 1.0);
-            let value = update_state.min + t * (update_state.max - update_state.min);
-            update_state.value.set(value);
-            update_label.set_text(&format(value));
-            update_area.queue_draw();
-            update_change(value);
+            let t = ((start_x + dx) / width).clamp(0.0, 1.0);
+            let value = update_adjustment.lower()
+                + t * (update_adjustment.upper() - update_adjustment.lower());
+            update_adjustment.set_value(value);
         });
-        let end_state = state.clone();
-        let end_change = change.clone();
-        drag.connect_drag_end(move |_, _, _| {
-            end_state.dragging.set(false);
-            end_change(end_state.value.get());
-        });
+        let drag_owner = drag.clone();
         area.add_controller(drag);
 
         root.append(&area);
@@ -641,9 +556,9 @@ impl SliderRow {
         Self {
             root,
             value_label,
-            area,
-            state,
-            format,
+            adjustment,
+            drag: drag_owner,
+            feedback_handler,
         }
     }
 
@@ -655,15 +570,15 @@ impl SliderRow {
 
     /// Applies a backend value unless the user is mid-drag.
     pub(super) fn set_value(&self, value: f64) {
-        if self.state.dragging.get() {
+        if self.drag.is_active() {
             return;
         }
-        let clamped = value.clamp(self.state.min, self.state.max);
-        if (self.state.value.get() - clamped).abs() > f64::EPSILON {
-            self.state.value.set(clamped);
-            self.area.queue_draw();
+        let clamped = value.clamp(self.adjustment.lower(), self.adjustment.upper());
+        if (self.adjustment.value() - clamped).abs() > f64::EPSILON {
+            self.adjustment.block_signal(&self.feedback_handler);
+            self.adjustment.set_value(clamped);
+            self.adjustment.unblock_signal(&self.feedback_handler);
         }
-        self.value_label.set_text(&(self.format)(clamped));
     }
 }
 
@@ -684,9 +599,11 @@ mod tests {
 
     #[test]
     fn gtk_feedback_carries_rebind_state_once() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let sender = FeedbackSender::new(tx);
-        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
+        let (sender, mailbox) = test_feedback_channel();
+        assert_eq!(
+            sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true),
+            Ok(())
+        );
         sender.capture_click_modifiers(
             gtk4::gdk::ModifierType::CONTROL_MASK | gtk4::gdk::ModifierType::SHIFT_MASK,
         );
@@ -694,14 +611,14 @@ mod tests {
         send_event(&sender, ToolbarEvent::Redo);
 
         assert_eq!(
-            rx.recv().unwrap(),
+            mailbox.receive_one().expect("first click feedback"),
             GtkToolbarFeedback::Event {
                 event: ToolbarEvent::Undo,
                 rebind_requested: true,
             }
         );
         assert_eq!(
-            rx.recv().unwrap(),
+            mailbox.receive_one().expect("second click feedback"),
             GtkToolbarFeedback::Event {
                 event: ToolbarEvent::Redo,
                 rebind_requested: false,
@@ -711,19 +628,65 @@ mod tests {
 
     #[test]
     fn backend_modifier_latch_survives_focus_reset_during_click() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let sender = FeedbackSender::new(tx);
-        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
+        let (sender, mailbox) = test_feedback_channel();
+        assert_eq!(
+            sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true),
+            Ok(())
+        );
         sender.capture_click_modifiers(gtk4::gdk::ModifierType::empty());
-        sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, false);
+        assert_eq!(
+            sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, false),
+            Ok(())
+        );
 
         send_event(&sender, ToolbarEvent::Undo);
 
         assert_eq!(
-            rx.recv().unwrap(),
+            mailbox.receive_one().expect("click feedback"),
             GtkToolbarFeedback::Event {
                 event: ToolbarEvent::Undo,
                 rebind_requested: true,
+            }
+        );
+    }
+
+    #[test]
+    fn captured_shift_resolves_clear_to_the_instant_variant() {
+        let (sender, mailbox) = test_feedback_channel();
+        sender.capture_click_modifiers(gtk4::gdk::ModifierType::SHIFT_MASK);
+
+        send_event(&sender, ToolbarEvent::ClearCanvas { instant: false });
+
+        assert_eq!(
+            mailbox.receive_one().expect("shift-click feedback"),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::ClearCanvas { instant: true },
+                rebind_requested: false,
+            }
+        );
+    }
+
+    #[test]
+    fn cancelled_pointer_click_clears_the_one_shot_rebind_latch() {
+        let (sender, mailbox) = test_feedback_channel();
+        assert_eq!(
+            sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true),
+            Ok(())
+        );
+        sender.capture_click_modifiers(gtk4::gdk::ModifierType::empty());
+        assert_eq!(
+            sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, false),
+            Ok(())
+        );
+        sender.finish_pointer_click();
+
+        send_event(&sender, ToolbarEvent::Undo);
+
+        assert_eq!(
+            mailbox.receive_one().expect("post-cancel feedback"),
+            GtkToolbarFeedback::Event {
+                event: ToolbarEvent::Undo,
+                rebind_requested: false,
             }
         );
     }

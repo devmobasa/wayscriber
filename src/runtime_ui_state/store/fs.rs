@@ -5,20 +5,14 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::runtime_ui_state::{RuntimeStateFileIdentity, RuntimeStateResolvedParent};
-
-static NEXT_SIBLING_ID: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Debug, Clone)]
-pub(super) struct PinnedParent {
-    inner: Arc<PinnedParentInner>,
-}
+use super::RuntimeStateWriterNamespace;
+use crate::runtime_ui_state::{
+    RuntimeStateFileIdentity, RuntimeStateResolvedParent, SourceMutationId,
+};
 
 #[derive(Debug)]
-struct PinnedParentInner {
+pub(super) struct PinnedParent {
     file: File,
     observed_path: PathBuf,
     identity: RuntimeStateFileIdentity,
@@ -43,11 +37,9 @@ impl PinnedParent {
             return Err(io::Error::other("runtime-state parent identity changed"));
         }
         Ok(Self {
-            inner: Arc::new(PinnedParentInner {
-                file,
-                observed_path: expected.path().to_path_buf(),
-                identity,
-            }),
+            file,
+            observed_path: expected.path().to_path_buf(),
+            identity,
         })
     }
 
@@ -55,32 +47,36 @@ impl PinnedParent {
         let leaf = leaf.into();
         validate_leaf(&leaf)?;
         Ok(PinnedPath {
-            parent: self.clone(),
+            parent: Self {
+                file: self.file.try_clone()?,
+                observed_path: self.observed_path.clone(),
+                identity: self.identity,
+            },
             leaf,
         })
     }
 
     fn fd(&self) -> libc::c_int {
-        self.inner.file.as_raw_fd()
+        self.file.as_raw_fd()
     }
 
     fn sync(&self) -> io::Result<()> {
-        self.inner.file.sync_all()
+        self.file.sync_all()
     }
 
     fn current_path(&self) -> io::Result<PathBuf> {
-        if fs::metadata(&self.inner.observed_path)
+        if fs::metadata(&self.observed_path)
             .ok()
-            .is_some_and(|metadata| file_identity(&metadata) == self.inner.identity)
+            .is_some_and(|metadata| file_identity(&metadata) == self.identity)
         {
-            return Ok(self.inner.observed_path.clone());
+            return Ok(self.observed_path.clone());
         }
 
         let proc_path = PathBuf::from(format!("/proc/self/fd/{}", self.fd()));
         let current = fs::read_link(proc_path)?;
         if !fs::metadata(&current)
             .ok()
-            .is_some_and(|metadata| file_identity(&metadata) == self.inner.identity)
+            .is_some_and(|metadata| file_identity(&metadata) == self.identity)
         {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -91,7 +87,7 @@ impl PinnedParent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct PinnedPath {
     parent: PinnedParent,
     leaf: OsString,
@@ -158,68 +154,86 @@ impl PinnedPath {
 }
 
 pub(super) struct CleanupPath {
-    path: Option<PinnedPath>,
+    path: PinnedPath,
+    armed: bool,
 }
 
 impl CleanupPath {
     pub(super) fn new(path: PinnedPath) -> Self {
-        Self { path: Some(path) }
+        Self { path, armed: true }
     }
 
     pub(super) fn path(&self) -> &PinnedPath {
-        self.path.as_ref().expect("cleanup path is armed")
+        &self.path
     }
 
     pub(super) fn disarm(&mut self) {
-        self.path = None;
+        self.armed = false;
     }
 }
 
 impl Drop for CleanupPath {
     fn drop(&mut self) {
-        if let Some(path) = &self.path {
-            let _ = remove_file(path);
+        if self.armed {
+            let _ = remove_file(&self.path);
         }
     }
 }
 
-pub(super) fn create_synced_temp(path: &PinnedPath, bytes: &[u8]) -> io::Result<CleanupPath> {
-    let path = create_unique_sibling(path, "tmp", |candidate| match candidate.create_new(0o600) {
-        Ok(mut file) => {
-            let result = file.write_all(bytes).and_then(|()| file.sync_all());
-            drop(file);
-            if let Err(error) = result {
-                let _ = remove_file(candidate);
-                return Err(error);
+pub(super) fn create_synced_temp(
+    path: &PinnedPath,
+    writer_namespace: RuntimeStateWriterNamespace,
+    mutation_id: SourceMutationId,
+    bytes: &[u8],
+) -> io::Result<CleanupPath> {
+    let path = create_unique_sibling(path, "tmp", writer_namespace, mutation_id, |candidate| {
+        match candidate.create_new(0o600) {
+            Ok(mut file) => {
+                let result = file.write_all(bytes).and_then(|()| file.sync_all());
+                drop(file);
+                if let Err(error) = result {
+                    let _ = remove_file(candidate);
+                    return Err(error);
+                }
+                Ok(true)
             }
-            Ok(true)
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+            Err(error) => Err(error),
         }
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
-        Err(error) => Err(error),
     })?;
     Ok(CleanupPath::new(path))
 }
 
-pub(super) fn unique_recovery_path(path: &PinnedPath) -> io::Result<PinnedPath> {
-    create_unique_sibling(path, "recovery", |candidate| {
-        Ok(!candidate.exists_nofollow()?)
-    })
+pub(super) fn unique_recovery_path(
+    path: &PinnedPath,
+    writer_namespace: RuntimeStateWriterNamespace,
+    mutation_id: SourceMutationId,
+) -> io::Result<PinnedPath> {
+    create_unique_sibling(
+        path,
+        "recovery",
+        writer_namespace,
+        mutation_id,
+        |candidate| Ok(!candidate.exists_nofollow()?),
+    )
 }
 
 fn create_unique_sibling<F>(
     path: &PinnedPath,
     suffix: &str,
+    writer_namespace: RuntimeStateWriterNamespace,
+    mutation_id: SourceMutationId,
     mut reserve: F,
 ) -> io::Result<PinnedPath>
 where
     F: FnMut(&PinnedPath) -> io::Result<bool>,
 {
-    for _ in 0..128 {
-        let id = NEXT_SIBLING_ID.fetch_add(1, Ordering::Relaxed);
+    for attempt in 0..128 {
         let candidate = path.parent.join(OsString::from(format!(
-            ".{}.wayscriber-{suffix}-{}-{id}",
+            ".{}.wayscriber-{suffix}-{}-{writer_namespace}-{}-{attempt}",
             path.leaf.to_string_lossy(),
-            std::process::id()
+            std::process::id(),
+            mutation_id.get(),
         )))?;
         if reserve(&candidate)? {
             return Ok(candidate);
@@ -300,5 +314,92 @@ fn file_identity(metadata: &fs::Metadata) -> RuntimeStateFileIdentity {
     RuntimeStateFileIdentity {
         device: metadata.dev(),
         inode: metadata.ino(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn independent_writers_reserve_distinct_operation_local_siblings() {
+        let temp = crate::test_temp::tempdir().expect("test owns its runtime-state directory");
+        let metadata = fs::metadata(temp.path()).expect("test runtime-state directory exists");
+        let expected =
+            RuntimeStateResolvedParent::new(temp.path().to_path_buf(), file_identity(&metadata));
+        let parent = PinnedParent::open(&expected).expect("test directory can be pinned");
+        let target = parent
+            .join("runtime-ui.toml")
+            .expect("test target has a valid leaf");
+
+        let writer_namespace = RuntimeStateWriterNamespace::test_fixture(7);
+        let first = create_synced_temp(&target, writer_namespace, SourceMutationId(7), b"first")
+            .expect("first writer reserves its temporary sibling");
+        let second = create_synced_temp(&target, writer_namespace, SourceMutationId(7), b"second")
+            .expect("second writer skips the first writer's reserved sibling");
+
+        assert_ne!(
+            first
+                .path()
+                .reported_path()
+                .expect("first sibling remains reportable"),
+            second
+                .path()
+                .reported_path()
+                .expect("second sibling remains reportable")
+        );
+    }
+
+    #[test]
+    fn later_mutation_does_not_reuse_removed_recovery_artifact_identity() {
+        let temp = crate::test_temp::tempdir().expect("test owns its runtime-state directory");
+        let metadata = fs::metadata(temp.path()).expect("test runtime-state directory exists");
+        let expected =
+            RuntimeStateResolvedParent::new(temp.path().to_path_buf(), file_identity(&metadata));
+        let parent = PinnedParent::open(&expected).expect("test directory can be pinned");
+        let target = parent
+            .join("runtime-ui.toml")
+            .expect("test target has a valid leaf");
+
+        let writer_namespace = RuntimeStateWriterNamespace::test_fixture(9);
+        let first = unique_recovery_path(&target, writer_namespace, SourceMutationId(11))
+            .expect("first mutation allocates a recovery identity");
+        let first_reported = first
+            .reported_path()
+            .expect("first recovery identity remains reportable");
+        let first_file = first
+            .create_new(0o600)
+            .expect("test retains the first recovery artifact");
+        drop(first_file);
+        remove_file(&first).expect("test removes the retained recovery artifact");
+
+        let second = unique_recovery_path(&target, writer_namespace, SourceMutationId(12))
+            .expect("later mutation allocates a new recovery identity");
+        let second_reported = second
+            .reported_path()
+            .expect("second recovery identity remains reportable");
+
+        assert_ne!(first_reported, second_reported);
+    }
+
+    #[test]
+    fn joined_path_parent_descriptor_is_close_on_exec() {
+        let temp = crate::test_temp::tempdir().expect("test owns its runtime-state directory");
+        let metadata = fs::metadata(temp.path()).expect("test runtime-state directory exists");
+        let expected =
+            RuntimeStateResolvedParent::new(temp.path().to_path_buf(), file_identity(&metadata));
+        let parent = PinnedParent::open(&expected).expect("test directory can be pinned");
+        let target = parent
+            .join("runtime-ui.toml")
+            .expect("test target has a valid leaf");
+
+        // SAFETY: target owns this live descriptor for the duration of the query.
+        let flags = unsafe { libc::fcntl(target.parent.fd(), libc::F_GETFD) };
+
+        assert!(
+            flags >= 0,
+            "test can inspect the duplicated descriptor flags"
+        );
+        assert_ne!(flags & libc::FD_CLOEXEC, 0);
     }
 }

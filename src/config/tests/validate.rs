@@ -75,7 +75,7 @@ fn drawing_polygon_sides_validation_keeps_supported_bounds() {
 }
 
 #[test]
-fn validate_boards_uses_boundary_id_normalization() {
+fn validate_boards_uses_boundary_id_normalization() -> Result<(), &'static str> {
     let mut config = Config {
         boards: Some(BoardsConfig {
             max_count: 4,
@@ -135,21 +135,90 @@ fn validate_boards_uses_boundary_id_normalization() {
 
     config.validate_and_clamp();
 
-    let boards = config.boards.as_ref().expect("boards");
+    let boards = config
+        .boards
+        .as_ref()
+        .expect("test fixture explicitly configures boards");
     let ids: Vec<_> = boards.items.iter().map(|item| item.id.as_str()).collect();
     assert_eq!(ids, vec!["transparent", "board-a", "board-a-2", "board-4"]);
-    match &boards.items[1].background {
-        BoardBackgroundConfig::Color(color) => assert_eq!(color.rgb(), [1.0, 0.5, 0.0]),
-        BoardBackgroundConfig::Transparent(_) => panic!("expected color background"),
-    }
+    let BoardBackgroundConfig::Color(color) = &boards.items[1].background else {
+        return Err("test fixture's second board must retain its color background");
+    };
+    assert_eq!(color.rgb(), [1.0, 0.5, 0.0]);
     assert_eq!(
         boards.items[1]
             .default_pen_color
             .as_ref()
-            .expect("pen")
+            .expect("test fixture's second board explicitly configures a pen color")
             .rgb(),
         [0.2, 1.0, 0.6]
     );
+    Ok(())
+}
+
+#[test]
+fn validate_boards_adds_the_typed_default_overlay_without_searching_defaults() {
+    let mut config = Config {
+        boards: Some(BoardsConfig {
+            max_count: 1,
+            default_board: "solid".to_string(),
+            items: vec![BoardItemConfig {
+                id: "solid".to_string(),
+                name: "Solid".to_string(),
+                background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([0.2, 0.3, 0.4])),
+                default_pen_color: None,
+                auto_adjust_pen: true,
+                persist: true,
+                pinned: false,
+            }],
+            ..BoardsConfig::default()
+        }),
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    let boards = config
+        .boards
+        .as_ref()
+        .expect("test config explicitly contains boards");
+    assert_eq!(boards.items.len(), 1);
+    assert_eq!(boards.items[0].id, "transparent");
+    assert!(boards.items[0].background.is_transparent());
+    assert_eq!(boards.default_board, "transparent");
+}
+
+#[test]
+fn validate_boards_deduplicates_the_inserted_overlay_id() {
+    let mut config = Config {
+        boards: Some(BoardsConfig {
+            max_count: 2,
+            default_board: "transparent".to_string(),
+            items: vec![BoardItemConfig {
+                id: "transparent".to_string(),
+                name: "Solid".to_string(),
+                background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([0.2, 0.3, 0.4])),
+                default_pen_color: None,
+                auto_adjust_pen: true,
+                persist: true,
+                pinned: false,
+            }],
+            ..BoardsConfig::default()
+        }),
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    let boards = config
+        .boards
+        .as_ref()
+        .expect("test config explicitly contains boards");
+    assert_eq!(boards.items.len(), 2);
+    assert_eq!(boards.items[0].id, "transparent-2");
+    assert!(boards.items[0].background.is_transparent());
+    assert_eq!(boards.items[1].id, "transparent");
+    assert_eq!(boards.default_board, "transparent");
 }
 
 #[test]

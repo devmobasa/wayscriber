@@ -13,10 +13,9 @@ use super::super::wire::{
 };
 use super::super::{BootClock, BootDeadline};
 use super::layout::{
-    QuarantineKind, bump_revision, command_root, control_path, controls_dir, flock, gc_dir,
-    is_atomic_temp, lock_until, open_lock, prepare_layout, quarantine_entry, queue_dir, queue_path,
-    read_control, read_dir_bounded, read_record, try_admission_lock, try_lock_until, unlock,
-    write_control,
+    QuarantineKind, bump_revision, control_path, controls_dir, flock, gc_dir, is_atomic_temp,
+    lock_until, open_lock, prepare_layout, quarantine_entry, queue_dir, queue_path, read_control,
+    read_dir_bounded, read_record, try_admission_lock, try_lock_until, unlock, write_control,
 };
 use super::recovery::{parse_queue_name, recover_previous_generation, validate_reference};
 use super::staging::recover_staging;
@@ -26,9 +25,8 @@ use super::{
 };
 
 impl CommandOwner {
-    pub(crate) fn open(daemon_token: &str) -> Result<Self> {
+    pub(crate) fn open(daemon_token: &str, root: PathBuf) -> Result<Self> {
         validate_token(daemon_token)?;
-        let root = command_root();
         prepare_layout(&root)?;
         recover_staging(&root)?;
         recover_previous_generation(&root, daemon_token)?;
@@ -174,7 +172,9 @@ impl CommandOwner {
             }
         };
         if use_claimed {
-            let (_order, identity, path) = claimed.expect("selected claimed command exists");
+            let Some((_order, identity, path)) = claimed else {
+                return Ok(None);
+            };
             return self.claim_ref_less_control(identity, path);
         }
         let Some((_order, (identity, reference_path, reference))) = reference else {

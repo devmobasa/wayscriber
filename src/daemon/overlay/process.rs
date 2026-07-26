@@ -63,8 +63,6 @@ impl Daemon {
                 }
             }
         }
-        self.overlay_active
-            .store(false, std::sync::atomic::Ordering::Release);
         self.active_named_session_file = None;
         Ok(())
     }
@@ -78,8 +76,6 @@ impl Daemon {
             Ok(Some(status)) => {
                 info!("Overlay process exited with status {:?}", status);
                 self.overlay_state = OverlayState::Hidden;
-                self.overlay_active
-                    .store(false, std::sync::atomic::Ordering::Release);
                 self.active_named_session_file = None;
             }
             Ok(None) => {}

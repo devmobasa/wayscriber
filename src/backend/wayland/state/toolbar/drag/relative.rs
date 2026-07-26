@@ -10,7 +10,7 @@ impl WaylandState {
         if !self.toolbar_position_drag_update_allowed(kind) {
             return;
         }
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "relative delta begin: kind={:?}, delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
             kind,
             delta.0,
@@ -39,7 +39,7 @@ impl WaylandState {
 
         self.apply_toolbar_offsets_throttled(&snapshot);
 
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
             kind,
             delta.0,
@@ -69,7 +69,7 @@ impl WaylandState {
             if commit {
                 self.reconcile_top_base_after_drag();
             }
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
                 self.data.toolbar_top_offset,
                 self.data.toolbar_top_offset_y,

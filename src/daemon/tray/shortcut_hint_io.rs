@@ -14,8 +14,11 @@ use std::ffi::OsStr;
 use std::time::Duration;
 
 #[cfg(feature = "tray")]
-pub(super) fn configured_toggle_shortcut_hint() -> Option<String> {
-    match current_shortcut_runtime_backend() {
+pub(super) fn configured_toggle_shortcut_hint(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    paths: &crate::paths::PathResolver,
+) -> Option<String> {
+    match current_shortcut_runtime_backend(paths) {
         ShortcutRuntimeBackend::PortalGlobalShortcuts => {
             let portal_shortcut_env = env::var(PORTAL_SHORTCUT_ENV).ok();
             normalize_shortcut_hint(portal_shortcut_env.as_deref())
@@ -24,7 +27,8 @@ pub(super) fn configured_toggle_shortcut_hint() -> Option<String> {
             if !current_desktop_is_gnome() {
                 return None;
             }
-            let (custom_keybindings_raw, binding_raw) = read_gnome_shortcut_outputs()?;
+            let (custom_keybindings_raw, binding_raw) =
+                read_gnome_shortcut_outputs(process_broker)?;
             resolve_toggle_shortcut_hint(
                 None,
                 true,
@@ -44,27 +48,34 @@ fn current_desktop_is_gnome() -> bool {
 }
 
 #[cfg(feature = "tray")]
-fn read_gnome_shortcut_outputs() -> Option<(String, String)> {
-    let custom_keybindings_raw =
-        read_gsettings_value(GNOME_MEDIA_KEYS_SCHEMA, GNOME_MEDIA_KEYS_KEY)?;
+fn read_gnome_shortcut_outputs(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+) -> Option<(String, String)> {
+    let custom_keybindings_raw = read_gsettings_value(
+        process_broker,
+        GNOME_MEDIA_KEYS_SCHEMA,
+        GNOME_MEDIA_KEYS_KEY,
+    )?;
     let schema_with_path = gnome_shortcut_schema_with_path();
-    let binding_raw = read_gsettings_value(&schema_with_path, "binding")?;
+    let binding_raw = read_gsettings_value(process_broker, &schema_with_path, "binding")?;
     Some((custom_keybindings_raw, binding_raw))
 }
 
 #[cfg(feature = "tray")]
-fn read_gsettings_value(schema: &str, key: &str) -> Option<String> {
-    let output = crate::process_broker::current()
-        .and_then(|broker| {
-            broker.run(
-                crate::process_broker::HelperKind::Gsettings,
-                OsStr::new("gsettings"),
-                [OsStr::new("get"), OsStr::new(schema), OsStr::new(key)],
-                Vec::new(),
-                Duration::from_secs(3),
-                64 * 1024,
-            )
-        })
+fn read_gsettings_value(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    schema: &str,
+    key: &str,
+) -> Option<String> {
+    let output = process_broker
+        .run(
+            crate::process_broker::HelperKind::Gsettings,
+            OsStr::new("gsettings"),
+            [OsStr::new("get"), OsStr::new(schema), OsStr::new(key)],
+            Vec::new(),
+            Duration::from_secs(3),
+            64 * 1024,
+        )
         .ok()?;
     if output.timed_out || output.status != 0 {
         return None;

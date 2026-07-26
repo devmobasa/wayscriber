@@ -1,5 +1,6 @@
 use super::super::*;
 use super::backdrop::desktop_backdrop_output_geometry_from_info;
+use crate::capture::CaptureError;
 use crate::input::state::{Toast, ToastPriority};
 
 impl WaylandState {
@@ -31,7 +32,17 @@ impl WaylandState {
 
         let destination = CaptureDestination::FileOnly;
         let exit_on_success = self.should_exit_after_capture(destination);
-        let save_config = self.board_pdf_save_config(action);
+        let save_config = match self.board_pdf_save_config(action) {
+            Ok(config) => config,
+            Err(error) => {
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture.pdf",
+                    Toast::error(error.to_string()),
+                );
+                return;
+            }
+        };
 
         if self.should_capture_desktop_for_pdf_export(action) {
             let request = self.desktop_backdrop_capture_request(operation);
@@ -174,10 +185,11 @@ impl WaylandState {
         self.accept_capture_submission(submission, operation);
     }
 
-    fn board_pdf_save_config(&self, action: Action) -> FileSaveConfig {
-        FileSaveConfig {
-            save_directory: expand_tilde(&self.config.capture.save_directory),
-            filename_template: if matches!(action, Action::ExportAllBoardsPdfFile) {
+    fn board_pdf_save_config(&self, action: Action) -> Result<FileSaveConfig, CaptureError> {
+        FileSaveConfig::from_user_config(
+            &self.path_resolver,
+            &self.config.capture.save_directory,
+            if matches!(action, Action::ExportAllBoardsPdfFile) {
                 self.config
                     .export
                     .pdf
@@ -188,8 +200,8 @@ impl WaylandState {
                     .pdf
                     .resolved_filename_template(&self.config.capture)
             },
-            format: "pdf".to_string(),
-        }
+            "pdf".to_string(),
+        )
     }
 
     fn should_capture_desktop_for_pdf_export(&self, action: Action) -> bool {

@@ -95,7 +95,6 @@ impl InputState {
             };
 
             let changed = apply(&mut drawn.shape);
-            drawn.invalidate_bounds();
             if !changed {
                 continue;
             }

@@ -17,7 +17,8 @@ mod image;
 mod system;
 pub(in crate::backend::wayland) mod transfer;
 pub(in crate::backend::wayland) use completion::{
-    ClipboardOperationController, ClipboardOperationIdSource, ClipboardPoll,
+    ClipboardCancellation, ClipboardOperationController, ClipboardOperationId,
+    ClipboardOperationIdSource, ClipboardPoll, ClipboardShutdown,
 };
 
 pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.selection+json";
@@ -36,6 +37,17 @@ pub(super) const CLIPBOARD_PUBLISH_COMMAND_TIMEOUT: Duration = Duration::from_mi
 pub(in crate::backend::wayland) struct ClipboardPasteCompletion {
     pub(in crate::backend::wayland) request: ClipboardPasteRequest,
     pub(in crate::backend::wayland) result: ClipboardPasteResult,
+}
+
+#[derive(Debug)]
+pub(in crate::backend::wayland) enum ClipboardPasteProducerCompletion {
+    Paste(ClipboardPasteCompletion),
+    FingerprintProbe {
+        request: ClipboardPasteRequest,
+        generation: u64,
+        expected: Option<ClipboardFingerprint>,
+        current: Option<ClipboardFingerprint>,
+    },
 }
 
 #[derive(Debug)]

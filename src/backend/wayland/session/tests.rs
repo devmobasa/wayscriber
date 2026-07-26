@@ -4,7 +4,6 @@ use crate::draw::{
     Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, REGULAR_POLYGON_DEFAULT_SIDES,
     Shape, ShapeId,
 };
-use crate::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV};
 use crate::input::{
     BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, ClickHighlightSettings, DrawingState, EraserMode,
     Tool,
@@ -12,45 +11,12 @@ use crate::input::{
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::MutexGuard;
 
 #[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
 
-struct EnvGuard {
-    _guard: MutexGuard<'static, ()>,
-    catalog_hooks: Option<std::ffi::OsString>,
-    xdg_data_home: Option<std::ffi::OsString>,
-}
-
-impl EnvGuard {
-    fn set_xdg_data_home(path: &Path) -> Self {
-        let guard = crate::test_env::lock();
-        let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
-        let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
-        unsafe {
-            std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
-            std::env::set_var(XDG_DATA_HOME_ENV, path);
-        }
-        Self {
-            _guard: guard,
-            catalog_hooks,
-            xdg_data_home,
-        }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match self.catalog_hooks.take() {
-            Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
-            None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
-        }
-        match self.xdg_data_home.take() {
-            Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
-        }
-    }
+fn catalog_for(root: &Path) -> stored_session::catalog::SessionCatalog {
+    stored_session::catalog::SessionCatalog::at_path(root.join("sessions.json"))
 }
 
 #[cfg(unix)]
@@ -275,7 +241,7 @@ fn loaded_line_x2(options: &SessionOptions) -> i32 {
 #[test]
 fn runtime_save_as_new_path_writes_and_switches_active_target() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-new");
     let target_options = named_options(temp.path(), "target-save-as-new");
 
@@ -290,6 +256,7 @@ fn runtime_save_as_new_path_writes_and_switches_active_target() {
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime save as");
 
@@ -312,7 +279,7 @@ fn runtime_save_as_new_path_writes_and_switches_active_target() {
     assert!(!input.is_session_dirty());
     assert_eq!(loaded_line_x2(&target_options), 51);
 
-    let recent = stored_session::catalog::recent_sessions().expect("recent sessions");
+    let recent = _catalog.recent_sessions().expect("recent sessions");
     let target_entry = recent
         .iter()
         .find(|entry| entry.path == target_options.session_file_path().display().to_string())
@@ -326,6 +293,7 @@ fn runtime_save_as_new_path_writes_and_switches_active_target() {
 #[test]
 fn runtime_save_as_rejects_existing_target_without_confirmation() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-existing");
     let target_options = named_options(temp.path(), "target-save-as-existing");
     stored_session::save_snapshot(&snapshot_for_board("transparent", 17), &target_options)
@@ -343,6 +311,7 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
         Instant::now(),
+        &_catalog,
     )
     .expect_err("existing target should require confirmation");
 
@@ -367,6 +336,7 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
 #[test]
 fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-sidecar");
     let target_options = named_options(temp.path(), "target-save-as-sidecar");
     std::fs::write(target_options.clear_marker_file_path(), b"stale clear").expect("stale clear");
@@ -382,6 +352,7 @@ fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
         Instant::now(),
+        &_catalog,
     )
     .expect_err("existing sidecar should require confirmation");
 
@@ -403,6 +374,7 @@ fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
 #[test]
 fn runtime_save_as_overwrite_preflight_reports_existing_artifacts() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-preflight");
     let fresh_options = named_options(temp.path(), "fresh-save-as-preflight");
     let primary_options = named_options(temp.path(), "primary-save-as-preflight");
@@ -438,6 +410,7 @@ fn runtime_save_as_overwrite_preflight_reports_existing_artifacts() {
 #[test]
 fn runtime_save_as_overwrite_preflight_skips_current_target() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-preflight-self");
     std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
     let session_state = SessionState::new(Some(current_options.clone()));
@@ -454,7 +427,7 @@ fn runtime_save_as_overwrite_preflight_skips_current_target() {
 #[test]
 fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-overwrite");
     let target_options = named_options(temp.path(), "target-save-as-overwrite");
     std::fs::write(target_options.session_file_path(), b"old primary").expect("old primary");
@@ -478,6 +451,7 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::ConfirmReplace,
         Instant::now(),
+        &_catalog,
     )
     .expect("confirmed overwrite");
 
@@ -501,6 +475,7 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
 #[test]
 fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-self");
     std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
 
@@ -512,6 +487,7 @@ fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
         &current_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
         Instant::now(),
+        &_catalog,
     )
     .expect("current target save as");
 
@@ -533,6 +509,7 @@ fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
 #[test]
 fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-as-symlink");
     std::fs::write(current_options.session_file_path(), b"current primary")
         .expect("current primary");
@@ -547,6 +524,7 @@ fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
         &symlink_path,
         stored_session::SaveAsOverwrite::Deny,
         Instant::now(),
+        &_catalog,
     )
     .expect_err("symlink target should be rejected before identity shortcut");
 
@@ -562,6 +540,7 @@ fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
 #[test]
 fn runtime_clear_persists_boundary_then_clears_live_session() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-runtime-clear");
     stored_session::save_snapshot(&snapshot_for_board("transparent", 12), &current_options)
         .expect("seed saved session");
@@ -599,6 +578,7 @@ fn runtime_clear_persists_boundary_then_clears_live_session() {
 #[test]
 fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let mut current_options =
         SessionOptions::new(temp.path().to_path_buf(), "runtime-clear-cleanup-fail");
     current_options.persist_transparent = true;
@@ -631,6 +611,7 @@ fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session(
 #[test]
 fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-runtime-clear-fail");
     let current_target = temp.path().join("current-runtime-clear-symlink-target");
     std::fs::write(&current_target, b"preserve current target").expect("write target");
@@ -660,6 +641,7 @@ fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
 #[test]
 fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-tool-reset");
     let mut saved = snapshot_for_board("transparent", 121);
     saved.tool_state = Some(sample_tool_state());
@@ -735,7 +717,7 @@ fn runtime_clear_saved_tool_state_without_active_session_resets_live_tools_only(
 #[test]
 fn runtime_open_success_commits_target_and_catalog_after_apply() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current");
     let candidate_options = named_options(temp.path(), "candidate");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -748,6 +730,7 @@ fn runtime_open_success_commits_target_and_catalog_after_apply() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -766,7 +749,7 @@ fn runtime_open_success_commits_target_and_catalog_after_apply() {
     assert!(!input.is_session_dirty());
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
 
-    let recent = stored_session::catalog::recent_sessions().expect("recent sessions");
+    let recent = _catalog.recent_sessions().expect("recent sessions");
     let candidate_entry = recent
         .iter()
         .find(|entry| entry.path == candidate_options.session_file_path().display().to_string())
@@ -780,7 +763,7 @@ fn runtime_open_success_commits_target_and_catalog_after_apply() {
 #[test]
 fn runtime_open_marks_full_damage_after_replacing_boards() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-damage");
     let candidate_options = named_options(temp.path(), "candidate-damage");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -798,6 +781,7 @@ fn runtime_open_marks_full_damage_after_replacing_boards() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -810,6 +794,7 @@ fn runtime_open_marks_full_damage_after_replacing_boards() {
 #[test]
 fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-before-backup-open");
     let source_options = named_options(temp.path(), "source-contentful-backup");
     stored_session::save_snapshot(&sample_snapshot(), &source_options)
@@ -843,6 +828,7 @@ fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -869,7 +855,7 @@ fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
 #[test]
 fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-with-whiteboard");
     let candidate_options = named_options(temp.path(), "candidate-transparent-only");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -886,6 +872,7 @@ fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -897,7 +884,7 @@ fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
 #[test]
 fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-pointer-cache");
     let mut candidate_options = named_options(temp.path(), "candidate-pointer-cache");
     candidate_options.persist_whiteboard = true;
@@ -918,6 +905,7 @@ fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -929,7 +917,7 @@ fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
 #[test]
 fn runtime_open_releases_old_board_slots_for_candidate_boards() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-full-board-slots");
     let candidate_options = named_options(temp.path(), "candidate-custom-board");
     let target_board = "session-target-board";
@@ -950,6 +938,7 @@ fn runtime_open_releases_old_board_slots_for_candidate_boards() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -961,7 +950,7 @@ fn runtime_open_releases_old_board_slots_for_candidate_boards() {
 #[test]
 fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-apply-failure");
     let candidate_options = named_options(temp.path(), "candidate-too-many-boards");
 
@@ -976,6 +965,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
     };
     stored_session::save_snapshot(&oversized_snapshot, &candidate_options)
         .expect("save oversized candidate");
+    _catalog.record_named_session_saved(&candidate_options);
     std::fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
 
     let mut input = input;
@@ -987,6 +977,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("oversized candidate should fail before applying");
 
@@ -1004,7 +995,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
     assert_no_candidate_sidecars(&candidate_options);
 
-    let recent = stored_session::catalog::recent_sessions().expect("recent sessions");
+    let recent = _catalog.recent_sessions().expect("recent sessions");
     let candidate_entry = recent
         .iter()
         .find(|entry| entry.path == candidate_options.session_file_path().display().to_string())
@@ -1018,7 +1009,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
 #[test]
 fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-overlay-preserved");
     let candidate_options = named_options(temp.path(), "candidate-without-overlay");
 
@@ -1039,6 +1030,7 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
     };
     stored_session::save_snapshot(&full_non_overlay_snapshot, &candidate_options)
         .expect("save full candidate");
+    _catalog.record_named_session_saved(&candidate_options);
     std::fs::remove_file(candidate_options.lock_file_path()).expect("remove save-created lock");
 
     let mut session_state = SessionState::new(Some(current_options.clone()));
@@ -1047,6 +1039,7 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("candidate should not evict the overlay board");
 
@@ -1063,7 +1056,7 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
         Some(current_options.session_file_path())
     );
 
-    let recent = stored_session::catalog::recent_sessions().expect("recent sessions");
+    let recent = _catalog.recent_sessions().expect("recent sessions");
     let candidate_entry = recent
         .iter()
         .find(|entry| entry.path == candidate_options.session_file_path().display().to_string())
@@ -1077,7 +1070,7 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
 #[test]
 fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-with-deleted-page");
     let candidate_options = named_options(temp.path(), "candidate-after-deleted-page");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1096,6 +1089,7 @@ fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
     input.restore_deleted_page();
@@ -1107,7 +1101,7 @@ fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
 #[test]
 fn runtime_open_cancels_active_interaction_from_previous_session() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-active-interaction");
     let candidate_options = named_options(temp.path(), "candidate-after-interaction");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1129,6 +1123,7 @@ fn runtime_open_cancels_active_interaction_from_previous_session() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1140,7 +1135,7 @@ fn runtime_open_cancels_active_interaction_from_previous_session() {
 #[test]
 fn runtime_open_closes_active_board_picker_drag() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-board-picker-drag");
     let candidate_options = named_options(temp.path(), "candidate-after-board-picker-drag");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1158,6 +1153,7 @@ fn runtime_open_closes_active_board_picker_drag() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1170,7 +1166,7 @@ fn runtime_open_closes_active_board_picker_drag() {
 #[test]
 fn runtime_open_closes_active_board_picker_page_drag() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-board-picker-page-drag");
     let candidate_options = named_options(temp.path(), "candidate-after-board-picker-page-drag");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1188,6 +1184,7 @@ fn runtime_open_closes_active_board_picker_page_drag() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1200,7 +1197,7 @@ fn runtime_open_closes_active_board_picker_page_drag() {
 #[test]
 fn runtime_open_saves_current_after_canceling_active_selection_move() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-active-selection-move");
     let candidate_options = named_options(temp.path(), "candidate-after-selection-move");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1225,6 +1222,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1245,7 +1243,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
 #[test]
 fn runtime_open_saves_current_after_canceling_active_text_edit() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-active-text-edit");
     let candidate_options = named_options(temp.path(), "candidate-after-text-edit");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1286,6 +1284,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1309,7 +1308,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
 #[test]
 fn runtime_open_saves_current_after_canceling_color_picker_preview() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-color-picker-preview");
     let candidate_options = named_options(temp.path(), "candidate-after-color-picker");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1329,6 +1328,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1348,6 +1348,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
 #[test]
 fn runtime_open_current_save_failure_preserves_active_selection_move() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-active-save-fail");
     let current_target = temp.path().join("current-active-symlink-target");
     std::fs::write(&current_target, b"preserve current target").expect("write target");
@@ -1375,6 +1376,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("current save failure should abort open");
 
@@ -1396,6 +1398,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
 #[test]
 fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selection_move() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-spatial-save-fail");
     let current_target = temp.path().join("current-spatial-symlink-target");
     std::fs::write(&current_target, b"preserve current target").expect("write target");
@@ -1441,6 +1444,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("current save failure should abort open");
 
@@ -1461,7 +1465,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
 #[test]
 fn runtime_open_clears_stale_selection_and_hit_cache() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-selected-shape");
     let candidate_options = named_options(temp.path(), "candidate-reuses-shape-id");
     stored_session::save_snapshot(&sample_snapshot(), &candidate_options).expect("save candidate");
@@ -1491,6 +1495,7 @@ fn runtime_open_clears_stale_selection_and_hit_cache() {
         &mut session_state,
         &candidate_path,
         Instant::now(),
+        &_catalog,
     )
     .expect("runtime open");
 
@@ -1501,7 +1506,7 @@ fn runtime_open_clears_stale_selection_and_hit_cache() {
 #[test]
 fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
-    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-first");
     let candidate_options = named_options(temp.path(), "candidate-corrupt");
     std::fs::write(candidate_options.session_file_path(), b"{not valid json")
@@ -1517,6 +1522,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("corrupt candidate should abort after current save");
 
@@ -1545,7 +1551,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
     );
     assert_no_candidate_sidecars(&candidate_options);
 
-    let recent = stored_session::catalog::recent_sessions().expect("recent sessions");
+    let recent = _catalog.recent_sessions().expect("recent sessions");
     assert!(
         recent
             .iter()
@@ -1558,6 +1564,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
 #[test]
 fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_dir = temp.path().join("current");
     let candidate_dir = temp.path().join("candidate");
     std::fs::create_dir(&current_dir).expect("create current dir");
@@ -1578,6 +1585,7 @@ fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("read-only candidate parent should abort runtime open");
 
@@ -1597,6 +1605,7 @@ fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
 #[test]
 fn runtime_open_current_save_failure_aborts_before_candidate_load() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let current_options = named_options(temp.path(), "current-save-fail");
     let current_target = temp.path().join("current-symlink-target");
     std::fs::write(&current_target, b"preserve current target").expect("write target");
@@ -1615,6 +1624,7 @@ fn runtime_open_current_save_failure_aborts_before_candidate_load() {
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
+        &_catalog,
     )
     .expect_err("current save failure should abort open");
 
@@ -1746,6 +1756,7 @@ fn contentless_save_guard_blocks_clean_unloaded_save_when_primary_exists() {
 #[test]
 fn contentless_save_guard_blocks_clean_unloaded_save_when_only_backup_exists() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let options = SessionOptions::new(temp.path().to_path_buf(), "backup-only");
     std::fs::write(options.backup_file_path(), b"backup").expect("backup write");
 
@@ -1762,6 +1773,7 @@ fn contentless_save_guard_blocks_clean_unloaded_save_when_only_backup_exists() {
 #[test]
 fn contentless_save_guard_blocks_clean_unloaded_save_when_only_recovery_exists() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let options = SessionOptions::new(temp.path().to_path_buf(), "recovery-only");
     std::fs::write(options.recovery_file_path(), b"recovery").expect("recovery write");
 
@@ -1778,6 +1790,7 @@ fn contentless_save_guard_blocks_clean_unloaded_save_when_only_recovery_exists()
 #[test]
 fn contentless_save_guard_blocks_clean_loaded_empty_save_when_only_preserved_recovery_exists() {
     let temp = crate::test_temp::tempdir().expect("tempdir");
+    let _catalog = catalog_for(temp.path());
     let options = SessionOptions::new(temp.path().to_path_buf(), "preserved-recovery");
     std::fs::write(
         options

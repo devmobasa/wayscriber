@@ -525,6 +525,7 @@ pub fn render_zoom_chip(
     style: &StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
+    theme: &theme::Theme,
 ) {
     let Some(layout) = input_state.zoom_chip_layout() else {
         return;
@@ -548,7 +549,7 @@ pub fn render_zoom_chip(
         layout.pill_height,
         ZOOM_CHIP_CORNER_RADIUS,
         (bg_color[0], bg_color[1], bg_color[2], bg_color[3]),
-        theme::current().border_hairline,
+        theme.border_hairline,
         None,
     );
 
@@ -600,7 +601,7 @@ pub fn render_zoom_chip(
                 // locked state reads without a separate label; every other run
                 // uses the shared chip text color.
                 if run.button == Some(ZoomChipButtonKind::Lock) && layout.lock_active {
-                    let (ar, ag, ab, aa) = theme::current().accent;
+                    let (ar, ag, ab, aa) = theme.accent;
                     ctx.set_source_rgba(ar, ag, ab, aa);
                 } else {
                     ctx.set_source_rgba(r, g, b, a);

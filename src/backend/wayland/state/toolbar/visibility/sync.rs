@@ -102,7 +102,7 @@ impl WaylandState {
         if side_visible != self.toolbar.is_side_visible() {
             self.toolbar.set_side_visible(side_visible);
             self.input_state.needs_redraw = true;
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "toolbar visibility change: side -> {}",
                 side_visible
             ));
@@ -128,7 +128,7 @@ impl WaylandState {
                 self.toolbar_needs_recreate(),
                 self.surface.scale()
             );
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "toolbar sync: top_offset=({}, {}), side_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
                 self.data.toolbar_top_offset,
                 self.data.toolbar_top_offset_y,
@@ -165,7 +165,7 @@ impl WaylandState {
             if (expected_top && !top_configured) || (expected_side && !side_configured) {
                 self.data.toolbar_configure_miss_count =
                     self.data.toolbar_configure_miss_count.saturating_add(1);
-                if debug_toolbar_drag_logging_enabled()
+                if self.runtime_options.debug_toolbar_drag_logging()
                     && self.data.toolbar_configure_miss_count.is_multiple_of(60)
                 {
                     debug!(

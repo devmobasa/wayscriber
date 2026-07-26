@@ -3,10 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-#[cfg(test)]
-use crate::env_vars::XDG_RUNTIME_DIR_ENV;
-#[cfg(test)]
-use crate::paths::daemon_command_dir;
 use crate::tray_action::TrayAction;
 
 mod queue;
@@ -151,10 +147,10 @@ impl DaemonToggleRequest {
 }
 
 fn normalize_daemon_session_file(path: &Path) -> Result<PathBuf> {
-    let raw = path
-        .to_str()
-        .ok_or_else(|| anyhow!("--session-file path must be valid UTF-8"))?;
-    Ok(crate::session::normalize_named_session_file_arg(raw))
+    if path.to_str().is_none() {
+        return Err(anyhow!("--session-file path must be valid UTF-8"));
+    }
+    Ok(path.to_path_buf())
 }
 
 fn current_unix_millis() -> Result<u64> {
@@ -175,23 +171,27 @@ pub(crate) fn generate_daemon_instance_token() -> String {
     format!("{:x}-{:x}", std::process::id(), now)
 }
 
-pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Result<()> {
-    match crate::daemon::protocol_v2::read_runtime_record(&crate::paths::daemon_pid_file())? {
+pub(crate) fn send_daemon_toggle_request(
+    request: &DaemonToggleRequest,
+    runtime_paths: &crate::paths::PreparedRuntimePaths,
+) -> Result<()> {
+    match crate::daemon::protocol_v2::read_runtime_record(&runtime_paths.daemon_pid_file())? {
         crate::daemon::protocol_v2::ClassifiedRuntimeRecord::V2(runtime) => {
             let command = crate::daemon::protocol_v2::ClientCommand::publish(
                 &crate::daemon::protocol_v2::DaemonRequestV2::from(request),
                 &runtime.v2_instance_token,
+                &runtime_paths.protocol_v2_root(),
             )?;
             return finish_v2_command(command.wait()?);
         }
         crate::daemon::protocol_v2::ClassifiedRuntimeRecord::LegacyV1 { .. } => {}
     }
 
-    let runtime = read_daemon_runtime_info()?;
+    let runtime = read_daemon_runtime_info(runtime_paths)?;
     let mut command = None;
 
     if let Some(token) = runtime.token.as_deref() {
-        command = Some(write_daemon_toggle_request(request, token)?);
+        command = Some(write_daemon_toggle_request(request, token, runtime_paths)?);
     } else if !request.is_empty() {
         return Err(anyhow!(
             "running daemon does not support typed control; restart wayscriber daemon"
@@ -199,7 +199,7 @@ pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Resul
     }
 
     if let Err(err) = signal_daemon_pid(runtime.pid) {
-        clear_stale_daemon_state_if_matches(&runtime);
+        clear_stale_daemon_state_if_matches(&runtime, runtime_paths);
         if let Some(command) = command.as_ref() {
             clear_daemon_toggle_command_files(command);
         }
@@ -231,11 +231,17 @@ fn finish_v2_command(result: crate::daemon::protocol_v2::TerminalCommandResult) 
     }
 }
 
-pub(crate) fn send_daemon_overlay_action(action: TrayAction) -> Result<()> {
-    send_daemon_toggle_request(&DaemonToggleRequest {
-        overlay_action: Some(action),
-        ..Default::default()
-    })
+pub(crate) fn send_daemon_overlay_action(
+    action: TrayAction,
+    runtime_paths: &crate::paths::PreparedRuntimePaths,
+) -> Result<()> {
+    send_daemon_toggle_request(
+        &DaemonToggleRequest {
+            overlay_action: Some(action),
+            ..Default::default()
+        },
+        runtime_paths,
+    )
 }
 
 #[cfg(test)]

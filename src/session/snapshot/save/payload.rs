@@ -50,10 +50,6 @@ impl PayloadCandidate {
             None
         }
     }
-
-    pub(super) fn fits_expanded_limit(&self, max_expanded_size: u64) -> bool {
-        self.expanded_limit_exceeded(max_expanded_size).is_none()
-    }
 }
 
 pub(super) struct PreparedPayload {
@@ -97,18 +93,15 @@ pub(super) fn payload_within_limit(
     let full_started = Instant::now();
     let full_payload = payload_candidate(snapshot, options, last_modified)?;
     log_payload_candidate("full", &full_payload, full_started.elapsed());
-    if full_payload.fits_limit(options, max_expanded_size) {
+    let Some(full_limit) = full_payload.limit_exceeded(options, max_expanded_size) else {
         return Ok(PreparedPayload::write(
             full_payload,
             SaveSnapshotOutcome::Full,
         ));
-    }
+    };
 
     let full_raw_size = full_payload.raw_size;
     let full_final_size = full_payload.final_size();
-    let full_limit = full_payload
-        .limit_exceeded(options, max_expanded_size)
-        .expect("full payload should exceed a save/load limit");
     let visible_only = snapshot_without_history(snapshot);
     if visible_only.is_empty() && visible_only.tool_state.is_none() {
         warn!(
@@ -127,10 +120,7 @@ pub(super) fn payload_within_limit(
     let visible_started = Instant::now();
     let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
     log_payload_candidate("visible-only", &visible_payload, visible_started.elapsed());
-    if !visible_payload.fits_limit(options, max_expanded_size) {
-        let visible_limit = visible_payload
-            .limit_exceeded(options, max_expanded_size)
-            .expect("visible payload should exceed a save/load limit");
+    if let Some(visible_limit) = visible_payload.limit_exceeded(options, max_expanded_size) {
         return Err(SavePayloadTooLarge {
             limit: visible_limit,
             written_size: visible_payload.final_size(),
@@ -155,7 +145,16 @@ pub(super) fn payload_within_limit(
             depth_one_started.elapsed(),
         );
 
-        if depth_one_payload.fits_limit(options, max_expanded_size) {
+        if let Some(depth_one_limit) = depth_one_payload.limit_exceeded(options, max_expanded_size)
+        {
+            warn!(
+                "Even one persisted history entry cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping history-depth scan and saving visible data only",
+                depth_one_limit.description(),
+                depth_one_payload.final_size(),
+                depth_one_payload.raw_size,
+                depth_one_payload.compressed
+            );
+        } else {
             let fitting_history = if history_depth == 1 || visible_near_limit {
                 if visible_near_limit && history_depth > 1 {
                     warn!(
@@ -194,17 +193,6 @@ pub(super) fn payload_within_limit(
                     SaveSnapshotOutcome::TrimmedHistory { depth },
                 ));
             }
-        } else {
-            let depth_one_limit = depth_one_payload
-                .limit_exceeded(options, max_expanded_size)
-                .expect("depth-one payload should exceed a save/load limit");
-            warn!(
-                "Even one persisted history entry cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping history-depth scan and saving visible data only",
-                depth_one_limit.description(),
-                depth_one_payload.final_size(),
-                depth_one_payload.raw_size,
-                depth_one_payload.compressed
-            );
         }
     }
 

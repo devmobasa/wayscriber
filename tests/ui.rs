@@ -98,6 +98,7 @@ fn render_status_bar_draws_for_all_positions() {
     let mut input = make_input_state();
     input.update_screen_dimensions(800, 480);
     let style = StatusBarStyle::default();
+    let theme = wayscriber::ui::theme::Theme::dark();
     let positions = [
         StatusPosition::TopLeft,
         StatusPosition::TopRight,
@@ -108,7 +109,7 @@ fn render_status_bar_draws_for_all_positions() {
     for position in positions {
         let (mut surface, ctx) = surface_with_context(400, 200);
         input.update_status_hud_layout(position, &style, 400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
+        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200, &theme);
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -123,8 +124,22 @@ fn render_help_overlay_draws_content() {
     let (mut surface, ctx) = surface_with_context(800, 600);
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
+    let mut renderer = wayscriber::ui::HelpOverlayRenderer::new();
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0, false,
+        &mut renderer,
+        &ctx,
+        &style,
+        800,
+        600,
+        true,
+        0,
+        &bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -135,6 +150,7 @@ fn render_status_bar_draws_in_board_modes() {
     let mut input = make_input_state();
     input.update_screen_dimensions(800, 480);
     let style = StatusBarStyle::default();
+    let theme = wayscriber::ui::theme::Theme::dark();
 
     let board_ids = [BOARD_ID_WHITEBOARD, BOARD_ID_BLACKBOARD];
 
@@ -142,7 +158,7 @@ fn render_status_bar_draws_in_board_modes() {
         input.switch_board(board_id);
         let (mut surface, ctx) = surface_with_context(400, 200);
         input.update_status_hud_layout(StatusPosition::BottomLeft, &style, 400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
+        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200, &theme);
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -157,8 +173,22 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let (mut surface, ctx) = surface_with_context(800, 600);
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
+    let mut renderer = wayscriber::ui::HelpOverlayRenderer::new();
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0, false,
+        &mut renderer,
+        &ctx,
+        &style,
+        800,
+        600,
+        false,
+        0,
+        &bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -307,17 +337,29 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     let (_surface, ctx) = surface_with_context(1400, 1000);
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
-    wayscriber::ui::clear_help_overlay_hit_map();
-    wayscriber::ui::render_help_overlay(
-        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    let mut renderer = wayscriber::ui::HelpOverlayRenderer::new();
+    let frame = wayscriber::ui::render_help_overlay(
+        &mut renderer,
+        &ctx,
+        &style,
+        1400,
+        1000,
+        true,
+        0,
+        &bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
     );
     drop(ctx);
 
     let mut found = Vec::new();
     for y in 0..1000 {
         for x in 0..1400 {
-            if let Some(HelpOverlayRegion::Row(action)) =
-                wayscriber::ui::help_overlay_region_at(x as f64, y as f64)
+            if let Some(HelpOverlayRegion::Row(action)) = frame.region_at(x as f64, y as f64)
                 && !found.contains(&action)
             {
                 found.push(action);
@@ -333,5 +375,59 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
         found.contains(&Action::OpenAbout),
         "about is clickable from the help overlay: {found:?}"
     );
-    wayscriber::ui::clear_help_overlay_hit_map();
+}
+
+#[test]
+fn help_overlay_renderer_owners_keep_frames_and_lifecycles_independent() {
+    let style = HelpOverlayStyle::default();
+    let first_input = make_input_state();
+    let second_input = make_input_state();
+    let first_bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&first_input);
+    let second_bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&second_input);
+    let (_first_surface, first_context) = surface_with_context(1400, 1000);
+    let (_second_surface, second_context) = surface_with_context(800, 600);
+    let mut first_renderer = wayscriber::ui::HelpOverlayRenderer::new();
+    let mut second_renderer = wayscriber::ui::HelpOverlayRenderer::new();
+
+    let first_frame = wayscriber::ui::render_help_overlay(
+        &mut first_renderer,
+        &first_context,
+        &style,
+        1400,
+        1000,
+        true,
+        0,
+        &first_bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
+    );
+    let second_frame = wayscriber::ui::render_help_overlay(
+        &mut second_renderer,
+        &second_context,
+        &style,
+        800,
+        600,
+        false,
+        0,
+        &second_bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        true,
+    );
+
+    assert!(first_frame.region_at(700.0, 500.0).is_some());
+    assert!(second_frame.region_at(400.0, 300.0).is_some());
+    assert_eq!(second_frame.region_at(1300.0, 900.0), None);
+
+    first_renderer.invalidate();
+
+    assert!(first_frame.region_at(700.0, 500.0).is_some());
+    assert!(second_frame.region_at(400.0, 300.0).is_some());
 }

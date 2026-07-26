@@ -61,13 +61,15 @@ pub fn resolve_shortcut_runtime_backend(inputs: ShortcutRuntimeInputs) -> Shortc
     }
 }
 
-pub fn current_shortcut_runtime_backend() -> ShortcutRuntimeBackend {
+pub fn current_shortcut_runtime_backend(
+    paths: &crate::paths::PathResolver,
+) -> ShortcutRuntimeBackend {
     let current = std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
     let session = std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
     resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
         gnome_desktop: is_gnome_desktop(&current, &session),
         portal_runtime_supported: portal_runtime_supported(),
-        portal_dropin_state: read_portal_shortcut_dropin_state(),
+        portal_dropin_state: read_portal_shortcut_dropin_state(paths),
     })
 }
 
@@ -127,8 +129,11 @@ pub fn parse_gsettings_path_list(raw: &str) -> Result<Vec<String>, String> {
     Ok(values)
 }
 
-pub fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
-    portal_shortcut_dropin_path()
+pub fn read_portal_shortcut_dropin_state(
+    paths: &crate::paths::PathResolver,
+) -> PortalShortcutDropInState {
+    portal_shortcut_dropin_path(paths)
+        .ok()
         .and_then(|path| fs::read_to_string(path).ok())
         .map(|content| parse_portal_shortcut_dropin_state(&content))
         .unwrap_or_default()

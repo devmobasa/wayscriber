@@ -49,59 +49,51 @@ impl ToolbarSettingsModel {
 
         let mut toggles = vec![
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsContextAwareUi,
+                ToolbarSettingsToggleKind::ContextAwareUi,
                 "Adapt to tool",
                 snapshot.context_aware_ui,
-                ToolbarEvent::ToggleContextAwareUi(!snapshot.context_aware_ui),
                 "Show only the active tool's controls.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsIconMode,
+                ToolbarSettingsToggleKind::IconMode,
                 "Icon buttons",
                 snapshot.use_icons,
-                ToolbarEvent::ToggleIconMode(!snapshot.use_icons),
                 "Icons instead of text labels.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsTextControls,
+                ToolbarSettingsToggleKind::TextControls,
                 "Text controls",
                 snapshot.show_text_controls,
-                ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
                 "Text: font size/family.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsStatusBar,
+                ToolbarSettingsToggleKind::StatusBar,
                 "Status bar",
                 snapshot.show_status_bar,
-                ToolbarEvent::ToggleStatusBar(!snapshot.show_status_bar),
                 "Status bar: color/tool readout.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsStatusBoardBadge,
+                ToolbarSettingsToggleKind::StatusBoardBadge,
                 "Status board",
                 snapshot.show_status_board_badge,
-                ToolbarEvent::ToggleStatusBoardBadge(!snapshot.show_status_board_badge),
                 "Status bar: board label.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsStatusPageBadge,
+                ToolbarSettingsToggleKind::StatusPageBadge,
                 "Status page",
                 snapshot.show_status_page_badge,
-                ToolbarEvent::ToggleStatusPageBadge(!snapshot.show_status_page_badge),
                 "Status bar: page counter.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsFloatingBadgeAlways,
+                ToolbarSettingsToggleKind::FloatingBadgeAlways,
                 "Overlay badge",
                 snapshot.show_floating_badge_always,
-                ToolbarEvent::ToggleFloatingBadgeAlways(!snapshot.show_floating_badge_always),
                 "Board/page badge when status bar is visible.",
             ),
             ToolbarSettingsToggle::new(
-                ToolbarControlId::SettingsPresetToasts,
+                ToolbarSettingsToggleKind::PresetToasts,
                 "Preset toasts",
                 snapshot.show_preset_toasts,
-                ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
                 "Preset toasts: apply/save/clear.",
             ),
         ];
@@ -109,53 +101,46 @@ impl ToolbarSettingsModel {
         if snapshot.layout_mode != ToolbarLayoutMode::Simple {
             toggles.extend([
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsPresets,
+                    ToolbarSettingsToggleKind::Presets,
                     "Presets",
                     snapshot.show_presets,
-                    ToolbarEvent::TogglePresets(!snapshot.show_presets),
                     "Presets: quick slots.",
                 ),
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsActions,
+                    ToolbarSettingsToggleKind::Actions,
                     "Actions",
                     snapshot.show_actions_section,
-                    ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
                     "Actions: undo/redo/clear.",
                 ),
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsZoomActions,
+                    ToolbarSettingsToggleKind::ZoomActions,
                     "Zoom actions",
                     snapshot.show_zoom_actions,
-                    ToolbarEvent::ToggleZoomActions(!snapshot.show_zoom_actions),
                     "Zoom: in/out/reset/lock.",
                 ),
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsAdvancedActions,
+                    ToolbarSettingsToggleKind::AdvancedActions,
                     "Advanced actions",
                     snapshot.show_actions_advanced,
-                    ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
                     "Undo all, delayed undo, freeze.",
                 )
                 .wide(),
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsBoards,
+                    ToolbarSettingsToggleKind::Boards,
                     "Boards",
                     snapshot.show_boards_section,
-                    ToolbarEvent::ToggleBoardsSection(!snapshot.show_boards_section),
                     "Boards: prev/next/new/del.",
                 ),
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsPages,
+                    ToolbarSettingsToggleKind::Pages,
                     "Pages",
                     snapshot.show_pages_section,
-                    ToolbarEvent::TogglePagesSection(!snapshot.show_pages_section),
                     "Pages: prev/next/new/dup/del.",
                 ),
                 ToolbarSettingsToggle::new(
-                    ToolbarControlId::SettingsStepControls,
+                    ToolbarSettingsToggleKind::StepControls,
                     "Multi-step undo/redo",
                     snapshot.show_step_section,
-                    ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
                     "Undo/redo several strokes at once.",
                 )
                 .wide(),
@@ -343,6 +328,7 @@ pub(crate) struct ToolbarSettingsItemOrder {
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarSettingsToggle {
     pub(crate) id: ToolbarControlId,
+    kind: ToolbarSettingsToggleKind,
     pub(crate) label: Cow<'static, str>,
     pub(crate) checked: bool,
     pub(crate) activation: ToolbarActivation,
@@ -353,17 +339,17 @@ pub(crate) struct ToolbarSettingsToggle {
 
 impl ToolbarSettingsToggle {
     fn new(
-        id: ToolbarControlId,
+        kind: ToolbarSettingsToggleKind,
         label: &'static str,
         checked: bool,
-        event: ToolbarEvent,
         tooltip: &'static str,
     ) -> Self {
         Self {
-            id,
+            id: kind.control_id(),
+            kind,
             label: Cow::Borrowed(label),
             checked,
-            activation: ToolbarActivation::Click(event),
+            activation: ToolbarActivation::Click(kind.event_for_checked(!checked)),
             tooltip: ToolbarTooltip::text(tooltip),
             wide: false,
         }
@@ -372,6 +358,71 @@ impl ToolbarSettingsToggle {
     fn wide(mut self) -> Self {
         self.wide = true;
         self
+    }
+
+    pub(crate) fn event_for_checked(&self, checked: bool) -> ToolbarEvent {
+        self.kind.event_for_checked(checked)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ToolbarSettingsToggleKind {
+    ContextAwareUi,
+    IconMode,
+    TextControls,
+    StatusBar,
+    StatusBoardBadge,
+    StatusPageBadge,
+    FloatingBadgeAlways,
+    PresetToasts,
+    Presets,
+    Actions,
+    ZoomActions,
+    AdvancedActions,
+    Boards,
+    Pages,
+    StepControls,
+}
+
+impl ToolbarSettingsToggleKind {
+    fn control_id(self) -> ToolbarControlId {
+        match self {
+            Self::ContextAwareUi => ToolbarControlId::SettingsContextAwareUi,
+            Self::IconMode => ToolbarControlId::SettingsIconMode,
+            Self::TextControls => ToolbarControlId::SettingsTextControls,
+            Self::StatusBar => ToolbarControlId::SettingsStatusBar,
+            Self::StatusBoardBadge => ToolbarControlId::SettingsStatusBoardBadge,
+            Self::StatusPageBadge => ToolbarControlId::SettingsStatusPageBadge,
+            Self::FloatingBadgeAlways => ToolbarControlId::SettingsFloatingBadgeAlways,
+            Self::PresetToasts => ToolbarControlId::SettingsPresetToasts,
+            Self::Presets => ToolbarControlId::SettingsPresets,
+            Self::Actions => ToolbarControlId::SettingsActions,
+            Self::ZoomActions => ToolbarControlId::SettingsZoomActions,
+            Self::AdvancedActions => ToolbarControlId::SettingsAdvancedActions,
+            Self::Boards => ToolbarControlId::SettingsBoards,
+            Self::Pages => ToolbarControlId::SettingsPages,
+            Self::StepControls => ToolbarControlId::SettingsStepControls,
+        }
+    }
+
+    fn event_for_checked(self, checked: bool) -> ToolbarEvent {
+        match self {
+            Self::ContextAwareUi => ToolbarEvent::ToggleContextAwareUi(checked),
+            Self::IconMode => ToolbarEvent::ToggleIconMode(checked),
+            Self::TextControls => ToolbarEvent::ToggleTextControls(checked),
+            Self::StatusBar => ToolbarEvent::ToggleStatusBar(checked),
+            Self::StatusBoardBadge => ToolbarEvent::ToggleStatusBoardBadge(checked),
+            Self::StatusPageBadge => ToolbarEvent::ToggleStatusPageBadge(checked),
+            Self::FloatingBadgeAlways => ToolbarEvent::ToggleFloatingBadgeAlways(checked),
+            Self::PresetToasts => ToolbarEvent::TogglePresetToasts(checked),
+            Self::Presets => ToolbarEvent::TogglePresets(checked),
+            Self::Actions => ToolbarEvent::ToggleActionsSection(checked),
+            Self::ZoomActions => ToolbarEvent::ToggleZoomActions(checked),
+            Self::AdvancedActions => ToolbarEvent::ToggleActionsAdvanced(checked),
+            Self::Boards => ToolbarEvent::ToggleBoardsSection(checked),
+            Self::Pages => ToolbarEvent::TogglePagesSection(checked),
+            Self::StepControls => ToolbarEvent::ToggleStepSection(checked),
+        }
     }
 }
 
@@ -450,11 +501,13 @@ fn runtime_persistence_notices(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     if let Some(detail) = &runtime.detail {
         push_notice(&mut notices, detail, severity);
     }
-    push_notice(
-        &mut notices,
-        &format!("Runtime state: {}", runtime.path.display()),
-        ToolbarSettingsNoticeSeverity::Info,
-    );
+    if let Some(path) = &runtime.path {
+        push_notice(
+            &mut notices,
+            &format!("Runtime state: {}", path.display()),
+            ToolbarSettingsNoticeSeverity::Info,
+        );
+    }
     for path in &runtime.recovery_artifacts {
         push_notice(
             &mut notices,

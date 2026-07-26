@@ -94,45 +94,54 @@ pub(in crate::backend::wayland) enum TransferWarning {
 }
 
 pub(in crate::backend::wayland) fn resolve_selection_clipboard_publish(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     generation: u64,
     payload_json: String,
+    cancellation: &mut super::ClipboardCancellation,
 ) -> ClipboardPublishCompletion {
     if payload_json.len() > MAX_CLIPBOARD_SELECTION_BYTES {
         return ClipboardPublishCompletion {
             generation,
-            fingerprint: system::clipboard_fingerprint(),
+            fingerprint: system::clipboard_fingerprint(process_broker, cancellation),
             copied: false,
             warning: Some(TransferWarning::PublishSelectionTooLarge),
         };
     }
 
-    let copied =
-        match std::panic::catch_unwind(|| system::publish_selection_clipboard(&payload_json)) {
-            Ok(Ok(())) => true,
-            Ok(Err(err)) => {
-                log::warn!("Selection clipboard publish failed: {}", err);
-                false
-            }
-            Err(_) => {
-                log::error!("Selection clipboard publish panicked");
-                false
-            }
+    let copied = match system::publish_selection_clipboard(process_broker, &payload_json) {
+        Ok(()) => true,
+        Err(err) => {
+            log::warn!("Selection clipboard publish failed: {}", err);
+            false
+        }
+    };
+
+    if cancellation.is_cancelled() {
+        return ClipboardPublishCompletion {
+            generation,
+            fingerprint: None,
+            copied: false,
+            warning: None,
         };
+    }
 
     ClipboardPublishCompletion {
         generation,
         fingerprint: if copied {
             None
         } else {
-            system::clipboard_fingerprint()
+            system::clipboard_fingerprint(process_broker, cancellation)
         },
         copied,
         warning: (!copied).then_some(TransferWarning::PublishUnavailable),
     }
 }
 
-pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteResult {
-    let offered = match system::list_mime_types() {
+pub(in crate::backend::wayland) fn resolve_system_clipboard(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    cancellation: &mut super::ClipboardCancellation,
+) -> ClipboardPasteResult {
+    let offered = match system::list_mime_types(process_broker) {
         Ok(types) if types.is_empty() => return ClipboardPasteResult::ClipboardEmpty,
         Ok(types) => types,
         Err(ClipboardReadError::Empty) => return ClipboardPasteResult::ClipboardEmpty,
@@ -141,6 +150,9 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
         }
         Err(err) => return map_read_error(err),
     };
+    if cancellation.is_cancelled() {
+        return ClipboardPasteResult::ClipboardError("clipboard operation cancelled".to_string());
+    }
 
     let Some(mime_type) = image::choose_supported_mime(&offered) else {
         return ClipboardPasteResult::NoSupportedMime { offered };
@@ -156,11 +168,19 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
         MAX_CLIPBOARD_IMAGE_BYTES
     };
 
-    let bytes = match system::read_clipboard_mime(&mime_type, limit, CLIPBOARD_READ_TIMEOUT) {
+    let bytes = match system::read_clipboard_mime(
+        process_broker,
+        &mime_type,
+        limit,
+        CLIPBOARD_READ_TIMEOUT,
+    ) {
         Ok(bytes) if bytes.is_empty() => return ClipboardPasteResult::ClipboardEmpty,
         Ok(bytes) => bytes,
         Err(err) => return map_read_error(err),
     };
+    if cancellation.is_cancelled() {
+        return ClipboardPasteResult::ClipboardError("clipboard operation cancelled".to_string());
+    }
     log::info!(
         "Read clipboard MIME '{}' payload: {} bytes (limit {} bytes)",
         mime_type,
@@ -177,7 +197,13 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     }
 
     if file_list::is_uri_list_mime(&mime_type) {
-        return file_list::decode_clipboard_uri_list(&mime_type, bytes, offered);
+        return file_list::decode_clipboard_uri_list(
+            process_broker,
+            cancellation,
+            &mime_type,
+            bytes,
+            offered,
+        );
     }
 
     image::decode_clipboard_image(&mime_type, bytes)
@@ -248,7 +274,20 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
 
     match result {
         ClipboardPasteResult::PrivateSelection(_) => {
-            let private_payload = private_payload.expect("private payload resolution required");
+            let Some(private_payload) = private_payload else {
+                log::error!(
+                    "Clipboard paste request {} completed with an unresolved private selection",
+                    request.id
+                );
+                return TransferPlan::with_effects(
+                    supersede_request_generation(&request),
+                    PasteAction::ShowWarning {
+                        request,
+                        warning: TransferWarning::ClipboardError,
+                        block_feedback: true,
+                    },
+                );
+            };
             plan_private_selection_completion(request, private_payload)
         }
         ClipboardPasteResult::Image(image) => TransferPlan::with_effects(

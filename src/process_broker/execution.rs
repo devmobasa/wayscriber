@@ -2,8 +2,7 @@ use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Sender, TryRecvError, channel};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
@@ -64,65 +63,93 @@ enum KillScope {
 }
 
 pub(super) struct OwnedProcess {
-    child: Option<Child>,
+    state: OwnedProcessState,
+    pid: u32,
     kill_scope: KillScope,
+}
+
+enum OwnedProcessState {
+    Running(Child),
+    Reaped,
 }
 
 impl OwnedProcess {
     pub(super) fn process_group(child: Child) -> Self {
+        let pid = child.id();
         Self {
-            child: Some(child),
+            state: OwnedProcessState::Running(child),
+            pid,
             kill_scope: KillScope::ProcessGroup,
         }
     }
 
     pub(super) fn process(child: Child) -> Self {
+        let pid = child.id();
         Self {
-            child: Some(child),
+            state: OwnedProcessState::Running(child),
+            pid,
             kill_scope: KillScope::Process,
         }
     }
 
     pub(super) fn id(&self) -> u32 {
-        self.child().id()
+        self.pid
     }
 
-    pub(super) fn into_child(mut self) -> Child {
-        self.child.take().expect("broker child remains owned")
+    pub(super) fn into_child(mut self) -> io::Result<Child> {
+        match std::mem::replace(&mut self.state, OwnedProcessState::Reaped) {
+            OwnedProcessState::Running(child) => Ok(child),
+            OwnedProcessState::Reaped => Err(io::Error::other("broker child was already reaped")),
+        }
     }
 
-    fn child(&self) -> &Child {
-        self.child.as_ref().expect("broker child remains owned")
+    fn child(&self) -> io::Result<&Child> {
+        match &self.state {
+            OwnedProcessState::Running(child) => Ok(child),
+            OwnedProcessState::Reaped => Err(io::Error::other("broker child was already reaped")),
+        }
     }
 
-    fn child_mut(&mut self) -> &mut Child {
-        self.child.as_mut().expect("broker child remains owned")
+    fn child_mut(&mut self) -> io::Result<&mut Child> {
+        match &mut self.state {
+            OwnedProcessState::Running(child) => Ok(child),
+            OwnedProcessState::Reaped => Err(io::Error::other("broker child was already reaped")),
+        }
     }
 
     fn terminate(&mut self) {
-        match self.kill_scope {
-            KillScope::ProcessGroup => kill_child_process_group(self.child_mut()),
-            KillScope::Process => {
-                let _ = self.child_mut().kill();
+        let kill_scope = self.kill_scope;
+        if let OwnedProcessState::Running(child) = &mut self.state {
+            match kill_scope {
+                KillScope::ProcessGroup => kill_child_process_group(child),
+                KillScope::Process => {
+                    let _ = child.kill();
+                }
             }
         }
     }
 
     pub(super) fn wait(&mut self) -> io::Result<ExitStatus> {
-        let result = self.child_mut().wait();
-        if result.is_ok() {
-            self.child = None;
+        let state = std::mem::replace(&mut self.state, OwnedProcessState::Reaped);
+        let OwnedProcessState::Running(mut child) = state else {
+            return Err(io::Error::other("broker child was already reaped"));
+        };
+        match child.wait() {
+            Ok(status) => Ok(status),
+            Err(error) => {
+                self.state = OwnedProcessState::Running(child);
+                Err(error)
+            }
         }
-        result
     }
 }
 
 impl Drop for OwnedProcess {
     fn drop(&mut self) {
-        if self.child.is_some() {
-            self.terminate();
-        }
-        if let Some(mut child) = self.child.take() {
+        self.terminate();
+        if let OwnedProcessState::Running(mut child) =
+            std::mem::replace(&mut self.state, OwnedProcessState::Reaped)
+        {
             let _ = child.wait();
         }
     }
@@ -184,13 +211,13 @@ pub(super) fn publish_bounded(
             .spawn()
             .context("broker publication helper spawn failed")?,
     );
-    let stdin = child.child_mut().stdin.take();
+    let stdin = child.child_mut()?.stdin.take();
     let stdin_writer = std::thread::spawn(move || match stdin {
         Some(stdin) => write_input_until(stdin, &input, deadline, shutdown_fd),
         None => Ok(()),
     });
     loop {
-        if let Some(unreaped_status) = child_status_unreaped(child.child())? {
+        if let Some(unreaped_status) = child_status_unreaped(child.child()?)? {
             let stdin_result = stdin_writer
                 .join()
                 .map_err(|_| anyhow!("broker publication stdin writer panicked"))?;
@@ -208,7 +235,7 @@ pub(super) fn publish_bounded(
             return Ok(PublishOutput {
                 status: unreaped_status,
                 timed_out: false,
-                retained: Some(child.into_child()),
+                retained: Some(child.into_child()?),
             });
         }
         if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
@@ -293,30 +320,37 @@ pub(super) fn run_bounded(
         .stderr(Stdio::piped());
     let mut child =
         OwnedProcess::process_group(command.spawn().context("broker helper spawn failed")?);
-    let mut stdin = child.child_mut().stdin.take();
+    let mut stdin = child.child_mut()?.stdin.take();
     let stdout = child
-        .child_mut()
+        .child_mut()?
         .stdout
         .take()
         .context("broker stdout pipe missing")?;
     let stderr = child
-        .child_mut()
+        .child_mut()?
         .stderr
         .take()
         .context("broker stderr pipe missing")?;
-    let stdout_limit_reached = Arc::new(AtomicBool::new(false));
-    let stderr_overflow = Arc::new(AtomicBool::new(false));
+    let (limit_tx, limit_rx) = channel();
     let stdout_reader = {
-        let limit_reached = Arc::clone(&stdout_limit_reached);
+        let limit_tx = limit_tx.clone();
         std::thread::spawn(move || match output_mode {
-            OutputMode::Complete => read_capped(stdout, output_cap, &limit_reached),
-            OutputMode::Prefix => read_prefix(stdout, output_cap, &limit_reached),
+            OutputMode::Complete => read_capped(stdout, output_cap, OutputLimit::Stdout, limit_tx),
+            OutputMode::Prefix => read_prefix(stdout, output_cap, limit_tx),
         })
     };
     let stderr_reader = {
-        let overflow = Arc::clone(&stderr_overflow);
-        std::thread::spawn(move || read_capped(stderr, output_cap.min(MAX_STDERR_BYTES), &overflow))
+        let limit_tx = limit_tx.clone();
+        std::thread::spawn(move || {
+            read_capped(
+                stderr,
+                output_cap.min(MAX_STDERR_BYTES),
+                OutputLimit::Stderr,
+                limit_tx,
+            )
+        })
     };
+    drop(limit_tx);
     let stdin_writer = std::thread::spawn(move || {
         stdin.take().and_then(|mut stdin| {
             stdin
@@ -325,8 +359,17 @@ pub(super) fn run_bounded(
                 .filter(|error| error.kind() != io::ErrorKind::BrokenPipe)
         })
     });
+    let mut stdout_limit_reached = false;
+    let mut stderr_overflow = false;
     let (status, timed_out, cancelled) = loop {
-        if child_status_unreaped(child.child())?.is_some() {
+        loop {
+            match limit_rx.try_recv() {
+                Ok(OutputLimit::Stdout) => stdout_limit_reached = true,
+                Ok(OutputLimit::Stderr) => stderr_overflow = true,
+                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+            }
+        }
+        if child_status_unreaped(child.child()?)?.is_some() {
             child.terminate();
             break (child.wait()?, false, false);
         }
@@ -335,10 +378,7 @@ pub(super) fn run_bounded(
             break (child.wait()?, true, false);
         }
         let cancelled = shutdown_requested(shutdown_fd)?;
-        if stdout_limit_reached.load(Ordering::Acquire)
-            || stderr_overflow.load(Ordering::Acquire)
-            || cancelled
-        {
+        if stdout_limit_reached || stderr_overflow || cancelled {
             child.terminate();
             break (child.wait()?, false, cancelled);
         }
@@ -350,6 +390,8 @@ pub(super) fn run_bounded(
     let stderr = stderr_reader
         .join()
         .map_err(|_| anyhow!("broker stderr reader panicked"))??;
+    stdout_limit_reached |= stdout.limit_reached;
+    stderr_overflow |= stderr.limit_reached;
     let stdin_error = stdin_writer
         .join()
         .map_err(|_| anyhow!("broker stdin writer panicked"))?;
@@ -359,31 +401,44 @@ pub(super) fn run_bounded(
     if cancelled {
         return Err(anyhow!("broker helper cancelled during shutdown"));
     }
-    let stdout_limit_reached = stdout_limit_reached.load(Ordering::Acquire);
     if output_mode == OutputMode::Complete && stdout_limit_reached {
         return Err(anyhow!("broker helper stdout exceeded output cap"));
     }
-    if stderr_overflow.load(Ordering::Acquire) {
+    if stderr_overflow {
         return Err(anyhow!("broker helper stderr exceeded output cap"));
     }
     Ok(BoundedOutput {
         status,
-        stdout,
-        stderr,
+        stdout: stdout.bytes,
+        stderr: stderr.bytes,
         timed_out,
         stdout_limit_reached,
     })
 }
 
+#[derive(Clone, Copy)]
+enum OutputLimit {
+    Stdout,
+    Stderr,
+}
+
+struct CappedRead {
+    bytes: Vec<u8>,
+    limit_reached: bool,
+}
+
 fn read_prefix(
     mut reader: impl Read,
     cap: usize,
-    limit_reached: &AtomicBool,
-) -> io::Result<Vec<u8>> {
+    limit_tx: Sender<OutputLimit>,
+) -> io::Result<CappedRead> {
     let mut retained = Vec::with_capacity(cap.min(8192));
     if cap == 0 {
-        limit_reached.store(true, Ordering::Release);
-        return Ok(retained);
+        let _ = limit_tx.send(OutputLimit::Stdout);
+        return Ok(CappedRead {
+            bytes: retained,
+            limit_reached: true,
+        });
     }
     let mut buffer = [0_u8; 8192];
     loop {
@@ -391,28 +446,44 @@ fn read_prefix(
         let read_cap = buffer.len().min(remaining);
         let read = reader.read(&mut buffer[..read_cap])?;
         if read == 0 {
-            return Ok(retained);
+            return Ok(CappedRead {
+                bytes: retained,
+                limit_reached: false,
+            });
         }
         retained.extend_from_slice(&buffer[..read]);
         if retained.len() == cap {
-            limit_reached.store(true, Ordering::Release);
-            return Ok(retained);
+            let _ = limit_tx.send(OutputLimit::Stdout);
+            return Ok(CappedRead {
+                bytes: retained,
+                limit_reached: true,
+            });
         }
     }
 }
 
-fn read_capped(mut reader: impl Read, cap: usize, overflow: &AtomicBool) -> io::Result<Vec<u8>> {
+fn read_capped(
+    mut reader: impl Read,
+    cap: usize,
+    limit: OutputLimit,
+    limit_tx: Sender<OutputLimit>,
+) -> io::Result<CappedRead> {
     let mut retained = Vec::with_capacity(cap.min(8192));
+    let mut limit_reached = false;
     let mut buffer = [0_u8; 8192];
     loop {
         let read = reader.read(&mut buffer)?;
         if read == 0 {
-            return Ok(retained);
+            return Ok(CappedRead {
+                bytes: retained,
+                limit_reached,
+            });
         }
         let remaining = cap.saturating_sub(retained.len());
         retained.extend_from_slice(&buffer[..read.min(remaining)]);
-        if read > remaining {
-            overflow.store(true, Ordering::Release);
+        if read > remaining && !limit_reached {
+            limit_reached = true;
+            let _ = limit_tx.send(limit);
         }
     }
 }

@@ -26,19 +26,19 @@ fn route_woken_persistence(state: &mut impl PersistenceWakeDrain) {
 
 fn route_woken_sources(
     state: &mut WaylandState,
-    signals: &mut OverlaySignalState,
+    signals: &mut OverlaySignalState<'_>,
 ) -> Result<(), anyhow::Error> {
     route_woken_persistence(state);
     state.drain_runtime_ui_completions();
+    signals
+        .drain_events()
+        .map_err(|error| anyhow::anyhow!("overlay signal source failed: {error}"))?;
 
     if signals.exit_requested() {
         state.input_state.should_exit = true;
     }
     if signals.take_tray_action_requested() {
         process_tray_actions_and_sync(state);
-    }
-    if let Some(failure) = signals.failure() {
-        return Err(anyhow::anyhow!("overlay signal listener failed: {failure}"));
     }
     Ok(())
 }
@@ -47,13 +47,17 @@ pub(super) fn dispatch_events(
     event_queue: &mut EventQueue<WaylandState>,
     state: &mut WaylandState,
     runtime_wake: &RuntimeWakeSource,
-    signals: &mut OverlaySignalState,
+    signals: &mut OverlaySignalState<'_>,
     animation_timeout: Option<Duration>,
 ) -> Result<(), anyhow::Error> {
+    let signal_fd = signals
+        .poll_raw_fd()
+        .map_err(|error| anyhow::anyhow!("overlay signal descriptor failed: {error}"))?;
     dispatch_with_timeout(
         event_queue,
         state,
         runtime_wake,
+        signal_fd,
         |state| route_woken_sources(state, signals),
         animation_timeout,
     )
@@ -121,7 +125,7 @@ mod tests {
         }
     }
 
-    fn wait_for_runtime_wake(runtime_wake: &RuntimeWakeSource) {
+    fn wait_for_runtime_wake(runtime_wake: &RuntimeWakeSource) -> std::io::Result<()> {
         let mut pollfd = libc::pollfd {
             fd: runtime_wake.poll_fd().as_raw_fd(),
             events: libc::POLLIN,
@@ -132,15 +136,23 @@ mod tests {
             // bounded test wait.
             let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
             if ready > 0 {
-                assert_ne!(pollfd.revents & libc::POLLIN, 0);
-                return;
+                if pollfd.revents & libc::POLLIN != 0 {
+                    return Ok(());
+                }
+                return Err(std::io::Error::other(format!(
+                    "runtime wake returned unexpected readiness {:#x}",
+                    pollfd.revents
+                )));
             }
             if ready == 0 {
-                panic!("persistence worker did not wake the production route");
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "persistence worker did not wake the production route",
+                ));
             }
             let err = std::io::Error::last_os_error();
             if err.kind() != std::io::ErrorKind::Interrupted {
-                panic!("runtime wake poll failed: {err}");
+                return Err(err);
             }
         }
     }
@@ -155,17 +167,30 @@ mod tests {
         let started = Instant::now();
         let mut session = SessionState::new(Some(options.clone()));
         session.record_input_dirty(started, true);
-        let dirty_window = session.prepare_autosave_submission().unwrap();
+        let dirty_window = session
+            .prepare_autosave_submission()
+            .expect("fixture dirty session prepares one autosave submission");
 
-        let runtime_wake = RuntimeWakeSource::new().unwrap();
-        let mut controller = PersistenceController::start(runtime_wake.handle()).unwrap();
+        let runtime_wake =
+            RuntimeWakeSource::new().expect("fixture creates its persistence runtime wake");
+        let temp = crate::test_temp::tempdir().expect("isolated catalog fixture");
+        let mut controller = PersistenceController::start(
+            runtime_wake
+                .try_sender()
+                .expect("test duplicates its persistence runtime eventfd"),
+            crate::session::catalog::SessionCatalog::at_path(temp.path().join("sessions.json")),
+        )
+        .expect("test starts its persistence controller");
         let request_id = controller
             .try_submit(0, PersistenceOperation::PanicForTest)
-            .unwrap();
+            .expect("fixture submits its injected worker failure");
         session.commit_autosave_submission(request_id, dirty_window);
 
-        wait_for_runtime_wake(&runtime_wake);
-        runtime_wake.drain().unwrap();
+        wait_for_runtime_wake(&runtime_wake)
+            .expect("fixture persistence worker wakes the production route");
+        runtime_wake
+            .drain()
+            .expect("fixture drains its persistence runtime wake");
         let mut route = WorkerFailureRoute {
             controller,
             session,

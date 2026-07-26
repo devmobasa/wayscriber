@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct UiTextStyle<'a> {
     pub family: &'a str,
@@ -70,109 +67,17 @@ impl UiTextLayout {
     }
 }
 
-/// Cache key identifying a shaped UI text layout.
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct UiLayoutCacheKey {
-    family: String,
-    slant: u8,
-    weight: u8,
-    /// Size in hundredths of a unit for stable hashing.
-    size_hundredths: i64,
-    /// Wrap width in pango units, or -1 for no wrap.
-    wrap_units: i32,
-    text: String,
-}
-
-struct CachedUiLayout {
-    layout: pango::Layout,
-    last_used: u64,
-}
-
-/// LRU cache for shaped Pango layouts. The UI layer re-renders every frame,
-/// but its text rarely changes; re-shaping (font itemization + HarfBuzz) is
-/// one of the most expensive per-frame CPU costs, so cache the shaped layout
-/// and re-bind it to the current Cairo context on reuse.
-struct UiLayoutCache {
-    entries: HashMap<UiLayoutCacheKey, CachedUiLayout>,
-    tick: u64,
-    max_entries: usize,
-}
-
-impl UiLayoutCache {
-    fn new(max_entries: usize) -> Self {
-        Self {
-            entries: HashMap::with_capacity(max_entries),
-            tick: 0,
-            max_entries,
-        }
-    }
-
-    fn get(&mut self, key: &UiLayoutCacheKey) -> Option<pango::Layout> {
-        self.tick += 1;
-        let tick = self.tick;
-        let entry = self.entries.get_mut(key)?;
-        entry.last_used = tick;
-        Some(entry.layout.clone())
-    }
-
-    fn insert(&mut self, key: UiLayoutCacheKey, mut entry: CachedUiLayout) {
-        self.tick += 1;
-        entry.last_used = self.tick;
-        // Evict least-recently-used entries. O(n) scan, but only on cache
-        // misses once the cache is full; hits stay O(1).
-        while self.entries.len() >= self.max_entries {
-            let Some(oldest) = self
-                .entries
-                .iter()
-                .min_by_key(|(_, e)| e.last_used)
-                .map(|(k, _)| k.clone())
-            else {
-                break;
-            };
-            self.entries.remove(&oldest);
-        }
-        self.entries.insert(key, entry);
-    }
-}
-
-thread_local! {
-    static UI_LAYOUT_CACHE: RefCell<UiLayoutCache> = RefCell::new(UiLayoutCache::new(512));
-    /// Shared 1x1 surface + context for measuring text without a target surface.
-    static MEASUREMENT_CONTEXT: RefCell<Option<cairo::Context>> = const { RefCell::new(None) };
-}
-
 /// Measure UI text without a rendering context (e.g. for damage computation
-/// before a frame buffer exists). Goes through the same layout cache as
-/// `text_layout`, so measurements agree exactly with subsequent rendering.
+/// before a frame buffer exists). The measurement surface belongs to this
+/// call, so independent UI roots cannot share mutable Pango state.
 pub(crate) fn measure_text(
     style: UiTextStyle<'_>,
     text: &str,
     wrap_width: Option<f64>,
 ) -> Option<UiTextExtents> {
-    MEASUREMENT_CONTEXT.with(|cell| {
-        let mut ctx_ref = cell.borrow_mut();
-        if ctx_ref.is_none() {
-            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
-            *ctx_ref = cairo::Context::new(&surface).ok();
-        }
-        let ctx = ctx_ref.as_ref()?;
-        Some(text_layout(ctx, style, text, wrap_width).ink_extents())
-    })
-}
-
-fn slant_key(slant: cairo::FontSlant) -> u8 {
-    match slant {
-        cairo::FontSlant::Italic => 1,
-        cairo::FontSlant::Oblique => 2,
-        _ => 0,
-    }
-}
-
-fn weight_key(weight: cairo::FontWeight) -> u8 {
-    match weight {
-        cairo::FontWeight::Bold => 1,
-        _ => 0,
-    }
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
+    let ctx = cairo::Context::new(&surface).ok()?;
+    Some(text_layout(&ctx, style, text, wrap_width).ink_extents())
 }
 
 pub(crate) fn text_layout(
@@ -182,29 +87,6 @@ pub(crate) fn text_layout(
     wrap_width: Option<f64>,
 ) -> UiTextLayout {
     let wrap_units = wrap_width.map_or(-1, |width| to_pango_units(width.max(1.0)));
-    let key = UiLayoutCacheKey {
-        family: style.family.to_string(),
-        slant: slant_key(style.slant),
-        weight: weight_key(style.weight),
-        size_hundredths: (style.size * 100.0).round() as i64,
-        wrap_units,
-        text: text.to_string(),
-    };
-
-    let cached = UI_LAYOUT_CACHE.with(|cache| cache.borrow_mut().get(&key));
-    if let Some(layout) = cached {
-        // Re-bind the cached layout to the current Cairo context (font options,
-        // resolution, transformation) without re-shaping the text.
-        pangocairo::functions::update_layout(ctx, &layout);
-        let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
-        return UiTextLayout {
-            layout,
-            ink_rect,
-            logical_rect,
-            baseline,
-        };
-    }
-
     let layout = pangocairo::functions::create_layout(ctx);
     let font_desc = font_description(style);
     layout.set_font_description(Some(&font_desc));
@@ -214,16 +96,6 @@ pub(crate) fn text_layout(
         layout.set_wrap(pango::WrapMode::WordChar);
     }
     let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
-
-    UI_LAYOUT_CACHE.with(|cache| {
-        cache.borrow_mut().insert(
-            key,
-            CachedUiLayout {
-                layout: layout.clone(),
-                last_used: 0,
-            },
-        );
-    });
 
     UiTextLayout {
         layout,

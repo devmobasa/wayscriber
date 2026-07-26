@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use std::time::Duration;
 
 use super::*;
 use crate::config::KeyBinding;
@@ -89,7 +88,7 @@ fn settings_popover_rebuilds_when_runtime_persistence_controls_change() {
         ToolbarBindingHints::from_input_state(&state),
     );
     unhealthy.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-        path: "/tmp/runtime-ui.toml".into(),
+        path: Some("/tmp/runtime-ui.toml".into()),
         mode: RuntimeUiPersistenceMode::Unhealthy,
         detail: None,
         recovery_artifacts: Vec::new(),
@@ -833,23 +832,23 @@ fn has_capture_phase_click_gesture(widget: &gtk4::Widget) -> bool {
 
 fn detach_test_popovers(top: &mut TopBar) {
     if let Some(popover) = top.shapes_popover.take() {
-        popover.unparent();
+        super::popovers::unparent_without_dismissal(&popover);
     }
     top.shapes_capture_surface = None;
     if let Some(popover) = top.overflow_popover.take() {
-        popover.unparent();
+        super::popovers::unparent_without_dismissal(&popover);
     }
     top.overflow_capture_surface = None;
     if let Some(popover) = top.canvas_popover.take() {
-        popover.unparent();
+        super::popovers::unparent_without_dismissal(&popover);
     }
     top.canvas_capture_surface = None;
     if let Some(popover) = top.session_popover.take() {
-        popover.unparent();
+        super::popovers::unparent_without_dismissal(&popover);
     }
     top.session_capture_surface = None;
     if let Some(popover) = top.settings_popover.take() {
-        popover.unparent();
+        super::popovers::unparent_without_dismissal(&popover);
     }
     top.settings_capture_surface = None;
 }
@@ -1427,8 +1426,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         let spec = super::strip::top_toolbar_spec(&snapshot, &plan);
         let expected = expected_semantic_records(&snapshot, &spec, &plan);
         let style_controls = style_pill_controls(&snapshot, &plan);
-        let (tx, _rx) = std::sync::mpsc::channel();
-        let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+        let (feedback, _mailbox) = crate::toolbar_gtk::widgets::test_feedback_channel();
+        let mut top = TopBar::new_for_test(feedback);
         if snapshot.top_minimized {
             top.build_minimized(&snapshot, &plan);
         } else if snapshot.top_micro_active() {
@@ -1436,7 +1435,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         } else {
             top.build_strip(&snapshot, &plan);
         }
-        for updater in top.updaters.borrow().iter() {
+        for updater in &mut top.updaters {
             updater(&snapshot);
         }
 
@@ -1497,8 +1496,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     // compact plan (M7-C2): assert neither renders in a compact build.
     let mut compact_plan = TopStripPlan::unconstrained();
     compact_plan.compact = true;
-    let (tx, _rx) = std::sync::mpsc::channel();
-    let mut compact_top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let (feedback, _mailbox) = crate::toolbar_gtk::widgets::test_feedback_channel();
+    let mut compact_top = TopBar::new_for_test(feedback);
     compact_top.build_strip(&regular, &compact_plan);
     let compact_widgets = collect_semantic_widgets(compact_top.root.upcast_ref());
     let compact_ids = compact_widgets
@@ -1532,8 +1531,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     let mut shapes = regular.clone();
     shapes.shape_picker_open = true;
     shapes.active_tool = Tool::RegularPolygon;
-    let (tx, shape_rx) = std::sync::mpsc::channel();
-    let shape_top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let (feedback, shape_mailbox) = crate::toolbar_gtk::widgets::test_feedback_channel();
+    let shape_top = TopBar::new_for_test(feedback);
     let shape_content = shape_top.build_shapes_popover_content(
         &shapes,
         (ICON_BUTTON, ICON_BUTTON),
@@ -1594,9 +1593,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("shape-picker tool button");
     first_shape.emit_clicked();
     assert_eq!(
-        shape_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("GTK shape event"),
+        shape_mailbox.receive_one().expect("GTK shape event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::SelectTool(shape_tools[0]),
             rebind_requested: false,
@@ -1659,24 +1656,17 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("overflow tool button");
     first_overflow.emit_clicked();
     assert_eq!(
-        shape_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("GTK overflow event"),
+        shape_mailbox.receive_one().expect("GTK overflow event"),
         GtkToolbarFeedback::Event {
             event: overflow_spec.overflow()[0].event(&regular),
             rebind_requested: false,
         }
     );
 
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut event_top = TopBar::new_for_test(FeedbackSender::new(tx));
-    let shape = event_top.shapes_picker_button(
-        &regular,
-        model::TopToolbarControl::ShapePicker,
-        (ICON_BUTTON, ICON_BUTTON),
-        ICON_SIZE,
-        true,
-    );
+    let (feedback, event_mailbox) = crate::toolbar_gtk::widgets::test_feedback_channel();
+    let mut event_top = TopBar::new_for_test(feedback);
+    let shape =
+        event_top.shapes_picker_button(&regular, (ICON_BUTTON, ICON_BUTTON), ICON_SIZE, true);
     let highlight = event_top.action_button(
         &regular,
         model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight),
@@ -1685,13 +1675,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         true,
         true,
     );
-    let pin = event_top.pin_button(&regular, model::TopToolbarControl::Pin, PIN_BUTTON_SIZE);
-    let overflow = event_top.overflow_button(
-        &regular,
-        model::TopToolbarControl::Overflow,
-        (ICON_BUTTON, ICON_BUTTON),
-        ICON_SIZE,
-    );
+    let pin = event_top.pin_button(&regular, PIN_BUTTON_SIZE);
+    let overflow = event_top.overflow_button(&regular, (ICON_BUTTON, ICON_BUTTON), ICON_SIZE);
     for (popover, capture_surface) in [
         (
             event_top.shapes_popover.as_ref().unwrap(),
@@ -1739,7 +1724,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     ] {
         button.emit_clicked();
         assert_eq!(
-            rx.recv_timeout(Duration::from_secs(1)).expect("GTK event"),
+            event_mailbox.receive_one().expect("GTK event"),
             GtkToolbarFeedback::Event {
                 event: expected,
                 rebind_requested: false,
@@ -1752,9 +1737,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     active.any_highlight_active = true;
     active.top_pinned = true;
     active.top_overflow_open = true;
-    event_top.shapes_expected_open.set(true);
-    event_top.overflow_expected_open.set(true);
-    for updater in event_top.updaters.borrow().iter() {
+    for updater in &mut event_top.updaters {
         updater(&active);
     }
     for (button, expected) in [
@@ -1765,16 +1748,13 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     ] {
         button.emit_clicked();
         assert_eq!(
-            rx.recv_timeout(Duration::from_secs(1)).expect("GTK event"),
+            event_mailbox.receive_one().expect("GTK event"),
             GtkToolbarFeedback::Event {
                 event: expected,
                 rebind_requested: false,
             }
         );
     }
-    event_top.shapes_expected_open.set(false);
-    event_top.overflow_expected_open.set(false);
-
     // The direct factories parent popovers to their buttons. Detach those
     // before rebuilding the test bar, matching the production rebuild path.
     detach_test_popovers(&mut event_top);
@@ -1791,8 +1771,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("highlight ring check button");
     ring.set_active(!highlighted.highlight_tool_ring_enabled);
     assert_eq!(
-        rx.recv_timeout(Duration::from_secs(1))
-            .expect("GTK ring event"),
+        event_mailbox.receive_one().expect("GTK ring event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::ToggleHighlightToolRing(!highlighted.highlight_tool_ring_enabled),
             rebind_requested: false,
@@ -1841,7 +1820,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     ]) {
         half.emit_clicked();
         assert_eq!(
-            rx.recv_timeout(Duration::from_secs(1))
+            event_mailbox
+                .receive_one()
                 .expect("GTK eraser segment event"),
             GtkToolbarFeedback::Event {
                 event: ToolbarEvent::SetEraserMode(mode),
@@ -1854,8 +1834,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("numeral button");
     numeral.emit_clicked();
     assert_eq!(
-        rx.recv_timeout(Duration::from_secs(1))
-            .expect("GTK numeral event"),
+        event_mailbox.receive_one().expect("GTK numeral event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::OpenPrecisionEntry(
                 crate::ui::toolbar::PrecisionEntryTarget::Thickness
@@ -1875,8 +1854,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("chip button")
         .emit_clicked();
     assert_eq!(
-        rx.recv_timeout(Duration::from_secs(1))
-            .expect("GTK chip event"),
+        event_mailbox.receive_one().expect("GTK chip event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::OpenColorPickerPopup,
             rebind_requested: false,
@@ -1887,8 +1865,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("swatch button");
     swatch.emit_clicked();
     assert_eq!(
-        rx.recv_timeout(Duration::from_secs(1))
-            .expect("GTK swatch event"),
+        event_mailbox.receive_one().expect("GTK swatch event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::SetQuickColor {
                 color: pen.quick_colors.rendered_entries()[1].color,
@@ -1902,7 +1879,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     // gesture is a controller of its own; it must target the same slot.
     emit_secondary_press(swatch.upcast_ref());
     assert_eq!(
-        rx.recv_timeout(Duration::from_secs(1))
+        event_mailbox
+            .receive_one()
             .expect("GTK swatch recolor event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::EditQuickColor { index: 1 },
@@ -1917,7 +1895,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     let mut churned = pen.clone();
     churned.thickness += 3.0;
     churned.top_fade = 0.4;
-    for updater in event_top.updaters.borrow().iter() {
+    for updater in &mut event_top.updaters {
         updater(&churned);
     }
     let numeral = pill_widget(&event_top, "top.style.thickness-value")
@@ -1944,8 +1922,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("fill check button");
     fill.set_active(!shape.fill_enabled);
     assert_eq!(
-        rx.recv_timeout(Duration::from_secs(1))
-            .expect("GTK fill event"),
+        event_mailbox.receive_one().expect("GTK fill event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::ToggleFill(!shape.fill_enabled),
             rebind_requested: false,
@@ -1974,8 +1951,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         display_name: "recent-0.wayscriber-session".to_string(),
         path: std::path::PathBuf::from("/tmp/recent-0.wayscriber-session"),
     }];
-    let (tx, menu_rx) = std::sync::mpsc::channel();
-    let mut menu_top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let (feedback, menu_mailbox) = crate::toolbar_gtk::widgets::test_feedback_channel();
+    let mut menu_top = TopBar::new_for_test(feedback);
     // Building the strip creates the two overflow-anchored native popovers.
     menu_top.build_strip(&session_snapshot, &plan_top_strip(&session_snapshot));
     assert!(menu_top.session_popover.is_some(), "session popover exists");
@@ -2006,9 +1983,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     }
     session_buttons[0].emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("GTK session open event"),
+        menu_mailbox.receive_one().expect("GTK session open event"),
         GtkToolbarFeedback::Event {
             event: session_model.buttons[0].event.clone(),
             rebind_requested: false,
@@ -2019,9 +1994,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         .expect("recent row button")
         .emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("GTK recent event"),
+        menu_mailbox.receive_one().expect("GTK recent event"),
         GtkToolbarFeedback::Event {
             event: session_model.recents[0].event(),
             rebind_requested: false,
@@ -2032,7 +2005,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     settings_snapshot.layout_mode = ToolbarLayoutMode::Advanced;
     settings_snapshot.settings_popover_open = true;
     settings_snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-        path: "/home/user/.local/share/wayscriber/runtime-ui.toml".into(),
+        path: Some("/home/user/.local/share/wayscriber/runtime-ui.toml".into()),
         mode: RuntimeUiPersistenceMode::Supported,
         detail: None,
         recovery_artifacts: Vec::new(),
@@ -2065,8 +2038,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     }
     checks[0].set_active(!toggles[0].checked);
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        menu_mailbox
+            .receive_one()
             .expect("GTK settings toggle event"),
         GtkToolbarFeedback::Event {
             event: toggles[0].activation.compatibility_event(),
@@ -2089,9 +2062,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert_eq!(tabs.len(), segmented.segments().len());
     tabs[0].emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("GTK layout mode event"),
+        menu_mailbox.receive_one().expect("GTK layout mode event"),
         GtkToolbarFeedback::Event {
             event: segmented.segments()[0].activation.compatibility_event(),
             rebind_requested: false,
@@ -2108,8 +2079,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     );
     plain_buttons[0].emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        menu_mailbox
+            .receive_one()
             .expect("GTK settings button event"),
         GtkToolbarFeedback::Event {
             event: settings_model.buttons()[0].event.clone(),
@@ -2206,8 +2177,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     );
     canvas_checks[0].set_active(!canvas_snapshot.custom_section_enabled);
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        menu_mailbox
+            .receive_one()
             .expect("GTK canvas step toggle event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::ToggleCustomSection(!canvas_snapshot.custom_section_enabled),
@@ -2227,7 +2198,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     delay_snapshot.show_delay_sliders = true;
     delay_snapshot.custom_section_enabled = false;
     delay_snapshot.undo_all_delay_ms = 1000;
-    let (delay_content, delay_updaters) =
+    let (delay_content, mut delay_updaters) =
         menu_top.build_canvas_popover_content(&delay_snapshot, 1.0);
     assert!(
         !delay_updaters.is_empty(),
@@ -2256,7 +2227,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     // never a rebuild — and the same slider widget updates in place.
     let mut bumped_delay = delay_snapshot.clone();
     bumped_delay.undo_all_delay_ms = 2500;
-    for updater in &delay_updaters {
+    for updater in &mut delay_updaters {
         updater(&bumped_delay);
     }
     assert!(
@@ -2287,38 +2258,38 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
 
 #[test]
 fn gtk_stateful_toggle_adapter_emits_the_requested_live_state() {
-    use super::controls::event_for_toggle_state;
+    use super::controls::ToggleControl;
 
     let cases = [
         (
-            model::TopToolbarControl::ShapePicker,
+            ToggleControl::ShapePicker,
             ToolbarEvent::ToggleShapePicker(false),
             ToolbarEvent::ToggleShapePicker(true),
         ),
         (
-            model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight),
+            ToggleControl::Highlight,
             ToolbarEvent::ToggleAllHighlight(false),
             ToolbarEvent::ToggleAllHighlight(true),
         ),
         (
-            model::TopToolbarControl::Pin,
+            ToggleControl::Pin,
             ToolbarEvent::PinTopToolbar(false),
             ToolbarEvent::PinTopToolbar(true),
         ),
         (
-            model::TopToolbarControl::Overflow,
+            ToggleControl::Overflow,
             ToolbarEvent::ToggleTopOverflow(false),
             ToolbarEvent::ToggleTopOverflow(true),
         ),
         (
-            model::TopToolbarControl::HighlightRing,
+            ToggleControl::HighlightRing,
             ToolbarEvent::ToggleHighlightToolRing(false),
             ToolbarEvent::ToggleHighlightToolRing(true),
         ),
     ];
 
     for (control, inactive, active) in cases {
-        assert_eq!(event_for_toggle_state(control, false), inactive);
-        assert_eq!(event_for_toggle_state(control, true), active);
+        assert_eq!(control.event(false), inactive);
+        assert_eq!(control.event(true), active);
     }
 }

@@ -1,10 +1,6 @@
 use super::*;
 use crate::input::state::{Toast, ToastPriority};
-use crate::{
-    config::{Action, Config},
-    notification,
-    session::SaveSnapshotOutcome,
-};
+use crate::{config::Action, notification, session::SaveSnapshotOutcome};
 
 const SESSION_SAVE_NOTIFICATION_TIMEOUT_MS: i32 = 15_000;
 const SESSION_SAVE_WARNING_TOAST_MS: u64 = 20_000;
@@ -50,7 +46,8 @@ pub(super) fn notify_session_save_report(
     };
 
     for notification in pending_save_notifications(&mut state.session, report) {
-        let (summary, body) = session_save_notification_text(notification, report);
+        let (summary, body) =
+            session_save_notification_text(notification, report, state.config_store.config_path());
         let toast = session_save_toast_text(notification, report);
         state.input_state.push_toast(
             ToastPriority::Action,
@@ -91,6 +88,7 @@ fn session_save_toast_text(
 pub(super) fn session_save_notification_text(
     notification: SessionSaveNotification,
     report: &SaveSnapshotReport,
+    config_path: &std::path::Path,
 ) -> (String, String) {
     let written = format_bytes(report.written_size as u64);
     let limit = format_bytes(report.max_file_size_bytes);
@@ -101,7 +99,7 @@ pub(super) fn session_save_notification_text(
             "Session Storage Nearly Full".to_string(),
             format!(
                 "Session save is using {written} of {limit}. Open Settings > Session > Max file size and set {suggested_limit_mb} MiB, or edit {}.",
-                config_path_display()
+                config_path.display()
             ),
         ),
         SessionSaveNotification::TrimmedHistory { depth } => (
@@ -208,10 +206,4 @@ fn suggested_limit_mb(projected_written_size: u64, current_limit_bytes: u64) -> 
         .div_ceil(2)
         .max(current_mb.saturating_mul(3).div_ceil(2))
         .clamp(1, 1024)
-}
-
-fn config_path_display() -> String {
-    Config::get_config_path()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
 }

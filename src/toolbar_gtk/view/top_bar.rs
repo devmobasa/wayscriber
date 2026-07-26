@@ -22,9 +22,6 @@ mod style_pill;
 #[cfg(test)]
 mod tests;
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
@@ -361,14 +358,14 @@ pub(in crate::toolbar_gtk) struct TopBar {
     root: gtk4::Box,
     capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
-    updaters: Rc<RefCell<Vec<Updater>>>,
+    updaters: Vec<Updater>,
     /// Persistent value-updaters for the open Canvas popover's content. Unlike
     /// the Session/Settings popovers (whose whole subtree rebuilds on any
     /// modelled change), the Canvas popover hosts the continuously-dragged
     /// delay sliders: their live values ride these updaters so a drag never
     /// triggers a subtree rebuild. Repopulated whenever the popover content is
     /// (re)built; run every `apply`.
-    canvas_updaters: Rc<RefCell<Vec<Updater>>>,
+    canvas_updaters: Vec<Updater>,
     shapes_popover: Option<gtk4::Popover>,
     shapes_capture_surface: Option<CaptureSurfaceContent>,
     overflow_popover: Option<gtk4::Popover>,
@@ -379,36 +376,29 @@ pub(in crate::toolbar_gtk) struct TopBar {
     session_capture_surface: Option<CaptureSurfaceContent>,
     settings_popover: Option<gtk4::Popover>,
     settings_capture_surface: Option<CaptureSurfaceContent>,
-    /// Popover open state as last driven by the snapshot; lets the
-    /// `closed` handlers distinguish user dismissal from state sync.
-    shapes_expected_open: Rc<Cell<bool>>,
-    overflow_expected_open: Rc<Cell<bool>>,
-    canvas_expected_open: Rc<Cell<bool>>,
-    session_expected_open: Rc<Cell<bool>>,
-    settings_expected_open: Rc<Cell<bool>>,
     /// Discriminants of the currently built popover contents; skips the
     /// per-snapshot rebuild that would reset hover and in-flight presses.
-    shapes_content_key: Cell<Option<ShapesContentKey>>,
-    overflow_content_key: Cell<Option<OverflowContentKey>>,
-    canvas_content_key: RefCell<Option<CanvasMenuContentKey>>,
-    session_content_key: RefCell<Option<SessionMenuContentKey>>,
-    settings_content_key: RefCell<Option<SettingsMenuContentKey>>,
-    drag_active: Rc<Cell<bool>>,
-    drag_blocked: Rc<Cell<bool>>,
+    shapes_content_key: Option<ShapesContentKey>,
+    overflow_content_key: Option<OverflowContentKey>,
+    canvas_content_key: Option<CanvasMenuContentKey>,
+    session_content_key: Option<SessionMenuContentKey>,
+    settings_content_key: Option<SettingsMenuContentKey>,
+    intents: super::drag::ViewIntentSender,
+    drag: super::drag::DragOwnerState,
     move_drag: Option<gtk4::GestureDrag>,
-    move_drag_cancel: Option<Rc<dyn Fn()>>,
-    offsets: Rc<Cell<(f64, f64)>>,
+    move_drag_controller: u64,
+    drag_blocked: bool,
     /// Base X in spec units from the backend (side palette pushes it).
-    base_x: Rc<Cell<f64>>,
-    /// Monotonic counter for outgoing drag offsets; stale echoes from the
-    /// backend are ignored by comparing against it.
-    offset_seq: Rc<Cell<u64>>,
+    base_x: f64,
     capture_suppressed: bool,
     mapped_before_capture: bool,
 }
 
 impl TopBar {
-    pub(in crate::toolbar_gtk) fn new(feedback: FeedbackSender) -> Self {
+    pub(in crate::toolbar_gtk) fn new(
+        feedback: FeedbackSender,
+        intents: super::drag::ViewIntentSender,
+    ) -> Self {
         let window = gtk4::Window::new();
         window.add_css_class("wayscriber-toolbar");
         window.init_layer_shell();
@@ -432,7 +422,7 @@ impl TopBar {
         // for now; fixing it would require wl_surface input-region surgery
         // on the GTK window.
 
-        Self::with_window(feedback, window)
+        Self::with_window(feedback, intents, window)
     }
 
     /// Build an unpresented GTK widget tree without layer-shell side effects.
@@ -441,10 +431,15 @@ impl TopBar {
     fn new_for_test(feedback: FeedbackSender) -> Self {
         let window = gtk4::Window::new();
         window.add_css_class("wayscriber-toolbar");
-        Self::with_window(feedback, window)
+        let (intents, _intent_rx, _failure_rx) = super::drag::ViewIntentSender::channel();
+        Self::with_window(feedback, intents, window)
     }
 
-    fn with_window(feedback: FeedbackSender, window: gtk4::Window) -> Self {
+    fn with_window(
+        feedback: FeedbackSender,
+        intents: super::drag::ViewIntentSender,
+        window: gtk4::Window,
+    ) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
         let capture_surface = CaptureSurfaceContent::new(&root);
@@ -470,8 +465,8 @@ impl TopBar {
             root,
             capture_surface,
             structure: None,
-            updaters: Rc::new(RefCell::new(Vec::new())),
-            canvas_updaters: Rc::new(RefCell::new(Vec::new())),
+            updaters: Vec::new(),
+            canvas_updaters: Vec::new(),
             shapes_popover: None,
             shapes_capture_surface: None,
             overflow_popover: None,
@@ -482,23 +477,17 @@ impl TopBar {
             session_capture_surface: None,
             settings_popover: None,
             settings_capture_surface: None,
-            shapes_expected_open: Rc::new(Cell::new(false)),
-            overflow_expected_open: Rc::new(Cell::new(false)),
-            canvas_expected_open: Rc::new(Cell::new(false)),
-            session_expected_open: Rc::new(Cell::new(false)),
-            settings_expected_open: Rc::new(Cell::new(false)),
-            shapes_content_key: Cell::new(None),
-            overflow_content_key: Cell::new(None),
-            canvas_content_key: RefCell::new(None),
-            session_content_key: RefCell::new(None),
-            settings_content_key: RefCell::new(None),
-            drag_active: Rc::new(Cell::new(false)),
-            drag_blocked: Rc::new(Cell::new(false)),
+            shapes_content_key: None,
+            overflow_content_key: None,
+            canvas_content_key: None,
+            session_content_key: None,
+            settings_content_key: None,
+            intents,
+            drag: super::drag::DragOwnerState::default(),
             move_drag: None,
-            move_drag_cancel: None,
-            offsets: Rc::new(Cell::new((0.0, 0.0))),
-            base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
-            offset_seq: Rc::new(Cell::new(0)),
+            move_drag_controller: 0,
+            drag_blocked: false,
+            base_x: BASE_MARGIN.1 as f64,
             capture_suppressed: false,
             mapped_before_capture: false,
         }
@@ -516,19 +505,15 @@ impl TopBar {
             self.mapped_before_capture = false;
         }
         self.capture_suppressed = update.capture_suppressed;
-        self.drag_blocked
-            .set(update.modal_engaged || update.capture_suppressed);
-        if entering_capture_suppression && let Some(cancel) = self.move_drag_cancel.as_ref() {
-            cancel();
-        }
+        self.set_drag_blocked(update.modal_engaged || update.capture_suppressed);
         let presentation = super::toolbar_surface_presentation(
             update.top_visible,
             update.capture_suppressed,
             super::drag_visual_should_be_hidden(
                 update.drag_preview,
                 GtkToolbarKind::Top,
-                self.drag_active.get(),
-                self.offset_seq.get(),
+                self.drag.active(),
+                self.drag.sequence(),
                 update.top_offset_seq,
             ),
             self.mapped_before_capture,
@@ -562,7 +547,7 @@ impl TopBar {
             }
             return false;
         }
-        self.base_x.set(update.top_base_x);
+        self.base_x = update.top_base_x;
         self.apply_offsets(update.top_offset, update.top_offset_seq);
 
         let plan = plan_top_strip(snapshot);
@@ -571,7 +556,7 @@ impl TopBar {
             self.rebuild(snapshot, &plan);
             self.structure = Some(key);
         }
-        for updater in self.updaters.borrow().iter() {
+        for updater in &mut self.updaters {
             updater(snapshot);
         }
         if update.capture_suppressed {
@@ -585,7 +570,7 @@ impl TopBar {
         // a subtree rebuild (set_value is a no-op mid-drag, so an in-flight
         // gesture survives). Run after `sync_popovers` so a fresh rebuild's
         // updaters are the ones invoked.
-        for updater in self.canvas_updaters.borrow().iter() {
+        for updater in &mut self.canvas_updaters {
             updater(snapshot);
         }
         self.window.set_visible(true);
@@ -621,22 +606,22 @@ impl TopBar {
 
     /// Mirror backend offsets into layer margins unless a local drag is in
     /// flight or the echo is older than what this bar already sent.
-    fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
-        if self.drag_active.get() || echo_seq < self.offset_seq.get() {
+    fn apply_offsets(&mut self, offsets: (f64, f64), echo_seq: u64) {
+        if self.drag.active() || echo_seq < self.drag.sequence() {
             crate::toolbar_gtk::drag_debug_log(format!(
                 "top echo rejected echo_seq={echo_seq} local_seq={} active={} backend=({:.3},{:.3}) local=({:.3},{:.3})",
-                self.offset_seq.get(),
-                self.drag_active.get(),
+                self.drag.sequence(),
+                self.drag.active(),
                 offsets.0,
                 offsets.1,
-                self.offsets.get().0,
-                self.offsets.get().1,
+                self.drag.offsets().0,
+                self.drag.offsets().1,
             ));
             return;
         }
-        let (left, x) = super::drag::rounded_margin_and_offset(self.base_x.get(), offsets.0);
+        let (left, x) = super::drag::rounded_margin_and_offset(self.base_x, offsets.0);
         let (top, y) = super::drag::rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
-        self.offsets.set((x, y));
+        self.drag.set_offsets((x, y));
         self.window.set_margin(Edge::Left, left);
         self.window.set_margin(Edge::Top, top);
         crate::toolbar_gtk::drag_debug_log(format!(
@@ -651,44 +636,39 @@ impl TopBar {
     fn rebuild(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         // Popovers are parented to bar buttons; unparent them before the
         // buttons go away or GTK complains and leaks the popover widgets.
-        self.shapes_expected_open.set(false);
-        self.overflow_expected_open.set(false);
-        self.canvas_expected_open.set(false);
-        self.session_expected_open.set(false);
-        self.settings_expected_open.set(false);
         if let Some(popover) = self.shapes_popover.take() {
-            popover.unparent();
+            popovers::unparent_without_dismissal(&popover);
         }
         self.shapes_capture_surface = None;
         if let Some(popover) = self.overflow_popover.take() {
-            popover.unparent();
+            popovers::unparent_without_dismissal(&popover);
         }
         self.overflow_capture_surface = None;
         if let Some(popover) = self.canvas_popover.take() {
-            popover.unparent();
+            popovers::unparent_without_dismissal(&popover);
         }
         self.canvas_capture_surface = None;
         if let Some(popover) = self.session_popover.take() {
-            popover.unparent();
+            popovers::unparent_without_dismissal(&popover);
         }
         self.session_capture_surface = None;
         if let Some(popover) = self.settings_popover.take() {
-            popover.unparent();
+            popovers::unparent_without_dismissal(&popover);
         }
         self.settings_capture_surface = None;
-        self.shapes_content_key.set(None);
-        self.overflow_content_key.set(None);
-        *self.canvas_content_key.borrow_mut() = None;
-        *self.session_content_key.borrow_mut() = None;
-        *self.settings_content_key.borrow_mut() = None;
+        self.shapes_content_key = None;
+        self.overflow_content_key = None;
+        self.canvas_content_key = None;
+        self.session_content_key = None;
+        self.settings_content_key = None;
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
         }
-        self.updaters.borrow_mut().clear();
+        self.updaters.clear();
         // The Canvas popover was just unparented above, so its persistent
         // value-updaters (which capture those now-dead widgets) must go too;
         // a fresh open repopulates them.
-        self.canvas_updaters.borrow_mut().clear();
+        self.canvas_updaters.clear();
 
         if snapshot.top_minimized {
             self.build_minimized(snapshot, plan);

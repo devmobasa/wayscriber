@@ -10,21 +10,72 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-static SIGNAL_COUNT: AtomicUsize = AtomicUsize::new(0);
-
 const SIGUSR1: i32 = 10;
+const SIG_BLOCK: i32 = 0;
+const EAGAIN: i32 = 11;
+const EINTR: i32 = 4;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SignalSet {
+    bits: [u64; 16],
+}
+
+#[repr(C)]
+struct Timespec {
+    seconds: i64,
+    nanoseconds: i64,
+}
 
 unsafe extern "C" {
     fn kill(pid: i32, signal: i32) -> i32;
-    fn signal(signal: i32, handler: extern "C" fn(i32)) -> usize;
+    fn sigemptyset(set: *mut SignalSet) -> i32;
+    fn sigaddset(set: *mut SignalSet, signal: i32) -> i32;
+    fn pthread_sigmask(how: i32, set: *const SignalSet, previous: *mut SignalSet) -> i32;
+    fn sigtimedwait(
+        set: *const SignalSet,
+        info: *mut std::ffi::c_void,
+        timeout: *const Timespec,
+    ) -> i32;
 }
 
-extern "C" fn record_signal(_signal: i32) {
-    SIGNAL_COUNT.fetch_add(1, Ordering::Relaxed);
+fn block_control_signal() -> io::Result<SignalSet> {
+    let mut set = SignalSet { bits: [0; 16] };
+    // SAFETY: `set` is valid writable storage for the duration of both calls.
+    if unsafe { sigemptyset(&mut set) } != 0 || unsafe { sigaddset(&mut set, SIGUSR1) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: both set pointers are valid; this fixture does not need the old mask.
+    let result = unsafe { pthread_sigmask(SIG_BLOCK, &set, std::ptr::null_mut()) };
+    if result != 0 {
+        return Err(io::Error::from_raw_os_error(result));
+    }
+    Ok(set)
+}
+
+fn drain_control_signals(set: &SignalSet) -> io::Result<usize> {
+    let timeout = Timespec {
+        seconds: 0,
+        nanoseconds: 0,
+    };
+    let mut drained = 0;
+    loop {
+        // SAFETY: `set` and `timeout` remain valid for the call; no siginfo is requested.
+        let signal = unsafe { sigtimedwait(set, std::ptr::null_mut(), &timeout) };
+        if signal == SIGUSR1 {
+            drained += 1;
+            continue;
+        }
+        let error = io::Error::last_os_error();
+        match error.raw_os_error() {
+            Some(EAGAIN) => return Ok(drained),
+            Some(EINTR) => continue,
+            _ => return Err(error),
+        }
+    }
 }
 
 fn runtime_file(root: &Path) -> PathBuf {
@@ -228,22 +279,14 @@ fn process_requests(root: &Path) -> io::Result<usize> {
     Ok(processed)
 }
 
-fn write_report(root: &Path, typed_count: usize) -> io::Result<()> {
-    let report = format!(
-        "signals={}\ntyped={}\n",
-        SIGNAL_COUNT.load(Ordering::Relaxed),
-        typed_count
-    );
+fn write_report(root: &Path, signal_count: usize, typed_count: usize) -> io::Result<()> {
+    let report = format!("signals={signal_count}\ntyped={typed_count}\n");
     atomic_write(&root.join("fixture-report"), report.as_bytes())
 }
 
 fn run_fake_daemon(root: &Path, v2_record: bool) -> io::Result<()> {
     fs::create_dir_all(root)?;
-    // SAFETY: the fixture process owns this signal disposition for its entire
-    // short test lifetime.
-    unsafe {
-        signal(SIGUSR1, record_signal);
-    }
+    let control_signals = block_control_signal()?;
     let pid = std::process::id();
     let runtime = if v2_record {
         format!(
@@ -255,10 +298,12 @@ fn run_fake_daemon(root: &Path, v2_record: bool) -> io::Result<()> {
     };
     atomic_write(&runtime_file(root), runtime.as_bytes())?;
 
+    let mut signal_count = 0;
     let mut typed_count = 0;
     loop {
+        signal_count += drain_control_signals(&control_signals)?;
         typed_count += process_requests(root)?;
-        write_report(root, typed_count)?;
+        write_report(root, signal_count, typed_count)?;
         thread::sleep(Duration::from_millis(2));
     }
 }

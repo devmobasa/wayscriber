@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::ffi::OsString;
 use std::io;
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
@@ -15,23 +16,36 @@ use super::transport::{
     decode_blob, encode_blob, recv_packet, send_packet, shutdown_requested,
     take_graceful_shutdown_signal,
 };
+use super::wire::ensure_admission_deadline;
 use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
-    BlobWire, BrokerOperation, BrokerOutcome, BrokerRequest, BrokerResponse, BrokerWireResponse,
-    HelperKind, HelperLifetime, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, MAX_OWNED_CHILDREN,
-    MAX_PACKET_BYTES, OutputMode,
+    BlobWire, BrokerFileReadWire, BrokerOperation, BrokerOutcome, BrokerRequest, BrokerResponse,
+    BrokerWireResponse, HelperKind, HelperLifetime, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES,
+    MAX_OWNED_CHILDREN, MAX_PACKET_BYTES, OutputMode,
 };
 
 pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
-    let fd = std::env::var(BROKER_FD_ENV).ok()?.parse::<RawFd>().ok()?;
-    let shutdown_fd = std::env::var(BROKER_SHUTDOWN_FD_ENV)
-        .ok()?
-        .parse::<RawFd>()
-        .ok()?;
-    let token = std::env::var(BROKER_TOKEN_ENV).ok()?;
+    if let Some(exit_code) = super::file_reader::run_if_requested() {
+        return Some(exit_code);
+    }
+    let bootstrap = match classify_internal_broker(
+        std::env::var_os(BROKER_FD_ENV),
+        std::env::var_os(BROKER_SHUTDOWN_FD_ENV),
+        std::env::var_os(BROKER_TOKEN_ENV),
+    ) {
+        InternalBrokerClassification::OrdinaryEntry => return None,
+        InternalBrokerClassification::InvalidBootstrap => {
+            return Some(ExitCode::from(126));
+        }
+        InternalBrokerClassification::InternalBroker(bootstrap) => bootstrap,
+    };
+    let BrokerBootstrap {
+        fd,
+        shutdown_fd,
+        token,
+    } = bootstrap;
     if fd != BROKER_FD
         || shutdown_fd != BROKER_SHUTDOWN_FD
-        || !canonical_lower_hex(&token, 64)
         || validate_broker_socket(fd).is_err()
         || validate_broker_socket(shutdown_fd).is_err()
     {
@@ -44,16 +58,62 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
             return Some(ExitCode::from(126));
         }
     }
-    // SAFETY: this entry runs before application worker threads start.
-    unsafe {
-        std::env::remove_var(BROKER_FD_ENV);
-        std::env::remove_var(BROKER_SHUTDOWN_FD_ENV);
-        std::env::remove_var(BROKER_TOKEN_ENV);
-    }
+    // Leave process environment untouched so the safe public entry remains
+    // valid for embedding callers. Every broker-created helper strips these
+    // private markers, and both validated descriptors are close-on-exec.
     Some(match broker_loop(fd, shutdown_fd, &token) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_) => ExitCode::FAILURE,
     })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum InternalBrokerClassification {
+    OrdinaryEntry,
+    InternalBroker(BrokerBootstrap),
+    InvalidBootstrap,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct BrokerBootstrap {
+    fd: RawFd,
+    shutdown_fd: RawFd,
+    token: String,
+}
+
+fn classify_internal_broker(
+    fd: Option<OsString>,
+    shutdown_fd: Option<OsString>,
+    token: Option<OsString>,
+) -> InternalBrokerClassification {
+    let (fd, shutdown_fd, token) = match (fd, shutdown_fd, token) {
+        (None, None, None) => return InternalBrokerClassification::OrdinaryEntry,
+        (Some(fd), Some(shutdown_fd), Some(token)) => (fd, shutdown_fd, token),
+        _ => return InternalBrokerClassification::InvalidBootstrap,
+    };
+
+    let fd = match parse_descriptor(fd) {
+        Some(fd) => fd,
+        None => return InternalBrokerClassification::InvalidBootstrap,
+    };
+    let shutdown_fd = match parse_descriptor(shutdown_fd) {
+        Some(shutdown_fd) => shutdown_fd,
+        None => return InternalBrokerClassification::InvalidBootstrap,
+    };
+    let token = match token.into_string() {
+        Ok(token) if canonical_lower_hex(&token, 64) => token,
+        Ok(_) | Err(_) => return InternalBrokerClassification::InvalidBootstrap,
+    };
+
+    InternalBrokerClassification::InternalBroker(BrokerBootstrap {
+        fd,
+        shutdown_fd,
+        token,
+    })
+}
+
+fn parse_descriptor(value: OsString) -> Option<RawFd> {
+    value.into_string().ok()?.parse().ok()
 }
 
 fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
@@ -82,6 +142,15 @@ fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
 }
 
 fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
+    broker_loop_with_admission(socket, shutdown_fd, token, |_| Ok(()))
+}
+
+fn broker_loop_with_admission(
+    socket: RawFd,
+    shutdown_fd: RawFd,
+    token: &str,
+    mut before_admission: impl FnMut(&BrokerOperation) -> Result<()>,
+) -> Result<()> {
     let mut ownership = BrokerOwnership::default();
     loop {
         if wait_for_request(socket, shutdown_fd)? == BrokerWake::Shutdown {
@@ -109,19 +178,26 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
             bail!("broker request identity is not canonical");
         }
         let request_id = request.request_id;
+        let admission_deadline_monotonic_ns = request.admission_deadline_monotonic_ns;
+        let operation = request.operation;
         let mut descriptors = VecDeque::from(descriptors);
-        let wire_response = handle_operation(
-            request.operation,
-            &mut descriptors,
-            &mut ownership,
-            shutdown_fd,
-        )
-        .unwrap_or_else(|error| BrokerWireResponse {
-            outcome: BrokerOutcome::Error {
-                message: truncate_reason(&format!("{error:#}"), 2048),
-            },
-            descriptors: Vec::new(),
-        });
+        let wire_response = before_admission(&operation)
+            .and_then(|()| ensure_admission_deadline(admission_deadline_monotonic_ns))
+            .and_then(|()| {
+                handle_operation(
+                    operation,
+                    &mut descriptors,
+                    &mut ownership,
+                    shutdown_fd,
+                    admission_deadline_monotonic_ns,
+                )
+            })
+            .unwrap_or_else(|error| BrokerWireResponse {
+                outcome: BrokerOutcome::Error {
+                    message: truncate_reason(&format!("{error:#}"), 2048),
+                },
+                descriptors: Vec::new(),
+            });
         let response = BrokerResponse {
             request_id,
             outcome: wire_response.outcome,
@@ -195,6 +271,35 @@ pub(super) fn run_loop_for_test(socket: RawFd, shutdown_fd: RawFd, token: &str) 
     broker_loop(socket, shutdown_fd, token)
 }
 
+#[cfg(test)]
+pub(super) fn run_loop_for_test_with_admission_gate(
+    socket: RawFd,
+    shutdown_fd: RawFd,
+    token: &str,
+    paused: std::sync::mpsc::SyncSender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+) -> Result<()> {
+    let mut paused = Some(paused);
+    let mut release = Some(release);
+    broker_loop_with_admission(socket, shutdown_fd, token, move |operation| {
+        if matches!(operation, BrokerOperation::Ping) {
+            return Ok(());
+        }
+        let Some(paused) = paused.take() else {
+            return Ok(());
+        };
+        paused
+            .send(())
+            .context("test broker admission observer disconnected")?;
+        let release = release
+            .take()
+            .ok_or_else(|| anyhow!("test broker admission release was already consumed"))?;
+        release
+            .recv()
+            .context("test broker admission release disconnected")
+    })
+}
+
 #[derive(Default)]
 struct BrokerOwnership {
     children: BTreeMap<String, std::process::Child>,
@@ -237,14 +342,27 @@ fn handle_operation(
     descriptors: &mut VecDeque<OwnedFd>,
     ownership: &mut BrokerOwnership,
     shutdown_fd: RawFd,
+    admission_deadline_monotonic_ns: u64,
 ) -> Result<BrokerWireResponse> {
-    if shutdown_requested(shutdown_fd)? {
-        bail!("broker operation cancelled during shutdown");
-    }
+    ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
     match operation {
         BrokerOperation::Ping => {
             reject_descriptors(descriptors)?;
             Ok(wire_outcome(BrokerOutcome::Acknowledged))
+        }
+        BrokerOperation::ReadFile {
+            path,
+            timeout_ms,
+            byte_limit,
+        } => {
+            reject_descriptors(descriptors)?;
+            read_file(
+                path,
+                timeout_ms,
+                byte_limit,
+                shutdown_fd,
+                admission_deadline_monotonic_ns,
+            )
         }
         BrokerOperation::Run {
             kind,
@@ -262,6 +380,7 @@ fn handle_operation(
             if output_mode == OutputMode::Prefix && !super::manifest::supports_prefix_output(kind) {
                 bail!("prefix output is restricted to wl-paste");
             }
+            ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
             let output = run_bounded(
                 super::manifest::command(program, arguments, environment),
                 input,
@@ -300,6 +419,7 @@ fn handle_operation(
             let input = decode_blob(input, descriptors, super::manifest::input_cap(kind))?;
             reject_descriptors(descriptors)?;
             super::manifest::validate(kind, &program, &arguments, &environment, &input)?;
+            ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
             let output = publish_bounded(
                 super::manifest::command(program, arguments, environment),
                 input,
@@ -339,6 +459,7 @@ fn handle_operation(
             descriptors,
             &mut ownership.children,
             shutdown_fd,
+            admission_deadline_monotonic_ns,
         ),
         BrokerOperation::Signal { handle, signal } => {
             reject_descriptors(descriptors)?;
@@ -352,6 +473,7 @@ fn handle_operation(
                 .children
                 .get(&handle)
                 .ok_or_else(|| anyhow!("unknown broker child handle"))?;
+            ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
             // SAFETY: the broker retains the exact unreaped child handle.
             if unsafe { libc::kill(child.id() as i32, signal) } != 0 {
                 return Err(io::Error::last_os_error()).context("broker child signal failed");
@@ -360,6 +482,7 @@ fn handle_operation(
         }
         BrokerOperation::TryWait { handle } => {
             reject_descriptors(descriptors)?;
+            ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
             let child = ownership
                 .children
                 .get_mut(&handle)
@@ -375,6 +498,7 @@ fn handle_operation(
         }
         BrokerOperation::KillWait { handle } => {
             reject_descriptors(descriptors)?;
+            ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
             let mut child = ownership
                 .children
                 .remove(&handle)
@@ -386,6 +510,81 @@ fn handle_operation(
             }))
         }
     }
+}
+
+fn read_file(
+    path: super::wire::OsWire,
+    timeout_ms: u64,
+    byte_limit: usize,
+    shutdown_fd: RawFd,
+    admission_deadline_monotonic_ns: u64,
+) -> Result<BrokerWireResponse> {
+    if byte_limit == 0 || byte_limit > MAX_OUTPUT_BYTES {
+        bail!("broker file-read byte limit is outside transport bounds");
+    }
+    let path = std::path::PathBuf::from(path.into_os());
+    if !path.is_absolute() {
+        bail!("broker file-read path must be absolute");
+    }
+    ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
+    let child_output_cap = if byte_limit < 4096 { 4096 } else { byte_limit };
+    let output = run_bounded(
+        super::file_reader::command(&path, byte_limit)?,
+        Vec::new(),
+        Duration::from_millis(timeout_ms).min(Duration::from_secs(120)),
+        child_output_cap,
+        OutputMode::Complete,
+        shutdown_fd,
+    )?;
+    let status = if output.timed_out {
+        BrokerFileReadWire::TimedOut
+    } else {
+        match status_code(output.status) {
+            status if status == i32::from(super::file_reader::EXIT_READY) => {
+                if output.stdout.is_empty() {
+                    BrokerFileReadWire::ReadFailed {
+                        reason: "internal file reader returned an empty ready payload".to_string(),
+                    }
+                } else if output.stdout.len() > byte_limit {
+                    BrokerFileReadWire::TooLarge
+                } else {
+                    BrokerFileReadWire::Ready
+                }
+            }
+            status if status == i32::from(super::file_reader::EXIT_EMPTY) => {
+                BrokerFileReadWire::Empty
+            }
+            status if status == i32::from(super::file_reader::EXIT_TOO_LARGE) => {
+                BrokerFileReadWire::TooLarge
+            }
+            status if status == i32::from(super::file_reader::EXIT_NOT_REGULAR) => {
+                BrokerFileReadWire::NotRegular
+            }
+            _ => {
+                let reason = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+                BrokerFileReadWire::ReadFailed {
+                    reason: if reason.is_empty() {
+                        "internal file reader failed without a diagnostic".to_string()
+                    } else {
+                        truncate_reason(&reason, 2048)
+                    },
+                }
+            }
+        }
+    };
+    let bytes = if matches!(&status, BrokerFileReadWire::Ready) {
+        output.stdout
+    } else {
+        Vec::new()
+    };
+    let (bytes, descriptor) = encode_blob(bytes, byte_limit)?;
+    Ok(BrokerWireResponse {
+        outcome: BrokerOutcome::FileRead {
+            result: status,
+            bytes,
+        },
+        descriptors: descriptor.into_iter().collect(),
+    })
 }
 
 struct SpawnRequest {
@@ -402,6 +601,7 @@ fn spawn_helper(
     descriptors: &mut VecDeque<OwnedFd>,
     children: &mut BTreeMap<String, std::process::Child>,
     shutdown_fd: RawFd,
+    admission_deadline_monotonic_ns: u64,
 ) -> Result<BrokerWireResponse> {
     let SpawnRequest {
         kind,
@@ -458,9 +658,7 @@ fn spawn_helper(
             break candidate;
         }
     };
-    if shutdown_requested(shutdown_fd)? {
-        bail!("broker spawn cancelled during shutdown");
-    }
+    ensure_operation_admitted(admission_deadline_monotonic_ns, shutdown_fd)?;
     let child = command.spawn().context("broker helper spawn failed")?;
     let child = if initial_detach {
         // The execed overlay calls setsid(). It must not be a process-group leader
@@ -473,7 +671,12 @@ fn spawn_helper(
     let pid = child.id();
     match lifetime {
         HelperLifetime::OwnedChild | HelperLifetime::OperationBound => {
-            children.insert(handle.clone(), child.into_child());
+            children.insert(
+                handle.clone(),
+                child
+                    .into_child()
+                    .context("broker helper ownership disappeared before registration")?,
+            );
         }
         HelperLifetime::DetachedAfterExec => {
             std::thread::Builder::new()
@@ -486,6 +689,17 @@ fn spawn_helper(
         }
     }
     Ok(wire_outcome(BrokerOutcome::Spawned { handle, pid }))
+}
+
+fn ensure_operation_admitted(
+    admission_deadline_monotonic_ns: u64,
+    shutdown_fd: RawFd,
+) -> Result<()> {
+    ensure_admission_deadline(admission_deadline_monotonic_ns)?;
+    if shutdown_requested(shutdown_fd)? {
+        bail!("broker operation cancelled during shutdown");
+    }
+    Ok(())
 }
 
 fn reject_descriptors(descriptors: &VecDeque<OwnedFd>) -> Result<()> {
@@ -541,6 +755,96 @@ fn canonical_lower_hex(value: &str, length: usize) -> bool {
 mod tests {
     use super::*;
     use std::os::fd::FromRawFd;
+    use std::os::unix::ffi::OsStringExt;
+
+    fn canonical_test_token() -> OsString {
+        OsString::from("a".repeat(64))
+    }
+
+    #[test]
+    fn broker_classifier_reserves_only_a_complete_bootstrap() {
+        assert_eq!(
+            classify_internal_broker(None, None, None),
+            InternalBrokerClassification::OrdinaryEntry
+        );
+
+        let descriptor = Some(OsString::from("3"));
+        let shutdown = Some(OsString::from("4"));
+        let token = Some(canonical_test_token());
+        let partial_markers = [
+            (descriptor.clone(), None, None),
+            (None, shutdown.clone(), None),
+            (None, None, token.clone()),
+            (descriptor.clone(), shutdown.clone(), None),
+            (descriptor.clone(), None, token.clone()),
+            (None, shutdown, token),
+        ];
+
+        for (descriptor, shutdown, token) in partial_markers {
+            assert_eq!(
+                classify_internal_broker(descriptor, shutdown, token),
+                InternalBrokerClassification::InvalidBootstrap
+            );
+        }
+    }
+
+    #[test]
+    fn broker_classifier_rejects_malformed_descriptors() {
+        let invalid_cases = [
+            (OsString::from("not-a-number"), OsString::from("4")),
+            (OsString::from("3"), OsString::from("not-a-number")),
+            (OsString::from_vec(vec![0xff]), OsString::from("4")),
+            (OsString::from("3"), OsString::from_vec(vec![0xff])),
+        ];
+
+        for (descriptor, shutdown) in invalid_cases {
+            assert_eq!(
+                classify_internal_broker(
+                    Some(descriptor),
+                    Some(shutdown),
+                    Some(canonical_test_token()),
+                ),
+                InternalBrokerClassification::InvalidBootstrap
+            );
+        }
+    }
+
+    #[test]
+    fn broker_classifier_rejects_malformed_tokens() {
+        let invalid_tokens = [
+            OsString::from("a".repeat(63)),
+            OsString::from("A".repeat(64)),
+            OsString::from("g".repeat(64)),
+            OsString::from_vec(vec![0xff; 64]),
+        ];
+
+        for token in invalid_tokens {
+            assert_eq!(
+                classify_internal_broker(
+                    Some(OsString::from("3")),
+                    Some(OsString::from("4")),
+                    Some(token),
+                ),
+                InternalBrokerClassification::InvalidBootstrap
+            );
+        }
+    }
+
+    #[test]
+    fn broker_classifier_leaves_descriptor_identity_to_the_process_adapter() {
+        assert_eq!(
+            classify_internal_broker(
+                Some(OsString::from("9")),
+                Some(OsString::from("10")),
+                Some(canonical_test_token()),
+            ),
+            InternalBrokerClassification::InternalBroker(BrokerBootstrap {
+                fd: 9,
+                shutdown_fd: 10,
+                token: "a".repeat(64),
+            })
+        );
+    }
 
     fn test_socket_pair() -> (OwnedFd, OwnedFd) {
         let mut sockets = [0; 2];
@@ -566,18 +870,18 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_channel_hangup_is_not_a_graceful_shutdown() {
+    fn shutdown_channel_hangup_is_not_a_graceful_shutdown() -> Result<(), &'static str> {
         let (_control_writer, control_reader) = test_socket_pair();
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         drop(shutdown_writer);
 
-        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        {
-            Ok(_) => panic!("hangup must unwind through destructive broker cleanup"),
-            Err(error) => error,
+        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        else {
+            return Err("hangup must unwind through destructive broker cleanup");
         };
 
         assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        Ok(())
     }
 
     #[test]
@@ -606,7 +910,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_shutdown_packet_is_not_a_graceful_shutdown() {
+    fn malformed_shutdown_packet_is_not_a_graceful_shutdown() -> Result<(), &'static str> {
         let (_control_writer, control_reader) = test_socket_pair();
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let invalid = [2_u8];
@@ -623,17 +927,17 @@ mod tests {
             1
         );
 
-        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        {
-            Ok(_) => panic!("invalid packet must not authorize ownership release"),
-            Err(error) => error,
+        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        else {
+            return Err("invalid packet must not authorize ownership release");
         };
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        Ok(())
     }
 
     #[test]
-    fn oversized_shutdown_packet_is_not_a_graceful_shutdown() {
+    fn oversized_shutdown_packet_is_not_a_graceful_shutdown() -> Result<(), &'static str> {
         let (_control_writer, control_reader) = test_socket_pair();
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let invalid = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE; 2];
@@ -650,21 +954,23 @@ mod tests {
             2
         );
 
-        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        {
-            Ok(_) => panic!("oversized packet must not authorize ownership release"),
-            Err(error) => error,
+        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        else {
+            return Err("oversized packet must not authorize ownership release");
         };
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        Ok(())
     }
 
     #[test]
     fn abnormal_ownership_drop_kills_a_retained_provider() {
         let mut command = std::process::Command::new("sleep");
         command.arg("30").process_group(0);
-        let child = command.spawn().unwrap();
-        let pid = i32::try_from(child.id()).unwrap();
+        let child = command
+            .spawn()
+            .expect("test fixture can launch its retained sleep provider");
+        let pid = i32::try_from(child.id()).expect("test child PID fits libc pid_t");
         let ownership = BrokerOwnership {
             children: BTreeMap::new(),
             retained_publication: Some(child),

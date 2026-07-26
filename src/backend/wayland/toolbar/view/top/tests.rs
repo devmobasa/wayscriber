@@ -1484,7 +1484,7 @@ fn settings_persistence_notices_wrap_as_full_width_logical_rows() {
     let runtime_path =
         std::path::PathBuf::from("/home/user/.local/share/wayscriber/runtime-ui.toml");
     snapshot.runtime_ui_persistence = Some(crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
-        path: runtime_path.clone(),
+        path: Some(runtime_path.clone()),
         mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Supported,
         detail: None,
         recovery_artifacts: Vec::new(),

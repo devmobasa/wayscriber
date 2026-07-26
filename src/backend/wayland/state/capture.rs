@@ -143,11 +143,22 @@ impl WaylandState {
         let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
             None
         } else {
-            Some(FileSaveConfig {
-                save_directory: expand_tilde(&self.config.capture.save_directory),
-                filename_template: self.config.capture.filename_template.clone(),
-                format: self.config.capture.format.clone(),
-            })
+            match FileSaveConfig::from_user_config(
+                &self.path_resolver,
+                &self.config.capture.save_directory,
+                self.config.capture.filename_template.clone(),
+                self.config.capture.format.clone(),
+            ) {
+                Ok(config) => Some(config),
+                Err(error) => {
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "capture",
+                        Toast::error(error.to_string()),
+                    );
+                    return;
+                }
+            }
         };
 
         let exit_on_success = self.should_exit_after_capture(destination);
@@ -223,11 +234,22 @@ impl WaylandState {
         let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
             None
         } else {
-            Some(FileSaveConfig {
-                save_directory: expand_tilde(&self.config.capture.save_directory),
-                filename_template: self.config.capture.filename_template.clone(),
-                format: rendered.format.extension.clone(),
-            })
+            match FileSaveConfig::from_user_config(
+                &self.path_resolver,
+                &self.config.capture.save_directory,
+                self.config.capture.filename_template.clone(),
+                rendered.format.extension.clone(),
+            ) {
+                Ok(config) => Some(config),
+                Err(error) => {
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "capture",
+                        Toast::error(error.to_string()),
+                    );
+                    return;
+                }
+            }
         };
 
         let exit_on_success = self.should_exit_after_capture(destination);

@@ -35,6 +35,31 @@ impl PersistencePipeline {
         self.drive()
     }
 
+    pub(crate) fn terminal_shutdown(&mut self, error: RuntimeStateIoError) {
+        self.shutdown_requested = true;
+        self.outbound = None;
+        if let Some(in_flight) = self.in_flight.take() {
+            self.settle_pending_failed(in_flight.covered, error.clone());
+        }
+        while let Some(stage) = self.pending.pop_front() {
+            match stage {
+                PendingStage::Replace(stage) => {
+                    self.settle_pending_failed(stage.covered, error.clone());
+                }
+                PendingStage::Flush { id, .. } => {
+                    self.flushes.insert(id, Some(FlushOutcome::Failed));
+                }
+                PendingStage::ResetSupported { through, .. }
+                | PendingStage::ResetUnsupportedIfUnchanged { through, .. } => {
+                    self.settle_pending_failed([through], error.clone());
+                }
+                PendingStage::Shutdown => {}
+            }
+        }
+        self.advance_settled_through();
+        self.shutdown_complete = true;
+    }
+
     pub(crate) fn take_outbound(&mut self) -> Option<SourceMutationRequest> {
         self.outbound.take()
     }

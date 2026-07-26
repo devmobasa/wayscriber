@@ -5,8 +5,7 @@ use serde_json::Value;
 impl Config {
     /// Generates a JSON Schema describing the full configuration surface.
     #[allow(dead_code)]
-    pub fn json_schema() -> Value {
+    pub fn json_schema() -> Result<Value, serde_json::Error> {
         serde_json::to_value(schema_for!(Config))
-            .expect("serializing configuration schema should succeed")
     }
 }

@@ -1,4 +1,4 @@
-use std::env;
+use std::path::Path;
 use std::time::Duration;
 
 use super::super::BootClock;
@@ -9,24 +9,12 @@ use std::fs;
 use super::layout::*;
 use super::recovery::parse_queue_name;
 use super::*;
-use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 use crate::tray_action::TrayAction;
 
-fn with_runtime<T>(run: impl FnOnce() -> T) -> T {
-    let _guard = crate::test_env::lock();
+fn with_runtime<T>(run: impl FnOnce(&Path) -> T) -> T {
     let temp = crate::test_temp::tempdir().unwrap();
-    let previous = env::var_os(XDG_RUNTIME_DIR_ENV);
-    // SAFETY: serialized by the test environment mutex.
-    unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, temp.path()) };
-    let result = run();
-    if let Some(previous) = previous {
-        // SAFETY: serialized by the test environment mutex.
-        unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, previous) };
-    } else {
-        // SAFETY: serialized by the test environment mutex.
-        unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) };
-    }
-    result
+    let root = temp.path().join("daemon-commands").join("v2");
+    run(&root)
 }
 
 fn token() -> String {
@@ -35,9 +23,9 @@ fn token() -> String {
 
 #[test]
 fn publish_claim_commit_complete_ack_and_gc() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -50,6 +38,7 @@ fn publish_claim_commit_complete_ack_and_gc() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let mut claimed = owner.claim_next().unwrap().unwrap();
@@ -68,9 +57,9 @@ fn publish_claim_commit_complete_ack_and_gc() {
 
 #[test]
 fn abandoned_unqueued_publication_is_rejected_and_collected() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -83,6 +72,7 @@ fn abandoned_unqueued_publication_is_rejected_and_collected() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let mut control = read_control(&client.control_path).unwrap();
@@ -114,9 +104,9 @@ fn abandoned_unqueued_publication_is_rejected_and_collected() {
 
 #[test]
 fn queue_rename_remains_the_enqueue_point_if_control_update_is_interrupted() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -129,6 +119,7 @@ fn queue_rename_remains_the_enqueue_point_if_control_update_is_interrupted() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let mut control = read_control(&client.control_path).unwrap();
@@ -146,9 +137,9 @@ fn queue_rename_remains_the_enqueue_point_if_control_update_is_interrupted() {
 
 #[test]
 fn contended_published_command_claim_is_deferred_and_retried() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -161,6 +152,7 @@ fn contended_published_command_claim_is_deferred_and_retried() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         flock(&client.decision_lock, libc::LOCK_EX).unwrap();
@@ -183,9 +175,9 @@ fn contended_published_command_claim_is_deferred_and_retried() {
 
 #[test]
 fn contended_ref_less_recovery_is_deferred_and_retried() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: Some("whiteboard".into()),
@@ -198,6 +190,7 @@ fn contended_ref_less_recovery_is_deferred_and_retried() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let control = read_control(&client.control_path).unwrap();
@@ -219,9 +212,9 @@ fn contended_ref_less_recovery_is_deferred_and_retried() {
 
 #[test]
 fn terminal_collection_defers_while_admission_is_busy() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -234,6 +227,7 @@ fn terminal_collection_defers_while_admission_is_busy() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let mut claimed = owner.claim_next().unwrap().unwrap();
@@ -258,9 +252,9 @@ fn terminal_collection_defers_while_admission_is_busy() {
 
 #[test]
 fn post_admission_finalization_failure_is_not_an_ordinary_publish_error() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let publication = ClientCommand::publish_with_final_control_failure(
             &DaemonRequestV2 {
                 mode: None,
@@ -273,6 +267,7 @@ fn post_admission_finalization_failure_is_not_an_ordinary_publish_error() {
                 overlay_action: None,
             },
             &token,
+            root,
         );
 
         assert!(
@@ -303,9 +298,9 @@ fn post_admission_finalization_failure_is_not_an_ordinary_publish_error() {
 
 #[test]
 fn queued_control_remains_recoverable_if_its_reference_is_lost() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: Some("whiteboard".into()),
@@ -318,6 +313,7 @@ fn queued_control_remains_recoverable_if_its_reference_is_lost() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let control = read_control(&client.control_path).unwrap();
@@ -341,9 +337,9 @@ fn queued_control_remains_recoverable_if_its_reference_is_lost() {
 
 #[test]
 fn terminal_command_from_a_dead_caller_does_not_leak() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -356,6 +352,7 @@ fn terminal_command_from_a_dead_caller_does_not_leak() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let mut claimed = owner.claim_next().unwrap().unwrap();
@@ -374,9 +371,9 @@ fn terminal_command_from_a_dead_caller_does_not_leak() {
 
 #[test]
 fn cancellation_and_commit_are_mutually_exclusive() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -389,6 +386,7 @@ fn cancellation_and_commit_are_mutually_exclusive() {
                 overlay_action: Some(TrayAction::ToggleFreeze),
             },
             &token,
+            root,
         )
         .unwrap();
         assert_eq!(client.cancel().unwrap(), TerminalCommandResult::Canceled);
@@ -404,10 +402,10 @@ fn cancellation_and_commit_are_mutually_exclusive() {
 
 #[test]
 fn failed_preclaim_action_is_terminal_without_waiting_for_restart() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
-        let journal = ActionJournal::open().unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
+        let journal = ActionJournal::open(root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -420,6 +418,7 @@ fn failed_preclaim_action_is_terminal_without_waiting_for_restart() {
                 overlay_action: Some(TrayAction::ToggleFreeze),
             },
             &token,
+            root,
         )
         .unwrap();
         let mut claimed = owner.claim_next().unwrap().unwrap();
@@ -441,9 +440,9 @@ fn failed_preclaim_action_is_terminal_without_waiting_for_restart() {
 
 #[test]
 fn rollback_rejects_open_work_and_preserves_committed_ambiguity() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let old_token = token();
-        let owner = CommandOwner::open(&old_token).unwrap();
+        let owner = CommandOwner::open(&old_token, root.to_path_buf()).unwrap();
         let committed = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: Some("whiteboard".into()),
@@ -456,6 +455,7 @@ fn rollback_rejects_open_work_and_preserves_committed_ambiguity() {
                 overlay_action: None,
             },
             &old_token,
+            root,
         )
         .unwrap();
         let mut claim = owner.claim_next().unwrap().unwrap();
@@ -473,10 +473,11 @@ fn rollback_rejects_open_work_and_preserves_committed_ambiguity() {
                 overlay_action: None,
             },
             &old_token,
+            root,
         )
         .unwrap();
 
-        super::super::prepare_rollback_compatibility().unwrap();
+        super::super::prepare_rollback_compatibility_at_root(root).unwrap();
         assert!(matches!(
             committed.wait().unwrap(),
             TerminalCommandResult::CommittedIndeterminate(_)
@@ -485,19 +486,15 @@ fn rollback_rejects_open_work_and_preserves_committed_ambiguity() {
             open.wait().unwrap(),
             TerminalCommandResult::FailedNoEffect(_)
         ));
-        assert!(
-            read_dir_bounded(&queue_dir(&command_root()), 1)
-                .unwrap()
-                .is_empty()
-        );
+        assert!(read_dir_bounded(&queue_dir(root), 1).unwrap().is_empty());
     });
 }
 
 #[test]
 fn canonical_queue_order_survives_restart_and_ref_less_claim() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let _first_client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: Some("whiteboard".into()),
@@ -510,6 +507,7 @@ fn canonical_queue_order_survives_restart_and_ref_less_claim() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let claimed = owner.claim_next().unwrap().unwrap();
@@ -527,9 +525,10 @@ fn canonical_queue_order_survives_restart_and_ref_less_claim() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
-        let restarted = CommandOwner::open(&token).unwrap();
+        let restarted = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let claimed = restarted.claim_next().unwrap().unwrap();
         assert_eq!(claimed.control().queue_order, order);
         assert_eq!(claimed.request().mode.as_deref(), Some("whiteboard"));
@@ -538,9 +537,9 @@ fn canonical_queue_order_survives_restart_and_ref_less_claim() {
 
 #[test]
 fn queue_filename_order_and_no_op_commit_are_strict() {
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -553,6 +552,7 @@ fn queue_filename_order_and_no_op_commit_are_strict() {
                 overlay_action: None,
             },
             &token,
+            root,
         )
         .unwrap();
         let original = read_dir_bounded(&queue_dir(&owner.root), 1)
@@ -574,9 +574,9 @@ fn queue_filename_order_and_no_op_commit_are_strict() {
         drop(client);
     });
 
-    with_runtime(|| {
+    with_runtime(|root| {
         let token = token();
-        let owner = CommandOwner::open(&token).unwrap();
+        let owner = CommandOwner::open(&token, root.to_path_buf()).unwrap();
         let client = ClientCommand::publish(
             &DaemonRequestV2 {
                 mode: None,
@@ -589,6 +589,7 @@ fn queue_filename_order_and_no_op_commit_are_strict() {
                 overlay_action: Some(TrayAction::LightDrawOff),
             },
             &token,
+            root,
         )
         .unwrap();
         let mut claimed = owner.claim_next().unwrap().unwrap();
@@ -600,11 +601,10 @@ fn queue_filename_order_and_no_op_commit_are_strict() {
 
 #[test]
 fn unknown_root_entries_and_noncanonical_queue_names_fail_closed() {
-    with_runtime(|| {
-        let root = command_root();
-        prepare_layout(&root).unwrap();
+    with_runtime(|root| {
+        prepare_layout(root).unwrap();
         fs::write(root.join("future"), b"sentinel").unwrap();
-        assert!(validate_root_shape(&root).is_err());
+        assert!(validate_root_shape(root).is_err());
         fs::remove_file(root.join("future")).unwrap();
         assert!(
             parse_queue_name("000000000000000A-00000000000000000000000000000000.request").is_err()
@@ -632,9 +632,8 @@ fn transition_types_cover_reconciliation_targets() {
 
 #[test]
 fn lock_deadline_is_reported_without_parsing_error_text() {
-    with_runtime(|| {
-        let root = command_root();
-        prepare_layout(&root).unwrap();
+    with_runtime(|root| {
+        prepare_layout(root).unwrap();
         let path = root.join("structured-timeout.lock");
         let held = open_lock(&path, true).unwrap();
         let contender = open_lock(&path, false).unwrap();

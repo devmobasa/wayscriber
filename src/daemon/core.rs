@@ -1,24 +1,18 @@
 use anyhow::{Context, Result};
 use log::{info, warn};
+use std::collections::VecDeque;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::os::fd::AsRawFd;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::RuntimeWakeSource;
 use crate::env_vars::NO_TRAY_ENV;
-use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
-#[cfg(test)]
-use crate::session_override::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
-use crate::tray_action::TrayAction;
-use crate::{decode_session_override, encode_session_override};
+use crate::tray_action::{TrayAction, TrayActionQueue};
 
 use super::control::DaemonToggleRequest;
 #[cfg(test)]
@@ -32,14 +26,14 @@ use super::protocol_v2::{
     ActionJournal, BootClock, BootDeadline, BootDeadlineSource, CommandOwner, CommandQueueWatcher,
     DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
 };
-use super::tray::start_system_tray;
-#[cfg(feature = "tray")]
-use super::types::TrayStatusShared;
+use super::tray::{TrayCleanupOwner, TrayRuntime, start_system_tray};
 use super::types::{
-    AlreadyRunningError, BackendRunner, DaemonControlEvent, OverlayActionIntents, OverlayState,
-    VisibilityIntents,
+    AlreadyRunningError, BackendRunner, DaemonControlMessage, DaemonEventInbox, OverlayState,
+    VisibilityIntent, daemon_event_channel,
 };
-use super::update_watch::start_update_watch;
+#[cfg(feature = "tray")]
+use super::types::{AvailableUpdateNotice, TraySnapshot, TrayStatus};
+use super::update_watch::{UpdateWatchHandle, start_update_watch};
 
 // Some desktop custom shortcut runners, observed on KDE, can launch the same
 // plain `--daemon-toggle` command twice about 400-600ms apart from one key press.
@@ -49,8 +43,6 @@ const DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW: Duration = Duration::from_millis(70
 // This bounds retries after journal I/O admission failures. It is unrelated to
 // the removed tray startup-discovery fallback; retries use the existing v2 timerfd.
 const ACTION_ADMISSION_RETRY_DELAY: Duration = Duration::from_millis(50);
-#[cfg(unix)]
-const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 mod toggles;
 
 fn finish_action_batch(failures: Vec<String>) -> Result<()> {
@@ -63,24 +55,31 @@ fn finish_action_batch(failures: Vec<String>) -> Result<()> {
 
 pub struct Daemon {
     pub(super) overlay_state: OverlayState,
-    pub(super) should_quit: Arc<AtomicBool>,
-    pub(super) visibility_intents: Arc<VisibilityIntents>,
+    pub(super) should_quit: bool,
+    daemon_event_inbox: Option<DaemonEventInbox>,
+    pending_visibility_intent: Option<VisibilityIntent>,
+    pending_overlay_actions: VecDeque<TrayAction>,
+    pub(super) tray_action_queue: TrayActionQueue,
     pub(super) initial_mode: Option<String>,
     pub(super) initial_named_session_file: Option<PathBuf>,
     pub(super) active_named_session_file: Option<PathBuf>,
     pub(super) instance_token: String,
     pub(super) freeze_on_show: bool,
     pub(super) tray_enabled: bool,
-    pub(super) backend_runner: Option<Arc<BackendRunner>>,
-    pub(super) tray_thread: Option<JoinHandle<()>>,
-    pub(super) update_watch_thread: Option<JoinHandle<()>>,
+    pub(super) process_broker: Option<crate::process_broker::ProcessBrokerHandle>,
+    pub(super) path_resolver: crate::paths::PathResolver,
+    pub(super) runtime_paths: crate::paths::PreparedRuntimePaths,
+    pub(super) config_store: crate::config::ConfigStore,
+    pub(super) logger: crate::logger::LoggerHandle,
+    pub(super) backend_runner: Option<Box<BackendRunner>>,
+    pub(super) tray_runtime: Option<TrayRuntime>,
+    tray_startup_cleanup: Option<TrayCleanupOwner>,
+    pub(super) update_watch: Option<UpdateWatchHandle>,
     pub(super) global_shortcuts_listener: Option<GlobalShortcutsListener>,
     pub(super) overlay_child: OverlayChildOwner,
-    pub(super) overlay_active: Arc<AtomicBool>,
-    pub(super) overlay_action_intents: Arc<OverlayActionIntents>,
     pub(super) pending_activation_token: Option<String>,
     pub(super) pending_toggle_request: Option<DaemonToggleRequest>,
-    pub(super) session_resume_override: Arc<AtomicU8>,
+    pub(super) session_resume_override: Option<bool>,
     pub(super) lock_file: Option<std::fs::File>,
     pub(super) overlay_spawn_failures: u32,
     pub(super) overlay_spawn_next_retry: Option<std::time::Instant>,
@@ -93,116 +92,173 @@ pub struct Daemon {
     v2_action_journal: Option<ActionJournal>,
     pending_action_admission_retry: Vec<TrayAction>,
     action_admission_retry_at: Option<BootDeadline>,
-    #[cfg(unix)]
-    signal_listener: Option<crate::unix_signals::SignalListener>,
+    #[cfg(test)]
+    _test_root: Option<crate::test_temp::TempDir>,
     #[cfg(feature = "tray")]
-    pub(super) tray_status: Arc<TrayStatusShared>,
+    pub(super) tray_status: TrayStatus,
+}
+
+pub(crate) struct DaemonLaunchOptions {
+    pub(crate) initial_mode: Option<String>,
+    pub(crate) tray_enabled: bool,
+    pub(crate) session_resume_override: Option<bool>,
+    pub(crate) initial_named_session_file: Option<PathBuf>,
+}
+
+pub(crate) struct DaemonRuntimeOwners {
+    pub(crate) process_broker: crate::process_broker::ProcessBrokerHandle,
+    pub(crate) path_resolver: crate::paths::PathResolver,
+    pub(crate) runtime_paths: crate::paths::PreparedRuntimePaths,
+    pub(crate) config_store: crate::config::ConfigStore,
+    pub(crate) logger: crate::logger::LoggerHandle,
+}
+
+struct DaemonInternalOwners {
+    process_broker: Option<crate::process_broker::ProcessBrokerHandle>,
+    path_resolver: crate::paths::PathResolver,
+    runtime_paths: crate::paths::PreparedRuntimePaths,
+    config_store: crate::config::ConfigStore,
+    logger: crate::logger::LoggerHandle,
 }
 
 impl Daemon {
+    fn new_internal(
+        options: DaemonLaunchOptions,
+        owners: DaemonInternalOwners,
+        backend_runner: Option<Box<BackendRunner>>,
+    ) -> Self {
+        let overlay_child = OverlayChildOwner::new(owners.runtime_paths.protocol_v2_root());
+        Self {
+            overlay_state: OverlayState::Hidden,
+            should_quit: false,
+            daemon_event_inbox: None,
+            pending_visibility_intent: None,
+            pending_overlay_actions: VecDeque::new(),
+            tray_action_queue: TrayActionQueue::new(owners.runtime_paths.tray_action_dir()),
+            initial_mode: options.initial_mode,
+            initial_named_session_file: options.initial_named_session_file,
+            active_named_session_file: None,
+            instance_token: crate::daemon::generate_daemon_instance_token(),
+            freeze_on_show: false,
+            tray_enabled: options.tray_enabled,
+            process_broker: owners.process_broker,
+            path_resolver: owners.path_resolver,
+            runtime_paths: owners.runtime_paths,
+            config_store: owners.config_store,
+            logger: owners.logger,
+            backend_runner,
+            tray_runtime: None,
+            tray_startup_cleanup: None,
+            update_watch: None,
+            global_shortcuts_listener: None,
+            overlay_child,
+            pending_activation_token: None,
+            pending_toggle_request: None,
+            session_resume_override: options.session_resume_override,
+            lock_file: None,
+            overlay_spawn_failures: 0,
+            overlay_spawn_next_retry: None,
+            overlay_spawn_backoff_logged: false,
+            last_plain_visibility_toggle_completed_at: None,
+            protocol_mode: DaemonControlProtocolMode::production(),
+            v2_command_owner: None,
+            v2_command_watcher: None,
+            v2_deadline_source: None,
+            v2_action_journal: None,
+            pending_action_admission_retry: Vec::new(),
+            action_admission_retry_at: None,
+            #[cfg(test)]
+            _test_root: None,
+            #[cfg(feature = "tray")]
+            tray_status: TrayStatus::default(),
+        }
+    }
+
+    #[cfg(test)]
     pub fn new(
         initial_mode: Option<String>,
         tray_enabled: bool,
         session_resume_override: Option<bool>,
         initial_named_session_file: Option<PathBuf>,
     ) -> Self {
-        let override_state = Arc::new(AtomicU8::new(encode_session_override(
-            session_resume_override,
-        )));
-        Self {
-            overlay_state: OverlayState::Hidden,
-            should_quit: Arc::new(AtomicBool::new(false)),
-            visibility_intents: Arc::new(VisibilityIntents::default()),
-            initial_mode,
-            initial_named_session_file,
-            active_named_session_file: None,
-            instance_token: crate::daemon::generate_daemon_instance_token(),
-            freeze_on_show: false,
-            tray_enabled,
-            backend_runner: None,
-            tray_thread: None,
-            update_watch_thread: None,
-            global_shortcuts_listener: None,
-            overlay_child: OverlayChildOwner::default(),
-            overlay_active: Arc::new(AtomicBool::new(false)),
-            overlay_action_intents: Arc::new(OverlayActionIntents::default()),
-            pending_activation_token: None,
-            pending_toggle_request: None,
-            session_resume_override: override_state,
-            lock_file: None,
-            overlay_spawn_failures: 0,
-            overlay_spawn_next_retry: None,
-            overlay_spawn_backoff_logged: false,
-            last_plain_visibility_toggle_completed_at: None,
-            protocol_mode: DaemonControlProtocolMode::production(),
-            v2_command_owner: None,
-            v2_command_watcher: None,
-            v2_deadline_source: None,
-            v2_action_journal: None,
-            pending_action_admission_retry: Vec::new(),
-            action_admission_retry_at: None,
-            #[cfg(unix)]
-            signal_listener: None,
-            #[cfg(feature = "tray")]
-            tray_status: Arc::new(TrayStatusShared::new()),
-        }
-    }
-
-    #[cfg(test)]
-    fn with_backend_runner_internal(
-        initial_mode: Option<String>,
-        backend_runner: Arc<BackendRunner>,
-    ) -> Self {
-        let override_state = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
-        Self {
-            overlay_state: OverlayState::Hidden,
-            should_quit: Arc::new(AtomicBool::new(false)),
-            visibility_intents: Arc::new(VisibilityIntents::default()),
-            initial_mode,
-            initial_named_session_file: None,
-            active_named_session_file: None,
-            instance_token: crate::daemon::generate_daemon_instance_token(),
-            freeze_on_show: false,
-            tray_enabled: true,
-            backend_runner: Some(backend_runner),
-            tray_thread: None,
-            update_watch_thread: None,
-            global_shortcuts_listener: None,
-            overlay_child: OverlayChildOwner::default(),
-            overlay_active: Arc::new(AtomicBool::new(false)),
-            overlay_action_intents: Arc::new(OverlayActionIntents::default()),
-            pending_activation_token: None,
-            pending_toggle_request: None,
-            session_resume_override: override_state,
-            lock_file: None,
-            overlay_spawn_failures: 0,
-            overlay_spawn_next_retry: None,
-            overlay_spawn_backoff_logged: false,
-            last_plain_visibility_toggle_completed_at: None,
-            protocol_mode: DaemonControlProtocolMode::production(),
-            v2_command_owner: None,
-            v2_command_watcher: None,
-            v2_deadline_source: None,
-            v2_action_journal: None,
-            pending_action_admission_retry: Vec::new(),
-            action_admission_retry_at: None,
-            #[cfg(unix)]
-            signal_listener: None,
-            #[cfg(feature = "tray")]
-            tray_status: Arc::new(TrayStatusShared::new()),
-        }
+        let test_root = crate::test_temp::tempdir()
+            .expect("daemon test fixture creates its isolated path root");
+        let path_resolver = daemon_test_path_resolver(&test_root);
+        let runtime_paths = crate::paths::PreparedRuntimePaths::prepare(&path_resolver)
+            .expect("daemon test fixture provides a private runtime directory");
+        let config_store = crate::config::ConfigStore::from_resolver(&path_resolver)
+            .expect("daemon test fixture provides a config identity");
+        let mut daemon = Self::new_internal(
+            DaemonLaunchOptions {
+                initial_mode,
+                tray_enabled,
+                session_resume_override,
+                initial_named_session_file,
+            },
+            DaemonInternalOwners {
+                process_broker: None,
+                path_resolver,
+                runtime_paths,
+                config_store,
+                logger: crate::logger::LoggerHandle::discarding(),
+            },
+            None,
+        );
+        daemon._test_root = Some(test_root);
+        daemon
     }
 
     #[cfg(test)]
     pub fn with_backend_runner(
         initial_mode: Option<String>,
-        backend_runner: Arc<BackendRunner>,
+        backend_runner: Box<BackendRunner>,
     ) -> Self {
-        Self::with_backend_runner_internal(initial_mode, backend_runner)
+        let test_root = crate::test_temp::tempdir()
+            .expect("daemon test fixture creates its isolated path root");
+        let path_resolver = daemon_test_path_resolver(&test_root);
+        let runtime_paths = crate::paths::PreparedRuntimePaths::prepare(&path_resolver)
+            .expect("daemon test fixture provides a private runtime directory");
+        let config_store = crate::config::ConfigStore::from_resolver(&path_resolver)
+            .expect("daemon test fixture provides a config identity");
+        let mut daemon = Self::new_internal(
+            DaemonLaunchOptions {
+                initial_mode,
+                tray_enabled: true,
+                session_resume_override: None,
+                initial_named_session_file: None,
+            },
+            DaemonInternalOwners {
+                process_broker: None,
+                path_resolver,
+                runtime_paths,
+                config_store,
+                logger: crate::logger::LoggerHandle::discarding(),
+            },
+            Some(backend_runner),
+        );
+        daemon._test_root = Some(test_root);
+        daemon
     }
 
     pub fn set_freeze_on_show(&mut self, enabled: bool) {
         self.freeze_on_show = enabled;
+    }
+
+    pub(crate) fn new_with_process_broker(
+        options: DaemonLaunchOptions,
+        owners: DaemonRuntimeOwners,
+    ) -> Self {
+        Self::new_internal(
+            options,
+            DaemonInternalOwners {
+                process_broker: Some(owners.process_broker),
+                path_resolver: owners.path_resolver,
+                runtime_paths: owners.runtime_paths,
+                config_store: owners.config_store,
+                logger: owners.logger,
+            },
+            None,
+        )
     }
 
     pub(super) fn effective_named_session_file(&self) -> Option<PathBuf> {
@@ -213,11 +269,11 @@ impl Daemon {
     }
 
     pub(super) fn session_resume_override(&self) -> Option<bool> {
-        decode_session_override(self.session_resume_override.load(Ordering::Acquire))
+        self.session_resume_override
     }
 
     fn acquire_daemon_lock(&mut self) -> Result<()> {
-        let lock_path = daemon_lock_file();
+        let lock_path = self.runtime_paths.daemon_lock_file();
         if let Some(parent) = lock_path.parent() {
             fs::create_dir_all(parent).with_context(|| {
                 format!("failed to create runtime directory {}", parent.display())
@@ -242,8 +298,18 @@ impl Daemon {
         }
     }
 
-    /// Run daemon with signal handling
-    pub fn run(&mut self) -> Result<()> {
+    /// Run the daemon with the root-owned external-event source.
+    pub fn run(
+        &mut self,
+        signal_source: &mut dyn crate::unix_signals::SignalEventSource,
+    ) -> Result<()> {
+        self.logger
+            .info("wayscriber::daemon", "daemon root started");
+        let process_broker = self
+            .process_broker
+            .as_ref()
+            .context("daemon requires an explicit process broker handle")?
+            .clone();
         info!("Starting wayscriber daemon");
         if self.freeze_on_show {
             info!("Daemon activations will request frozen mode on show");
@@ -253,10 +319,10 @@ impl Daemon {
         info!("Legacy raw SIGUSR1 toggle still works, but cannot carry launch args");
 
         self.acquire_daemon_lock()?;
-        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
+        if let Err(err) = crate::daemon::clear_daemon_pid_file(&self.runtime_paths) {
             warn!("Failed to clear stale daemon pid file on startup: {}", err);
         }
-        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
+        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file(&self.runtime_paths) {
             warn!(
                 "Failed to clear stale daemon toggle request on startup: {}",
                 err
@@ -265,85 +331,58 @@ impl Daemon {
 
         let daemon_wake =
             RuntimeWakeSource::new().context("Failed to create daemon control wake descriptor")?;
-        let visibility = self.visibility_intents.publisher(daemon_wake.handle());
-        let action = self.overlay_action_intents.publisher(daemon_wake.handle());
-        let quit_event = DaemonControlEvent::new(self.should_quit.clone(), daemon_wake.handle());
+        let (daemon_event_inbox, mut daemon_event_senders) = daemon_event_channel();
+        self.daemon_event_inbox = Some(daemon_event_inbox);
+        let visibility = daemon_event_senders.visibility(
+            daemon_wake
+                .try_sender()
+                .context("Failed to duplicate daemon visibility wake descriptor")?,
+        );
+        let action = daemon_event_senders
+            .overlay_actions(
+                daemon_wake
+                    .try_sender()
+                    .context("Failed to duplicate daemon action wake descriptor")?,
+            )
+            .context("Failed to claim daemon overlay-action publisher")?;
+        let quit_event = daemon_event_senders.quit(
+            daemon_wake
+                .try_sender()
+                .context("Failed to duplicate daemon shutdown wake descriptor")?,
+        );
 
-        #[cfg(unix)]
-        {
-            let listener_wake = daemon_wake.handle();
-            let signal_visibility = visibility.clone();
-            let signal_quit = quit_event.clone();
-            self.signal_listener = Some(
-                crate::unix_signals::spawn_listener(
-                    &DAEMON_SIGNALS,
-                    move |sig| {
-                        if signal_quit.is_raised() {
-                            return;
-                        }
-                        match sig {
-                            libc::SIGUSR1 => {
-                                info!("Received SIGUSR1 - toggling overlay");
-                                if let Err(error) = signal_visibility.publish(
-                                    None,
-                                    true,
-                                    "SIGUSR1 visibility publication",
-                                ) {
-                                    warn!("Failed to wake daemon after SIGUSR1: {error}");
-                                }
-                            }
-                            libc::SIGTERM | libc::SIGINT => {
-                                info!(
-                                    "Received {} - initiating graceful shutdown",
-                                    if sig == libc::SIGTERM {
-                                        "SIGTERM"
-                                    } else {
-                                        "SIGINT"
-                                    }
-                                );
-                                if let Err(error) = signal_quit.raise("daemon shutdown signal") {
-                                    warn!("Failed to wake daemon after shutdown signal: {error}");
-                                }
-                            }
-                            _ => warn!("Received unexpected signal: {sig}"),
-                        }
-                    },
-                    move || {
-                        if let Err(err) = listener_wake.wake() {
-                            warn!("Failed to wake daemon after signal publication: {err}");
-                        }
-                    },
-                )
-                .context("Failed to register signal handler")?,
-            );
-        }
-
-        // Only publish the pid after SIGUSR1 is handled. A racing
-        // `--daemon-toggle` sends SIGUSR1 to this pid, and the default action
-        // before handler installation would terminate the daemon.
+        // The app root installed and blocked the daemon signals before any
+        // ordinary runtime thread. Only publish the pid after this method owns
+        // the descriptor consumer, so a racing legacy SIGUSR1 remains queued
+        // for the control loop instead of taking its default action.
         let publish_result = match self.protocol_mode {
             DaemonControlProtocolMode::LegacyV1 => {
-                super::protocol_v2::prepare_rollback_compatibility()
+                super::protocol_v2::prepare_rollback_compatibility(&self.runtime_paths)
                     .context("v2 state is not safe for rollback compatibility")?;
-                crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)
+                crate::daemon::write_daemon_pid_file(
+                    std::process::id(),
+                    &self.instance_token,
+                    &self.runtime_paths,
+                )
             }
             #[cfg(test)]
-            DaemonControlProtocolMode::DarkV2Harness => {
-                unreachable!("dark harness must install protocol objects directly")
-            }
+            DaemonControlProtocolMode::DarkV2Harness => Err(anyhow::anyhow!(
+                "dark harness must install protocol objects directly"
+            )),
             DaemonControlProtocolMode::PublishedV2 => {
                 let token = ProtocolToken::generate()
                     .context("failed to generate daemon v2 instance token")?;
-                let owner = CommandOwner::open(&token.to_string())
+                let protocol_root = self.runtime_paths.protocol_v2_root();
+                let owner = CommandOwner::open(&token.to_string(), protocol_root.clone())
                     .context("failed to open daemon v2 command owner")?;
-                super::protocol_v2::recover_stale_child_records()
+                super::protocol_v2::recover_stale_child_records(&protocol_root)
                     .context("failed to recover daemon v2 child proofs")?;
                 let watcher = CommandQueueWatcher::new(&owner.queue_path())
                     .context("failed to watch daemon v2 command queue")?;
                 let deadline_source = BootDeadlineSource::new()
                     .context("failed to create daemon v2 deadline source")?;
-                let action_journal =
-                    ActionJournal::open().context("failed to open daemon v2 action journal")?;
+                let action_journal = ActionJournal::open(protocol_root)
+                    .context("failed to open daemon v2 action journal")?;
                 let runtime = DaemonRuntimeRecordV2::current(token)
                     .context("failed to build daemon v2 runtime identity")?;
                 self.instance_token = runtime.v2_instance_token.clone();
@@ -352,38 +391,49 @@ impl Daemon {
                 self.v2_deadline_source = Some(deadline_source);
                 self.v2_action_journal = Some(action_journal);
                 super::protocol_v2::write_runtime_record_v2(
-                    &crate::paths::daemon_pid_file(),
+                    &self.runtime_paths.daemon_pid_file(),
                     &runtime,
                 )
             }
         };
-        if let Err(err) = publish_result {
-            if let Err(stop_err) = self.stop_signal_listener() {
-                warn!(
-                    "Failed to stop signal listener after readiness publication error: {stop_err}"
-                );
-            }
-            return Err(err);
-        }
+        publish_result?;
 
         // Start system tray (optional)
         if self.tray_enabled {
-            let tray_overlay_active = self.overlay_active.clone();
             #[cfg(feature = "tray")]
-            let tray_status = self.tray_status.clone();
+            let tray_status_publisher = daemon_event_senders.tray_status(
+                daemon_wake
+                    .try_sender()
+                    .context("Failed to duplicate daemon tray-status wake descriptor")?,
+            );
             #[cfg(not(feature = "tray"))]
-            let tray_status = ();
+            let tray_status_publisher = ();
+            #[cfg(feature = "tray")]
+            let tray_snapshot = self.tray_snapshot();
+            #[cfg(not(feature = "tray"))]
+            let tray_snapshot = ();
             match start_system_tray(
-                visibility.clone(),
-                action,
-                quit_event.clone(),
-                tray_overlay_active,
-                tray_status,
+                super::tray::TrayControl {
+                    visibility: visibility
+                        .try_duplicate()
+                        .context("Failed to duplicate daemon tray visibility wake descriptor")?,
+                    action,
+                    quit: quit_event
+                        .try_duplicate()
+                        .context("Failed to duplicate daemon tray shutdown wake descriptor")?,
+                },
+                tray_status_publisher,
+                tray_snapshot,
+                process_broker.clone(),
+                self.config_store.clone(),
+                self.path_resolver.clone(),
             ) {
-                Ok(tray_handle) => {
-                    self.tray_thread = Some(tray_handle);
+                Ok(tray_runtime) => {
+                    self.tray_runtime = Some(tray_runtime);
                 }
-                Err(err) => {
+                Err(failure) => {
+                    let (err, cleanup) = failure.into_parts();
+                    self.tray_startup_cleanup = cleanup;
                     warn!("System tray unavailable: {}", err);
                     warn!(
                         "Continuing without system tray; use --no-tray or {NO_TRAY_ENV}=1 to silence this warning"
@@ -396,19 +446,20 @@ impl Daemon {
 
         // Update notices are independent of the tray: without it the answer
         // still reaches the desktop notification and the About window.
-        {
-            #[cfg(feature = "tray")]
-            let update_sink = self.tray_status.clone();
-            #[cfg(not(feature = "tray"))]
-            let update_sink = ();
-            self.update_watch_thread =
-                start_update_watch(quit_event.clone(), self.overlay_active.clone(), update_sink);
-        }
+        self.update_watch = start_update_watch(
+            daemon_event_senders.update_watch(
+                daemon_wake
+                    .try_sender()
+                    .context("Failed to duplicate update-watch wake descriptor")?,
+            ),
+            process_broker,
+            self.config_store.clone(),
+            crate::update_check::UpdateCacheStore::from_resolver(&self.path_resolver)?,
+        );
 
-        match current_shortcut_runtime_backend() {
+        match current_shortcut_runtime_backend(&self.path_resolver) {
             ShortcutRuntimeBackend::PortalGlobalShortcuts => {
-                self.global_shortcuts_listener =
-                    start_global_shortcuts_listener(visibility, self.should_quit.clone());
+                self.global_shortcuts_listener = start_global_shortcuts_listener(visibility);
                 if self.global_shortcuts_listener.is_some() {
                     info!("Global shortcuts portal listener started");
                 }
@@ -425,7 +476,8 @@ impl Daemon {
 
         info!("Daemon ready - waiting for toggle signal");
 
-        let run_result = self.run_control_loop_and_invalidate_on_failure(&daemon_wake);
+        let run_result =
+            self.run_control_loop_and_invalidate_on_failure(&daemon_wake, signal_source);
         let cleanup_result = self.shutdown_after_run();
         run_result.and(cleanup_result)
     }
@@ -433,39 +485,42 @@ impl Daemon {
     fn run_control_loop_and_invalidate_on_failure(
         &mut self,
         daemon_wake: &RuntimeWakeSource,
+        signal_source: &mut dyn crate::unix_signals::SignalEventSource,
     ) -> Result<()> {
-        let result = self.run_control_loop(daemon_wake);
+        let result = self.run_control_loop(daemon_wake, signal_source);
         if result.is_err()
-            && let Err(err) = crate::daemon::clear_daemon_pid_file()
+            && let Err(err) = crate::daemon::clear_daemon_pid_file(&self.runtime_paths)
         {
             warn!("Failed to invalidate daemon readiness after runtime failure: {err}");
         }
         result
     }
 
-    fn run_control_loop(&mut self, daemon_wake: &RuntimeWakeSource) -> Result<()> {
+    fn run_control_loop(
+        &mut self,
+        daemon_wake: &RuntimeWakeSource,
+        signal_source: &mut dyn crate::unix_signals::SignalEventSource,
+    ) -> Result<()> {
         if self.protocol_mode != DaemonControlProtocolMode::LegacyV1 {
             self.process_v2_commands()?;
         }
         loop {
-            self.ensure_signal_listener_healthy()?;
+            self.drain_signal_events(signal_source)?;
             self.update_overlay_process_state()?;
+            self.drain_daemon_events();
+            self.sync_tray_snapshot();
 
-            // Check for quit signal
-            // Use Acquire ordering to ensure we see all memory operations
-            // that happened before the flag was set
-            if self.should_quit.load(Ordering::Acquire) {
+            if self.should_quit {
                 info!("Quit signal received - exiting daemon");
                 break;
             }
 
-            // Action readiness and its FIFO batch are claimed under one mutex.
-            // Visibility and its metadata are claimed separately immediately
-            // afterward. A non-empty action batch intentionally absorbs that
-            // coalesced visibility snapshot for compatibility with the existing
-            // tray behavior.
+            // The owner claims its FIFO action batch first, then its coalesced
+            // visibility intent. A non-empty action batch intentionally absorbs
+            // that visibility snapshot for compatibility with the existing tray
+            // behavior.
             let (action_intents, claimed_admission_retry) = self.claim_overlay_action_batch()?;
-            let visibility = self.visibility_intents.claim();
+            let visibility = self.pending_visibility_intent.take();
             if !action_intents.is_empty() {
                 let result = self.process_overlay_action_intents(action_intents);
                 if let Err(error) = result {
@@ -473,7 +528,7 @@ impl Daemon {
                 }
                 if claimed_admission_retry
                     && self.pending_action_admission_retry.is_empty()
-                    && self.overlay_action_intents.is_ready()
+                    && !self.pending_overlay_actions.is_empty()
                 {
                     continue;
                 }
@@ -494,14 +549,19 @@ impl Daemon {
                     warn!("Toggle overlay failed: {error}");
                 }
             }
+            self.sync_tray_snapshot();
 
             self.arm_v2_lifecycle_deadline()?;
             let readiness = wait_for_daemon_lifecycle(
                 daemon_wake,
+                signal_source,
                 self.v2_command_watcher.as_ref(),
                 self.v2_deadline_source.as_ref(),
                 &self.overlay_child,
             )?;
+            if readiness.signal {
+                self.drain_signal_events(signal_source)?;
+            }
             if readiness.deadline {
                 self.v2_deadline_source
                     .as_ref()
@@ -530,6 +590,130 @@ impl Daemon {
         Ok(())
     }
 
+    fn drain_daemon_events(&mut self) {
+        let Some(inbox) = self.daemon_event_inbox.as_ref() else {
+            return;
+        };
+        let batch = inbox.drain();
+        self.pending_overlay_actions.extend(batch.overlay_actions);
+        for message in batch.controls {
+            match message {
+                DaemonControlMessage::Quit => self.should_quit = true,
+                DaemonControlMessage::Visibility(intent) => {
+                    let pending = self
+                        .pending_visibility_intent
+                        .get_or_insert_with(VisibilityIntent::default);
+                    if intent.activation_token.is_some() {
+                        pending.activation_token = intent.activation_token;
+                    }
+                    pending.signal_requested |= intent.signal_requested;
+                }
+                DaemonControlMessage::UpdateAvailable(update) => {
+                    #[cfg(feature = "tray")]
+                    {
+                        self.tray_status.available_update =
+                            update.map(|update| AvailableUpdateNotice {
+                                version: update.version,
+                                update_url: update.update_url,
+                            });
+                    }
+                    #[cfg(not(feature = "tray"))]
+                    let _ = update;
+                }
+                DaemonControlMessage::UpdateNotificationAuthorization(request) => {
+                    let authorized = self.overlay_state == OverlayState::Hidden;
+                    match self.update_watch.as_ref() {
+                        Some(watch) => {
+                            if let Err(error) = watch.resolve_notification_authorization(
+                                request.request_id,
+                                request.update,
+                                authorized,
+                            ) {
+                                log::debug!(
+                                    "Update notification authorization could not reach watcher: {error}"
+                                );
+                            }
+                        }
+                        None => log::debug!(
+                            "Update notification authorization arrived after watcher shutdown"
+                        ),
+                    }
+                }
+                #[cfg(feature = "tray")]
+                DaemonControlMessage::TrayWatcherOnline => {
+                    if self.tray_status.watcher_offline {
+                        info!("StatusNotifierWatcher is online");
+                    }
+                    self.tray_status.watcher_offline = false;
+                    self.tray_status.watcher_reason = None;
+                }
+                #[cfg(feature = "tray")]
+                DaemonControlMessage::TrayWatcherOffline(reason) => {
+                    if !self.tray_status.watcher_offline
+                        || self.tray_status.watcher_reason.as_deref() != Some(reason.as_str())
+                    {
+                        warn!("StatusNotifierWatcher is offline: {reason}");
+                    }
+                    self.tray_status.watcher_offline = true;
+                    self.tray_status.watcher_reason = Some(reason);
+                }
+            }
+        }
+    }
+
+    fn drain_signal_events(
+        &mut self,
+        signal_source: &mut dyn crate::unix_signals::SignalEventSource,
+    ) -> Result<()> {
+        for event in signal_source
+            .drain()
+            .context("daemon signal source failed")?
+        {
+            match event {
+                crate::unix_signals::SignalEvent::ToggleOverlay => {
+                    info!("Received SIGUSR1 - toggling overlay");
+                    self.pending_visibility_intent = Some(VisibilityIntent {
+                        activation_token: None,
+                        signal_requested: true,
+                    });
+                }
+                crate::unix_signals::SignalEvent::Shutdown(signal) => {
+                    let name = match signal {
+                        crate::unix_signals::ShutdownSignal::Interrupt => "SIGINT",
+                        crate::unix_signals::ShutdownSignal::Terminate => "SIGTERM",
+                    };
+                    info!("Received {name} - initiating graceful shutdown");
+                    self.should_quit = true;
+                }
+                crate::unix_signals::SignalEvent::TrayAction => {
+                    warn!("Daemon received an overlay-only tray signal event");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "tray")]
+    fn tray_snapshot(&self) -> TraySnapshot {
+        TraySnapshot {
+            overlay_active: self.overlay_state == OverlayState::Visible,
+            status: self.tray_status.clone(),
+        }
+    }
+
+    #[cfg(feature = "tray")]
+    fn sync_tray_snapshot(&mut self) {
+        let snapshot = self.tray_snapshot();
+        if let Some(runtime) = self.tray_runtime.as_mut()
+            && let Err(error) = runtime.sync(snapshot)
+        {
+            warn!("Failed to publish daemon state to system tray: {error}");
+        }
+    }
+
+    #[cfg(not(feature = "tray"))]
+    fn sync_tray_snapshot(&mut self) {}
+
     fn arm_v2_lifecycle_deadline(&self) -> Result<()> {
         let Some(source) = self.v2_deadline_source.as_ref() else {
             return Ok(());
@@ -552,7 +736,7 @@ impl Daemon {
 
     fn claim_overlay_action_batch(&mut self) -> Result<(Vec<TrayAction>, bool)> {
         if self.pending_action_admission_retry.is_empty() {
-            return Ok((self.overlay_action_intents.claim_batch(), false));
+            return Ok((self.pending_overlay_actions.drain(..).collect(), false));
         }
         if let Some(retry_at) = self.action_admission_retry_at
             && BootClock::now()? < retry_at
@@ -582,7 +766,7 @@ impl Daemon {
                     failures.push(format!("{}: {error:#}", action.as_str()));
                 }
             }
-            self.overlay_action_intents.finish_batch(action_count);
+            self.release_overlay_action_slots(action_count);
             return finish_action_batch(failures);
         }
 
@@ -661,7 +845,7 @@ impl Daemon {
         completed: usize,
         failures: &mut Vec<String>,
     ) {
-        self.overlay_action_intents.finish_batch(completed);
+        self.release_overlay_action_slots(completed);
         if retry.is_empty() {
             return;
         }
@@ -676,6 +860,18 @@ impl Daemon {
             Err(error) => failures.push(format!(
                 "failed to schedule anonymous action admission retry: {error}"
             )),
+        }
+    }
+
+    fn release_overlay_action_slots(&self, completed: usize) {
+        if completed == 0 {
+            return;
+        }
+        let Some(inbox) = self.daemon_event_inbox.as_ref() else {
+            return;
+        };
+        if let Err(error) = inbox.release_overlay_action_slots(completed) {
+            log::debug!("Overlay-action publisher no longer accepts capacity releases: {error}");
         }
     }
 
@@ -798,18 +994,44 @@ impl Daemon {
         if let Err(err) = self.hide_overlay() {
             warn!("Failed to hide overlay during shutdown: {}", err);
         }
-        self.should_quit.store(true, Ordering::Release);
+        self.should_quit = true;
+        self.stop_runtime_workers();
+        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file(&self.runtime_paths) {
+            warn!("Failed to clear daemon toggle request file: {}", err);
+        }
+        if let Err(err) = crate::daemon::clear_daemon_pid_file(&self.runtime_paths) {
+            warn!("Failed to clear daemon pid file: {}", err);
+        }
+        Ok(())
+    }
+
+    fn stop_runtime_workers(&mut self) {
         if let Some(listener) = self.global_shortcuts_listener.as_mut() {
             listener.request_shutdown();
         }
-        if let Some(handle) = self.tray_thread.take() {
-            match handle.join() {
+        if let Some(runtime) = self.tray_runtime.as_mut() {
+            runtime.request_shutdown();
+        }
+        if let Some(cleanup) = self.tray_startup_cleanup.as_mut() {
+            cleanup.request_shutdown();
+        }
+        if let Some(watch) = self.update_watch.as_mut() {
+            watch.request_shutdown();
+        }
+        if let Some(runtime) = self.tray_runtime.take() {
+            match runtime.join() {
                 Ok(()) => info!("System tray thread joined"),
                 Err(err) => warn!("System tray thread panicked: {:?}", err),
             }
         }
-        if let Some(handle) = self.update_watch_thread.take() {
-            match handle.join() {
+        if let Some(cleanup) = self.tray_startup_cleanup.take() {
+            match cleanup.join() {
+                Ok(()) => info!("Tray startup cleanup thread joined"),
+                Err(err) => warn!("Tray startup cleanup thread panicked: {:?}", err),
+            }
+        }
+        if let Some(watch) = self.update_watch.take() {
+            match watch.join() {
                 Ok(()) => info!("Update watcher thread joined"),
                 Err(err) => warn!("Update watcher thread panicked: {:?}", err),
             }
@@ -820,67 +1042,48 @@ impl Daemon {
                 Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
             }
         }
-        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
-            warn!("Failed to clear daemon toggle request file: {}", err);
-        }
-        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
-            warn!("Failed to clear daemon pid file: {}", err);
-        }
-        self.stop_signal_listener()
     }
+}
 
-    fn ensure_signal_listener_healthy(&self) -> Result<()> {
-        #[cfg(unix)]
-        {
-            let listener = self
-                .signal_listener
-                .as_ref()
-                .context("daemon signal listener is not installed")?;
-            match listener.health() {
-                crate::unix_signals::SignalListenerHealth::Running => Ok(()),
-                crate::unix_signals::SignalListenerHealth::Failed(failure) => {
-                    Err(anyhow::anyhow!("daemon signal listener failed: {failure}"))
-                }
-                health => Err(anyhow::anyhow!(
-                    "daemon signal listener stopped unexpectedly: {health:?}"
-                )),
-            }
-        }
+#[cfg(test)]
+fn daemon_test_path_resolver(root: &crate::test_temp::TempDir) -> crate::paths::PathResolver {
+    use crate::env_vars::{
+        HOME_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV,
+    };
 
-        #[cfg(not(unix))]
-        {
-            Ok(())
-        }
-    }
+    let home = root.path().join("home");
+    let config = root.path().join("config");
+    let cache = root.path().join("cache");
+    let data = root.path().join("data");
+    let runtime = root.path().join("runtime");
+    crate::paths::PathResolver::from_environment(crate::paths::PathEnvironment::for_test(&[
+        (HOME_ENV, home.as_os_str()),
+        (XDG_CONFIG_HOME_ENV, config.as_os_str()),
+        (XDG_CACHE_HOME_ENV, cache.as_os_str()),
+        (XDG_DATA_HOME_ENV, data.as_os_str()),
+        (XDG_RUNTIME_DIR_ENV, runtime.as_os_str()),
+    ]))
+}
 
-    fn stop_signal_listener(&mut self) -> Result<()> {
-        #[cfg(unix)]
-        if let Some(mut listener) = self.signal_listener.take() {
-            let failure = match listener.health() {
-                crate::unix_signals::SignalListenerHealth::Failed(failure) => Some(failure),
-                _ => None,
-            };
-            listener
-                .stop_and_join()
-                .context("failed to stop daemon signal listener")?;
-            if let Some(failure) = failure {
-                return Err(anyhow::anyhow!(
-                    "daemon signal listener failed before teardown: {failure}"
-                ));
-            }
-        }
-        Ok(())
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        // `run` performs full daemon-state cleanup. This fallback owns only
+        // worker lifetimes so construction errors and early drops cannot
+        // detach a thread that inherited the root signal mask.
+        self.stop_runtime_workers();
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct DaemonLifecycleReadiness {
+    signal: bool,
     command_queue: bool,
     deadline: bool,
 }
 
 fn wait_for_daemon_lifecycle(
     daemon_wake: &RuntimeWakeSource,
+    signal_source: &dyn crate::unix_signals::SignalEventSource,
     command_watcher: Option<&CommandQueueWatcher>,
     deadline_source: Option<&BootDeadlineSource>,
     overlay_child: &OverlayChildOwner,
@@ -890,6 +1093,15 @@ fn wait_for_daemon_lifecycle(
         events: libc::POLLIN,
         revents: 0,
     }];
+    let signal_index = pollfds.len();
+    pollfds.push(libc::pollfd {
+        fd: signal_source
+            .poll_fd()
+            .context("daemon signal descriptor is unavailable")?
+            .as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    });
     if let Some(watcher) = command_watcher {
         pollfds.push(libc::pollfd {
             fd: watcher.poll_fd().as_raw_fd(),
@@ -897,7 +1109,7 @@ fn wait_for_daemon_lifecycle(
             revents: 0,
         });
     }
-    let command_index = command_watcher.map(|_| 1);
+    let command_index = command_watcher.map(|_| 2);
     let deadline_index = deadline_source.map(|source| {
         let index = pollfds.len();
         pollfds.push(libc::pollfd {
@@ -918,18 +1130,14 @@ fn wait_for_daemon_lifecycle(
     });
     loop {
         // SAFETY: the descriptor remains owned by `daemon_wake` throughout poll.
-        let ready = unsafe {
-            libc::poll(
-                pollfds.as_mut_ptr(),
-                pollfds
-                    .len()
-                    .try_into()
-                    .expect("poll descriptor count fits"),
-                -1,
-            )
-        };
+        let poll_count: libc::nfds_t = pollfds
+            .len()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("daemon lifecycle descriptor count exceeds nfds_t"))?;
+        let ready = unsafe { libc::poll(pollfds.as_mut_ptr(), poll_count, -1) };
         if ready == 0 {
             return Ok(DaemonLifecycleReadiness {
+                signal: false,
                 command_queue: false,
                 deadline: false,
             });
@@ -951,6 +1159,7 @@ fn wait_for_daemon_lifecycle(
             }
         }
         let daemon_ready = pollfds[0].revents & libc::POLLIN != 0;
+        let signal_ready = pollfds[signal_index].revents & libc::POLLIN != 0;
         let command_ready = command_index
             .and_then(|index| pollfds.get(index))
             .is_some_and(|pollfd| pollfd.revents & libc::POLLIN != 0);
@@ -960,7 +1169,7 @@ fn wait_for_daemon_lifecycle(
         let child_ready = child_index
             .and_then(|index| pollfds.get(index))
             .is_some_and(|pollfd| pollfd.revents & libc::POLLIN != 0);
-        if !daemon_ready && !command_ready && !deadline_ready && !child_ready {
+        if !daemon_ready && !signal_ready && !command_ready && !deadline_ready && !child_ready {
             return Err(anyhow::anyhow!(
                 "daemon wake descriptor returned invalid readiness {:#x}",
                 pollfds[0].revents
@@ -972,6 +1181,7 @@ fn wait_for_daemon_lifecycle(
                 .context("failed to drain daemon wake descriptor")?;
         }
         return Ok(DaemonLifecycleReadiness {
+            signal: signal_ready,
             command_queue: command_ready,
             deadline: deadline_ready,
         });

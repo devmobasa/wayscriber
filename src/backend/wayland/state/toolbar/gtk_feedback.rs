@@ -6,7 +6,7 @@
 //! revealed. This avoids feeding surface movement back into GTK-local gesture
 //! coordinates.
 
-use super::super::{WaylandState, drag_log};
+use super::super::WaylandState;
 use super::MoveDragKind;
 use crate::toolbar_gtk::{GtkToolbarDragPhase, GtkToolbarKind, GtkToolbarSurfaceSize};
 
@@ -164,7 +164,7 @@ impl WaylandState {
         };
         self.data.toolbar_top_offset = x;
         self.data.toolbar_top_offset_y = y;
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "gtk top final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({base_x:.3},{:.3}) end=({:.3},{:.3})",
             before.0,
             before.1,
@@ -199,7 +199,7 @@ impl WaylandState {
         };
         self.data.toolbar_side_offset_x = x;
         self.data.toolbar_side_offset = y;
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "gtk side final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({:.3},{:.3}) end=({:.3},{:.3})",
             before.0,
             before.1,

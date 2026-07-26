@@ -3,7 +3,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
+use crate::backend::wayland::state::surface_id;
 
 use super::super::state::WaylandState;
 
@@ -25,7 +25,7 @@ impl PointerHandler for WaylandState {
         for event in events {
             let on_toolbar = self.toolbar.is_toolbar_surface(&event.surface);
             let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
-            if debug_toolbar_drag_logging_enabled() {
+            if self.runtime_options.debug_toolbar_drag_logging() {
                 debug!(
                     "pointer {:?}: seat={:?}, surface={}, on_toolbar={}, inline_active={}, pos=({:.1}, {:.1}), drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
                     event.kind,

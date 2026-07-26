@@ -1,6 +1,6 @@
 //! About-window state: focus, hover, and the actions the handlers trigger.
 
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
@@ -11,6 +11,7 @@ use super::{AboutWindowState, clipboard, icon, surface_size};
 
 /// How the footer acknowledges an action that has no visible result of its own.
 const COPIED_NOTICE: &str = "Copied to clipboard";
+const COPY_FAILED_NOTICE: &str = "Clipboard copy failed";
 const OPENED_NOTICE: &str = "Opened in your browser";
 
 impl AboutWindowState {
@@ -25,10 +26,14 @@ impl AboutWindowState {
         window: super::Window,
         content: AboutContent,
         plan: Plan,
+        theme: crate::ui::theme::Theme,
+        process_broker: crate::process_broker::ProcessBrokerHandle,
+        update_cache: crate::update_check::UpdateCacheStore,
+        clipboard_wake: crate::backend::wayland::RuntimeWakeSender,
     ) -> Self {
         // Opening the dialog costs no network: the row reports whatever the
         // last background check wrote, and the user can ask for a fresh one.
-        let update = UpdateState::from_cache(crate::update_check::cached_status());
+        let update = UpdateState::from_cache(crate::update_check::cached_status(&update_cache));
         let elements = interaction::focus_order(&content, &update);
         let (width, height) = surface_size(&plan);
 
@@ -50,12 +55,16 @@ impl AboutWindowState {
             check_requested: false,
             content,
             plan,
+            theme,
             update,
             elements,
             hover: None,
             focus: None,
             shift_held: false,
             notice: None,
+            process_broker,
+            update_cache,
+            clipboard_jobs: clipboard::ClipboardCopyJobs::new(clipboard_wake),
             icon: icon::load(),
             themed_pointer: None,
         }
@@ -124,12 +133,14 @@ impl AboutWindowState {
     fn perform(&mut self, action: AboutAction) {
         match action {
             AboutAction::OpenUrl(url) => {
-                clipboard::open_url(&url);
+                clipboard::open_url(&self.process_broker, &url);
                 self.set_notice(OPENED_NOTICE);
             }
             AboutAction::CopyText(text) => {
-                clipboard::copy_text_to_clipboard(&text);
-                self.set_notice(COPIED_NOTICE);
+                match self.clipboard_jobs.request(&self.process_broker, &text) {
+                    Ok(()) => self.set_notice(COPIED_NOTICE),
+                    Err(error) => self.reject_clipboard_start(error),
+                }
             }
             AboutAction::CheckForUpdates => self.begin_update_check(),
             AboutAction::Close => self.should_exit = true,
@@ -145,7 +156,7 @@ impl AboutWindowState {
     /// Perform the check synchronously. Called from the event loop, never from a
     /// protocol handler.
     pub(super) fn run_update_check(&mut self) {
-        let next = match crate::update_check::check_now() {
+        let next = match crate::update_check::check_now(&self.process_broker, &self.update_cache) {
             Ok(crate::update_check::CheckOutcome::Update(update)) => UpdateState::Available {
                 update: Box::new(update),
                 freshness: crate::update_check::Freshness {
@@ -165,6 +176,23 @@ impl AboutWindowState {
             }
         };
         self.set_update(next);
+    }
+
+    pub(super) fn settle_finished_clipboard_jobs(&mut self) {
+        if let Err(error) = self.clipboard_jobs.settle_finished(&self.process_broker) {
+            self.reject_clipboard_start(error);
+        }
+    }
+
+    pub(super) fn settle_clipboard_jobs(&mut self) {
+        if let Err(error) = self.clipboard_jobs.settle_all(&self.process_broker) {
+            self.reject_clipboard_start(error);
+        }
+    }
+
+    fn reject_clipboard_start(&mut self, error: clipboard::CopyStartRejected<std::io::Error>) {
+        warn!("About clipboard request was rejected: {error}");
+        self.set_notice(COPY_FAILED_NOTICE);
     }
 
     fn set_update(&mut self, update: UpdateState) {

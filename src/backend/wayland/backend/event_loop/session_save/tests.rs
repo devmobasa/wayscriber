@@ -66,7 +66,10 @@ fn accepted_autosave_worker_panic_restores_dirty_and_requests_one_notification()
     let mut session = SessionState::new(Some(options.clone()));
     session.record_input_dirty(started, true);
     let dirty_window = session.prepare_autosave_submission().unwrap();
-    let mut controller = PersistenceController::start_for_test().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
+    let catalog =
+        crate::session::catalog::SessionCatalog::at_path(temp.path().join("sessions.json"));
+    let mut controller = PersistenceController::start_for_test(catalog).unwrap();
     let request_id = controller
         .try_submit(0, PersistenceOperation::PanicForTest)
         .unwrap();
@@ -415,6 +418,7 @@ fn history_fallback_notifications_do_not_blame_only_file_size_cap() {
     let (_, trimmed_body) = session_save_notification_text(
         SessionSaveNotification::TrimmedHistory { depth: 2 },
         &report,
+        std::path::Path::new("/tmp/config.toml"),
     );
     assert!(trimmed_body.contains("save and restore safety limits"));
     assert!(!trimmed_body.contains("session.max_file_size_mb"));
@@ -425,8 +429,11 @@ fn history_fallback_notifications_do_not_blame_only_file_size_cap() {
         50,
         100,
     );
-    let (_, visible_body) =
-        session_save_notification_text(SessionSaveNotification::VisibleOnly, &report);
+    let (_, visible_body) = session_save_notification_text(
+        SessionSaveNotification::VisibleOnly,
+        &report,
+        std::path::Path::new("/tmp/config.toml"),
+    );
     assert!(visible_body.contains("save and restore safety limits"));
     assert!(!visible_body.contains("session.max_file_size_mb"));
 }

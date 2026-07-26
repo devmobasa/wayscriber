@@ -3,7 +3,7 @@
 use std::future::Future;
 use std::time::{Duration, Instant};
 
-use super::CaptureProofTarget;
+use super::{CaptureProofTarget, TooltipCapture};
 
 pub(super) const CAPTURE_BARRIER_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -13,15 +13,13 @@ pub(super) const CAPTURE_BARRIER_TIMEOUT: Duration = Duration::from_secs(1);
 // callbacks run before capture can be acknowledged.
 const GTK_POPUP_QUIET_PERIOD: Duration = Duration::from_millis(50);
 
-pub(super) async fn wait_for_popover_quiescence<Scan, Mark, Prove, ProveFuture>(
+pub(super) async fn wait_for_popover_quiescence<Prove, ProveFuture>(
     generation: u64,
-    mut scan: Scan,
-    mut mark_proven: Mark,
+    capture: &mut TooltipCapture,
+    roots: &[gtk4::Widget],
     mut prove: Prove,
 ) -> Result<(), String>
 where
-    Scan: FnMut() -> Vec<CaptureProofTarget>,
-    Mark: FnMut(),
     Prove: FnMut(Vec<CaptureProofTarget>, Instant) -> ProveFuture,
     ProveFuture: Future<Output = Result<(), String>>,
 {
@@ -37,7 +35,10 @@ where
         let mut quiet_until = Instant::now() + GTK_POPUP_QUIET_PERIOD;
 
         loop {
-            let targets = scan();
+            for root in roots {
+                capture.install_tree(root);
+            }
+            let targets = capture.pending_capture_popover_targets();
             let now = Instant::now();
 
             if now >= deadline {
@@ -51,7 +52,7 @@ where
                     targets.len()
                 );
                 prove(targets, deadline).await?;
-                mark_proven();
+                capture.mark_capture_popovers_proven();
                 // A proof wait yields the GTK main context. Require another
                 // complete quiet window in case that work admitted a second
                 // wave of already-scheduled native popups.

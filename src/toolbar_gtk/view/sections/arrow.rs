@@ -1,9 +1,6 @@
 //! Arrow labels section: "Auto-number" toggle, a "Next: N" header hint,
 //! and a Reset button shown only while numbering is enabled.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
@@ -28,12 +25,8 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
     check.set_tooltip_text(Some("Auto-number arrows 1, 2, 3."));
     check.set_active(ctx.snapshot.arrow_label_enabled);
     let sender = ctx.feedback.clone();
-    let syncing = Rc::new(Cell::new(false));
-    let toggle_sync = syncing.clone();
-    check.connect_toggled(move |check| {
-        if !toggle_sync.get() {
-            send_event(&sender, ToolbarEvent::ToggleArrowLabels(check.is_active()));
-        }
+    let feedback_handler = check.connect_toggled(move |check| {
+        send_event(&sender, ToolbarEvent::ToggleArrowLabels(check.is_active()));
     });
     card.body.append(&check);
 
@@ -49,9 +42,9 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
 
     ctx.updaters.push(Box::new(move |snapshot| {
         if check.is_active() != snapshot.arrow_label_enabled {
-            syncing.set(true);
+            check.block_signal(&feedback_handler);
             check.set_active(snapshot.arrow_label_enabled);
-            syncing.set(false);
+            check.unblock_signal(&feedback_handler);
         }
         reset.set_visible(snapshot.arrow_label_enabled);
         if let Some(hint) = &hint {

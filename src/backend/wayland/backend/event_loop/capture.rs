@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use super::super::super::state::{OverlaySuppression, WaylandState};
 use super::super::helpers::friendly_capture_error;
-use crate::capture::file::{FileSaveConfig, expand_tilde};
-use crate::capture::{CaptureOutcome, CapturePoll, ImageOperationKind};
+use crate::capture::file::FileSaveConfig;
+use crate::capture::{CaptureManagerEvent, CaptureOutcome, ImageOperationKind};
 use crate::config::Action;
 use crate::input::state::PendingBackendAction;
 use crate::notification;
@@ -79,6 +79,7 @@ pub(super) fn handle_pending_actions(
     state.poll_clipboard_publish_completion();
     state.poll_clipboard_paste_completion();
     state.poll_hex_copy_completion();
+    state.poll_hex_paste_completion();
     state.poll_text_copy_completion();
     state.poll_text_paste_completion();
     state.poll_session_file_dialog_completion(qh);
@@ -114,6 +115,23 @@ pub(super) fn handle_pending_actions(
             }
             PendingBackendAction::EditKeybinding(request) => {
                 state.handle_keybinding_edit(request);
+            }
+            PendingBackendAction::LaunchAbout => {
+                state.input_state.launch_about(&state.process_broker);
+            }
+            PendingBackendAction::LaunchConfigurator => {
+                state
+                    .input_state
+                    .launch_configurator(&state.process_broker, state.config_store.config_path());
+            }
+            PendingBackendAction::OpenCaptureFolder => {
+                state.input_state.open_capture_folder(&state.process_broker);
+            }
+            PendingBackendAction::OpenConfigFile => {
+                state.input_state.open_config_file_default(
+                    &state.process_broker,
+                    state.config_store.config_path(),
+                );
             }
             PendingBackendAction::PersistToolbarConfig => {
                 state.save_toolbar_display_config();
@@ -187,26 +205,54 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
 }
 
 fn handle_capture_results(state: &mut WaylandState) {
-    let (id, operation, outcome) = match state.capture.manager_mut().poll() {
-        CapturePoll::Idle | CapturePoll::Pending { .. } => return,
-        CapturePoll::Ready {
-            id,
-            operation,
-            outcome,
-        } => (id, operation, outcome),
-        CapturePoll::WorkerFailed {
-            active_id,
-            operation,
-            error,
-        } => {
-            if let Some(id) = active_id {
-                let _ = state.capture.consume_accepted(id);
+    loop {
+        match state.capture.manager_mut().poll_event() {
+            CaptureManagerEvent::Idle | CaptureManagerEvent::Pending { .. } => return,
+            CaptureManagerEvent::Status {
+                id,
+                operation,
+                status,
+            } => {
+                let expected = state.capture.accepted_id();
+                if expected != Some(id) {
+                    state.capture.manager_mut().mark_unhealthy();
+                    handle_capture_manager_failure(
+                        state,
+                        Some(operation),
+                        &format!(
+                            "capture status {id} did not match accepted identity {expected:?}"
+                        ),
+                    );
+                    return;
+                }
+                log::debug!("Capture operation {id} ({operation:?}) status: {status:?}");
             }
-            handle_capture_manager_failure(state, operation, &error);
-            return;
+            CaptureManagerEvent::Ready {
+                id,
+                operation,
+                outcome,
+            } => handle_capture_result(state, id, operation, outcome),
+            CaptureManagerEvent::WorkerFailed {
+                active_id,
+                operation,
+                error,
+            } => {
+                if let Some(id) = active_id {
+                    let _ = state.capture.consume_accepted(id);
+                }
+                handle_capture_manager_failure(state, operation, &error);
+                return;
+            }
         }
-    };
+    }
+}
 
+fn handle_capture_result(
+    state: &mut WaylandState,
+    id: crate::capture::CaptureRequestId,
+    operation: ImageOperationKind,
+    outcome: CaptureOutcome,
+) {
     if !state.capture.consume_accepted(id) {
         let expected = state.capture.accepted_id();
         state.capture.manager_mut().mark_unhealthy();
@@ -259,10 +305,22 @@ fn handle_capture_results(state: &mut WaylandState) {
                 warn!("Clipboard copy failed, offering save-to-file fallback");
 
                 // Build save config from user preferences for fallback save
-                let mut save_config = FileSaveConfig {
-                    save_directory: expand_tilde(&state.config.capture.save_directory),
-                    filename_template: state.config.capture.filename_template.clone(),
-                    format: state.config.capture.format.clone(),
+                let mut save_config = match FileSaveConfig::from_user_config(
+                    &state.path_resolver,
+                    &state.config.capture.save_directory,
+                    state.config.capture.filename_template.clone(),
+                    state.config.capture.format.clone(),
+                ) {
+                    Ok(config) => config,
+                    Err(error) => {
+                        state.input_state.push_toast(
+                            ToastPriority::Critical,
+                            "capture",
+                            Toast::error(error.to_string()),
+                        );
+                        state.capture.clear_exit_on_success();
+                        return;
+                    }
                 };
                 if let Some(format) = result.fallback_format_override.as_ref() {
                     save_config.format = format.extension.clone();

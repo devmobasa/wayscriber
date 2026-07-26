@@ -1,4 +1,3 @@
-use super::paths::primary_config_dir;
 use super::{Config, ConfigDocument};
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::time_utils::{format_with_template, now_local};
@@ -23,23 +22,33 @@ pub struct LoadedConfig {
     pub source: ConfigSource,
 }
 
-impl Config {
-    /// Returns the path to the configuration file.
-    ///
-    /// The config file is located at `~/.config/wayscriber/config.toml`.
-    ///
-    /// # Errors
-    /// Returns an error if the config directory cannot be determined (e.g., HOME not set).
-    pub fn get_config_path() -> Result<PathBuf> {
-        Ok(primary_config_dir()?.join("config.toml"))
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConfigStore {
+    config_path: PathBuf,
+}
+
+impl ConfigStore {
+    pub fn from_resolver(resolver: &crate::paths::PathResolver) -> Result<Self> {
+        Ok(Self::at_path(resolver.config_file()?))
     }
 
-    /// Determines the directory containing the active configuration file based on the source.
-    pub fn config_directory_from_source(_source: &ConfigSource) -> Result<PathBuf> {
-        let path = Self::get_config_path()?;
-        path.parent()
-            .map(PathBuf::from)
-            .ok_or_else(|| anyhow!("Config path {} has no parent directory", path.display()))
+    pub fn at_path(config_path: impl Into<PathBuf>) -> Self {
+        Self {
+            config_path: config_path.into(),
+        }
+    }
+
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+
+    pub fn config_directory(&self) -> Result<PathBuf> {
+        self.config_path.parent().map(PathBuf::from).ok_or_else(|| {
+            anyhow!(
+                "Config path {} has no parent directory",
+                self.config_path.display()
+            )
+        })
     }
 
     /// Loads configuration from file, or returns defaults if not found.
@@ -53,8 +62,8 @@ impl Config {
     /// - The config directory path cannot be determined
     /// - The file exists but cannot be read
     /// - The file exists but contains invalid TOML syntax
-    pub fn load() -> Result<LoadedConfig> {
-        let mut loaded = Self::load_unvalidated()?;
+    pub fn load(&self) -> Result<LoadedConfig> {
+        let mut loaded = self.load_unvalidated()?;
 
         // Validate and clamp values to acceptable ranges.
         loaded.config.validate_and_clamp();
@@ -68,8 +77,8 @@ impl Config {
     ///
     /// Binary-only repair workflows use this to fix an invalid subsection
     /// before normal validation. Ordinary consumers must use [`Self::load`].
-    pub(crate) fn load_unvalidated() -> Result<LoadedConfig> {
-        let primary_path = primary_config_dir()?.join("config.toml");
+    pub(crate) fn load_unvalidated(&self) -> Result<LoadedConfig> {
+        let primary_path = self.config_path.clone();
 
         let (config_path, source) = if primary_path.exists() {
             (primary_path.clone(), ConfigSource::Primary)
@@ -93,13 +102,13 @@ impl Config {
         Ok(LoadedConfig { config, source })
     }
 
-    fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
-        let config_path = Self::get_config_path()?;
+    fn write_config(&self, config: &Config, create_backup: bool) -> Result<Option<PathBuf>> {
+        let config_path = self.config_path.clone();
         let document = ConfigDocument::load_from_path(&config_path)?;
         let outcome = if create_backup {
-            document.save_with_backup(self.clone())?
+            document.save_with_backup(config.clone())?
         } else {
-            document.save(self.clone())?
+            document.save(config.clone())?
         };
         let (_, backup_path) = outcome.into_parts();
 
@@ -120,8 +129,8 @@ impl Config {
     /// that fresh typed value, and saves it through the same revision guard.
     /// This prevents a long-lived runtime snapshot from overwriting newer
     /// edits made through the configurator or directly in `config.toml`.
-    pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
-        let config_path = Self::get_config_path()?;
+    pub(crate) fn update_file(&self, update: impl FnOnce(&mut Config)) -> Result<()> {
+        let config_path = self.config_path.clone();
         let document = ConfigDocument::load_from_path(&config_path)?;
         let mut config = document.config().clone();
         update(&mut config);
@@ -132,16 +141,16 @@ impl Config {
 
     /// Saves the current configuration to disk without creating a backup.
     #[allow(dead_code)]
-    pub fn save(&self) -> Result<()> {
-        self.write_config(false)?;
+    pub fn save(&self, config: &Config) -> Result<()> {
+        self.write_config(config, false)?;
         Ok(())
     }
 
     /// Saves the current configuration and creates a timestamped `.bak` copy when overwriting
     /// an existing file. Returns the backup path if one was created.
     #[allow(dead_code)]
-    pub fn save_with_backup(&self) -> Result<Option<PathBuf>> {
-        self.write_config(true)
+    pub fn save_with_backup(&self, config: &Config) -> Result<Option<PathBuf>> {
+        self.write_config(config, true)
     }
 
     /// Creates a default configuration file with documentation comments.
@@ -155,8 +164,8 @@ impl Config {
     /// - The config directory cannot be created
     /// - The file cannot be written
     #[allow(dead_code)]
-    pub fn create_default_file() -> Result<()> {
-        let config_path = Self::get_config_path()?;
+    pub fn create_default_file(&self) -> Result<()> {
+        let config_path = self.config_path.clone();
 
         if config_path.exists() {
             return Err(anyhow!(

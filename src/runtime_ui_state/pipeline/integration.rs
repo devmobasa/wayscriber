@@ -1,49 +1,45 @@
 use super::*;
 
 impl PersistencePipeline {
-    pub(crate) fn integrate(
-        &mut self,
-        result: SourceMutationResult,
-    ) -> Result<IntegratedSourceMutation, PipelineProtocolError> {
+    pub(crate) fn preflight_integrate(
+        &self,
+        result: &SourceMutationResult,
+    ) -> Result<(), PipelineProtocolError> {
         if self.outbound.is_some() {
             return Err(PipelineProtocolError::MutationNotDispatched);
         }
         let in_flight = self
             .in_flight
-            .take()
+            .as_ref()
             .ok_or(PipelineProtocolError::NoMutationInFlight)?;
         if result.id() != in_flight.request.id {
-            let expected = in_flight.request.id;
-            self.in_flight = Some(in_flight);
             return Err(PipelineProtocolError::WrongMutationId {
-                expected,
+                expected: in_flight.request.id,
                 received: result.id(),
             });
         }
         if let SourceMutationResult::Applied {
             applied_through, ..
-        } = &result
+        } = result
             && *applied_through != in_flight.request.accepted_through
         {
-            let expected = in_flight.request.accepted_through;
-            let received = *applied_through;
-            self.in_flight = Some(in_flight);
-            return Err(PipelineProtocolError::WrongAppliedRevision { expected, received });
+            return Err(PipelineProtocolError::WrongAppliedRevision {
+                expected: in_flight.request.accepted_through,
+                received: *applied_through,
+            });
         }
-        if let SourceMutationResult::Applied { new_source, .. } = &result
+        if let SourceMutationResult::Applied { new_source, .. } = result
             && new_source.path_identity() != in_flight.request.expected_source.path_identity()
         {
-            self.in_flight = Some(in_flight);
             return Err(PipelineProtocolError::AppliedSourcePathMismatch);
         }
-        if let SourceMutationResult::Applied { new_source, .. } = &result
+        if let SourceMutationResult::Applied { new_source, .. } = result
             && matches!(&in_flight.request.kind, SourceMutationKind::Replace(_))
             && new_source.bytes().is_none()
         {
-            self.in_flight = Some(in_flight);
             return Err(PipelineProtocolError::ReplaceDidNotProducePresentSource);
         }
-        if let SourceMutationResult::Applied { new_source, .. } = &result
+        if let SourceMutationResult::Applied { new_source, .. } = result
             && matches!(
                 &in_flight.request.kind,
                 SourceMutationKind::ResetSupported { .. }
@@ -51,19 +47,25 @@ impl PersistencePipeline {
             )
             && new_source.bytes().is_some()
         {
-            self.in_flight = Some(in_flight);
             return Err(PipelineProtocolError::ResetDidNotProduceMissingSource);
         }
-        if let Err(error) = validate_source_mutation_evidence(&result) {
-            self.in_flight = Some(in_flight);
-            return Err(error);
-        }
-        if let SourceMutationResult::SourceChangedBeforeMutation { active, .. } = &result
+        validate_source_mutation_evidence(result)?;
+        if let SourceMutationResult::SourceChangedBeforeMutation { active, .. } = result
             && active.revision == in_flight.request.expected_source
         {
-            self.in_flight = Some(in_flight);
             return Err(PipelineProtocolError::ConflictMatchedExpectedSource);
         }
+        Ok(())
+    }
+
+    pub(crate) fn integrate(
+        &mut self,
+        result: &SourceMutationResult,
+    ) -> Result<IntegratedSourceMutation, PipelineProtocolError> {
+        self.preflight_integrate(result)?;
+        let Some(in_flight) = self.in_flight.take() else {
+            return Err(PipelineProtocolError::NoMutationInFlight);
+        };
 
         match &result {
             SourceMutationResult::Applied { new_source, .. } => {
@@ -116,7 +118,6 @@ impl PersistencePipeline {
         Ok(IntegratedSourceMutation {
             request: in_flight.request,
             covered: in_flight.covered,
-            result,
         })
     }
 
@@ -131,14 +132,8 @@ impl PersistencePipeline {
         &mut self,
         revision: AcceptedStateRevision,
     ) -> Option<DurabilityOutcome> {
-        if !self.receipts.get(&revision).is_some_and(Option::is_some) {
-            return None;
-        }
-        let outcome = self
-            .receipts
-            .remove(&revision)
-            .and_then(|outcome| outcome)
-            .expect("terminal receipt was checked above");
+        let outcome = self.receipts.get_mut(&revision)?.take()?;
+        self.receipts.remove(&revision);
         if revision > self.settled_through {
             self.consumed_terminal_receipts.insert(revision);
         }
@@ -160,6 +155,32 @@ impl PersistencePipeline {
             self.settle_receipt(revision, DurabilityOutcome::Failed(error.clone()));
         }
         self.advance_settled_through();
+    }
+
+    pub(crate) fn settle_pending_failed(
+        &mut self,
+        revisions: impl IntoIterator<Item = AcceptedStateRevision>,
+        error: RuntimeStateIoError,
+    ) {
+        for revision in revisions {
+            if self.receipts.get(&revision).is_some_and(Option::is_none) {
+                self.settle_receipt(revision, DurabilityOutcome::Failed(error.clone()));
+            }
+        }
+        self.advance_settled_through();
+    }
+
+    pub(crate) fn settle_held_pending_failed(
+        &mut self,
+        stages: &[HeldReplacementStage],
+        error: RuntimeStateIoError,
+    ) {
+        self.settle_pending_failed(
+            stages
+                .iter()
+                .flat_map(|stage| stage.covered.iter().copied()),
+            error,
+        );
     }
 
     pub(crate) fn settle_persisted(

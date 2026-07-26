@@ -1,7 +1,7 @@
 //! Data types for screenshot capture functionality.
 
+use std::fmt;
 use std::path::PathBuf;
-use std::{fmt, sync::Arc};
 
 /// User-facing operation kind for image delivery and status labels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -338,9 +338,9 @@ pub struct DesktopBackdropCaptureRequest {
     pub operation: ImageOperationKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DesktopBackdropCaptureResult {
-    pub data: Arc<[u8]>,
+    pub data: Vec<u8>,
     pub width: i32,
     pub height: i32,
     pub stride: i32,
@@ -381,7 +381,7 @@ pub struct CaptureResult {
 }
 
 /// Outcome of a capture request (success or failure).
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum CaptureOutcome {
     Success(CaptureResult),
     DesktopBackdropSuccess(DesktopBackdropCaptureResult),
@@ -418,6 +418,8 @@ pub enum CaptureError {
 
     SaveError(std::io::Error),
 
+    InvalidDestination(PathBuf),
+
     ClipboardError(String),
 
     ImageError(String),
@@ -435,6 +437,11 @@ impl fmt::Display for CaptureError {
             #[cfg(feature = "dbus")]
             Self::DBusError(err) => write!(f, "D-Bus communication error: {err}"),
             Self::SaveError(err) => write!(f, "Failed to save screenshot: {err}"),
+            Self::InvalidDestination(path) => write!(
+                f,
+                "Capture destination must be absolute after supported ~/ expansion: {}",
+                path.display()
+            ),
             Self::ClipboardError(err) => write!(f, "Clipboard operation failed: {err}"),
             Self::ImageError(err) => write!(f, "Image processing error: {err}"),
             Self::InvalidResponse(err) => write!(f, "Portal returned invalid response: {err}"),

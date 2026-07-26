@@ -106,7 +106,6 @@ impl Frame {
             *w = bounds.w;
             *h = bounds.h;
             target.locked = bounds.locked;
-            target.invalidate_bounds();
         }
     }
 }

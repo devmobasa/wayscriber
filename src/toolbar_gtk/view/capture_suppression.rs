@@ -1,21 +1,24 @@
 mod native_popovers;
 mod quiescence;
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gtk4::prelude::*;
 
 use super::{
-    CaptureProofTarget, CaptureSurfaceContent, after_next_surface_paint_counter,
-    widget_native_is_mapped,
+    CaptureProofTarget, CaptureProofWithdrawal, CaptureSurfaceContent,
+    after_next_surface_paint_counter, widget_native_is_mapped,
 };
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
+use crate::toolbar_gtk::view::drag::{TooltipIntent, ViewIntent, ViewIntentSender};
 use native_popovers::NativePopoverCapture;
 
 const CAPTURE_PAINT_TIMEOUT: Duration = Duration::from_millis(500);
 const CAPTURE_PAINT_POLL_INTERVAL: Duration = Duration::from_millis(2);
+const TOOLTIP_SOURCE_INSTALLED_CLASS: &str = "wayscriber-tooltip-capture-source";
+const TOOLTIP_SOURCE_ACTIVE_CLASS: &str = "wayscriber-tooltip-capture-active";
+const TOOLTIP_SUPPRESSED_CLASS: &str = "wayscriber-tooltip-capture-suppressed";
+const TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS: &str = "wayscriber-tooltip-mapped-before-capture";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CapturePresentationState {
@@ -33,48 +36,41 @@ enum CapturePresentationState {
 /// by widgets such as `GtkText` are discovered through the public widget tree.
 /// Plain popovers receive the same proof wrapper; `GtkPopoverMenu` instead gets
 /// a temporary public menu model so its class-owned direct child is untouched.
-#[derive(Clone)]
 pub(super) struct TooltipCapture {
-    inner: Rc<TooltipCaptureInner>,
-}
-
-struct TooltipCaptureInner {
     content: CaptureSurfaceContent,
     label: gtk4::Label,
-    installed_sources: RefCell<Vec<gtk4::glib::WeakRef<gtk4::Widget>>>,
-    active_source: RefCell<Option<gtk4::glib::WeakRef<gtk4::Widget>>>,
+    installed_sources: Vec<(u64, gtk4::glib::WeakRef<gtk4::Widget>)>,
+    next_source: u64,
     native_popovers: NativePopoverCapture,
-    suppressed: Cell<bool>,
-    popup_input_enabled: Cell<bool>,
-    mapped_before_capture: Cell<bool>,
+    suppressed: bool,
+    popup_input_enabled: bool,
+    intents: ViewIntentSender,
 }
 
 impl TooltipCapture {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(intents: ViewIntentSender) -> Self {
         let label = gtk4::Label::new(None);
         label.set_wrap(true);
         let content = CaptureSurfaceContent::new(&label);
         Self {
-            inner: Rc::new(TooltipCaptureInner {
-                content,
-                label,
-                installed_sources: RefCell::new(Vec::new()),
-                active_source: RefCell::new(None),
-                native_popovers: NativePopoverCapture::default(),
-                suppressed: Cell::new(false),
-                popup_input_enabled: Cell::new(true),
-                mapped_before_capture: Cell::new(false),
-            }),
+            content,
+            label,
+            installed_sources: Vec::new(),
+            next_source: 0,
+            native_popovers: NativePopoverCapture::default(),
+            suppressed: false,
+            popup_input_enabled: true,
+            intents,
         }
     }
 
     /// Install the custom query handler on every tooltipped descendant.
     /// Rebuilds can replace toolbar controls, so dead weak references are
     /// pruned and newly created controls are enrolled after every update.
-    pub(super) fn install_tree(&self, root: &gtk4::Widget) {
+    pub(super) fn install_tree(&mut self, root: &gtk4::Widget) {
         let mut pending = vec![root.clone()];
         while let Some(widget) = pending.pop() {
-            if self.inner.suppressed.get()
+            if self.suppressed
                 && let Ok(popover) = widget.clone().downcast::<gtk4::Popover>()
             {
                 let selected_for_capture = popover.is_visible() || popover.is_mapped();
@@ -91,137 +87,142 @@ impl TooltipCapture {
         }
     }
 
-    fn enroll_native_popover(&self, popover: &gtk4::Popover, selected_for_capture: bool) {
-        let input_enabled = self.inner.popup_input_enabled.get();
-        self.inner
-            .native_popovers
-            .enroll(popover, selected_for_capture, input_enabled);
+    fn enroll_native_popover(&mut self, popover: &gtk4::Popover, selected_for_capture: bool) {
+        self.native_popovers
+            .enroll(popover, selected_for_capture, self.popup_input_enabled);
     }
 
-    fn install_source(&self, source: &gtk4::Widget) {
-        let already_installed = {
-            let mut installed = self.inner.installed_sources.borrow_mut();
-            installed.retain(|source| source.upgrade().is_some());
-            installed
-                .iter()
-                .filter_map(gtk4::glib::WeakRef::upgrade)
-                .any(|candidate| candidate == *source)
-        };
+    fn install_source(&mut self, source: &gtk4::Widget) {
+        self.installed_sources
+            .retain(|(_, source)| source.upgrade().is_some());
+        let already_installed = self
+            .installed_sources
+            .iter()
+            .filter_map(|(_, source)| source.upgrade())
+            .any(|candidate| candidate == *source);
         if already_installed {
             return;
         }
 
-        self.inner
-            .installed_sources
-            .borrow_mut()
-            .push(source.downgrade());
-        let capture = self.clone();
+        self.next_source = self.next_source.wrapping_add(1);
+        let source_id = self.next_source;
+        source.add_css_class(TOOLTIP_SOURCE_INSTALLED_CLASS);
+        self.installed_sources.push((source_id, source.downgrade()));
+        let content = self.content.clone();
+        let label = self.label.clone();
+        let intents = self.intents.clone();
         source.connect_query_tooltip(move |source, _, _, _, tooltip| {
-            capture.query_tooltip(source, tooltip)
+            query_tooltip(&content, &label, &intents, source_id, source, tooltip)
         });
     }
 
-    fn query_tooltip(&self, source: &gtk4::Widget, tooltip: &gtk4::Tooltip) -> bool {
-        let suppressed = self.inner.suppressed.get();
-        if suppressed && (!self.inner.mapped_before_capture.get() || !self.active_source_is(source))
-        {
-            // Do not admit a new popup after capture suppression starts. A
-            // tooltip that was already mapped is kept alive and made
-            // transparent through the custom content below.
+    #[cfg(test)]
+    fn query_tooltip(&mut self, source: &gtk4::Widget, tooltip: &gtk4::Tooltip) -> bool {
+        let Some(source_id) = self.installed_sources.iter().find_map(|(id, candidate)| {
+            candidate
+                .upgrade()
+                .filter(|candidate| candidate == source)
+                .map(|_| *id)
+        }) else {
             return false;
-        }
-
-        if let Some(text) = source.tooltip_text() {
-            self.inner.label.set_text(&text);
-        } else if let Some(markup) = source.tooltip_markup() {
-            self.inner.label.set_markup(&markup);
-        } else {
-            return false;
-        }
-
-        if !suppressed {
-            self.inner.active_source.replace(Some(source.downgrade()));
-        }
-        self.inner.content.set_transparent(suppressed);
-        tooltip.set_custom(Some(self.inner.content.widget()));
-        self.sync_native_chrome();
-        if !suppressed {
+        };
+        let shown = query_tooltip(
+            &self.content,
+            &self.label,
+            &self.intents,
+            source_id,
+            source,
+            tooltip,
+        );
+        if shown && !self.suppressed {
+            self.handle_intent(TooltipIntent::Activated { source: source_id });
             self.set_input_enabled(true);
         }
-        true
+        self.sync_native_chrome();
+        shown
     }
 
-    fn active_source_is(&self, source: &gtk4::Widget) -> bool {
-        self.inner
-            .active_source
-            .borrow()
-            .as_ref()
-            .and_then(gtk4::glib::WeakRef::upgrade)
-            .is_some_and(|active| active == *source)
+    pub(super) fn handle_intent(&mut self, intent: TooltipIntent) {
+        let TooltipIntent::Activated { source } = intent;
+        for (id, candidate) in &self.installed_sources {
+            let Some(candidate) = candidate.upgrade() else {
+                continue;
+            };
+            candidate.remove_css_class(TOOLTIP_SOURCE_ACTIVE_CLASS);
+            if *id == source {
+                candidate.add_css_class(TOOLTIP_SOURCE_ACTIVE_CLASS);
+            }
+        }
     }
 
     /// Enter or leave capture mode without unmapping a tooltip that is
     /// already visible. Pending tooltip timers are rejected by the query
     /// handler while suppression is active.
-    pub(super) fn set_suppressed(&self, suppressed: bool) {
-        if suppressed && !self.inner.suppressed.get() {
-            self.inner
-                .mapped_before_capture
-                .set(self.active_native_widget().is_some());
+    pub(super) fn set_suppressed(&mut self, suppressed: bool) {
+        if suppressed && !self.suppressed && self.active_native_widget().is_some() {
+            self.content
+                .root
+                .add_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS);
         }
-        self.inner.suppressed.set(suppressed);
-        self.inner.popup_input_enabled.set(!suppressed);
-        self.inner.content.set_transparent(suppressed);
+        self.suppressed = suppressed;
+        self.popup_input_enabled = !suppressed;
+        if suppressed {
+            self.content.root.add_css_class(TOOLTIP_SUPPRESSED_CLASS);
+        } else {
+            self.content.root.remove_css_class(TOOLTIP_SUPPRESSED_CLASS);
+        }
+        self.content.set_transparent(suppressed);
         self.sync_native_chrome();
-        self.inner.native_popovers.set_suppressed(suppressed);
+        self.native_popovers.set_suppressed(suppressed);
 
         if !suppressed {
             self.set_input_enabled(true);
-            self.inner.mapped_before_capture.set(false);
+            self.content
+                .root
+                .remove_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS);
         } else {
             self.set_input_enabled(false);
         }
     }
 
-    pub(super) fn set_input_enabled(&self, enabled: bool) {
-        self.inner.popup_input_enabled.set(enabled);
+    pub(super) fn set_input_enabled(&mut self, enabled: bool) {
+        self.popup_input_enabled = enabled;
         if let Some(native) = self.native_widget() {
             set_native_widget_input_enabled(&native, enabled);
         }
-        self.inner.native_popovers.set_input_enabled(enabled);
+        self.native_popovers.set_input_enabled(enabled);
     }
 
     pub(super) fn capture_target(&self) -> Option<CaptureProofTarget> {
-        self.inner
-            .mapped_before_capture
-            .get()
+        self.content
+            .root
+            .has_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS)
             .then(|| self.active_native_widget())
             .flatten()
             .map(|native| {
-                let capture = self.clone();
-                CaptureProofTarget::new_withdrawable_with_callback(
+                CaptureProofTarget::new_withdrawable_with_cleanup(
                     "tooltip",
                     &native,
-                    &self.inner.content,
-                    move || capture.inner.mapped_before_capture.set(false),
+                    &self.content,
+                    CaptureProofWithdrawal::RemoveContentClass(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS),
                 )
             })
     }
 
-    pub(super) fn capture_popover_targets(&self) -> Vec<CaptureProofTarget> {
-        self.inner.native_popovers.capture_targets()
+    pub(super) fn capture_popover_targets(&mut self) -> Vec<CaptureProofTarget> {
+        self.native_popovers.capture_targets()
     }
 
-    pub(super) fn pending_capture_popover_targets(&self) -> Vec<CaptureProofTarget> {
-        self.inner.native_popovers.pending_capture_targets()
+    pub(super) fn pending_capture_popover_targets(&mut self) -> Vec<CaptureProofTarget> {
+        self.native_popovers.pending_capture_targets()
     }
 
-    pub(super) fn mark_capture_popovers_proven(&self) {
-        self.inner.native_popovers.mark_proven();
+    pub(super) fn mark_capture_popovers_proven(&mut self) {
+        self.native_popovers.mark_proven();
     }
 
     pub(super) async fn wait_for_popover_quiescence<F, Fut>(
-        &self,
+        &mut self,
         generation: u64,
         roots: &[gtk4::Widget],
         prove: F,
@@ -230,18 +231,7 @@ impl TooltipCapture {
         F: FnMut(Vec<CaptureProofTarget>, Instant) -> Fut,
         Fut: std::future::Future<Output = Result<(), String>>,
     {
-        quiescence::wait_for_popover_quiescence(
-            generation,
-            || {
-                for root in roots {
-                    self.install_tree(root);
-                }
-                self.pending_capture_popover_targets()
-            },
-            || self.mark_capture_popovers_proven(),
-            prove,
-        )
-        .await
+        quiescence::wait_for_popover_quiescence(generation, self, roots, prove).await
     }
 
     fn active_native_widget(&self) -> Option<gtk4::Widget> {
@@ -249,7 +239,7 @@ impl TooltipCapture {
     }
 
     fn native_widget(&self) -> Option<gtk4::Widget> {
-        let native = self.inner.content.widget().native()?;
+        let native = self.content.widget().native()?;
         Some(native.upcast::<gtk4::Widget>())
     }
 
@@ -257,7 +247,7 @@ impl TooltipCapture {
         let Some(native) = self.native_widget() else {
             return;
         };
-        if self.inner.suppressed.get() {
+        if self.suppressed {
             native.add_css_class(CAPTURE_TRANSPARENT_CLASS);
         } else {
             native.remove_css_class(CAPTURE_TRANSPARENT_CLASS);
@@ -267,21 +257,57 @@ impl TooltipCapture {
 
     #[cfg(test)]
     pub(super) fn installed_source_count(&self) -> usize {
-        self.inner
-            .installed_sources
-            .borrow()
+        self.installed_sources
             .iter()
-            .filter(|source| source.upgrade().is_some())
+            .filter(|(_, source)| source.upgrade().is_some())
             .count()
     }
 
     #[cfg(test)]
     pub(super) fn transparent_content_state(&self) -> (Option<f64>, bool) {
-        (
-            self.inner.content.content_opacity(),
-            self.inner.content.proof_visible(),
-        )
+        (self.content.content_opacity(), self.content.proof_visible())
     }
+}
+
+fn query_tooltip(
+    content: &CaptureSurfaceContent,
+    label: &gtk4::Label,
+    intents: &ViewIntentSender,
+    source_id: u64,
+    source: &gtk4::Widget,
+    tooltip: &gtk4::Tooltip,
+) -> bool {
+    let suppressed = content.root.has_css_class(TOOLTIP_SUPPRESSED_CLASS);
+    if suppressed
+        && (!content
+            .root
+            .has_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS)
+            || !source.has_css_class(TOOLTIP_SOURCE_ACTIVE_CLASS))
+    {
+        // Do not admit a new popup after capture suppression starts. A
+        // tooltip that was already mapped is kept alive and made transparent.
+        return false;
+    }
+
+    if let Some(text) = source.tooltip_text() {
+        label.set_text(&text);
+    } else if let Some(markup) = source.tooltip_markup() {
+        label.set_markup(&markup);
+    } else {
+        return false;
+    }
+
+    if !suppressed {
+        source.add_css_class(TOOLTIP_SOURCE_ACTIVE_CLASS);
+        if !intents.send(ViewIntent::Tooltip(TooltipIntent::Activated {
+            source: source_id,
+        })) {
+            return false;
+        }
+    }
+    content.set_transparent(suppressed);
+    tooltip.set_custom(Some(content.widget()));
+    true
 }
 
 fn set_native_widget_input_enabled(widget: &gtk4::Widget, enabled: bool) {
@@ -398,9 +424,6 @@ async fn wait_for_surface_presentation(
             "GTK capture suppression generation {generation} found no frame clock for mapped {name}"
         )
     })?;
-    let rendered_counter = Rc::new(Cell::new(None));
-    let callback_counter = Rc::clone(&rendered_counter);
-
     log::info!(
         "capture.preflight id={generation} component=gtk surface={name} phase=proof-requested sequence={ordinal}/{target_count} elapsed_ms={}",
         started.elapsed().as_millis()
@@ -411,23 +434,31 @@ async fn wait_for_surface_presentation(
     // without a new Wayland buffer or presentation event. Give this target a
     // fresh but still alpha-zero texture before arming its dedicated frame.
     target.refresh_transparent_proof();
-    after_next_surface_paint_counter(widget, move |counter| {
-        callback_counter.set(counter);
-    });
+    let rendered = after_next_surface_paint_counter(widget);
+    tokio::pin!(rendered);
 
-    while rendered_counter.get().is_none() {
-        reject_withdrawn_target(generation, target, started)?;
-        if proof_started.elapsed() >= CAPTURE_PAINT_TIMEOUT || Instant::now() >= deadline {
-            return Err(format!(
-                "GTK capture suppression generation {generation} timed out waiting for a dedicated transparent render from {name}"
-            ));
+    let frame_counter = loop {
+        tokio::select! {
+            rendered = &mut rendered => {
+                match rendered {
+                    Some(counter) => break counter,
+                    None => {
+                        return Err(format!(
+                            "GTK capture suppression generation {generation} lost the frame clock while rendering {name}"
+                        ));
+                    }
+                }
+            }
+            _ = gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL) => {
+                reject_withdrawn_target(generation, target, started)?;
+                if proof_started.elapsed() >= CAPTURE_PAINT_TIMEOUT || Instant::now() >= deadline {
+                    return Err(format!(
+                        "GTK capture suppression generation {generation} timed out waiting for a dedicated transparent render from {name}"
+                    ));
+                }
+            }
         }
-        gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
-    }
-
-    let frame_counter = rendered_counter
-        .get()
-        .expect("dedicated transparent render counter recorded");
+    };
     log::info!(
         "capture.preflight id={generation} component=gtk surface={name} phase=rendered frame_counter={frame_counter} sequence={ordinal}/{target_count} elapsed_ms={}",
         started.elapsed().as_millis()
@@ -492,6 +523,8 @@ fn reject_withdrawn_target(
 #[cfg(test)]
 mod tests {
     mod process;
+
+    use std::sync::mpsc;
 
     use super::*;
 
@@ -559,14 +592,22 @@ mod tests {
         let original_context_child = context_popover.child().expect("GtkText popup child");
         let original_context_model = context_menu.menu_model().expect("GtkText menu model");
 
-        let capture = TooltipCapture::new();
+        let (intents, mut intent_rx, _failure_rx) = ViewIntentSender::channel();
+        let mut capture = TooltipCapture::new(intents);
         capture.install_tree(root.upcast_ref());
         capture.install_tree(root.upcast_ref());
         assert_eq!(capture.installed_source_count(), 1);
 
         let tooltip = gtk4::glib::Object::builder::<gtk4::Tooltip>().build();
         assert!(button.emit_by_name::<bool>("query-tooltip", &[&0i32, &0i32, &false, &tooltip]));
-        assert_eq!(capture.inner.label.text().as_str(), "Zoom");
+        let activated = intent_rx
+            .try_recv()
+            .expect("the installed tooltip callback publishes its activation intent");
+        assert!(matches!(activated, ViewIntent::Tooltip(_)));
+        if let ViewIntent::Tooltip(activated) = activated {
+            capture.handle_intent(activated);
+        }
+        assert_eq!(capture.label.text().as_str(), "Zoom");
         assert_eq!(capture.transparent_content_state(), (Some(1.0), false));
 
         capture.set_suppressed(true);
@@ -631,12 +672,11 @@ mod tests {
                 .as_ref()
                 .is_some_and(CaptureSurfaceContent::is_wrapper)
         );
-        let proof_before = capture.inner.content.proof.paintable();
-        let serial_before = capture.inner.content.proof_serial();
-        CaptureProofTarget::new("tooltip", &root, &capture.inner.content)
-            .refresh_transparent_proof();
-        assert_ne!(capture.inner.content.proof_serial(), serial_before);
-        assert_ne!(capture.inner.content.proof.paintable(), proof_before);
+        let proof_before = capture.content.proof.paintable();
+        let serial_before = capture.content.proof_serial();
+        CaptureProofTarget::new("tooltip", &root, &capture.content).refresh_transparent_proof();
+        assert_ne!(capture.content.proof_serial(), serial_before);
+        assert_ne!(capture.content.proof.paintable(), proof_before);
         assert!(
             !capture.query_tooltip(button.upcast_ref(), &tooltip),
             "an unmapped tooltip must not appear after suppression starts"
@@ -644,7 +684,10 @@ mod tests {
 
         // The mapped case uses the same query path but remains admitted so its
         // existing native popup can submit the transparent proof.
-        capture.inner.mapped_before_capture.set(true);
+        capture
+            .content
+            .root
+            .add_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS);
         assert!(capture.query_tooltip(button.upcast_ref(), &tooltip));
 
         capture.set_suppressed(false);
@@ -661,13 +704,15 @@ mod tests {
         );
         assert!(capture.capture_popover_targets().is_empty());
 
-        let withdrawn = Rc::new(Cell::new(false));
-        let withdrawn_callback = Rc::clone(&withdrawn);
-        let closed_target = CaptureProofTarget::new_withdrawable_with_callback(
+        capture
+            .content
+            .root
+            .add_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS);
+        let closed_target = CaptureProofTarget::new_withdrawable_with_cleanup(
             "closed-native-popover",
             &root,
-            &capture.inner.content,
-            move || withdrawn_callback.set(true),
+            &capture.content,
+            CaptureProofWithdrawal::RemoveContentClass(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS),
         );
         let error = gtk4::glib::MainContext::default()
             .block_on(wait_for_presented_transparency_until(
@@ -680,7 +725,12 @@ mod tests {
             error.contains("withdrawn before transparent presentation"),
             "unexpected withdrawal error: {error}"
         );
-        assert!(withdrawn.get());
+        assert!(
+            !capture
+                .content
+                .root
+                .has_css_class(TOOLTIP_MAPPED_BEFORE_CAPTURE_CLASS)
+        );
 
         // Exercise the production discovery path across a main-context yield.
         // The GtkText-owned popover does not exist during the first scan and
@@ -701,37 +751,39 @@ mod tests {
             .first_child()
             .and_then(|child| child.downcast::<gtk4::Text>().ok())
             .expect("second asynchronous GtkEntry text delegate");
-        let asynchronous_capture = TooltipCapture::new();
+        let (asynchronous_intents, _asynchronous_intent_rx, _asynchronous_failure_rx) =
+            ViewIntentSender::channel();
+        let mut asynchronous_capture = TooltipCapture::new(asynchronous_intents);
         asynchronous_capture.set_suppressed(true);
         asynchronous_capture.install_tree(asynchronous_root.upcast_ref());
 
-        let created_popovers = Rc::new(RefCell::new(Vec::<(gtk4::Popover, gtk4::Widget)>::new()));
-        let created_popovers_callback = Rc::clone(&created_popovers);
+        let (created_popovers_tx, created_popovers_rx) = mpsc::channel();
+        let first_created_popover_tx = created_popovers_tx.clone();
         gtk4::glib::timeout_add_local_once(Duration::from_millis(10), move || {
-            created_popovers_callback
-                .borrow_mut()
-                .push(open_hidden_test_text_popover(&asynchronous_text));
+            first_created_popover_tx
+                .send(open_hidden_test_text_popover(&asynchronous_text))
+                .expect("fixture popup observer remains connected");
         });
 
-        let proof_calls = Rc::new(Cell::new(0usize));
-        let proof_calls_callback = Rc::clone(&proof_calls);
-        let second_created_popovers = Rc::clone(&created_popovers);
+        let (proof_calls_tx, proof_calls_rx) = mpsc::channel();
+        let mut first_proof = true;
         let roots = [asynchronous_root.clone().upcast::<gtk4::Widget>()];
         gtk4::glib::MainContext::default()
             .block_on(asynchronous_capture.wait_for_popover_quiescence(
                 91,
                 &roots,
                 move |targets, _deadline| {
-                    let proof_calls = Rc::clone(&proof_calls_callback);
-                    if proof_calls.get() == 0 {
+                    if first_proof {
+                        first_proof = false;
                         let text = second_asynchronous_text.clone();
-                        let popovers = Rc::clone(&second_created_popovers);
+                        let popovers = created_popovers_tx.clone();
                         gtk4::glib::timeout_add_local_once(Duration::from_millis(10), move || {
                             popovers
-                                .borrow_mut()
-                                .push(open_hidden_test_text_popover(&text));
+                                .send(open_hidden_test_text_popover(&text))
+                                .expect("fixture popup observer remains connected");
                         });
                     }
+                    let proof_calls = proof_calls_tx.clone();
                     async move {
                         assert_eq!(targets.len(), 1);
                         assert_eq!(targets[0].name, "gtk-owned-popover");
@@ -739,16 +791,20 @@ mod tests {
                         // Mirror that so the second popup is created during
                         // the first proof round, after its discovery scan.
                         gtk4::glib::timeout_future(Duration::from_millis(20)).await;
-                        proof_calls.set(proof_calls.get() + 1);
+                        proof_calls
+                            .send(())
+                            .expect("fixture proof observer remains connected");
                         Ok(())
                     }
                 },
             ))
             .expect("asynchronous GTK-owned popup reaches quiescence");
 
-        assert_eq!(proof_calls.get(), 2);
-        assert_eq!(created_popovers.borrow().len(), 2);
-        for (popover, _) in created_popovers.borrow().iter() {
+        let proof_calls = proof_calls_rx.try_iter().count();
+        let created_popovers = created_popovers_rx.try_iter().collect::<Vec<_>>();
+        assert_eq!(proof_calls, 2);
+        assert_eq!(created_popovers.len(), 2);
+        for (popover, _) in &created_popovers {
             assert!(popover.has_css_class(CAPTURE_TRANSPARENT_CLASS));
             assert!(!popover.can_target());
         }
@@ -758,7 +814,7 @@ mod tests {
                 .is_empty()
         );
         asynchronous_capture.set_suppressed(false);
-        for (popover, original_child) in created_popovers.borrow().iter() {
+        for (popover, original_child) in &created_popovers {
             assert!(!popover.has_css_class(CAPTURE_TRANSPARENT_CLASS));
             assert!(popover.can_target());
             assert_eq!(popover.child().as_ref(), Some(original_child));

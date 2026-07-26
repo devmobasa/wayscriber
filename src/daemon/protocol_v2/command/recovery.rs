@@ -86,36 +86,29 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
                 },
             },
         };
-        if matches!(
-            control.action_status,
-            ActionStatus::Prepared { .. }
-                | ActionStatus::Eligible { .. }
-                | ActionStatus::Claimed { .. }
-        ) {
-            control.action_status = match control.action_status.clone() {
-                ActionStatus::Prepared {
-                    action_id,
-                    action_order,
-                    digest,
-                }
-                | ActionStatus::Eligible {
-                    action_id,
-                    action_order,
-                    digest,
-                }
-                | ActionStatus::Claimed {
-                    action_id,
-                    action_order,
-                    digest,
-                } => ActionStatus::Indeterminate {
-                    action_id,
-                    action_order,
-                    digest,
-                    reason: reason.to_owned(),
-                },
-                _ => unreachable!("matched action state changed without mutation"),
-            };
-        }
+        control.action_status = match control.action_status.clone() {
+            ActionStatus::Prepared {
+                action_id,
+                action_order,
+                digest,
+            }
+            | ActionStatus::Eligible {
+                action_id,
+                action_order,
+                digest,
+            }
+            | ActionStatus::Claimed {
+                action_id,
+                action_order,
+                digest,
+            } => ActionStatus::Indeterminate {
+                action_id,
+                action_order,
+                digest,
+                reason: reason.to_owned(),
+            },
+            settled => settled,
+        };
         bump_revision(&mut control)?;
         control.response = Some(response);
         write_control(&path, &control)?;

@@ -1,7 +1,15 @@
 use super::*;
-use crate::paths::daemon_pid_file;
-use std::env;
+use crate::paths::{PathEnvironment, PathResolver, PreparedRuntimePaths};
 use std::fs;
+
+fn runtime_paths(temp: &crate::test_temp::TempDir) -> PreparedRuntimePaths {
+    let environment = PathEnvironment::for_test(&[(
+        crate::env_vars::XDG_RUNTIME_DIR_ENV,
+        temp.path().as_os_str(),
+    )]);
+    PreparedRuntimePaths::prepare(&PathResolver::from_environment(environment))
+        .expect("runtime path fixture should be private")
+}
 
 #[test]
 fn empty_toggle_request_reports_empty() {
@@ -216,97 +224,89 @@ fn daemon_toggle_response_parse_error_marks_existing_request_canceled() {
 
 #[test]
 fn daemon_pid_file_round_trips_runtime_info() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
-    write_daemon_pid_file(1234, "daemon-token").unwrap();
-    let info = read_daemon_runtime_info().unwrap_err();
+    write_daemon_pid_file(1234, "daemon-token", &runtime_paths).unwrap();
+    let info = read_daemon_runtime_info(&runtime_paths).unwrap_err();
     assert!(
         info.to_string()
             .contains("wayscriber daemon is not running")
     );
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn stale_cleanup_removes_matching_runtime_while_lock_is_free() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let runtime = DaemonRuntimeInfo {
         pid: 1234,
         token: Some("old-token".into()),
     };
-    write_daemon_pid_file(runtime.pid, runtime.token.as_deref().unwrap()).unwrap();
+    write_daemon_pid_file(
+        runtime.pid,
+        runtime.token.as_deref().unwrap(),
+        &runtime_paths,
+    )
+    .unwrap();
     write_daemon_toggle_request(
         &DaemonToggleRequest {
             freeze: true,
             ..Default::default()
         },
         "old-token",
+        &runtime_paths,
     )
     .unwrap();
 
-    clear_stale_daemon_state_if_matches(&runtime);
+    clear_stale_daemon_state_if_matches(&runtime, &runtime_paths);
 
-    assert!(!daemon_pid_file().exists());
-    assert!(!daemon_command_dir().exists());
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
+    assert!(!runtime_paths.daemon_pid_file().exists());
+    assert!(!runtime_paths.daemon_command_dir().exists());
 }
 
 #[test]
 fn stale_cleanup_removes_only_legacy_commands_and_preserves_versioned_state() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let runtime = DaemonRuntimeInfo {
         pid: 1234,
         token: Some("old-token".into()),
     };
-    write_daemon_pid_file(runtime.pid, runtime.token.as_deref().unwrap()).unwrap();
+    write_daemon_pid_file(
+        runtime.pid,
+        runtime.token.as_deref().unwrap(),
+        &runtime_paths,
+    )
+    .unwrap();
     let command = write_daemon_toggle_request(
         &DaemonToggleRequest {
             freeze: true,
             ..Default::default()
         },
         "old-token",
+        &runtime_paths,
     )
     .unwrap();
     write_daemon_toggle_command_success(&command).unwrap();
 
-    let versioned_sentinel = daemon_command_dir()
+    let versioned_sentinel = runtime_paths
+        .daemon_command_dir()
         .join("v2")
         .join("controls")
         .join("sentinel");
     fs::create_dir_all(versioned_sentinel.parent().unwrap()).unwrap();
     fs::write(&versioned_sentinel, b"unresolved-v2-state").unwrap();
-    let noncanonical_v1_sentinel =
-        daemon_command_dir().join("0000000000000000000000000000000A-00000001.json");
+    let noncanonical_v1_sentinel = runtime_paths
+        .daemon_command_dir()
+        .join("0000000000000000000000000000000A-00000001.json");
     fs::write(&noncanonical_v1_sentinel, b"not-a-canonical-v1-request").unwrap();
 
-    clear_stale_daemon_state_if_matches(&runtime);
+    clear_stale_daemon_state_if_matches(&runtime, &runtime_paths);
 
-    assert!(!daemon_pid_file().exists());
+    assert!(!runtime_paths.daemon_pid_file().exists());
     assert!(!command.request_path.exists());
     assert!(!command.response_path.exists());
     assert_eq!(
@@ -317,58 +317,49 @@ fn stale_cleanup_removes_only_legacy_commands_and_preserves_versioned_state() {
         fs::read(&noncanonical_v1_sentinel).unwrap(),
         b"not-a-canonical-v1-request"
     );
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn stale_cleanup_preserves_mismatched_runtime() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let current = DaemonRuntimeInfo {
         pid: 5678,
         token: Some("new-token".into()),
     };
-    write_daemon_pid_file(current.pid, current.token.as_deref().unwrap()).unwrap();
+    write_daemon_pid_file(
+        current.pid,
+        current.token.as_deref().unwrap(),
+        &runtime_paths,
+    )
+    .unwrap();
     write_daemon_toggle_request(
         &DaemonToggleRequest {
             freeze: true,
             ..Default::default()
         },
         "new-token",
+        &runtime_paths,
     )
     .unwrap();
 
-    clear_stale_daemon_state_if_matches(&DaemonRuntimeInfo {
-        pid: 1234,
-        token: Some("old-token".into()),
-    });
+    clear_stale_daemon_state_if_matches(
+        &DaemonRuntimeInfo {
+            pid: 1234,
+            token: Some("old-token".into()),
+        },
+        &runtime_paths,
+    );
 
-    assert_eq!(read_daemon_runtime_file().unwrap(), current);
-    assert!(daemon_command_dir().exists());
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
+    assert_eq!(read_daemon_runtime_file(&runtime_paths).unwrap(), current);
+    assert!(runtime_paths.daemon_command_dir().exists());
 }
 
 #[test]
 fn take_daemon_toggle_request_round_trips_payload() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let request = DaemonToggleRequest {
         mode: Some("whiteboard".into()),
@@ -377,8 +368,8 @@ fn take_daemon_toggle_request_round_trips_payload() {
         session_file: Some(PathBuf::from("/tmp/lecture.wayscriber-session")),
         ..Default::default()
     };
-    write_daemon_toggle_request(&request, "daemon-token").unwrap();
-    let batch = take_daemon_toggle_requests("daemon-token").unwrap();
+    write_daemon_toggle_request(&request, "daemon-token", &runtime_paths).unwrap();
+    let batch = take_daemon_toggle_requests("daemon-token", &runtime_paths).unwrap();
     let requests = batch
         .commands
         .iter()
@@ -391,31 +382,22 @@ fn take_daemon_toggle_request_round_trips_payload() {
     assert!(
         batch.commands[0]
             .request_path
-            .starts_with(daemon_command_dir())
+            .starts_with(runtime_paths.daemon_command_dir())
     );
     assert!(
         batch.commands[0]
             .response_path
-            .starts_with(daemon_command_dir().join("responses"))
+            .starts_with(runtime_paths.daemon_command_dir().join("responses"))
     );
-    let batch = take_daemon_toggle_requests("daemon-token").unwrap();
+    let batch = take_daemon_toggle_requests("daemon-token", &runtime_paths).unwrap();
     assert!(!batch.saw_command_files);
     assert!(batch.commands.is_empty());
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     write_daemon_toggle_request(
         &DaemonToggleRequest {
@@ -423,6 +405,7 @@ fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files(
             ..Default::default()
         },
         "daemon-token",
+        &runtime_paths,
     )
     .unwrap();
     write_daemon_toggle_request(
@@ -431,10 +414,11 @@ fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files(
             ..Default::default()
         },
         "daemon-token",
+        &runtime_paths,
     )
     .unwrap();
 
-    let command_dir = daemon_command_dir();
+    let command_dir = runtime_paths.daemon_command_dir();
     let entries = fs::read_dir(&command_dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
@@ -442,21 +426,12 @@ fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files(
     assert_eq!(entries.len(), 2);
     assert!(entries.iter().all(|name| name.ends_with(".json")));
     assert!(!entries.iter().any(|name| name.ends_with(".tmp")));
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let first = DaemonToggleRequest {
         freeze: true,
@@ -466,10 +441,10 @@ fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
         mode: Some("whiteboard".into()),
         ..Default::default()
     };
-    write_daemon_toggle_request(&first, "daemon-token").unwrap();
-    write_daemon_toggle_request(&second, "daemon-token").unwrap();
+    write_daemon_toggle_request(&first, "daemon-token", &runtime_paths).unwrap();
+    write_daemon_toggle_request(&second, "daemon-token", &runtime_paths).unwrap();
 
-    let batch = take_daemon_toggle_requests("daemon-token").unwrap();
+    let batch = take_daemon_toggle_requests("daemon-token", &runtime_paths).unwrap();
     let requests = batch
         .commands
         .into_iter()
@@ -478,26 +453,18 @@ fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
     assert_eq!(requests, vec![first, second]);
     assert!(batch.saw_command_files);
     assert!(
-        daemon_command_dir()
+        runtime_paths
+            .daemon_command_dir()
             .read_dir()
             .map(|mut entries| entries.next().is_none())
             .unwrap_or(true)
     );
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn take_daemon_toggle_request_ignores_mismatched_token() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     write_daemon_toggle_request(
         &DaemonToggleRequest {
@@ -505,30 +472,22 @@ fn take_daemon_toggle_request_ignores_mismatched_token() {
             ..Default::default()
         },
         "other-daemon",
+        &runtime_paths,
     )
     .unwrap();
 
     assert!(
-        take_daemon_toggle_requests("daemon-token")
+        take_daemon_toggle_requests("daemon-token", &runtime_paths)
             .unwrap()
             .commands
             .is_empty()
     );
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn take_daemon_toggle_request_ignores_stale_payload() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let payload = serde_json::to_vec(&DaemonToggleEnvelope {
         daemon_token: "daemon-token".into(),
@@ -540,27 +499,22 @@ fn take_daemon_toggle_request_ignores_stale_payload() {
         },
     })
     .unwrap();
-    fs::create_dir_all(daemon_command_dir()).unwrap();
-    fs::write(daemon_command_dir().join("stale.json"), payload).unwrap();
+    fs::create_dir_all(runtime_paths.daemon_command_dir()).unwrap();
+    fs::write(
+        runtime_paths.daemon_command_dir().join("stale.json"),
+        payload,
+    )
+    .unwrap();
 
-    let batch = take_daemon_toggle_requests("daemon-token").unwrap();
+    let batch = take_daemon_toggle_requests("daemon-token", &runtime_paths).unwrap();
     assert!(batch.saw_command_files);
     assert!(batch.commands.is_empty());
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }
 
 #[test]
 fn take_daemon_toggle_request_ignores_canceled_payload_but_marks_typed_signal() {
-    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
+    let runtime_paths = runtime_paths(&tmp);
 
     let payload = serde_json::to_vec(&DaemonToggleEnvelope {
         daemon_token: "daemon-token".into(),
@@ -572,15 +526,14 @@ fn take_daemon_toggle_request_ignores_canceled_payload_but_marks_typed_signal() 
         },
     })
     .unwrap();
-    fs::create_dir_all(daemon_command_dir()).unwrap();
-    fs::write(daemon_command_dir().join("canceled.json"), payload).unwrap();
+    fs::create_dir_all(runtime_paths.daemon_command_dir()).unwrap();
+    fs::write(
+        runtime_paths.daemon_command_dir().join("canceled.json"),
+        payload,
+    )
+    .unwrap();
 
-    let batch = take_daemon_toggle_requests("daemon-token").unwrap();
+    let batch = take_daemon_toggle_requests("daemon-token", &runtime_paths).unwrap();
     assert!(batch.saw_command_files);
     assert!(batch.commands.is_empty());
-
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
-    }
 }

@@ -128,6 +128,12 @@ pub(crate) enum PipelineProtocolError {
     ControllerBarrierActive {
         barrier: ControllerBarrierId,
     },
+    ControllerBarrierIdExhausted,
+    PersistenceIncidentIdExhausted,
+    RecoveryHandleIdExhausted,
+    ControllerBarrierMissing,
+    ResetTransactionMissing,
+    UnexpectedMutationResult,
     ShuttingDown,
 }
 
@@ -143,7 +149,6 @@ pub(crate) struct HeldReplacementStage {
 pub(crate) struct IntegratedSourceMutation {
     pub(crate) request: SourceMutationRequest,
     pub(crate) covered: Vec<AcceptedStateRevision>,
-    pub(crate) result: SourceMutationResult,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -16,12 +16,8 @@ pub(super) fn top_toolbar_spec(
 }
 
 impl TopBar {
-    pub(super) fn build_minimized(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
-        let spec = top_toolbar_spec(snapshot, plan);
-        let control = match spec.strip() {
-            [model::TopToolbarNode::Control(control)] => *control,
-            _ => unreachable!("minimized specification contains one restore control"),
-        };
+    pub(super) fn build_minimized(&mut self, snapshot: &ToolbarSnapshot, _plan: &TopStripPlan) {
+        let control = model::TopToolbarControl::Restore;
         let scale = effective_scale(snapshot);
         // A GTK toplevel never shrinks on its own; reset the default size
         // or the tab keeps the full strip's width. The panel padding is
@@ -41,7 +37,7 @@ impl TopBar {
         restore.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         restore.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("restore icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::Restore),
             (MINIMIZED_SIZE.1 * 0.75 * scale).min(18.0 * scale),
         );
         restore.set_child(Some(&icon.area));
@@ -57,12 +53,8 @@ impl TopBar {
     /// a ring stroked in the current color). Clicking restores the full
     /// strip. The drawing itself is shared with the built-in frontend via
     /// `toolbar_icons::draw_micro_chip`.
-    pub(super) fn build_micro(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
-        let spec = top_toolbar_spec(snapshot, plan);
-        let control = match spec.strip() {
-            [model::TopToolbarNode::Control(control)] => *control,
-            _ => unreachable!("micro specification contains one chip control"),
-        };
+    pub(super) fn build_micro(&mut self, snapshot: &ToolbarSnapshot, _plan: &TopStripPlan) {
+        let control = model::TopToolbarControl::MicroChip;
         let scale = effective_scale(snapshot);
         self.window.set_default_size(
             (MICRO_SIZE * scale).round() as i32,
@@ -79,10 +71,10 @@ impl TopBar {
         chip.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         chip.set_tooltip_text(Some(&control.tooltip(snapshot)));
 
-        let painter = Rc::new(Cell::new(crate::toolbar_icons::top_toolbar_icon_painter(
-            control.icon(snapshot).expect("micro chip tool icon"),
-        )));
-        let ring: Rc<Cell<MicroRing>> = Rc::new(Cell::new((
+        let painter = crate::toolbar_icons::top_toolbar_icon_painter(model::TopToolbarIcon::Tool(
+            model::semantic_icon_for_tool(snapshot.active_tool),
+        ));
+        let ring: MicroRing = (
             (
                 snapshot.color.r,
                 snapshot.color.g,
@@ -90,56 +82,25 @@ impl TopBar {
                 snapshot.color.a,
             ),
             model::micro_ring_width(snapshot.thickness),
-        )));
-        let hovered = Rc::new(Cell::new(false));
+        );
 
         let area = gtk4::DrawingArea::new();
         let size = (MICRO_SIZE * scale).round().max(1.0) as i32;
         area.set_content_width(size);
         area.set_content_height(size);
         area.set_can_target(false);
-        let draw_painter = painter.clone();
-        let draw_ring = ring.clone();
-        let draw_hovered = hovered.clone();
-        area.set_draw_func(move |area, ctx, width, height| {
-            let color = area.color();
-            let (ring_color, ring_width) = draw_ring.get();
-            let chip_size = (width.min(height) as f64).max(1.0);
-            let x = (width as f64 - chip_size) / 2.0;
-            let y = (height as f64 - chip_size) / 2.0;
-            crate::toolbar_icons::draw_micro_chip(
-                ctx,
-                x,
-                y,
-                chip_size,
-                draw_painter.get(),
-                &crate::toolbar_icons::MicroChipStyle {
-                    ring_color,
-                    // Ring width is in spec units; scale with the chip.
-                    ring_width: ring_width * (chip_size / MICRO_SIZE),
-                    icon_color: (
-                        color.red() as f64,
-                        color.green() as f64,
-                        color.blue() as f64,
-                        color.alpha() as f64,
-                    ),
-                    hovered: draw_hovered.get(),
-                },
-            );
-        });
+        install_micro_chip_draw(&area, painter, ring);
         chip.set_child(Some(&area));
 
         let motion = gtk4::EventControllerMotion::new();
-        let enter_hovered = hovered.clone();
         let enter_area = area.clone();
         motion.connect_enter(move |_, _, _| {
-            enter_hovered.set(true);
+            enter_area.add_css_class("hovered");
             enter_area.queue_draw();
         });
-        let leave_hovered = hovered;
         let leave_area = area.clone();
         motion.connect_leave(move |_| {
-            leave_hovered.set(false);
+            leave_area.remove_css_class("hovered");
             leave_area.queue_draw();
         });
         chip.add_controller(motion);
@@ -153,16 +114,11 @@ impl TopBar {
 
         // Live state: tool glyph, ring color, and ring width track the
         // snapshot without rebuilding the chip.
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-            let next_painter = crate::toolbar_icons::top_toolbar_icon_painter(
+        self.updaters.push(Box::new(move |snapshot| {
+            let painter = crate::toolbar_icons::top_toolbar_icon_painter(
                 model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool)),
             );
-            let mut dirty = false;
-            if !std::ptr::fn_addr_eq(painter.get(), next_painter) {
-                painter.set(next_painter);
-                dirty = true;
-            }
-            let next_ring = (
+            let ring = (
                 (
                     snapshot.color.r,
                     snapshot.color.g,
@@ -171,13 +127,8 @@ impl TopBar {
                 ),
                 model::micro_ring_width(snapshot.thickness),
             );
-            if ring.get() != next_ring {
-                ring.set(next_ring);
-                dirty = true;
-            }
-            if dirty {
-                area.queue_draw();
-            }
+            install_micro_chip_draw(&area, painter, ring);
+            area.queue_draw();
         }));
     }
 
@@ -283,7 +234,7 @@ impl TopBar {
                 model::TopToolbarNode::Control(control) => match control {
                     model::TopToolbarControl::DragHandle => {
                         let grip = IconWidget::new(
-                            top_toolbar_icon_painter(control.icon(snapshot).expect("drag icon")),
+                            top_toolbar_icon_painter(model::TopToolbarIcon::Drag),
                             sz(HANDLE_SIZE),
                         );
                         set_control_widget_id(&grip.area, control);
@@ -316,7 +267,6 @@ impl TopBar {
                     model::TopToolbarControl::ShapePicker => {
                         let button = self.shapes_picker_button(
                             snapshot,
-                            control,
                             (sz(btn_w), sz(btn_h)),
                             sz(ICON_SIZE),
                             use_icons,
@@ -344,8 +294,7 @@ impl TopBar {
                         }
                     }
                     model::TopToolbarControl::Preset(index) => {
-                        let button =
-                            self.preset_button(snapshot, control, index, (sz(btn_w), sz(btn_h)));
+                        let button = self.preset_button(snapshot, index, (sz(btn_w), sz(btn_h)));
                         append_gap(bar, button.as_ref(), gap);
                         x += btn_w + gap;
                     }
@@ -365,12 +314,8 @@ impl TopBar {
                         // The ⋯ toggle anchors the overflow menu (Clear
                         // first, then width-dropped items) from the history
                         // island.
-                        let button = self.overflow_button(
-                            snapshot,
-                            control,
-                            (sz(btn_w), sz(btn_h)),
-                            sz(ICON_SIZE),
-                        );
+                        let button =
+                            self.overflow_button(snapshot, (sz(btn_w), sz(btn_h)), sz(ICON_SIZE));
                         append_gap(bar, button.as_ref(), gap);
                         x += btn_w + gap;
                     }
@@ -384,7 +329,9 @@ impl TopBar {
                     | model::TopToolbarControl::SessionMenu
                     | model::TopToolbarControl::SettingsMenu
                     | model::TopToolbarControl::HighlightRing => {
-                        unreachable!("control belongs outside the main strip")
+                        log::error!(
+                            "GTK top-strip specification supplied out-of-lane control {control:?}"
+                        );
                     }
                 },
             }
@@ -399,15 +346,17 @@ impl TopBar {
         for control in spec.chrome().iter().copied() {
             match control {
                 model::TopToolbarControl::Pin => {
-                    island_chrome.append(&self.pin_button(snapshot, control, sz(chrome_size)));
+                    island_chrome.append(&self.pin_button(snapshot, sz(chrome_size)));
                 }
                 model::TopToolbarControl::Minimize => {
-                    island_chrome.append(&self.minimize_button(snapshot, control, sz(chrome_size)));
+                    island_chrome.append(&self.minimize_button(snapshot, sz(chrome_size)));
                 }
                 model::TopToolbarControl::About => {
-                    island_chrome.append(&self.about_button(snapshot, control, sz(chrome_size)));
+                    island_chrome.append(&self.about_button(snapshot, sz(chrome_size)));
                 }
-                _ => unreachable!("non-chrome control in chrome specification"),
+                other => {
+                    log::error!("GTK chrome specification supplied non-chrome control {other:?}");
+                }
             }
         }
 
@@ -434,7 +383,7 @@ impl TopBar {
         // engine snaps under reduced motion). Continuous opacity, driven
         // per-update, so open popovers and hover state survive.
         let fade_outer = outer.clone();
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+        self.updaters.push(Box::new(move |snapshot| {
             fade_outer.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
         }));
 
@@ -462,22 +411,18 @@ impl TopBar {
             ring.set_margin_start(px(ring_x));
             ring.set_margin_top(px(2.0));
             let sender = self.feedback.clone();
-            let syncing = Rc::new(Cell::new(false));
-            let toggle_sync = syncing.clone();
-            ring.connect_toggled(move |check| {
-                if !toggle_sync.get() {
-                    send_event(
-                        &sender,
-                        super::controls::event_for_toggle_state(control, check.is_active()),
-                    );
-                }
+            let toggled = ring.connect_toggled(move |check| {
+                send_event(
+                    &sender,
+                    super::controls::ToggleControl::HighlightRing.event(check.is_active()),
+                );
             });
             let ring_handle = ring.clone();
-            self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            self.updaters.push(Box::new(move |snapshot| {
                 if ring_handle.is_active() != snapshot.highlight_tool_ring_enabled {
-                    syncing.set(true);
+                    ring_handle.block_signal(&toggled);
                     ring_handle.set_active(snapshot.highlight_tool_ring_enabled);
-                    syncing.set(false);
+                    ring_handle.unblock_signal(&toggled);
                 }
                 // The contextual ring row fades with the islands above it.
                 ring_handle.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
@@ -488,4 +433,36 @@ impl TopBar {
         // --- Style pill (island D): contextual tool properties -------------------
         self.build_style_pill(snapshot, plan);
     }
+}
+
+fn install_micro_chip_draw(
+    area: &gtk4::DrawingArea,
+    painter: crate::toolbar_icons::ToolbarIconPainter,
+    (ring_color, ring_width): MicroRing,
+) {
+    area.set_draw_func(move |area, ctx, width, height| {
+        let color = area.color();
+        let chip_size = (width.min(height) as f64).max(1.0);
+        let x = (width as f64 - chip_size) / 2.0;
+        let y = (height as f64 - chip_size) / 2.0;
+        crate::toolbar_icons::draw_micro_chip(
+            ctx,
+            x,
+            y,
+            chip_size,
+            painter,
+            &crate::toolbar_icons::MicroChipStyle {
+                ring_color,
+                // Ring width is in spec units; scale with the chip.
+                ring_width: ring_width * (chip_size / MICRO_SIZE),
+                icon_color: (
+                    color.red() as f64,
+                    color.green() as f64,
+                    color.blue() as f64,
+                    color.alpha() as f64,
+                ),
+                hovered: area.has_css_class("hovered"),
+            },
+        );
+    });
 }

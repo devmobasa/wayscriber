@@ -1,9 +1,6 @@
 //! Thickness block: the thickness slider, eraser mode toggle, and polygon
 //! sides cards the built-in palette draws together.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::config::Action;
@@ -129,27 +126,23 @@ fn eraser_mode_card(ctx: &mut SectionCtx) -> gtk4::Widget {
     )));
     toggle.set_active(snapshot.eraser_mode == EraserMode::Stroke);
     let sender = ctx.feedback.clone();
-    let syncing = Rc::new(Cell::new(false));
-    let toggle_sync = syncing.clone();
-    toggle.connect_toggled(move |check| {
-        if !toggle_sync.get() {
-            send_event(
-                &sender,
-                ToolbarEvent::SetEraserMode(if check.is_active() {
-                    EraserMode::Stroke
-                } else {
-                    EraserMode::Brush
-                }),
-            );
-        }
+    let feedback_handler = toggle.connect_toggled(move |check| {
+        send_event(
+            &sender,
+            ToolbarEvent::SetEraserMode(if check.is_active() {
+                EraserMode::Stroke
+            } else {
+                EraserMode::Brush
+            }),
+        );
     });
     card.body.append(&toggle);
     ctx.updaters.push(Box::new(move |snapshot| {
         let stroke_active = snapshot.eraser_mode == EraserMode::Stroke;
         if toggle.is_active() != stroke_active {
-            syncing.set(true);
+            toggle.block_signal(&feedback_handler);
             toggle.set_active(stroke_active);
-            syncing.set(false);
+            toggle.unblock_signal(&feedback_handler);
         }
     }));
     card.root.upcast()

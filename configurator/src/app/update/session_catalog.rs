@@ -3,15 +3,13 @@ use std::path::PathBuf;
 use iced::Task;
 
 use crate::app::session_catalog::{
-    clear_session_catalog_entry, clear_session_catalog_tool_state_entry,
-    duplicate_session_catalog_entry, forget_session_catalog_entry, load_session_catalog,
-    move_session_catalog_entry, rename_session_catalog_entry, reveal_session_catalog_entry,
     session_clear_cached_status_blocker, session_clear_tool_state_cached_status_blocker,
     session_duplicate_cached_status_blocker, session_move_cached_status_blocker,
 };
 use crate::messages::Message;
 use crate::models::{SessionCatalogActionResult, SessionCatalogItem};
 
+use super::super::blocking_jobs::{BlockingJobRequest, SessionCatalogMutation};
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
@@ -41,26 +39,25 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_session_catalog_refresh_requested(&mut self) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         self.session_catalog.is_loading = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Loading sessions...");
-        Task::perform(load_session_catalog(), Message::SessionCatalogLoaded)
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogLoad)
     }
 
     pub(super) fn handle_session_catalog_forget_requested(&mut self, id: String) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Forgetting session metadata...");
-        Task::perform(
-            forget_session_catalog_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::Forget { id },
+        ))
     }
 
     pub(super) fn handle_session_catalog_rename_input_changed(
@@ -73,7 +70,7 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_session_catalog_rename_requested(&mut self, id: String) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         let Some(item) = self.session_catalog.item(&id) else {
@@ -89,10 +86,9 @@ impl ConfiguratorApp {
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Renaming session...");
-        Task::perform(
-            rename_session_catalog_entry(id, display_name),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::Rename { id, display_name },
+        ))
     }
 
     pub(super) fn handle_session_catalog_duplicate_input_changed(
@@ -108,7 +104,7 @@ impl ConfiguratorApp {
         &mut self,
         id: String,
     ) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         if let Some(blocker) = session_duplicate_cached_status_blocker(self.daemon_status.as_ref())
@@ -129,10 +125,12 @@ impl ConfiguratorApp {
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Duplicating session...");
-        Task::perform(
-            duplicate_session_catalog_entry(id, PathBuf::from(target)),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::Duplicate {
+                id,
+                target: PathBuf::from(target),
+            },
+        ))
     }
 
     pub(super) fn handle_session_catalog_move_input_changed(
@@ -145,7 +143,7 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_session_catalog_move_requested(&mut self, id: String) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         if let Some(blocker) = session_move_cached_status_blocker(self.daemon_status.as_ref()) {
@@ -165,30 +163,31 @@ impl ConfiguratorApp {
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Moving session...");
-        Task::perform(
-            move_session_catalog_entry(id, PathBuf::from(target)),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::Move {
+                id,
+                target: PathBuf::from(target),
+            },
+        ))
     }
 
     pub(super) fn handle_session_catalog_reveal_requested(&mut self, id: String) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Opening session folder...");
-        Task::perform(
-            reveal_session_catalog_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::Reveal { id },
+        ))
     }
 
     pub(super) fn handle_session_catalog_clear_tool_state_requested(
         &mut self,
         id: String,
     ) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         if let Some(blocker) =
@@ -205,14 +204,13 @@ impl ConfiguratorApp {
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Clearing saved tool state...");
-        Task::perform(
-            clear_session_catalog_tool_state_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::ClearToolState { id },
+        ))
     }
 
     pub(super) fn handle_session_catalog_clear_requested(&mut self, id: String) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         if let Some(blocker) = session_clear_cached_status_blocker(self.daemon_status.as_ref()) {
@@ -227,21 +225,24 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_session_catalog_clear_confirmed(&mut self, id: String) -> Task<Message> {
-        if self.session_catalog.busy {
+        if self.session_catalog_operation_blocked() {
             return Task::none();
         }
         if self.session_catalog.pending_clear_id.as_deref() != Some(id.as_str()) {
             return Task::none();
         }
+        self.session_catalog.pending_clear_id = None;
         self.session_catalog.busy = true;
         self.status = StatusMessage::info("Clearing saved session data...");
-        Task::perform(
-            clear_session_catalog_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        self.submit_blocking_job(BlockingJobRequest::SessionCatalogMutation(
+            SessionCatalogMutation::Clear { id },
+        ))
     }
 
     pub(super) fn handle_session_catalog_clear_canceled(&mut self) -> Task<Message> {
+        if self.session_catalog_operation_blocked() {
+            return Task::none();
+        }
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::idle();
         Task::none()
@@ -277,6 +278,10 @@ impl ConfiguratorApp {
             | StatusMessage::Warning(message) => Some(message.as_str()),
             StatusMessage::Idle => None,
         }
+    }
+
+    fn session_catalog_operation_blocked(&self) -> bool {
+        self.session_catalog.busy || self.session_catalog.is_loading
     }
 }
 

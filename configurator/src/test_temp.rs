@@ -1,8 +1,7 @@
+use std::collections::hash_map::RandomState;
+use std::hash::{BuildHasher, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{fs, io};
-
-static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) struct TempDir {
     path: PathBuf,
@@ -25,8 +24,10 @@ pub(crate) fn tempdir() -> io::Result<TempDir> {
     let pid = std::process::id();
 
     for _ in 0..100 {
-        let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let path = base.join(format!("wayscriber-configurator-test-{pid}-{id}"));
+        let candidate = RandomState::new().build_hasher().finish();
+        let path = base.join(format!(
+            "wayscriber-configurator-test-{pid}-{candidate:016x}"
+        ));
         match fs::create_dir(&path) {
             Ok(()) => return Ok(TempDir { path }),
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => continue,
@@ -38,4 +39,13 @@ pub(crate) fn tempdir() -> io::Result<TempDir> {
         io::ErrorKind::AlreadyExists,
         "failed to create a unique temporary test directory",
     ))
+}
+
+pub(crate) fn path_resolver() -> wayscriber::paths::PathResolver {
+    wayscriber::paths::PathResolver::from_environment(
+        wayscriber::paths::PathEnvironment::from_values(&[(
+            wayscriber::env_vars::HOME_ENV,
+            std::ffi::OsStr::new("/tmp"),
+        )]),
+    )
 }

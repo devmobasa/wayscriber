@@ -1,7 +1,6 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::str::FromStr;
-use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -292,21 +291,21 @@ pub(crate) fn item_visibility_setting(
     }
 }
 
-static FACTORY_INDIVIDUAL_VISIBILITY_SETTINGS: LazyLock<
-    BTreeMap<ToolbarItemId, ToolbarItemVisibilitySetting>,
-> = LazyLock::new(|| {
-    let factory = ToolbarItemsConfig::default().resolved();
-    resettable_individual_toolbar_item_ids()
-        .map(|id| (id, item_visibility_setting(&factory, id)))
-        .collect()
-});
-
 /// Built-in visibility settings for the exact individual-item reset batch.
-/// This is initialized once and shared by availability, live mutation, and
-/// runtime persistence so those layers cannot drift.
+/// Availability, live mutation, and runtime persistence all derive their
+/// values through this pure iterator so those layers cannot drift.
 pub(crate) fn factory_individual_toolbar_item_visibility_settings()
--> &'static BTreeMap<ToolbarItemId, ToolbarItemVisibilitySetting> {
-    &FACTORY_INDIVIDUAL_VISIBILITY_SETTINGS
+-> impl Iterator<Item = (ToolbarItemId, ToolbarItemVisibilitySetting)> {
+    resettable_individual_toolbar_item_ids()
+        .map(|id| (id, factory_toolbar_item_visibility_setting(id)))
+}
+
+fn factory_toolbar_item_visibility_setting(id: ToolbarItemId) -> ToolbarItemVisibilitySetting {
+    if DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS.contains(&id) {
+        ToolbarItemVisibilitySetting::Hidden
+    } else {
+        ToolbarItemVisibilitySetting::Default
+    }
 }
 
 /// Canonical visibility-customization predicate shared by the settings UI,

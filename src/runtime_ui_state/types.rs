@@ -16,7 +16,26 @@ macro_rules! id_type {
     };
 }
 
-id_type!(ControllerId);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct ControllerId {
+    owner_nonce: [u8; 16],
+    ordinal: u64,
+}
+
+impl ControllerId {
+    pub(crate) const fn new(owner_nonce: [u8; 16], ordinal: u64) -> Self {
+        Self {
+            owner_nonce,
+            ordinal,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn fixture(owner_byte: u8, ordinal: u64) -> Self {
+        Self::new([owner_byte; 16], ordinal)
+    }
+}
+
 id_type!(AcceptedStateRevision);
 id_type!(SourceMutationId);
 id_type!(ControllerBarrierId);

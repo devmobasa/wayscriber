@@ -77,23 +77,28 @@ impl HyprlandLightControlsInstallResult {
     }
 }
 
-pub(super) fn read_light_controls_status() -> HyprlandLightControlsStatus {
-    let Some(config_root) = wayscriber::paths::config_dir() else {
+pub(super) fn read_light_controls_status(
+    paths: &wayscriber::paths::PathResolver,
+) -> HyprlandLightControlsStatus {
+    let Ok(config_root) = paths.config_dir() else {
         return HyprlandLightControlsStatus {
             include_path: None,
             include_exists: false,
             source_present: false,
         };
     };
-    read_light_controls_status_from_config_root(&config_root)
+    read_light_controls_status_from_config_root(&config_root, paths.home_dir().ok().as_deref())
 }
 
-fn read_light_controls_status_from_config_root(config_root: &Path) -> HyprlandLightControlsStatus {
+fn read_light_controls_status_from_config_root(
+    config_root: &Path,
+    home: Option<&Path>,
+) -> HyprlandLightControlsStatus {
     let include_path = light_controls_include_path(config_root);
     let main_config_path = main_config_path(config_root);
     let source_line = source_line_for_include(&include_path);
     let source_present = fs::read_to_string(&main_config_path)
-        .map(|content| has_source_line(&content, &source_line))
+        .map(|content| has_source_line(&content, &source_line, home))
         .unwrap_or(false);
 
     HyprlandLightControlsStatus {
@@ -103,12 +108,13 @@ fn read_light_controls_status_from_config_root(config_root: &Path) -> HyprlandLi
     }
 }
 
-pub(super) fn install_light_controls() -> Result<HyprlandLightControlsInstallResult, String> {
-    let config_root = wayscriber::paths::config_dir().ok_or_else(|| {
-        "Cannot resolve config directory; failed to determine Hyprland config path.".to_string()
-    })?;
+pub(super) fn install_light_controls(
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<HyprlandLightControlsInstallResult, String> {
+    let config_root = paths.config_dir().map_err(|error| error.to_string())?;
     let binary_path = resolve_wayscriber_binary_path()?;
-    let mut result = write_light_controls(&config_root, &binary_path)?;
+    let mut result =
+        write_light_controls(&config_root, &binary_path, paths.home_dir().ok().as_deref())?;
 
     if result.source_configured && command_available("hyprctl") {
         result.reload_attempted = true;
@@ -135,6 +141,7 @@ pub(super) fn install_light_controls() -> Result<HyprlandLightControlsInstallRes
 fn write_light_controls(
     config_root: &Path,
     binary_path: &Path,
+    home: Option<&Path>,
 ) -> Result<HyprlandLightControlsInstallResult, String> {
     let hyprland_dir = config_root.join(HYPRLAND_DIR);
     fs::create_dir_all(&hyprland_dir).map_err(|err| {
@@ -166,7 +173,7 @@ fn write_light_controls(
 
     match fs::read_to_string(&main_config_path) {
         Ok(content) => {
-            let (updated_content, changed) = ensure_source_line(&content, &source_line);
+            let (updated_content, changed) = ensure_source_line(&content, &source_line, home);
             source_configured = true;
             source_updated = changed;
             if changed {
@@ -233,8 +240,8 @@ bindr = SUPER ALT, F, exec, {binary} --light-draw-off\n"
     )
 }
 
-fn ensure_source_line(content: &str, source_line: &str) -> (String, bool) {
-    if has_source_line(content, source_line) {
+fn ensure_source_line(content: &str, source_line: &str, home: Option<&Path>) -> (String, bool) {
+    if has_source_line(content, source_line, home) {
         return (content.to_string(), false);
     }
 
@@ -252,16 +259,20 @@ fn ensure_source_line(content: &str, source_line: &str) -> (String, bool) {
     (updated, true)
 }
 
-fn has_source_line(content: &str, source_line: &str) -> bool {
+fn has_source_line(content: &str, source_line: &str, home: Option<&Path>) -> bool {
+    has_source_line_with_home(content, source_line, home)
+}
+
+fn has_source_line_with_home(content: &str, source_line: &str, home: Option<&Path>) -> bool {
     let Some(expected_target) =
-        source_target(source_line).map(|target| normalize_source_target(&target))
+        source_target(source_line).map(|target| normalize_source_target(&target, home))
     else {
         return false;
     };
     content
         .lines()
         .filter_map(source_target)
-        .any(|target| normalize_source_target(&target) == expected_target)
+        .any(|target| normalize_source_target(&target, home) == expected_target)
 }
 
 fn source_target(line: &str) -> Option<String> {
@@ -322,10 +333,9 @@ fn strip_matching_quotes(value: &str) -> &str {
     }
 }
 
-fn normalize_source_target(target: &str) -> PathBuf {
+fn normalize_source_target(target: &str, home: Option<&Path>) -> PathBuf {
     let expanded = if let Some(stripped) = target.strip_prefix("~/") {
-        wayscriber::paths::home_dir()
-            .map(|home| home.join(stripped))
+        home.map(|home| home.join(stripped))
             .unwrap_or_else(|| PathBuf::from(target))
     } else {
         PathBuf::from(target)

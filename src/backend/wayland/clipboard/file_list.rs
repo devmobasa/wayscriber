@@ -1,13 +1,8 @@
 use super::{
     CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError, MAX_CLIPBOARD_IMAGE_BYTES,
-    image::decode_clipboard_image, system::read_pipe_with_timeout,
+    image::decode_clipboard_image,
 };
 use crate::file_uri;
-#[cfg(unix)]
-use std::fs::OpenOptions;
-use std::fs::{self, File};
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 const GNOME_COPIED_FILES_MIME: &str = "x-special/gnome-copied-files";
@@ -15,9 +10,34 @@ const TEXT_URI_LIST_MIME: &str = "text/uri-list";
 const OCTET_STREAM_MIME: &str = "application/octet-stream";
 
 pub(super) fn decode_clipboard_uri_list(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    cancellation: &mut super::ClipboardCancellation,
     mime_type: &str,
     bytes: Vec<u8>,
     offered: Vec<String>,
+) -> ClipboardPasteResult {
+    decode_clipboard_uri_list_with_reader(mime_type, bytes, offered, |path| {
+        if cancellation.is_cancelled() {
+            return Err(ClipboardReadError::Other(
+                "clipboard operation cancelled".to_string(),
+            ));
+        }
+        let result = read_clipboard_file(process_broker, path);
+        if cancellation.is_cancelled() {
+            Err(ClipboardReadError::Other(
+                "clipboard operation cancelled".to_string(),
+            ))
+        } else {
+            result
+        }
+    })
+}
+
+fn decode_clipboard_uri_list_with_reader(
+    mime_type: &str,
+    bytes: Vec<u8>,
+    offered: Vec<String>,
+    mut read_file: impl FnMut(&Path) -> Result<Vec<u8>, ClipboardReadError>,
 ) -> ClipboardPasteResult {
     let uris = match parse_clipboard_file_uris(mime_type, &bytes) {
         Ok(uris) if uris.is_empty() => return ClipboardPasteResult::NoSupportedMime { offered },
@@ -37,7 +57,7 @@ pub(super) fn decode_clipboard_uri_list(
         };
         saw_local_file = true;
 
-        let image_bytes = match read_clipboard_file(&path) {
+        let image_bytes = match read_file(&path) {
             Ok(bytes) if bytes.is_empty() => {
                 last_decode_error = Some(format!("clipboard file {} is empty", path.display()));
                 continue;
@@ -94,10 +114,28 @@ fn parse_clipboard_file_uris(mime_type: &str, bytes: &[u8]) -> Result<Vec<String
     Ok(uris)
 }
 
-fn read_clipboard_file(path: &Path) -> Result<Vec<u8>, ClipboardReadError> {
-    ensure_regular_clipboard_path(path)?;
-    let file = open_regular_clipboard_file(path)?;
-    read_pipe_with_timeout(file, MAX_CLIPBOARD_IMAGE_BYTES, CLIPBOARD_READ_TIMEOUT)
+fn read_clipboard_file(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    path: &Path,
+) -> Result<Vec<u8>, ClipboardReadError> {
+    match process_broker.read_regular_file(path, MAX_CLIPBOARD_IMAGE_BYTES, CLIPBOARD_READ_TIMEOUT)
+    {
+        Ok(crate::process_broker::BrokerFileRead::Ready(bytes)) => Ok(bytes),
+        Ok(crate::process_broker::BrokerFileRead::Empty) => Err(ClipboardReadError::Empty),
+        Ok(crate::process_broker::BrokerFileRead::TooLarge { limit }) => {
+            Err(ClipboardReadError::TooLarge { limit })
+        }
+        Ok(crate::process_broker::BrokerFileRead::NotRegular) => Err(ClipboardReadError::Other(
+            "clipboard URI does not identify a regular, non-symlink file".to_string(),
+        )),
+        Ok(crate::process_broker::BrokerFileRead::TimedOut) => Err(ClipboardReadError::TimedOut),
+        Ok(crate::process_broker::BrokerFileRead::ReadFailed { reason }) => {
+            Err(ClipboardReadError::Other(reason))
+        }
+        Err(error) => Err(ClipboardReadError::Unavailable(format!(
+            "clipboard file broker failed: {error:#}"
+        ))),
+    }
 }
 
 fn map_clipboard_file_read_error(path: &Path, err: ClipboardReadError) -> ClipboardPasteResult {
@@ -121,76 +159,6 @@ fn map_clipboard_file_read_error(path: &Path, err: ClipboardReadError) -> Clipbo
     }
 }
 
-fn ensure_regular_clipboard_path(path: &Path) -> Result<(), ClipboardReadError> {
-    let metadata = fs::metadata(path).map_err(|err| {
-        ClipboardReadError::Other(format!(
-            "Failed to inspect clipboard file {}: {}",
-            path.display(),
-            err
-        ))
-    })?;
-    validate_clipboard_file_metadata(&metadata, path)
-}
-
-fn validate_clipboard_file_metadata(
-    metadata: &fs::Metadata,
-    path: &Path,
-) -> Result<(), ClipboardReadError> {
-    if !metadata.file_type().is_file() {
-        return Err(ClipboardReadError::Other(format!(
-            "Clipboard file {} is not a regular file",
-            path.display()
-        )));
-    }
-    if metadata.len() > MAX_CLIPBOARD_IMAGE_BYTES as u64 {
-        return Err(ClipboardReadError::TooLarge {
-            limit: MAX_CLIPBOARD_IMAGE_BYTES,
-        });
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn open_regular_clipboard_file(path: &Path) -> Result<File, ClipboardReadError> {
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK)
-        .open(path)
-        .map_err(|err| {
-            ClipboardReadError::Other(format!(
-                "Failed to open clipboard file {}: {}",
-                path.display(),
-                err
-            ))
-        })?;
-    ensure_regular_clipboard_file(&file, path)?;
-    Ok(file)
-}
-
-#[cfg(not(unix))]
-fn open_regular_clipboard_file(path: &Path) -> Result<File, ClipboardReadError> {
-    let file = File::open(path).map_err(|err| {
-        ClipboardReadError::Other(format!(
-            "Failed to open clipboard file {}: {}",
-            path.display(),
-            err
-        ))
-    })?;
-    ensure_regular_clipboard_file(&file, path)?;
-    Ok(file)
-}
-
-fn ensure_regular_clipboard_file(file: &File, path: &Path) -> Result<(), ClipboardReadError> {
-    let metadata = file.metadata().map_err(|err| {
-        ClipboardReadError::Other(format!(
-            "Failed to inspect clipboard file {}: {}",
-            path.display(),
-            err
-        ))
-    })?;
-    validate_clipboard_file_metadata(&metadata, path)
-}
-
 fn is_gnome_copied_files_mime(mime_type: &str) -> bool {
     mime_type.eq_ignore_ascii_case(GNOME_COPIED_FILES_MIME)
 }
@@ -201,6 +169,31 @@ mod tests {
     use crate::backend::wayland::clipboard::image::choose_supported_mime;
     use crate::test_temp::TempDir;
     use std::fs;
+
+    fn decode_fixture_uri_list(
+        mime_type: &str,
+        bytes: Vec<u8>,
+        offered: Vec<String>,
+    ) -> ClipboardPasteResult {
+        decode_clipboard_uri_list_with_reader(mime_type, bytes, offered, |path| {
+            let metadata = fs::symlink_metadata(path).map_err(|error| {
+                ClipboardReadError::Other(format!("fixture file inspection failed: {error}"))
+            })?;
+            if !metadata.file_type().is_file() {
+                return Err(ClipboardReadError::Other(
+                    "fixture path is not a regular file".to_string(),
+                ));
+            }
+            if metadata.len() > MAX_CLIPBOARD_IMAGE_BYTES as u64 {
+                return Err(ClipboardReadError::TooLarge {
+                    limit: MAX_CLIPBOARD_IMAGE_BYTES,
+                });
+            }
+            fs::read(path).map_err(|error| {
+                ClipboardReadError::Other(format!("fixture file read failed: {error}"))
+            })
+        })
+    }
 
     #[test]
     fn choose_supported_mime_accepts_file_manager_uri_lists() {
@@ -228,38 +221,39 @@ mod tests {
     }
 
     #[test]
-    fn uri_list_paste_decodes_copied_image_file_without_deleting_it() {
-        let temp = TempDir::new().unwrap();
+    fn uri_list_paste_decodes_copied_image_file_without_deleting_it() -> Result<(), String> {
+        let temp = TempDir::new().expect("URI-list fixture creates an isolated directory");
         let image_path = temp.path().join("cat.png");
-        fs::write(&image_path, tiny_png()).unwrap();
+        fs::write(&image_path, tiny_png()).expect("URI-list fixture writes its image");
         let uri = file_uri_for_path(&image_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_fixture_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
 
-        match result {
-            ClipboardPasteResult::Image(image) => {
-                assert_eq!(image.mime_type, "image/png");
-                assert_eq!(image.width, 1);
-                assert_eq!(image.height, 1);
-            }
-            other => panic!("expected image result, got {other:?}"),
-        }
+        let image = match result {
+            ClipboardPasteResult::Image(image) => image,
+            other => return Err(format!("URI-list fixture expected an image, got {other:?}")),
+        };
+        assert_eq!(image.mime_type, "image/png");
+        assert_eq!(image.width, 1);
+        assert_eq!(image.height, 1);
         assert!(
             image_path.exists(),
             "clipboard paste must not delete copied files"
         );
+        Ok(())
     }
 
     #[test]
     #[cfg(unix)]
-    fn uri_list_paste_rejects_fifo_without_blocking() {
+    fn uri_list_paste_rejects_fifo_without_blocking() -> Result<(), String> {
         use std::ffi::CString;
         use std::os::unix::ffi::OsStrExt;
 
-        let temp = TempDir::new().unwrap();
+        let temp = TempDir::new().expect("FIFO fixture creates an isolated directory");
         let fifo_path = temp.path().join("not-an-image");
-        let c_path = CString::new(fifo_path.as_os_str().as_bytes()).unwrap();
+        let c_path = CString::new(fifo_path.as_os_str().as_bytes())
+            .expect("FIFO fixture path contains no interior NUL");
         let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
         assert_eq!(
             result,
@@ -270,31 +264,35 @@ mod tests {
         let uri = file_uri_for_path(&fifo_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_fixture_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
 
-        match result {
-            ClipboardPasteResult::DecodeFailed(err) => {
-                assert!(err.contains("not a regular file"));
-            }
-            other => panic!("expected decode failure, got {other:?}"),
-        }
+        let error = match result {
+            ClipboardPasteResult::DecodeFailed(error) => error,
+            other => return Err(format!("FIFO fixture expected a failure, got {other:?}")),
+        };
+        assert!(error.contains("not a regular file"));
+        Ok(())
     }
 
     #[test]
-    fn uri_list_paste_treats_missing_file_as_decode_failure() {
-        let temp = TempDir::new().unwrap();
+    fn uri_list_paste_treats_missing_file_as_decode_failure() -> Result<(), String> {
+        let temp = TempDir::new().expect("missing-file fixture creates an isolated directory");
         let image_path = temp.path().join("missing.png");
         let uri = file_uri_for_path(&image_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 
-        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+        let result = decode_fixture_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
 
-        match result {
-            ClipboardPasteResult::DecodeFailed(err) => {
-                assert!(err.contains("could not be read") || err.contains("Failed to inspect"));
+        let error = match result {
+            ClipboardPasteResult::DecodeFailed(error) => error,
+            other => {
+                return Err(format!(
+                    "missing-file fixture expected a failure, got {other:?}"
+                ));
             }
-            other => panic!("expected decode failure, got {other:?}"),
-        }
+        };
+        assert!(error.contains("could not be read"));
+        Ok(())
     }
 
     fn file_uri_for_path(path: &Path) -> String {
@@ -312,8 +310,12 @@ mod tests {
             let mut encoder = png::Encoder::new(&mut bytes, 1, 1);
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_depth(png::BitDepth::Eight);
-            let mut writer = encoder.write_header().unwrap();
-            writer.write_image_data(&[255, 0, 0, 255]).unwrap();
+            let mut writer = encoder
+                .write_header()
+                .expect("PNG fixture writes its header");
+            writer
+                .write_image_data(&[255, 0, 0, 255])
+                .expect("PNG fixture writes its single pixel");
         }
         bytes
     }

@@ -14,10 +14,14 @@ impl ToolbarSurfaceManager {
         position: (f64, f64),
     ) -> Option<(ToolbarIntent, bool)> {
         if self.top.is_surface(surface) {
-            return self.top.hit_at(position.0, position.1);
+            return self
+                .top
+                .hit_at(position.0, position.1, self.debug_color_logging);
         }
         if self.side.is_surface(surface) {
-            return self.side.hit_at(position.0, position.1);
+            return self
+                .side
+                .hit_at(position.0, position.1, self.debug_color_logging);
         }
         None
     }
@@ -53,7 +57,9 @@ impl ToolbarSurfaceManager {
                 self.top_hover = Some(position);
                 self.top.set_hover(Some(position));
             }
-            return self.top.drag_at(position.0, position.1);
+            return self
+                .top
+                .drag_at(position.0, position.1, self.debug_color_logging);
         }
         if self.side.is_surface(surface) {
             if self.side_hover != Some(position) {
@@ -64,7 +70,9 @@ impl ToolbarSurfaceManager {
                 self.side_hover = Some(position);
                 self.side.set_hover(Some(position));
             }
-            return self.side.drag_at(position.0, position.1);
+            return self
+                .side
+                .drag_at(position.0, position.1, self.debug_color_logging);
         }
         None
     }

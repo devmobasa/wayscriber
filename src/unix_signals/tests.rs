@@ -1,462 +1,427 @@
-use super::listener::MAX_SIGNAL_PIPE_BYTES_PER_PASS;
-use super::*;
-use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier, mpsc};
-use std::thread;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::os::fd::AsRawFd;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const TEST_SIGNAL: libc::c_int = libc::SIGWINCH;
+use super::*;
 
 #[test]
-fn signal_handlers_restart_interrupted_syscalls() {
-    let _guard = test_signal_lock();
-    assert_ne!(signal_action_flags() & libc::SA_RESTART, 0);
-}
-
-#[test]
-fn setup_failure_restores_partial_installation_and_releases_singleton() {
-    let _guard = test_signal_lock();
-    let before = current_sigaction(TEST_SIGNAL).unwrap();
-
-    let err = match spawn_listener(&[TEST_SIGNAL, i32::MAX], |_| {}, || {}) {
-        Ok(_) => panic!("invalid signal unexpectedly installed"),
-        Err(err) => err,
-    };
-
-    assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
-    let after = current_sigaction(TEST_SIGNAL).unwrap();
-    assert_eq!(after.sa_sigaction, before.sa_sigaction);
-    assert_eq!(SIGNAL_WRITE_FD.load(Ordering::Acquire), -1);
+fn profiles_decode_only_their_owned_events() {
     assert_eq!(
-        gate_state(HANDLER_GATE_TOKEN.load(Ordering::Acquire)),
-        GATE_INACTIVE
+        decode_signal(SignalProfile::Daemon, libc::SIGUSR1)
+            .expect("daemon fixture decodes its registered toggle signal"),
+        SignalEvent::ToggleOverlay
     );
-
-    let mut replacement = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    replacement.stop_and_join().unwrap();
+    assert_eq!(
+        decode_signal(SignalProfile::Overlay, libc::SIGUSR2)
+            .expect("overlay fixture decodes its registered tray signal"),
+        SignalEvent::TrayAction
+    );
+    assert_eq!(
+        decode_signal(SignalProfile::Daemon, libc::SIGUSR2)
+            .expect_err("daemon fixture rejects the overlay-only tray signal")
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
 }
 
 #[test]
-fn signal_installed_during_listener_setup_is_replayed_after_startup() {
-    let _guard = test_signal_lock();
-    reset_handler_hooks(test_hooks::PAUSE_AFTER_HANDLER_INSTALL);
-    let callbacks = Arc::new(AtomicUsize::new(0));
-    let callback_count = Arc::clone(&callbacks);
-    let (listener_tx, listener_rx) = mpsc::channel();
-    let setup = thread::spawn(move || {
-        listener_tx
-            .send(spawn_listener(
-                &[TEST_SIGNAL],
-                move |_| {
-                    callback_count.fetch_add(1, Ordering::AcqRel);
-                },
-                || {},
-            ))
-            .unwrap();
-    });
-    wait_until(|| test_hooks::HANDLER_PAUSED.load(Ordering::Acquire));
+fn independent_fake_sources_publish_without_process_global_coordination() {
+    let mut first = FakeSignalSource::new().expect("fixture creates its first signal source");
+    let mut second = FakeSignalSource::new().expect("fixture creates its second signal source");
+    first
+        .publish(SignalEvent::Shutdown(ShutdownSignal::Terminate))
+        .expect("fixture publishes to its first source");
+    second
+        .publish(SignalEvent::TrayAction)
+        .expect("fixture publishes to its second source");
 
-    signal_handler(TEST_SIGNAL);
-
-    test_hooks::RESUME_HANDLER.store(true, Ordering::Release);
-    let mut listener = listener_rx
-        .recv_timeout(Duration::from_secs(1))
-        .expect("listener setup did not resume")
-        .expect("listener setup failed");
-    setup.join().unwrap();
-    wait_until(|| callbacks.load(Ordering::Acquire) == 1);
-    let delivered = callbacks.load(Ordering::Acquire);
-    listener.stop_and_join().unwrap();
-    reset_handler_hooks(0);
-
-    assert_eq!(delivered, 1, "signal delivered during setup was lost");
-}
-
-#[test]
-fn signal_handler_preserves_errno() {
-    let _guard = test_signal_lock();
-    let mut listener = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    set_errno(libc::E2BIG);
-
-    signal_handler(TEST_SIGNAL);
-
-    assert_eq!(current_errno(), libc::E2BIG);
-    listener.stop_and_join().unwrap();
-}
-
-#[test]
-fn pending_state_survives_an_unavailable_self_pipe() {
-    let _guard = test_signal_lock();
-    let callbacks = Arc::new(AtomicUsize::new(0));
-    let callback_count = Arc::clone(&callbacks);
-    let mut listener = spawn_listener(
-        &[TEST_SIGNAL],
-        move |_| {
-            callback_count.fetch_add(1, Ordering::AcqRel);
-        },
-        || {},
-    )
-    .unwrap();
-    let write_fd = listener.endpoint_fds().1;
-    SIGNAL_WRITE_FD.store(-1, Ordering::Release);
-
-    signal_handler(TEST_SIGNAL);
-
-    SIGNAL_WRITE_FD.store(write_fd, Ordering::Release);
-    assert!(dispatch_pending_signals(&|_| {
-        callbacks.fetch_add(1, Ordering::AcqRel);
-    }));
-    assert_eq!(callbacks.load(Ordering::Acquire), 1);
-    listener.stop_and_join().unwrap();
-}
-
-#[test]
-fn wake_before_listener_wait_is_retained_and_callback_precedes_owner_wake() {
-    let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    let wake_handle = owner_wake.handle();
-    let callback_published = Arc::new(AtomicBool::new(false));
-    let callback_state = Arc::clone(&callback_published);
-    let mut listener = spawn_listener(
-        &[TEST_SIGNAL],
-        move |_| callback_state.store(true, Ordering::Release),
-        move || wake_handle.wake().unwrap(),
-    )
-    .unwrap();
-
-    signal_handler(TEST_SIGNAL);
-
-    wait_for_owner_wake(&owner_wake);
-    assert!(callback_published.load(Ordering::Acquire));
-    listener.stop_and_join().unwrap();
-}
-
-#[cfg(target_os = "linux")]
-#[test]
-fn signal_delivered_while_listener_is_blocked_wakes_owner() {
-    let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    let wake_handle = owner_wake.handle();
-    let callbacks = Arc::new(AtomicUsize::new(0));
-    let callback_count = Arc::clone(&callbacks);
-    let mut listener = spawn_listener(
-        &[TEST_SIGNAL],
-        move |_| {
-            callback_count.fetch_add(1, Ordering::AcqRel);
-        },
-        move || wake_handle.wake().unwrap(),
-    )
-    .unwrap();
-    wait_until_listener_blocks(&listener);
-
-    signal_handler(TEST_SIGNAL);
-
-    wait_for_owner_wake(&owner_wake);
-    assert_eq!(callbacks.load(Ordering::Acquire), 1);
-    listener.stop_and_join().unwrap();
-}
-
-#[test]
-fn signal_burst_coalesces_while_callback_is_in_flight() {
-    let _guard = test_signal_lock();
-    let entered = Arc::new(Barrier::new(2));
-    let release = Arc::new(Barrier::new(2));
-    let callbacks = Arc::new(AtomicUsize::new(0));
-    let callback_entered = Arc::clone(&entered);
-    let callback_release = Arc::clone(&release);
-    let callback_count = Arc::clone(&callbacks);
-    let mut listener = spawn_listener(
-        &[TEST_SIGNAL],
-        move |_| {
-            let call = callback_count.fetch_add(1, Ordering::AcqRel);
-            if call == 0 {
-                callback_entered.wait();
-                callback_release.wait();
-            }
-        },
-        || {},
-    )
-    .unwrap();
-
-    signal_handler(TEST_SIGNAL);
-    entered.wait();
-    for _ in 0..64 {
-        signal_handler(TEST_SIGNAL);
+    for source in [&first, &second] {
+        let mut pollfd = libc::pollfd {
+            fd: source
+                .poll_fd()
+                .expect("fixture source retains its poll descriptor")
+                .as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let ready = unsafe {
+            // SAFETY: each fake retains its descriptor for this nonblocking poll.
+            libc::poll(&mut pollfd, 1, 0)
+        };
+        assert_eq!(ready, 1);
+        assert_ne!(pollfd.revents & libc::POLLIN, 0);
     }
-    release.wait();
-    wait_until(|| callbacks.load(Ordering::Acquire) == 2);
-
-    assert_eq!(callbacks.load(Ordering::Acquire), 2);
-    listener.stop_and_join().unwrap();
-}
-
-#[test]
-fn read_error_publishes_failure_before_owner_wake_and_retains_endpoints() {
-    let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    let wake_handle = owner_wake.handle();
-    let mut listener =
-        spawn_listener(&[TEST_SIGNAL], |_| {}, move || wake_handle.wake().unwrap()).unwrap();
-    let endpoints = listener.endpoint_fds();
-
-    listener.inject_read_error(libc::EIO);
-    wait_for_owner_wake(&owner_wake);
-
-    assert!(matches!(
-        listener.health(),
-        SignalListenerHealth::Failed(SignalListenerFailure::ReadFailed {
-            raw_os_error: Some(libc::EIO),
-            ..
-        })
-    ));
-    assert!(fd_is_open(endpoints.0));
-    assert!(fd_is_open(endpoints.1));
-    assert!(listener.retains_endpoints());
-    listener.stop_and_join().unwrap();
-    assert!(!listener.retains_endpoints());
-}
-
-#[test]
-fn callback_panic_publishes_failure_before_independent_owner_wake() {
-    let _guard = test_signal_lock();
-    let owner_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    let wake_handle = owner_wake.handle();
-    let mut listener = spawn_listener(
-        &[TEST_SIGNAL],
-        |_| panic!("injected callback panic"),
-        move || wake_handle.wake().unwrap(),
-    )
-    .unwrap();
-
-    signal_handler(TEST_SIGNAL);
-    wait_for_owner_wake(&owner_wake);
 
     assert_eq!(
-        listener.health(),
-        SignalListenerHealth::Failed(SignalListenerFailure::CallbackPanicked)
+        first
+            .drain()
+            .expect("fixture drains its first signal source"),
+        vec![SignalEvent::Shutdown(ShutdownSignal::Terminate)]
     );
-    listener.stop_and_join().unwrap();
-}
-
-#[test]
-fn old_epoch_paused_before_admission_cannot_access_next_generation_descriptor() {
-    let _guard = test_signal_lock();
-    reset_handler_hooks(test_hooks::PAUSE_AFTER_TOKEN_READ);
-    let mut first = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    let old_handler = thread::spawn(|| signal_handler(TEST_SIGNAL));
-    wait_until(|| test_hooks::HANDLER_PAUSED.load(Ordering::Acquire));
-
-    first.stop_and_join().unwrap();
-    let mut second = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    let accesses_before = test_hooks::DESCRIPTOR_ACCESSES.load(Ordering::Acquire);
-    test_hooks::RESUME_HANDLER.store(true, Ordering::Release);
-    old_handler.join().unwrap();
-
     assert_eq!(
-        test_hooks::DESCRIPTOR_ACCESSES.load(Ordering::Acquire),
-        accesses_before
+        second
+            .drain()
+            .expect("fixture drains its second signal source"),
+        vec![SignalEvent::TrayAction]
     );
-    reset_handler_hooks(0);
-    second.stop_and_join().unwrap();
 }
 
 #[test]
-fn descriptor_close_waits_for_every_admitted_handler() {
-    let _guard = test_signal_lock();
-    reset_handler_hooks(test_hooks::PAUSE_AFTER_ADMISSION);
-    let listener = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    let endpoints = listener.endpoint_fds();
-    let admitted_handler = thread::spawn(|| signal_handler(TEST_SIGNAL));
-    wait_until(|| test_hooks::HANDLER_PAUSED.load(Ordering::Acquire));
+fn tokio_workers_inherit_the_calling_threads_blocked_runtime_signals() {
+    let profile = SignalProfile::Daemon;
+    let mask = signal_mask(profile).expect("fixture constructs the daemon signal mask");
+    let previous = block_signals(&mask).expect("fixture blocks daemon signals");
+    let runtime = tokio::runtime::Runtime::new().expect("fixture creates its Tokio runtime");
 
-    let (stopped_tx, stopped_rx) = mpsc::channel();
-    let stopper = thread::spawn(move || {
-        let mut listener = listener;
-        let result = listener.stop_and_join();
-        stopped_tx.send(result).unwrap();
+    let worker_membership = runtime.block_on(async move {
+        tokio::spawn(async move { selected_signal_membership(profile) })
+            .await
+            .expect("fixture worker completes")
+            .expect("fixture worker can inspect its mask")
     });
-    assert!(stopped_rx.recv_timeout(Duration::from_millis(20)).is_err());
-    assert!(fd_is_open(endpoints.0));
-    assert!(fd_is_open(endpoints.1));
 
-    test_hooks::RESUME_HANDLER.store(true, Ordering::Release);
-    admitted_handler.join().unwrap();
-    stopped_rx
-        .recv_timeout(Duration::from_secs(1))
-        .unwrap()
-        .unwrap();
-    stopper.join().unwrap();
-    reset_handler_hooks(0);
+    drop(runtime);
+    restore_signals(&previous).expect("fixture restores its calling-thread signal mask");
+    assert!(
+        worker_membership.into_iter().all(|blocked| blocked),
+        "Tokio worker did not inherit the blocked daemon signal mask"
+    );
 }
 
 #[test]
-fn continuous_signals_cannot_starve_stop_and_join() {
-    let _guard = test_signal_lock();
-    let listener = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    let keep_sending = Arc::new(AtomicBool::new(true));
-    let sender_flag = Arc::clone(&keep_sending);
-    let sender = thread::spawn(move || {
-        while sender_flag.load(Ordering::Acquire) {
-            signal_handler(TEST_SIGNAL);
-            thread::yield_now();
+fn real_owner_admission_rejects_before_mask_change_and_reopens_after_drop() -> TestResult {
+    if std::env::var_os(REAL_ADMISSION_CHILD_ENV).is_some() {
+        return run_real_owner_admission_probe();
+    }
+
+    let output = Command::new(std::env::current_exe()?)
+        .arg("--exact")
+        .arg("unix_signals::tests::real_owner_admission_rejects_before_mask_change_and_reopens_after_drop")
+        .arg("--nocapture")
+        .env(REAL_ADMISSION_CHILD_ENV, "1")
+        .output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(io::Error::other(format!(
+        "isolated signal-admission probe failed ({}); stdout: {}; stderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    ))
+    .into())
+}
+
+const REAL_ADMISSION_CHILD_ENV: &str = "WAYSCRIBER_REAL_SIGNAL_ADMISSION_CHILD";
+
+fn run_real_owner_admission_probe() -> TestResult {
+    let original_mask = selected_signal_membership(SignalProfile::Daemon)?;
+    let first = SignalOwner::install(SignalProfile::Daemon)?;
+    let second = std::thread::spawn(|| -> io::Result<(io::ErrorKind, bool)> {
+        let before = selected_signal_membership(SignalProfile::Overlay)?;
+        let rejection = match SignalOwner::install(SignalProfile::Overlay) {
+            Ok(mut unexpected) => {
+                let _ = unexpected.finish();
+                return Err(io::Error::other(
+                    "concurrent real signal owner unexpectedly acquired admission",
+                ));
+            }
+            Err(error) => error,
+        };
+        let after = selected_signal_membership(SignalProfile::Overlay)?;
+        Ok((rejection.kind(), after == before))
+    })
+    .join();
+
+    drop(first);
+    let restored_mask = selected_signal_membership(SignalProfile::Daemon)?;
+    let (kind, mask_unchanged) =
+        second.map_err(|_| io::Error::other("concurrent signal-admission probe panicked"))??;
+    assert_eq!(kind, io::ErrorKind::AlreadyExists);
+    assert!(
+        mask_unchanged,
+        "rejected signal admission changed the competing thread's mask"
+    );
+    assert_eq!(
+        restored_mask, original_mask,
+        "dropping the first owner did not restore its thread's mask"
+    );
+
+    let mut replacement = SignalOwner::install(SignalProfile::Overlay)?;
+    replacement.finish()?;
+
+    let retry_original_mask = selected_signal_membership(SignalProfile::Daemon)?;
+    let mut retry_owner = SignalOwner::install(SignalProfile::Daemon)?;
+    let injected = retry_owner
+        .finish_with(|_| Err(io::Error::other("injected signal-mask restoration failure")));
+    assert!(injected.is_err());
+    assert!(matches!(
+        retry_owner.poll_fd(),
+        Err(error) if error.kind() == io::ErrorKind::NotConnected
+    ));
+
+    let retry_rejection = match SignalOwner::install(SignalProfile::Overlay) {
+        Ok(mut unexpected) => {
+            let _ = unexpected.finish();
+            return Err(io::Error::other(
+                "restore-pending owner unexpectedly released signal admission",
+            )
+            .into());
+        }
+        Err(error) => error,
+    };
+    assert_eq!(retry_rejection.kind(), io::ErrorKind::AlreadyExists);
+
+    retry_owner.finish()?;
+    retry_owner.finish()?;
+    assert_eq!(
+        selected_signal_membership(SignalProfile::Daemon)?,
+        retry_original_mask
+    );
+    let mut retry_replacement = SignalOwner::install(SignalProfile::Overlay)?;
+    retry_replacement.finish()?;
+    Ok(())
+}
+
+#[test]
+fn fake_source_reports_a_typed_terminal_read_failure() {
+    let mut source = FakeSignalSource::new().expect("fixture creates its signal source");
+    source
+        .fail_next_drain(io::ErrorKind::BrokenPipe)
+        .expect("fixture wakes its injected failure source");
+
+    assert_eq!(
+        source
+            .drain()
+            .expect_err("fixture observes its injected source failure")
+            .kind(),
+        io::ErrorKind::BrokenPipe
+    );
+}
+
+const REAL_PROBE_CHILD_ENV: &str = "WAYSCRIBER_REAL_SIGNAL_PROBE_CHILD";
+const REAL_PROBE_READY: &str = "WAYSCRIBER_SIGNAL_PROBE_READY=";
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+#[test]
+fn real_signal_owner_subprocess_probe() -> TestResult {
+    if std::env::var_os(REAL_PROBE_CHILD_ENV).is_some() {
+        return run_real_probe_child();
+    }
+
+    let executable = std::env::current_exe()?;
+    let mut child = Command::new(executable)
+        .arg("--exact")
+        .arg("unix_signals::tests::real_signal_owner_subprocess_probe")
+        .arg("--nocapture")
+        .env(REAL_PROBE_CHILD_ENV, "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| io::Error::other("signal probe child stdout was not piped"))?;
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => {
+                    let _ = ready_tx.send(Err(
+                        "signal probe child exited before publishing readiness".to_string(),
+                    ));
+                    return;
+                }
+                Ok(_) => {
+                    if let Some(marker) = line.find(REAL_PROBE_READY) {
+                        let raw_tid = line[marker + REAL_PROBE_READY.len()..].trim();
+                        let result = raw_tid
+                            .parse::<libc::pid_t>()
+                            .map(|tid| (tid, reader))
+                            .map_err(|error| format!("invalid signal probe tid: {error}"));
+                        let _ = ready_tx.send(result);
+                        return;
+                    }
+                }
+                Err(error) => {
+                    let _ = ready_tx.send(Err(format!(
+                        "failed reading signal probe readiness: {error}"
+                    )));
+                    return;
+                }
+            }
         }
     });
-    let (stopped_tx, stopped_rx) = mpsc::channel();
-    let stopper = thread::spawn(move || {
-        let mut listener = listener;
-        stopped_tx.send(listener.stop_and_join()).unwrap();
-    });
 
-    let result = stopped_rx.recv_timeout(Duration::from_secs(1));
-    keep_sending.store(false, Ordering::Release);
-    sender.join().unwrap();
-    result
-        .expect("continuous signals starved teardown")
-        .unwrap();
-    stopper.join().unwrap();
-}
-
-#[test]
-fn stop_restores_handlers_and_is_idempotent() {
-    let _guard = test_signal_lock();
-    let before = current_sigaction(TEST_SIGNAL).unwrap();
-    let mut listener = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    let installed = current_sigaction(TEST_SIGNAL).unwrap();
-    assert_ne!(installed.sa_sigaction, before.sa_sigaction);
-
-    listener.stop_and_join().unwrap();
-    listener.stop_and_join().unwrap();
-
-    let after = current_sigaction(TEST_SIGNAL).unwrap();
-    assert_eq!(after.sa_sigaction, before.sa_sigaction);
-    assert_eq!(listener.health(), SignalListenerHealth::Stopped);
-}
-
-#[test]
-fn stale_old_generation_handler_cannot_write_to_reused_numeric_descriptor() {
-    let _guard = test_signal_lock();
-    reset_handler_hooks(test_hooks::PAUSE_AFTER_TOKEN_READ);
-    let mut listener = spawn_listener(&[TEST_SIGNAL], |_| {}, || {}).unwrap();
-    let old_write_fd = listener.endpoint_fds().1;
-    let old_handler = thread::spawn(|| signal_handler(TEST_SIGNAL));
-    wait_until(|| test_hooks::HANDLER_PAUSED.load(Ordering::Acquire));
-    listener.stop_and_join().unwrap();
-
-    let (reuse_read, reuse_write) = create_pipe().unwrap();
-    let reuse_read = if reuse_read.as_raw_fd() == old_write_fd {
-        // SAFETY: duplicates the live read endpoint so `old_write_fd` can be
-        // deliberately reused for the write endpoint below.
-        let duplicate = unsafe { libc::dup(reuse_read.as_raw_fd()) };
-        assert!(duplicate >= 0);
-        drop(reuse_read);
-        // SAFETY: `dup` returned a fresh descriptor owned by this test.
-        unsafe { OwnedFd::from_raw_fd(duplicate) }
-    } else {
-        reuse_read
+    let (tid, mut stdout) = match ready_rx.recv_timeout(Duration::from_secs(3)) {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(error)) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            reader
+                .join()
+                .expect("fixture readiness reader exits after child shutdown");
+            return Err(io::Error::other(error).into());
+        }
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            reader
+                .join()
+                .expect("fixture readiness reader exits after timeout shutdown");
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("signal probe readiness timed out: {error}"),
+            )
+            .into());
+        }
     };
-    set_status_flag(reuse_read.as_raw_fd(), libc::O_NONBLOCK).unwrap();
-    if reuse_write.as_raw_fd() != old_write_fd {
-        // SAFETY: duplicates the live pipe endpoint onto the deliberately
-        // reused numeric descriptor for this isolated race test.
-        assert!(unsafe { libc::dup2(reuse_write.as_raw_fd(), old_write_fd) } >= 0);
-    }
-    test_hooks::RESUME_HANDLER.store(true, Ordering::Release);
-    old_handler.join().unwrap();
+    reader
+        .join()
+        .expect("fixture readiness reader handed ownership back to the test");
 
-    let mut byte = 0_u8;
-    // SAFETY: `byte` is writable and the pipe read descriptor remains open.
-    let count = unsafe {
-        libc::read(
-            reuse_read.as_raw_fd(),
-            (&mut byte as *mut u8).cast::<libc::c_void>(),
-            1,
+    let signal_result = unsafe {
+        // SAFETY: the child published this live Linux thread id and tgkill
+        // targets only that isolated fixture process/thread.
+        libc::syscall(
+            libc::SYS_tgkill,
+            child.id() as libc::pid_t,
+            tid,
+            libc::SIGUSR2,
         )
     };
-    assert_eq!(count, -1);
-    assert_eq!(io::Error::last_os_error().kind(), io::ErrorKind::WouldBlock);
-    if reuse_write.as_raw_fd() != old_write_fd {
-        close_fd(old_write_fd);
+    if signal_result != 0 {
+        let error = io::Error::last_os_error();
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error.into());
     }
-    reset_handler_hooks(0);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "real signal probe child did not exit",
+            )
+            .into());
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let mut remaining_stdout = String::new();
+    stdout.read_to_string(&mut remaining_stdout)?;
+    let mut stderr = String::new();
+    if let Some(mut child_stderr) = child.stderr.take() {
+        child_stderr.read_to_string(&mut stderr)?;
+    }
+    if !status.success() {
+        return Err(io::Error::other(format!(
+            "real signal probe failed ({status}); stdout: {remaining_stdout}; stderr: {stderr}"
+        ))
+        .into());
+    }
+    Ok(())
 }
 
-#[test]
-fn listener_pass_is_explicitly_bounded() {
-    assert_eq!(MAX_SIGNAL_PIPE_BYTES_PER_PASS, 4096);
-}
+fn run_real_probe_child() -> TestResult {
+    let profile = SignalProfile::Overlay;
+    let before = selected_signal_membership(profile)?;
+    let mut owner = SignalOwner::install(profile)?;
+    let installed = selected_signal_membership(profile)?;
+    if installed.iter().any(|blocked| !blocked) {
+        return Err(io::Error::other("install did not block every overlay signal").into());
+    }
 
-fn wait_for_owner_wake(source: &crate::backend::wayland::RuntimeWakeSource) {
+    let inherited = std::thread::spawn(move || selected_signal_membership(profile))
+        .join()
+        .map_err(|_| io::Error::other("ordinary signal probe thread panicked"))??;
+    if inherited.iter().any(|blocked| !blocked) {
+        return Err(io::Error::other(
+            "ordinary thread did not inherit every blocked overlay signal",
+        )
+        .into());
+    }
+
+    let tid = unsafe {
+        // SAFETY: gettid has no preconditions and identifies this fixture
+        // thread for the parent process's targeted signal.
+        libc::syscall(libc::SYS_gettid) as libc::pid_t
+    };
+    println!("{REAL_PROBE_READY}{tid}");
+    std::io::stdout().flush()?;
+
     let mut pollfd = libc::pollfd {
-        fd: source.poll_fd().as_raw_fd(),
+        fd: owner.poll_fd()?.as_raw_fd(),
         events: libc::POLLIN,
         revents: 0,
     };
-    // SAFETY: source owns the descriptor throughout this bounded wait.
-    let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
-    assert_eq!(ready, 1, "owner was not woken");
-    assert_ne!(pollfd.revents & libc::POLLIN, 0);
-    source.drain().unwrap();
-}
-
-#[cfg(target_os = "linux")]
-fn wait_until_listener_blocks(listener: &SignalListener) {
-    wait_until(|| {
-        let tid = listener.thread_tid();
-        if tid == 0 {
-            return false;
-        }
-        std::fs::read_to_string(format!("/proc/self/task/{tid}/stat"))
-            .ok()
-            .and_then(|stat| {
-                stat.rsplit_once(") ")
-                    .and_then(|(_, suffix)| suffix.chars().next())
-            })
-            == Some('S')
-    });
-}
-
-fn wait_until(mut predicate: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(1);
-    while !predicate() {
-        assert!(Instant::now() < deadline, "condition was not observed");
-        thread::yield_now();
+    let ready = unsafe {
+        // SAFETY: owner retains its signalfd throughout this bounded poll.
+        libc::poll(&mut pollfd, 1, 2_000)
+    };
+    if ready != 1 || pollfd.revents & libc::POLLIN == 0 {
+        return Err(io::Error::other(format!(
+            "real signalfd did not become readable: result={ready}, readiness={:#x}",
+            pollfd.revents
+        ))
+        .into());
     }
-}
-
-fn reset_handler_hooks(stage: u8) {
-    test_hooks::PAUSE_STAGE.store(stage, Ordering::Release);
-    test_hooks::HANDLER_PAUSED.store(false, Ordering::Release);
-    test_hooks::RESUME_HANDLER.store(false, Ordering::Release);
-    test_hooks::DESCRIPTOR_ACCESSES.store(0, Ordering::Release);
-}
-
-fn fd_is_open(fd: RawFd) -> bool {
-    // SAFETY: F_GETFD only queries the supplied descriptor.
-    (unsafe { libc::fcntl(fd, libc::F_GETFD) }) >= 0
-}
-
-fn current_errno() -> libc::c_int {
-    let location = errno_location();
-    assert!(!location.is_null());
-    // SAFETY: `location` points to the current thread's errno slot.
-    unsafe { *location }
-}
-
-fn set_errno(value: libc::c_int) {
-    let location = errno_location();
-    assert!(!location.is_null());
-    // SAFETY: `location` points to the current thread's errno slot.
-    unsafe { *location = value };
-}
-
-fn current_sigaction(signal: libc::c_int) -> io::Result<libc::sigaction> {
-    // SAFETY: Zeroed sigaction is filled by libc when the query succeeds.
-    let mut action = unsafe { std::mem::zeroed::<libc::sigaction>() };
-    // SAFETY: Null new action queries the current handler for `signal`.
-    if unsafe { libc::sigaction(signal, std::ptr::null(), &mut action) } != 0 {
-        return Err(io::Error::last_os_error());
+    let events = owner.drain()?;
+    if events != [SignalEvent::TrayAction] {
+        return Err(io::Error::other(format!(
+            "real signalfd returned unexpected events: {events:?}"
+        ))
+        .into());
     }
-    Ok(action)
+
+    owner.finish()?;
+    let restored = selected_signal_membership(profile)?;
+    if restored != before {
+        return Err(io::Error::other(format!(
+            "signal mask was not restored: before={before:?}, after={restored:?}"
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+fn selected_signal_membership(profile: SignalProfile) -> io::Result<Vec<bool>> {
+    let mut current = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+    let error = unsafe {
+        // SAFETY: a null set queries without changing this thread's mask and
+        // initializes `current` on success.
+        libc::pthread_sigmask(libc::SIG_BLOCK, std::ptr::null(), current.as_mut_ptr())
+    };
+    if error != 0 {
+        return Err(io::Error::from_raw_os_error(error));
+    }
+    let current = unsafe {
+        // SAFETY: pthread_sigmask initialized the queried mask on success.
+        current.assume_init()
+    };
+    signals_for_profile(profile)
+        .iter()
+        .map(|signal| {
+            let member = unsafe {
+                // SAFETY: `current` is initialized and signal is supported.
+                libc::sigismember(&current, *signal)
+            };
+            match member {
+                0 => Ok(false),
+                1 => Ok(true),
+                _ => Err(io::Error::last_os_error()),
+            }
+        })
+        .collect()
 }

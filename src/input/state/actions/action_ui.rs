@@ -240,11 +240,11 @@ impl InputState {
                 true
             }
             Action::OpenConfigurator => {
-                self.launch_configurator();
+                self.set_pending_backend_action(PendingBackendAction::LaunchConfigurator);
                 true
             }
             Action::OpenAbout => {
-                self.launch_about();
+                self.set_pending_backend_action(PendingBackendAction::LaunchAbout);
                 true
             }
             Action::ClearSavedToolState => {
@@ -252,7 +252,7 @@ impl InputState {
                 true
             }
             Action::OpenCaptureFolder => {
-                self.open_capture_folder();
+                self.set_pending_backend_action(PendingBackendAction::OpenCaptureFolder);
                 true
             }
             Action::ReplayTour => {

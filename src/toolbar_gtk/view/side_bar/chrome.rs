@@ -8,9 +8,6 @@ use crate::ui::theme::{Rgba, set_color};
 /// TODO(theme-consolidation): hoist the mirrored pair into `theme::toolbar`.
 const COLOR_BOARD_CHIP_EMPTY_DOT: Rgba = (0.62, 0.68, 0.76, 0.7);
 
-/// Board chip color dot, RGBA; `None` draws the empty outline.
-type BoardDotColor = Rc<Cell<Option<(f64, f64, f64, f64)>>>;
-
 impl SideBar {
     pub(super) fn board_chip(&mut self, _snapshot: &ToolbarSnapshot, scale: f64) -> gtk4::Button {
         let chip = gtk4::Button::new();
@@ -18,43 +15,12 @@ impl SideBar {
         chip.set_hexpand(true);
         chip.set_size_request(-1, (22.0 * scale).round() as i32);
         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, (4.0 * scale).round() as i32);
-        let dot_color: BoardDotColor = Rc::new(Cell::new(None));
         let dot = gtk4::DrawingArea::new();
         let dot_size = (14.0 * scale).round() as i32;
         dot.set_content_width(dot_size);
         dot.set_content_height(dot_size);
         dot.set_valign(gtk4::Align::Center);
-        let draw_color = dot_color.clone();
-        dot.set_draw_func(move |_, ctx, width, height| {
-            let size = width.min(height) as f64;
-            match draw_color.get() {
-                Some((r, g, b, a)) => {
-                    super::super::super::widgets::rounded_rect_path(
-                        ctx,
-                        0.5,
-                        0.5,
-                        size - 1.0,
-                        size - 1.0,
-                        3.0,
-                    );
-                    ctx.set_source_rgba(r, g, b, a);
-                    let _ = ctx.fill();
-                }
-                None => {
-                    super::super::super::widgets::rounded_rect_path(
-                        ctx,
-                        0.5,
-                        0.5,
-                        size - 1.0,
-                        size - 1.0,
-                        3.0,
-                    );
-                    set_color(ctx, COLOR_BOARD_CHIP_EMPTY_DOT);
-                    ctx.set_line_width(1.0);
-                    let _ = ctx.stroke();
-                }
-            }
-        });
+        install_board_dot_draw(&dot, None);
         row.append(&dot);
         let board_icon = IconWidget::new(toolbar_icons::draw_icon_board, 10.0 * scale);
         row.append(&board_icon.area);
@@ -86,10 +52,8 @@ impl SideBar {
             if let Some(tooltip) = header_model.board_chip.presentation.tooltip.as_string() {
                 chip_handle.set_tooltip_text(Some(&tooltip));
             }
-            if dot_color.get() != color {
-                dot_color.set(color);
-                dot.queue_draw();
-            }
+            install_board_dot_draw(&dot, color);
+            dot.queue_draw();
         }));
         chip
     }
@@ -106,27 +70,22 @@ impl SideBar {
             size * 0.62,
         );
         button.set_child(Some(&icon.area));
+        sync_pin_presentation(&button, snapshot.side_pinned);
         let sender = self.feedback.clone();
-        let pinned = Rc::new(Cell::new(snapshot.side_pinned));
-        let click_pinned = pinned.clone();
-        button.connect_clicked(move |_| {
-            send_event(&sender, ToolbarEvent::PinSideToolbar(!click_pinned.get()));
+        button.connect_clicked(move |button| {
+            send_event(
+                &sender,
+                ToolbarEvent::PinSideToolbar(!button.has_css_class("pinned")),
+            );
         });
         let handle = button.clone();
         self.chrome_updaters.push(Box::new(move |snapshot| {
-            pinned.set(snapshot.side_pinned);
             icon.set_painter(if snapshot.side_pinned {
                 toolbar_icons::draw_icon_pin
             } else {
                 toolbar_icons::draw_icon_unpin
             });
-            if snapshot.side_pinned {
-                handle.add_css_class("pinned");
-                handle.set_tooltip_text(Some("Pinned: opens at startup (click to disable)"));
-            } else {
-                handle.remove_css_class("pinned");
-                handle.set_tooltip_text(Some("Pin: click to open at startup"));
-            }
+            sync_pin_presentation(&handle, snapshot.side_pinned);
         }));
         button
     }
@@ -143,5 +102,33 @@ impl SideBar {
             send_event(&sender, ToolbarEvent::SetSideMinimized(true));
         });
         button
+    }
+}
+
+fn install_board_dot_draw(dot: &gtk4::DrawingArea, color: Option<(f64, f64, f64, f64)>) {
+    dot.set_draw_func(move |_, ctx, width, height| {
+        let size = width.min(height) as f64;
+        super::super::super::widgets::rounded_rect_path(ctx, 0.5, 0.5, size - 1.0, size - 1.0, 3.0);
+        match color {
+            Some((r, g, b, a)) => {
+                ctx.set_source_rgba(r, g, b, a);
+                let _ = ctx.fill();
+            }
+            None => {
+                set_color(ctx, COLOR_BOARD_CHIP_EMPTY_DOT);
+                ctx.set_line_width(1.0);
+                let _ = ctx.stroke();
+            }
+        }
+    });
+}
+
+fn sync_pin_presentation(button: &gtk4::Button, pinned: bool) {
+    if pinned {
+        button.add_css_class("pinned");
+        button.set_tooltip_text(Some("Pinned: opens at startup (click to disable)"));
+    } else {
+        button.remove_css_class("pinned");
+        button.set_tooltip_text(Some("Pin: click to open at startup"));
     }
 }

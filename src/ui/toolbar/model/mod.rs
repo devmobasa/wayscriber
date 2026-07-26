@@ -215,6 +215,13 @@ mod tests {
 
         snapshot.layout_mode = ToolbarLayoutMode::Regular;
         let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        for toggle in model.toggles() {
+            assert_eq!(
+                toggle.event_for_checked(!toggle.checked),
+                toggle.activation.compatibility_event(),
+                "settings toggle activation must be derived from its typed kind"
+            );
+        }
         assert!(
             model
                 .toggles()
@@ -426,7 +433,7 @@ mod tests {
             "/another/very/long/recovery/location/whose/complete/path/must/remain/visible/wayscriber-recovery.toml",
         );
         snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-            path: runtime_path.clone(),
+            path: Some(runtime_path.clone()),
             mode: RuntimeUiPersistenceMode::Unhealthy,
             detail: Some("disk outcome is uncertain".to_string()),
             recovery_artifacts: vec![artifact_path.clone()],
@@ -460,7 +467,7 @@ mod tests {
         assert!(rendered.contains(artifact_path.to_string_lossy().as_ref()));
 
         snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-            path: runtime_path,
+            path: Some(runtime_path),
             mode: RuntimeUiPersistenceMode::AwaitingUnsupportedResetConfirmation {
                 version: Some(9),
             },
@@ -482,7 +489,7 @@ mod tests {
         );
 
         snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-            path: std::path::PathBuf::from("/isolated/runtime-ui.toml"),
+            path: Some(std::path::PathBuf::from("/isolated/runtime-ui.toml")),
             mode: RuntimeUiPersistenceMode::Unavailable,
             detail: Some(
                 "writer startup failed; runtime-only toolbar and board changes are process-only"

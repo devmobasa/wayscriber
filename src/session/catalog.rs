@@ -4,27 +4,40 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[cfg(test)]
-use crate::env_vars::CATALOG_HOOKS_TEST_ENV;
 
 use super::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 use super::options::SessionOptions;
 
 mod identity;
 
-#[cfg(test)]
-use identity::normalize_exact_path;
 pub use identity::{CatalogPathIdentity, session_path_identity, session_paths_match};
 use identity::{
     display_name_for_path, entry_matches_identity, optional_path_to_string, path_to_string,
 };
 
 const CATALOG_VERSION: u32 = 1;
-static NEXT_CATALOG_ID: AtomicU64 = AtomicU64::new(0);
-static NEXT_CATALOG_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionCatalog {
+    path: PathBuf,
+}
+
+impl SessionCatalog {
+    pub fn from_resolver(paths: &crate::paths::PathResolver) -> Result<Self> {
+        Ok(Self::at_path(
+            paths.wayscriber_data_dir()?.join("sessions.json"),
+        ))
+    }
+
+    pub fn at_path(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogEvent {
@@ -69,166 +82,155 @@ impl Default for CatalogFile {
     }
 }
 
-/// Path to the session catalog under the configured XDG data root.
-pub fn catalog_path() -> PathBuf {
-    catalog_dir().join("sessions.json")
-}
-
 /// Upsert a session in the catalog and mark it opened or saved.
-pub fn upsert_session_event(path: &Path, event: CatalogEvent) -> Result<CatalogEntry> {
-    with_catalog_write(|catalog| catalog.upsert(path, event, None))
-}
-
-/// Upsert a session in the catalog using a caller-provided display name.
-#[allow(dead_code)]
-pub fn upsert_session_event_with_display_name(
-    path: &Path,
-    event: CatalogEvent,
-    display_name: &str,
-) -> Result<CatalogEntry> {
-    let display_name = display_name.trim();
-    if display_name.is_empty() {
-        return Err(anyhow!("session display name cannot be empty"));
-    }
-    with_catalog_write(|catalog| catalog.upsert(path, event, Some(display_name)))
-}
-
-/// Return recent sessions sorted newest first.
-#[allow(dead_code)]
-pub fn recent_sessions() -> Result<Vec<CatalogEntry>> {
-    let path = catalog_path();
-    let mut catalog = load_catalog_from_path(&path)?;
-    catalog.sessions.sort_by(|a, b| {
-        b.recent_millis()
-            .cmp(&a.recent_millis())
-            .then_with(|| a.display_name.cmp(&b.display_name))
-            .then_with(|| a.path.cmp(&b.path))
-    });
-    Ok(catalog.sessions)
-}
-
-/// Remove a catalog entry by opaque ID. Session files and sidecars are untouched.
-#[allow(dead_code)]
-pub fn forget_session_by_id(id: &str) -> Result<bool> {
-    with_catalog_write(|catalog| {
-        let before = catalog.sessions.len();
-        catalog.sessions.retain(|entry| entry.id != id);
-        Ok(before != catalog.sessions.len())
-    })
-}
-
-/// Remove catalog entries for a path. Session files and sidecars are untouched.
-#[allow(dead_code)]
-pub fn forget_session_by_path(path: &Path) -> Result<bool> {
-    let identity = session_path_identity(path);
-    with_catalog_write(|catalog| {
-        let before = catalog.sessions.len();
-        catalog
-            .sessions
-            .retain(|entry| !entry_matches_identity(entry, &identity));
-        Ok(before != catalog.sessions.len())
-    })
-}
-
-/// Rename a catalog entry's display name only. Session files are untouched.
-#[allow(dead_code)]
-pub fn rename_session_display_name_by_id(
-    id: &str,
-    display_name: &str,
-) -> Result<Option<CatalogEntry>> {
-    let display_name = display_name.trim();
-    if display_name.is_empty() {
-        return Err(anyhow!("session display name cannot be empty"));
+impl SessionCatalog {
+    pub fn upsert_session_event(&self, path: &Path, event: CatalogEvent) -> Result<CatalogEntry> {
+        self.with_catalog_write(|catalog| catalog.upsert(path, event, None))
     }
 
-    with_catalog_write(|catalog| {
-        let Some(entry) = catalog.sessions.iter_mut().find(|entry| entry.id == id) else {
-            return Ok(None);
-        };
-        entry.display_name = display_name.to_string();
-        Ok(Some(entry.clone()))
-    })
-}
+    /// Upsert a session in the catalog using a caller-provided display name.
+    #[allow(dead_code)]
+    pub fn upsert_session_event_with_display_name(
+        &self,
+        path: &Path,
+        event: CatalogEvent,
+        display_name: &str,
+    ) -> Result<CatalogEntry> {
+        let display_name = display_name.trim();
+        if display_name.is_empty() {
+            return Err(anyhow!("session display name cannot be empty"));
+        }
+        self.with_catalog_write(|catalog| catalog.upsert(path, event, Some(display_name)))
+    }
 
-/// Update a catalog entry's session path after a committed disk move.
-#[allow(dead_code)]
-pub fn move_session_path_by_id(id: &str, target_path: &Path) -> Result<Option<CatalogEntry>> {
-    let target_identity = session_path_identity(target_path);
-    with_catalog_write(|catalog| {
-        if catalog
-            .sessions
-            .iter()
-            .any(|entry| entry.id != id && entry_matches_identity(entry, &target_identity))
+    /// Return recent sessions sorted newest first.
+    #[allow(dead_code)]
+    pub fn recent_sessions(&self) -> Result<Vec<CatalogEntry>> {
+        let mut catalog = load_catalog_from_path(&self.path)?;
+        catalog.sessions.sort_by(|a, b| {
+            b.recent_millis()
+                .cmp(&a.recent_millis())
+                .then_with(|| a.display_name.cmp(&b.display_name))
+                .then_with(|| a.path.cmp(&b.path))
+        });
+        Ok(catalog.sessions)
+    }
+
+    /// Remove a catalog entry by opaque ID. Session files and sidecars are untouched.
+    #[allow(dead_code)]
+    pub fn forget_session_by_id(&self, id: &str) -> Result<bool> {
+        self.with_catalog_write(|catalog| {
+            let before = catalog.sessions.len();
+            catalog.sessions.retain(|entry| entry.id != id);
+            Ok(before != catalog.sessions.len())
+        })
+    }
+
+    /// Remove catalog entries for a path. Session files and sidecars are untouched.
+    #[allow(dead_code)]
+    pub fn forget_session_by_path(&self, path: &Path) -> Result<bool> {
+        let identity = session_path_identity(path);
+        self.with_catalog_write(|catalog| {
+            let before = catalog.sessions.len();
+            catalog
+                .sessions
+                .retain(|entry| !entry_matches_identity(entry, &identity));
+            Ok(before != catalog.sessions.len())
+        })
+    }
+
+    /// Rename a catalog entry's display name only. Session files are untouched.
+    #[allow(dead_code)]
+    pub fn rename_session_display_name_by_id(
+        &self,
+        id: &str,
+        display_name: &str,
+    ) -> Result<Option<CatalogEntry>> {
+        let display_name = display_name.trim();
+        if display_name.is_empty() {
+            return Err(anyhow!("session display name cannot be empty"));
+        }
+
+        self.with_catalog_write(|catalog| {
+            let Some(entry) = catalog.sessions.iter_mut().find(|entry| entry.id == id) else {
+                return Ok(None);
+            };
+            entry.display_name = display_name.to_string();
+            Ok(Some(entry.clone()))
+        })
+    }
+
+    /// Update a catalog entry's session path after a committed disk move.
+    #[allow(dead_code)]
+    pub fn move_session_path_by_id(
+        &self,
+        id: &str,
+        target_path: &Path,
+    ) -> Result<Option<CatalogEntry>> {
+        let target_identity = session_path_identity(target_path);
+        self.with_catalog_write(|catalog| {
+            if catalog
+                .sessions
+                .iter()
+                .any(|entry| entry.id != id && entry_matches_identity(entry, &target_identity))
+            {
+                return Err(anyhow!(
+                    "session move target is already present in the catalog: {}",
+                    target_identity.exact_path.display()
+                ));
+            }
+
+            let Some(entry) = catalog.sessions.iter_mut().find(|entry| entry.id == id) else {
+                return Ok(None);
+            };
+            entry.path = path_to_string(&target_identity.exact_path)?;
+            entry.canonical_path =
+                optional_path_to_string(target_identity.canonical_path.as_deref())?;
+            if entry.display_name.trim().is_empty() {
+                entry.display_name = display_name_for_path(&target_identity.exact_path);
+            }
+            Ok(Some(entry.clone()))
+        })
+    }
+
+    pub(crate) fn record_named_session_opened(&self, options: &SessionOptions) {
+        if !options.is_named_file() {
+            return;
+        }
+        let path = options.session_file_path();
+
+        if let Err(err) = self.upsert_session_event(&path, CatalogEvent::Opened) {
+            warn!(
+                "Failed to update named session catalog after opening {}: {}",
+                path.display(),
+                err,
+            );
+        }
+    }
+
+    pub(crate) fn record_named_session_saved(&self, options: &SessionOptions) {
+        if !options.is_named_file() {
+            return;
+        }
+        let path = options.session_file_path();
+
+        if path.is_file()
+            && let Err(err) = self.upsert_session_event(&path, CatalogEvent::Saved)
         {
-            return Err(anyhow!(
-                "session move target is already present in the catalog: {}",
-                target_identity.exact_path.display()
-            ));
+            warn!(
+                "Failed to update named session catalog after saving {}: {}",
+                path.display(),
+                err,
+            );
         }
-
-        let Some(entry) = catalog.sessions.iter_mut().find(|entry| entry.id == id) else {
-            return Ok(None);
-        };
-        entry.path = path_to_string(&target_identity.exact_path)?;
-        entry.canonical_path = optional_path_to_string(target_identity.canonical_path.as_deref())?;
-        if entry.display_name.trim().is_empty() {
-            entry.display_name = display_name_for_path(&target_identity.exact_path);
-        }
-        Ok(Some(entry.clone()))
-    })
-}
-
-pub(crate) fn record_named_session_opened(options: &SessionOptions) {
-    if !options.is_named_file() {
-        return;
-    }
-    let path = options.session_file_path();
-
-    #[cfg(test)]
-    if !test_catalog_hooks_enabled_for_path(&path) {
-        return;
     }
 
-    if let Err(err) = upsert_session_event(&path, CatalogEvent::Opened) {
-        warn!(
-            "Failed to update named session catalog after opening {}: {}",
-            path.display(),
-            err,
-        );
+    fn with_catalog_write<T>(
+        &self,
+        update: impl FnOnce(&mut CatalogFile) -> Result<T>,
+    ) -> Result<T> {
+        with_catalog_write_at(&self.path, update)
     }
-}
-
-pub(crate) fn record_named_session_saved(options: &SessionOptions) {
-    if !options.is_named_file() {
-        return;
-    }
-    let path = options.session_file_path();
-
-    #[cfg(test)]
-    if !test_catalog_hooks_enabled_for_path(&path) {
-        return;
-    }
-
-    if path.is_file()
-        && let Err(err) = upsert_session_event(&path, CatalogEvent::Saved)
-    {
-        warn!(
-            "Failed to update named session catalog after saving {}: {}",
-            path.display(),
-            err,
-        );
-    }
-}
-
-#[cfg(test)]
-fn test_catalog_hooks_enabled_for_path(path: &Path) -> bool {
-    let Some(raw) = std::env::var_os(CATALOG_HOOKS_TEST_ENV) else {
-        return false;
-    };
-    if raw.is_empty() || raw == std::ffi::OsStr::new("1") {
-        return true;
-    }
-    normalize_exact_path(path).starts_with(normalize_exact_path(Path::new(&raw)))
 }
 
 impl CatalogFile {
@@ -257,7 +259,7 @@ impl CatalogFile {
         }
 
         let mut entry = CatalogEntry {
-            id: generated_catalog_id(now),
+            id: self.generated_catalog_id(now),
             display_name: display_name
                 .map(str::to_string)
                 .unwrap_or_else(|| display_name_for_path(&identity.exact_path)),
@@ -277,10 +279,25 @@ impl CatalogFile {
             .iter()
             .position(|entry| entry_matches_identity(entry, identity))
     }
+
+    fn generated_catalog_id(&self, now: u64) -> String {
+        // The catalog lock serializes writers, and the loaded catalog is the
+        // authoritative finite namespace. Extending a colliding candidate
+        // must eventually produce a value absent from that finite set, so the
+        // allocator is total without a process-global counter or an
+        // impossible error branch.
+        let mut candidate = format!("s-{:x}-{now:x}-0", std::process::id());
+        while self.sessions.iter().any(|entry| entry.id == candidate) {
+            candidate.push('f');
+        }
+        candidate
+    }
 }
 
-fn with_catalog_write<T>(update: impl FnOnce(&mut CatalogFile) -> Result<T>) -> Result<T> {
-    let path = catalog_path();
+fn with_catalog_write_at<T>(
+    path: &Path,
+    update: impl FnOnce(&mut CatalogFile) -> Result<T>,
+) -> Result<T> {
     let dir = path
         .parent()
         .ok_or_else(|| anyhow!("session catalog path has no parent: {}", path.display()))?;
@@ -291,7 +308,7 @@ fn with_catalog_write<T>(update: impl FnOnce(&mut CatalogFile) -> Result<T>) -> 
         )
     })?;
 
-    let lock_path = catalog_lock_path(&path);
+    let lock_path = catalog_lock_path(path);
     let lock_file = open_runtime_lock_file(&lock_path, true).with_context(|| {
         format!(
             "failed to open session catalog lock {}",
@@ -302,9 +319,9 @@ fn with_catalog_write<T>(update: impl FnOnce(&mut CatalogFile) -> Result<T>) -> 
         .with_context(|| format!("failed to lock session catalog {}", lock_path.display()))?;
 
     let result = (|| {
-        let mut catalog = load_catalog_from_path(&path)?;
+        let mut catalog = load_catalog_from_path(path)?;
         let value = update(&mut catalog)?;
-        save_catalog_atomic(&path, &catalog)?;
+        save_catalog_atomic(path, &catalog)?;
         Ok(value)
     })();
 
@@ -344,10 +361,33 @@ fn load_catalog_from_path(path: &Path) -> Result<CatalogFile> {
 }
 
 fn save_catalog_atomic(path: &Path, catalog: &CatalogFile) -> Result<()> {
-    let tmp_path = catalog_temp_path(path)?;
-    save_catalog_atomic_with_temp_path(path, &tmp_path, catalog)
+    let payload =
+        serde_json::to_vec_pretty(catalog).context("failed to serialize session catalog")?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    for attempt in 0..64 {
+        let tmp_path = catalog_temp_path(path, stamp, attempt)?;
+        match open_catalog_temp(&tmp_path) {
+            Ok(file) => return finish_catalog_save(path, &tmp_path, &payload, file),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "failed to open temporary session catalog {}",
+                        tmp_path.display()
+                    )
+                });
+            }
+        }
+    }
+    Err(anyhow!(
+        "temporary session catalog collision retry budget exhausted for {}",
+        path.display()
+    ))
 }
 
+#[cfg(test)]
 fn save_catalog_atomic_with_temp_path(
     path: &Path,
     tmp_path: &Path,
@@ -355,47 +395,47 @@ fn save_catalog_atomic_with_temp_path(
 ) -> Result<()> {
     let payload =
         serde_json::to_vec_pretty(catalog).context("failed to serialize session catalog")?;
-    let result = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(tmp_path)
-            .with_context(|| {
-                format!(
-                    "failed to open temporary session catalog {}",
-                    tmp_path.display()
-                )
-            })?;
-        file.write_all(&payload)
-            .context("failed to write session catalog")?;
-        file.sync_all().context("failed to sync session catalog")?;
-        drop(file);
-        fs::rename(tmp_path, path).with_context(|| {
-            format!(
-                "failed to move temporary session catalog {} -> {}",
-                tmp_path.display(),
-                path.display()
-            )
-        })?;
-        if let Err(err) = sync_catalog_parent(path) {
-            warn!(
-                "Session catalog {} was updated, but syncing its parent directory failed: {}",
-                path.display(),
-                err
-            );
-        }
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(tmp_path);
-    }
-    result
+    let file = open_catalog_temp(tmp_path).with_context(|| {
+        format!(
+            "failed to open temporary session catalog {}",
+            tmp_path.display()
+        )
+    })?;
+    finish_catalog_save(path, tmp_path, &payload, file)
 }
 
-fn catalog_dir() -> PathBuf {
-    crate::paths::data_dir()
-        .unwrap_or_else(|| crate::paths::home_dir().unwrap_or_else(std::env::temp_dir))
-        .join("wayscriber")
+fn open_catalog_temp(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new().write(true).create_new(true).open(path)
+}
+
+fn finish_catalog_save(path: &Path, tmp_path: &Path, payload: &[u8], mut file: File) -> Result<()> {
+    let write_result = file
+        .write_all(payload)
+        .context("failed to write session catalog")
+        .and_then(|()| file.sync_all().context("failed to sync session catalog"));
+    drop(file);
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(tmp_path);
+        return Err(error);
+    }
+    if let Err(error) = fs::rename(tmp_path, path).with_context(|| {
+        format!(
+            "failed to move temporary session catalog {} -> {}",
+            tmp_path.display(),
+            path.display()
+        )
+    }) {
+        let _ = fs::remove_file(tmp_path);
+        return Err(error);
+    }
+    if let Err(err) = sync_catalog_parent(path) {
+        warn!(
+            "Session catalog {} was updated, but syncing its parent directory failed: {}",
+            path.display(),
+            err
+        );
+    }
+    Ok(())
 }
 
 fn catalog_lock_path(path: &Path) -> PathBuf {
@@ -404,7 +444,7 @@ fn catalog_lock_path(path: &Path) -> PathBuf {
     PathBuf::from(raw)
 }
 
-fn catalog_temp_path(path: &Path) -> Result<PathBuf> {
+fn catalog_temp_path(path: &Path, stamp: u128, attempt: u8) -> Result<PathBuf> {
     let parent = path
         .parent()
         .ok_or_else(|| anyhow!("session catalog path has no parent: {}", path.display()))?;
@@ -417,8 +457,10 @@ fn catalog_temp_path(path: &Path) -> Result<PathBuf> {
                 path.display()
             )
         })?;
-    let id = NEXT_CATALOG_TEMP_ID.fetch_add(1, Ordering::Relaxed);
-    Ok(parent.join(format!(".{file_name}.{}-{id}.tmp", std::process::id())))
+    Ok(parent.join(format!(
+        ".{file_name}.{}-{stamp}-{attempt}.tmp",
+        std::process::id()
+    )))
 }
 
 #[cfg(unix)]
@@ -442,11 +484,6 @@ fn apply_event(entry: &mut CatalogEntry, event: CatalogEvent, now: u64) {
         CatalogEvent::Opened => entry.last_opened_at_millis = Some(now),
         CatalogEvent::Saved => entry.last_saved_at_millis = Some(now),
     }
-}
-
-fn generated_catalog_id(now: u64) -> String {
-    let counter = NEXT_CATALOG_ID.fetch_add(1, Ordering::Relaxed);
-    format!("s-{:x}-{:x}-{counter:x}", std::process::id(), now)
 }
 
 fn now_epoch_millis() -> u64 {

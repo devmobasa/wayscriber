@@ -44,6 +44,7 @@ const CHECK_NOW: &str = "Check now";
 
 /// Everything one frame needs.
 pub(super) struct Frame<'a> {
+    pub(super) theme: Theme,
     pub(super) plan: &'a Plan,
     pub(super) content: &'a AboutContent,
     pub(super) update: &'a UpdateState,
@@ -64,7 +65,7 @@ impl Frame<'_> {
 }
 
 pub(super) fn draw_about(ctx: &cairo::Context, frame: &Frame<'_>) {
-    let theme = theme::current();
+    let theme = &frame.theme;
 
     backdrop(ctx, frame.plan, theme);
     header(ctx, frame, theme);
@@ -407,6 +408,7 @@ mod tests {
         update: &'a UpdateState,
     ) -> Frame<'a> {
         Frame {
+            theme: Theme::dark(),
             plan,
             content,
             update,

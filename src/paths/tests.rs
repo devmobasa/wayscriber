@@ -1,303 +1,255 @@
+use std::ffi::OsStr;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+
 use super::*;
 use crate::env_vars::{
     HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
     XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
 };
-use std::env;
 
-#[test]
-#[cfg(unix)]
-fn tray_action_prefers_runtime_dir_when_set() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-    // SAFETY: serialised via ENV_MUTEX
-    unsafe {
-        env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-    }
-
-    let path = tray_action_file();
-    assert!(path.starts_with(tmp.path()));
-    assert!(tray_action_dir().starts_with(tmp.path()));
-    assert!(daemon_command_file().starts_with(tmp.path()));
-    assert!(daemon_command_dir().starts_with(tmp.path()));
-    assert!(daemon_pid_file().starts_with(tmp.path()));
-
-    if let Some(prev) = prev {
-        unsafe {
-            env::set_var(XDG_RUNTIME_DIR_ENV, prev);
-        }
-    } else {
-        unsafe {
-            env::remove_var(XDG_RUNTIME_DIR_ENV);
-        }
-    }
+fn resolver(values: &[(&str, &OsStr)]) -> PathResolver {
+    PathResolver::from_environment(PathEnvironment::for_test(values))
 }
 
 #[test]
-fn config_dir_prefers_xdg_config_home_when_set() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_CONFIG_HOME_ENV);
-
-    unsafe {
-        env::set_var(XDG_CONFIG_HOME_ENV, tmp.path());
-        env::remove_var(HOME_ENV);
-        env::remove_var(USERPROFILE_ENV);
-    }
-
-    let dir = config_dir()
-        .unwrap_or_else(|| panic!("config_dir should resolve from {XDG_CONFIG_HOME_ENV}"));
-    assert_eq!(dir, tmp.path());
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_CONFIG_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_CONFIG_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
-}
-
-#[test]
-fn update_check_cache_follows_the_cache_directory() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_CACHE_HOME_ENV);
-
-    unsafe {
-        env::set_var(XDG_CACHE_HOME_ENV, tmp.path());
-        env::remove_var(HOME_ENV);
-        env::remove_var(USERPROFILE_ENV);
-    }
-
-    assert_eq!(cache_dir().as_deref(), Some(tmp.path()));
+fn absolute_home_wins_over_userprofile() {
+    let paths = resolver(&[
+        (HOME_ENV, OsStr::new("/home/primary")),
+        (USERPROFILE_ENV, OsStr::new("/home/secondary")),
+    ]);
     assert_eq!(
-        update_check_cache_file(),
-        tmp.path().join("wayscriber").join("update-check.json")
+        paths.home_dir().expect("absolute HOME is a valid fixture"),
+        Path::new("/home/primary")
     );
+}
 
-    // Falling back to HOME keeps the result inside ~/.cache, never in data or
-    // config directories.
-    unsafe {
-        env::remove_var(XDG_CACHE_HOME_ENV);
-        env::set_var(HOME_ENV, tmp.path());
-    }
+#[test]
+fn empty_home_permits_absolute_userprofile() {
+    let paths = resolver(&[
+        (HOME_ENV, OsStr::new("")),
+        (USERPROFILE_ENV, OsStr::new("/profiles/person")),
+    ]);
     assert_eq!(
-        update_check_cache_file(),
-        tmp.path()
-            .join(".cache")
-            .join("wayscriber")
-            .join("update-check.json")
+        paths
+            .home_dir()
+            .expect("empty HOME permits the absolute USERPROFILE fixture"),
+        Path::new("/profiles/person")
     );
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_CACHE_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_CACHE_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
 }
 
 #[test]
-fn config_dir_falls_back_to_home_config() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_CONFIG_HOME_ENV);
-
-    unsafe {
-        env::set_var(HOME_ENV, tmp.path());
-        env::remove_var(USERPROFILE_ENV);
-        env::remove_var(XDG_CONFIG_HOME_ENV);
-    }
-
-    let dir = config_dir().expect("config_dir should resolve from HOME");
-    assert_eq!(dir, tmp.path().join(".config"));
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_CONFIG_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_CONFIG_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
+fn relative_home_is_a_typed_error_without_userprofile_fallback() {
+    let paths = resolver(&[
+        (HOME_ENV, OsStr::new("relative-home")),
+        (USERPROFILE_ENV, OsStr::new("/profiles/person")),
+    ]);
+    assert!(matches!(
+        paths.home_dir(),
+        Err(PathResolutionError::RelativeEnvironmentValue {
+            variable: HOME_ENV,
+            ..
+        })
+    ));
 }
 
 #[test]
-fn data_dir_prefers_xdg_data_home_when_set() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_DATA_HOME_ENV);
-
-    unsafe {
-        env::set_var(XDG_DATA_HOME_ENV, tmp.path());
-        env::remove_var(HOME_ENV);
-        env::remove_var(USERPROFILE_ENV);
-    }
-
-    let dir =
-        data_dir().unwrap_or_else(|| panic!("data_dir should resolve from {XDG_DATA_HOME_ENV}"));
-    assert_eq!(dir, tmp.path());
+fn missing_home_sources_do_not_fall_back_to_current_directory() {
+    let paths = resolver(&[]);
     assert_eq!(
-        runtime_ui_state_file(),
-        tmp.path().join("wayscriber/runtime-ui.toml")
+        paths.home_dir(),
+        Err(PathResolutionError::Unavailable {
+            capability: PathCapability::Home
+        })
     );
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_DATA_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
 }
 
 #[test]
-fn data_dir_falls_back_to_home_share() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_DATA_HOME_ENV);
-
-    unsafe {
-        env::set_var(HOME_ENV, tmp.path());
-        env::remove_var(USERPROFILE_ENV);
-        env::remove_var(XDG_DATA_HOME_ENV);
-    }
-
-    let dir = data_dir().expect("data_dir should resolve from HOME");
-    assert_eq!(dir, tmp.path().join(".local").join("share"));
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_DATA_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
+fn absolute_xdg_roots_bypass_home_selection() {
+    let paths = resolver(&[
+        (HOME_ENV, OsStr::new("relative-home")),
+        (XDG_CONFIG_HOME_ENV, OsStr::new("/xdg/config")),
+        (XDG_CACHE_HOME_ENV, OsStr::new("/xdg/cache")),
+        (XDG_DATA_HOME_ENV, OsStr::new("/xdg/data")),
+        (XDG_PICTURES_DIR_ENV, OsStr::new("/xdg/pictures")),
+        (XDG_RUNTIME_DIR_ENV, OsStr::new("/run/user/1000")),
+    ]);
+    assert_eq!(
+        paths.config_dir().expect("config fixture"),
+        Path::new("/xdg/config")
+    );
+    assert_eq!(
+        paths.cache_dir().expect("cache fixture"),
+        Path::new("/xdg/cache")
+    );
+    assert_eq!(
+        paths.data_dir().expect("data fixture"),
+        Path::new("/xdg/data")
+    );
+    assert_eq!(
+        paths.pictures_dir().expect("pictures fixture"),
+        Path::new("/xdg/pictures")
+    );
+    assert_eq!(
+        paths.runtime_dir().expect("runtime fixture"),
+        Path::new("/run/user/1000/wayscriber")
+    );
 }
 
 #[test]
-fn pictures_dir_prefers_xdg_when_set() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_PICTURES_DIR_ENV);
-
-    unsafe {
-        env::set_var(XDG_PICTURES_DIR_ENV, tmp.path());
-        env::remove_var(HOME_ENV);
-        env::remove_var(USERPROFILE_ENV);
-    }
-
-    let dir = pictures_dir()
-        .unwrap_or_else(|| panic!("pictures_dir should resolve from {XDG_PICTURES_DIR_ENV}"));
-    assert_eq!(dir, tmp.path());
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_PICTURES_DIR_ENV, v) },
-        None => unsafe { env::remove_var(XDG_PICTURES_DIR_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
+fn relative_xdg_roots_fail_only_the_requested_capability() {
+    let paths = resolver(&[
+        (HOME_ENV, OsStr::new("/home/person")),
+        (XDG_CONFIG_HOME_ENV, OsStr::new("relative-config")),
+        (XDG_DATA_HOME_ENV, OsStr::new("/xdg/data")),
+    ]);
+    assert!(matches!(
+        paths.config_dir(),
+        Err(PathResolutionError::RelativeEnvironmentValue {
+            variable: XDG_CONFIG_HOME_ENV,
+            ..
+        })
+    ));
+    assert_eq!(
+        paths.data_dir().expect("independent data fixture"),
+        Path::new("/xdg/data")
+    );
 }
 
 #[test]
-fn pictures_dir_falls_back_to_home() {
-    let _guard = crate::test_env::lock();
-
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
-    let prev_userprofile = env::var_os(USERPROFILE_ENV);
-    let prev_xdg = env::var_os(XDG_PICTURES_DIR_ENV);
-
-    unsafe {
-        env::set_var(HOME_ENV, tmp.path());
-        env::remove_var(USERPROFILE_ENV);
-        env::remove_var(XDG_PICTURES_DIR_ENV);
-    }
-
-    let dir = pictures_dir().expect("pictures_dir should resolve from HOME");
-    assert_eq!(dir, tmp.path().join("Pictures"));
-
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_PICTURES_DIR_ENV, v) },
-        None => unsafe { env::remove_var(XDG_PICTURES_DIR_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
-    }
+fn home_fallbacks_follow_the_approved_capability_layout() {
+    let paths = resolver(&[(HOME_ENV, OsStr::new("/home/person"))]);
+    assert_eq!(
+        paths.config_dir().expect("config fallback"),
+        Path::new("/home/person/.config")
+    );
+    assert_eq!(
+        paths.cache_dir().expect("cache fallback"),
+        Path::new("/home/person/.cache")
+    );
+    assert_eq!(
+        paths.data_dir().expect("data fallback"),
+        Path::new("/home/person/.local/share")
+    );
+    assert_eq!(
+        paths.pictures_dir().expect("pictures fallback"),
+        Path::new("/home/person/Pictures")
+    );
+    assert_eq!(
+        paths.runtime_dir().expect("runtime fallback"),
+        Path::new("/home/person/.local/share/wayscriber/runtime")
+    );
 }
 
 #[test]
-fn expand_tilde_replaces_home() {
-    let _guard = crate::test_env::lock();
+fn derived_files_remain_below_their_capability_roots() {
+    let paths = resolver(&[
+        (XDG_CONFIG_HOME_ENV, OsStr::new("/xdg/config")),
+        (XDG_CACHE_HOME_ENV, OsStr::new("/xdg/cache")),
+        (XDG_DATA_HOME_ENV, OsStr::new("/xdg/data")),
+    ]);
+    assert_eq!(
+        paths.config_file().expect("config file fixture"),
+        Path::new("/xdg/config/wayscriber/config.toml")
+    );
+    assert_eq!(
+        paths.update_check_cache_file().expect("cache file fixture"),
+        Path::new("/xdg/cache/wayscriber/update-check.json")
+    );
+    assert_eq!(
+        paths.runtime_ui_state_file().expect("runtime UI fixture"),
+        Path::new("/xdg/data/wayscriber/runtime-ui.toml")
+    );
+}
 
-    let tmp = crate::test_temp::tempdir().unwrap();
-    let prev_home = env::var_os(HOME_ENV);
+#[test]
+fn tilde_expansion_uses_the_selected_absolute_home() {
+    let paths = resolver(&[(HOME_ENV, OsStr::new("/home/person"))]);
+    assert_eq!(
+        paths
+            .expand_tilde("~/sessions/talk")
+            .expect("tilde fixture"),
+        Path::new("/home/person/sessions/talk")
+    );
+    assert_eq!(
+        paths
+            .expand_tilde("plain/path")
+            .expect("plain path fixture"),
+        Path::new("plain/path")
+    );
+}
 
-    unsafe {
-        env::set_var(HOME_ENV, tmp.path());
-    }
+#[test]
+fn absolute_user_path_policy_rejects_relative_values() {
+    let paths = resolver(&[(HOME_ENV, OsStr::new("/home/person"))]);
+    assert_eq!(
+        paths
+            .require_absolute_user_path("~/Pictures", PathCapability::Pictures)
+            .expect("expanded fixture is absolute"),
+        Path::new("/home/person/Pictures")
+    );
+    assert!(matches!(
+        paths.require_absolute_user_path("captures", PathCapability::Pictures),
+        Err(PathResolutionError::RelativeUserPath {
+            capability: PathCapability::Pictures,
+            ..
+        })
+    ));
+}
 
-    let path = expand_tilde("~/test");
-    assert_eq!(path, tmp.path().join("test"));
+#[test]
+fn prepared_runtime_paths_secure_and_project_one_root() {
+    let temp = crate::test_temp::tempdir().expect("runtime fixture root exists");
+    let paths = resolver(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let prepared = PreparedRuntimePaths::prepare(&paths)
+        .expect("runtime fixture can prepare a private directory");
+    assert_eq!(prepared.root(), temp.path().join("wayscriber"));
+    assert_eq!(
+        prepared.daemon_pid_file(),
+        prepared.root().join("wayscriber.pid")
+    );
+    assert_eq!(
+        prepared.protocol_v2_root(),
+        prepared.root().join("daemon-commands/v2")
+    );
+    let mode = std::fs::metadata(prepared.root())
+        .expect("prepared runtime directory is inspectable")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o700);
+}
 
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
+#[test]
+fn prepared_runtime_paths_restrict_an_existing_owned_directory() {
+    let temp = crate::test_temp::tempdir().expect("runtime fixture root exists");
+    let root = temp.path().join("wayscriber");
+    std::fs::create_dir(&root).expect("runtime fixture directory exists");
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755))
+        .expect("runtime fixture starts with public permissions");
+
+    let paths = resolver(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    let prepared = PreparedRuntimePaths::prepare(&paths)
+        .expect("an owned runtime directory can be restricted safely");
+
+    let mode = std::fs::metadata(prepared.root())
+        .expect("prepared runtime directory is inspectable")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o700);
+}
+
+#[test]
+fn prepared_runtime_paths_reject_a_symlink_root() {
+    let temp = crate::test_temp::tempdir().expect("runtime fixture root exists");
+    let target = temp.path().join("target");
+    std::fs::create_dir(&target).expect("symlink target fixture exists");
+    std::os::unix::fs::symlink(&target, temp.path().join("wayscriber"))
+        .expect("runtime symlink fixture exists");
+    let paths = resolver(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
+    assert!(matches!(
+        PreparedRuntimePaths::prepare(&paths),
+        Err(PrepareRuntimePathsError::Prepare(
+            RuntimeDirectoryError::Symlink { .. }
+        ))
+    ));
 }

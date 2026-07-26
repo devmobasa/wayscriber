@@ -11,7 +11,7 @@
 use super::color_picker::{
     ClipboardTextError, copy_text_via_command, read_clipboard_text_via_command,
 };
-use super::{ClipboardOperationController, WaylandState};
+use super::{ClipboardOperationController, ClipboardOperationIdSource, WaylandState};
 use crate::backend::wayland::clipboard::ClipboardPoll;
 use crate::input::state::{
     TextClipboardRequest, TextPasteEdit, TextPasteTarget, Toast, ToastPriority,
@@ -25,11 +25,13 @@ impl WaylandState {
             return;
         }
         self.suppress_focus_exit_for(Duration::from_millis(1500));
+        let process_broker = self.process_broker.clone();
         if let Err(err) = queue_text_copy(
+            &mut self.clipboard_operation_ids,
             &mut self.clipboard_text_copy,
             &mut self.pending_text_copy,
             request,
-            copy_text_via_command,
+            move |text| copy_text_via_command(&process_broker, text),
         ) {
             log::warn!("Failed to start text clipboard copy: {err}");
             self.input_state.push_toast(
@@ -71,11 +73,16 @@ impl WaylandState {
             ClipboardPoll::Disconnected { .. } => {
                 log::error!("Text copy producer disconnected");
             }
+            ClipboardPoll::Cancelled { .. } => {
+                log::info!("Text copy producer was cancelled");
+            }
         }
+        let process_broker = self.process_broker.clone();
         if let Err(err) = submit_pending_text_copy_if_idle(
+            &mut self.clipboard_operation_ids,
             &mut self.clipboard_text_copy,
             &mut self.pending_text_copy,
-            copy_text_via_command,
+            move |text| copy_text_via_command(&process_broker, text),
         ) {
             log::warn!("Failed to start pending text clipboard copy: {err}");
         }
@@ -87,11 +94,13 @@ impl WaylandState {
             return;
         }
         self.suppress_focus_exit_for(Duration::from_millis(1500));
+        let process_broker = self.process_broker.clone();
         if let Err(err) = queue_text_paste(
+            &mut self.clipboard_operation_ids,
             &mut self.clipboard_text_paste,
             &mut self.pending_text_paste,
             target,
-            read_text_paste,
+            move || read_text_paste(&process_broker),
         ) {
             log::warn!("Failed to start text clipboard paste: {err}");
             self.push_text_paste_failure();
@@ -145,6 +154,14 @@ impl WaylandState {
                     self.push_text_paste_failure();
                 }
             }
+            ClipboardPoll::Cancelled {
+                context: target, ..
+            } => {
+                log::info!("Text paste producer was cancelled");
+                if self.input_state.text_paste_target_is_current(target) {
+                    self.push_text_paste_failure();
+                }
+            }
         }
         self.start_pending_text_paste_if_idle();
     }
@@ -158,9 +175,13 @@ impl WaylandState {
                 log::debug!("Discarding stale queued text clipboard paste request");
                 continue;
             }
-            if let Err(err) =
-                start_text_paste(&mut self.clipboard_text_paste, target, read_text_paste)
-            {
+            let process_broker = self.process_broker.clone();
+            if let Err(err) = start_text_paste(
+                &mut self.clipboard_operation_ids,
+                &mut self.clipboard_text_paste,
+                target,
+                move || read_text_paste(&process_broker),
+            ) {
                 log::warn!("Failed to start pending text clipboard paste: {err}");
                 self.push_text_paste_failure();
             }
@@ -178,13 +199,14 @@ impl WaylandState {
 }
 
 fn start_text_copy(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
     request: TextClipboardRequest,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
     let worker_text = request.text.clone();
     controller
-        .try_submit(request, "wayscriber-text-copy", move || {
+        .try_submit(ids, request, "wayscriber-text-copy", move |_cancellation| {
             operation(&worker_text)
         })
         .map(drop)
@@ -192,6 +214,7 @@ fn start_text_copy(
 }
 
 fn queue_text_copy(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
     pending: &mut VecDeque<TextClipboardRequest>,
     request: TextClipboardRequest,
@@ -205,10 +228,11 @@ fn queue_text_copy(
     } else {
         pending.push_back(request);
     }
-    submit_pending_text_copy_if_idle(controller, pending, operation)
+    submit_pending_text_copy_if_idle(ids, controller, pending, operation)
 }
 
 fn submit_pending_text_copy_if_idle(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
     pending: &mut VecDeque<TextClipboardRequest>,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
@@ -219,13 +243,15 @@ fn submit_pending_text_copy_if_idle(
     let Some(request) = pending.pop_front() else {
         return Ok(());
     };
-    start_text_copy(controller, request, operation)
+    start_text_copy(ids, controller, request, operation)
 }
 
 type TextPasteOutcome = Result<Option<String>, String>;
 
-fn read_text_paste() -> TextPasteOutcome {
-    match read_clipboard_text_via_command() {
+fn read_text_paste(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+) -> TextPasteOutcome {
+    match read_clipboard_text_via_command(process_broker) {
         Ok(text) => Ok(Some(text)),
         Err(ClipboardTextError::Empty) => Ok(None),
         Err(ClipboardTextError::Other(err)) => Err(err),
@@ -233,17 +259,21 @@ fn read_text_paste() -> TextPasteOutcome {
 }
 
 fn start_text_paste(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<TextPasteTarget, TextPasteOutcome>,
     target: TextPasteTarget,
     operation: impl FnOnce() -> TextPasteOutcome + Send + 'static,
 ) -> Result<(), String> {
     controller
-        .try_submit(target, "wayscriber-text-paste", operation)
+        .try_submit(ids, target, "wayscriber-text-paste", move |_cancellation| {
+            operation()
+        })
         .map(drop)
         .map_err(|failure| failure.into_parts().0.to_string())
 }
 
 fn queue_text_paste(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<TextPasteTarget, TextPasteOutcome>,
     pending: &mut VecDeque<TextPasteTarget>,
     target: TextPasteTarget,
@@ -264,7 +294,7 @@ fn queue_text_paste(
     let Some(target) = pending.pop_front() else {
         return Ok(());
     };
-    start_text_paste(controller, target, operation)
+    start_text_paste(ids, controller, target, operation)
 }
 
 fn rebase_text_paste_target(target: &mut TextPasteTarget, edit: &TextPasteEdit) {
@@ -302,6 +332,20 @@ mod tests {
     use crate::backend::wayland::RuntimeWakeSource;
     use crate::backend::wayland::clipboard::ClipboardOperationIdSource;
 
+    fn clipboard_controller<C, T: Send + 'static>() -> (
+        RuntimeWakeSource,
+        ClipboardOperationIdSource,
+        ClipboardOperationController<C, T>,
+    ) {
+        let wake =
+            RuntimeWakeSource::new().expect("text clipboard fixture creates a runtime eventfd");
+        let controller = ClipboardOperationController::new(
+            wake.try_sender()
+                .expect("text clipboard fixture duplicates its runtime eventfd"),
+        );
+        (wake, ClipboardOperationIdSource::new(), controller)
+    }
+
     fn copy_request(text: &str) -> TextClipboardRequest {
         TextClipboardRequest {
             text: text.to_string(),
@@ -331,18 +375,22 @@ mod tests {
 
     #[test]
     fn text_copy_keeps_its_request_context_until_worker_completion() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (wake, mut ids, mut controller) = clipboard_controller();
 
-        start_text_copy(&mut controller, copy_request("selected"), |text| {
-            assert_eq!(text, "selected");
-            Ok(())
-        })
-        .unwrap();
+        start_text_copy(
+            &mut ids,
+            &mut controller,
+            copy_request("selected"),
+            |text| {
+                assert_eq!(text, "selected");
+                Ok(())
+            },
+        )
+        .expect("text-copy fixture submits its request");
 
         assert!(
-            wake.wait_readable(Some(Duration::from_secs(1))).unwrap(),
+            wake.wait_readable(Some(Duration::from_secs(1)))
+                .expect("text-copy fixture polls its valid runtime eventfd"),
             "text copy completion did not wake the event loop"
         );
         assert!(matches!(
@@ -357,85 +405,121 @@ mod tests {
 
     #[test]
     fn active_text_copy_retains_only_the_newest_request() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (_wake, mut ids, mut controller) = clipboard_controller();
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
         queue_text_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             copy_request("first"),
             move |_| {
-                started_tx.send(()).unwrap();
-                release_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+                started_tx.send(()).map_err(|error| error.to_string())?;
+                release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
                 Ok(())
             },
         )
-        .unwrap();
-        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        .expect("newest text-copy fixture submits its active request");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("active text-copy worker announces that it started");
 
+        let (unexpected_tx, unexpected_rx) = mpsc::channel();
+        let second_unexpected_tx = unexpected_tx.clone();
         queue_text_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             copy_request("second"),
-            |_| panic!("busy submission must not run"),
+            move |_| {
+                let _ = second_unexpected_tx.send("second");
+                Ok(())
+            },
         )
-        .unwrap();
+        .expect("busy text-copy fixture queues its second request");
         queue_text_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             copy_request("newest"),
-            |_| panic!("busy submission must not run"),
+            move |_| {
+                let _ = unexpected_tx.send("newest");
+                Ok(())
+            },
         )
-        .unwrap();
+        .expect("busy text-copy fixture replaces its pending copy request");
 
+        assert!(matches!(
+            unexpected_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected)
+        ));
         assert_eq!(
             pending.front().map(|request| request.text.as_str()),
             Some("newest")
         );
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("newest text-copy fixture retains its active worker receiver");
     }
 
     #[test]
     fn active_text_copy_preserves_every_pending_cut_request() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (_wake, mut ids, mut controller) = clipboard_controller();
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
         queue_text_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             copy_request("first"),
             move |_| {
-                started_tx.send(()).unwrap();
-                release_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+                started_tx.send(()).map_err(|error| error.to_string())?;
+                release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
                 Ok(())
             },
         )
-        .unwrap();
-        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        .expect("pending-cut fixture submits its active copy request");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("pending-cut worker announces that it started");
 
+        let (unexpected_tx, unexpected_rx) = mpsc::channel();
+        let second_unexpected_tx = unexpected_tx.clone();
         queue_text_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             cut_request("second", 0),
-            |_| panic!("busy submission must not run"),
+            move |_| {
+                let _ = second_unexpected_tx.send("second");
+                Ok(())
+            },
         )
-        .unwrap();
+        .expect("busy cut fixture queues its second request");
         queue_text_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             cut_request("third", 6),
-            |_| panic!("busy submission must not run"),
+            move |_| {
+                let _ = unexpected_tx.send("third");
+                Ok(())
+            },
         )
-        .unwrap();
+        .expect("busy cut fixture queues its third request");
 
+        assert!(matches!(
+            unexpected_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected)
+        ));
         assert_eq!(
             pending
                 .iter()
@@ -443,29 +527,36 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["second", "third"]
         );
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("pending-cut fixture retains its active worker receiver");
     }
 
     #[test]
     fn text_paste_read_stays_off_the_event_thread_until_completion() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (wake, mut ids, mut controller) = clipboard_controller();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
-        start_text_paste(&mut controller, paste_target(7), move || {
-            started_tx.send(()).unwrap();
-            release_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        start_text_paste(&mut ids, &mut controller, paste_target(7), move || {
+            started_tx.send(()).map_err(|error| error.to_string())?;
+            release_rx
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|error| error.to_string())?;
             Ok(Some("clipboard text".to_string()))
         })
-        .unwrap();
+        .expect("text-paste fixture submits its read request");
 
-        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("text-paste worker announces that it started");
         assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("text-paste fixture retains its worker receiver");
         assert!(
-            wake.wait_readable(Some(Duration::from_secs(1))).unwrap(),
+            wake.wait_readable(Some(Duration::from_secs(1)))
+                .expect("text-paste fixture polls its valid runtime eventfd"),
             "text paste completion did not wake the event loop"
         );
         assert!(matches!(
@@ -480,30 +571,58 @@ mod tests {
 
     #[test]
     fn active_text_paste_preserves_every_request_from_the_same_session() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (_wake, mut ids, mut controller) = clipboard_controller();
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
-        queue_text_paste(&mut controller, &mut pending, paste_target(7), move || {
-            started_tx.send(()).unwrap();
-            release_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-            Ok(Some("first".to_string()))
-        })
-        .unwrap();
-        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        queue_text_paste(
+            &mut ids,
+            &mut controller,
+            &mut pending,
+            paste_target(7),
+            move || {
+                started_tx.send(()).map_err(|error| error.to_string())?;
+                release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                Ok(Some("first".to_string()))
+            },
+        )
+        .expect("same-session paste fixture submits its active request");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("same-session paste worker announces that it started");
 
-        queue_text_paste(&mut controller, &mut pending, paste_target(7), || {
-            panic!("busy submission must not run")
-        })
-        .unwrap();
-        queue_text_paste(&mut controller, &mut pending, paste_target(7), || {
-            panic!("busy submission must not run")
-        })
-        .unwrap();
+        let (unexpected_tx, unexpected_rx) = mpsc::channel();
+        let second_unexpected_tx = unexpected_tx.clone();
+        queue_text_paste(
+            &mut ids,
+            &mut controller,
+            &mut pending,
+            paste_target(7),
+            move || {
+                let _ = second_unexpected_tx.send("second");
+                Ok(None)
+            },
+        )
+        .expect("same-session paste fixture queues its second request");
+        queue_text_paste(
+            &mut ids,
+            &mut controller,
+            &mut pending,
+            paste_target(7),
+            move || {
+                let _ = unexpected_tx.send("third");
+                Ok(None)
+            },
+        )
+        .expect("same-session paste fixture queues its third request");
 
+        assert!(matches!(
+            unexpected_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected)
+        ));
         assert_eq!(
             pending
                 .iter()
@@ -511,36 +630,56 @@ mod tests {
                 .collect::<Vec<_>>(),
             [7, 7]
         );
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("same-session paste fixture retains its active worker receiver");
     }
 
     #[test]
     fn newer_text_session_supersedes_older_pending_pastes_without_coalescing_its_own() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let (_wake, mut ids, mut controller) = clipboard_controller();
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
-        queue_text_paste(&mut controller, &mut pending, paste_target(1), move || {
-            started_tx.send(()).unwrap();
-            release_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-            Ok(Some("stale".to_string()))
-        })
-        .unwrap();
-        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        queue_text_paste(
+            &mut ids,
+            &mut controller,
+            &mut pending,
+            paste_target(1),
+            move || {
+                started_tx.send(()).map_err(|error| error.to_string())?;
+                release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                Ok(Some("stale".to_string()))
+            },
+        )
+        .expect("new-session paste fixture submits its active request");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("new-session paste worker announces that it started");
 
+        let (unexpected_tx, unexpected_rx) = mpsc::channel();
         for generation in [1, 1, 2, 2] {
+            let unexpected_tx = unexpected_tx.clone();
             queue_text_paste(
+                &mut ids,
                 &mut controller,
                 &mut pending,
                 paste_target(generation),
-                || panic!("busy submission must not run"),
+                move || {
+                    let _ = unexpected_tx.send(generation);
+                    Ok(None)
+                },
             )
-            .unwrap();
+            .expect("busy new-session paste fixture queues its request");
         }
 
+        assert!(matches!(
+            unexpected_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected)
+        ));
         assert_eq!(
             pending
                 .iter()
@@ -548,7 +687,9 @@ mod tests {
                 .collect::<Vec<_>>(),
             [2, 2]
         );
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("new-session paste fixture retains its active worker receiver");
     }
 
     #[test]

@@ -508,13 +508,7 @@ fn shutdown_during_external_cleanup_closes_after_a_late_reload() {
             result => panic!("unexpected conflict result: {result:?}"),
         };
     assert_eq!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: preview,
-                intent: RuntimePreviewFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_runtime_preview(preview, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::AbandonedDuringBarrier { barrier }
     );
     controller.update_seeds(test_seeds(true, false));
@@ -547,11 +541,13 @@ fn shutdown_during_external_cleanup_closes_after_a_late_reload() {
 fn invalid_external_authority_discards_pre_change_preview_rollback() {
     let persisted_wire = wire_with_top_pinned(true);
     let mut controller = RuntimeUiStateController::new_with_authority(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("r1"),
         RuntimeUiFileStatus::Supported,
         persisted_wire,
-    );
+    )
+    .expect("fixture supported source satisfies controller startup invariants");
     let mut rollback = PreviewRollbackSnapshot::default();
     rollback.values.insert(
         InteractionSeedTarget::TopPinned,
@@ -575,13 +571,7 @@ fn invalid_external_authority_discards_pre_change_preview_rollback() {
             result => panic!("unexpected conflict result: {result:?}"),
         };
     assert_eq!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: preview,
-                intent: RuntimePreviewFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_runtime_preview(preview, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::AbandonedDuringBarrier { barrier }
     );
     assert!(matches!(

@@ -1,11 +1,16 @@
-use std::cell::Cell;
 use std::collections::{BTreeSet, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use super::*;
 
-static NEXT_CONTROLLER_ID: AtomicU64 = AtomicU64::new(1);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ControllerStartupError {
+    SourceStatusMismatch,
+    DecodedAuthorityForNonSupportedStatus,
+    ReconciliationCleanup(PipelineProtocolError),
+    StartupRecoveryBarrierMissing,
+    StartupRecoveryIncident(PipelineProtocolError),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BeginMutationError {
@@ -157,7 +162,14 @@ pub(crate) enum SubmitSourceMutationResult {
         recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
         path_effect: RuntimeStateObservedPathEffect,
     },
-    Rejected(PipelineProtocolError),
+    RejectedUnconsumed {
+        result: SourceMutationResult,
+        error: PipelineProtocolError,
+    },
+    Terminalized {
+        error: PipelineProtocolError,
+        recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,8 +229,8 @@ pub(crate) enum ExternalAuthorityInstallError {
 pub(crate) struct RuntimeUiStateController {
     pub(super) id: ControllerId,
     pub(super) authority_epoch: u64,
-    next_mutation_id: Cell<u64>,
-    pub(super) next_preview_session_id: Cell<u64>,
+    next_mutation_id: u64,
+    pub(super) next_preview_session_id: u64,
     pub(super) next_barrier_id: u64,
     pub(super) next_incident_id: u64,
     pub(super) next_recovery_attempt_id: u64,
@@ -243,11 +255,9 @@ pub(crate) struct RuntimeUiStateController {
     pub(super) preview_resolution_outbox: Vec<AbandonedPreviewResolution>,
     pub(super) active_recovery: Option<ActiveRecoveryAttempt>,
     pub(super) recovery_outbox: VecDeque<RecoveryIoCommand>,
-    pub(super) integrated_recovery_commands: BTreeSet<RecoveryCommandId>,
-    pub(super) integrated_recovery_command_order: VecDeque<RecoveryCommandId>,
+    pub(super) integrated_recovery_commands: VecDeque<RecoveryCommandId>,
     pub(super) rejected_recovery_completions: VecDeque<RecoveryIoCompletion>,
-    pub(super) cancelled_read_only_commands: BTreeSet<RecoveryCommandId>,
-    pub(super) cancelled_read_only_command_order: VecDeque<RecoveryCommandId>,
+    pub(super) cancelled_read_only_commands: VecDeque<RecoveryCommandId>,
     pub(super) lifecycle_tx: Sender<LifecycleControl>,
     lifecycle_rx: Receiver<LifecycleControl>,
     pub(super) shutting_down: bool,
@@ -255,11 +265,13 @@ pub(crate) struct RuntimeUiStateController {
 
 impl RuntimeUiStateController {
     pub(crate) fn new(
+        id: ControllerId,
         seeds: ValidatedInteractionSeeds,
         stable_source: RuntimeStateSourceRevision,
         file_status: RuntimeUiFileStatus,
-    ) -> Self {
+    ) -> Result<Self, ControllerStartupError> {
         Self::new_with_authority(
+            id,
             seeds,
             stable_source,
             file_status,
@@ -268,33 +280,25 @@ impl RuntimeUiStateController {
     }
 
     pub(crate) fn new_with_authority(
+        id: ControllerId,
         seeds: ValidatedInteractionSeeds,
         stable_source: RuntimeStateSourceRevision,
         file_status: RuntimeUiFileStatus,
         acknowledged: RuntimeUiWireState,
-    ) -> Self {
-        debug_assert_eq!(
-            stable_source.bytes().is_none(),
-            matches!(file_status, RuntimeUiFileStatus::Missing),
-            "startup file status must match the exact source revision"
-        );
-        debug_assert!(
-            matches!(file_status, RuntimeUiFileStatus::Supported)
-                || (acknowledged.model.is_empty() && acknowledged.passthrough.is_empty()),
-            "missing, unsupported, and invalid startup authorities cannot carry decoded V1 state"
-        );
+    ) -> Result<Self, ControllerStartupError> {
+        if stable_source.bytes().is_none() != matches!(file_status, RuntimeUiFileStatus::Missing) {
+            return Err(ControllerStartupError::SourceStatusMismatch);
+        }
+        if !matches!(file_status, RuntimeUiFileStatus::Supported)
+            && (!acknowledged.model.is_empty() || !acknowledged.passthrough.is_empty())
+        {
+            return Err(ControllerStartupError::DecodedAuthorityForNonSupportedStatus);
+        }
         let acknowledged = if matches!(file_status, RuntimeUiFileStatus::Supported) {
             acknowledged
         } else {
             RuntimeUiWireState::default()
         };
-        let id = ControllerId(
-            NEXT_CONTROLLER_ID
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                    current.checked_add(1)
-                })
-                .expect("controller id space exhausted"),
-        );
         let seeds = InteractionSeedRegistry::from_validated(seeds);
         let mut model = acknowledged.model.clone();
         let mut passthrough = acknowledged.passthrough.clone();
@@ -309,14 +313,14 @@ impl RuntimeUiStateController {
         if needs_cleanup {
             pipeline
                 .accept_replace(canonical, 1)
-                .expect("fresh startup pipeline must accept reconciliation cleanup");
+                .map_err(ControllerStartupError::ReconciliationCleanup)?;
         }
         let (lifecycle_tx, lifecycle_rx) = channel();
-        Self {
+        Ok(Self {
             id,
             authority_epoch: 1,
-            next_mutation_id: Cell::new(1),
-            next_preview_session_id: Cell::new(1),
+            next_mutation_id: 1,
+            next_preview_session_id: 1,
             next_barrier_id: 1,
             next_incident_id: 1,
             next_recovery_attempt_id: 1,
@@ -341,42 +345,43 @@ impl RuntimeUiStateController {
             preview_resolution_outbox: Vec::new(),
             active_recovery: None,
             recovery_outbox: VecDeque::new(),
-            integrated_recovery_commands: BTreeSet::new(),
-            integrated_recovery_command_order: VecDeque::new(),
+            integrated_recovery_commands: VecDeque::new(),
             rejected_recovery_completions: VecDeque::new(),
-            cancelled_read_only_commands: BTreeSet::new(),
-            cancelled_read_only_command_order: VecDeque::new(),
+            cancelled_read_only_commands: VecDeque::new(),
             lifecycle_tx,
             lifecycle_rx,
             shutting_down: false,
-        }
+        })
     }
 
     pub(crate) fn new_startup_unhealthy(
+        id: ControllerId,
         seeds: ValidatedInteractionSeeds,
         observed: RuntimeStateSourceObservation,
         error: RuntimeStateIoError,
         recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
         path_effect: RuntimeStateFailurePathEffect,
-    ) -> (Self, PersistenceIncidentId) {
+    ) -> Result<(Self, PersistenceIncidentId), ControllerStartupError> {
         let mut controller = Self::new(
+            id,
             seeds,
             observed.revision.clone(),
             RuntimeUiFileStatus::Invalid,
-        );
-        let incident = controller.enter_persistence_incident(
-            error,
-            Some(observed),
-            recovery_artifacts,
-            path_effect,
-            None,
-        );
-        controller
-            .active_barrier
-            .as_mut()
-            .expect("startup incident installs a barrier")
-            .operation = ControllerBarrierOperation::StartupPersistenceRecovery;
-        (controller, incident)
+        )?;
+        let incident = controller
+            .enter_persistence_incident(
+                error,
+                Some(observed),
+                recovery_artifacts,
+                path_effect,
+                None,
+            )
+            .map_err(ControllerStartupError::StartupRecoveryIncident)?;
+        let Some(barrier) = controller.active_barrier.as_mut() else {
+            return Err(ControllerStartupError::StartupRecoveryBarrierMissing);
+        };
+        barrier.operation = ControllerBarrierOperation::StartupPersistenceRecovery;
+        Ok((controller, incident))
     }
 
     pub(crate) fn id(&self) -> ControllerId {
@@ -449,8 +454,13 @@ impl RuntimeUiStateController {
         &self.pipeline
     }
 
+    #[cfg(test)]
+    pub(crate) fn exhaust_incident_id_for_test(&mut self) {
+        self.next_incident_id = u64::MAX;
+    }
+
     pub(crate) fn begin_mutation(
-        &self,
+        &mut self,
         scope: RuntimeUiMutationScope,
     ) -> Result<RuntimeUiMutationPermit, BeginMutationError> {
         if self.shutting_down {
@@ -546,7 +556,7 @@ impl RuntimeUiStateController {
     }
 
     pub(crate) fn begin_config_interaction(
-        &self,
+        &mut self,
         target: ConfigPositionTarget,
     ) -> Result<ConfigInteractionPermit, BeginConfigInteractionError> {
         if self.shutting_down {
@@ -845,12 +855,27 @@ impl RuntimeUiStateController {
         result: SourceMutationResult,
     ) -> SubmitSourceMutationResult {
         self.drain_lifecycle_controls();
-        let integrated = match self.pipeline.integrate(result) {
+        let prepared_incident = if matches!(&result, SourceMutationResult::Failed { .. }) {
+            if let Err(error) = self.pipeline.preflight_integrate(&result) {
+                return SubmitSourceMutationResult::RejectedUnconsumed { result, error };
+            }
+            match self.prepare_persistence_incident() {
+                Ok(prepared) => Some(prepared),
+                Err(error) => {
+                    return SubmitSourceMutationResult::RejectedUnconsumed { result, error };
+                }
+            }
+        } else {
+            None
+        };
+        let integrated = match self.pipeline.integrate(&result) {
             Ok(integrated) => integrated,
-            Err(error) => return SubmitSourceMutationResult::Rejected(error),
+            Err(error) => {
+                return SubmitSourceMutationResult::RejectedUnconsumed { result, error };
+            }
         };
 
-        match &integrated.result {
+        match &result {
             SourceMutationResult::Applied {
                 recovery_artifacts, ..
             } => {
@@ -863,13 +888,18 @@ impl RuntimeUiStateController {
                     SourceMutationKind::ResetSupported { .. }
                         | SourceMutationKind::ResetUnsupportedIfUnchanged { .. }
                 ) {
-                    return self.finish_supported_reset_success(integrated);
+                    return self.finish_supported_reset_success(integrated, recovery_artifacts);
                 }
                 if self.supported_reset.is_some() {
                     self.capture_reset_authority_after_prerequisite();
                 }
                 if let Err(error) = self.pipeline.resume_after_integration() {
-                    return SubmitSourceMutationResult::Rejected(error);
+                    return self.terminalize_integrated_source_mutation(
+                        error,
+                        &integrated,
+                        recovery_artifacts,
+                        None,
+                    );
                 }
                 self.refresh_reset_barrier_phase();
                 if matches!(
@@ -883,18 +913,32 @@ impl RuntimeUiStateController {
                     if self.shutting_down {
                         self.settle_external_reconciliation_for_shutdown();
                     } else if let Err(error) = self.finish_external_reconciliation_write() {
-                        return SubmitSourceMutationResult::Rejected(error);
+                        return self.terminalize_integrated_source_mutation(
+                            error,
+                            &integrated,
+                            recovery_artifacts,
+                            None,
+                        );
                     }
                 }
                 SubmitSourceMutationResult::Integrated { recovery_artifacts }
             }
             SourceMutationResult::SourceChangedBeforeMutation { active, .. } => {
-                self.enter_external_reconciliation(
+                let barrier = match self.enter_external_reconciliation(
                     active.clone(),
                     Vec::new(),
                     RuntimeStateObservedPathEffect::Untouched,
-                );
-                let barrier = self.active_barrier.as_ref().expect("barrier installed").id;
+                ) {
+                    Ok(barrier) => barrier,
+                    Err(error) => {
+                        return self.terminalize_integrated_source_mutation(
+                            error,
+                            &integrated,
+                            Vec::new(),
+                            None,
+                        );
+                    }
+                };
                 if self.shutting_down {
                     self.settle_external_reconciliation_for_shutdown();
                     return SubmitSourceMutationResult::ExternalReconciliationSettledForShutdown {
@@ -919,12 +963,21 @@ impl RuntimeUiStateController {
             } => {
                 let observed_effect =
                     RuntimeStateObservedPathEffect::PostClaim(path_effect.clone());
-                self.enter_external_reconciliation(
+                let barrier = match self.enter_external_reconciliation(
                     active.clone(),
                     recovery_artifacts.clone(),
                     observed_effect.clone(),
-                );
-                let barrier = self.active_barrier.as_ref().expect("barrier installed").id;
+                ) {
+                    Ok(barrier) => barrier,
+                    Err(error) => {
+                        return self.terminalize_integrated_source_mutation(
+                            error,
+                            &integrated,
+                            recovery_artifacts.clone(),
+                            None,
+                        );
+                    }
+                };
                 if self.shutting_down {
                     self.settle_external_reconciliation_for_shutdown();
                     return SubmitSourceMutationResult::ExternalReconciliationSettledForShutdown {
@@ -948,6 +1001,14 @@ impl RuntimeUiStateController {
                 path_effect,
                 ..
             } => {
+                let Some(prepared_incident) = prepared_incident else {
+                    return self.terminalize_integrated_source_mutation(
+                        PipelineProtocolError::UnexpectedMutationResult,
+                        &integrated,
+                        recovery_artifacts.clone(),
+                        Some(error.clone()),
+                    );
+                };
                 let failed_replacement = match &integrated.request.kind {
                     SourceMutationKind::Replace(snapshot) => Some(HeldReplacementStage {
                         snapshot: snapshot.clone(),
@@ -962,18 +1023,23 @@ impl RuntimeUiStateController {
                         None
                     }
                 };
-                let incident = self.enter_persistence_incident(
+                let (incident, barrier) = self.enter_prepared_persistence_incident(
+                    prepared_incident,
                     error.clone(),
                     active.clone(),
                     recovery_artifacts.clone(),
                     path_effect.clone(),
                     failed_replacement,
                 );
-                let barrier = self.active_barrier.as_ref().expect("barrier installed").id;
                 if self.shutting_down {
                     self.settle_incident_for_shutdown();
-                    if let Err(error) = self.pipeline.resume_after_integration() {
-                        return SubmitSourceMutationResult::Rejected(error);
+                    if let Err(protocol_error) = self.pipeline.resume_after_integration() {
+                        return self.terminalize_integrated_source_mutation(
+                            protocol_error,
+                            &integrated,
+                            recovery_artifacts.clone(),
+                            Some(error.clone()),
+                        );
                     }
                     return SubmitSourceMutationResult::PersistenceFailureSettledForShutdown {
                         barrier,
@@ -1025,10 +1091,18 @@ impl RuntimeUiStateController {
             observation.envelope,
             RuntimeStateObservedEnvelope::PresentWithoutReadableVersion
         ) {
-            let evidence = self
-                .external_reconciliation
-                .take()
-                .expect("external reconciliation validated above");
+            let prepared_incident = match self.prepare_persistence_incident() {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    self.terminal_persistence_shutdown(RuntimeStateIoError::new(format!(
+                        "invalid external authority could not enter recovery: {error:?}"
+                    )));
+                    return Err(ExternalAuthorityInstallError::Persistence(error));
+                }
+            };
+            let Some(evidence) = self.external_reconciliation.take() else {
+                return Err(ExternalAuthorityInstallError::NoReconciliationPending);
+            };
             self.pipeline.install_acknowledged_authority(
                 observation.revision.clone(),
                 RuntimeUiWireState::default(),
@@ -1038,7 +1112,8 @@ impl RuntimeUiStateController {
             self.passthrough = WirePassthrough::default();
             self.live_only_overlay.clear();
             self.rebuild_live_state();
-            let incident = self.enter_persistence_incident(
+            let (incident, _) = self.enter_prepared_persistence_incident(
+                prepared_incident,
                 RuntimeStateIoError::new(
                     "external runtime-state authority is malformed or unreadable",
                 ),
@@ -1114,11 +1189,15 @@ impl RuntimeUiStateController {
                 .settle_held_external(&transaction.held_by_reset);
         }
         self.rebuild_live_state();
-        let cleanup = needs_cleanup.then(|| {
-            self.pipeline
-                .accept_replace(canonical_wire, self.authority_epoch)
-                .expect("preflighted external-authority cleanup must dispatch")
-        });
+        let cleanup = if needs_cleanup {
+            Some(
+                self.pipeline
+                    .accept_replace(canonical_wire, self.authority_epoch)
+                    .map_err(ExternalAuthorityInstallError::Persistence)?,
+            )
+        } else {
+            None
+        };
         if cleanup.is_none() {
             if let Some(barrier) = self.active_barrier.as_ref().map(|barrier| barrier.id) {
                 self.close_barrier_and_resolve_previews_after_seed_changes(
@@ -1132,17 +1211,20 @@ impl RuntimeUiStateController {
                 );
             }
         } else if let Some(barrier) = &mut self.active_barrier {
-            barrier.phase = ControllerBarrierPhase::Writing(
-                self.pipeline
-                    .source_mutation_in_flight()
-                    .expect("cleanup dispatched")
-                    .id,
-            );
+            let Some(mutation_id) = self
+                .pipeline
+                .source_mutation_in_flight()
+                .map(|request| request.id)
+            else {
+                return Err(ExternalAuthorityInstallError::Persistence(
+                    PipelineProtocolError::MutationNotDispatched,
+                ));
+            };
+            barrier.phase = ControllerBarrierPhase::Writing(mutation_id);
         }
-        let evidence = self
-            .external_reconciliation
-            .take()
-            .expect("reconciliation evidence validated before authority installation");
+        let Some(evidence) = self.external_reconciliation.take() else {
+            return Err(ExternalAuthorityInstallError::NoReconciliationPending);
+        };
         Ok(ExternalAuthorityInstallResult {
             cleanup_through: cleanup,
             evidence,
@@ -1201,6 +1283,69 @@ impl RuntimeUiStateController {
         self.pipeline.shutdown_complete()
     }
 
+    pub(crate) fn settle_rejected_source_mutation_for_shutdown(
+        &mut self,
+        result: SourceMutationResult,
+        rejection: PipelineProtocolError,
+    ) {
+        let settlement_error = match &result {
+            SourceMutationResult::Failed { error, .. } => error.clone(),
+            _ => RuntimeStateIoError::new(format!(
+                "runtime-state writer completion was rejected: {rejection:?}"
+            )),
+        };
+        if let Ok(integrated) = self.pipeline.integrate(&result)
+            && matches!(&result, SourceMutationResult::Failed { .. })
+        {
+            self.pipeline
+                .settle_pending_failed(integrated.covered, settlement_error.clone());
+        }
+        self.terminal_persistence_shutdown(settlement_error);
+    }
+
+    fn terminalize_integrated_source_mutation(
+        &mut self,
+        error: PipelineProtocolError,
+        integrated: &IntegratedSourceMutation,
+        recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
+        settlement_error: Option<RuntimeStateIoError>,
+    ) -> SubmitSourceMutationResult {
+        let settlement_error = match settlement_error {
+            Some(error) => error,
+            None => RuntimeStateIoError::new(format!(
+                "runtime-state writer completion could not finish controller integration: {error:?}"
+            )),
+        };
+        self.pipeline
+            .settle_pending_failed(integrated.covered.iter().copied(), settlement_error.clone());
+        self.terminal_persistence_shutdown(settlement_error);
+        SubmitSourceMutationResult::Terminalized {
+            error,
+            recovery_artifacts,
+        }
+    }
+
+    fn terminal_persistence_shutdown(&mut self, error: RuntimeStateIoError) {
+        self.shutting_down = true;
+        self.pending_unsupported_reset_confirmation = None;
+        if let Some(transaction) = self.supported_reset.take() {
+            self.pipeline
+                .settle_held_pending_failed(&transaction.held_by_reset, error.clone());
+            self.pipeline
+                .settle_pending_failed([transaction.through], error.clone());
+        }
+        self.settle_incident_for_shutdown();
+        self.external_reconciliation = None;
+        self.staged_reload = None;
+        if let Some(barrier) = self.active_barrier.as_ref().map(|barrier| barrier.id) {
+            self.close_barrier_and_resolve_previews(
+                barrier,
+                AbandonedPreviewResolutionReason::CancelledUnderRetainedAuthority,
+            );
+        }
+        self.pipeline.terminal_shutdown(error);
+    }
+
     pub(crate) fn drain_lifecycle_controls(&mut self) {
         while let Ok(control) = self.lifecycle_rx.try_recv() {
             self.apply_lifecycle_control(control);
@@ -1221,29 +1366,32 @@ impl RuntimeUiStateController {
             next_model.reconcile(&next_seeds) | next_passthrough.reconcile_entries(&next_model);
         let next_live_state =
             RuntimeUiLiveState::rebuild(&next_seeds, &next_model, &next_live_only_overlay);
+        let canonical = RuntimeUiWireState {
+            model: next_model.clone(),
+            passthrough: next_passthrough.clone(),
+        };
         let needs_cleanup = pruned
             && matches!(
                 self.file_status,
                 RuntimeUiFileStatus::Missing | RuntimeUiFileStatus::Supported
             );
-        if needs_cleanup && let Err(error) = self.pipeline.preflight_accept_replace() {
-            return UpdateSeedsResult::RejectedPersistence(error);
-        }
+        let cleanup_through = if needs_cleanup {
+            match self
+                .pipeline
+                .accept_replace(canonical, self.authority_epoch)
+            {
+                Ok(through) => Some(through),
+                Err(error) => return UpdateSeedsResult::RejectedPersistence(error),
+            }
+        } else {
+            None
+        };
 
         self.seeds = next_seeds;
         self.live_only_overlay = next_live_only_overlay;
         self.model = next_model;
         self.passthrough = next_passthrough;
         self.live_state = next_live_state;
-        let cleanup_through = if needs_cleanup {
-            Some(
-                self.pipeline
-                    .accept_replace(self.canonical_wire(), self.authority_epoch)
-                    .expect("preflighted seed-reconciliation cleanup must dispatch"),
-            )
-        } else {
-            None
-        };
         UpdateSeedsResult::Applied {
             changed_targets,
             cleanup_through,
@@ -1252,7 +1400,11 @@ impl RuntimeUiStateController {
 
     fn finish_external_reconciliation_write(&mut self) -> Result<(), PipelineProtocolError> {
         let Some(staged) = self.staged_reload.as_ref().cloned() else {
-            let barrier = self.active_barrier.as_ref().expect("barrier checked").id;
+            let barrier = self
+                .active_barrier
+                .as_ref()
+                .map(|barrier| barrier.id)
+                .ok_or(PipelineProtocolError::ControllerBarrierMissing)?;
             self.close_barrier_and_resolve_previews(
                 barrier,
                 AbandonedPreviewResolutionReason::DiscardedForAuthorityChange,
@@ -1273,9 +1425,28 @@ impl RuntimeUiStateController {
         };
         let needs_cleanup = matches!(self.file_status, RuntimeUiFileStatus::Supported)
             && canonical != *self.pipeline.acknowledged_wire();
-        if needs_cleanup {
-            self.pipeline.preflight_accept_replace()?;
-        }
+        let cleanup_mutation = if needs_cleanup {
+            self.pipeline
+                .accept_replace(canonical, self.authority_epoch)?;
+            Some(
+                self.pipeline
+                    .source_mutation_in_flight()
+                    .map(|request| request.id)
+                    .ok_or(PipelineProtocolError::MutationNotDispatched)?,
+            )
+        } else {
+            None
+        };
+        let close_barrier = if cleanup_mutation.is_none() {
+            Some(
+                self.active_barrier
+                    .as_ref()
+                    .map(|barrier| barrier.id)
+                    .ok_or(PipelineProtocolError::ControllerBarrierMissing)?,
+            )
+        } else {
+            None
+        };
 
         self.staged_reload = None;
         self.seeds = next_seeds;
@@ -1284,20 +1455,11 @@ impl RuntimeUiStateController {
         self.passthrough = next_passthrough;
         self.rebuild_live_state();
 
-        if needs_cleanup {
-            self.pipeline
-                .accept_replace(canonical, self.authority_epoch)
-                .expect("preflighted external reconciliation cleanup must dispatch");
+        if let Some(mutation_id) = cleanup_mutation {
             if let Some(barrier) = &mut self.active_barrier {
-                barrier.phase = ControllerBarrierPhase::Writing(
-                    self.pipeline
-                        .source_mutation_in_flight()
-                        .expect("cleanup dispatched")
-                        .id,
-                );
+                barrier.phase = ControllerBarrierPhase::Writing(mutation_id);
             }
-        } else {
-            let barrier = self.active_barrier.as_ref().expect("barrier checked").id;
+        } else if let Some(barrier) = close_barrier {
             self.close_barrier_and_resolve_previews(
                 barrier,
                 AbandonedPreviewResolutionReason::DiscardedForAuthorityChange,
@@ -1318,9 +1480,9 @@ impl RuntimeUiStateController {
             RuntimeUiLiveState::rebuild(&self.seeds, &self.model, &self.live_only_overlay);
     }
 
-    fn allocate_mutation_id(&self) -> Option<u64> {
-        let current = self.next_mutation_id.get();
-        self.next_mutation_id.set(current.checked_add(1)?);
+    fn allocate_mutation_id(&mut self) -> Option<u64> {
+        let current = self.next_mutation_id;
+        self.next_mutation_id = current.checked_add(1)?;
         Some(current)
     }
 
@@ -1388,17 +1550,16 @@ impl RuntimeUiStateController {
     fn finish_supported_reset_success(
         &mut self,
         integrated: IntegratedSourceMutation,
+        recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
     ) -> SubmitSourceMutationResult {
-        let recovery_artifacts = match &integrated.result {
-            SourceMutationResult::Applied {
-                recovery_artifacts, ..
-            } => recovery_artifacts.clone(),
-            _ => unreachable!("reset success requires an applied result"),
+        let Some(transaction) = self.supported_reset.take() else {
+            return self.terminalize_integrated_source_mutation(
+                PipelineProtocolError::ResetTransactionMissing,
+                &integrated,
+                recovery_artifacts,
+                None,
+            );
         };
-        let transaction = self
-            .supported_reset
-            .take()
-            .expect("matching reset acknowledgement requires transaction");
         debug_assert_eq!(transaction.through, integrated.request.accepted_through);
         self.model.clear();
         self.passthrough = WirePassthrough::default();
@@ -1412,7 +1573,12 @@ impl RuntimeUiStateController {
         self.authority_epoch = transaction.publish_epoch;
         self.file_status = RuntimeUiFileStatus::Missing;
         if let Err(error) = self.pipeline.resume_after_integration() {
-            return SubmitSourceMutationResult::Rejected(error);
+            return self.terminalize_integrated_source_mutation(
+                error,
+                &integrated,
+                recovery_artifacts,
+                None,
+            );
         }
         self.close_barrier_and_resolve_previews(
             transaction.barrier,
@@ -1430,7 +1596,13 @@ impl RuntimeUiStateController {
         active: RuntimeStateSourceObservation,
         recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
         path_effect: RuntimeStateObservedPathEffect,
-    ) {
+    ) -> Result<ControllerBarrierId, PipelineProtocolError> {
+        let barrier_id = match self.active_barrier.as_ref() {
+            Some(barrier) => barrier.id,
+            None => self
+                .allocate_barrier_id()
+                .ok_or(PipelineProtocolError::ControllerBarrierIdExhausted)?,
+        };
         self.external_reconciliation = Some(ExternalReconciliationEvidence {
             writer_observation: active,
             recovery_artifacts,
@@ -1438,11 +1610,8 @@ impl RuntimeUiStateController {
         });
         self.pipeline.discard_pending_for_external_authority();
         if self.active_barrier.is_none() {
-            let id = self
-                .allocate_barrier_id()
-                .expect("barrier id exhausted during external reconciliation");
             self.active_barrier = Some(ActiveControllerBarrier {
-                id,
+                id: barrier_id,
                 operation: ControllerBarrierOperation::ExternalAuthorityReconciliation,
                 phase: ControllerBarrierPhase::Reinspecting,
             });
@@ -1454,6 +1623,7 @@ impl RuntimeUiStateController {
             self.pipeline
                 .settle_held_external(&transaction.held_by_reset);
         }
+        Ok(barrier_id)
     }
 
     fn settle_external_reconciliation_for_shutdown(&mut self) {
@@ -1499,4 +1669,106 @@ fn file_status_matches_observation(
             RuntimeStateObservedEnvelope::Version(observed_version),
         ) if status_version == observed_version && *observed_version != 1
     )
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    fn seeds() -> ValidatedInteractionSeeds {
+        let mut seeds = ValidatedInteractionSeeds::new();
+        seeds
+            .insert(
+                InteractionSeedTarget::TopPinned,
+                InteractionSeedValue::Bool(false),
+            )
+            .expect("fixture top-pin seed matches its target");
+        seeds
+    }
+
+    fn missing_source() -> RuntimeStateSourceRevision {
+        RuntimeStateSourceRevision::missing(RuntimeStatePathIdentity::direct(
+            "/tmp/wayscriber-controller-identity-test.toml",
+        ))
+    }
+
+    fn controller(id: ControllerId) -> RuntimeUiStateController {
+        RuntimeUiStateController::new(id, seeds(), missing_source(), RuntimeUiFileStatus::Missing)
+            .expect("fixture source status satisfies controller startup invariants")
+    }
+
+    #[test]
+    fn permit_from_another_root_is_rejected() {
+        let mut first = controller(ControllerId::fixture(1, 1));
+        let mut second = controller(ControllerId::fixture(2, 1));
+        let permit = first
+            .begin_mutation(RuntimeUiMutationScope::one(
+                InteractionSeedTarget::TopPinned,
+            ))
+            .expect("fixture controller has a matching top-pin seed");
+        let values = RuntimeUiMutationValues::one(
+            InteractionSeedTarget::TopPinned,
+            InteractionSeedValue::Bool(true),
+        )
+        .expect("fixture mutation value matches its target");
+
+        assert!(matches!(
+            second.commit(permit, values),
+            CommitResult::RejectedWrongController
+        ));
+    }
+
+    #[test]
+    fn mutation_id_exhaustion_is_typed_and_does_not_wrap() {
+        let mut controller = controller(ControllerId::fixture(1, 1));
+        controller.next_mutation_id = u64::MAX;
+
+        assert!(matches!(
+            controller.begin_mutation(RuntimeUiMutationScope::one(
+                InteractionSeedTarget::TopPinned,
+            )),
+            Err(BeginMutationError::MutationIdExhausted)
+        ));
+        assert_eq!(controller.next_mutation_id, u64::MAX);
+    }
+
+    #[test]
+    fn preview_id_exhaustion_is_typed_and_does_not_wrap() {
+        let source = RuntimeStateSourceRevision::present(
+            RuntimeStatePathIdentity::direct(
+                "/tmp/wayscriber-controller-preview-identity-test.toml",
+            ),
+            b"version = 2\n".to_vec().into_boxed_slice(),
+        );
+        let mut controller = RuntimeUiStateController::new(
+            ControllerId::fixture(1, 1),
+            seeds(),
+            source,
+            RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
+        )
+        .expect("fixture unsupported source satisfies controller startup invariants");
+        controller.next_preview_session_id = u64::MAX;
+
+        assert!(matches!(
+            controller.begin_runtime_preview(
+                RuntimeUiMutationScope::one(InteractionSeedTarget::TopPinned),
+                PreviewRollbackSnapshot::default(),
+            ),
+            Err(BeginPreviewError::MutationIdExhausted)
+        ));
+        assert_eq!(controller.next_preview_session_id, u64::MAX);
+    }
+
+    #[test]
+    fn mismatched_startup_status_is_a_typed_error() {
+        assert!(matches!(
+            RuntimeUiStateController::new(
+                ControllerId::fixture(1, 1),
+                seeds(),
+                missing_source(),
+                RuntimeUiFileStatus::Supported,
+            ),
+            Err(ControllerStartupError::SourceStatusMismatch)
+        ));
+    }
 }

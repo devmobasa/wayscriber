@@ -10,4 +10,5 @@ mod subscription;
 mod update;
 mod view;
 
+pub(crate) use blocking_jobs::BlockingJobId;
 pub use entry::run;

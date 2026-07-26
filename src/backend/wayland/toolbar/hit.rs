@@ -1,4 +1,3 @@
-use crate::backend::wayland::state::{color_log, debug_toolbar_color_logging_enabled};
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
@@ -98,7 +97,17 @@ pub fn clip_hit_regions_to_bounds(
     }
 }
 
+#[cfg(test)]
 pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent, bool)> {
+    intent_for_hit_with_color_logging(hit, x, y, false)
+}
+
+pub(in crate::backend::wayland) fn intent_for_hit_with_color_logging(
+    hit: &HitRegion,
+    x: f64,
+    y: f64,
+    debug_color_logging: bool,
+) -> Option<(ToolbarIntent, bool)> {
     if !hit.contains(x, y) {
         return None;
     }
@@ -150,8 +159,8 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
             hit,
             x,
         ),
-        PickSatVal { hue } => sat_val_event_for_hit(hue, hit, x, y),
-        PickHue { sat, val } => hue_event_for_hit(sat, val, hit, x),
+        PickSatVal { hue } => sat_val_event_for_hit(hue, hit, x, y, debug_color_logging),
+        PickHue { sat, val } => hue_event_for_hit(sat, val, hit, x, debug_color_logging),
         DragUndoDelay => slider_event_for_hit(
             ToolbarSliderTarget::UndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
@@ -200,7 +209,17 @@ pub fn quick_color_slot_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<usize
     }
 }
 
+#[cfg(test)]
 pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarIntent> {
+    drag_intent_for_hit_with_color_logging(hit, x, y, false)
+}
+
+pub(in crate::backend::wayland) fn drag_intent_for_hit_with_color_logging(
+    hit: &HitRegion,
+    x: f64,
+    y: f64,
+    debug_color_logging: bool,
+) -> Option<ToolbarIntent> {
     if !hit.contains(x, y) {
         return None;
     }
@@ -234,8 +253,20 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
             hit,
             x,
         ))),
-        PickSatVal { hue } => Some(ToolbarIntent(sat_val_event_for_hit(hue, hit, x, y))),
-        PickHue { sat, val } => Some(ToolbarIntent(hue_event_for_hit(sat, val, hit, x))),
+        PickSatVal { hue } => Some(ToolbarIntent(sat_val_event_for_hit(
+            hue,
+            hit,
+            x,
+            y,
+            debug_color_logging,
+        ))),
+        PickHue { sat, val } => Some(ToolbarIntent(hue_event_for_hit(
+            sat,
+            val,
+            hit,
+            x,
+            debug_color_logging,
+        ))),
         DragUndoDelay => Some(ToolbarIntent(slider_event_for_hit(
             ToolbarSliderTarget::UndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
@@ -282,27 +313,39 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
 
 /// Map a pointer position inside the saturation/value area to a full HSV
 /// color; saturation follows x, value follows inverted y, hue is fixed.
-fn sat_val_event_for_hit(hue: f64, hit: &HitRegion, x: f64, y: f64) -> ToolbarEvent {
+fn sat_val_event_for_hit(
+    hue: f64,
+    hit: &HitRegion,
+    x: f64,
+    y: f64,
+    debug_color_logging: bool,
+) -> ToolbarEvent {
     let s = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
     let v = (1.0 - (y - hit.rect.1) / hit.rect.3.max(1.0)).clamp(0.0, 1.0);
-    if debug_toolbar_color_logging_enabled() {
-        color_log(format!(
+    if debug_color_logging {
+        log::info!(
             "toolbar pick sat/val: pos=({x:.1},{y:.1}) rect={:?} h={hue:.3} s={s:.3} v={v:.3}",
             hit.rect
-        ));
+        );
     }
     ToolbarEvent::SetColorHsv { h: hue, s, v }
 }
 
 /// Map a pointer x inside the hue bar to a full HSV color; hue follows x,
 /// saturation and value are fixed.
-fn hue_event_for_hit(sat: f64, val: f64, hit: &HitRegion, x: f64) -> ToolbarEvent {
+fn hue_event_for_hit(
+    sat: f64,
+    val: f64,
+    hit: &HitRegion,
+    x: f64,
+    debug_color_logging: bool,
+) -> ToolbarEvent {
     let h = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
-    if debug_toolbar_color_logging_enabled() {
-        color_log(format!(
+    if debug_color_logging {
+        log::info!(
             "toolbar pick hue: x={x:.1} rect={:?} h={h:.3} s={sat:.3} v={val:.3}",
             hit.rect
-        ));
+        );
     }
     ToolbarEvent::SetColorHsv { h, s: sat, v: val }
 }
@@ -452,15 +495,23 @@ mod tests {
     }
 
     fn assert_set_thickness(event: ToolbarEvent, expected: f64) {
-        match event {
-            ToolbarEvent::SetThickness(value) => {
-                assert!(
-                    (value - expected).abs() < 0.000_001,
-                    "expected {expected}, got {value}"
-                );
-            }
-            other => panic!("unexpected event: {other:?}"),
+        let value = match event {
+            ToolbarEvent::SetThickness(value) => Some(value),
+            _ => None,
         }
+        .expect("thickness-slider fixture always resolves to SetThickness");
+        assert!(
+            (value - expected).abs() < 0.000_001,
+            "expected {expected}, got {value}"
+        );
+    }
+
+    fn hsv_components(event: ToolbarEvent) -> (f64, f64, f64) {
+        match event {
+            ToolbarEvent::SetColorHsv { h, s, v } => Some((h, s, v)),
+            _ => None,
+        }
+        .expect("color-hit fixture always resolves to SetColorHsv")
     }
 
     #[test]
@@ -533,8 +584,10 @@ mod tests {
     fn slider_press_and_drag_use_same_pointer_mapping() {
         let hit = thickness_slider();
 
-        let (press, start_drag) = intent_for_hit(&hit, 200.0, 10.0).expect("press intent");
-        let drag = drag_intent_for_hit(&hit, 200.0, 10.0).expect("drag intent");
+        let (press, start_drag) = intent_for_hit(&hit, 200.0, 10.0)
+            .expect("slider fixture point is inside its press hit");
+        let drag = drag_intent_for_hit(&hit, 200.0, 10.0)
+            .expect("slider fixture point is inside its drag hit");
 
         assert!(start_drag);
         assert_set_thickness(press.0, 15.0);
@@ -545,8 +598,10 @@ mod tests {
     fn slider_pointer_mapping_clamps_to_hit_rect() {
         let hit = thickness_slider();
 
-        let (left, _) = intent_for_hit(&hit, 100.0, 10.0).expect("left intent");
-        let (right, _) = intent_for_hit(&hit, 300.0, 10.0).expect("right intent");
+        let (left, _) =
+            intent_for_hit(&hit, 100.0, 10.0).expect("slider fixture includes its left boundary");
+        let (right, _) =
+            intent_for_hit(&hit, 300.0, 10.0).expect("slider fixture includes its right boundary");
 
         assert_set_thickness(left.0, 10.0);
         assert_set_thickness(right.0, 20.0);
@@ -568,28 +623,22 @@ mod tests {
             tooltip: None,
         };
 
-        let (intent, start_drag) = intent_for_hit(&hit, 200.0, 90.0).expect("press intent");
+        let (intent, start_drag) = intent_for_hit(&hit, 200.0, 90.0)
+            .expect("saturation-value fixture point is inside its hit");
         assert!(start_drag);
-        match intent.0 {
-            ToolbarEvent::SetColorHsv { h, s, v } => {
-                assert!((h - 0.5).abs() < 1e-9);
-                assert!((s - 0.5).abs() < 1e-9);
-                assert!((v - 0.5).abs() < 1e-9);
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
+        let (h, s, v) = hsv_components(intent.0);
+        assert!((h - 0.5).abs() < 1e-9);
+        assert!((s - 0.5).abs() < 1e-9);
+        assert!((v - 0.5).abs() < 1e-9);
 
         // The top-right corner is full saturation and value; the mapping
         // derives from the hit rect itself, not an embedded payload rect.
-        let drag = drag_intent_for_hit(&hit, 300.0, 50.0).expect("drag intent");
-        match drag.0 {
-            ToolbarEvent::SetColorHsv { h, s, v } => {
-                assert!((h - 0.5).abs() < 1e-9);
-                assert!((s - 1.0).abs() < 1e-9);
-                assert!((v - 1.0).abs() < 1e-9);
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
+        let drag = drag_intent_for_hit(&hit, 300.0, 50.0)
+            .expect("saturation-value fixture includes its top-right corner");
+        let (h, s, v) = hsv_components(drag.0);
+        assert!((h - 0.5).abs() < 1e-9);
+        assert!((s - 1.0).abs() < 1e-9);
+        assert!((v - 1.0).abs() < 1e-9);
     }
 
     #[test]
@@ -609,16 +658,13 @@ mod tests {
             tooltip: None,
         };
 
-        let (intent, start_drag) = intent_for_hit(&hit, 150.0, 157.0).expect("press intent");
+        let (intent, start_drag) =
+            intent_for_hit(&hit, 150.0, 157.0).expect("hue fixture point is inside its hit");
         assert!(start_drag);
-        match intent.0 {
-            ToolbarEvent::SetColorHsv { h, s, v } => {
-                assert!((h - 0.25).abs() < 1e-9);
-                assert!((s - 0.25).abs() < 1e-9);
-                assert!((v - 0.75).abs() < 1e-9);
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
+        let (h, s, v) = hsv_components(intent.0);
+        assert!((h - 0.25).abs() < 1e-9);
+        assert!((s - 0.25).abs() < 1e-9);
+        assert!((v - 0.75).abs() < 1e-9);
     }
 
     #[test]

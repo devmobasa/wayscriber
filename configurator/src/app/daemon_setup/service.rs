@@ -19,7 +19,10 @@ use super::command::{command_available, find_in_path, run_command, run_command_c
 
 pub(super) const SERVICE_NAME: &str = USER_SERVICE_NAME;
 
-pub(super) fn detect_service_unit_path(systemctl_available: bool) -> Option<PathBuf> {
+pub(super) fn detect_service_unit_path(
+    systemctl_available: bool,
+    paths: &wayscriber::paths::PathResolver,
+) -> Option<PathBuf> {
     if systemctl_available {
         let capture = run_command(
             "systemctl",
@@ -40,7 +43,7 @@ pub(super) fn detect_service_unit_path(systemctl_available: bool) -> Option<Path
         }
     }
 
-    if let Some(path) = user_service_unit_path()
+    if let Ok(path) = user_service_unit_path(paths)
         && path.exists()
     {
         return Some(path);
@@ -87,20 +90,24 @@ pub(super) fn run_systemctl_user(args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn user_service_unit_path() -> Option<PathBuf> {
-    shared_user_service_unit_path()
+pub(super) fn user_service_unit_path(
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<PathBuf, String> {
+    shared_user_service_unit_path(paths).map_err(|error| error.to_string())
 }
 
-pub(super) fn portal_shortcut_dropin_path() -> Option<PathBuf> {
-    shared_portal_shortcut_dropin_path()
+pub(super) fn portal_shortcut_dropin_path(
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<PathBuf, String> {
+    shared_portal_shortcut_dropin_path(paths).map_err(|error| error.to_string())
 }
 
-pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
+pub(super) fn install_or_update_user_service(
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<PathBuf, String> {
     let binary_path = resolve_wayscriber_binary_path()?;
 
-    let service_path = user_service_unit_path().ok_or_else(|| {
-        "Cannot resolve home directory; failed to determine user systemd service path.".to_string()
-    })?;
+    let service_path = user_service_unit_path(paths)?;
     let service_dir = service_path
         .parent()
         .ok_or_else(|| "Invalid user service path".to_string())?;
@@ -133,20 +140,27 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     Ok(service_path)
 }
 
-pub(super) fn detect_managed_daemon_portal_runtime_supported() -> bool {
-    managed_daemon_runtime_capabilities()
+pub(super) fn detect_managed_daemon_portal_runtime_supported(
+    paths: &wayscriber::paths::PathResolver,
+) -> bool {
+    managed_daemon_runtime_capabilities(paths)
         .map(|capabilities| capabilities.portal)
         .unwrap_or(false)
 }
 
-fn managed_daemon_runtime_capabilities() -> Result<RuntimeCapabilities, String> {
+fn managed_daemon_runtime_capabilities(
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<RuntimeCapabilities, String> {
     let binary_path = explicit_wayscriber_binary_path()
-        .or_else(|| detect_installed_service_binary_path(command_available("systemctl")))
+        .or_else(|| detect_installed_service_binary_path(command_available("systemctl"), paths))
         .map_or_else(resolve_wayscriber_binary_path, Ok)?;
     query_wayscriber_runtime_capabilities(&binary_path)
 }
 
-fn detect_installed_service_binary_path(systemctl_available: bool) -> Option<PathBuf> {
+fn detect_installed_service_binary_path(
+    systemctl_available: bool,
+    paths: &wayscriber::paths::PathResolver,
+) -> Option<PathBuf> {
     if systemctl_available
         && let Ok(capture) = run_command(
             "systemctl",
@@ -164,7 +178,7 @@ fn detect_installed_service_binary_path(systemctl_available: bool) -> Option<Pat
         return Some(path);
     }
 
-    detect_service_unit_path(systemctl_available)
+    detect_service_unit_path(systemctl_available, paths)
         .and_then(|path| fs::read_to_string(path).ok())
         .and_then(|content| parse_service_exec_start_path(&content))
 }
@@ -268,17 +282,18 @@ fn query_wayscriber_runtime_capabilities(
 
 pub(super) fn remove_portal_shortcut_dropin_if_gnome(
     desktop: DesktopEnvironment,
+    paths: &wayscriber::paths::PathResolver,
 ) -> Result<bool, String> {
     if desktop != DesktopEnvironment::Gnome {
         return Ok(false);
     }
-    remove_portal_shortcut_dropin()
+    remove_portal_shortcut_dropin(paths)
 }
 
-pub(super) fn remove_portal_shortcut_dropin() -> Result<bool, String> {
-    let Some(path) = portal_shortcut_dropin_path() else {
-        return Ok(false);
-    };
+pub(super) fn remove_portal_shortcut_dropin(
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<bool, String> {
+    let path = portal_shortcut_dropin_path(paths)?;
     if !path.exists() {
         return Ok(false);
     }

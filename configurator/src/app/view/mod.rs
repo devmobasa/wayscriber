@@ -15,12 +15,10 @@ pub(crate) mod theme;
 mod ui;
 mod widgets;
 
-use iced::widget::{Column, Row, Space, button, column, container, row, rule, text, text_input};
-use iced::{Element, Length};
-use wayscriber::config::Config;
-
 use crate::messages::Message;
 use crate::models::TabId;
+use iced::widget::{Column, Row, Space, button, column, container, row, rule, text, text_input};
+use iced::{Element, Length};
 
 use self::widgets::{default_label_color, feedback_text};
 use super::search::{AppSearchSummary, SEARCH_INPUT_ID, TabSearchSummary};
@@ -100,9 +98,9 @@ impl ConfiguratorApp {
             );
         }
 
-        toolbar = if self.is_saving {
+        toolbar = if self.base_document.is_saving() {
             toolbar.push(text("Saving...").size(16))
-        } else if self.is_loading {
+        } else if self.base_document.is_loading() {
             toolbar.push(text("Loading...").size(16))
         } else if self.is_dirty {
             toolbar.push(
@@ -202,9 +200,9 @@ impl ConfiguratorApp {
 
         let config_path = self
             .base_document
-            .as_ref()
-            .map(|document| document.source_path().to_path_buf())
-            .or_else(|| Config::get_config_path().ok());
+            .source_path()
+            .map(|path| path.to_path_buf())
+            .or_else(|| self.path_resolver.config_file().ok());
         if let Some(path) = config_path {
             info = info.push(text(format!("Config path: {}", path.display())).size(14));
         }

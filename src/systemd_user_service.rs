@@ -1,16 +1,20 @@
 use std::path::{Path, PathBuf};
 
 use crate::env_vars::{PATH_ENV, WAYLAND_DISPLAY_ENV, XDG_RUNTIME_DIR_ENV};
-use crate::paths::config_dir;
+use crate::paths::{PathResolutionError, PathResolver};
 
 pub const USER_SERVICE_NAME: &str = "wayscriber.service";
 
-pub fn user_service_unit_path() -> Option<PathBuf> {
-    config_dir().map(|root| user_service_unit_path_from_config_root(&root))
+pub fn user_service_unit_path(paths: &PathResolver) -> Result<PathBuf, PathResolutionError> {
+    paths
+        .config_dir()
+        .map(|root| user_service_unit_path_from_config_root(&root))
 }
 
-pub fn portal_shortcut_dropin_path() -> Option<PathBuf> {
-    config_dir().map(|root| portal_shortcut_dropin_path_from_config_root(&root))
+pub fn portal_shortcut_dropin_path(paths: &PathResolver) -> Result<PathBuf, PathResolutionError> {
+    paths
+        .config_dir()
+        .map(|root| portal_shortcut_dropin_path_from_config_root(&root))
 }
 
 pub fn user_service_unit_path_from_config_root(config_root: &Path) -> PathBuf {

@@ -21,16 +21,21 @@ use super::service::{
 const PORTAL_APP_ID: &str = "wayscriber";
 const GNOME_SHORTCUT_NAME: &str = "Wayscriber Toggle";
 
-pub(super) fn read_configured_shortcut(backend: ShortcutBackend) -> Option<String> {
+pub(super) fn read_configured_shortcut(
+    backend: ShortcutBackend,
+    paths: &wayscriber::paths::PathResolver,
+) -> Option<String> {
     match backend {
         ShortcutBackend::GnomeCustomShortcut => read_gnome_shortcut_binding(),
-        ShortcutBackend::PortalServiceDropIn => read_portal_shortcut_from_dropin(),
+        ShortcutBackend::PortalServiceDropIn => read_portal_shortcut_from_dropin(paths),
         ShortcutBackend::Manual => None,
     }
 }
 
-pub(super) fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
-    let Some(path) = portal_shortcut_dropin_path() else {
+pub(super) fn read_portal_shortcut_dropin_state(
+    paths: &wayscriber::paths::PathResolver,
+) -> PortalShortcutDropInState {
+    let Ok(path) = portal_shortcut_dropin_path(paths) else {
         return PortalShortcutDropInState::default();
     };
     let Ok(content) = fs::read_to_string(path) else {
@@ -39,20 +44,23 @@ pub(super) fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
     parse_portal_shortcut_dropin_state(&content)
 }
 
-pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
+pub(super) fn apply_shortcut(
+    shortcut_input: &str,
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<String, String> {
     let desktop = DesktopEnvironment::detect_current();
     let apply_capability = ShortcutApplyCapability::from_environment(
         desktop,
         command_available("gsettings"),
         command_available("systemctl"),
-        detect_managed_daemon_portal_runtime_supported(),
+        detect_managed_daemon_portal_runtime_supported(paths),
     );
 
     match apply_capability {
         ShortcutApplyCapability::GnomeCustomShortcut => {
             let normalized = normalize_shortcut_for_gnome(shortcut_input)?;
             apply_gnome_custom_shortcut(&normalized)?;
-            let removed_dropin = remove_portal_shortcut_dropin_if_gnome(desktop)?;
+            let removed_dropin = remove_portal_shortcut_dropin_if_gnome(desktop, paths)?;
             if command_available("systemctl") {
                 run_systemctl_user(&["daemon-reload"])?;
                 if removed_dropin && query_service_active() {
@@ -64,7 +72,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
         ShortcutApplyCapability::PortalServiceDropIn => {
             require_systemctl_available()?;
             let normalized = normalize_shortcut_for_portal(shortcut_input)?;
-            let dropin_path = write_portal_shortcut_dropin(&normalized)?;
+            let dropin_path = write_portal_shortcut_dropin(&normalized, paths)?;
             run_systemctl_user(&["daemon-reload"])?;
             if query_service_active() {
                 run_systemctl_user(&["restart", "wayscriber.service"])?;
@@ -174,10 +182,11 @@ fn run_gsettings_command(args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, String> {
-    let dropin_path = portal_shortcut_dropin_path().ok_or_else(|| {
-        "Cannot resolve home directory; failed to determine systemd drop-in path.".to_string()
-    })?;
+fn write_portal_shortcut_dropin(
+    shortcut: &str,
+    paths: &wayscriber::paths::PathResolver,
+) -> Result<std::path::PathBuf, String> {
+    let dropin_path = portal_shortcut_dropin_path(paths)?;
     let dropin_dir = dropin_path
         .parent()
         .ok_or_else(|| "Invalid drop-in path".to_string())?;
@@ -213,8 +222,8 @@ fn render_portal_shortcut_dropin(escaped_shortcut: &str, escaped_app_id: &str) -
     )
 }
 
-fn read_portal_shortcut_from_dropin() -> Option<String> {
-    let path = portal_shortcut_dropin_path()?;
+fn read_portal_shortcut_from_dropin(paths: &wayscriber::paths::PathResolver) -> Option<String> {
+    let path = portal_shortcut_dropin_path(paths).ok()?;
     let content = fs::read_to_string(path).ok()?;
     parse_portal_shortcut_from_dropin(&content)
 }

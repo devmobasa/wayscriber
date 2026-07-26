@@ -10,8 +10,7 @@ use super::super::wire::{
     bounded_reason, validate_id,
 };
 use super::layout::{
-    bump_revision, command_root, control_path, flock, lock_until, open_lock, read_control, unlock,
-    write_control,
+    bump_revision, control_path, flock, lock_until, open_lock, read_control, unlock, write_control,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,19 +21,21 @@ pub(in crate::daemon::protocol_v2) enum CommandActionClaim {
 }
 
 pub(in crate::daemon::protocol_v2) fn try_claim_command_action(
+    command_root: &std::path::Path,
     command_identity: &str,
     action: &PreparedAction,
 ) -> Result<Option<CommandActionClaim>> {
-    claim_command_action_inner(command_identity, action, true)
+    claim_command_action_inner(command_root, command_identity, action, true)
 }
 
 fn claim_command_action_inner(
+    command_root: &std::path::Path,
     command_identity: &str,
     action: &PreparedAction,
     nonblocking: bool,
 ) -> Result<Option<CommandActionClaim>> {
     validate_id(command_identity)?;
-    let path = control_path(&command_root(), command_identity);
+    let path = control_path(command_root, command_identity);
     let decision = open_lock(&path.join("decision.lock"), false)?;
     if nonblocking {
         match flock(&decision, libc::LOCK_EX | libc::LOCK_NB) {
@@ -138,6 +139,7 @@ pub(in crate::daemon::protocol_v2) enum CommandActionResult {
 }
 
 pub(in crate::daemon::protocol_v2) fn finish_command_action(
+    command_root: &std::path::Path,
     command_identity: &str,
     action: &PreparedAction,
     applied: bool,
@@ -148,7 +150,14 @@ pub(in crate::daemon::protocol_v2) fn finish_command_action(
     } else {
         CommandActionResult::NoEffect
     };
-    if finish_command_action_inner(command_identity, action, result, reason, false)? {
+    if finish_command_action_inner(
+        command_root,
+        command_identity,
+        action,
+        result,
+        reason,
+        false,
+    )? {
         Ok(())
     } else {
         bail!("blocking command-action finish unexpectedly deferred")
@@ -156,20 +165,23 @@ pub(in crate::daemon::protocol_v2) fn finish_command_action(
 }
 
 pub(in crate::daemon::protocol_v2) fn try_finish_command_action(
+    command_root: &std::path::Path,
     command_identity: &str,
     action: &PreparedAction,
     result: CommandActionResult,
     reason: Option<&str>,
 ) -> Result<bool> {
-    finish_command_action_inner(command_identity, action, result, reason, true)
+    finish_command_action_inner(command_root, command_identity, action, result, reason, true)
 }
 
 pub(in crate::daemon::protocol_v2) fn finish_command_action_indeterminate(
+    command_root: &std::path::Path,
     command_identity: &str,
     action: &PreparedAction,
     reason: &str,
 ) -> Result<()> {
     if finish_command_action_inner(
+        command_root,
         command_identity,
         action,
         CommandActionResult::Indeterminate,
@@ -183,6 +195,7 @@ pub(in crate::daemon::protocol_v2) fn finish_command_action_indeterminate(
 }
 
 fn finish_command_action_inner(
+    command_root: &std::path::Path,
     command_identity: &str,
     action: &PreparedAction,
     result: CommandActionResult,
@@ -190,7 +203,7 @@ fn finish_command_action_inner(
     nonblocking: bool,
 ) -> Result<bool> {
     validate_id(command_identity)?;
-    let path = control_path(&command_root(), command_identity);
+    let path = control_path(command_root, command_identity);
     let decision = open_lock(&path.join("decision.lock"), false)?;
     if nonblocking {
         match flock(&decision, libc::LOCK_EX | libc::LOCK_NB) {

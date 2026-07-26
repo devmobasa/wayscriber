@@ -13,13 +13,13 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
         surface: &wl_surface::WlSurface,
     ) {
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "lock_pointer_for_drag: inline_active={}, locked={}, surface={}",
             self.inline_toolbars_active(),
             self.pointer_lock_active(),
             surface_id(surface)
         ));
-        if !toolbar_pointer_lock_enabled() {
+        if !self.runtime_options.toolbar_pointer_lock() {
             log::info!("skip pointer lock: disabled via {TOOLBAR_POINTER_LOCK_ENV}");
             return;
         }
@@ -45,7 +45,7 @@ impl WaylandState {
         ) {
             Ok(lp) => {
                 self.locked_pointer = Some(lp);
-                drag_log(format!(
+                self.runtime_options.drag_log(format!(
                     "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
                     self.current_seat_id(),
                     surface_id(surface),
@@ -73,7 +73,8 @@ impl WaylandState {
         {
             Ok(rp) => {
                 self.relative_pointer = Some(rp);
-                drag_log("relative pointer bound for drag");
+                self.runtime_options
+                    .drag_log("relative pointer bound for drag");
             }
             Err(err) => {
                 warn!("Failed to obtain relative pointer for drag: {}", err);
@@ -85,7 +86,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn unlock_pointer(&mut self) {
         if self.locked_pointer.is_some() || self.relative_pointer.is_some() {
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "unlock pointer: locked={}, relative={}",
                 self.locked_pointer.is_some(),
                 self.relative_pointer.is_some()

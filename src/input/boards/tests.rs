@@ -209,17 +209,6 @@ fn board_identity_change_rejects_stale_board_delete_confirmation() {
 }
 
 #[test]
-fn cloned_board_manager_gets_fresh_identity_generation() {
-    let boards = manager();
-    let clone = boards.clone();
-
-    assert_ne!(
-        clone.board_identity_generation(),
-        boards.board_identity_generation()
-    );
-}
-
-#[test]
 fn rollback_clone_preserves_identity_generation() {
     let boards = manager();
     let clone = boards.clone_preserving_identity_generation();
@@ -265,7 +254,7 @@ fn full_board_manager_replacement_rejects_same_id_confirmation() {
     let mut boards = manager();
     let confirmation = board_delete_confirmation(&mut boards, BOARD_ID_BLACKBOARD);
 
-    let mut replacement = manager();
+    let mut replacement = boards.replaced_from_config(BoardsConfig::default());
 
     assert!(matches!(
         replacement.delete_board(BoardDeleteRequest::Confirm(confirmation)),

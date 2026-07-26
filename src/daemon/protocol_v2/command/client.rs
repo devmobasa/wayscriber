@@ -14,24 +14,28 @@ use super::super::wire::{
 };
 use super::super::{BootClock, BootIdentity, NamespaceIdentity};
 use super::layout::{
-    admission_lock, allocate_order, bump_revision, command_root, control_path,
-    create_private_directory, creating_dir, ensure_capacity, lock_until, open_lock, prepare_layout,
-    queue_path, read_control, try_lock_until, unlock, validate_root_shape, write_control,
-    write_record,
+    admission_lock, allocate_order, bump_revision, control_path, create_private_directory,
+    creating_dir, ensure_capacity, lock_until, open_lock, prepare_layout, queue_path, read_control,
+    try_lock_until, unlock, validate_root_shape, write_control, write_record,
 };
 use super::{AUTHORIZATION_WINDOW, ClientCommand, RESPONSE_WINDOW, TerminalCommandResult};
 
 impl ClientCommand {
-    pub(crate) fn publish(request: &DaemonRequestV2, daemon_token: &str) -> Result<Self> {
-        Self::publish_with_final_control_write(request, daemon_token, write_control)
+    pub(crate) fn publish(
+        request: &DaemonRequestV2,
+        daemon_token: &str,
+        root: &std::path::Path,
+    ) -> Result<Self> {
+        Self::publish_with_final_control_write(request, daemon_token, root, write_control)
     }
 
     #[cfg(test)]
     pub(crate) fn publish_with_final_control_failure(
         request: &DaemonRequestV2,
         daemon_token: &str,
+        root: &std::path::Path,
     ) -> Result<Self> {
-        Self::publish_with_final_control_write(request, daemon_token, |_path, _control| {
+        Self::publish_with_final_control_write(request, daemon_token, root, |_path, _control| {
             Err(anyhow!("injected final control write failure"))
         })
     }
@@ -39,6 +43,7 @@ impl ClientCommand {
     fn publish_with_final_control_write(
         request: &DaemonRequestV2,
         daemon_token: &str,
+        root: &std::path::Path,
         final_control_write: impl FnOnce(
             &std::path::Path,
             &super::super::wire::CommandControl,
@@ -46,21 +51,20 @@ impl ClientCommand {
     ) -> Result<Self> {
         request.validate()?;
         validate_token(daemon_token)?;
-        let root = command_root();
-        prepare_layout(&root)?;
+        prepare_layout(root)?;
         let now = BootClock::now()?;
         let authorization_deadline = now.checked_add(AUTHORIZATION_WINDOW)?;
         let response_deadline = now.checked_add(RESPONSE_WINDOW)?;
-        let admission = admission_lock(&root, authorization_deadline)?;
-        validate_root_shape(&root)?;
-        ensure_capacity(&root)?;
+        let admission = admission_lock(root, authorization_deadline)?;
+        validate_root_shape(root)?;
+        ensure_capacity(root)?;
 
-        let order = allocate_order(&root)?;
+        let order = allocate_order(root)?;
         let identity = fresh_id()?;
         let caller_nonce = fresh_id()?;
         let boot_id = BootIdentity::read()?.as_str().to_owned();
         let stage =
-            creating_dir(&root).join(format!("{boot_id}-{:016x}-{identity}", now.as_nanos()));
+            creating_dir(root).join(format!("{boot_id}-{:016x}-{identity}", now.as_nanos()));
         create_private_directory(&stage)?;
         let decision_lock = open_lock(&stage.join("decision.lock"), true)?;
         let caller_lease = open_lock(&stage.join("caller.lease"), true)?;
@@ -99,7 +103,7 @@ impl ClientCommand {
             caller_disposition: CallerDisposition::Waiting,
         };
         write_control(&stage, &control)?;
-        let published_control = control_path(&root, &identity);
+        let published_control = control_path(root, &identity);
         fs::rename(&stage, &published_control).with_context(|| {
             format!(
                 "failed to publish command control {}",
@@ -114,7 +118,7 @@ impl ClientCommand {
             target_daemon_token: daemon_token.to_owned(),
         };
         write_record(
-            &queue_path(&root, order, &identity),
+            &queue_path(root, order, &identity),
             &reference,
             MAX_QUEUE_REFERENCE_BYTES,
         )?;

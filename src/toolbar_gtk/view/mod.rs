@@ -2,7 +2,7 @@
 //! stylesheet, and output pinning.
 
 mod capture_suppression;
-mod drag;
+pub(super) mod drag;
 mod sections;
 mod side_bar;
 mod top_bar;
@@ -15,7 +15,7 @@ use super::{GtkToolbarFeedback, GtkToolbarKind, GtkToolbarUpdate};
 use crate::ui::toolbar::ToolbarSnapshot;
 
 /// Closure applying one control's state from a fresh snapshot.
-pub(super) type Updater = Box<dyn Fn(&ToolbarSnapshot)>;
+pub(super) type Updater = Box<dyn FnMut(&ToolbarSnapshot)>;
 
 const CAPTURE_SURFACE_CONTENT_CLASS: &str = "wayscriber-capture-surface-content";
 
@@ -127,7 +127,6 @@ pub(super) fn set_visual_hidden(
 pub(super) struct CaptureSurfaceContent {
     root: gtk4::Overlay,
     proof: gtk4::Picture,
-    proof_serial: std::rc::Rc<std::cell::Cell<u8>>,
 }
 
 impl CaptureSurfaceContent {
@@ -151,11 +150,7 @@ impl CaptureSurfaceContent {
         root.add_css_class(CAPTURE_SURFACE_CONTENT_CLASS);
         root.add_overlay(&proof);
 
-        Self {
-            root,
-            proof,
-            proof_serial: std::rc::Rc::new(std::cell::Cell::new(0)),
-        }
+        Self { root, proof }
     }
 
     fn new<W>(content: &W) -> Self
@@ -199,15 +194,19 @@ impl CaptureSurfaceContent {
     /// surface's dedicated proof render with the transparency change that
     /// another native surface already presented.
     fn refresh_transparent_proof(&self) {
-        let serial = self.proof_serial.get().wrapping_add(1);
-        self.proof_serial.set(serial);
+        let alternate = !self.proof.has_css_class("wayscriber-proof-alternate");
+        if alternate {
+            self.proof.add_css_class("wayscriber-proof-alternate");
+        } else {
+            self.proof.remove_css_class("wayscriber-proof-alternate");
+        }
         // Both variants remain fully transparent. Alternating hidden RGB and
         // allocating a new texture changes the render node identity without
         // contributing a visible pixel to the capture.
-        let bytes = if serial & 1 == 0 {
-            [0xff, 0x00, 0xff, 0x00]
-        } else {
+        let bytes = if alternate {
             [0x00, 0xff, 0xff, 0x00]
+        } else {
+            [0xff, 0x00, 0xff, 0x00]
         };
         let bytes = gtk4::glib::Bytes::from_owned(bytes);
         let texture =
@@ -230,7 +229,7 @@ impl CaptureSurfaceContent {
 
     #[cfg(test)]
     fn proof_serial(&self) -> u8 {
-        self.proof_serial.get()
+        u8::from(self.proof.has_css_class("wayscriber-proof-alternate"))
     }
 }
 
@@ -240,13 +239,19 @@ struct CaptureProofTarget {
     widget: gtk4::Widget,
     content: CaptureSurfaceContent,
     lifetime: CaptureProofLifetime,
-    on_withdrawn: Option<std::rc::Rc<dyn Fn()>>,
+    withdrawal: Option<CaptureProofWithdrawal>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CaptureProofLifetime {
     Required,
     WhileMapped,
+}
+
+#[derive(Clone, Copy)]
+enum CaptureProofWithdrawal {
+    RemoveContentClass(&'static str),
+    RemoveWidgetClass(&'static str),
 }
 
 impl CaptureProofTarget {
@@ -259,7 +264,7 @@ impl CaptureProofTarget {
             widget: widget.clone().upcast(),
             content: content.clone(),
             lifetime: CaptureProofLifetime::Required,
-            on_withdrawn: None,
+            withdrawal: None,
         }
     }
 
@@ -272,26 +277,25 @@ impl CaptureProofTarget {
             widget: widget.clone().upcast(),
             content: content.clone(),
             lifetime: CaptureProofLifetime::WhileMapped,
-            on_withdrawn: None,
+            withdrawal: None,
         }
     }
 
-    fn new_withdrawable_with_callback<W, F>(
+    fn new_withdrawable_with_cleanup<W>(
         name: &'static str,
         widget: &W,
         content: &CaptureSurfaceContent,
-        on_withdrawn: F,
+        withdrawal: CaptureProofWithdrawal,
     ) -> Self
     where
         W: IsA<gtk4::Widget>,
-        F: Fn() + 'static,
     {
         Self {
             name,
             widget: widget.clone().upcast(),
             content: content.clone(),
             lifetime: CaptureProofLifetime::WhileMapped,
-            on_withdrawn: Some(std::rc::Rc::new(on_withdrawn)),
+            withdrawal: Some(withdrawal),
         }
     }
 
@@ -304,8 +308,14 @@ impl CaptureProofTarget {
     }
 
     fn mark_withdrawn(&self) {
-        if let Some(on_withdrawn) = self.on_withdrawn.as_ref() {
-            on_withdrawn();
+        match self.withdrawal {
+            Some(CaptureProofWithdrawal::RemoveContentClass(class)) => {
+                self.content.root.remove_css_class(class);
+            }
+            Some(CaptureProofWithdrawal::RemoveWidgetClass(class)) => {
+                self.widget.remove_css_class(class);
+            }
+            None => {}
         }
     }
 
@@ -374,42 +384,38 @@ fn set_surface_input_enabled(window: &gtk4::Window, enabled: bool) {
     window.queue_draw();
 }
 
-/// Run a callback only after GTK has painted the pending surface changes.
-/// The drag preview lives on another Wayland connection, so sending its start
-/// before this point can briefly show both the parked bar and its preview.
-pub(super) fn after_next_surface_paint<W, F>(widget: &W, callback: F)
-where
-    W: IsA<gtk4::Widget>,
-    F: FnOnce() + 'static,
-{
-    after_next_surface_paint_counter(widget, move |_| callback());
+struct PaintSignalGuard {
+    frame_clock: gtk4::gdk::FrameClock,
+    handler: Option<gtk4::glib::SignalHandlerId>,
 }
 
-fn after_next_surface_paint_counter<W, F>(widget: &W, callback: F)
+impl Drop for PaintSignalGuard {
+    fn drop(&mut self) {
+        if let Some(handler) = self.handler.take() {
+            self.frame_clock.disconnect(handler);
+        }
+    }
+}
+
+/// Resolve only after GTK has painted the pending surface changes. The
+/// disconnect guard owns the signal lifetime, while the callback can only
+/// publish a bounded frame counter; no callback-owned mutable state is shared.
+async fn after_next_surface_paint_counter<W>(widget: &W) -> Option<i64>
 where
     W: IsA<gtk4::Widget>,
-    F: FnOnce(Option<i64>) + 'static,
 {
-    let Some(frame_clock) = widget.frame_clock() else {
-        callback(None);
-        return;
-    };
-    let callback = std::rc::Rc::new(std::cell::RefCell::new(Some(callback)));
-    let handler = std::rc::Rc::new(std::cell::RefCell::new(None));
-    let callback_slot = callback.clone();
-    let handler_slot = handler.clone();
-    let callback_clock = frame_clock.clone();
-    let handler_id = frame_clock.connect_after_paint(move |clock| {
-        if let Some(handler_id) = handler_slot.borrow_mut().take() {
-            callback_clock.disconnect(handler_id);
-        }
-        if let Some(callback) = callback_slot.borrow_mut().take() {
-            callback(Some(clock.frame_counter()));
-        }
+    let frame_clock = widget.frame_clock()?;
+    let (painted_tx, mut painted_rx) = tokio::sync::mpsc::channel(1);
+    let handler = frame_clock.connect_after_paint(move |clock| {
+        let _ = painted_tx.try_send(clock.frame_counter());
     });
-    *handler.borrow_mut() = Some(handler_id);
+    let _guard = PaintSignalGuard {
+        frame_clock: frame_clock.clone(),
+        handler: Some(handler),
+    };
     widget.queue_draw();
     frame_clock.request_phase(gtk4::gdk::FrameClockPhase::PAINT);
+    painted_rx.recv().await
 }
 
 pub(super) struct Windows {
@@ -424,7 +430,7 @@ pub(super) struct Windows {
 }
 
 impl Windows {
-    pub(super) fn new(feedback: FeedbackSender) -> Self {
+    pub(super) fn new(feedback: FeedbackSender, intents: drag::ViewIntentSender) -> Self {
         let css_provider = gtk4::CssProvider::new();
         css_provider.load_from_string(&super::css::stylesheet(1.0));
         if let Some(display) = gtk4::gdk::Display::default() {
@@ -435,9 +441,9 @@ impl Windows {
             );
         }
         Self {
-            top: top_bar::TopBar::new(feedback.clone()),
-            side: side_bar::SideBar::new(feedback.clone()),
-            tooltip_capture: capture_suppression::TooltipCapture::new(),
+            top: top_bar::TopBar::new(feedback.clone(), intents.clone()),
+            side: side_bar::SideBar::new(feedback.clone(), intents.clone()),
+            tooltip_capture: capture_suppression::TooltipCapture::new(intents.clone()),
             css_provider,
             css_scale_milli: 1000,
             pinned_output: None,
@@ -446,9 +452,21 @@ impl Windows {
         }
     }
 
+    pub(super) async fn handle_intent(&mut self, intent: drag::ViewIntent) -> Result<(), String> {
+        match intent {
+            drag::ViewIntent::Top(intent) => self.top.handle_drag_intent(intent).await,
+            drag::ViewIntent::Side(intent) => self.side.handle_drag_intent(intent).await,
+            drag::ViewIntent::Tooltip(intent) => {
+                self.tooltip_capture.handle_intent(intent);
+                Ok(())
+            }
+        }
+    }
+
     pub(super) async fn apply(&mut self, update: &GtkToolbarUpdate) -> Result<(), String> {
         self.feedback
-            .set_rebind_state(update.rebind_modifier, update.rebind_modifier_active);
+            .set_rebind_state(update.rebind_modifier, update.rebind_modifier_active)
+            .map_err(|()| "GTK feedback mailbox closed while applying an update".to_string())?;
         let capture_plan = self.capture_updates.plan(
             update.capture_suppressed,
             update.capture_suppression_generation,
@@ -540,7 +558,7 @@ impl Windows {
     }
 
     async fn wait_for_capture_paints(
-        &self,
+        &mut self,
         generation: u64,
         top_mapped: bool,
         side_mapped: bool,
@@ -563,7 +581,7 @@ impl Windows {
         Ok(())
     }
 
-    fn refresh_popup_capture_sources(&self) {
+    fn refresh_popup_capture_sources(&mut self) {
         for root in self.popup_capture_roots() {
             self.tooltip_capture.install_tree(&root);
         }

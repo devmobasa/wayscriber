@@ -19,8 +19,9 @@ impl Dispatch<wl_callback::WlCallback, MainSurfaceFrameCallback> for WaylandStat
         _conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        let wl_callback::Event::Done { callback_data } = event else {
-            unreachable!("wl_callback has no event other than done");
+        let callback_data = match event {
+            wl_callback::Event::Done { callback_data } => callback_data,
+            _ => return,
         };
         if !state.surface.is_surface(&data.surface) {
             return;

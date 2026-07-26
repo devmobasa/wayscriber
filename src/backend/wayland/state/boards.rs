@@ -10,7 +10,7 @@ impl WaylandState {
         update: PendingBoardConfigUpdate,
     ) {
         apply_board_config_update_to_config(&mut self.config, update);
-        if let Err(err) = self.config.save() {
+        if let Err(err) = self.config_store.save(&self.config) {
             log::warn!("Failed to save board config: {}", err);
         } else {
             self.refresh_runtime_ui_config_seeds();
@@ -165,7 +165,9 @@ fn apply_board_config_update_to_config(
     {
         config.boards = Some(config.resolved_boards());
     }
-    let boards = config.boards.as_mut().expect("resolved boards are present");
+    let Some(boards) = config.boards.as_mut() else {
+        return;
+    };
     let PendingBoardConfigUpdate {
         snapshot,
         structure_changed,

@@ -1,7 +1,5 @@
 use std::fmt;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use tokio::sync::mpsc;
 
@@ -20,7 +18,7 @@ use crate::capture::{
     },
 };
 
-type CompletionNotifier = Arc<dyn Fn() + Send + Sync + 'static>;
+type EventNotifier = Box<dyn Fn() + Send + 'static>;
 
 /// Monotonic identity for one accepted capture or delivery operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -85,14 +83,49 @@ pub enum CapturePoll {
     },
 }
 
+/// Ordered worker event observed by the thread that owns the capture manager.
+#[derive(Debug)]
+pub(crate) enum CaptureManagerEvent {
+    Idle,
+    Pending {
+        id: CaptureRequestId,
+        operation: ImageOperationKind,
+    },
+    Status {
+        id: CaptureRequestId,
+        operation: ImageOperationKind,
+        status: CaptureStatus,
+    },
+    Ready {
+        id: CaptureRequestId,
+        operation: ImageOperationKind,
+        outcome: CaptureOutcome,
+    },
+    WorkerFailed {
+        active_id: Option<CaptureRequestId>,
+        operation: Option<ImageOperationKind>,
+        error: String,
+    },
+}
+
 struct CaptureCommand {
     id: CaptureRequestId,
     request: CaptureManagerRequest,
 }
 
-struct CaptureCompletion {
-    id: CaptureRequestId,
-    outcome: CaptureOutcome,
+enum CaptureWorkerEvent {
+    Status {
+        id: CaptureRequestId,
+        operation: ImageOperationKind,
+        status: CaptureStatus,
+    },
+    Completed {
+        id: CaptureRequestId,
+        operation: ImageOperationKind,
+        status: CaptureStatus,
+        outcome: CaptureOutcome,
+    },
+    ExitedUnexpectedly,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -103,28 +136,28 @@ struct ActiveCapture {
 
 /// Unique owner for bounded, identified asynchronous capture operations.
 ///
-/// Production Wayland code installs a completion notifier backed by the shared
-/// runtime wake. Other callers may use [`CaptureManager::new`] and poll the
+/// Production Wayland code installs an event notifier backed by its runtime
+/// wake source. Other callers may use [`CaptureManager::new`] and poll the
 /// manager directly.
 pub struct CaptureManager {
     request_tx: Option<mpsc::Sender<CaptureCommand>>,
-    completion_rx: Receiver<CaptureCompletion>,
+    event_rx: Option<Receiver<CaptureWorkerEvent>>,
     active: Option<ActiveCapture>,
     next_id: Option<u64>,
     healthy: bool,
     terminal_reported: bool,
-    shutdown_requested: Arc<AtomicBool>,
+    status: CaptureStatus,
     worker: Option<tokio::task::JoinHandle<()>>,
-    status: Arc<tokio::sync::Mutex<CaptureStatus>>,
 }
 
 impl CaptureManager {
     /// Creates a manager whose owner polls completions directly.
+    #[cfg(test)]
     pub fn new(runtime_handle: &tokio::runtime::Handle) -> Self {
         Self::with_dependencies_and_notifier(
             runtime_handle,
             CaptureDependencies::default(),
-            Arc::new(|| {}),
+            Box::new(|| {}),
         )
     }
 
@@ -134,17 +167,18 @@ impl CaptureManager {
         runtime_handle: &tokio::runtime::Handle,
         dependencies: CaptureDependencies,
     ) -> Self {
-        Self::with_dependencies_and_notifier(runtime_handle, dependencies, Arc::new(|| {}))
+        Self::with_dependencies_and_notifier(runtime_handle, dependencies, Box::new(|| {}))
     }
 
-    pub(crate) fn with_completion_notifier(
+    pub(crate) fn with_event_notifier(
         runtime_handle: &tokio::runtime::Handle,
-        notifier: impl Fn() + Send + Sync + 'static,
+        process_broker: crate::process_broker::ProcessBrokerHandle,
+        notifier: impl Fn() + Send + 'static,
     ) -> Self {
         Self::with_dependencies_and_notifier(
             runtime_handle,
-            CaptureDependencies::default(),
-            Arc::new(notifier),
+            CaptureDependencies::production(process_broker),
+            Box::new(notifier),
         )
     }
 
@@ -152,39 +186,34 @@ impl CaptureManager {
     pub(crate) fn with_dependencies_and_test_notifier(
         runtime_handle: &tokio::runtime::Handle,
         dependencies: CaptureDependencies,
-        notifier: impl Fn() + Send + Sync + 'static,
+        notifier: impl Fn() + Send + 'static,
     ) -> Self {
-        Self::with_dependencies_and_notifier(runtime_handle, dependencies, Arc::new(notifier))
+        Self::with_dependencies_and_notifier(runtime_handle, dependencies, Box::new(notifier))
     }
 
     fn with_dependencies_and_notifier(
         runtime_handle: &tokio::runtime::Handle,
         dependencies: CaptureDependencies,
-        notifier: CompletionNotifier,
+        notifier: EventNotifier,
     ) -> Self {
         let (request_tx, request_rx) = mpsc::channel::<CaptureCommand>(1);
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-        let status = Arc::new(tokio::sync::Mutex::new(CaptureStatus::Idle));
-        let shutdown_requested = Arc::new(AtomicBool::new(false));
+        let (event_tx, event_rx) = std::sync::mpsc::channel();
         let worker = runtime_handle.spawn(run_capture_worker(
             request_rx,
-            completion_tx,
-            Arc::clone(&status),
-            Arc::new(dependencies),
+            event_tx,
+            dependencies,
             notifier,
-            Arc::clone(&shutdown_requested),
         ));
 
         Self {
             request_tx: Some(request_tx),
-            completion_rx,
+            event_rx: Some(event_rx),
             active: None,
             next_id: Some(1),
             healthy: true,
             terminal_reported: false,
-            shutdown_requested,
+            status: CaptureStatus::Idle,
             worker: Some(worker),
-            status,
         }
     }
 
@@ -266,57 +295,159 @@ impl CaptureManager {
         }
     }
 
+    /// Polls for a public completion while applying any preceding status events.
     pub fn poll(&mut self) -> CapturePoll {
-        let message = self.completion_rx.try_recv();
-        if self.shutdown_requested.load(Ordering::Acquire) || self.terminal_reported {
-            return CapturePoll::Idle;
+        loop {
+            match self.poll_event() {
+                CaptureManagerEvent::Idle => return CapturePoll::Idle,
+                CaptureManagerEvent::Pending { id, operation } => {
+                    return CapturePoll::Pending { id, operation };
+                }
+                CaptureManagerEvent::Status { .. } => {}
+                CaptureManagerEvent::Ready {
+                    id,
+                    operation,
+                    outcome,
+                } => {
+                    return CapturePoll::Ready {
+                        id,
+                        operation,
+                        outcome,
+                    };
+                }
+                CaptureManagerEvent::WorkerFailed {
+                    active_id,
+                    operation,
+                    error,
+                } => {
+                    return CapturePoll::WorkerFailed {
+                        active_id,
+                        operation,
+                        error,
+                    };
+                }
+            }
         }
-        match (self.active, message) {
-            (None, Err(TryRecvError::Empty)) => CapturePoll::Idle,
-            (Some(active), Err(TryRecvError::Empty)) => CapturePoll::Pending {
+    }
+
+    /// Polls the next ordered worker event on the manager-owning thread.
+    pub(crate) fn poll_event(&mut self) -> CaptureManagerEvent {
+        if self.terminal_reported {
+            return CaptureManagerEvent::Idle;
+        }
+        let Some(event_rx) = self.event_rx.as_ref() else {
+            return CaptureManagerEvent::Idle;
+        };
+        match (self.active, event_rx.try_recv()) {
+            (None, Err(TryRecvError::Empty)) => CaptureManagerEvent::Idle,
+            (Some(active), Err(TryRecvError::Empty)) => CaptureManagerEvent::Pending {
                 id: active.id,
                 operation: active.operation,
             },
             (active, Err(TryRecvError::Disconnected)) => {
                 self.terminal_reported = true;
-                self.healthy = false;
                 self.active = None;
-                CapturePoll::WorkerFailed {
+                self.disable_worker();
+                CaptureManagerEvent::WorkerFailed {
                     active_id: active.map(|active| active.id),
                     operation: active.map(|active| active.operation),
                     error: "capture worker exited unexpectedly".to_string(),
                 }
             }
-            (None, Ok(completion)) => {
-                let reason = format!(
-                    "capture completion {} arrived without an active request",
-                    completion.id
-                );
+            (active, Ok(CaptureWorkerEvent::ExitedUnexpectedly)) => {
+                self.terminal_reported = true;
+                self.active = None;
+                self.disable_worker();
+                CaptureManagerEvent::WorkerFailed {
+                    active_id: active.map(|capture| capture.id),
+                    operation: active.map(|capture| capture.operation),
+                    error: "capture worker exited unexpectedly".to_string(),
+                }
+            }
+            (
+                None,
+                Ok(CaptureWorkerEvent::Status {
+                    id,
+                    operation,
+                    status: _,
+                }),
+            )
+            | (
+                None,
+                Ok(CaptureWorkerEvent::Completed {
+                    id,
+                    operation,
+                    status: _,
+                    outcome: _,
+                }),
+            ) => {
+                let reason =
+                    format!("capture event {id} ({operation:?}) arrived without an active request");
                 self.terminal_reported = true;
                 self.disable_worker();
-                CapturePoll::WorkerFailed {
+                CaptureManagerEvent::WorkerFailed {
                     active_id: None,
                     operation: None,
                     error: reason,
                 }
             }
-            (Some(active), Ok(completion)) if completion.id == active.id => {
-                self.active = None;
-                CapturePoll::Ready {
-                    id: active.id,
-                    operation: active.operation,
-                    outcome: completion.outcome,
+            (
+                Some(active),
+                Ok(CaptureWorkerEvent::Status {
+                    id,
+                    operation,
+                    status,
+                }),
+            ) if id == active.id && operation == active.operation => {
+                self.status = status.clone();
+                CaptureManagerEvent::Status {
+                    id,
+                    operation,
+                    status,
                 }
             }
-            (Some(active), Ok(completion)) => {
+            (
+                Some(active),
+                Ok(CaptureWorkerEvent::Completed {
+                    id,
+                    operation,
+                    status,
+                    outcome,
+                }),
+            ) if id == active.id && operation == active.operation => {
+                self.active = None;
+                self.status = status;
+                CaptureManagerEvent::Ready {
+                    id,
+                    operation,
+                    outcome,
+                }
+            }
+            (
+                Some(active),
+                Ok(CaptureWorkerEvent::Status {
+                    id,
+                    operation,
+                    status: _,
+                }),
+            )
+            | (
+                Some(active),
+                Ok(CaptureWorkerEvent::Completed {
+                    id,
+                    operation,
+                    status: _,
+                    outcome: _,
+                }),
+            ) => {
                 let reason = format!(
-                    "capture completion identity {}, expected {}",
-                    completion.id, active.id
+                    "capture event identity {id} ({operation:?}), expected {} ({:?})",
+                    active.id, active.operation
                 );
                 self.active = None;
                 self.terminal_reported = true;
                 self.disable_worker();
-                CapturePoll::WorkerFailed {
+                CaptureManagerEvent::WorkerFailed {
                     active_id: Some(active.id),
                     operation: Some(active.operation),
                     error: reason,
@@ -332,15 +463,19 @@ impl CaptureManager {
         self.disable_worker();
     }
 
-    /// Gets the current informational capture status.
+    /// Returns the last informational status observed while this owner polled.
+    ///
+    /// Worker-side changes become visible here only after [`Self::poll`] (or the
+    /// application runtime's ordered event polling) applies the corresponding
+    /// event on the thread that owns this manager.
     pub async fn get_status(&self) -> CaptureStatus {
-        self.status.lock().await.clone()
+        self.status.clone()
     }
 
     /// Stops the owned worker without reporting normal teardown as failure.
     pub fn shutdown(&mut self) {
-        self.shutdown_requested.store(true, Ordering::Release);
         self.request_tx.take();
+        self.event_rx.take();
         if let Some(worker) = self.worker.take() {
             worker.abort();
         }
@@ -349,8 +484,8 @@ impl CaptureManager {
 
     fn disable_worker(&mut self) {
         self.healthy = false;
-        self.shutdown_requested.store(true, Ordering::Release);
         self.request_tx.take();
+        self.event_rx.take();
         if let Some(worker) = self.worker.take() {
             worker.abort();
         }
@@ -365,13 +500,11 @@ impl Drop for CaptureManager {
 
 async fn run_capture_worker(
     mut request_rx: mpsc::Receiver<CaptureCommand>,
-    completion_tx: SyncSender<CaptureCompletion>,
-    status: Arc<tokio::sync::Mutex<CaptureStatus>>,
-    dependencies: Arc<CaptureDependencies>,
-    notifier: CompletionNotifier,
-    shutdown_requested: Arc<AtomicBool>,
+    event_tx: Sender<CaptureWorkerEvent>,
+    mut dependencies: CaptureDependencies,
+    notifier: EventNotifier,
 ) {
-    let guard = CaptureWorkerExitGuard::new(completion_tx, notifier, shutdown_requested);
+    let mut reporter = CaptureWorkerReporter::new(event_tx, notifier);
     while let Some(command) = request_rx.recv().await {
         log::debug!(
             "Processing capture manager request {}: {:?}",
@@ -379,114 +512,119 @@ async fn run_capture_worker(
             command.request
         );
         let operation = command.request.operation();
-        *status.lock().await = CaptureStatus::AwaitingPermission;
+        if !reporter.publish(CaptureWorkerEvent::Status {
+            id: command.id,
+            operation,
+            status: CaptureStatus::AwaitingPermission,
+        }) {
+            reporter.finish();
+            return;
+        }
 
         let result = match command.request {
-            CaptureManagerRequest::Capture(request) => {
-                perform_capture(request, dependencies.clone())
-                    .await
-                    .map(CaptureManagerResult::Capture)
-            }
+            CaptureManagerRequest::Capture(request) => perform_capture(request, &mut dependencies)
+                .await
+                .map(CaptureManagerResult::Capture),
             CaptureManagerRequest::CaptureDesktopBackdrop(request) => {
-                capture_desktop_backdrop(request, dependencies.clone())
+                capture_desktop_backdrop(request, &mut dependencies)
                     .await
                     .map(CaptureManagerResult::DesktopBackdrop)
             }
             CaptureManagerRequest::DeliverImage(request) => {
-                deliver_image(request, dependencies.clone())
+                deliver_image(request, &mut dependencies)
                     .await
                     .map(CaptureManagerResult::Capture)
             }
             CaptureManagerRequest::DeliverDocument(request) => {
-                deliver_document(request, dependencies.clone())
+                deliver_document(request, &mut dependencies)
                     .await
                     .map(CaptureManagerResult::Capture)
             }
         };
-        let outcome = outcome_and_status(result, operation, &status).await;
-        if !guard.publish(CaptureCompletion {
+        let (status, outcome) = outcome_and_status(result, operation);
+        if !reporter.publish(CaptureWorkerEvent::Completed {
             id: command.id,
+            operation,
+            status,
             outcome,
         }) {
+            reporter.finish();
             return;
         }
     }
+    reporter.finish();
 }
 
-async fn outcome_and_status(
+fn outcome_and_status(
     result: Result<CaptureManagerResult, CaptureError>,
     operation: ImageOperationKind,
-    status: &tokio::sync::Mutex<CaptureStatus>,
-) -> CaptureOutcome {
+) -> (CaptureStatus, CaptureOutcome) {
     match result {
         Ok(CaptureManagerResult::Capture(result)) => {
             log::info!("Image operation successful: {:?}", result.saved_path);
-            *status.lock().await = CaptureStatus::Success;
-            CaptureOutcome::Success(result)
+            (CaptureStatus::Success, CaptureOutcome::Success(result))
         }
         Ok(CaptureManagerResult::DesktopBackdrop(result)) => {
             log::info!("Desktop backdrop capture successful");
-            *status.lock().await = CaptureStatus::Success;
-            CaptureOutcome::DesktopBackdropSuccess(result)
+            (
+                CaptureStatus::Success,
+                CaptureOutcome::DesktopBackdropSuccess(result),
+            )
         }
         Err(CaptureError::Cancelled(reason)) => {
             log::info!("Image operation cancelled: {reason}");
-            *status.lock().await = CaptureStatus::Cancelled(reason.clone());
-            CaptureOutcome::Cancelled { operation, reason }
+            (
+                CaptureStatus::Cancelled(reason.clone()),
+                CaptureOutcome::Cancelled { operation, reason },
+            )
         }
         Err(error) => {
             let message = operation.format_error(&error);
             log::error!("Image operation failed: {message}");
-            *status.lock().await = CaptureStatus::Failed(message.clone());
-            CaptureOutcome::Failed { operation, message }
+            (
+                CaptureStatus::Failed(message.clone()),
+                CaptureOutcome::Failed { operation, message },
+            )
         }
     }
 }
 
-struct CaptureWorkerExitGuard {
-    completion_tx: Option<SyncSender<CaptureCompletion>>,
-    notifier: CompletionNotifier,
-    shutdown_requested: Arc<AtomicBool>,
+struct CaptureWorkerReporter {
+    event_tx: Option<Sender<CaptureWorkerEvent>>,
+    notifier: EventNotifier,
 }
 
-impl CaptureWorkerExitGuard {
-    fn new(
-        completion_tx: SyncSender<CaptureCompletion>,
-        notifier: CompletionNotifier,
-        shutdown_requested: Arc<AtomicBool>,
-    ) -> Self {
+impl CaptureWorkerReporter {
+    fn new(event_tx: Sender<CaptureWorkerEvent>, notifier: EventNotifier) -> Self {
         Self {
-            completion_tx: Some(completion_tx),
+            event_tx: Some(event_tx),
             notifier,
-            shutdown_requested,
         }
     }
 
-    fn publish(&self, completion: CaptureCompletion) -> bool {
-        let result = self
-            .completion_tx
-            .as_ref()
-            .expect("capture completion sender retained by worker")
-            .try_send(completion);
-        match result {
-            Ok(()) => {
-                (self.notifier)();
-                true
-            }
-            Err(TrySendError::Full(_)) => {
-                log::error!("Capture worker found an impossible full completion channel");
-                false
-            }
-            Err(TrySendError::Disconnected(_)) => false,
+    fn publish(&self, event: CaptureWorkerEvent) -> bool {
+        let Some(event_tx) = self.event_tx.as_ref() else {
+            return false;
+        };
+        if event_tx.send(event).is_err() {
+            return false;
         }
+        (self.notifier)();
+        true
+    }
+
+    fn finish(&mut self) {
+        self.event_tx.take();
     }
 }
 
-impl Drop for CaptureWorkerExitGuard {
+impl Drop for CaptureWorkerReporter {
     fn drop(&mut self) {
-        // Closing the producer side is the authoritative unexpected-exit state.
-        self.completion_tx.take();
-        if !self.shutdown_requested.load(Ordering::Acquire) {
+        if let Some(event_tx) = self.event_tx.take()
+            && event_tx
+                .send(CaptureWorkerEvent::ExitedUnexpectedly)
+                .is_ok()
+        {
             (self.notifier)();
         }
     }
@@ -495,15 +633,24 @@ impl Drop for CaptureWorkerExitGuard {
 #[cfg(test)]
 impl CaptureManager {
     pub(crate) fn with_closed_channel_for_test() -> Self {
-        let runtime = tokio::runtime::Runtime::new().expect("test runtime");
+        let runtime = tokio::runtime::Runtime::new()
+            .expect("fixture creates a Tokio runtime before constructing its manager");
         let mut manager = Self::new(runtime.handle());
         manager.request_tx.take();
+        manager.event_rx.take();
         if let Some(worker) = manager.worker.take() {
             worker.abort();
         }
         manager.healthy = true;
-        manager.shutdown_requested.store(false, Ordering::Release);
         manager
+    }
+
+    pub(crate) fn abort_worker_for_test(&mut self) -> bool {
+        let Some(worker) = self.worker.take() else {
+            return false;
+        };
+        worker.abort();
+        true
     }
 }
 
@@ -529,63 +676,106 @@ mod transport_tests {
     fn harness() -> (
         CaptureManager,
         mpsc::Receiver<CaptureCommand>,
-        SyncSender<CaptureCompletion>,
+        Sender<CaptureWorkerEvent>,
     ) {
         let (request_tx, request_rx) = mpsc::channel(1);
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+        let (event_tx, event_rx) = std::sync::mpsc::channel();
         let manager = CaptureManager {
             request_tx: Some(request_tx),
-            completion_rx,
+            event_rx: Some(event_rx),
             active: None,
             next_id: Some(1),
             healthy: true,
             terminal_reported: false,
-            shutdown_requested: Arc::new(AtomicBool::new(false)),
+            status: CaptureStatus::Idle,
             worker: None,
-            status: Arc::new(tokio::sync::Mutex::new(CaptureStatus::Idle)),
         };
-        (manager, request_rx, completion_tx)
+        (manager, request_rx, event_tx)
+    }
+
+    fn completed(id: CaptureRequestId) -> CaptureWorkerEvent {
+        CaptureWorkerEvent::Completed {
+            id,
+            operation: ImageOperationKind::Screenshot,
+            status: CaptureStatus::Cancelled("test completion".to_string()),
+            outcome: cancelled(),
+        }
     }
 
     #[test]
-    fn accepted_request_is_unique_and_busy_until_matching_completion() {
-        let (mut manager, mut request_rx, completion_tx) = harness();
+    fn accepted_request_is_busy_until_ordered_status_and_completion_events_arrive() {
+        let (mut manager, mut request_rx, event_tx) = harness();
 
-        let first = manager.try_submit(request()).unwrap();
+        let first = manager
+            .try_submit(request())
+            .expect("fixture transport accepts its first request");
         assert!(matches!(
-            manager.poll(),
-            CapturePoll::Pending { id, operation }
+            manager.poll_event(),
+            CaptureManagerEvent::Pending { id, operation }
                 if id == first && operation == ImageOperationKind::Screenshot
         ));
         assert!(matches!(
             manager.try_submit(request()),
             Err(CaptureSubmitError::Busy { active_id }) if active_id == first
         ));
-        assert_eq!(request_rx.try_recv().unwrap().id, first);
+        assert_eq!(
+            request_rx
+                .try_recv()
+                .expect("fixture request channel contains the accepted request")
+                .id,
+            first
+        );
 
-        completion_tx
-            .try_send(CaptureCompletion {
+        event_tx
+            .send(CaptureWorkerEvent::Status {
                 id: first,
-                outcome: cancelled(),
+                operation: ImageOperationKind::Screenshot,
+                status: CaptureStatus::AwaitingPermission,
             })
-            .unwrap();
+            .expect("fixture event receiver remains live for the status event");
         assert!(matches!(
             manager.try_submit(request()),
             Err(CaptureSubmitError::Busy { active_id }) if active_id == first
         ));
         assert!(matches!(
-            manager.poll(),
-            CapturePoll::Ready { id, operation, .. }
-                if id == first && operation == ImageOperationKind::Screenshot
+            manager.poll_event(),
+            CaptureManagerEvent::Status {
+                id,
+                operation: ImageOperationKind::Screenshot,
+                status: CaptureStatus::AwaitingPermission,
+            } if id == first
+        ));
+        assert_eq!(manager.status, CaptureStatus::AwaitingPermission);
+
+        event_tx
+            .send(completed(first))
+            .expect("fixture event receiver remains live for the completion event");
+        assert!(matches!(
+            manager.try_submit(request()),
+            Err(CaptureSubmitError::Busy { active_id }) if active_id == first
+        ));
+        assert!(matches!(
+            manager.poll_event(),
+            CaptureManagerEvent::Ready {
+                id,
+                operation: ImageOperationKind::Screenshot,
+                ..
+            } if id == first
+        ));
+        assert!(matches!(
+            &manager.status,
+            CaptureStatus::Cancelled(reason) if reason == "test completion"
         ));
 
-        let second = manager.try_submit(request()).unwrap();
+        let second = manager
+            .try_submit(request())
+            .expect("completed fixture request releases the transport for a second request");
         assert!(second > first);
     }
 
     #[test]
     fn closed_or_impossibly_full_request_transport_never_creates_active_state() {
-        let (mut disconnected, request_rx, _completion_tx) = harness();
+        let (mut disconnected, request_rx, _event_tx) = harness();
         drop(request_rx);
         assert!(matches!(
             disconnected.try_submit(request()),
@@ -593,15 +783,15 @@ mod transport_tests {
         ));
         assert!(disconnected.active.is_none());
 
-        let (mut full, _request_rx, _completion_tx) = harness();
+        let (mut full, _request_rx, _event_tx) = harness();
         full.request_tx
             .as_ref()
-            .unwrap()
+            .expect("fixture harness always installs a request sender")
             .try_send(CaptureCommand {
                 id: CaptureRequestId(99),
                 request: request(),
             })
-            .unwrap();
+            .expect("empty fixture request channel accepts its prefill command");
         assert!(matches!(
             full.try_submit(request()),
             Err(CaptureSubmitError::Unhealthy { reason }) if reason.contains("full")
@@ -610,16 +800,22 @@ mod transport_tests {
     }
 
     #[test]
-    fn mismatched_or_unowned_completion_is_terminal_and_reported_once() {
-        let (mut mismatch, mut request_rx, completion_tx) = harness();
-        let accepted = mismatch.try_submit(request()).unwrap();
-        request_rx.try_recv().unwrap();
-        completion_tx
-            .try_send(CaptureCompletion {
+    fn mismatched_or_unowned_event_is_terminal_and_reported_once() {
+        let (mut mismatch, mut request_rx, event_tx) = harness();
+        let accepted = mismatch
+            .try_submit(request())
+            .expect("fixture transport accepts the request used for identity mismatch");
+        request_rx
+            .try_recv()
+            .expect("fixture request channel contains the mismatch request");
+        event_tx
+            .send(CaptureWorkerEvent::Completed {
                 id: CaptureRequestId(accepted.0 + 1),
+                operation: ImageOperationKind::Screenshot,
+                status: CaptureStatus::Cancelled("test completion".to_string()),
                 outcome: cancelled(),
             })
-            .unwrap();
+            .expect("fixture event receiver remains live for the mismatched event");
         assert!(matches!(
             mismatch.poll(),
             CapturePoll::WorkerFailed {
@@ -630,13 +826,14 @@ mod transport_tests {
         ));
         assert!(matches!(mismatch.poll(), CapturePoll::Idle));
 
-        let (mut unowned, _request_rx, completion_tx) = harness();
-        completion_tx
-            .try_send(CaptureCompletion {
+        let (mut unowned, _request_rx, event_tx) = harness();
+        event_tx
+            .send(CaptureWorkerEvent::Status {
                 id: CaptureRequestId(7),
-                outcome: cancelled(),
+                operation: ImageOperationKind::Screenshot,
+                status: CaptureStatus::AwaitingPermission,
             })
-            .unwrap();
+            .expect("fixture event receiver remains live for the unowned event");
         assert!(matches!(
             unowned.poll(),
             CapturePoll::WorkerFailed {
@@ -649,14 +846,11 @@ mod transport_tests {
     }
 
     #[test]
-    fn buffered_completion_after_terminal_shutdown_is_discarded() {
-        let (mut manager, _request_rx, completion_tx) = harness();
-        completion_tx
-            .try_send(CaptureCompletion {
-                id: CaptureRequestId(7),
-                outcome: cancelled(),
-            })
-            .unwrap();
+    fn buffered_event_after_terminal_shutdown_is_discarded() {
+        let (mut manager, _request_rx, event_tx) = harness();
+        event_tx
+            .send(completed(CaptureRequestId(7)))
+            .expect("fixture event receiver remains live before terminal shutdown");
         manager.mark_unhealthy();
 
         assert!(matches!(manager.poll(), CapturePoll::Idle));
@@ -665,18 +859,19 @@ mod transport_tests {
 
     #[test]
     fn identity_exhaustion_occurs_only_after_the_last_identity_completes() {
-        let (mut manager, mut request_rx, completion_tx) = harness();
+        let (mut manager, mut request_rx, event_tx) = harness();
         manager.next_id = Some(u64::MAX);
 
-        let last = manager.try_submit(request()).unwrap();
+        let last = manager
+            .try_submit(request())
+            .expect("fixture transport accepts the last available request identity");
         assert_eq!(last.0, u64::MAX);
-        request_rx.try_recv().unwrap();
-        completion_tx
-            .try_send(CaptureCompletion {
-                id: last,
-                outcome: cancelled(),
-            })
-            .unwrap();
+        request_rx
+            .try_recv()
+            .expect("fixture request channel contains the last-identity request");
+        event_tx
+            .send(completed(last))
+            .expect("fixture event receiver remains live for the last completion");
         assert!(matches!(manager.poll(), CapturePoll::Ready { id, .. } if id == last));
         assert!(matches!(
             manager.try_submit(request()),
@@ -691,9 +886,11 @@ mod transport_tests {
 
     #[test]
     fn active_and_idle_disconnects_are_terminal_but_normal_shutdown_is_silent() {
-        let (mut active, _request_rx, completion_tx) = harness();
-        let accepted = active.try_submit(request()).unwrap();
-        drop(completion_tx);
+        let (mut active, _request_rx, event_tx) = harness();
+        let accepted = active
+            .try_submit(request())
+            .expect("fixture transport accepts the request used for active disconnect");
+        drop(event_tx);
         assert!(matches!(
             active.poll(),
             CapturePoll::WorkerFailed {
@@ -708,8 +905,8 @@ mod transport_tests {
             Err(CaptureSubmitError::Unhealthy { .. })
         ));
 
-        let (mut idle, _request_rx, completion_tx) = harness();
-        drop(completion_tx);
+        let (mut idle, _request_rx, event_tx) = harness();
+        drop(event_tx);
         assert!(matches!(
             idle.poll(),
             CapturePoll::WorkerFailed {
@@ -720,36 +917,61 @@ mod transport_tests {
         ));
         assert!(matches!(idle.poll(), CapturePoll::Idle));
 
-        let (mut shutdown, _request_rx, completion_tx) = harness();
-        drop(completion_tx);
+        let (mut shutdown, _request_rx, event_tx) = harness();
+        drop(event_tx);
         shutdown.shutdown();
         assert!(matches!(shutdown.poll(), CapturePoll::Idle));
     }
 
     #[test]
-    fn completion_channel_is_capacity_one_and_notifier_follows_publication() {
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-        let notifications = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let notified = Arc::clone(&notifications);
-        let shutdown = Arc::new(AtomicBool::new(true));
-        let guard = CaptureWorkerExitGuard::new(
-            completion_tx,
-            Arc::new(move || {
-                notified.fetch_add(1, Ordering::AcqRel);
+    fn reporter_notifies_after_publication_and_reports_only_unexpected_exit() {
+        let (event_tx, event_rx) = std::sync::mpsc::channel();
+        let (notification_tx, notification_rx) = std::sync::mpsc::channel();
+        let mut reporter = CaptureWorkerReporter::new(
+            event_tx,
+            Box::new(move || {
+                let _ = notification_tx.send(());
             }),
-            shutdown,
         );
 
-        assert!(guard.publish(CaptureCompletion {
+        assert!(reporter.publish(CaptureWorkerEvent::Status {
             id: CaptureRequestId(1),
-            outcome: cancelled(),
+            operation: ImageOperationKind::Screenshot,
+            status: CaptureStatus::AwaitingPermission,
         }));
-        assert_eq!(notifications.load(Ordering::Acquire), 1);
-        assert!(!guard.publish(CaptureCompletion {
-            id: CaptureRequestId(2),
-            outcome: cancelled(),
-        }));
-        assert_eq!(notifications.load(Ordering::Acquire), 1);
-        assert_eq!(completion_rx.try_recv().unwrap().id, CaptureRequestId(1));
+        assert!(matches!(
+            event_rx.try_recv(),
+            Ok(CaptureWorkerEvent::Status {
+                id: CaptureRequestId(1),
+                ..
+            })
+        ));
+        assert!(notification_rx.try_recv().is_ok());
+
+        reporter.finish();
+        drop(reporter);
+        assert!(matches!(
+            event_rx.try_recv(),
+            Err(TryRecvError::Empty | TryRecvError::Disconnected)
+        ));
+        assert!(matches!(
+            notification_rx.try_recv(),
+            Err(TryRecvError::Empty | TryRecvError::Disconnected)
+        ));
+
+        let (event_tx, event_rx) = std::sync::mpsc::channel();
+        let (notification_tx, notification_rx) = std::sync::mpsc::channel();
+        let reporter = CaptureWorkerReporter::new(
+            event_tx,
+            Box::new(move || {
+                let _ = notification_tx.send(());
+            }),
+        );
+        drop(reporter);
+        assert!(matches!(
+            event_rx.try_recv(),
+            Ok(CaptureWorkerEvent::ExitedUnexpectedly)
+        ));
+        assert!(notification_rx.try_recv().is_ok());
     }
 }

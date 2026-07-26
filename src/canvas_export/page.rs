@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::capture::CaptureError;
 use crate::draw::{
     BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, render_blur_rect,
@@ -40,7 +38,7 @@ pub enum CanvasExportBackdropSnapshot {
     Transparent,
     Solid(Color),
     PersistedImage {
-        data: Arc<[u8]>,
+        data: Vec<u8>,
         width: i32,
         height: i32,
         stride: i32,
@@ -182,7 +180,7 @@ impl ExportBackdrop {
             } => {
                 validate_persisted_image_backdrop(data.len(), *width, *height, *stride)?;
 
-                // SAFETY: dimensions and stride have been checked, and the Arc-backed
+                // SAFETY: dimensions and stride have been checked, and the owned
                 // byte slice covers every row Cairo may read for this temporary surface.
                 // The surface is owned by ExportBackdrop and dropped before the snapshot.
                 let surface = unsafe {

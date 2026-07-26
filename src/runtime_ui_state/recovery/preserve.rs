@@ -5,6 +5,9 @@ impl RuntimeUiStateController {
         &mut self,
         result: SourceMutationResult,
     ) -> SubmitPersistenceRecoveryResult {
+        if let Err(error) = self.validate_active_recovery_state() {
+            return self.finish_recovery_state_failure(error);
+        }
         let cancel_requested = self
             .active_recovery
             .as_ref()
@@ -14,14 +17,17 @@ impl RuntimeUiStateController {
                 &result,
                 RuntimeStateObservedEnvelope::PresentWithoutReadableVersion,
             );
-            self.retain_recovery_mutation_evidence(&result);
+            if let Err(state_error) = self.retain_recovery_mutation_evidence_for_kind(
+                &result,
+                &RecoverySourceMutationKind::PreserveInvalid,
+            ) {
+                return self.finish_recovery_state_failure(state_error);
+            }
             if cancel_requested {
                 if self.shutting_down {
                     return self.finish_recovery_shutdown();
                 }
-                let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                self.finish_cancelled_attempt(active);
-                return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                return self.finish_current_attempt_cancelled(active);
             }
             return self.finish_still_unhealthy(
                 RuntimeStateIoError::new(format!(
@@ -35,8 +41,21 @@ impl RuntimeUiStateController {
                 Some(RecoveryAttemptKind::ConfirmPreserveInvalidResetInFlight { confirmation }) => {
                     (confirmation.revision.clone(), confirmation.envelope.clone())
                 }
-                _ => unreachable!("preserve-invalid result requires an in-flight confirmation"),
+                Some(_) => {
+                    return self
+                        .finish_recovery_state_failure(RecoveryStateFailure::InvalidAttemptPhase);
+                }
+                None => {
+                    return self
+                        .finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+                }
             };
+        if let Err(error) = self.retain_recovery_mutation_evidence_for_kind(
+            &result,
+            &RecoverySourceMutationKind::PreserveInvalid,
+        ) {
+            return self.finish_recovery_state_failure(error);
+        }
         match result {
             SourceMutationResult::Applied {
                 new_source,
@@ -50,9 +69,6 @@ impl RuntimeUiStateController {
                             && artifact.observation.revision == confirmed_revision
                     })
                     .map(|artifact| artifact.path.clone());
-                if let Some(incident) = &mut self.incident {
-                    merge_artifacts(&mut incident.recovery_artifacts, recovery_artifacts);
-                }
                 let observation = if new_source.bytes().is_none() {
                     RuntimeStateSourceObservation {
                         revision: new_source.clone(),
@@ -69,9 +85,7 @@ impl RuntimeUiStateController {
                         if self.shutting_down {
                             return self.finish_recovery_shutdown();
                         }
-                        let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                        self.finish_cancelled_attempt(Some(observation));
-                        return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                        return self.finish_current_attempt_cancelled(Some(observation));
                     }
                     return self.finish_still_unhealthy(
                         RuntimeStateIoError::new(
@@ -85,9 +99,7 @@ impl RuntimeUiStateController {
                         if self.shutting_down {
                             return self.finish_recovery_shutdown();
                         }
-                        let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                        self.finish_cancelled_attempt(Some(observation));
-                        return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                        return self.finish_current_attempt_cancelled(Some(observation));
                     }
                     return self.finish_still_unhealthy(
                         RuntimeStateIoError::new(
@@ -101,7 +113,9 @@ impl RuntimeUiStateController {
                     RuntimeUiWireState::default(),
                 );
                 let Some(recovery_path) = recovery_path else {
-                    self.install_preserved_invalid_authority();
+                    if let Err(error) = self.install_preserved_invalid_authority() {
+                        return self.finish_recovery_state_failure(error);
+                    }
                     if self.shutting_down {
                         return self.finish_recovery_shutdown();
                     }
@@ -113,13 +127,13 @@ impl RuntimeUiStateController {
                     );
                 };
                 if cancel_requested {
-                    self.install_preserved_invalid_authority();
+                    if let Err(error) = self.install_preserved_invalid_authority() {
+                        return self.finish_recovery_state_failure(error);
+                    }
                     if self.shutting_down {
                         return self.finish_recovery_shutdown();
                     }
-                    let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                    self.finish_cancelled_attempt(Some(observation));
-                    return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                    return self.finish_current_attempt_cancelled(Some(observation));
                 }
                 self.finish_preserved_invalid(observation, recovery_path)
             }
@@ -128,9 +142,7 @@ impl RuntimeUiStateController {
                     if self.shutting_down {
                         return self.finish_recovery_shutdown();
                     }
-                    let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                    self.finish_cancelled_attempt(Some(active));
-                    return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                    return self.finish_current_attempt_cancelled(Some(active));
                 }
                 self.dispatch_preserve_invalid_reinspection(
                     active,
@@ -140,25 +152,14 @@ impl RuntimeUiStateController {
             }
             SourceMutationResult::ObservationChangedAfterClaim {
                 active,
-                recovery_artifacts,
                 path_effect,
                 ..
             } => {
-                if let Some(incident) = &mut self.incident {
-                    merge_artifacts(&mut incident.recovery_artifacts, recovery_artifacts);
-                    incident
-                        .path_effect_history
-                        .push(RuntimeStateFailurePathEffect::Known(
-                            RuntimeStateObservedPathEffect::PostClaim(path_effect.clone()),
-                        ));
-                }
                 if cancel_requested {
                     if self.shutting_down {
                         return self.finish_recovery_shutdown();
                     }
-                    let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                    self.finish_cancelled_attempt(Some(active));
-                    return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                    return self.finish_current_attempt_cancelled(Some(active));
                 }
                 self.dispatch_preserve_invalid_reinspection(
                     active,
@@ -166,24 +167,12 @@ impl RuntimeUiStateController {
                     confirmed_revision,
                 )
             }
-            SourceMutationResult::Failed {
-                error,
-                active,
-                recovery_artifacts,
-                path_effect,
-                ..
-            } => {
-                if let Some(incident) = &mut self.incident {
-                    merge_artifacts(&mut incident.recovery_artifacts, recovery_artifacts);
-                    incident.path_effect_history.push(path_effect);
-                }
+            SourceMutationResult::Failed { error, active, .. } => {
                 if cancel_requested {
                     if self.shutting_down {
                         return self.finish_recovery_shutdown();
                     }
-                    let attempt = self.active_recovery.as_ref().expect("active attempt").id;
-                    self.finish_cancelled_attempt(active);
-                    return SubmitPersistenceRecoveryResult::Terminal { attempt };
+                    return self.finish_current_attempt_cancelled(active);
                 }
                 self.finish_still_unhealthy(error, active)
             }
@@ -197,14 +186,20 @@ impl RuntimeUiStateController {
         confirmed_revision: RuntimeStateSourceRevision,
     ) -> SubmitPersistenceRecoveryResult {
         let result = self.dispatch_external_authority_reinspection(writer_observation, path_effect);
-        if let Some(active) = &mut self.active_recovery
-            && let RecoveryAttemptKind::ReinspectExternalAuthority {
-                preserve_invalid_confirmed,
-                ..
-            } = &mut active.kind
-        {
-            *preserve_invalid_confirmed = Some(confirmed_revision);
+        if !matches!(&result, SubmitPersistenceRecoveryResult::Continue { .. }) {
+            return result;
         }
+        let Some(active) = &mut self.active_recovery else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        };
+        let RecoveryAttemptKind::ReinspectExternalAuthority {
+            preserve_invalid_confirmed,
+            ..
+        } = &mut active.kind
+        else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::InvalidAttemptPhase);
+        };
+        *preserve_invalid_confirmed = Some(confirmed_revision);
         result
     }
 }

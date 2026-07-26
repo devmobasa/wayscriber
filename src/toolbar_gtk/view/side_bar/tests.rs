@@ -46,7 +46,7 @@ fn side_structure_rebuilds_when_runtime_persistence_controls_change() {
         ToolbarBindingHints::from_input_state(&state),
     );
     unsupported.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
-        path: "/tmp/runtime-ui.toml".into(),
+        path: Some("/tmp/runtime-ui.toml".into()),
         mode: RuntimeUiPersistenceMode::UnsupportedReadOnly { version: Some(2) },
         detail: None,
         recovery_artifacts: Vec::new(),

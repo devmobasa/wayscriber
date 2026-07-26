@@ -5,10 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-static ACTION_QUEUE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -60,41 +57,81 @@ impl TrayAction {
 }
 
 fn action_queue_stamp() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos()
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_nanos(),
+        Err(_) => 0,
+    }
 }
 
-fn queued_action_path(dir: &Path) -> PathBuf {
-    let sequence = ACTION_QUEUE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+fn queued_action_path(dir: &Path, stamp: u128, sequence: u64) -> PathBuf {
     dir.join(format!(
-        "{:032x}-{:08x}-{:08x}.action",
-        action_queue_stamp(),
+        "{stamp:032x}-{:08x}-{sequence:08x}.action",
         std::process::id(),
-        sequence
     ))
 }
 
-pub(crate) fn queue_action(action: TrayAction) -> Result<PathBuf> {
-    let dir = crate::paths::tray_action_dir();
-    fs::create_dir_all(&dir)
-        .with_context(|| format!("failed to create runtime directory {}", dir.display()))?;
+pub(crate) struct TrayActionQueue {
+    dir: PathBuf,
+    next_sequence: u64,
+}
 
-    let path = queued_action_path(&dir);
-    crate::durable_io::write_text_atomic(
-        &path,
-        action.as_str(),
-        AtomicWriteOptions {
-            overwrite: OverwriteMode::CreateNew,
-            permissions: PermissionPolicy::FixedMode(0o600),
-            symlink: SymlinkPolicy::Reject,
-            sync_file: false,
-            sync_parent: false,
-        },
-    )
-    .with_context(|| format!("failed to queue tray action {}", path.display()))?;
-    Ok(path)
+impl TrayActionQueue {
+    pub(crate) fn new(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            next_sequence: 0,
+        }
+    }
+
+    #[cfg(test)]
+    fn for_test(dir: PathBuf) -> Self {
+        Self::new(dir)
+    }
+
+    fn take_sequence(&mut self, stamp: u128) -> Result<u64> {
+        let sequence = self.next_sequence;
+        self.next_sequence = sequence.checked_add(1).ok_or_else(|| {
+            anyhow::anyhow!(
+                "tray action queue identity space exhausted for stamp {}",
+                stamp
+            )
+        })?;
+        Ok(sequence)
+    }
+
+    pub(crate) fn queue(&mut self, action: TrayAction) -> Result<PathBuf> {
+        self.queue_at(action, action_queue_stamp())
+    }
+
+    fn queue_at(&mut self, action: TrayAction, stamp: u128) -> Result<PathBuf> {
+        fs::create_dir_all(&self.dir).with_context(|| {
+            format!("failed to create runtime directory {}", self.dir.display())
+        })?;
+
+        loop {
+            let sequence = self.take_sequence(stamp)?;
+            let path = queued_action_path(&self.dir, stamp, sequence);
+            match crate::durable_io::write_text_atomic(
+                &path,
+                action.as_str(),
+                AtomicWriteOptions {
+                    overwrite: OverwriteMode::CreateNew,
+                    permissions: PermissionPolicy::FixedMode(0o600),
+                    symlink: SymlinkPolicy::Reject,
+                    sync_file: false,
+                    sync_parent: false,
+                },
+            ) {
+                Ok(()) => return Ok(path),
+                Err(crate::durable_io::DurableIoError::AlreadyExists { .. }) => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to queue tray action {}", path.display())
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn parse_action_file(path: &Path, content: &str) -> Option<TrayAction> {
@@ -111,8 +148,10 @@ fn parse_action_file(path: &Path, content: &str) -> Option<TrayAction> {
     }
 }
 
-pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
-    let dir = crate::paths::tray_action_dir();
+pub(crate) fn take_pending_actions(
+    runtime_paths: &crate::paths::PreparedRuntimePaths,
+) -> Vec<TrayAction> {
+    let dir = runtime_paths.tray_action_dir();
     let mut paths = match fs::read_dir(&dir) {
         Ok(entries) => entries
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -154,7 +193,7 @@ pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
         }
     }
 
-    let legacy_path = crate::paths::tray_action_file();
+    let legacy_path = runtime_paths.tray_action_file();
     match fs::read_to_string(&legacy_path) {
         Ok(content) => {
             if let Err(err) = fs::remove_file(&legacy_path) {
@@ -181,9 +220,7 @@ pub(crate) fn take_pending_actions() -> Vec<TrayAction> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TrayAction, queue_action, take_pending_actions};
-    use crate::env_vars::XDG_RUNTIME_DIR_ENV;
-    use std::env;
+    use super::{TrayAction, TrayActionQueue, take_pending_actions};
 
     #[test]
     fn tray_action_round_trip() {
@@ -209,30 +246,50 @@ mod tests {
 
     #[test]
     fn queued_tray_actions_round_trip_in_order() {
-        let _guard = crate::test_env::lock();
-        let tmp = crate::test_temp::tempdir().unwrap();
-        let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
-        unsafe {
-            env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
-        }
+        let tmp = crate::test_temp::tempdir()
+            .expect("fixture creates its private tray-action runtime directory");
+        let paths =
+            crate::paths::PathResolver::from_environment(crate::paths::PathEnvironment::for_test(
+                &[(crate::env_vars::XDG_RUNTIME_DIR_ENV, tmp.path().as_os_str())],
+            ));
+        let runtime_paths = crate::paths::PreparedRuntimePaths::prepare(&paths)
+            .expect("fixture prepares a private runtime identity");
 
-        queue_action(TrayAction::LightDrawOn).unwrap();
-        queue_action(TrayAction::LightDrawOff).unwrap();
+        let mut queue = TrayActionQueue::new(runtime_paths.tray_action_dir());
+        queue
+            .queue(TrayAction::LightDrawOn)
+            .expect("fixture queues its first tray action in the private runtime directory");
+        queue
+            .queue(TrayAction::LightDrawOff)
+            .expect("fixture queues its second tray action in the private runtime directory");
 
         assert_eq!(
-            take_pending_actions(),
+            take_pending_actions(&runtime_paths),
             vec![TrayAction::LightDrawOn, TrayAction::LightDrawOff]
         );
-        assert!(take_pending_actions().is_empty());
+        assert!(take_pending_actions(&runtime_paths).is_empty());
+    }
 
-        if let Some(prev) = prev {
-            unsafe {
-                env::set_var(XDG_RUNTIME_DIR_ENV, prev);
-            }
-        } else {
-            unsafe {
-                env::remove_var(XDG_RUNTIME_DIR_ENV);
-            }
-        }
+    #[test]
+    fn independent_queue_owners_resolve_identity_collisions_without_sharing_state() {
+        let tmp = crate::test_temp::tempdir()
+            .expect("fixture creates its private tray-action queue directory");
+        let queue_dir = tmp.path().join("queue");
+        let mut first = TrayActionQueue::for_test(queue_dir.clone());
+        let mut second = TrayActionQueue::for_test(queue_dir);
+
+        let first_path = first
+            .queue_at(TrayAction::LightDrawOn, 42)
+            .expect("first fixture owner publishes its action");
+        let second_path = second
+            .queue_at(TrayAction::LightDrawOff, 42)
+            .expect("second fixture owner resolves the colliding identity");
+        let third_path = first
+            .queue_at(TrayAction::ToggleFreeze, 42)
+            .expect("first fixture owner advances past the second owner's identity");
+
+        assert_ne!(first_path, second_path);
+        assert_ne!(second_path, third_path);
+        assert_ne!(first_path, third_path);
     }
 }

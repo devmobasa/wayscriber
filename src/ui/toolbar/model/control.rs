@@ -41,6 +41,16 @@ pub(crate) struct ToolbarSegmentedControl {
 }
 
 impl ToolbarSegmentedControl {
+    pub(crate) fn from_fixed(
+        active_segment: ToolbarControlId,
+        segments: [ToolbarSegment; 3],
+    ) -> Self {
+        Self {
+            active_segment: Some(active_segment),
+            segments: Vec::from(segments),
+        }
+    }
+
     pub(crate) fn try_new(
         active_segment: Option<ToolbarControlId>,
         segments: Vec<ToolbarSegment>,

@@ -2,9 +2,6 @@
 //! button grid, and the toolbar-item customization sub-panel (group
 //! chooser plus per-item show/hide and reorder rows).
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::toolbar_icons;
@@ -122,8 +119,7 @@ fn layout_mode_segments(ctx: &mut SectionCtx) -> gtk4::Box {
 struct ToggleSync {
     id: model::ToolbarControlId,
     check: gtk4::CheckButton,
-    event: Rc<RefCell<ToolbarEvent>>,
-    syncing: Rc<Cell<bool>>,
+    feedback_handler: gtk4::glib::SignalHandlerId,
 }
 
 /// Two-column toggle grid: wide toggles span the full row, narrow ones
@@ -151,24 +147,17 @@ fn toggle_grid(
             if let Some(tooltip) = toggle.tooltip.as_string() {
                 check.set_tooltip_text(Some(&tooltip));
             }
-            let event = Rc::new(RefCell::new(toggle.activation.compatibility_event()));
-            let syncing = Rc::new(Cell::new(false));
             let sender = ctx.feedback.clone();
-            let toggle_event = event.clone();
-            let toggle_sync = syncing.clone();
-            check.connect_toggled(move |_| {
-                if !toggle_sync.get() {
-                    let event = toggle_event.borrow().clone();
-                    send_event(&sender, event);
-                }
+            let event_toggle = (*toggle).clone();
+            let feedback_handler = check.connect_toggled(move |check| {
+                send_event(&sender, event_toggle.event_for_checked(check.is_active()));
             });
             let width = if full_row { 2 } else { 1 };
             grid.attach(&check, col as i32, row_index as i32, width, 1);
             handles.push(ToggleSync {
                 id: toggle.id,
                 check,
-                event,
-                syncing,
+                feedback_handler,
             });
         }
     }
@@ -180,11 +169,10 @@ fn toggle_grid(
             let Some(toggle) = fresh.toggles().iter().find(|toggle| toggle.id == handle.id) else {
                 continue;
             };
-            *handle.event.borrow_mut() = toggle.activation.compatibility_event();
             if handle.check.is_active() != toggle.checked {
-                handle.syncing.set(true);
+                handle.check.block_signal(&handle.feedback_handler);
                 handle.check.set_active(toggle.checked);
-                handle.syncing.set(false);
+                handle.check.unblock_signal(&handle.feedback_handler);
             }
         }
     }));

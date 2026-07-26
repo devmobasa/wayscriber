@@ -1,6 +1,4 @@
 use super::*;
-use crate::backend::wayland::state::helpers::toolbar_drag_handoff_delay;
-
 fn reset_gtk_drag_lifecycle(
     preview: &mut Option<crate::toolbar_gtk::GtkToolbarKind>,
     handoff_at: &mut Option<Instant>,
@@ -52,12 +50,12 @@ impl WaylandState {
     }
 
     fn schedule_toolbar_drag_handoff(&mut self) {
-        let delay = toolbar_drag_handoff_delay();
+        let delay = self.runtime_options.toolbar_drag_handoff_delay();
         if delay.is_zero() {
             self.finish_toolbar_drag_handoff();
             return;
         }
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "schedule toolbar drag handoff after {}ms",
             delay.as_millis()
         ));
@@ -68,7 +66,9 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland::state::toolbar::drag) fn begin_toolbar_drag_handoff(&mut self) {
-        drag_log("begin toolbar drag handoff (keep inline preview while layer surface settles)");
+        self.runtime_options.drag_log(
+            "begin toolbar drag handoff (keep inline preview while layer surface settles)",
+        );
         let snapshot = self.toolbar_snapshot();
         let _ = self.apply_toolbar_offsets(&snapshot);
         self.request_toolbar_drag_flush();
@@ -81,7 +81,7 @@ impl WaylandState {
     ) {
         let snapshot = self.toolbar_snapshot();
         let frozen_top_base_x = self.inline_top_base_x(&snapshot);
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "begin GTK {:?} drag preview (park transparent input surface, freeze top base at {frozen_top_base_x:.3})",
             kind,
         ));
@@ -97,7 +97,8 @@ impl WaylandState {
         if self.data.gtk_drag_preview.is_none() {
             return;
         }
-        drag_log("begin GTK drag handoff (move transparent surface before reveal)");
+        self.runtime_options
+            .drag_log("begin GTK drag handoff (move transparent surface before reveal)");
         self.request_toolbar_drag_flush();
         self.schedule_toolbar_drag_handoff();
     }
@@ -120,7 +121,8 @@ impl WaylandState {
             &mut self.data.gtk_side_drag_blocked,
         );
         if had_state {
-            drag_log("cancel GTK drag lifecycle (restore built-in toolbar rendering)");
+            self.runtime_options
+                .drag_log("cancel GTK drag lifecycle (restore built-in toolbar rendering)");
         }
         self.request_toolbar_drag_flush();
         self.clear_inline_toolbar_hits();
@@ -135,7 +137,8 @@ impl WaylandState {
     ) {
         self.data.toolbar_drag_handoff_at = None;
         if self.data.gtk_drag_preview.take().is_some() {
-            drag_log("finish GTK drag handoff (reveal surface at final position)");
+            self.runtime_options
+                .drag_log("finish GTK drag handoff (reveal surface at final position)");
             self.request_toolbar_drag_flush();
             self.clear_inline_toolbar_hits();
             self.clear_inline_toolbar_hover();
@@ -146,7 +149,8 @@ impl WaylandState {
         if !self.toolbar_drag_preview_active() {
             return;
         }
-        drag_log("finish toolbar drag handoff (restore layer-shell toolbars)");
+        self.runtime_options
+            .drag_log("finish toolbar drag handoff (restore layer-shell toolbars)");
         self.set_toolbar_drag_preview_active(false);
         let snapshot = self.toolbar_snapshot();
         let _ = self.apply_toolbar_offsets(&snapshot);

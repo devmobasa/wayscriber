@@ -24,12 +24,10 @@ pub use command_palette::{command_palette_visual_geometry, render_command_palett
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]
 pub use help_overlay::HelpOverlayBindings;
-#[cfg(test)]
-pub use help_overlay::install_help_hit_map_for_test;
+pub(crate) use help_overlay::HelpOverlayHitMap;
 #[allow(unused_imports)]
 pub use help_overlay::{
-    HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at,
-    invalidate_help_overlay_cache, render_help_overlay,
+    HelpOverlayRegion, HelpOverlayRenderFrame, HelpOverlayRenderer, render_help_overlay,
 };
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;

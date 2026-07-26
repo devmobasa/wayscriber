@@ -80,6 +80,394 @@ fn invalid_recovery_acknowledgement_does_not_strand_in_flight_mutation() {
 }
 
 #[test]
+fn matching_recovery_write_completion_is_integrated_before_state_failure_shutdown()
+-> Result<(), &'static str> {
+    let mut controller = controller();
+    let through = commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let request = request.clone();
+    let Some(incident_state) = controller.incident.as_mut() else {
+        return Err("fixture must retain the persistence incident");
+    };
+    incident_state.handle.availability = RecoveryHandleAvailability::Available;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: write.barrier,
+            attempt: write.attempt,
+            command_id: write.command_id,
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                id: request.id,
+                applied_through: request.accepted_through,
+                new_source: present_revision("applied-before-state-failure"),
+                recovery_artifacts: Vec::new(),
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::HandleStateMismatch),
+            ..
+        })
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert_eq!(
+        controller.pipeline().stable_source(),
+        &present_revision("applied-before-state-failure")
+    );
+    assert!(matches!(
+        controller.receipt(through),
+        Some(DurabilityOutcome::Failed(error)) if error.message() == "temporary"
+    ));
+    assert!(controller.pipeline().shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn malformed_recovery_write_completion_terminally_settles_state_failure_shutdown()
+-> Result<(), &'static str> {
+    let mut controller = controller();
+    commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let Some(incident_state) = controller.incident.as_mut() else {
+        return Err("fixture must retain the persistence incident");
+    };
+    incident_state.handle.availability = RecoveryHandleAvailability::Available;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: write.barrier,
+            attempt: write.attempt,
+            command_id: write.command_id,
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                id: SourceMutationId(request.id.get() + 1),
+                applied_through: request.accepted_through,
+                new_source: present_revision("malformed-before-state-failure"),
+                recovery_artifacts: Vec::new(),
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::HandleStateMismatch),
+            ..
+        })
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn unrelated_completion_terminally_settles_active_write_on_state_failure()
+-> Result<(), &'static str> {
+    let mut controller = controller();
+    commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let Some(incident_state) = controller.incident.as_mut() else {
+        return Err("fixture must retain the persistence incident");
+    };
+    incident_state.handle.availability = RecoveryHandleAvailability::Available;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: write.barrier,
+            attempt: write.attempt,
+            command_id: RecoveryCommandId(write.command_id.get() + 1),
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                id: request.id,
+                applied_through: request.accepted_through,
+                new_source: present_revision("unrelated-before-state-failure"),
+                recovery_artifacts: Vec::new(),
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::HandleStateMismatch),
+            ..
+        })
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn matching_canonical_post_claim_completion_retains_evidence_before_state_failure()
+-> Result<(), &'static str> {
+    let mut controller = controller();
+    commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/state-failure-post-claim-artifact".into(),
+        observation: observation(present_revision("quarantined-source")),
+    };
+    let effect = RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+        recovery_path: artifact.path.clone(),
+    };
+    let Some(incident_state) = controller.incident.as_mut() else {
+        return Err("fixture must retain the persistence incident");
+    };
+    incident_state.handle.availability = RecoveryHandleAvailability::Available;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: write.barrier,
+            attempt: write.attempt,
+            command_id: write.command_id,
+            result: RecoveryIoResult::SourceMutation(
+                SourceMutationResult::ObservationChangedAfterClaim {
+                    id: request.id,
+                    active: observation(present_revision("post-claim-active")),
+                    recovery_artifacts: vec![artifact.clone()],
+                    path_effect: effect.clone(),
+                }
+            ),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown { evidence, .. })
+            if evidence.recovery_artifacts == vec![artifact]
+                && evidence.path_effect_history.last()
+                    == Some(&RuntimeStateFailurePathEffect::Known(
+                        RuntimeStateObservedPathEffect::PostClaim(effect)
+                    ))
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn missing_incident_shutdown_retains_the_sole_source_completion_evidence()
+-> Result<(), &'static str> {
+    let mut controller = controller();
+    commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/missing-incident-recovery-artifact".into(),
+        observation: observation(present_revision("missing-incident-artifact")),
+    };
+    let effect = RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+        recovery_path: artifact.path.clone(),
+    };
+    controller.incident = None;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: write.barrier,
+            attempt: write.attempt,
+            command_id: write.command_id,
+            result: RecoveryIoResult::SourceMutation(
+                SourceMutationResult::ObservationChangedAfterClaim {
+                    id: request.id,
+                    active: observation(present_revision("missing-incident-active")),
+                    recovery_artifacts: vec![artifact.clone()],
+                    path_effect: effect.clone(),
+                }
+            ),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::MissingIncident),
+            evidence,
+            ..
+        }) if evidence.recovery_artifacts == vec![artifact]
+            && evidence.path_effect_history == vec![RuntimeStateFailurePathEffect::Known(
+                RuntimeStateObservedPathEffect::PostClaim(effect)
+            )]
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn missing_incident_malformed_completion_retains_conservative_evidence() -> Result<(), &'static str>
+{
+    let mut controller = controller();
+    commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/malformed-missing-incident-artifact".into(),
+        observation: observation(present_revision("malformed-missing-incident-artifact")),
+    };
+    let effect = RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+        recovery_path: artifact.path.clone(),
+    };
+    controller.incident = None;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: write.barrier,
+            attempt: write.attempt,
+            command_id: write.command_id,
+            result: RecoveryIoResult::SourceMutation(
+                SourceMutationResult::ObservationChangedAfterClaim {
+                    id: SourceMutationId(request.id.get() + 1),
+                    active: observation(present_revision("malformed-missing-incident-active")),
+                    recovery_artifacts: vec![artifact.clone()],
+                    path_effect: effect.clone(),
+                }
+            ),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::MissingIncident),
+            evidence,
+            ..
+        }) if evidence.recovery_artifacts == vec![artifact]
+            && evidence.path_effect_history == vec![RuntimeStateFailurePathEffect::Known(
+                RuntimeStateObservedPathEffect::PostClaim(effect)
+            )]
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.shutdown_complete());
+    Ok(())
+}
+
+#[test]
 fn cancellation_wins_when_recovery_acknowledgement_is_invalid() {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
@@ -139,7 +527,8 @@ fn cancellation_wins_when_recovery_acknowledgement_is_invalid() {
 }
 
 #[test]
-fn cancellation_waits_for_the_legitimate_writer_after_protocol_failure() {
+fn malformed_result_kind_settles_pending_cancellation_from_sole_completion()
+-> Result<(), &'static str> {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let (_, incident) = fail_current_replace(&mut controller, "temporary");
@@ -156,10 +545,11 @@ fn cancellation_waits_for_the_legitimate_writer_after_protocol_failure() {
         command_id: inspection.command_id,
         result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
     });
-    let write = controller.take_recovery_io_command().unwrap();
-    let request = match &write.operation {
-        RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } => request.clone(),
-        operation => panic!("unexpected operation: {operation:?}"),
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
     };
     let RecoveryAttemptClient {
         cancellation,
@@ -177,53 +567,32 @@ fn cancellation_waits_for_the_legitimate_writer_after_protocol_failure() {
             barrier: write.barrier,
             attempt: write.attempt,
             command_id: write.command_id,
-            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
-                id: SourceMutationId(request.id.get() + 1),
-                applied_through: request.accepted_through,
-                new_source: present_revision("uncertain-after-protocol-failure"),
-                recovery_artifacts: Vec::new(),
-            }),
-        }),
-        SubmitPersistenceRecoveryResult::BlockedProtocolFailure {
-            reinspection_dispatched: None,
-            ..
-        }
-    ));
-    assert!(controller.take_recovery_io_command().is_none());
-    let active = present_revision("actual-write-after-protocol-failure");
-    assert!(matches!(
-        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
-            controller_id: controller.id(),
-            incident,
-            barrier: write.barrier,
-            attempt: write.attempt,
-            command_id: write.command_id,
-            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
-                id: request.id,
-                applied_through: request.accepted_through,
-                new_source: active.clone(),
-                recovery_artifacts: Vec::new(),
-            }),
+            result: RecoveryIoResult::Inspected(Ok(inspected(observation(present_revision(
+                "malformed-result-kind"
+            ))))),
         }),
         SubmitPersistenceRecoveryResult::Terminal { .. }
     ));
+    assert!(controller.take_recovery_io_command().is_none());
     assert!(matches!(
         completion.try_recv(),
-        Some(PersistenceRecoveryResult::Cancelled {
-            active: Some(returned),
-            ..
-        }) if returned == observation(active)
+        Some(PersistenceRecoveryResult::Cancelled { evidence, .. })
+            if matches!(
+                evidence.path_effect_history.last(),
+                Some(RuntimeStateFailurePathEffect::UnknownAfterMutation)
+            )
     ));
-    assert!(controller.take_recovery_io_command().is_none());
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.active_barrier().is_some());
+    Ok(())
 }
 
 #[test]
-fn shutdown_waits_for_the_legitimate_writer_after_protocol_failure() {
+fn malformed_active_write_completion_terminalizes_requested_shutdown() -> Result<(), &'static str> {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let (_, incident) = fail_current_replace(&mut controller, "temporary");
-    let (_client, inspection) = begin_recovery(
+    let (client, inspection) = begin_recovery(
         &mut controller,
         incident,
         PersistenceRecoveryAction::RetryPending,
@@ -236,12 +605,15 @@ fn shutdown_waits_for_the_legitimate_writer_after_protocol_failure() {
         command_id: inspection.command_id,
         result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
     });
-    let write = controller.take_recovery_io_command().unwrap();
-    let request = match &write.operation {
-        RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } => request.clone(),
-        operation => panic!("unexpected operation: {operation:?}"),
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
     };
-    controller.request_shutdown().unwrap();
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    if controller.request_shutdown().is_err() {
+        return Err("fixture shutdown request must be accepted");
+    }
 
     assert!(matches!(
         controller.submit_persistence_recovery_io(RecoveryIoCompletion {
@@ -257,12 +629,59 @@ fn shutdown_waits_for_the_legitimate_writer_after_protocol_failure() {
                 recovery_artifacts: Vec::new(),
             }),
         }),
-        SubmitPersistenceRecoveryResult::BlockedProtocolFailure {
-            reinspection_dispatched: None,
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::Requested,
             ..
-        }
+        })
     ));
     assert!(controller.take_recovery_io_command().is_none());
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.active_barrier().is_none());
+    assert!(controller.pipeline().shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn recovery_shutdown_drive_failure_terminally_settles_the_pipeline() -> Result<(), &'static str> {
+    let mut controller = controller();
+    commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let (_, incident) = fail_current_replace(&mut controller, "temporary");
+    let (client, inspection) = begin_recovery(
+        &mut controller,
+        incident,
+        PersistenceRecoveryAction::RetryPending,
+    );
+    controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+        controller_id: controller.id(),
+        incident,
+        barrier: inspection.barrier,
+        attempt: inspection.attempt,
+        command_id: inspection.command_id,
+        result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+    });
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
+    };
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let reset_through = controller
+        .pipeline
+        .allocate_reset_revision()
+        .map_err(|_| "fixture must allocate a pending reset receipt")?;
+    controller
+        .pipeline
+        .stage_supported_reset(reset_through, controller.authority_epoch() + 1)
+        .map_err(|_| "fixture reset must wait behind the recovery write")?;
+    controller.pipeline.exhaust_mutation_id_for_test();
+    controller
+        .request_shutdown()
+        .map_err(|_| "fixture shutdown request must wait for the recovery write")?;
+
     assert!(matches!(
         controller.submit_persistence_recovery_io(RecoveryIoCompletion {
             controller_id: controller.id(),
@@ -271,16 +690,33 @@ fn shutdown_waits_for_the_legitimate_writer_after_protocol_failure() {
             attempt: write.attempt,
             command_id: write.command_id,
             result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
-                id: request.id,
+                id: SourceMutationId(request.id.get() + 1),
                 applied_through: request.accepted_through,
-                new_source: present_revision("actual-write-during-shutdown"),
+                new_source: present_revision("uncertain-during-failed-shutdown"),
                 recovery_artifacts: Vec::new(),
             }),
         }),
         SubmitPersistenceRecoveryResult::Terminal { .. }
     ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::Pipeline(
+                PipelineProtocolError::MutationIdExhausted,
+            )),
+            ..
+        })
+    ));
+    assert!(matches!(
+        controller.receipt(reset_through),
+        Some(DurabilityOutcome::Failed(error))
+            if error.message().contains("recovery shutdown failed: MutationIdExhausted")
+    ));
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.take_source_mutation().is_none());
     assert!(controller.active_barrier().is_none());
-    assert!(controller.pipeline().shutdown_complete());
+    assert!(controller.shutdown_complete());
+    Ok(())
 }
 
 #[test]
@@ -523,7 +959,7 @@ fn cancel_during_recovery_conflict_rotates_without_dispatching_reinspection() {
 }
 
 #[test]
-fn malformed_active_write_completion_waits_for_the_legitimate_writer_result() {
+fn malformed_active_write_completion_is_consumed_before_reinspection() -> Result<(), &'static str> {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let (_, incident) = fail_current_replace(&mut controller, "temporary");
@@ -540,12 +976,13 @@ fn malformed_active_write_completion_waits_for_the_legitimate_writer_result() {
         command_id: inspection.command_id,
         result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
     });
-    let write = controller.take_recovery_io_command().unwrap();
-    let request = match &write.operation {
-        RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } => request.clone(),
-        operation => panic!("unexpected operation: {operation:?}"),
+    let Some(write) = controller.take_recovery_io_command() else {
+        return Err("fixture must dispatch a canonical recovery write");
     };
-    let completion = RecoveryIoCompletion {
+    let RecoveryIoOperation::PersistCanonicalIfUnchanged { request, .. } = &write.operation else {
+        return Err("fixture recovery command must be a canonical write");
+    };
+    let mismatch = controller.submit_persistence_recovery_io(RecoveryIoCompletion {
         controller_id: controller.id(),
         incident,
         barrier: write.barrier,
@@ -557,40 +994,20 @@ fn malformed_active_write_completion_waits_for_the_legitimate_writer_result() {
             new_source: present_revision("uncertain"),
             recovery_artifacts: Vec::new(),
         }),
-    };
-    let mismatch = controller.submit_persistence_recovery_io(completion.clone());
+    });
     assert!(matches!(
         mismatch,
         SubmitPersistenceRecoveryResult::BlockedProtocolFailure {
             reason: RecoveryCompletionProtocolError::UnexpectedSourceMutationIdentity,
-            reinspection_dispatched: None,
+            reinspection_dispatched: Some(_),
             ..
         }
     ));
     assert!(controller.active_barrier().is_some());
-    assert!(controller.take_recovery_io_command().is_none());
-    assert!(matches!(
-        controller.submit_persistence_recovery_io(completion),
-        SubmitPersistenceRecoveryResult::IgnoredDuplicateAlreadyIntegrated { .. }
-    ));
-
-    assert!(matches!(
-        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
-            controller_id: controller.id(),
-            incident,
-            barrier: write.barrier,
-            attempt: write.attempt,
-            command_id: write.command_id,
-            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
-                id: request.id,
-                applied_through: request.accepted_through,
-                new_source: present_revision("actual-write-completed"),
-                recovery_artifacts: Vec::new(),
-            }),
-        }),
-        SubmitPersistenceRecoveryResult::Continue { .. }
-    ));
-    let reinspection = controller.take_recovery_io_command().unwrap();
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    let Some(reinspection) = controller.take_recovery_io_command() else {
+        return Err("sole malformed completion must dispatch reinspection");
+    };
     assert!(matches!(
         reinspection.operation,
         RecoveryIoOperation::Inspect
@@ -603,7 +1020,7 @@ fn malformed_active_write_completion_waits_for_the_legitimate_writer_result() {
             attempt: reinspection.attempt,
             command_id: reinspection.command_id,
             result: RecoveryIoResult::Inspected(Ok(inspected(observation(present_revision(
-                "actual-write-completed"
+                "uncertain"
             ))))),
         }),
         SubmitPersistenceRecoveryResult::Terminal { .. }
@@ -612,6 +1029,7 @@ fn malformed_active_write_completion_waits_for_the_legitimate_writer_result() {
         client.completion.try_recv(),
         Some(PersistenceRecoveryResult::StillUnhealthy { .. })
     ));
+    Ok(())
 }
 
 #[test]

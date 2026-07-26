@@ -1,16 +1,23 @@
 use crate::cli::Cli;
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
-pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
-    let loaded = crate::config::Config::load()?;
-    let config_dir = crate::config::Config::config_directory_from_source(&loaded.source)?;
+pub(crate) fn run_session_cli_commands(
+    cli: &Cli,
+    config_store: &crate::config::ConfigStore,
+    path_resolver: &crate::paths::PathResolver,
+) -> anyhow::Result<()> {
+    let loaded = config_store.load()?;
+    let config_dir = config_store.config_directory()?;
     let display_env = std::env::var(WAYLAND_DISPLAY_ENV).ok();
 
     let options = if let Some(raw_path) = cli.session_file.as_ref() {
         let raw = raw_path
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
-        let path = crate::session::normalize_named_session_file_arg(raw);
+        let current_dir = std::env::current_dir()
+            .map_err(|error| anyhow::anyhow!("failed to resolve current directory: {error}"))?;
+        let path =
+            crate::session::normalize_named_session_file_arg(raw, path_resolver, &current_dir)?;
         if cli.clear_session || cli.clear_tool_state {
             crate::session::validate_named_session_file_for_clear(&path)?;
         } else {
@@ -28,6 +35,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
             &loaded.config.session,
             &config_dir,
             display_env.as_deref(),
+            path_resolver,
         )?
     };
 

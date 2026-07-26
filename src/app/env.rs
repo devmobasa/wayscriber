@@ -1,64 +1,37 @@
 pub(crate) fn env_flag_enabled(name: &str) -> bool {
-    if let Ok(val) = std::env::var(name) {
-        matches!(
-            val.to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes" | "on"
-        )
-    } else {
-        false
-    }
+    std::env::var(name)
+        .ok()
+        .is_some_and(|value| parse_env_flag(&value))
+}
+
+fn parse_env_flag(value: &str) -> bool {
+    matches!(
+        value.to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::env_flag_enabled;
-    use std::env;
-    use std::sync::Mutex;
-
-    const TEST_FLAG_ENV: &str = "WAYSCRIBER_TEST_FLAG";
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+    use super::parse_env_flag;
 
     #[test]
     fn env_flag_enabled_accepts_truthy_values() {
-        let _guard = ENV_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
         for value in ["1", "true", "yes", "on", "TrUe"] {
-            // SAFETY: serialized via ENV_MUTEX
-            unsafe {
-                env::set_var(TEST_FLAG_ENV, value);
-            }
             assert!(
-                env_flag_enabled(TEST_FLAG_ENV),
+                parse_env_flag(value),
                 "expected '{value}' to be treated as truthy"
             );
-        }
-
-        unsafe {
-            env::remove_var(TEST_FLAG_ENV);
         }
     }
 
     #[test]
     fn env_flag_enabled_rejects_non_truthy_values() {
-        let _guard = ENV_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
         for value in ["0", "false", "no", "off", "", "random"] {
-            // SAFETY: serialized via ENV_MUTEX
-            unsafe {
-                env::set_var(TEST_FLAG_ENV, value);
-            }
             assert!(
-                !env_flag_enabled(TEST_FLAG_ENV),
+                !parse_env_flag(value),
                 "expected '{value}' to be treated as falsey"
             );
-        }
-
-        unsafe {
-            env::remove_var(TEST_FLAG_ENV);
         }
     }
 }

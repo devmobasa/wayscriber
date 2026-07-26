@@ -6,7 +6,6 @@ use crate::input::state::mouse::TEXT_CLICK_DRAG_THRESHOLD;
 use crate::input::state::{DrawingState, InputState};
 use crate::input::tool::{ToolMotionBehavior, ToolMotionSizeSource, ToolPressBehavior};
 use crate::input::{EraserMode, MouseButton, Tool};
-use std::sync::Arc;
 
 pub(crate) fn handle_active_motion(
     state: &mut InputState,
@@ -95,20 +94,31 @@ pub(crate) fn handle_active_motion(
         ));
     }
 
-    if let DrawingState::ResizingSelection {
-        handle,
-        original_bounds,
-        start_x,
-        start_y,
-        snapshots,
-    } = &state.state
-    {
-        let dx = canvas.x() - *start_x;
-        let dy = canvas.y() - *start_y;
-        let handle = *handle;
-        let original_bounds = *original_bounds;
-        let snapshots = Arc::clone(snapshots);
-        state.apply_selection_resize(handle, &original_bounds, dx, dy, snapshots.as_ref());
+    let resize = match &mut state.state {
+        DrawingState::ResizingSelection {
+            handle,
+            original_bounds,
+            start_x,
+            start_y,
+            snapshots,
+        } => Some((
+            *handle,
+            *original_bounds,
+            canvas.x() - *start_x,
+            canvas.y() - *start_y,
+            std::mem::take(snapshots),
+        )),
+        _ => None,
+    };
+    if let Some((handle, original_bounds, dx, dy, snapshots)) = resize {
+        state.apply_selection_resize(handle, &original_bounds, dx, dy, &snapshots);
+        if let DrawingState::ResizingSelection {
+            snapshots: owned_snapshots,
+            ..
+        } = &mut state.state
+        {
+            *owned_snapshots = snapshots;
+        }
         state.needs_redraw = true;
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::ResizingSelection,

@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::config::test_helpers::with_temp_config_home;
+use crate::config::test_helpers::{test_config_store, with_temp_config_home};
 use std::fs;
 
 #[cfg(unix)]
@@ -14,12 +14,13 @@ fn save_with_backup_creates_timestamped_file() {
         let original = "# Keep this backup source comment.\n[ui.toolbar]\nside_pinned = true\n";
         fs::write(&config_file, original).unwrap();
 
-        let mut config = Config::load()
+        let mut config = test_config_store(config_root)
+            .load()
             .expect("load config before backup save")
             .config;
         config.ui.toolbar.side_pinned = false;
-        let backup_path = config
-            .save_with_backup()
+        let backup_path = test_config_store(config_root)
+            .save_with_backup(&config)
             .expect("save_with_backup should succeed")
             .expect("backup should be created");
 
@@ -71,9 +72,14 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
         )
         .unwrap();
 
-        let mut config = Config::load().expect("load sparse config").config;
+        let mut config = test_config_store(config_root)
+            .load()
+            .expect("load sparse config")
+            .config;
         config.ui.toolbar.side_pinned = false;
-        config.save().expect("save runtime toolbar preference");
+        test_config_store(config_root)
+            .save(&config)
+            .expect("save runtime toolbar preference");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Keep this user comment."));
@@ -98,19 +104,26 @@ fn targeted_runtime_update_preserves_newer_sibling_edit() {
 
         // Simulate the running overlay's older in-memory snapshot, followed by
         // an edit made through the configurator while the overlay remains up.
-        let _stale_runtime_config = Config::load().expect("load startup config").config;
+        let _stale_runtime_config = test_config_store(config_root)
+            .load()
+            .expect("load startup config")
+            .config;
         fs::write(
             &config_file,
             "# Preserve this newer configurator edit.\n[ui]\nshow_floating_badge = true\n\n[performance]\nmax_fps_no_vsync = 60\n",
         )
         .unwrap();
 
-        Config::update_file(|config| config.ui.show_floating_badge = false)
+        test_config_store(config_root)
+            .update_file(|config| config.ui.show_floating_badge = false)
             .expect("save only the runtime-owned badge preference");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Preserve this newer configurator edit."));
-        let reloaded = Config::load().expect("reload targeted update").config;
+        let reloaded = test_config_store(config_root)
+            .load()
+            .expect("reload targeted update")
+            .config;
         assert!(!reloaded.ui.show_floating_badge);
         assert_eq!(reloaded.performance.max_fps_no_vsync, 60);
     });
@@ -138,24 +151,28 @@ color = "#00FF00"
         )
         .unwrap();
 
-        Config::update_file(|config| {
-            let crimson = crate::draw::Color {
-                r: 220.0 / 255.0,
-                g: 20.0 / 255.0,
-                b: 60.0 / 255.0,
-                a: 1.0,
-            };
-            assert_eq!(
-                config.drawing.quick_colors.set_color_at(1, crimson),
-                crate::config::QuickColorWrite::Written
-            );
-        })
-        .expect("save the recolored quick color");
+        test_config_store(config_root)
+            .update_file(|config| {
+                let crimson = crate::draw::Color {
+                    r: 220.0 / 255.0,
+                    g: 20.0 / 255.0,
+                    b: 60.0 / 255.0,
+                    a: 1.0,
+                };
+                assert_eq!(
+                    config.drawing.quick_colors.set_color_at(1, crimson),
+                    crate::config::QuickColorWrite::Written
+                );
+            })
+            .expect("save the recolored quick color");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Keep this palette comment."));
 
-        let reloaded = Config::load().expect("reload recolored palette").config;
+        let reloaded = test_config_store(config_root)
+            .load()
+            .expect("reload recolored palette")
+            .config;
         let palette = QuickColorPalette::from_config(&reloaded.drawing.quick_colors);
         assert_eq!(
             palette.color_for_index(1),
@@ -209,9 +226,14 @@ background = { rgb = [0.992, 0.992, 0.992] }
         )
         .unwrap();
 
-        let mut config = Config::load().expect("load board config").config;
+        let mut config = test_config_store(config_root)
+            .load()
+            .expect("load board config")
+            .config;
         config.boards.as_mut().expect("boards").items.swap(0, 1);
-        config.save().expect("save reordered boards");
+        test_config_store(config_root)
+            .save(&config)
+            .expect("save reordered boards");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         let document = saved.parse::<toml_edit::DocumentMut>().unwrap();
@@ -260,7 +282,10 @@ background = { rgb = [0.992, 0.992, 0.992], future_color_space = "display-p3" }
         )
         .unwrap();
 
-        let mut config = Config::load().expect("load board config").config;
+        let mut config = test_config_store(config_root)
+            .load()
+            .expect("load board config")
+            .config;
         let whiteboard = config
             .boards
             .as_mut()
@@ -271,7 +296,9 @@ background = { rgb = [0.992, 0.992, 0.992], future_color_space = "display-p3" }
             .unwrap();
         whiteboard.background =
             BoardBackgroundConfig::Color(BoardColorConfig::Rgb([0.2, 0.3, 0.4]));
-        config.save().expect("save changed board color");
+        test_config_store(config_root)
+            .save(&config)
+            .expect("save changed board color");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Preserve this comment while changing the color."));
@@ -289,7 +316,10 @@ background = { rgb = [0.992, 0.992, 0.992], future_color_space = "display-p3" }
                 .and_then(toml_edit::Value::as_str),
             Some("display-p3")
         );
-        let reloaded = Config::load().expect("reload changed board config").config;
+        let reloaded = test_config_store(config_root)
+            .load()
+            .expect("reload changed board config")
+            .config;
         let whiteboard = reloaded
             .boards
             .as_ref()
@@ -329,7 +359,10 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0], future_color_space = "display-p3" }
         )
         .unwrap();
 
-        let mut config = Config::load().expect("load board config").config;
+        let mut config = test_config_store(config_root)
+            .load()
+            .expect("load board config")
+            .config;
         let whiteboard = config
             .boards
             .as_mut()
@@ -339,7 +372,9 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0], future_color_space = "display-p3" }
             .find(|board| board.id == "whiteboard")
             .unwrap();
         whiteboard.default_pen_color = Some(BoardColorConfig::Rgb([0.8, 0.7, 0.6]));
-        config.save().expect("save changed default pen color");
+        test_config_store(config_root)
+            .save(&config)
+            .expect("save changed default pen color");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         let saved_document = saved.parse::<toml_edit::DocumentMut>().unwrap();
@@ -357,7 +392,10 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0], future_color_space = "display-p3" }
             Some("display-p3")
         );
 
-        let reloaded = Config::load().expect("reload changed board config").config;
+        let reloaded = test_config_store(config_root)
+            .load()
+            .expect("reload changed board config")
+            .config;
         let whiteboard = reloaded
             .boards
             .as_ref()
@@ -393,10 +431,13 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
         fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
         symlink(&target, &config_link).unwrap();
 
-        let mut config = Config::load().expect("load symlinked config").config;
+        let mut config = test_config_store(config_root)
+            .load()
+            .expect("load symlinked config")
+            .config;
         config.ui.toolbar.side_pinned = false;
-        let backup_path = config
-            .save_with_backup()
+        let backup_path = test_config_store(config_root)
+            .save_with_backup(&config)
             .expect("save_with_backup should succeed for symlinked config")
             .expect("backup should be created for symlinked config");
 
@@ -441,7 +482,9 @@ fn create_default_file_writes_example_when_missing() {
             "config.toml should not exist before create_default_file"
         );
 
-        Config::create_default_file().expect("create_default_file should succeed");
+        test_config_store(config_root)
+            .create_default_file()
+            .expect("create_default_file should succeed");
 
         let config_path = config_dir.join("config.toml");
         let contents = fs::read_to_string(&config_path).expect("config file should be readable");
@@ -510,7 +553,8 @@ fn create_default_file_errors_when_config_exists() {
         let config_path = config_dir.join("config.toml");
         fs::write(&config_path, "custom = true").unwrap();
 
-        let err = Config::create_default_file()
+        let err = test_config_store(config_root)
+            .create_default_file()
             .expect_err("create_default_file should fail when config exists");
         let msg = err.to_string();
         assert!(

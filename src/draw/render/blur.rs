@@ -1,16 +1,9 @@
 use super::types::EraserReplayContext;
 use crate::draw::shape::BlurStyle;
-use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
-};
-
 const PLACEHOLDER_FILL: (f64, f64, f64, f64) = (0.12, 0.15, 0.2, 0.82);
 const PLACEHOLDER_STROKE: (f64, f64, f64, f64) = (0.92, 0.94, 0.98, 0.35);
 /// Faint edge drawn around every blur region so it reads as deliberate.
 const REDACTION_EDGE: (f64, f64, f64, f64) = (0.92, 0.94, 0.98, 0.22);
-const BLUR_CACHE_MAX_ENTRIES: usize = 8;
-const BLUR_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
 type Rgba = (f64, f64, f64, f64);
 type OverlayPalette = (Rgba, Rgba);
 
@@ -63,87 +56,9 @@ pub struct BlurRectParams {
     pub cacheable: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct BlurCacheKey {
-    backdrop_cache_key: u64,
-    src_x: i32,
-    src_y: i32,
-    src_w: i32,
-    src_h: i32,
-    primary_factor: u16,
-    secondary_factor: u16,
-    /// Two styles over the same region produce different pixels, so the style
-    /// has to be part of the key or they would serve each other's cache entry.
-    style: BackdropStyle,
-}
-
-#[derive(Clone)]
 struct CachedBlurRegion {
     surface: cairo::ImageSurface,
     stats: BlurSurfaceStats,
-    approx_bytes: usize,
-}
-
-struct BlurRenderCache {
-    entries: HashMap<BlurCacheKey, CachedBlurRegion>,
-    access_order: VecDeque<BlurCacheKey>,
-    max_entries: usize,
-    max_bytes: usize,
-    cached_bytes: usize,
-}
-
-impl BlurRenderCache {
-    fn new(max_entries: usize, max_bytes: usize) -> Self {
-        Self {
-            entries: HashMap::new(),
-            access_order: VecDeque::new(),
-            max_entries,
-            max_bytes,
-            cached_bytes: 0,
-        }
-    }
-
-    fn get(&mut self, key: &BlurCacheKey) -> Option<CachedBlurRegion> {
-        let entry = self.entries.get(key).cloned()?;
-        self.touch(*key);
-        Some(entry)
-    }
-
-    fn insert(&mut self, key: BlurCacheKey, entry: CachedBlurRegion) {
-        if let Some(previous) = self.entries.remove(&key) {
-            self.cached_bytes = self.cached_bytes.saturating_sub(previous.approx_bytes);
-            self.access_order.retain(|existing| existing != &key);
-        }
-
-        self.cached_bytes = self.cached_bytes.saturating_add(entry.approx_bytes);
-        self.entries.insert(key, entry);
-        self.access_order.push_back(key);
-        self.evict_if_needed();
-    }
-
-    fn touch(&mut self, key: BlurCacheKey) {
-        self.access_order.retain(|existing| existing != &key);
-        self.access_order.push_back(key);
-    }
-
-    fn evict_if_needed(&mut self) {
-        while self.entries.len() > self.max_entries
-            || (self.cached_bytes > self.max_bytes && self.entries.len() > 1)
-        {
-            let Some(oldest) = self.access_order.pop_front() else {
-                break;
-            };
-            if let Some(entry) = self.entries.remove(&oldest) {
-                self.cached_bytes = self.cached_bytes.saturating_sub(entry.approx_bytes);
-            }
-        }
-    }
-}
-
-thread_local! {
-    static BLUR_RENDER_CACHE: RefCell<BlurRenderCache> = RefCell::new(
-        BlurRenderCache::new(BLUR_CACHE_MAX_ENTRIES, BLUR_CACHE_MAX_BYTES)
-    );
 }
 
 fn normalize_rect(x: i32, y: i32, w: i32, h: i32) -> Option<(f64, f64, f64, f64)> {
@@ -412,45 +327,6 @@ fn blur_overlay_palette(stats: BlurSurfaceStats, alpha: f64) -> OverlayPalette {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_blur_cache_key(
-    replay_ctx: &EraserReplayContext<'_>,
-    recipe: BlurRecipe,
-    style: BackdropStyle,
-    src_x: i32,
-    src_y: i32,
-    src_w: i32,
-    src_h: i32,
-) -> Option<BlurCacheKey> {
-    Some(BlurCacheKey {
-        backdrop_cache_key: replay_ctx.backdrop_cache_key?,
-        src_x,
-        src_y,
-        src_w,
-        src_h,
-        primary_factor: recipe.primary_factor.round() as u16,
-        secondary_factor: recipe.secondary_factor.round() as u16,
-        style,
-    })
-}
-
-fn cacheable_blur_entry(
-    cache_key: Option<BlurCacheKey>,
-    compute: impl FnOnce() -> Option<CachedBlurRegion>,
-) -> Option<CachedBlurRegion> {
-    if let Some(key) = cache_key
-        && let Some(entry) = BLUR_RENDER_CACHE.with(|cache| cache.borrow_mut().get(&key))
-    {
-        return Some(entry);
-    }
-
-    let entry = compute()?;
-    if let Some(key) = cache_key {
-        BLUR_RENDER_CACHE.with(|cache| cache.borrow_mut().insert(key, entry.clone()));
-    }
-    Some(entry)
-}
-
 fn render_blur_region(
     surface: &cairo::ImageSurface,
     src_x: i32,
@@ -493,9 +369,6 @@ fn render_blur_region(
     let stats = average_surface_stats(&mut obscured).unwrap_or(FALLBACK_BLUR_STATS);
 
     Some(CachedBlurRegion {
-        approx_bytes: (src_w.max(1) as usize)
-            .saturating_mul(src_h.max(1) as usize)
-            .saturating_mul(4),
         surface: obscured,
         stats,
     })
@@ -513,7 +386,7 @@ pub fn render_blur_rect(
         h,
         strength,
         style,
-        cacheable,
+        cacheable: _,
     } = params;
     let Some((left, top, width, height)) = normalize_rect(x, y, w, h) else {
         return;
@@ -545,12 +418,8 @@ pub fn render_blur_rect(
     let src_y2 = src_y2.clamp(src_y + 1, surface.height());
     let src_w = src_x2 - src_x;
     let src_h = src_y2 - src_y;
-    let cache_key = cacheable
-        .then(|| build_blur_cache_key(replay_ctx, recipe, style, src_x, src_y, src_w, src_h));
-    let cache_key = cache_key.flatten();
-    let Some(blurred) = cacheable_blur_entry(cache_key, || {
-        render_blur_region(surface, src_x, src_y, src_w, src_h, recipe, style)
-    }) else {
+    let Some(blurred) = render_blur_region(surface, src_x, src_y, src_w, src_h, recipe, style)
+    else {
         render_blur_placeholder(ctx, x, y, w, h, false);
         return;
     };

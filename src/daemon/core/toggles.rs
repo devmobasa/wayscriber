@@ -127,11 +127,11 @@ impl Daemon {
     }
 
     fn dispatch_overlay_action(
-        &self,
+        &mut self,
         action: TrayAction,
         signal_visible_overlay: bool,
     ) -> Result<()> {
-        let action_path = crate::tray_action::queue_action(action)?;
+        let action_path = self.tray_action_queue.queue(action)?;
 
         if signal_visible_overlay && self.overlay_state == OverlayState::Visible {
             #[cfg(unix)]
@@ -175,7 +175,7 @@ impl Daemon {
         signal_toggle_requested: bool,
     ) -> Result<()> {
         let queued_requests = if signal_toggle_requested {
-            crate::daemon::take_daemon_toggle_requests(&self.instance_token)?
+            crate::daemon::take_daemon_toggle_requests(&self.instance_token, &self.runtime_paths)?
         } else {
             DaemonToggleCommands {
                 commands: Vec::new(),

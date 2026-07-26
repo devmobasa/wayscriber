@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::config::test_helpers::with_temp_config_home;
+use crate::config::test_helpers::{test_config_store, with_temp_config_home};
 use std::fs;
 
 #[test]
@@ -13,7 +13,9 @@ fn load_prefers_primary_directory() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
         assert!(matches!(loaded.source, ConfigSource::Primary));
     });
 }
@@ -29,7 +31,9 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
         assert_eq!(
             loaded.config.ui.xdg_focus_loss_behavior,
             XdgFocusLossBehavior::Stay
@@ -207,7 +211,9 @@ fn load_migrates_legacy_shortcut_defaults_in_memory_without_rewriting_file() {
         let original = "[keybindings]\ntoggle_command_palette = ['Ctrl+K']\ncapture_full_screen = ['Ctrl+Shift+P']\n";
         fs::write(&config_path, original).unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
 
         assert_eq!(
             loaded.config.keybindings.ui.toggle_command_palette,
@@ -237,12 +243,20 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
         )
         .unwrap();
 
-        let mut migrated = Config::load().expect("legacy load succeeds").config;
+        let mut migrated = test_config_store(config_root)
+            .load()
+            .expect("legacy load succeeds")
+            .config;
         migrated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
         migrated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
-        migrated.save().expect("saving revision succeeds");
+        test_config_store(config_root)
+            .save(&migrated)
+            .expect("saving revision succeeds");
 
-        let reloaded = Config::load().expect("current load succeeds").config;
+        let reloaded = test_config_store(config_root)
+            .load()
+            .expect("current load succeeds")
+            .config;
         assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
         assert_eq!(reloaded.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
         assert_eq!(
@@ -264,7 +278,10 @@ fn load_migrates_explicit_legacy_toggle_toolbar_pair_without_rewriting_file() {
         let original = "[keybindings]\ntoggle_toolbar = ['F2', 'F9']\nundo = ['Ctrl+Alt+U']\n";
         fs::write(&config_path, original).unwrap();
 
-        let loaded = Config::load().expect("load succeeds").config;
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds")
+            .config;
 
         assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F9"]);
         assert_eq!(loaded.keybindings.ui.cycle_toolbar_display, ["F2"]);
@@ -290,7 +307,10 @@ fn custom_f2_toggle_toolbar_binding_keeps_f2_and_unbinds_cycle() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds").config;
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds")
+            .config;
 
         assert_eq!(
             loaded.keybindings.ui.toggle_toolbar,
@@ -318,14 +338,22 @@ fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
         )
         .unwrap();
 
-        let mut migrated = Config::load().expect("legacy load succeeds").config;
+        let mut migrated = test_config_store(config_root)
+            .load()
+            .expect("legacy load succeeds")
+            .config;
         // Post-migration the user deliberately restores the pair and
         // unbinds the cycle action; the saved revision protects it.
         migrated.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
         migrated.keybindings.ui.cycle_toolbar_display = Vec::new();
-        migrated.save().expect("saving revision succeeds");
+        test_config_store(config_root)
+            .save(&migrated)
+            .expect("saving revision succeeds");
 
-        let reloaded = Config::load().expect("current load succeeds").config;
+        let reloaded = test_config_store(config_root)
+            .load()
+            .expect("current load succeeds")
+            .config;
         assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
         assert_eq!(reloaded.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
         assert!(reloaded.keybindings.ui.cycle_toolbar_display.is_empty());
@@ -344,7 +372,10 @@ fn revision_one_config_still_gets_the_f2_split_but_not_the_palette_heuristic() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds").config;
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds")
+            .config;
 
         // The F2 split (revision 2) applies...
         assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F9"]);
@@ -873,7 +904,9 @@ fn load_parses_mouse_button_drag_tool_bindings() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
         let drag_tools = loaded.config.drawing.drag_tools.expect("drag tools config");
         assert_eq!(drag_tools.left.drag_tool, crate::input::DragTool::Line);
         assert_eq!(drag_tools.left.shift_drag_tool, crate::input::DragTool::Pen);
@@ -933,7 +966,9 @@ fn effective_drag_tools_preserve_legacy_left_when_only_right_is_configured() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
         let drag_tools = loaded.config.drawing.effective_drag_tools();
         assert_eq!(drag_tools.left.drag_tool, crate::input::DragTool::Arrow);
         assert_eq!(
@@ -955,7 +990,9 @@ fn effective_drag_tools_preserve_explicit_builtin_left_mapping() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
         let drag_tools = loaded.config.drawing.effective_drag_tools();
         assert_eq!(drag_tools.left.drag_tool, crate::input::DragTool::Pen);
         assert_eq!(
@@ -1025,7 +1062,9 @@ fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {
         )
         .unwrap();
 
-        let loaded = Config::load().expect("load succeeds");
+        let loaded = test_config_store(config_root)
+            .load()
+            .expect("load succeeds");
         assert!(loaded.config.tablet.enabled);
     });
 }

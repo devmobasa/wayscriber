@@ -219,11 +219,9 @@ fn reset_button_visible(snapshot: &ToolbarSnapshot, id: ToolbarControlId) -> boo
 }
 
 fn individual_visibility_differs_from_factory(snapshot: &ToolbarSnapshot) -> bool {
-    factory_individual_toolbar_item_visibility_settings()
-        .iter()
-        .any(|(id, factory)| {
-            item_visibility_setting(&snapshot.resolved_toolbar_items, *id) != *factory
-        })
+    factory_individual_toolbar_item_visibility_settings().any(|(id, factory)| {
+        item_visibility_setting(&snapshot.resolved_toolbar_items, id) != factory
+    })
 }
 
 pub(super) fn is_section_toggle_id(id: ToolbarControlId) -> bool {

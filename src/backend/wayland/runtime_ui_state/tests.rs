@@ -44,7 +44,12 @@ fn test_runtime_allow_startup_incident(config: &Config, path: &Path) -> ToolbarR
     let inspection = store.inspect().unwrap();
     retain_stored_board_pin_seeds_for_session_restore(&mut board_pin_seeds, &inspection);
     let bootstrap = inspection
-        .into_controller_bootstrap(runtime_seeds_from_config(config, &board_pin_seeds).unwrap());
+        .into_controller_bootstrap(
+            store.controller_id(),
+            runtime_seeds_from_config(config, &board_pin_seeds)
+                .expect("fixture config produces valid runtime seeds"),
+        )
+        .expect("fixture inspection satisfies controller startup invariants");
     let mut runtime = ToolbarRuntimeState {
         controller: bootstrap.controller,
         runtime_path: path.to_path_buf(),
@@ -63,10 +68,18 @@ fn test_runtime_allow_startup_incident(config: &Config, path: &Path) -> ToolbarR
 
 fn controller_only_runtime(config: &Config, path: &Path) -> ToolbarRuntimeState {
     let mut board_pin_seeds = board_pin_seeds_from_input(&input_from_config(config));
-    let inspection = RuntimeUiStateStore::new(path).inspect().unwrap();
+    let store = RuntimeUiStateStore::new(path);
+    let inspection = store
+        .inspect()
+        .expect("fixture runtime-state path is inspectable");
     retain_stored_board_pin_seeds_for_session_restore(&mut board_pin_seeds, &inspection);
     let bootstrap = inspection
-        .into_controller_bootstrap(runtime_seeds_from_config(config, &board_pin_seeds).unwrap());
+        .into_controller_bootstrap(
+            store.controller_id(),
+            runtime_seeds_from_config(config, &board_pin_seeds)
+                .expect("fixture config produces valid runtime seeds"),
+        )
+        .expect("fixture inspection satisfies controller startup invariants");
     ToolbarRuntimeState {
         controller: bootstrap.controller,
         runtime_path: path.to_path_buf(),
@@ -222,7 +235,7 @@ fn toolbar_section_visibility_is_not_seeded_into_runtime_state() {
 
 #[test]
 fn runtime_rebuild_reuses_minimize_and_pane_transition_cleanup() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("fixture temp directory is available");
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut source = input_from_config(&config);
@@ -338,12 +351,9 @@ fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
     input.toolbar_top_pinned = false;
     let desired = toolbar_values(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input).unwrap();
     assert!(matches!(
-        runtime.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent: RuntimePreviewFinishIntent::Commit(desired),
-            },
-            |_, _| unreachable!(),
+        runtime.controller.finish_runtime_preview(
+            prepared.session,
+            RuntimePreviewFinishIntent::Commit(desired)
         ),
         PreviewFinishResult::AcceptedRuntime { .. }
     ));
@@ -375,6 +385,60 @@ fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
         runtime.persistence_snapshot().recovery_artifacts,
         vec![artifact_path]
     );
+}
+
+#[test]
+fn rejected_writer_completion_is_terminally_settled_by_the_coordinator() -> Result<(), &'static str>
+{
+    let temp = crate::test_temp::tempdir().expect("fixture temp directory is available");
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config = Config::default();
+    let mut runtime = controller_only_runtime(&config, &runtime_path);
+    let target = InteractionSeedTarget::TopPinned;
+    let permit = runtime
+        .controller
+        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
+        .expect("fixture target has a matching runtime seed");
+    let through = match runtime.controller.commit(
+        permit,
+        RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(false))
+            .expect("fixture value matches the top-pin target"),
+    ) {
+        CommitResult::Accepted { through } => through,
+        _ => return Err("fixture mutation must be accepted"),
+    };
+    let request = runtime
+        .controller
+        .take_source_mutation()
+        .expect("accepted fixture mutation dispatches a replacement");
+    runtime.controller.exhaust_incident_id_for_test();
+
+    runtime.handle_source_mutation_result(SourceMutationResult::Failed {
+        id: request.id,
+        error: RuntimeStateIoError::new("fixture writer failure"),
+        active: Some(RuntimeStateSourceObservation::missing(
+            request.expected_source,
+        )),
+        recovery_artifacts: Vec::new(),
+        path_effect: RuntimeStateFailurePathEffect::Known(
+            RuntimeStateObservedPathEffect::Untouched,
+        ),
+    });
+
+    assert!(
+        !runtime
+            .controller
+            .pipeline()
+            .has_source_mutation_in_flight()
+    );
+    assert!(matches!(
+        runtime.controller.receipt(through),
+        Some(DurabilityOutcome::Failed(error))
+            if error.message() == "fixture writer failure"
+    ));
+    assert!(runtime.controller.active_barrier().is_none());
+    assert!(runtime.controller.shutdown_complete());
+    Ok(())
 }
 
 #[test]
@@ -1654,12 +1718,9 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     input.toolbar_top_pinned = false;
     let desired = toolbar_values(target, &input).unwrap();
     assert!(matches!(
-        runtime.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent: RuntimePreviewFinishIntent::Commit(desired),
-            },
-            |_, _| unreachable!(),
+        runtime.controller.finish_runtime_preview(
+            prepared.session,
+            RuntimePreviewFinishIntent::Commit(desired)
         ),
         PreviewFinishResult::AcceptedRuntime { .. }
     ));

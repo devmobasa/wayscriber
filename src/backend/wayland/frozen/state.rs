@@ -2,7 +2,7 @@ use log::info;
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
-use crate::backend::wayland::RuntimeWakeHandle;
+use crate::backend::wayland::RuntimeWakeSender;
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::crop_argb;
@@ -39,7 +39,7 @@ pub struct FrozenState {
     pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
     pub(super) portal_in_progress: bool,
     pub(super) portal_target_output_id: Option<u32>,
-    pub(super) runtime_wake: Option<RuntimeWakeHandle>,
+    pub(super) runtime_wake: Option<RuntimeWakeSender>,
     pub(super) preflight_pending: bool,
     pub(super) preflight_use_fallback: bool,
     pub(super) capture_done: bool,
@@ -54,14 +54,14 @@ impl FrozenState {
 
     pub(in crate::backend::wayland) fn new_with_runtime_wake(
         manager: Option<ZwlrScreencopyManagerV1>,
-        runtime_wake: RuntimeWakeHandle,
+        runtime_wake: RuntimeWakeSender,
     ) -> Self {
         Self::new_inner(manager, Some(runtime_wake))
     }
 
     fn new_inner(
         manager: Option<ZwlrScreencopyManagerV1>,
-        runtime_wake: Option<RuntimeWakeHandle>,
+        runtime_wake: Option<RuntimeWakeSender>,
     ) -> Self {
         Self {
             manager,

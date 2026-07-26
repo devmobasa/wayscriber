@@ -20,5 +20,6 @@ pub(crate) use control::{
     take_daemon_toggle_requests, write_daemon_pid_file,
 };
 pub use core::Daemon;
+pub(crate) use core::{DaemonLaunchOptions, DaemonRuntimeOwners};
 pub(crate) use protocol_v2::try_claim_overlay_action;
 pub use types::AlreadyRunningError;

@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf, sync::Arc};
+use std::{fmt, path::PathBuf};
 
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
@@ -9,7 +9,6 @@ use crate::capture::{
         ImageDeliveryRequest, ImageOperationKind,
     },
 };
-use tokio::task;
 
 #[derive(Clone)]
 pub(crate) struct CaptureRequest {
@@ -91,7 +90,7 @@ pub(crate) enum CaptureManagerResult {
 
 pub(crate) async fn perform_capture(
     request: CaptureRequest,
-    dependencies: Arc<CaptureDependencies>,
+    dependencies: &mut CaptureDependencies,
 ) -> Result<CaptureResult, CaptureError> {
     log::info!("Starting capture: {:?}", request.capture_type);
 
@@ -120,12 +119,8 @@ pub(crate) async fn perform_capture(
             if let Some(save_config) = request.save_config.clone() {
                 if !save_config.save_directory.as_os_str().is_empty() {
                     Some(
-                        save_bytes(
-                            Arc::clone(&dependencies.saver),
-                            image_data.clone(),
-                            save_config,
-                        )
-                        .await?,
+                        save_bytes(dependencies.saver.as_mut(), image_data.clone(), save_config)
+                            .await?,
                     )
                 } else {
                     None
@@ -137,12 +132,8 @@ pub(crate) async fn perform_capture(
         CaptureDestination::ClipboardAndFile => {
             if let Some(save_config) = request.save_config.clone() {
                 if !save_config.save_directory.as_os_str().is_empty() {
-                    match save_bytes(
-                        Arc::clone(&dependencies.saver),
-                        image_data.clone(),
-                        save_config,
-                    )
-                    .await
+                    match save_bytes(dependencies.saver.as_mut(), image_data.clone(), save_config)
+                        .await
                     {
                         Ok(path) => Some(path),
                         Err(err) => {
@@ -165,7 +156,7 @@ pub(crate) async fn perform_capture(
     let copied_to_clipboard = match request.destination {
         CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile => {
             log::info!("Attempting to copy {} bytes to clipboard", image_data.len());
-            copy_to_clipboard(Arc::clone(&dependencies.clipboard), image_data.clone()).await
+            copy_to_clipboard(dependencies.clipboard.as_mut(), image_data.clone()).await
         }
         CaptureDestination::FileOnly => {
             log::debug!("Clipboard copy not requested for this capture");
@@ -191,7 +182,7 @@ pub(crate) async fn perform_capture(
 
 pub(crate) async fn deliver_image(
     request: ImageDeliveryRequest,
-    dependencies: Arc<CaptureDependencies>,
+    dependencies: &mut CaptureDependencies,
 ) -> Result<CaptureResult, CaptureError> {
     log::info!(
         "Starting image delivery: {:?} {}x{} {} bytes",
@@ -213,7 +204,7 @@ pub(crate) async fn deliver_image(
             if let Some(config) =
                 save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
             {
-                Some(save_bytes(Arc::clone(&dependencies.saver), image_data.clone(), config).await?)
+                Some(save_bytes(dependencies.saver.as_mut(), image_data.clone(), config).await?)
             } else {
                 None
             }
@@ -222,8 +213,7 @@ pub(crate) async fn deliver_image(
             if let Some(config) =
                 save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
             {
-                match save_bytes(Arc::clone(&dependencies.saver), image_data.clone(), config).await
-                {
+                match save_bytes(dependencies.saver.as_mut(), image_data.clone(), config).await {
                     Ok(path) => Some(path),
                     Err(err) => {
                         log::warn!("Failed to save delivered image: {}", err);
@@ -244,7 +234,7 @@ pub(crate) async fn deliver_image(
                 "Attempting to copy delivered image {} bytes to clipboard",
                 image_data.len()
             );
-            copy_to_clipboard(Arc::clone(&dependencies.clipboard), image_data.clone()).await
+            copy_to_clipboard(dependencies.clipboard.as_mut(), image_data.clone()).await
         }
         CaptureDestination::FileOnly => false,
     };
@@ -267,7 +257,7 @@ pub(crate) async fn deliver_image(
 
 pub(crate) async fn deliver_document(
     request: DocumentDeliveryRequest,
-    dependencies: Arc<CaptureDependencies>,
+    dependencies: &mut CaptureDependencies,
 ) -> Result<CaptureResult, CaptureError> {
     log::info!(
         "Starting document delivery: {:?} {} {} bytes",
@@ -297,7 +287,7 @@ pub(crate) async fn deliver_document(
     save_config.format = request.document.extension.clone();
     let document_bytes = request.document.bytes;
     let saved_path = save_bytes(
-        Arc::clone(&dependencies.saver),
+        dependencies.saver.as_mut(),
         document_bytes.clone(),
         save_config,
     )
@@ -313,25 +303,20 @@ pub(crate) async fn deliver_document(
 }
 
 async fn save_bytes(
-    saver: Arc<dyn CaptureFileSaver>,
+    saver: &mut dyn CaptureFileSaver,
     bytes: Vec<u8>,
     config: FileSaveConfig,
 ) -> Result<PathBuf, CaptureError> {
-    task::spawn_blocking(move || saver.save(&bytes, &config))
-        .await
-        .map_err(|e| CaptureError::ImageError(format!("Save task failed: {}", e)))?
+    saver.save(bytes, config).await
 }
 
-async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec<u8>) -> bool {
-    match task::spawn_blocking(move || clipboard.copy(&image_data))
-        .await
-        .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
-    {
-        Ok(Ok(())) => {
+async fn copy_to_clipboard(clipboard: &mut dyn CaptureClipboard, image_data: Vec<u8>) -> bool {
+    match clipboard.copy(image_data).await {
+        Ok(()) => {
             log::info!("Successfully copied to clipboard");
             true
         }
-        Ok(Err(e)) | Err(e) => {
+        Err(e) => {
             log::error!("Failed to copy to clipboard: {}", e);
             false
         }

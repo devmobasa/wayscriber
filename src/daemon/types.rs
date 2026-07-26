@@ -1,67 +1,54 @@
+use crate::backend::wayland::RuntimeWakeSender;
 use crate::tray_action::TrayAction;
-#[cfg(feature = "tray")]
-use log::warn;
-use std::collections::VecDeque;
+use crate::update_check::AvailableUpdate;
 use std::ffi::OsString;
 use std::io;
-use std::sync::Arc;
-use std::sync::Mutex;
-#[cfg(feature = "tray")]
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(any(feature = "tray", test))]
+use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 #[cfg(feature = "tray")]
 use std::time::Instant;
 
-use crate::backend::wayland::RuntimeWakeHandle;
-#[cfg(all(test, feature = "portal"))]
-use crate::backend::wayland::RuntimeWakeSource;
+const MAX_DAEMON_CONTROL_EVENTS: usize = 64;
+const MAX_VISIBILITY_INTENTS: usize = 64;
+const MAX_PENDING_QUIT_EVENTS: usize = 1;
+#[cfg(any(feature = "tray", test))]
+pub(super) const MAX_OVERLAY_ACTION_INTENTS: usize = 64;
 
-trait ControlWake: Send + Sync {
-    fn wake(&self) -> io::Result<()>;
+#[derive(Debug)]
+pub(super) enum DaemonPublishError {
+    QueueFull,
+    Disconnected,
+    #[cfg(any(feature = "tray", test))]
+    InvalidCapacity,
+    Wake(io::Error),
 }
 
-impl ControlWake for RuntimeWakeHandle {
-    fn wake(&self) -> io::Result<()> {
-        RuntimeWakeHandle::wake(self)
-    }
-}
-
-/// A daemon-owned flag whose external producers cannot publish without also
-/// waking the control loop that consumes it.
-#[derive(Clone)]
-pub(super) struct DaemonControlEvent {
-    flag: Arc<AtomicBool>,
-    wake: Arc<dyn ControlWake>,
-}
-
-impl DaemonControlEvent {
-    pub(super) fn new(flag: Arc<AtomicBool>, wake: RuntimeWakeHandle) -> Self {
-        Self {
-            flag,
-            wake: Arc::new(wake),
+impl std::fmt::Display for DaemonPublishError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::QueueFull => formatter.write_str("daemon event queue is full"),
+            Self::Disconnected => formatter.write_str("daemon event owner disconnected"),
+            #[cfg(any(feature = "tray", test))]
+            Self::InvalidCapacity => {
+                formatter.write_str("daemon action capacity release exceeded its fixed bound")
+            }
+            Self::Wake(error) => write!(
+                formatter,
+                "daemon event was queued but wake failed: {error}"
+            ),
         }
     }
+}
 
-    #[cfg(test)]
-    fn with_wake(flag: Arc<AtomicBool>, wake: Arc<dyn ControlWake>) -> Self {
-        Self { flag, wake }
-    }
-
-    pub(super) fn raise(&self, source: &str) -> io::Result<()> {
-        self.flag.store(true, Ordering::Release);
-        self.wake
-            .wake()
-            .map_err(|error| io::Error::new(error.kind(), format!("{source}: {error}")))
-    }
-
-    pub(super) fn is_raised(&self) -> bool {
-        self.flag.load(Ordering::Acquire)
-    }
-
-    #[cfg(all(test, feature = "portal"))]
-    pub(super) fn for_test(flag: Arc<AtomicBool>) -> (Self, RuntimeWakeSource) {
-        let wake = RuntimeWakeSource::new().unwrap();
-        (Self::new(flag, wake.handle()), wake)
+impl std::error::Error for DaemonPublishError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Wake(error) => Some(error),
+            Self::QueueFull | Self::Disconnected => None,
+            #[cfg(any(feature = "tray", test))]
+            Self::InvalidCapacity => None,
+        }
     }
 }
 
@@ -71,84 +58,386 @@ pub(super) struct VisibilityIntent {
     pub(super) signal_requested: bool,
 }
 
-#[derive(Debug, Default)]
-struct VisibilityIntentState {
-    activation_token: Option<String>,
-    signal_requested: bool,
+#[derive(Debug)]
+pub(super) enum DaemonControlMessage {
+    Quit,
+    Visibility(VisibilityIntent),
+    UpdateAvailable(Option<AvailableUpdate>),
+    UpdateNotificationAuthorization(UpdateNotificationAuthorizationRequest),
+    #[cfg(feature = "tray")]
+    TrayWatcherOnline,
+    #[cfg(feature = "tray")]
+    TrayWatcherOffline(String),
+}
+
+#[derive(Debug)]
+pub(super) struct UpdateNotificationAuthorizationRequest {
+    pub(super) request_id: u64,
+    pub(super) update: AvailableUpdate,
 }
 
 #[derive(Debug, Default)]
-pub(super) struct VisibilityIntents {
-    state: Mutex<VisibilityIntentState>,
-    ready: Arc<AtomicBool>,
+pub(super) struct DaemonEventBatch {
+    pub(super) controls: Vec<DaemonControlMessage>,
+    pub(super) overlay_actions: Vec<TrayAction>,
 }
 
-#[derive(Clone)]
-pub(super) struct VisibilityPublisher {
-    intents: Arc<VisibilityIntents>,
-    event: DaemonControlEvent,
+pub(super) struct DaemonEventInbox {
+    quit: Receiver<()>,
+    visibility: Receiver<VisibilityIntent>,
+    control: Receiver<DaemonControlMessage>,
+    #[cfg(any(feature = "tray", test))]
+    overlay_actions: Receiver<TrayAction>,
+    #[cfg(any(feature = "tray", test))]
+    overlay_action_releases: Sender<()>,
 }
 
-impl VisibilityIntents {
-    #[cfg(all(test, feature = "tray"))]
-    pub(super) fn with_ready(ready: Arc<AtomicBool>) -> Self {
-        Self {
-            state: Mutex::new(VisibilityIntentState::default()),
-            ready,
+impl DaemonEventInbox {
+    pub(super) fn drain(&self) -> DaemonEventBatch {
+        let mut controls = Vec::new();
+        if self.quit.try_recv().is_ok() {
+            controls.push(DaemonControlMessage::Quit);
+        }
+        controls.extend(
+            self.visibility
+                .try_iter()
+                .map(DaemonControlMessage::Visibility),
+        );
+        controls.extend(self.control.try_iter());
+        #[cfg(any(feature = "tray", test))]
+        let overlay_actions = self.overlay_actions.try_iter().collect();
+        #[cfg(not(any(feature = "tray", test)))]
+        let overlay_actions = Vec::new();
+        DaemonEventBatch {
+            controls,
+            overlay_actions,
         }
     }
 
-    pub(super) fn publisher(self: &Arc<Self>, wake: RuntimeWakeHandle) -> VisibilityPublisher {
-        VisibilityPublisher {
-            intents: Arc::clone(self),
-            event: DaemonControlEvent::new(Arc::clone(&self.ready), wake),
+    #[cfg(any(feature = "tray", test))]
+    pub(super) fn release_overlay_action_slots(
+        &self,
+        count: usize,
+    ) -> Result<(), DaemonPublishError> {
+        for _ in 0..count {
+            self.overlay_action_releases
+                .send(())
+                .map_err(|_| DaemonPublishError::Disconnected)?;
         }
+        Ok(())
     }
 
-    pub(super) fn claim(&self) -> Option<VisibilityIntent> {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if !self.ready.swap(false, Ordering::Acquire) {
-            return None;
+    #[cfg(not(any(feature = "tray", test)))]
+    pub(super) fn release_overlay_action_slots(
+        &self,
+        _count: usize,
+    ) -> Result<(), DaemonPublishError> {
+        Ok(())
+    }
+}
+
+pub(super) struct DaemonEventSenders {
+    quit: SyncSender<()>,
+    visibility: SyncSender<VisibilityIntent>,
+    control: SyncSender<DaemonControlMessage>,
+    #[cfg(any(feature = "tray", test))]
+    overlay_actions: SyncSender<TrayAction>,
+    #[cfg(any(feature = "tray", test))]
+    overlay_action_releases: Option<Receiver<()>>,
+}
+
+pub(super) fn daemon_event_channel() -> (DaemonEventInbox, DaemonEventSenders) {
+    let (quit_sender, quit_receiver) = mpsc::sync_channel(MAX_PENDING_QUIT_EVENTS);
+    let (visibility_sender, visibility_receiver) = mpsc::sync_channel(MAX_VISIBILITY_INTENTS);
+    let (control_sender, control_receiver) = mpsc::sync_channel(MAX_DAEMON_CONTROL_EVENTS);
+    #[cfg(any(feature = "tray", test))]
+    let (action_sender, action_receiver) = mpsc::sync_channel(MAX_OVERLAY_ACTION_INTENTS);
+    #[cfg(any(feature = "tray", test))]
+    let (action_release_sender, action_release_receiver) = mpsc::channel();
+    (
+        DaemonEventInbox {
+            quit: quit_receiver,
+            visibility: visibility_receiver,
+            control: control_receiver,
+            #[cfg(any(feature = "tray", test))]
+            overlay_actions: action_receiver,
+            #[cfg(any(feature = "tray", test))]
+            overlay_action_releases: action_release_sender,
+        },
+        DaemonEventSenders {
+            quit: quit_sender,
+            visibility: visibility_sender,
+            control: control_sender,
+            #[cfg(any(feature = "tray", test))]
+            overlay_actions: action_sender,
+            #[cfg(any(feature = "tray", test))]
+            overlay_action_releases: Some(action_release_receiver),
+        },
+    )
+}
+
+struct EventPublisher<T> {
+    sender: SyncSender<T>,
+    wake: RuntimeWakeSender,
+}
+
+impl<T> EventPublisher<T> {
+    fn try_duplicate(&self) -> io::Result<Self> {
+        Ok(Self {
+            sender: self.sender.clone(),
+            wake: self.wake.try_duplicate()?,
+        })
+    }
+
+    fn publish(&self, message: T, source: &str) -> Result<(), DaemonPublishError> {
+        publish_and_wake(&self.sender, message, &self.wake, source)
+    }
+}
+
+fn publish_and_wake<T>(
+    sender: &SyncSender<T>,
+    message: T,
+    wake: &RuntimeWakeSender,
+    source: &str,
+) -> Result<(), DaemonPublishError> {
+    match sender.try_send(message) {
+        Ok(()) => {}
+        Err(TrySendError::Full(_)) => return Err(DaemonPublishError::QueueFull),
+        Err(TrySendError::Disconnected(_)) => return Err(DaemonPublishError::Disconnected),
+    }
+    wake.wake().map_err(|error| {
+        DaemonPublishError::Wake(io::Error::new(error.kind(), format!("{source}: {error}")))
+    })
+}
+
+/// A shutdown publisher. The daemon loop remains the only owner of the quit
+/// state; producers can only enqueue a typed request and wake that owner.
+pub(super) struct DaemonControlEvent {
+    publisher: EventPublisher<()>,
+}
+
+impl DaemonControlEvent {
+    pub(super) fn try_duplicate(&self) -> io::Result<Self> {
+        Ok(Self {
+            publisher: self.publisher.try_duplicate()?,
+        })
+    }
+
+    #[cfg(any(feature = "tray", test))]
+    pub(super) fn raise(&self, source: &str) -> Result<(), DaemonPublishError> {
+        match self.publisher.sender.try_send(()) {
+            Ok(()) | Err(TrySendError::Full(_)) => {}
+            Err(TrySendError::Disconnected(_)) => return Err(DaemonPublishError::Disconnected),
         }
-        Some(VisibilityIntent {
-            activation_token: state.activation_token.take(),
-            signal_requested: std::mem::take(&mut state.signal_requested),
+        self.publisher.wake.wake().map_err(|error| {
+            DaemonPublishError::Wake(io::Error::new(error.kind(), format!("{source}: {error}")))
         })
     }
 }
 
+pub(super) struct VisibilityPublisher {
+    publisher: EventPublisher<VisibilityIntent>,
+}
+
 impl VisibilityPublisher {
+    pub(super) fn try_duplicate(&self) -> io::Result<Self> {
+        Ok(Self {
+            publisher: self.publisher.try_duplicate()?,
+        })
+    }
+
+    #[cfg(any(feature = "portal", feature = "tray", test))]
     pub(super) fn publish(
         &self,
         activation_token: Option<String>,
         signal_requested: bool,
         source: &str,
-    ) -> io::Result<()> {
-        let mut state = self
-            .intents
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if activation_token.is_some() {
-            state.activation_token = activation_token;
-        }
-        state.signal_requested |= signal_requested;
-        self.event.raise(source)
+    ) -> Result<(), DaemonPublishError> {
+        self.publisher.publish(
+            VisibilityIntent {
+                activation_token,
+                signal_requested,
+            },
+            source,
+        )
     }
 }
 
-/// Overlay state for daemon mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OverlayState {
-    Hidden,  // Daemon running, overlay not visible
-    Visible, // Overlay active, capturing input
+pub(super) struct UpdateWatchPublisher {
+    publisher: EventPublisher<DaemonControlMessage>,
+}
+
+impl UpdateWatchPublisher {
+    pub(super) fn publish_available(
+        &self,
+        update: Option<AvailableUpdate>,
+    ) -> Result<(), DaemonPublishError> {
+        self.publisher.publish(
+            DaemonControlMessage::UpdateAvailable(update),
+            "update availability publication",
+        )
+    }
+
+    pub(super) fn request_notification(
+        &self,
+        request_id: u64,
+        update: AvailableUpdate,
+    ) -> Result<(), DaemonPublishError> {
+        self.publisher.publish(
+            DaemonControlMessage::UpdateNotificationAuthorization(
+                UpdateNotificationAuthorizationRequest { request_id, update },
+            ),
+            "update notification authorization publication",
+        )
+    }
 }
 
 #[cfg(feature = "tray")]
-#[derive(Debug, Clone)]
+pub(super) struct TrayStatusPublisher {
+    publisher: EventPublisher<DaemonControlMessage>,
+}
+
+#[cfg(feature = "tray")]
+impl TrayStatusPublisher {
+    pub(super) fn watcher_online(&self) -> Result<(), DaemonPublishError> {
+        self.publisher.publish(
+            DaemonControlMessage::TrayWatcherOnline,
+            "tray watcher-online publication",
+        )
+    }
+
+    pub(super) fn watcher_offline(&self, reason: String) -> Result<(), DaemonPublishError> {
+        self.publisher.publish(
+            DaemonControlMessage::TrayWatcherOffline(reason),
+            "tray watcher-offline publication",
+        )
+    }
+}
+
+pub(super) struct OverlayActionPublisher {
+    #[cfg(any(feature = "tray", test))]
+    sender: SyncSender<TrayAction>,
+    #[cfg(any(feature = "tray", test))]
+    wake: RuntimeWakeSender,
+    #[cfg(any(feature = "tray", test))]
+    releases: Receiver<()>,
+    #[cfg(any(feature = "tray", test))]
+    available_slots: usize,
+}
+
+#[cfg(any(feature = "tray", test))]
+pub(super) type OverlayActionPublishError = DaemonPublishError;
+
+#[cfg(any(feature = "tray", test))]
+impl OverlayActionPublisher {
+    fn refresh_available_slots(&mut self) -> Result<(), OverlayActionPublishError> {
+        for () in self.releases.try_iter() {
+            if self.available_slots >= MAX_OVERLAY_ACTION_INTENTS {
+                return Err(DaemonPublishError::InvalidCapacity);
+            }
+            self.available_slots += 1;
+        }
+        Ok(())
+    }
+
+    pub(super) fn publish(&mut self, action: TrayAction) -> Result<(), OverlayActionPublishError> {
+        self.refresh_available_slots()?;
+        if self.available_slots == 0 {
+            return Err(DaemonPublishError::QueueFull);
+        }
+        self.available_slots -= 1;
+        match self.sender.try_send(action) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                self.available_slots += 1;
+                return Err(DaemonPublishError::QueueFull);
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                self.available_slots += 1;
+                return Err(DaemonPublishError::Disconnected);
+            }
+        }
+        self.wake.wake().map_err(|error| {
+            DaemonPublishError::Wake(io::Error::new(
+                error.kind(),
+                format!("tray action: {error}"),
+            ))
+        })
+    }
+}
+
+impl DaemonEventSenders {
+    fn control_publisher(&self, wake: RuntimeWakeSender) -> EventPublisher<DaemonControlMessage> {
+        EventPublisher {
+            sender: self.control.clone(),
+            wake,
+        }
+    }
+
+    pub(super) fn quit(&self, wake: RuntimeWakeSender) -> DaemonControlEvent {
+        DaemonControlEvent {
+            publisher: EventPublisher {
+                sender: self.quit.clone(),
+                wake,
+            },
+        }
+    }
+
+    pub(super) fn visibility(&self, wake: RuntimeWakeSender) -> VisibilityPublisher {
+        VisibilityPublisher {
+            publisher: EventPublisher {
+                sender: self.visibility.clone(),
+                wake,
+            },
+        }
+    }
+
+    pub(super) fn update_watch(&self, wake: RuntimeWakeSender) -> UpdateWatchPublisher {
+        UpdateWatchPublisher {
+            publisher: self.control_publisher(wake),
+        }
+    }
+
+    #[cfg(feature = "tray")]
+    pub(super) fn tray_status(&self, wake: RuntimeWakeSender) -> TrayStatusPublisher {
+        TrayStatusPublisher {
+            publisher: self.control_publisher(wake),
+        }
+    }
+
+    pub(super) fn overlay_actions(
+        &mut self,
+        wake: RuntimeWakeSender,
+    ) -> io::Result<OverlayActionPublisher> {
+        #[cfg(not(any(feature = "tray", test)))]
+        let _ = wake;
+        Ok(OverlayActionPublisher {
+            #[cfg(any(feature = "tray", test))]
+            sender: self.overlay_actions.clone(),
+            #[cfg(any(feature = "tray", test))]
+            wake,
+            #[cfg(any(feature = "tray", test))]
+            releases: self.overlay_action_releases.take().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "daemon overlay-action publisher was already claimed",
+                )
+            })?,
+            #[cfg(any(feature = "tray", test))]
+            available_slots: MAX_OVERLAY_ACTION_INTENTS,
+        })
+    }
+}
+
+/// Overlay state for daemon mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayState {
+    Hidden,
+    Visible,
+}
+
+#[cfg(feature = "tray")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OverlaySpawnErrorInfo {
     pub(crate) message: String,
     pub(crate) next_retry_at: Option<Instant>,
@@ -160,8 +449,6 @@ pub(crate) struct OverlaySpawnCandidate {
     pub(crate) source: &'static str,
 }
 
-/// A newer release the update watcher found. Carries the URL it discovered it
-/// with, so the tray item opens the instructions for this install method.
 #[cfg(feature = "tray")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AvailableUpdateNotice {
@@ -170,7 +457,7 @@ pub(crate) struct AvailableUpdateNotice {
 }
 
 #[cfg(feature = "tray")]
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct TrayStatus {
     pub(crate) overlay_error: Option<OverlaySpawnErrorInfo>,
     pub(crate) watcher_offline: bool,
@@ -179,338 +466,152 @@ pub(crate) struct TrayStatus {
 }
 
 #[cfg(feature = "tray")]
-#[derive(Debug)]
-pub(crate) struct TrayStatusShared {
-    inner: Mutex<TrayStatus>,
-    revision: AtomicU64,
-}
-
-#[cfg(feature = "tray")]
-impl TrayStatusShared {
-    pub(crate) fn new() -> Self {
-        Self {
-            inner: Mutex::new(TrayStatus::default()),
-            revision: AtomicU64::new(0),
-        }
-    }
-
-    pub(crate) fn snapshot(&self) -> TrayStatus {
-        self.lock_status().clone()
-    }
-
-    pub(crate) fn set_overlay_error(&self, error: Option<OverlaySpawnErrorInfo>) {
-        {
-            let mut status = self.lock_status();
-            status.overlay_error = error;
-        }
-        self.bump_revision();
-    }
-
-    pub(crate) fn set_watcher_offline(&self, reason: String) -> bool {
-        let was_offline = {
-            let mut status = self.lock_status();
-            let was_offline = status.watcher_offline;
-            status.watcher_offline = true;
-            status.watcher_reason = Some(reason);
-            was_offline
-        };
-        self.bump_revision();
-        !was_offline
-    }
-
-    pub(crate) fn set_watcher_online(&self) -> bool {
-        let was_offline = {
-            let mut status = self.lock_status();
-            let was_offline = status.watcher_offline;
-            status.watcher_offline = false;
-            status.watcher_reason = None;
-            was_offline
-        };
-        self.bump_revision();
-        was_offline
-    }
-
-    /// Publish (or clear) the pending update notice. The revision only moves
-    /// when the notice actually changed, so the tray is not rebuilt on every
-    /// poll that finds the same version.
-    pub(crate) fn set_available_update(&self, update: Option<AvailableUpdateNotice>) {
-        {
-            let mut status = self.lock_status();
-            if status.available_update == update {
-                return;
-            }
-            status.available_update = update;
-        }
-        self.bump_revision();
-    }
-
-    pub(crate) fn revision(&self) -> u64 {
-        self.revision.load(Ordering::Acquire)
-    }
-
-    fn lock_status(&self) -> std::sync::MutexGuard<'_, TrayStatus> {
-        self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("tray status mutex poisoned; recovering");
-            poisoned.into_inner()
-        })
-    }
-
-    fn bump_revision(&self) {
-        self.revision.fetch_add(1, Ordering::Release);
-    }
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct TraySnapshot {
+    pub(crate) overlay_active: bool,
+    pub(crate) status: TrayStatus,
 }
 
 #[derive(Debug)]
 pub struct AlreadyRunningError;
 
 impl std::fmt::Display for AlreadyRunningError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "wayscriber daemon is already running")
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("wayscriber daemon is already running")
     }
 }
 
 impl std::error::Error for AlreadyRunningError {}
 
-/// Daemon state manager
-pub type BackendRunner = dyn Fn(Option<String>) -> anyhow::Result<()> + Send + Sync;
-
-#[cfg(any(feature = "tray", test))]
-const MAX_OVERLAY_ACTION_INTENTS: usize = 64;
-
-#[derive(Debug, Default)]
-struct OverlayActionIntentState {
-    queue: VecDeque<TrayAction>,
-    in_flight: usize,
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct OverlayActionIntents {
-    state: Mutex<OverlayActionIntentState>,
-    ready: Arc<AtomicBool>,
-}
-
-#[derive(Clone)]
-pub(super) struct OverlayActionPublisher {
-    #[cfg(any(feature = "tray", test))]
-    intents: Arc<OverlayActionIntents>,
-    #[cfg(any(feature = "tray", test))]
-    event: DaemonControlEvent,
-}
-
-#[cfg(any(feature = "tray", test))]
-#[derive(Debug)]
-pub(super) enum OverlayActionPublishError {
-    QueueFull,
-    Wake(io::Error),
-}
-
-impl OverlayActionIntents {
-    pub(super) fn publisher(self: &Arc<Self>, wake: RuntimeWakeHandle) -> OverlayActionPublisher {
-        #[cfg(not(any(feature = "tray", test)))]
-        let _ = wake;
-        OverlayActionPublisher {
-            #[cfg(any(feature = "tray", test))]
-            intents: Arc::clone(self),
-            #[cfg(any(feature = "tray", test))]
-            event: DaemonControlEvent::new(Arc::clone(&self.ready), wake),
-        }
-    }
-
-    pub(crate) fn claim_batch(&self) -> Vec<TrayAction> {
-        self.claim_batch_with_hook(|| {})
-    }
-
-    fn claim_batch_with_hook(&self, after_claim: impl FnOnce()) -> Vec<TrayAction> {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if !self.ready.swap(false, Ordering::Acquire) {
-            return Vec::new();
-        }
-        after_claim();
-        let batch: Vec<_> = state.queue.drain(..).collect();
-        state.in_flight += batch.len();
-        batch
-    }
-
-    pub(crate) fn finish_batch(&self, completed: usize) {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        assert!(
-            completed <= state.in_flight,
-            "completed action count exceeds in-flight ownership"
-        );
-        state.in_flight -= completed;
-    }
-
-    pub(crate) fn is_ready(&self) -> bool {
-        self.ready.load(Ordering::Acquire)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn pending_counts(&self) -> (usize, usize) {
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        (state.queue.len(), state.in_flight)
-    }
-}
-
-#[cfg(any(feature = "tray", test))]
-impl OverlayActionPublisher {
-    pub(super) fn publish(&self, action: TrayAction) -> Result<(), OverlayActionPublishError> {
-        let mut state = self
-            .intents
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if state.queue.len() + state.in_flight >= MAX_OVERLAY_ACTION_INTENTS {
-            return Err(OverlayActionPublishError::QueueFull);
-        }
-        state.queue.push_back(action);
-        self.event
-            .raise("tray action")
-            .map_err(OverlayActionPublishError::Wake)
-    }
-}
+/// Test seam for running the overlay inline without spawning another process.
+pub type BackendRunner = dyn FnMut(Option<String>, Option<bool>) -> anyhow::Result<()> + Send;
 
 #[cfg(test)]
-mod control_tests {
+mod tests {
     use super::*;
-    use std::sync::Barrier;
-    use std::sync::atomic::AtomicUsize;
+    use crate::backend::wayland::RuntimeWakeSource;
+    use std::time::Duration;
 
-    #[derive(Default)]
-    struct CountingWake {
-        calls: AtomicUsize,
-        fail: AtomicBool,
-    }
-
-    impl ControlWake for CountingWake {
-        fn wake(&self) -> io::Result<()> {
-            self.calls.fetch_add(1, Ordering::Relaxed);
-            if self.fail.load(Ordering::Relaxed) {
-                Err(io::Error::other("injected wake failure"))
-            } else {
-                Ok(())
-            }
-        }
-    }
-
-    fn action_publisher(
-        intents: &Arc<OverlayActionIntents>,
-        wake: Arc<CountingWake>,
-    ) -> OverlayActionPublisher {
-        OverlayActionPublisher {
-            intents: Arc::clone(intents),
-            event: DaemonControlEvent::with_wake(Arc::clone(&intents.ready), wake),
-        }
+    fn test_wake() -> (RuntimeWakeSource, RuntimeWakeSender) {
+        let wake = RuntimeWakeSource::new().expect("test creates a daemon runtime eventfd");
+        let sender = wake
+            .try_sender()
+            .expect("test duplicates its daemon runtime eventfd");
+        (wake, sender)
     }
 
     #[test]
-    fn action_published_after_batch_claim_remains_pending() {
-        let intents = Arc::new(OverlayActionIntents::default());
-        let wake = Arc::new(CountingWake::default());
-        let publisher = action_publisher(&intents, wake);
-        publisher.publish(TrayAction::ToggleFreeze).unwrap();
+    fn independent_action_owners_preserve_fifo_order() {
+        let (first_inbox, mut first_senders) = daemon_event_channel();
+        let (second_inbox, mut second_senders) = daemon_event_channel();
+        let (first_wake, first_sender) = test_wake();
+        let (second_wake, second_sender) = test_wake();
+        let mut first = first_senders
+            .overlay_actions(first_sender)
+            .expect("first fixture claims its only action publisher");
+        let mut second = second_senders
+            .overlay_actions(second_sender)
+            .expect("second fixture claims its only action publisher");
 
-        let claim_barrier = Arc::new(Barrier::new(2));
-        let release_barrier = Arc::new(Barrier::new(2));
-        let claimant_intents = Arc::clone(&intents);
-        let claimant_claim = Arc::clone(&claim_barrier);
-        let claimant_release = Arc::clone(&release_barrier);
-        let claimant = std::thread::spawn(move || {
-            claimant_intents.claim_batch_with_hook(|| {
-                claimant_claim.wait();
-                claimant_release.wait();
-            })
-        });
+        first
+            .publish(TrayAction::ToggleFreeze)
+            .expect("first owner publishes into an open fixture queue");
+        first
+            .publish(TrayAction::ToggleHelp)
+            .expect("first owner preserves its second FIFO action");
+        second
+            .publish(TrayAction::CaptureRegion)
+            .expect("second owner publishes into its isolated fixture queue");
 
-        claim_barrier.wait();
-        let late_publisher = publisher.clone();
-        let late = std::thread::spawn(move || {
-            late_publisher.publish(TrayAction::ToggleHelp).unwrap();
-        });
-        release_barrier.wait();
-
-        let first = claimant.join().unwrap();
-        late.join().unwrap();
-        assert_eq!(first, [TrayAction::ToggleFreeze]);
-        intents.finish_batch(first.len());
-
-        let second = intents.claim_batch();
-        assert_eq!(second, [TrayAction::ToggleHelp]);
-        intents.finish_batch(second.len());
+        assert!(
+            first_wake
+                .wait_readable(Some(Duration::ZERO))
+                .expect("fixture wake remains readable")
+        );
+        assert!(
+            second_wake
+                .wait_readable(Some(Duration::ZERO))
+                .expect("fixture wake remains readable")
+        );
+        assert_eq!(
+            first_inbox.drain().overlay_actions,
+            [TrayAction::ToggleFreeze, TrayAction::ToggleHelp]
+        );
+        assert_eq!(
+            second_inbox.drain().overlay_actions,
+            [TrayAction::CaptureRegion]
+        );
     }
 
     #[test]
-    fn queue_full_rejection_does_not_publish_another_wake() {
-        let intents = Arc::new(OverlayActionIntents::default());
-        let wake = Arc::new(CountingWake::default());
-        let publisher = action_publisher(&intents, Arc::clone(&wake));
+    fn bounded_action_queue_reports_backpressure_without_reordering() {
+        let (inbox, mut senders) = daemon_event_channel();
+        let (_wake, wake_sender) = test_wake();
+        let mut publisher = senders
+            .overlay_actions(wake_sender)
+            .expect("fixture claims its only action publisher");
+
         for _ in 0..MAX_OVERLAY_ACTION_INTENTS {
-            publisher.publish(TrayAction::ToggleHelp).unwrap();
+            publisher
+                .publish(TrayAction::ToggleHelp)
+                .expect("fixture queue has its documented remaining capacity");
         }
-        let wake_count = wake.calls.load(Ordering::Relaxed);
-
         assert!(matches!(
             publisher.publish(TrayAction::ToggleFreeze),
-            Err(OverlayActionPublishError::QueueFull)
+            Err(DaemonPublishError::QueueFull)
         ));
-        assert_eq!(wake.calls.load(Ordering::Relaxed), wake_count);
-        assert!(intents.ready.load(Ordering::Acquire));
-    }
+        let batch = inbox.drain();
+        assert_eq!(batch.overlay_actions.len(), MAX_OVERLAY_ACTION_INTENTS);
+        assert!(matches!(
+            publisher.publish(TrayAction::ToggleFreeze),
+            Err(DaemonPublishError::QueueFull)
+        ));
 
-    #[test]
-    fn wake_failure_keeps_action_and_readiness_pending() {
-        let intents = Arc::new(OverlayActionIntents::default());
-        let wake = Arc::new(CountingWake::default());
-        wake.fail.store(true, Ordering::Relaxed);
-        let publisher = action_publisher(&intents, wake);
-
-        let error = publisher
+        inbox
+            .release_overlay_action_slots(1)
+            .expect("owner returns one completed action slot");
+        publisher
             .publish(TrayAction::ToggleFreeze)
-            .expect_err("injected wake failure should be returned");
-        let OverlayActionPublishError::Wake(error) = error else {
-            panic!("expected wake failure");
-        };
-        assert_eq!(error.kind(), io::ErrorKind::Other);
-        assert!(intents.ready.load(Ordering::Acquire));
-        assert_eq!(intents.pending_counts(), (1, 0));
-
-        let batch = intents.claim_batch();
-        assert_eq!(batch, [TrayAction::ToggleFreeze]);
-        intents.finish_batch(batch.len());
+            .expect("returned capacity admits exactly one newer action");
+        assert_eq!(inbox.drain().overlay_actions, [TrayAction::ToggleFreeze]);
     }
 
     #[test]
-    fn visibility_metadata_merges_and_claims_as_one_snapshot() {
-        let intents = Arc::new(VisibilityIntents::default());
-        let wake = Arc::new(CountingWake::default());
-        let publisher = VisibilityPublisher {
-            intents: Arc::clone(&intents),
-            event: DaemonControlEvent::with_wake(Arc::clone(&intents.ready), wake),
-        };
+    fn dropped_owner_reports_disconnection() {
+        let (inbox, senders) = daemon_event_channel();
+        let (_wake, wake_sender) = test_wake();
+        let publisher = senders.visibility(wake_sender);
+        drop(inbox);
 
-        publisher
-            .publish(Some("first".into()), false, "first publication")
-            .unwrap();
-        publisher.publish(None, true, "signal publication").unwrap();
-        publisher
-            .publish(Some("latest".into()), false, "replacement publication")
-            .unwrap();
+        assert!(matches!(
+            publisher.publish(None, true, "fixture publication"),
+            Err(DaemonPublishError::Disconnected)
+        ));
+    }
 
-        assert_eq!(
-            intents.claim(),
-            Some(VisibilityIntent {
-                activation_token: Some("latest".into()),
-                signal_requested: true,
-            })
-        );
-        assert_eq!(intents.claim(), None);
+    #[test]
+    fn shutdown_publication_is_independent_and_idempotent_when_control_is_full() {
+        let (inbox, senders) = daemon_event_channel();
+        let (_control_wake, control_sender) = test_wake();
+        let (_quit_wake, quit_sender) = test_wake();
+        let updates = senders.update_watch(control_sender);
+        let quit = senders.quit(quit_sender);
+
+        for _ in 0..MAX_DAEMON_CONTROL_EVENTS {
+            updates
+                .publish_available(None)
+                .expect("fixture fills the ordinary control queue");
+        }
+        quit.raise("first fixture shutdown")
+            .expect("shutdown has an independent queue");
+        quit.raise("duplicate fixture shutdown")
+            .expect("a duplicate shutdown coalesces with the pending request");
+
+        let batch = inbox.drain();
+        assert!(matches!(
+            batch.controls.first(),
+            Some(DaemonControlMessage::Quit)
+        ));
+        assert_eq!(batch.controls.len(), MAX_DAEMON_CONTROL_EVENTS + 1);
     }
 }

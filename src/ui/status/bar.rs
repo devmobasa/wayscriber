@@ -833,6 +833,7 @@ pub fn render_status_bar(
     style: &crate::config::StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
+    theme: &theme::Theme,
 ) {
     let Some(layout) = input_state.status_hud_layout() else {
         return;
@@ -856,7 +857,7 @@ pub fn render_status_bar(
         layout.pill_height,
         STATUS_BAR_CORNER_RADIUS,
         (bg_color[0], bg_color[1], bg_color[2], bg_color[3]),
-        theme::current().border_hairline,
+        theme.border_hairline,
         None,
     );
 

@@ -6,6 +6,38 @@
 use super::*;
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
 
+const PROGRAMMATIC_CLOSE_CLASS: &str = "wayscriber-programmatic-popover-close";
+
+pub(super) fn attach_closed_dismissal(
+    popover: &gtk4::Popover,
+    feedback: &FeedbackSender,
+    dismiss: ToolbarEvent,
+) {
+    let sender = feedback.clone();
+    popover.connect_closed(move |popover| {
+        if popover.has_css_class(PROGRAMMATIC_CLOSE_CLASS) {
+            popover.remove_css_class(PROGRAMMATIC_CLOSE_CLASS);
+            return;
+        }
+        send_event(&sender, dismiss.clone());
+    });
+}
+
+fn popdown_without_dismissal(popover: &gtk4::Popover) {
+    popover.add_css_class(PROGRAMMATIC_CLOSE_CLASS);
+    popover.popdown();
+}
+
+fn popup_from_snapshot(popover: &gtk4::Popover) {
+    popover.remove_css_class(PROGRAMMATIC_CLOSE_CLASS);
+    popover.popup();
+}
+
+pub(super) fn unparent_without_dismissal(popover: &gtk4::Popover) {
+    popover.add_css_class(PROGRAMMATIC_CLOSE_CLASS);
+    popover.unparent();
+}
+
 pub(super) fn set_popover_capture_transparent(
     popover: &gtk4::Popover,
     capture_surface: &CaptureSurfaceContent,
@@ -36,11 +68,6 @@ fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
 
 impl TopBar {
     pub(super) fn hide_popovers_for_window_hide(&self) {
-        self.shapes_expected_open.set(false);
-        self.overflow_expected_open.set(false);
-        self.canvas_expected_open.set(false);
-        self.session_expected_open.set(false);
-        self.settings_expected_open.set(false);
         for popover in [
             self.shapes_popover.as_ref(),
             self.overflow_popover.as_ref(),
@@ -52,7 +79,7 @@ impl TopBar {
         .flatten()
         {
             if popover.is_visible() {
-                popover.popdown();
+                popdown_without_dismissal(popover);
             }
         }
     }
@@ -173,25 +200,23 @@ impl TopBar {
                     snapshot.fill_enabled,
                     snapshot.polygon_sides,
                 );
-                if self.shapes_content_key.get() != Some(content_key) {
-                    self.shapes_capture_surface
-                        .as_ref()
-                        .expect("shapes popover capture surface")
-                        .set_content(&self.build_shapes_popover_content(
+                if self.shapes_content_key != Some(content_key) {
+                    if let Some(surface) = self.shapes_capture_surface.as_ref() {
+                        surface.set_content(&self.build_shapes_popover_content(
                             snapshot,
                             button_size,
                             icon_size,
                             use_icons,
                             scale,
                         ));
-                    self.shapes_content_key.set(Some(content_key));
+                    }
+                    self.shapes_content_key = Some(content_key);
                 }
             }
-            self.shapes_expected_open.set(open);
             if open && !popover.is_visible() {
-                popover.popup();
+                popup_from_snapshot(&popover);
             } else if !open && popover.is_visible() {
-                popover.popdown();
+                popdown_without_dismissal(&popover);
             }
         }
 
@@ -209,12 +234,10 @@ impl TopBar {
                     snapshot.session_popover_open,
                     snapshot.settings_popover_open,
                 );
-                if self.overflow_content_key.get() != Some(content_key) {
+                if self.overflow_content_key != Some(content_key) {
                     let spec = model::TopToolbarSpec::build(snapshot, plan);
-                    self.overflow_capture_surface
-                        .as_ref()
-                        .expect("overflow popover capture surface")
-                        .set_content(&self.build_overflow_popover_content(
+                    if let Some(surface) = self.overflow_capture_surface.as_ref() {
+                        surface.set_content(&self.build_overflow_popover_content(
                             snapshot,
                             &spec,
                             button_size,
@@ -222,17 +245,15 @@ impl TopBar {
                             use_icons,
                             scale,
                         ));
-                    self.overflow_content_key.set(Some(content_key));
+                    }
+                    self.overflow_content_key = Some(content_key);
                 }
             }
-            self.overflow_expected_open.set(open);
             if open && !popover.is_visible() {
-                popover.popup();
+                popup_from_snapshot(&popover);
             } else if !open && popover.is_visible() {
-                popover.popdown();
+                popdown_without_dismissal(&popover);
             }
-        } else {
-            self.overflow_expected_open.set(false);
         }
 
         self.sync_menu_popovers(snapshot, scale);
@@ -246,72 +267,60 @@ impl TopBar {
             let open = snapshot.canvas_popover_open;
             if open {
                 let content_key = CanvasMenuContentKey::of(snapshot);
-                if self.canvas_content_key.borrow().as_ref() != Some(&content_key) {
+                if self.canvas_content_key.as_ref() != Some(&content_key) {
                     let (content, updaters) = self.build_canvas_popover_content(snapshot, scale);
-                    self.canvas_capture_surface
-                        .as_ref()
-                        .expect("canvas popover capture surface")
-                        .set_content(&content);
+                    if let Some(surface) = self.canvas_capture_surface.as_ref() {
+                        surface.set_content(&content);
+                    }
                     // Delay-slider values ride these persistent updaters (the
                     // content key omits them), so a delay drag never rebuilds
                     // the subtree. Replace the old set — it captured the now
                     // dead widgets this rebuild just discarded.
-                    *self.canvas_updaters.borrow_mut() = updaters;
-                    *self.canvas_content_key.borrow_mut() = Some(content_key);
+                    self.canvas_updaters = updaters;
+                    self.canvas_content_key = Some(content_key);
                 }
             }
-            self.canvas_expected_open.set(open);
             if open && !popover.is_visible() {
-                popover.popup();
+                popup_from_snapshot(&popover);
             } else if !open && popover.is_visible() {
-                popover.popdown();
+                popdown_without_dismissal(&popover);
             }
-        } else {
-            self.canvas_expected_open.set(false);
         }
 
         if let Some(popover) = self.session_popover.clone() {
             let open = snapshot.session_popover_open;
             if open {
                 let content_key = SessionMenuContentKey::of(snapshot);
-                if self.session_content_key.borrow().as_ref() != Some(&content_key) {
-                    self.session_capture_surface
-                        .as_ref()
-                        .expect("session popover capture surface")
-                        .set_content(&self.build_session_popover_content(snapshot, scale));
-                    *self.session_content_key.borrow_mut() = Some(content_key);
+                if self.session_content_key.as_ref() != Some(&content_key) {
+                    if let Some(surface) = self.session_capture_surface.as_ref() {
+                        surface.set_content(&self.build_session_popover_content(snapshot, scale));
+                    }
+                    self.session_content_key = Some(content_key);
                 }
             }
-            self.session_expected_open.set(open);
             if open && !popover.is_visible() {
-                popover.popup();
+                popup_from_snapshot(&popover);
             } else if !open && popover.is_visible() {
-                popover.popdown();
+                popdown_without_dismissal(&popover);
             }
-        } else {
-            self.session_expected_open.set(false);
         }
 
         if let Some(popover) = self.settings_popover.clone() {
             let open = snapshot.settings_popover_open;
             if open {
                 let content_key = SettingsMenuContentKey::of(snapshot);
-                if self.settings_content_key.borrow().as_ref() != Some(&content_key) {
-                    self.settings_capture_surface
-                        .as_ref()
-                        .expect("settings popover capture surface")
-                        .set_content(&self.build_settings_popover_content(snapshot, scale));
-                    *self.settings_content_key.borrow_mut() = Some(content_key);
+                if self.settings_content_key.as_ref() != Some(&content_key) {
+                    if let Some(surface) = self.settings_capture_surface.as_ref() {
+                        surface.set_content(&self.build_settings_popover_content(snapshot, scale));
+                    }
+                    self.settings_content_key = Some(content_key);
                 }
             }
-            self.settings_expected_open.set(open);
             if open && !popover.is_visible() {
-                popover.popup();
+                popup_from_snapshot(&popover);
             } else if !open && popover.is_visible() {
-                popover.popdown();
+                popdown_without_dismissal(&popover);
             }
-        } else {
-            self.settings_expected_open.set(false);
         }
     }
 
@@ -437,9 +446,9 @@ impl TopBar {
                 let control = model::TopToolbarControl::Tool(tool);
                 let tooltip = control.tooltip(snapshot);
                 let label = control.label(snapshot);
-                let button = if use_icons {
+                let button = if let (true, Some(icon)) = (use_icons, control.icon(snapshot)) {
                     icon_button(
-                        top_toolbar_icon_painter(control.icon(snapshot).expect("tool icon")),
+                        top_toolbar_icon_painter(icon),
                         button_size,
                         icon_size,
                         &tooltip,
@@ -539,9 +548,9 @@ impl TopBar {
         for control in spec.overflow().iter().copied() {
             let tooltip = control.overflow_tooltip(snapshot);
             let label = control.label(snapshot);
-            let button = if use_icons {
+            let button = if let (true, Some(icon)) = (use_icons, control.icon(snapshot)) {
                 icon_button(
-                    top_toolbar_icon_painter(control.icon(snapshot).expect("overflow icon")),
+                    top_toolbar_icon_painter(icon),
                     button_size,
                     icon_size,
                     &tooltip,

@@ -1,14 +1,25 @@
 use super::core::Daemon;
 #[cfg(feature = "tray")]
 use super::tray::WayscriberTray;
+#[cfg(feature = "tray")]
+use super::types::DaemonControlMessage;
 use super::types::{BackendRunner, OverlayState};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::mpsc::{self, Receiver};
 
 #[cfg(feature = "tray")]
 use ksni::{Tray, menu::MenuItem};
-#[cfg(feature = "tray")]
-use std::sync::atomic::AtomicBool;
+
+type RunnerInvocation = (Option<String>, Option<bool>);
+
+fn runner_probe() -> (Box<BackendRunner>, Receiver<RunnerInvocation>) {
+    let (sender, receiver) = mpsc::channel();
+    let runner = Box::new(move |mode, session_resume_override| {
+        sender
+            .send((mode, session_resume_override))
+            .map_err(|_| anyhow::anyhow!("runner probe receiver disconnected"))
+    });
+    (runner, receiver)
+}
 
 #[test]
 fn daemon_session_resume_override_reflects_constructor_value() {
@@ -23,55 +34,51 @@ fn daemon_session_resume_override_reflects_constructor_value() {
 
 #[test]
 fn toggle_overlay_with_backend_runner_works_without_external_process() {
-    let called = Arc::new(AtomicUsize::new(0));
-    let called_clone = Arc::clone(&called);
-    let runner: Arc<BackendRunner> = Arc::new(move |_| {
-        called_clone.fetch_add(1, AtomicOrdering::SeqCst);
-        Ok(())
-    });
+    let (runner, calls) = runner_probe();
     let mut daemon = Daemon::with_backend_runner(None, runner);
 
-    daemon.toggle_overlay().unwrap();
-    assert_eq!(called.load(AtomicOrdering::SeqCst), 1);
+    daemon
+        .toggle_overlay()
+        .expect("fixture toggles through its inline backend runner");
+    assert_eq!(calls.try_iter().count(), 1);
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
-}
-
-#[cfg(feature = "tray")]
-fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {
-    Arc::new(move |mode: Option<String>| -> anyhow::Result<()> {
-        assert_eq!(mode.as_deref(), Some("whiteboard"));
-        count.fetch_add(1, AtomicOrdering::SeqCst);
-        Ok(())
-    })
 }
 
 #[cfg(feature = "tray")]
 #[test]
 fn toggle_overlay_invokes_backend_when_hidden() {
-    let counter = Arc::new(AtomicUsize::new(0));
-    let runner = runner_counter(counter.clone());
+    let (runner, modes) = runner_probe();
     let mut daemon = Daemon::with_backend_runner(Some("whiteboard".into()), runner);
 
-    daemon.toggle_overlay().unwrap();
-    assert_eq!(counter.load(AtomicOrdering::SeqCst), 1);
+    daemon
+        .toggle_overlay()
+        .expect("fixture invokes its hidden-overlay backend runner");
+    assert_eq!(
+        modes.try_iter().collect::<Vec<_>>(),
+        [(Some("whiteboard".into()), None)]
+    );
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
 }
 
 #[cfg(feature = "tray")]
 #[test]
 fn hide_overlay_is_idempotent() {
-    let runner = Arc::new(|_: Option<String>| Ok(())) as Arc<BackendRunner>;
+    let runner = Box::new(|_: Option<String>, _: Option<bool>| Ok(()));
     let mut daemon = Daemon::with_backend_runner(None, runner);
-    daemon.hide_overlay().unwrap();
+    daemon
+        .hide_overlay()
+        .expect("fixture hides an already-hidden overlay");
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
 
     daemon.overlay_state = OverlayState::Visible;
-    daemon.toggle_overlay().unwrap();
+    daemon
+        .toggle_overlay()
+        .expect("fixture hides its synthetic visible overlay");
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
 }
 
 #[cfg(feature = "tray")]
-fn activate_menu_item(tray: &mut WayscriberTray, label: &str) {
+fn activate_menu_item(tray: &mut WayscriberTray, label: &str) -> bool {
     fn activate_in(
         tray: &mut WayscriberTray,
         items: Vec<MenuItem<WayscriberTray>>,
@@ -98,10 +105,7 @@ fn activate_menu_item(tray: &mut WayscriberTray, label: &str) {
     }
 
     let items = tray.menu();
-    if activate_in(tray, items, label) {
-        return;
-    }
-    panic!("Menu item '{label}' not found");
+    activate_in(tray, items, label)
 }
 
 #[cfg(feature = "tray")]
@@ -129,23 +133,23 @@ fn menu_labels(tray: &WayscriberTray) -> Vec<String> {
 #[cfg(feature = "tray")]
 #[test]
 fn tray_toggle_action_sets_flag() {
-    let toggle = Arc::new(AtomicBool::new(false));
-    let quit = Arc::new(AtomicBool::new(false));
-    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    let mut tray =
-        WayscriberTray::new_for_tests_with_wake(toggle.clone(), quit, false, wake.handle());
+    let (mut tray, inbox, wake, _process_broker) = WayscriberTray::new_for_tests(false);
 
-    activate_menu_item(&mut tray, "Toggle Overlay");
-    assert!(toggle.load(AtomicOrdering::SeqCst));
-    assert!(wake.wait_readable(Some(std::time::Duration::ZERO)).unwrap());
+    assert!(activate_menu_item(&mut tray, "Toggle Overlay"));
+    assert!(
+        wake.wait_readable(Some(std::time::Duration::ZERO))
+            .expect("fixture observes the tray-toggle daemon wake")
+    );
+    assert!(matches!(
+        inbox.drain().controls.as_slice(),
+        [DaemonControlMessage::Visibility(_)]
+    ));
 }
 
 #[cfg(feature = "tray")]
 #[test]
 fn tray_menu_exposes_minimal_light_actions() {
-    let toggle = Arc::new(AtomicBool::new(false));
-    let quit = Arc::new(AtomicBool::new(false));
-    let tray = WayscriberTray::new_for_tests(toggle, quit, false);
+    let (tray, _inbox, _wake, _process_broker) = WayscriberTray::new_for_tests(false);
 
     let labels = menu_labels(&tray);
     assert!(labels.iter().any(|label| label.contains("Light Mode")));
@@ -157,9 +161,7 @@ fn tray_menu_exposes_minimal_light_actions() {
 #[cfg(feature = "tray")]
 #[test]
 fn tray_menu_groups_actions_to_fit_short_displays() {
-    let toggle = Arc::new(AtomicBool::new(false));
-    let quit = Arc::new(AtomicBool::new(false));
-    let tray = WayscriberTray::new_for_tests(toggle, quit, false);
+    let (tray, _inbox, _wake, _process_broker) = WayscriberTray::new_for_tests(false);
     let menu = tray.menu();
 
     assert!(menu.len() <= 12, "top-level tray menu grew too tall");
@@ -180,13 +182,15 @@ fn tray_menu_groups_actions_to_fit_short_displays() {
 #[cfg(feature = "tray")]
 #[test]
 fn tray_quit_action_sets_quit_flag() {
-    let toggle = Arc::new(AtomicBool::new(false));
-    let quit = Arc::new(AtomicBool::new(false));
-    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    let mut tray =
-        WayscriberTray::new_for_tests_with_wake(toggle, quit.clone(), false, wake.handle());
+    let (mut tray, inbox, wake, _process_broker) = WayscriberTray::new_for_tests(false);
 
-    activate_menu_item(&mut tray, "Quit");
-    assert!(quit.load(AtomicOrdering::SeqCst));
-    assert!(wake.wait_readable(Some(std::time::Duration::ZERO)).unwrap());
+    assert!(activate_menu_item(&mut tray, "Quit"));
+    assert!(
+        wake.wait_readable(Some(std::time::Duration::ZERO))
+            .expect("fixture observes the tray-quit daemon wake")
+    );
+    assert!(matches!(
+        inbox.drain().controls.as_slice(),
+        [DaemonControlMessage::Quit]
+    ));
 }

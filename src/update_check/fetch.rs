@@ -20,8 +20,14 @@ use super::manifest::MAX_MANIFEST_BYTES;
 const FETCHERS: [&str; 2] = ["curl", "wget"];
 
 /// Download `url` and return its body.
-pub(crate) fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
-    fetch_with(url, timeout, run_fetcher)
+pub(crate) fn fetch(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    url: &str,
+    timeout: Duration,
+) -> Result<String, String> {
+    fetch_with(url, timeout, |program, url, timeout| {
+        run_fetcher(process_broker, program, url, timeout)
+    })
 }
 
 fn fetch_with(
@@ -54,23 +60,26 @@ enum FetchError {
     Failed(String),
 }
 
-fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, FetchError> {
+fn run_fetcher(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    program: &str,
+    url: &str,
+    timeout: Duration,
+) -> Result<String, FetchError> {
     let Some(program_path) = find_in_path(program) else {
         return Err(FetchError::Unavailable);
     };
 
     let arguments = fetch_arguments(program, url, timeout);
-    let output = crate::process_broker::current()
-        .and_then(|broker| {
-            broker.run(
-                crate::process_broker::HelperKind::UpdateFetcher,
-                program_path.as_os_str(),
-                &arguments,
-                Vec::new(),
-                timeout.max(Duration::from_secs(1)),
-                MAX_MANIFEST_BYTES + 1,
-            )
-        })
+    let output = process_broker
+        .run(
+            crate::process_broker::HelperKind::UpdateFetcher,
+            program_path.as_os_str(),
+            &arguments,
+            Vec::new(),
+            timeout.max(Duration::from_secs(1)),
+            MAX_MANIFEST_BYTES + 1,
+        )
         .map_err(|err| {
             let message = err.to_string();
             if message.contains("stdout exceeded output cap") {
@@ -207,7 +216,12 @@ mod tests {
 
     #[test]
     fn rejects_non_https_urls_without_spawning_anything() {
-        let err = fetch("http://wayscriber.com/latest.json", Duration::from_secs(5)).unwrap_err();
+        let err = fetch_with(
+            "http://wayscriber.com/latest.json",
+            Duration::from_secs(5),
+            |_, _, _| Err(FetchError::Unavailable),
+        )
+        .expect_err("non-HTTPS fixture URL is rejected before transport");
         assert!(err.contains("non-HTTPS"), "unexpected error: {err}");
     }
 
@@ -220,7 +234,11 @@ mod tests {
         );
 
         // User config must be ignored, and curl only honors this as arg one.
-        assert_eq!(args.first().unwrap(), "--disable");
+        assert_eq!(
+            args.first()
+                .expect("curl fixture always emits its required first argument"),
+            "--disable"
+        );
         assert!(args.contains(&"--fail".to_string()));
         assert!(args.windows(2).any(|pair| pair == ["--proto", "=https"]));
         assert!(
@@ -233,7 +251,11 @@ mod tests {
                 |pair| pair[0] == "--max-filesize" && pair[1] == MAX_MANIFEST_BYTES.to_string()
             )
         );
-        assert_eq!(args.last().unwrap(), "https://wayscriber.com/latest.json");
+        assert_eq!(
+            args.last()
+                .expect("curl fixture always emits its requested URL"),
+            "https://wayscriber.com/latest.json"
+        );
     }
 
     #[test]
@@ -251,7 +273,11 @@ mod tests {
         // Errors must survive: only progress output is suppressed.
         assert!(args.contains(&"--no-verbose".to_string()));
         assert!(!args.contains(&"--quiet".to_string()));
-        assert_eq!(args.last().unwrap(), "https://wayscriber.com/latest.json");
+        assert_eq!(
+            args.last()
+                .expect("wget fixture always emits its requested URL"),
+            "https://wayscriber.com/latest.json"
+        );
     }
 
     #[test]
@@ -321,7 +347,10 @@ mod tests {
 
     #[test]
     fn body_validation_guards_size_and_encoding() {
-        assert_eq!(validate_body(b"{}").unwrap(), "{}");
+        assert_eq!(
+            validate_body(b"{}").expect("UTF-8 fixture body is within the manifest cap"),
+            "{}"
+        );
         assert!(validate_body(&vec![b'x'; MAX_MANIFEST_BYTES + 1]).is_err());
         assert!(validate_body(&[0xff, 0xfe]).is_err());
     }
@@ -357,7 +386,7 @@ mod tests {
                 }
             },
         )
-        .unwrap();
+        .expect("missing-curl fixture falls through to its successful wget transport");
         assert_eq!(body, "{}");
         assert_eq!(calls, ["curl", "wget"]);
     }

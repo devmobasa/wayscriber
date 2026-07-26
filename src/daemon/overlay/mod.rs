@@ -1,8 +1,6 @@
 use anyhow::Result;
 use log::{debug, info};
 
-use crate::{runtime_session_override, set_runtime_session_override};
-
 use super::core::Daemon;
 use super::types::OverlayState;
 
@@ -32,24 +30,23 @@ impl Daemon {
             return Ok(());
         }
 
-        if let Some(runner) = self.backend_runner.clone() {
+        if let Some(mut runner) = self.backend_runner.take() {
             self.overlay_state = OverlayState::Visible;
             self.active_named_session_file = self.effective_named_session_file();
             info!("Overlay state set to Visible");
             self.clear_overlay_spawn_error();
-            let previous_override = runtime_session_override();
-            let request_override = self
-                .pending_toggle_request
-                .as_ref()
-                .and_then(|request| request.session_resume_override());
-            set_runtime_session_override(request_override.or(self.session_resume_override()));
             let requested_mode = self
                 .pending_toggle_request
                 .as_ref()
                 .and_then(|request| request.mode.clone())
                 .or_else(|| self.initial_mode.clone());
-            let result = runner(requested_mode);
-            set_runtime_session_override(previous_override);
+            let session_resume_override = self
+                .pending_toggle_request
+                .as_ref()
+                .and_then(|request| request.session_resume_override())
+                .or(self.session_resume_override);
+            let result = runner(requested_mode, session_resume_override);
+            self.backend_runner = Some(runner);
             self.pending_toggle_request = None;
             self.active_named_session_file = None;
             self.overlay_state = OverlayState::Hidden;

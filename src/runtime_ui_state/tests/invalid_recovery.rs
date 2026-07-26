@@ -123,11 +123,19 @@ fn confirmed_invalid_reset_is_observation_bound_and_retains_artifact() {
     assert!(matches!(
         confirm_client.completion.try_recv(),
         Some(PersistenceRecoveryResult::InvalidSourcePreservedAndReset {
+            evidence,
             path_effect: RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
                 recovery_path,
             },
             ..
         }) if recovery_path == artifact_path
+            && evidence.path_effect_history.contains(&RuntimeStateFailurePathEffect::Known(
+                RuntimeStateObservedPathEffect::PostClaim(
+                    RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+                        recovery_path: artifact_path.clone(),
+                    }
+                )
+            ))
     ));
     assert!(matches!(
         controller.receipt(through),
@@ -136,6 +144,148 @@ fn confirmed_invalid_reset_is_observation_bound_and_retains_artifact() {
     assert_eq!(controller.pipeline().stable_source(), &missing);
     assert_eq!(controller.authority_epoch(), 2);
     assert!(controller.active_barrier().is_none());
+}
+
+#[test]
+fn preserve_completion_after_unrelated_protocol_result_retains_known_effect()
+-> Result<(), &'static str> {
+    let (mut controller, _, incident, client, preserve, mutation_id) =
+        begin_confirmed_invalid_preserve();
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/preserved-after-unrelated-protocol-result".into(),
+        observation: invalid_observation("invalid-source"),
+    };
+    let expected_effect =
+        RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::PostClaim(
+            RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+                recovery_path: artifact.path.clone(),
+            },
+        ));
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: preserve.barrier,
+            attempt: preserve.attempt,
+            command_id: RecoveryCommandId(preserve.command_id.get() + 1),
+            result: RecoveryIoResult::Inspected(Ok(inspected(invalid_observation(
+                "unrelated-protocol-result"
+            )))),
+        }),
+        SubmitPersistenceRecoveryResult::BlockedProtocolFailure {
+            reason: RecoveryCompletionProtocolError::UnknownCommand,
+            reinspection_dispatched: None,
+            ..
+        }
+    ));
+    assert!(controller.take_recovery_io_command().is_none());
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: preserve.barrier,
+            attempt: preserve.attempt,
+            command_id: preserve.command_id,
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                id: mutation_id,
+                applied_through: AcceptedStateRevision(0),
+                new_source: missing_revision(),
+                recovery_artifacts: vec![artifact.clone()],
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::Continue { .. }
+    ));
+    let Some(reinspection) = controller.take_recovery_io_command() else {
+        return Err("preserve completion must dispatch protocol-failure reinspection");
+    };
+    assert!(matches!(
+        reinspection.operation,
+        RecoveryIoOperation::Inspect
+    ));
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: reinspection.barrier,
+            attempt: reinspection.attempt,
+            command_id: reinspection.command_id,
+            result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::StillUnhealthy { evidence, .. })
+            if evidence.recovery_artifacts.contains(&artifact)
+                && evidence.path_effect_history.contains(&expected_effect)
+    ));
+    Ok(())
+}
+
+#[test]
+fn malformed_owned_preserve_completion_retains_known_effect() -> Result<(), &'static str> {
+    let (mut controller, _, incident, client, preserve, mutation_id) =
+        begin_confirmed_invalid_preserve();
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/preserved-after-malformed-owned-completion".into(),
+        observation: invalid_observation("invalid-source"),
+    };
+    let expected_effect =
+        RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::PostClaim(
+            RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+                recovery_path: artifact.path.clone(),
+            },
+        ));
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: preserve.barrier,
+            attempt: preserve.attempt,
+            command_id: preserve.command_id,
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                id: SourceMutationId(mutation_id.get() + 1),
+                applied_through: AcceptedStateRevision(0),
+                new_source: missing_revision(),
+                recovery_artifacts: vec![artifact.clone()],
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::BlockedProtocolFailure {
+            reason: RecoveryCompletionProtocolError::UnexpectedSourceMutationIdentity,
+            evidence,
+            reinspection_dispatched: Some(_),
+            ..
+        } if evidence.recovery_artifacts.contains(&artifact)
+            && evidence.path_effect_history.contains(&expected_effect)
+    ));
+    let Some(reinspection) = controller.take_recovery_io_command() else {
+        return Err("malformed preserve completion must dispatch reinspection");
+    };
+    assert!(matches!(
+        reinspection.operation,
+        RecoveryIoOperation::Inspect
+    ));
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: reinspection.barrier,
+            attempt: reinspection.attempt,
+            command_id: reinspection.command_id,
+            result: RecoveryIoResult::Inspected(Ok(inspected(observation(missing_revision())))),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::StillUnhealthy { evidence, .. })
+            if evidence.recovery_artifacts.contains(&artifact)
+                && evidence.path_effect_history.contains(&expected_effect)
+    ));
+    Ok(())
 }
 
 #[test]
@@ -520,12 +670,14 @@ fn preserve_invalid_rejects_duplicate_recovery_artifact_paths() {
 fn retry_does_not_overwrite_an_exact_invalid_source() {
     let invalid = invalid_observation("startup-invalid");
     let (mut controller, incident) = RuntimeUiStateController::new_startup_unhealthy(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         invalid.clone(),
         RuntimeStateIoError::new("malformed startup state"),
         Vec::new(),
         RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::Untouched),
-    );
+    )
+    .expect("fixture invalid source starts a recovery barrier");
     let (client, inspection) = begin_recovery(
         &mut controller,
         incident,
@@ -634,6 +786,103 @@ fn preserve_invalid_requires_an_artifact_matching_the_confirmed_source() {
                 && evidence.recovery_artifacts.len() == 1
     ));
     assert!(controller.active_barrier().is_some());
+}
+
+#[test]
+fn matching_preserve_failure_retains_artifact_and_unknown_effect_before_state_failure()
+-> Result<(), &'static str> {
+    let (mut controller, _, incident, client, preserve, mutation_id) =
+        begin_confirmed_invalid_preserve();
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/state-failure-preserved-invalid".into(),
+        observation: invalid_observation("preserved-invalid-bytes"),
+    };
+    let Some(incident_state) = controller.incident.as_mut() else {
+        return Err("fixture must retain the invalid persistence incident");
+    };
+    incident_state.handle.availability = RecoveryHandleAvailability::Available;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: preserve.barrier,
+            attempt: preserve.attempt,
+            command_id: preserve.command_id,
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Failed {
+                id: mutation_id,
+                error: RuntimeStateIoError::new("preserve failed after mutation"),
+                active: Some(invalid_observation("active-invalid-after-preserve")),
+                recovery_artifacts: vec![artifact.clone()],
+                path_effect: RuntimeStateFailurePathEffect::UnknownAfterMutation,
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown { evidence, .. })
+            if evidence.recovery_artifacts.contains(&artifact)
+                && evidence
+                    .path_effect_history
+                    .iter()
+                    .filter(|effect| {
+                        matches!(effect, RuntimeStateFailurePathEffect::UnknownAfterMutation)
+                    })
+                    .count()
+                    == 2
+    ));
+    assert!(controller.shutdown_complete());
+    Ok(())
+}
+
+#[test]
+fn matching_applied_preserve_records_the_known_effect_before_state_failure()
+-> Result<(), &'static str> {
+    let (mut controller, _, incident, client, preserve, mutation_id) =
+        begin_confirmed_invalid_preserve();
+    let artifact = RuntimeStateRecoveryArtifact {
+        path: "/tmp/state-failure-applied-preserve".into(),
+        observation: invalid_observation("invalid-source"),
+    };
+    let expected_effect =
+        RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::PostClaim(
+            RuntimeStatePostClaimPathEffect::QuarantinedAndRetained {
+                recovery_path: artifact.path.clone(),
+            },
+        ));
+    let Some(incident_state) = controller.incident.as_mut() else {
+        return Err("fixture must retain the invalid persistence incident");
+    };
+    incident_state.handle.availability = RecoveryHandleAvailability::Available;
+
+    assert!(matches!(
+        controller.submit_persistence_recovery_io(RecoveryIoCompletion {
+            controller_id: controller.id(),
+            incident,
+            barrier: preserve.barrier,
+            attempt: preserve.attempt,
+            command_id: preserve.command_id,
+            result: RecoveryIoResult::SourceMutation(SourceMutationResult::Applied {
+                id: mutation_id,
+                applied_through: AcceptedStateRevision(0),
+                new_source: missing_revision(),
+                recovery_artifacts: vec![artifact.clone()],
+            }),
+        }),
+        SubmitPersistenceRecoveryResult::Terminal { .. }
+    ));
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Shutdown {
+            reason: RecoveryShutdownReason::StateFailure(RecoveryStateFailure::HandleStateMismatch),
+            evidence,
+            ..
+        }) if evidence.recovery_artifacts.contains(&artifact)
+            && evidence.path_effect_history.contains(&expected_effect)
+    ));
+    assert!(controller.shutdown_complete());
+    Ok(())
 }
 
 #[test]

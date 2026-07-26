@@ -7,9 +7,6 @@
 //! frontends pixel-identical and lets GTK state (hover/active/disabled)
 //! recolor them for free.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::input::Tool;
@@ -30,7 +27,6 @@ pub(super) fn tool_icon_painter(tool: Tool) -> IconPainter {
 #[derive(Clone)]
 pub(super) struct IconWidget {
     pub(super) area: gtk4::DrawingArea,
-    painter: Rc<Cell<IconPainter>>,
 }
 
 impl IconWidget {
@@ -42,33 +38,28 @@ impl IconWidget {
         area.set_halign(gtk4::Align::Center);
         area.set_valign(gtk4::Align::Center);
         area.set_can_target(false);
-        let cell = Rc::new(Cell::new(painter));
-        let draw_cell = cell.clone();
-        area.set_draw_func(move |area, ctx, width, height| {
-            let color = area.color();
-            ctx.set_source_rgba(
-                color.red() as f64,
-                color.green() as f64,
-                color.blue() as f64,
-                color.alpha() as f64,
-            );
-            let size = (width.min(height) as f64).max(1.0);
-            let x = (width as f64 - size) / 2.0;
-            let y = (height as f64 - size) / 2.0;
-            (draw_cell.get())(ctx, x, y, size);
-        });
-        Self {
-            area,
-            painter: cell,
-        }
+        install_painter(&area, painter);
+        Self { area }
     }
 
     pub(super) fn set_painter(&self, painter: IconPainter) {
-        // Address equality is only an optimization: merged functions draw
-        // identical output, so a false match never skips a needed redraw.
-        if !std::ptr::fn_addr_eq(self.painter.get(), painter) {
-            self.painter.set(painter);
-            self.area.queue_draw();
-        }
+        install_painter(&self.area, painter);
+        self.area.queue_draw();
     }
+}
+
+fn install_painter(area: &gtk4::DrawingArea, painter: IconPainter) {
+    area.set_draw_func(move |area, ctx, width, height| {
+        let color = area.color();
+        ctx.set_source_rgba(
+            color.red() as f64,
+            color.green() as f64,
+            color.blue() as f64,
+            color.alpha() as f64,
+        );
+        let size = (width.min(height) as f64).max(1.0);
+        let x = (width as f64 - size) / 2.0;
+        let y = (height as f64 - size) / 2.0;
+        painter(ctx, x, y, size);
+    });
 }

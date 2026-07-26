@@ -15,7 +15,6 @@ mod core;
 mod document;
 mod field_metadata;
 mod io;
-mod paths;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
@@ -40,11 +39,14 @@ pub use enums::{
 };
 pub use field_metadata::{
     PERFORMANCE_BUFFER_COUNT_MAX, PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_BUFFER_COUNTS,
-    PERFORMANCE_FIELD_METADATA, PERFORMANCE_UI_ANIMATION_FPS_MAX, PerformanceFieldGroup,
-    PerformanceFieldId, PerformanceFieldMetadata, ScalarConstraint, performance_field_metadata,
+    PERFORMANCE_FIELD_METADATA, PERFORMANCE_FIELDS, PERFORMANCE_UI_ANIMATION_FPS_MAX,
+    PerformanceBooleanFieldMetadata, PerformanceFieldGroup, PerformanceFieldId,
+    PerformanceFieldMetadata, PerformanceFieldPresentation, PerformanceFields,
+    PerformanceUnsignedChoiceFieldMetadata, PerformanceUnsignedRangeFieldMetadata,
+    ScalarConstraint, performance_field_metadata,
 };
 #[allow(unused_imports)]
-pub use io::{ConfigSource, LoadedConfig};
+pub use io::{ConfigSource, ConfigStore, LoadedConfig};
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 #[allow(unused_imports)]
 pub use types::{
@@ -86,4 +88,4 @@ pub(crate) use types::{
 pub use enums::ColorSpec;
 
 #[cfg(test)]
-pub(crate) use paths::PRIMARY_CONFIG_DIR;
+pub(crate) const PRIMARY_CONFIG_DIR: &str = "wayscriber";

@@ -24,8 +24,12 @@ impl ZoomState {
 
         let runtime_wake = self
             .runtime_wake
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?;
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?
+            .try_duplicate()
+            .map_err(|error| {
+                anyhow::anyhow!("failed to duplicate portal capture runtime wake: {error}")
+            })?;
         self.portal_in_progress = true;
         self.portal_target_output_id = self.active_output_id;
 
@@ -174,6 +178,7 @@ impl ZoomState {
 mod tests {
     use super::*;
     use crate::backend::wayland::portal_task::PORTAL_CAPTURE_TIMEOUT;
+    use crate::backend::wayland::{RuntimeWakeSender, RuntimeWakeSource};
     use crate::input::state::test_support::make_test_input_state;
 
     fn image(byte: u8) -> FrozenImage {
@@ -185,57 +190,72 @@ mod tests {
         }
     }
 
-    async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) {
+    fn runtime_sender(wake: &RuntimeWakeSource) -> RuntimeWakeSender {
+        wake.try_sender()
+            .expect("test duplicates its zoom-capture runtime eventfd")
+    }
+
+    async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) -> bool {
         for _ in 0..100 {
             zoom.poll_portal_capture(input, Instant::now());
             if !zoom.portal_in_progress {
-                return;
+                return true;
             }
             tokio::task::yield_now().await;
         }
-        panic!("zoom portal task did not finish");
+        false
     }
 
     #[tokio::test]
     async fn success_activates_zoom_with_the_matching_image() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a zoom-capture runtime eventfd");
+        let mut zoom = ZoomState::new_with_runtime_wake(None, runtime_sender(&wake));
         let mut input = make_test_input_state();
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             async { Ok((None, image(3))) },
         ));
         zoom.portal_in_progress = true;
 
-        poll_until_finished(&mut zoom, &mut input).await;
+        assert!(poll_until_finished(&mut zoom, &mut input).await);
 
         assert!(zoom.active);
         assert!(!zoom.pending_activation);
-        assert_eq!(zoom.image().unwrap().data, vec![3; 8]);
+        assert_eq!(
+            zoom.image()
+                .expect("test portal result installs a zoom image")
+                .data,
+            vec![3; 8]
+        );
         assert!(zoom.take_capture_done());
     }
 
     #[tokio::test]
-    async fn domain_error_and_task_panic_restore_the_zoom_lifecycle() {
-        for panic_task in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-            let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+    async fn domain_error_and_task_abort_restore_the_zoom_lifecycle() {
+        for abort_task in [false, true] {
+            let wake = crate::backend::wayland::RuntimeWakeSource::new()
+                .expect("test creates a zoom-capture runtime eventfd");
+            let mut zoom = ZoomState::new_with_runtime_wake(None, runtime_sender(&wake));
             let mut input = make_test_input_state();
             zoom.request_activation();
-            zoom.portal_task = Some(if panic_task {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                    panic!("expected zoom portal panic")
-                })
+            zoom.portal_task = Some(if abort_task {
+                PortalTask::aborted_for_test(
+                    &tokio::runtime::Handle::current(),
+                    runtime_sender(&wake),
+                )
             } else {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                    Err("portal denied".to_string())
-                })
+                PortalTask::spawn(
+                    &tokio::runtime::Handle::current(),
+                    runtime_sender(&wake),
+                    async { Err("portal denied".to_string()) },
+                )
             });
             zoom.portal_in_progress = true;
 
-            poll_until_finished(&mut zoom, &mut input).await;
+            assert!(poll_until_finished(&mut zoom, &mut input).await);
 
             assert!(!zoom.is_in_progress());
             assert!(!zoom.active);
@@ -249,15 +269,17 @@ mod tests {
     async fn disconnect_and_deadline_expiry_restore_without_a_producer_result() {
         let now = Instant::now();
         for timed_out in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-            let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+            let wake = crate::backend::wayland::RuntimeWakeSource::new()
+                .expect("test creates a zoom-capture runtime eventfd");
+            let mut zoom = ZoomState::new_with_runtime_wake(None, runtime_sender(&wake));
             let mut input = make_test_input_state();
             zoom.request_activation();
             zoom.portal_task = Some(if timed_out {
                 PortalTask::spawn_at_for_test(
                     &tokio::runtime::Handle::current(),
-                    wake.handle(),
-                    now.checked_sub(PORTAL_CAPTURE_TIMEOUT).unwrap(),
+                    runtime_sender(&wake),
+                    now.checked_sub(PORTAL_CAPTURE_TIMEOUT)
+                        .expect("test start instant is later than the portal timeout"),
                     std::future::pending(),
                 )
             } else {
@@ -277,8 +299,9 @@ mod tests {
 
     #[tokio::test]
     async fn stale_output_preserves_the_current_zoom_image_and_activation() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a zoom-capture runtime eventfd");
+        let mut zoom = ZoomState::new_with_runtime_wake(None, runtime_sender(&wake));
         let mut input = make_test_input_state();
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
@@ -286,34 +309,40 @@ mod tests {
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             async { Ok((Some(1), image(9))) },
         ));
         zoom.portal_in_progress = true;
 
-        poll_until_finished(&mut zoom, &mut input).await;
+        assert!(poll_until_finished(&mut zoom, &mut input).await);
 
         assert!(!zoom.active);
         assert!(!zoom.pending_activation);
         assert_eq!(zoom.image_generation(), generation);
-        assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
+        assert_eq!(
+            zoom.image()
+                .expect("test retains its pre-existing zoom image")
+                .data,
+            vec![4; 8]
+        );
         assert!(zoom.take_capture_done());
     }
 
     #[tokio::test]
     async fn supersession_is_ignored_and_explicit_abort_owns_task_cancellation() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a zoom-capture runtime eventfd");
+        let mut zoom = ZoomState::new_with_runtime_wake(None, runtime_sender(&wake));
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             std::future::pending(),
         ));
         zoom.portal_in_progress = true;
 
         zoom.capture_via_portal(&tokio::runtime::Handle::current())
-            .unwrap();
+            .expect("test retains its existing zoom portal task during supersession");
         assert!(zoom.portal_task.is_some());
         assert!(zoom.abort_capture());
         assert!(zoom.portal_task.is_none());

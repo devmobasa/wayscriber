@@ -4,29 +4,25 @@ impl RuntimeUiStateController {
     const RECOVERY_COMMAND_TOMBSTONE_LIMIT: usize = 1024;
 
     pub(super) fn record_integrated_recovery_command(&mut self, command: RecoveryCommandId) {
-        if self.integrated_recovery_commands.insert(command) {
-            self.integrated_recovery_command_order.push_back(command);
+        if !self.integrated_recovery_commands.contains(&command) {
+            self.integrated_recovery_commands.push_back(command);
         }
-        while self.integrated_recovery_commands.len() > Self::RECOVERY_COMMAND_TOMBSTONE_LIMIT {
-            let expired = self
-                .integrated_recovery_command_order
-                .pop_front()
-                .expect("integrated command order tracks every tombstone");
-            self.integrated_recovery_commands.remove(&expired);
-        }
+        let expired = self
+            .integrated_recovery_commands
+            .len()
+            .saturating_sub(Self::RECOVERY_COMMAND_TOMBSTONE_LIMIT);
+        self.integrated_recovery_commands.drain(..expired);
     }
 
     pub(super) fn record_cancelled_read_only_command(&mut self, command: RecoveryCommandId) {
-        if self.cancelled_read_only_commands.insert(command) {
-            self.cancelled_read_only_command_order.push_back(command);
+        if !self.cancelled_read_only_commands.contains(&command) {
+            self.cancelled_read_only_commands.push_back(command);
         }
-        while self.cancelled_read_only_commands.len() > Self::RECOVERY_COMMAND_TOMBSTONE_LIMIT {
-            let expired = self
-                .cancelled_read_only_command_order
-                .pop_front()
-                .expect("cancelled command order tracks every tombstone");
-            self.cancelled_read_only_commands.remove(&expired);
-        }
+        let expired = self
+            .cancelled_read_only_commands
+            .len()
+            .saturating_sub(Self::RECOVERY_COMMAND_TOMBSTONE_LIMIT);
+        self.cancelled_read_only_commands.drain(..expired);
     }
 
     pub(super) fn record_rejected_recovery_completion(&mut self, completion: RecoveryIoCompletion) {
@@ -38,22 +34,22 @@ impl RuntimeUiStateController {
             return;
         }
         self.rejected_recovery_completions.push_back(completion);
-        while self.rejected_recovery_completions.len() > Self::RECOVERY_COMMAND_TOMBSTONE_LIMIT {
-            self.rejected_recovery_completions.pop_front();
-        }
+        let expired = self
+            .rejected_recovery_completions
+            .len()
+            .saturating_sub(Self::RECOVERY_COMMAND_TOMBSTONE_LIMIT);
+        self.rejected_recovery_completions.drain(..expired);
     }
 
     pub(super) fn take_cancelled_read_only_command(&mut self, command: RecoveryCommandId) -> bool {
-        if !self.cancelled_read_only_commands.remove(&command) {
-            return false;
-        }
-        self.cancelled_read_only_command_order
+        let found = self.cancelled_read_only_commands.contains(&command);
+        self.cancelled_read_only_commands
             .retain(|candidate| *candidate != command);
-        true
+        found
     }
 
     pub(in crate::runtime_ui_state) fn prepare_recovery_shutdown(&mut self) -> bool {
-        let Some(active) = self.active_recovery.as_ref() else {
+        let Some(active) = self.active_recovery.as_mut() else {
             self.settle_incident_for_shutdown();
             return true;
         };
@@ -65,10 +61,7 @@ impl RuntimeUiStateController {
                 true
             }
             RecoveryCommandExpectation::SourceMutation { .. } => {
-                self.active_recovery
-                    .as_mut()
-                    .expect("active recovery was just observed")
-                    .cancel_requested = true;
+                active.cancel_requested = true;
                 false
             }
         }
@@ -94,7 +87,7 @@ impl RuntimeUiStateController {
         let Some(lease) =
             allocate_counter(&mut self.next_recovery_lease_nonce).map(RecoveryLeaseNonce)
         else {
-            return CheckoutPersistenceRecoveryHandleResult::AlreadyCheckedOut;
+            return CheckoutPersistenceRecoveryHandleResult::LeaseNonceExhausted;
         };
         incident.handle.availability = RecoveryHandleAvailability::CheckedOut(lease);
         CheckoutPersistenceRecoveryHandleResult::CheckedOut(PersistenceRecoveryHandle {
@@ -118,14 +111,29 @@ impl RuntimeUiStateController {
             return BeginPersistenceRecoveryResult::Rejected { request, reason };
         }
 
-        let attempt_id = RecoveryAttemptId(
-            allocate_counter(&mut self.next_recovery_attempt_id)
-                .expect("recovery attempt id exhausted"),
-        );
-        let command_id = RecoveryCommandId(
-            allocate_counter(&mut self.next_recovery_command_id)
-                .expect("recovery command id exhausted"),
-        );
+        let Some(next_attempt_id) = self.next_recovery_attempt_id.checked_add(1) else {
+            return BeginPersistenceRecoveryResult::Rejected {
+                request,
+                reason: RecoveryBeginRejection::AttemptIdExhausted,
+            };
+        };
+        let Some(next_command_id) = self.next_recovery_command_id.checked_add(1) else {
+            return BeginPersistenceRecoveryResult::Rejected {
+                request,
+                reason: RecoveryBeginRejection::CommandIdExhausted,
+            };
+        };
+        let Some(incident) = self.incident.as_mut() else {
+            return BeginPersistenceRecoveryResult::Rejected {
+                request,
+                reason: RecoveryBeginRejection::NotUnhealthy,
+            };
+        };
+        let attempt_id = RecoveryAttemptId(self.next_recovery_attempt_id);
+        let command_id = RecoveryCommandId(self.next_recovery_command_id);
+        self.next_recovery_attempt_id = next_attempt_id;
+        self.next_recovery_command_id = next_command_id;
+        incident.handle.availability = RecoveryHandleAvailability::InAttempt(attempt_id);
         request.recovery.disarm();
         let incident_id = request.recovery.incident;
         let barrier = request.recovery.barrier;
@@ -155,11 +163,6 @@ impl RuntimeUiStateController {
             cancel_requested: false,
             completion: completion_tx,
         };
-        self.incident
-            .as_mut()
-            .expect("validated incident")
-            .handle
-            .availability = RecoveryHandleAvailability::InAttempt(attempt_id);
         self.active_recovery = Some(active);
         self.recovery_outbox.push_back(RecoveryIoCommand {
             controller_id: self.id,
@@ -233,6 +236,36 @@ impl RuntimeUiStateController {
         let Some(active) = self.active_recovery.as_ref() else {
             return SubmitPersistenceRecoveryResult::RejectedNoActiveRecovery { completion };
         };
+        let completion_matches_active = active.incident == completion.incident
+            && active.barrier == completion.barrier
+            && active.id == completion.attempt
+            && active.current_command.id == completion.command_id;
+        let expectation = active.current_command.expected.clone();
+        if let Err(reason) = self.validate_active_recovery_state() {
+            let mut reason = reason;
+            let mut fallback_evidence = None;
+            if completion_matches_active
+                && let (
+                    RecoveryIoResult::SourceMutation(result),
+                    RecoveryCommandExpectation::SourceMutation { kind, .. },
+                ) = (&completion.result, &expectation)
+            {
+                let completion_evidence = self.recovery_mutation_evidence(result, Some(kind));
+                if let Err(evidence_error) =
+                    self.retain_recovery_evidence(completion_evidence.clone())
+                {
+                    reason = evidence_error;
+                }
+                fallback_evidence = Some(completion_evidence);
+                if completion_protocol_error(&completion.result, &expectation).is_none()
+                    && matches!(kind, RecoverySourceMutationKind::PersistCanonical { .. })
+                {
+                    self.integrate_recovery_source_completion_before_shutdown(result);
+                }
+            }
+            self.record_rejected_recovery_completion(completion);
+            return self.finish_recovery_state_failure_with_evidence(reason, fallback_evidence);
+        }
         if active.incident != completion.incident || active.barrier != completion.barrier {
             return self.block_protocol_failure(
                 RecoveryCompletionProtocolError::WrongIncidentOrBarrier,
@@ -251,7 +284,6 @@ impl RuntimeUiStateController {
                 completion,
             );
         }
-        let expectation = active.current_command.expected.clone();
         if let Some(reason) = completion_protocol_error(&completion.result, &expectation) {
             return self.block_protocol_failure(reason, completion);
         }
@@ -275,6 +307,23 @@ impl RuntimeUiStateController {
                 self.integrate_recovery_source_mutation(result)
             }
         }
+    }
+
+    fn integrate_recovery_source_completion_before_shutdown(
+        &mut self,
+        result: &SourceMutationResult,
+    ) {
+        let covered = match self.pipeline.integrate(result) {
+            Ok(integrated) => integrated.covered,
+            Err(_) => self
+                .pipeline
+                .abandon_in_flight_for_reinspection()
+                .map_or_else(Vec::new, |abandoned| abandoned.covered),
+        };
+        self.pipeline.settle_pending_failed(
+            covered,
+            RuntimeStateIoError::new("runtime-state persistence shut down"),
+        );
     }
 
     pub(crate) fn cancel_persistence_recovery(
@@ -333,34 +382,86 @@ impl RuntimeUiStateController {
         recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
         path_effect: RuntimeStateFailurePathEffect,
         failed_replacement: Option<HeldReplacementStage>,
-    ) -> PersistenceIncidentId {
-        let barrier = match self.active_barrier.as_ref() {
-            Some(barrier) => barrier.id,
+    ) -> Result<PersistenceIncidentId, PipelineProtocolError> {
+        let prepared = self.prepare_persistence_incident()?;
+        Ok(self
+            .enter_prepared_persistence_incident(
+                prepared,
+                error,
+                active,
+                recovery_artifacts,
+                path_effect,
+                failed_replacement,
+            )
+            .0)
+    }
+
+    pub(in crate::runtime_ui_state) fn prepare_persistence_incident(
+        &self,
+    ) -> Result<PreparedPersistenceIncident, PipelineProtocolError> {
+        let (barrier, next_barrier_id) = match self.active_barrier.as_ref() {
+            Some(active) => (active.id, None),
             None => {
-                let id = ControllerBarrierId(self.next_barrier_id);
-                self.next_barrier_id = self
-                    .next_barrier_id
-                    .checked_add(1)
-                    .expect("barrier id exhausted");
-                self.active_barrier = Some(ActiveControllerBarrier {
-                    id,
-                    operation: ControllerBarrierOperation::PersistenceFailureRecovery,
-                    phase: ControllerBarrierPhase::Inspecting,
-                });
-                id
+                let Some(next) = self.next_barrier_id.checked_add(1) else {
+                    return Err(PipelineProtocolError::ControllerBarrierIdExhausted);
+                };
+                (ControllerBarrierId(self.next_barrier_id), Some(next))
             }
         };
-        let id = PersistenceIncidentId(
-            allocate_counter(&mut self.next_incident_id).expect("incident id exhausted"),
-        );
-        let handle_id = RecoveryHandleId(
-            allocate_counter(&mut self.next_recovery_handle_id).expect("handle id exhausted"),
-        );
-        let held_replacements = if let Some(transaction) = self.supported_reset.take() {
-            let _ = self.pipeline.cancel_pending_reset(
-                transaction.through,
-                DurabilityOutcome::Failed(error.clone()),
+        let Some(next_incident_id) = self.next_incident_id.checked_add(1) else {
+            return Err(PipelineProtocolError::PersistenceIncidentIdExhausted);
+        };
+        let Some(next_handle_id) = self.next_recovery_handle_id.checked_add(1) else {
+            return Err(PipelineProtocolError::RecoveryHandleIdExhausted);
+        };
+        let pending_reset_through = if let Some(transaction) = self.supported_reset.as_ref() {
+            let must_be_pending = matches!(
+                transaction.authority,
+                SupportedResetAuthorityState::WaitingForPrerequisite
             );
+            if must_be_pending && !self.pipeline.has_pending_reset(transaction.through) {
+                return Err(PipelineProtocolError::ResetTransactionMissing);
+            }
+            Some(transaction.through)
+        } else {
+            None
+        };
+
+        Ok(PreparedPersistenceIncident {
+            barrier,
+            next_barrier_id,
+            id: PersistenceIncidentId(self.next_incident_id),
+            next_incident_id,
+            handle_id: RecoveryHandleId(self.next_recovery_handle_id),
+            next_handle_id,
+            pending_reset_through,
+        })
+    }
+
+    pub(in crate::runtime_ui_state) fn enter_prepared_persistence_incident(
+        &mut self,
+        prepared: PreparedPersistenceIncident,
+        error: RuntimeStateIoError,
+        active: Option<RuntimeStateSourceObservation>,
+        recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
+        path_effect: RuntimeStateFailurePathEffect,
+        failed_replacement: Option<HeldReplacementStage>,
+    ) -> (PersistenceIncidentId, ControllerBarrierId) {
+        if let Some(through) = prepared.pending_reset_through {
+            self.pipeline
+                .cancel_pending_reset(through, DurabilityOutcome::Failed(error.clone()));
+        }
+        self.next_incident_id = prepared.next_incident_id;
+        self.next_recovery_handle_id = prepared.next_handle_id;
+        if let Some(next) = prepared.next_barrier_id {
+            self.next_barrier_id = next;
+            self.active_barrier = Some(ActiveControllerBarrier {
+                id: prepared.barrier,
+                operation: ControllerBarrierOperation::PersistenceFailureRecovery,
+                phase: ControllerBarrierPhase::Inspecting,
+            });
+        }
+        let held_replacements = if let Some(transaction) = self.supported_reset.take() {
             let mut held = self.pipeline.hold_all_pending_replacements();
             held.extend(transaction.held_by_reset);
             held
@@ -415,8 +516,8 @@ impl RuntimeUiStateController {
             RecoveryCleanupState::Clean
         };
         self.incident = Some(PersistenceIncident {
-            id,
-            barrier,
+            id: prepared.id,
+            barrier: prepared.barrier,
             retained_authority,
             held_replacements,
             retry_desired_through,
@@ -427,16 +528,18 @@ impl RuntimeUiStateController {
             recovery_artifacts: artifacts,
             path_effect_history: vec![path_effect],
             handle: RecoveryHandleState {
-                id: handle_id,
+                id: prepared.handle_id,
                 availability: RecoveryHandleAvailability::Available,
             },
         });
         if let Some(active_barrier) = &mut self.active_barrier {
-            active_barrier.phase = ControllerBarrierPhase::PersistenceUnhealthy { incident: id };
+            active_barrier.phase = ControllerBarrierPhase::PersistenceUnhealthy {
+                incident: prepared.id,
+            };
         }
         if retained_authority_is_proven {
             self.resolve_previews_while_barrier_retained(
-                barrier,
+                prepared.barrier,
                 if crossed_authority_change {
                     AbandonedPreviewResolutionReason::DiscardedForAuthorityChange
                 } else {
@@ -445,7 +548,7 @@ impl RuntimeUiStateController {
                 None,
             );
         }
-        id
+        (prepared.id, prepared.barrier)
     }
 
     pub(in crate::runtime_ui_state) fn apply_lifecycle_control(
@@ -530,6 +633,16 @@ impl RuntimeUiStateController {
         let Some(incident) = &self.incident else {
             return Some(RecoveryBeginRejection::NotUnhealthy);
         };
+        let Some(barrier) = &self.active_barrier else {
+            return Some(RecoveryBeginRejection::ControllerState(
+                RecoveryStateFailure::MissingBarrier,
+            ));
+        };
+        if barrier.id != incident.barrier {
+            return Some(RecoveryBeginRejection::ControllerState(
+                RecoveryStateFailure::BarrierMismatch,
+            ));
+        }
         if self.active_recovery.is_some() {
             return Some(RecoveryBeginRejection::AttemptAlreadyRunning);
         }

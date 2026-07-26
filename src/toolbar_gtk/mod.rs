@@ -36,15 +36,10 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) fn drag_debug_log(message: impl AsRef<str>) {
-    use std::sync::OnceLock;
-
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    let enabled = *ENABLED.get_or_init(|| {
-        let raw = std::env::var(crate::env_vars::DEBUG_TOOLBAR_DRAG_ENV)
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        !(raw.is_empty() || raw == "0" || raw == "false" || raw == "off")
-    });
+    let raw = std::env::var(crate::env_vars::DEBUG_TOOLBAR_DRAG_ENV)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let enabled = !(raw.is_empty() || raw == "0" || raw == "false" || raw == "off");
     if enabled {
         log::info!("[gtk-drag] {}", message.as_ref());
     }
@@ -198,7 +193,7 @@ pub use disabled::GtkToolbarBridge;
 #[cfg(not(feature = "toolbar-gtk"))]
 mod disabled {
     use super::{GtkToolbarFeedback, GtkToolbarUpdate};
-    use crate::backend::wayland::RuntimeWakeHandle;
+    use crate::backend::wayland::RuntimeWakeSender;
 
     /// Stub bridge: without the `toolbar-gtk` feature `spawn` never
     /// succeeds, so the other methods are unreachable but keep call sites
@@ -206,11 +201,11 @@ mod disabled {
     pub struct GtkToolbarBridge {}
 
     impl GtkToolbarBridge {
-        pub fn spawn(_runtime_wake: RuntimeWakeHandle) -> Option<Self> {
-            None
+        pub fn spawn(_runtime_wake: RuntimeWakeSender) -> std::io::Result<Option<Self>> {
+            Ok(None)
         }
 
-        pub fn drain_feedback(&self) -> (Vec<GtkToolbarFeedback>, bool) {
+        pub fn drain_feedback(&mut self) -> (Vec<GtkToolbarFeedback>, bool) {
             (Vec::new(), false)
         }
 

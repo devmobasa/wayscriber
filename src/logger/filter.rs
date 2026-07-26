@@ -7,7 +7,6 @@ use log::{Level, LevelFilter};
 pub(super) struct LogFilter {
     default: LevelFilter,
     directives: Vec<LogDirective>,
-    max_level: LevelFilter,
 }
 
 impl LogFilter {
@@ -57,19 +56,10 @@ impl LogFilter {
             default = LevelFilter::Error;
         }
 
-        let max_level = directives
-            .iter()
-            .map(|directive| directive.level)
-            .fold(default, max_level_filter);
         Self {
             default,
             directives,
-            max_level,
         }
-    }
-
-    pub(super) fn max_level(&self) -> LevelFilter {
-        self.max_level
     }
 
     pub(super) fn enabled(&self, target: &str, level: Level) -> bool {
@@ -115,13 +105,9 @@ fn target_matches(directive: &str, target: &str) -> bool {
             .is_some_and(|remaining| remaining.starts_with("::"))
 }
 
-fn max_level_filter(left: LevelFilter, right: LevelFilter) -> LevelFilter {
-    if left >= right { left } else { right }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{LogFilter, max_level_filter};
+    use super::LogFilter;
     use log::{Level, LevelFilter};
 
     #[test]
@@ -130,7 +116,6 @@ mod tests {
 
         assert!(filter.enabled("wayscriber", Level::Info));
         assert!(!filter.enabled("wayscriber", Level::Debug));
-        assert_eq!(filter.max_level(), LevelFilter::Info);
     }
 
     #[test]
@@ -140,7 +125,6 @@ mod tests {
         assert!(filter.enabled("wayscriber", Level::Debug));
         assert!(filter.enabled("zbus", Level::Debug));
         assert!(!filter.enabled("wayscriber", Level::Trace));
-        assert_eq!(filter.max_level(), LevelFilter::Debug);
     }
 
     #[test]
@@ -149,7 +133,6 @@ mod tests {
 
         assert!(filter.enabled("wayscriber", Level::Error));
         assert!(!filter.enabled("wayscriber", Level::Warn));
-        assert_eq!(filter.max_level(), LevelFilter::Error);
     }
 
     #[test]
@@ -158,7 +141,6 @@ mod tests {
 
         assert!(filter.enabled("wayscriber", Level::Error));
         assert!(!filter.enabled("wayscriber", Level::Warn));
-        assert_eq!(filter.max_level(), LevelFilter::Error);
     }
 
     #[test]
@@ -166,7 +148,6 @@ mod tests {
         let filter = LogFilter::parse("off", LevelFilter::Off);
 
         assert!(!filter.enabled("wayscriber", Level::Error));
-        assert_eq!(filter.max_level(), LevelFilter::Off);
     }
 
     #[test]
@@ -177,7 +158,6 @@ mod tests {
         assert!(filter.enabled("wayscriber_extra", Level::Warn));
         assert!(!filter.enabled("wayscriber_extra", Level::Info));
         assert!(!filter.enabled("zbus", Level::Error));
-        assert_eq!(filter.max_level(), LevelFilter::Debug);
     }
 
     #[test]
@@ -186,7 +166,6 @@ mod tests {
 
         assert!(filter.enabled("wayscriber", Level::Error));
         assert!(!filter.enabled("wayscriber", Level::Warn));
-        assert_eq!(filter.max_level(), LevelFilter::Trace);
     }
 
     #[test]
@@ -197,7 +176,6 @@ mod tests {
         assert!(!filter.enabled("wayscriber::daemon", Level::Trace));
         assert!(filter.enabled("wayscriber::ui", Level::Info));
         assert!(!filter.enabled("wayscriber::ui", Level::Debug));
-        assert_eq!(filter.max_level(), LevelFilter::Debug);
     }
 
     #[test]
@@ -206,14 +184,5 @@ mod tests {
 
         assert!(filter.enabled("wayscriber::backend", Level::Trace));
         assert!(!filter.enabled("zbus", Level::Error));
-        assert_eq!(filter.max_level(), LevelFilter::Trace);
-    }
-
-    #[test]
-    fn max_level_filter_returns_more_verbose_level() {
-        assert_eq!(
-            max_level_filter(LevelFilter::Warn, LevelFilter::Debug),
-            LevelFilter::Debug
-        );
     }
 }

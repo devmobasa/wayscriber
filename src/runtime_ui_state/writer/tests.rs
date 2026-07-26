@@ -1,8 +1,5 @@
 use std::fs;
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::mpsc::sync_channel;
 
 use super::*;
 use crate::runtime_ui_state::*;
@@ -54,10 +51,16 @@ fn a_panicking_completion_notifier_does_not_stop_the_writer() {
     let path = temp.path().join("runtime-ui.toml");
     let store = RuntimeUiStateStore::new(&path);
     let expected = store.inspect().unwrap().observation.revision;
-    let calls = Arc::new(AtomicUsize::new(0));
-    let notify_calls = Arc::clone(&calls);
+    let (notification_tx, notification_rx) = sync_channel(2);
+    let (first_call_tx, first_call_rx) = sync_channel(1);
+    first_call_tx
+        .send(())
+        .expect("fixture seeds its first-notification marker");
     let writer = RuntimeUiStateWriter::spawn_with_completion_notifier(store, move || {
-        if notify_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+        notification_tx
+            .send(())
+            .expect("fixture notification observer remains connected");
+        if first_call_rx.try_recv().is_ok() {
             panic!("test notifier panic");
         }
     })
@@ -100,7 +103,13 @@ fn a_panicking_completion_notifier_does_not_stop_the_writer() {
         })
     ));
     writer.shutdown();
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    notification_rx
+        .recv()
+        .expect("fixture observes the first notification");
+    notification_rx
+        .recv()
+        .expect("fixture observes the second notification");
+    assert!(notification_rx.try_recv().is_err());
 }
 
 #[test]
@@ -185,7 +194,7 @@ fn inspection_command_returns_exact_unsupported_bytes() {
     fs::write(&path, bytes).unwrap();
     let writer = RuntimeUiStateWriter::spawn(RuntimeUiStateStore::new(path)).unwrap();
     let command = RecoveryIoCommand {
-        controller_id: ControllerId(1),
+        controller_id: ControllerId::fixture(1, 1),
         incident: PersistenceIncidentId(2),
         barrier: ControllerBarrierId(3),
         attempt: RecoveryAttemptId(4),
@@ -222,7 +231,7 @@ fn a_batch_of_accepted_inspections_has_no_missing_or_duplicate_completion() {
     for id in 1..=12 {
         writer
             .submit(RuntimeStateWriterCommand::Recovery(RecoveryIoCommand {
-                controller_id: ControllerId(1),
+                controller_id: ControllerId::fixture(1, 1),
                 incident: PersistenceIncidentId(2),
                 barrier: ControllerBarrierId(3),
                 attempt: RecoveryAttemptId(4),
@@ -253,7 +262,8 @@ fn malformed_startup_is_preserved_and_reset_through_real_recovery_io() {
     let bootstrap = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(startup_seeds());
+        .into_controller_bootstrap(store.controller_id(), startup_seeds())
+        .expect("fixture inspection satisfies controller startup invariants");
     let incident = bootstrap.startup_incident.unwrap();
     let mut controller = bootstrap.controller;
     let writer = RuntimeUiStateWriter::spawn(store.clone()).unwrap();

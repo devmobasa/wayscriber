@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use log::debug;
 
+pub(crate) use cache::UpdateCacheStore;
 pub use manifest::{DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL, MANIFEST_URL, install_source};
 
 use crate::env_vars::DISABLE_UPDATE_CHECK_ENV;
@@ -108,7 +109,11 @@ pub fn background_checks_enabled(config_enabled: bool) -> bool {
 /// switch whose only job is to stop network access, an unrecognized value is
 /// honored rather than ignored, so a typo cannot silently re-enable the check.
 fn env_opt_out() -> bool {
-    std::env::var_os(DISABLE_UPDATE_CHECK_ENV)
+    env_value_opts_out(std::env::var_os(DISABLE_UPDATE_CHECK_ENV).as_deref())
+}
+
+fn env_value_opts_out(value: Option<&std::ffi::OsStr>) -> bool {
+    value
         .map(|value| {
             let value = value.to_string_lossy().trim().to_ascii_lowercase();
             !matches!(
@@ -120,8 +125,8 @@ fn env_opt_out() -> bool {
 }
 
 /// Report the last stored result without any network access.
-pub fn cached_status() -> CachedStatus {
-    let cache = cache::load();
+pub(crate) fn cached_status(cache_store: &UpdateCacheStore) -> CachedStatus {
+    let cache = cache_store.load();
     // Age is measured from the last *successful* fetch, and a newer failed
     // attempt is reported alongside it, so a stale answer can neither look
     // freshly verified nor hide the failed retry.
@@ -173,18 +178,21 @@ fn trusted_or_default(candidate: Option<&str>, fallback: &str) -> String {
 
 /// Fetch the manifest and record the result. Ignores the throttle: callers use
 /// this for explicit, user-initiated checks.
-pub fn check_now() -> Result<CheckOutcome, String> {
+pub fn check_now(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    cache_store: &UpdateCacheStore,
+) -> Result<CheckOutcome, String> {
     if compiled_out() {
         return Err(COMPILED_OUT_MESSAGE.to_string());
     }
 
-    let result =
-        fetch::fetch(MANIFEST_URL, FETCH_TIMEOUT).and_then(|body| manifest::parse_manifest(&body));
+    let result = fetch::fetch(process_broker, MANIFEST_URL, FETCH_TIMEOUT)
+        .and_then(|body| manifest::parse_manifest(&body));
 
     // Every attempt is persisted, including a failed explicit one: this process
     // has already made the request, and the daemon reads the same file to decide
     // whether another is due.
-    record_attempt(result.as_ref().ok());
+    record_attempt(cache_store, result.as_ref().ok());
 
     result.map(|manifest| outcome_for(&manifest))
 }
@@ -192,9 +200,9 @@ pub fn check_now() -> Result<CheckOutcome, String> {
 /// Persist one attempt. A manifest also refreshes the stored result and the
 /// success stamp; a failure moves the attempt stamp alone, leaving the previous
 /// result in place but no longer claiming it was just verified.
-fn record_attempt(manifest: Option<&manifest::ReleaseManifest>) {
+fn record_attempt(cache_store: &UpdateCacheStore, manifest: Option<&manifest::ReleaseManifest>) {
     let now = cache::now_unix();
-    let _ = cache::update(|cache| {
+    let _ = cache_store.update(|cache| {
         cache.last_attempt_unix = now;
         cache.last_attempt_outcome = Some(if manifest.is_some() {
             cache::AttemptOutcome::Succeeded
@@ -231,15 +239,27 @@ fn outcome_for(manifest: &manifest::ReleaseManifest) -> CheckOutcome {
 /// The daemon owns one instance in its update-watch loop. Keeping this state
 /// there avoids ambient process-wide synchronization; explicit About/CLI checks
 /// intentionally bypass the interval and therefore do not need it.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct CheckThrottle {
+    cache_store: UpdateCacheStore,
     last_attempt: Option<std::time::Instant>,
 }
 
 impl CheckThrottle {
+    pub(crate) fn new(cache_store: UpdateCacheStore) -> Self {
+        Self {
+            cache_store,
+            last_attempt: None,
+        }
+    }
+
     /// Run a check only when both the process-local and persisted attempts are
     /// older than `interval`. Returns `None` when skipped or failed.
-    pub(crate) fn check_if_due(&mut self, interval: Duration) -> Option<CheckOutcome> {
+    pub(crate) fn check_if_due(
+        &mut self,
+        process_broker: &crate::process_broker::ProcessBrokerHandle,
+        interval: Duration,
+    ) -> Option<CheckOutcome> {
         if !self.is_due_now(interval) {
             return None;
         }
@@ -247,7 +267,7 @@ impl CheckThrottle {
         // Record before fetching, so an unwritable cache still cannot turn one
         // request into another request on every watcher wakeup.
         self.note_attempt();
-        match check_now() {
+        match check_now(process_broker, &self.cache_store) {
             Ok(outcome) => Some(outcome),
             Err(err) => {
                 // `check_now` already tried to persist the attempt for other
@@ -262,7 +282,11 @@ impl CheckThrottle {
         if self.attempted_within(interval) {
             return false;
         }
-        is_due(cache::load().last_attempt_unix, cache::now_unix(), interval)
+        is_due(
+            self.cache_store.load().last_attempt_unix,
+            cache::now_unix(),
+            interval,
+        )
     }
 
     fn note_attempt(&mut self) {
@@ -288,8 +312,11 @@ fn is_due(last_attempt_unix: u64, now_unix: u64, interval: Duration) -> bool {
 }
 
 /// Whether the user has yet to be told about `update`.
-pub fn notification_pending(update: &AvailableUpdate) -> bool {
-    cache::load().notified_version.as_deref() != Some(update.version.as_str())
+pub(crate) fn notification_pending(
+    cache_store: &UpdateCacheStore,
+    update: &AvailableUpdate,
+) -> bool {
+    cache_store.load().notified_version.as_deref() != Some(update.version.as_str())
 }
 
 /// Record that the user has been told about `update`, so the notification is
@@ -298,15 +325,16 @@ pub fn notification_pending(update: &AvailableUpdate) -> bool {
 ///
 /// Callers claim *after* a successful delivery: claiming first would swallow the
 /// only notification for a release if the notification daemon was not up yet.
-pub fn claim_notification(update: &AvailableUpdate) -> bool {
-    cache::update(|cache| {
-        if cache.notified_version.as_deref() == Some(update.version.as_str()) {
-            return false;
-        }
-        cache.notified_version = Some(update.version.clone());
-        true
-    })
-    .unwrap_or(false)
+pub(crate) fn claim_notification(cache_store: &UpdateCacheStore, update: &AvailableUpdate) -> bool {
+    cache_store
+        .update(|cache| {
+            if cache.notified_version.as_deref() == Some(update.version.as_str()) {
+                return false;
+            }
+            cache.notified_version = Some(update.version.clone());
+            true
+        })
+        .unwrap_or(false)
 }
 
 /// Update instructions for this build's install source.
@@ -318,59 +346,26 @@ pub fn update_instructions_url() -> String {
 mod tests {
     use super::*;
 
-    /// Restores the opt-out variable when the test ends, however it ends.
-    struct OptOutEnv(Option<std::ffi::OsString>);
-
-    impl OptOutEnv {
-        fn capture() -> Self {
-            Self(std::env::var_os(DISABLE_UPDATE_CHECK_ENV))
-        }
-
-        fn set(&self, value: &str) {
-            unsafe { std::env::set_var(DISABLE_UPDATE_CHECK_ENV, value) };
-        }
-
-        fn clear(&self) {
-            unsafe { std::env::remove_var(DISABLE_UPDATE_CHECK_ENV) };
-        }
-    }
-
-    impl Drop for OptOutEnv {
-        fn drop(&mut self) {
-            match self.0.take() {
-                Some(value) => unsafe { std::env::set_var(DISABLE_UPDATE_CHECK_ENV, value) },
-                None => unsafe { std::env::remove_var(DISABLE_UPDATE_CHECK_ENV) },
-            }
-        }
+    fn cache_store(root: &std::path::Path) -> UpdateCacheStore {
+        UpdateCacheStore::at_path(root.join("update-check.json"))
     }
 
     #[test]
     fn env_opt_out_recognizes_falsey_values() {
-        let _lock = crate::test_env::lock();
-        let env = OptOutEnv::capture();
-
-        env.set("1");
-        assert!(env_opt_out());
-        assert!(!background_checks_enabled(true));
-
-        env.set("0");
-        assert!(!env_opt_out());
-        // A build with the check compiled out stays off regardless.
-        assert_eq!(background_checks_enabled(true), !compiled_out());
+        assert!(env_value_opts_out(Some(std::ffi::OsStr::new("1"))));
+        assert!(!env_value_opts_out(Some(std::ffi::OsStr::new("0"))));
 
         for falsey in ["false", "off", "no", "disable", "disabled", "  OFF  ", ""] {
-            env.set(falsey);
-            assert!(!env_opt_out(), "expected {falsey:?} to leave checks on");
+            assert!(
+                !env_value_opts_out(Some(std::ffi::OsStr::new(falsey))),
+                "expected {falsey:?} to leave checks on"
+            );
         }
 
         // An unrecognized value still opts out: this switch exists to stop
         // network access, so it is honored rather than ignored.
-        env.set("please");
-        assert!(env_opt_out());
-
-        env.clear();
-        assert!(!env_opt_out());
-        assert!(!background_checks_enabled(false));
+        assert!(env_value_opts_out(Some(std::ffi::OsStr::new("please"))));
+        assert!(!env_value_opts_out(None));
     }
 
     #[test]
@@ -380,7 +375,14 @@ mod tests {
         }
 
         assert!(!background_checks_enabled(true));
-        assert_eq!(check_now(), Err(COMPILED_OUT_MESSAGE.to_string()));
+        let process_broker = crate::process_broker::start_for_runtime()
+            .expect("test starts its explicit process broker owner");
+        let dir = crate::test_temp::tempdir().expect("isolated update cache fixture");
+        let store = cache_store(dir.path());
+        assert_eq!(
+            check_now(&process_broker.handle(), &store),
+            Err(COMPILED_OUT_MESSAGE.to_string())
+        );
     }
 
     #[test]
@@ -398,14 +400,13 @@ mod tests {
     /// turning a daily check into one request per daemon wakeup.
     #[test]
     fn each_watcher_owns_its_in_process_attempt_throttle() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let dir = crate::test_temp::tempdir()
+            .expect("watcher-throttle fixture creates an isolated cache directory");
+        let store = cache_store(dir.path());
 
-        let mut attempted = CheckThrottle::default();
+        let mut attempted = CheckThrottle::new(store.clone());
         attempted.note_attempt();
-        let untouched = CheckThrottle::default();
+        let untouched = CheckThrottle::new(store);
 
         assert!(attempted.attempted_within(Duration::from_secs(86_400)));
         // A zero interval means "no throttle", so the guard must not block.
@@ -414,11 +415,6 @@ mod tests {
         // One watcher's attempt does not become ambient process-wide state.
         assert!(!attempted.is_due_now(Duration::from_secs(86_400)));
         assert!(untouched.is_due_now(Duration::from_secs(86_400)));
-
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
-        }
     }
 
     #[test]
@@ -437,56 +433,58 @@ mod tests {
             notes_url: DEFAULT_NOTES_URL.to_string(),
             update_url: DEFAULT_UPDATE_URL.to_string(),
         };
-        match outcome_for(&newer) {
-            CheckOutcome::Update(update) => {
-                assert_eq!(update.version, "999.0.0");
-                assert!(update.update_url.starts_with(DEFAULT_UPDATE_URL));
-            }
-            other => panic!("expected an update, got {other:?}"),
+        let update = match outcome_for(&newer) {
+            CheckOutcome::Update(update) => Some(update),
+            CheckOutcome::UpToDate { .. } => None,
         }
+        .expect("newer-version fixture produces an update outcome");
+        assert_eq!(update.version, "999.0.0");
+        assert!(update.update_url.starts_with(DEFAULT_UPDATE_URL));
     }
 
     /// The About window's whole data path: what a completed check wrote is what
     /// the dialog reads back, with the install-source anchor applied.
     #[test]
     fn cached_status_reports_what_the_last_check_stored() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let dir = crate::test_temp::tempdir()
+            .expect("cached-status fixture creates an isolated cache directory");
+        let store = cache_store(dir.path());
 
-        assert_eq!(cached_status(), CachedStatus::Never(Freshness::default()));
+        assert_eq!(
+            cached_status(&store),
+            CachedStatus::Never(Freshness::default())
+        );
 
         let now = cache::now_unix();
-        let mut seeded = cache::load();
+        let mut seeded = store.load();
         seeded.last_attempt_unix = now;
         seeded.last_success_unix = now;
         seeded.latest_version = Some("999.0.0".to_string());
         seeded.released = Some("2030-01-01".to_string());
         seeded.update_url = Some(DEFAULT_UPDATE_URL.to_string());
         seeded.notes_url = Some(DEFAULT_NOTES_URL.to_string());
-        cache::store(&seeded);
-        match cached_status() {
-            CachedStatus::Update { update, .. } => {
-                assert_eq!(update.version, "999.0.0");
-                assert_eq!(update.released.as_deref(), Some("2030-01-01"));
-                assert_eq!(
-                    update.update_url,
-                    manifest::update_url_for_install_source(DEFAULT_UPDATE_URL)
-                );
-                assert!(notification_pending(&update));
-                assert!(claim_notification(&update));
-                assert!(!notification_pending(&update));
-            }
-            other => panic!("expected a cached update, got {other:?}"),
+        store.store(&seeded);
+        let update = match cached_status(&store) {
+            CachedStatus::Update { update, .. } => Some(update),
+            CachedStatus::Never(_) | CachedStatus::UpToDate(_) => None,
         }
+        .expect("seeded cache fixture reports its available update");
+        assert_eq!(update.version, "999.0.0");
+        assert_eq!(update.released.as_deref(), Some("2030-01-01"));
+        assert_eq!(
+            update.update_url,
+            manifest::update_url_for_install_source(DEFAULT_UPDATE_URL)
+        );
+        assert!(notification_pending(&store, &update));
+        assert!(claim_notification(&store, &update));
+        assert!(!notification_pending(&store, &update));
 
         // A latest version that is not newer than this build reads as up to date.
-        let mut cache = cache::load();
+        let mut cache = store.load();
         cache.latest_version = Some("0.0.1".to_string());
-        cache::store(&cache);
+        store.store(&cache);
         assert!(matches!(
-            cached_status(),
+            cached_status(&store),
             CachedStatus::UpToDate(Freshness {
                 checked_seconds_ago: Some(_),
                 last_attempt_failed: false,
@@ -497,14 +495,16 @@ mod tests {
         // background check. The age still refers to the success — but the failed
         // retry is reported with it, so nothing prints a bare "Checked N ago"
         // for an attempt that failed seconds ago.
-        let mut cache = cache::load();
+        let mut cache = store.load();
         cache.last_success_unix = cache::now_unix() - 7_200;
         cache.last_attempt_unix = cache::now_unix();
         cache.last_attempt_outcome = Some(cache::AttemptOutcome::Failed);
-        cache::store(&cache);
-        let CachedStatus::UpToDate(freshness) = cached_status() else {
-            panic!("expected an up-to-date verdict");
-        };
+        store.store(&cache);
+        let freshness = match cached_status(&store) {
+            CachedStatus::UpToDate(freshness) => Some(freshness),
+            CachedStatus::Never(_) | CachedStatus::Update { .. } => None,
+        }
+        .expect("older-version cache fixture reports an up-to-date verdict");
         assert!(freshness.last_attempt_failed);
         assert!(
             freshness
@@ -515,81 +515,64 @@ mod tests {
         // ...and the attempt the failure recorded is what suppresses the next
         // check, so a failing server is not retried on every wakeup.
         assert!(!is_due(
-            cache::load().last_attempt_unix,
+            store.load().last_attempt_unix,
             cache::now_unix(),
             Duration::from_secs(86_400)
         ));
 
         // A record with no success on it (a migrated v1 file) is unknown rather
         // than known-failed.
-        let mut cache = cache::load();
+        let mut cache = store.load();
         cache.last_success_unix = 0;
         cache.last_attempt_outcome = None;
-        cache::store(&cache);
+        store.store(&cache);
         assert_eq!(
-            cached_status(),
+            cached_status(&store),
             CachedStatus::UpToDate(Freshness {
                 checked_seconds_ago: None,
                 last_attempt_failed: false,
             })
         );
-
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
-        }
     }
 
     #[test]
     fn a_first_persisted_failure_remains_visible_after_reopening_about() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let dir = crate::test_temp::tempdir()
+            .expect("first-failure fixture creates an isolated cache directory");
+        let store = cache_store(dir.path());
 
-        record_attempt(None);
+        record_attempt(&store, None);
 
         assert_eq!(
-            cached_status(),
+            cached_status(&store),
             CachedStatus::Never(Freshness {
                 checked_seconds_ago: None,
                 last_attempt_failed: true,
             })
         );
-
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
-        }
     }
 
     #[test]
     fn a_same_second_failure_is_not_mistaken_for_the_previous_success() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let dir = crate::test_temp::tempdir()
+            .expect("same-second fixture creates an isolated cache directory");
+        let store = cache_store(dir.path());
 
         let stamp = cache::now_unix();
-        let mut seeded = cache::load();
+        let mut seeded = store.load();
         seeded.last_attempt_unix = stamp;
         seeded.last_success_unix = stamp;
         seeded.last_attempt_outcome = Some(cache::AttemptOutcome::Failed);
         seeded.latest_version = Some("0.0.1".to_string());
-        cache::store(&seeded);
+        store.store(&seeded);
 
         assert!(matches!(
-            cached_status(),
+            cached_status(&store),
             CachedStatus::UpToDate(Freshness {
                 checked_seconds_ago: Some(_),
                 last_attempt_failed: true,
             })
         ));
-
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
-        }
     }
 
     #[test]

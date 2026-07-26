@@ -15,6 +15,19 @@ pub enum ExitAfterCaptureMode {
     Never,
 }
 
+pub(crate) struct WaylandRunContext {
+    pub(crate) initial_mode: Option<String>,
+    pub(crate) freeze_on_start: bool,
+    pub(crate) exit_after_capture_mode: ExitAfterCaptureMode,
+    pub(crate) named_session_file: Option<std::path::PathBuf>,
+    pub(crate) session_resume_override: Option<bool>,
+    pub(crate) process_broker: crate::process_broker::ProcessBrokerHandle,
+    pub(crate) path_resolver: crate::paths::PathResolver,
+    pub(crate) runtime_paths: crate::paths::PreparedRuntimePaths,
+    pub(crate) config_store: crate::config::ConfigStore,
+    pub(crate) logger: crate::logger::LoggerHandle,
+}
+
 /// Run Wayland backend with full event loop
 ///
 /// # Arguments
@@ -22,19 +35,12 @@ pub enum ExitAfterCaptureMode {
 /// * `freeze_on_start` - Whether to start with the overlay frozen for immediate capture pause
 /// * `exit_after_capture_mode` - Exit behavior after a capture completes
 pub fn run_wayland(
-    initial_mode: Option<String>,
-    freeze_on_start: bool,
-    exit_after_capture_mode: ExitAfterCaptureMode,
-    named_session_file: Option<std::path::PathBuf>,
+    context: WaylandRunContext,
+    signal_source: &mut dyn crate::unix_signals::SignalEventSource,
 ) -> Result<()> {
-    let mut backend = wayland::WaylandBackend::new(
-        initial_mode,
-        freeze_on_start,
-        exit_after_capture_mode,
-        named_session_file,
-    )?;
+    let mut backend = wayland::WaylandBackend::new(context)?;
     backend.init()?;
-    backend.show()?; // show() calls run() internally
+    backend.show(signal_source)?; // show() calls run() internally
     backend.hide()?;
     Ok(())
 }
@@ -62,7 +68,31 @@ mod tests {
             );
             return;
         }
-        super::run_wayland(None, false, super::ExitAfterCaptureMode::Never, None)
-            .expect("Wayland backend should start");
+        let process_broker_owner = crate::process_broker::start_for_runtime()
+            .expect("Wayland smoke fixture starts its process broker owner");
+        let mut signal_source = crate::unix_signals::FakeSignalSource::new()
+            .expect("Wayland smoke fixture creates its signal source");
+        let resolver = crate::paths::PathResolver::from_process_environment();
+        super::run_wayland(
+            super::WaylandRunContext {
+                initial_mode: None,
+                freeze_on_start: false,
+                exit_after_capture_mode: super::ExitAfterCaptureMode::Never,
+                named_session_file: None,
+                session_resume_override: None,
+                process_broker: process_broker_owner.handle(),
+                runtime_paths: crate::paths::PreparedRuntimePaths::prepare(&resolver)
+                    .expect("Wayland smoke fixture provides a private runtime directory"),
+                config_store: crate::config::ConfigStore::at_path(
+                    "/tmp/wayscriber-smoke-config.toml",
+                ),
+                logger: crate::logger::LoggerOwner::start(false, &resolver)
+                    .expect("Wayland smoke fixture starts its logger owner")
+                    .1,
+                path_resolver: resolver,
+            },
+            &mut signal_source,
+        )
+        .expect("Wayland backend should start");
     }
 }

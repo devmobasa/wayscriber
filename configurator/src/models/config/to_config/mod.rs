@@ -16,7 +16,11 @@ use super::draft::ConfigDraft;
 use wayscriber::config::Config;
 
 impl ConfigDraft {
-    pub fn to_config(&self, base: &Config) -> Result<Config, Vec<FormError>> {
+    pub fn to_config(
+        &self,
+        base: &Config,
+        paths: &wayscriber::paths::PathResolver,
+    ) -> Result<Config, Vec<FormError>> {
         let mut errors = Vec::new();
         let mut config = base.clone();
 
@@ -28,7 +32,7 @@ impl ConfigDraft {
         self.apply_boards(&mut config, &mut errors);
         self.render_profiles
             .apply_to_config(&mut config, &mut errors);
-        self.apply_capture(&mut config, &mut errors);
+        self.apply_capture(&mut config, &mut errors, paths);
         self.apply_export(&mut config, &mut errors);
         self.apply_session(&mut config, &mut errors);
         self.apply_tablet(&mut config, &mut errors);

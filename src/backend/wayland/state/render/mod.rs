@@ -362,7 +362,7 @@ impl WaylandState {
             // Damage logic moved to top of function (add_regions and take_buffer_damage).
             // We now use the computed screen-space damage for clipping and compositor hints.
 
-            if debug_damage_logging_enabled() {
+            if self.runtime_options.debug_damage_logging() {
                 debug!(
                     "Damage (scaled): count={}, {}",
                     scaled_damage.len(),

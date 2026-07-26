@@ -559,14 +559,19 @@ fn position_rollback(
     positions: ToolbarPositionSnapshot,
 ) -> PreviewRollbackSnapshot {
     let mut values = std::collections::BTreeMap::new();
-    for seed_target in target.seed_targets() {
-        let raw = match seed_target {
-            InteractionSeedTarget::TopPosition => positions.top,
-            InteractionSeedTarget::SidePosition => positions.side,
-            _ => unreachable!("config position target returned a runtime-owned seed"),
-        };
+    let position_seeds: &[(InteractionSeedTarget, (f64, f64))] = match target {
+        ConfigPositionTarget::Top => &[(InteractionSeedTarget::TopPosition, positions.top)],
+        ConfigPositionTarget::Side => &[
+            (InteractionSeedTarget::TopPosition, positions.top),
+            (InteractionSeedTarget::SidePosition, positions.side),
+        ],
+    };
+    for (seed_target, raw) in position_seeds {
         if let Some(position) = ToolbarPositionSeed::new(raw.0, raw.1) {
-            values.insert(seed_target, InteractionSeedValue::Position(position));
+            values.insert(
+                seed_target.clone(),
+                InteractionSeedValue::Position(position),
+            );
         }
     }
     PreviewRollbackSnapshot { values }

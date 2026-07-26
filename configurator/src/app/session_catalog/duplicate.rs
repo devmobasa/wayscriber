@@ -3,40 +3,44 @@ use std::path::{Path, PathBuf};
 use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult};
 
 use super::{
-    CatalogOperation, RuntimeLockKind, acquire_runtime_lock_for_inactive_operation,
-    load_session_catalog_sync, service_status_blocker,
+    CatalogOperation, RuntimeLockKind, RuntimeLockPaths,
+    acquire_runtime_lock_for_inactive_operation, load_session_catalog_sync, service_status_blocker,
 };
 
-use super::super::blocking_jobs::{BlockingJobKind, run_blocking};
-use super::super::daemon_setup::load_daemon_runtime_status_sync;
+use super::super::daemon_setup::load_daemon_runtime_status;
 
-pub(crate) async fn duplicate_session_catalog_entry(
+pub(crate) fn duplicate_session_catalog_entry(
     id: String,
     target: PathBuf,
+    paths: &wayscriber::paths::PathResolver,
 ) -> Result<SessionCatalogActionResult, String> {
-    run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
-        let status = load_daemon_runtime_status_sync()?;
-        duplicate_session_catalog_entry_sync(&id, &target, &status)
-    })
-    .await
+    let status = load_daemon_runtime_status(paths)?;
+    let catalog = wayscriber::session::catalog::SessionCatalog::from_resolver(paths)
+        .map_err(|error| error.to_string())?;
+    let runtime_locks = RuntimeLockPaths::prepare(paths)?;
+    duplicate_session_catalog_entry_sync(&id, &target, &status, &catalog, &runtime_locks)
 }
 
 fn duplicate_session_catalog_entry_sync(
     id: &str,
     target: &Path,
     status: &DaemonRuntimeStatus,
+    catalog: &wayscriber::session::catalog::SessionCatalog,
+    runtime_locks: &RuntimeLockPaths,
 ) -> Result<SessionCatalogActionResult, String> {
-    let initial_items = load_session_catalog_sync()?;
+    let initial_items = load_session_catalog_sync(catalog)?;
     let item = initial_items
         .iter()
         .find(|item| item.id == id)
         .cloned()
         .ok_or_else(|| "Session is no longer in the catalog.".to_string())?;
     let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
+        runtime_locks,
         RuntimeLockKind::Daemon,
         CatalogOperation::Duplicate,
     )?;
     let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
+        runtime_locks,
         RuntimeLockKind::Overlay,
         CatalogOperation::Duplicate,
     )?;
@@ -46,7 +50,7 @@ fn duplicate_session_catalog_entry_sync(
 
     let outcome = wayscriber::session::duplicate_named_session_primary(&item.path, target)
         .map_err(|err| err.to_string())?;
-    let entry = match wayscriber::session::catalog::upsert_session_event_with_display_name(
+    let entry = match catalog.upsert_session_event_with_display_name(
         &outcome.target,
         wayscriber::session::catalog::CatalogEvent::Saved,
         &item.display_name,
@@ -63,7 +67,7 @@ fn duplicate_session_catalog_entry_sync(
             ));
         }
     };
-    let items = match load_session_catalog_sync() {
+    let items = match load_session_catalog_sync(catalog) {
         Ok(items) => items,
         Err(err) => {
             return Ok(SessionCatalogActionResult::warning(
@@ -89,59 +93,37 @@ fn duplicate_session_catalog_entry_sync(
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
-    use std::path::Path;
-    use std::sync::MutexGuard;
 
+    use super::*;
     use crate::models::{
         DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability,
         ShortcutApplyCapability, ShortcutBackend,
     };
-    use wayscriber::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV};
 
-    use super::*;
-
-    struct EnvGuard {
-        catalog_hooks: Option<OsString>,
-        xdg_data_home: Option<OsString>,
-        xdg_runtime_dir: Option<OsString>,
-        _guard: MutexGuard<'static, ()>,
-    }
-
-    impl EnvGuard {
-        fn set_roots(path: &Path) -> Self {
-            let guard = crate::test_env::lock();
-            let catalog_hooks = std::env::var_os(CATALOG_HOOKS_TEST_ENV);
-            let xdg_data_home = std::env::var_os(XDG_DATA_HOME_ENV);
-            let xdg_runtime_dir = std::env::var_os(XDG_RUNTIME_DIR_ENV);
-            unsafe {
-                std::env::set_var(CATALOG_HOOKS_TEST_ENV, path);
-                std::env::set_var(XDG_DATA_HOME_ENV, path);
-                std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
-            }
-            Self {
-                catalog_hooks,
-                xdg_data_home,
-                xdg_runtime_dir,
-                _guard: guard,
-            }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.catalog_hooks.take() {
-                Some(value) => unsafe { std::env::set_var(CATALOG_HOOKS_TEST_ENV, value) },
-                None => unsafe { std::env::remove_var(CATALOG_HOOKS_TEST_ENV) },
-            }
-            match self.xdg_data_home.take() {
-                Some(value) => unsafe { std::env::set_var(XDG_DATA_HOME_ENV, value) },
-                None => unsafe { std::env::remove_var(XDG_DATA_HOME_ENV) },
-            }
-            match self.xdg_runtime_dir.take() {
-                Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-                None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
-            }
-        }
+    fn fixture_owners(
+        temp: &crate::test_temp::TempDir,
+    ) -> (
+        wayscriber::session::catalog::SessionCatalog,
+        RuntimeLockPaths,
+    ) {
+        let paths = wayscriber::paths::PathResolver::from_environment(
+            wayscriber::paths::PathEnvironment::from_values(&[
+                (wayscriber::env_vars::HOME_ENV, temp.path().as_os_str()),
+                (
+                    wayscriber::env_vars::XDG_DATA_HOME_ENV,
+                    temp.path().as_os_str(),
+                ),
+                (
+                    wayscriber::env_vars::XDG_RUNTIME_DIR_ENV,
+                    temp.path().as_os_str(),
+                ),
+            ]),
+        );
+        (
+            wayscriber::session::catalog::SessionCatalog::from_resolver(&paths)
+                .expect("fixture resolves its catalog"),
+            RuntimeLockPaths::prepare(&paths).expect("fixture prepares runtime locks"),
+        )
     }
 
     fn inactive_status() -> DaemonRuntimeStatus {
@@ -164,34 +146,47 @@ mod tests {
 
     #[test]
     fn duplicate_session_catalog_entry_copies_primary_and_catalogs_new_entry() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = EnvGuard::set_roots(temp.path());
+        let temp = crate::test_temp::tempdir()
+            .expect("the duplicate-session test fixture operation should succeed");
+        let (catalog, runtime_locks) = fixture_owners(&temp);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("lecture-copy.wayscriber-session");
         let source_artifacts = wayscriber::session::named_session_artifact_paths(&source);
         let target_artifacts = wayscriber::session::named_session_artifact_paths(&target);
-        std::fs::write(&source_artifacts.primary, b"primary").unwrap();
-        std::fs::write(&source_artifacts.backup, b"backup").unwrap();
-        std::fs::write(&source_artifacts.lock, b"lock").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
-            &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
-            "Lecture",
-        )
-        .unwrap();
+        std::fs::write(&source_artifacts.primary, b"primary")
+            .expect("the duplicate-session test fixture operation should succeed");
+        std::fs::write(&source_artifacts.backup, b"backup")
+            .expect("the duplicate-session test fixture operation should succeed");
+        std::fs::write(&source_artifacts.lock, b"lock")
+            .expect("the duplicate-session test fixture operation should succeed");
+        let source_entry = catalog
+            .upsert_session_event_with_display_name(
+                &source,
+                wayscriber::session::catalog::CatalogEvent::Saved,
+                "Lecture",
+            )
+            .expect("the duplicate-session test fixture operation should succeed");
 
-        let result =
-            duplicate_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status())
-                .unwrap();
+        let result = duplicate_session_catalog_entry_sync(
+            &source_entry.id,
+            &target,
+            &inactive_status(),
+            &catalog,
+            &runtime_locks,
+        )
+        .expect("the duplicate-session test fixture operation should succeed");
 
         assert_eq!(
-            std::fs::read(&target_artifacts.primary).unwrap(),
+            std::fs::read(&target_artifacts.primary)
+                .expect("the duplicate-session test fixture operation should succeed"),
             b"primary"
         );
         assert!(!target_artifacts.backup.exists());
         assert!(!target_artifacts.lock.exists());
         assert!(result.message.contains("Duplicated Lecture"));
-        let recents = wayscriber::session::catalog::recent_sessions().unwrap();
+        let recents = catalog
+            .recent_sessions()
+            .expect("the duplicate-session test fixture operation should succeed");
         assert_eq!(recents.len(), 2);
         assert_eq!(
             recents
@@ -205,49 +200,66 @@ mod tests {
 
     #[test]
     fn duplicate_session_catalog_entry_warns_when_catalog_update_fails_after_copy() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = EnvGuard::set_roots(temp.path());
+        let temp = crate::test_temp::tempdir()
+            .expect("the duplicate-session test fixture operation should succeed");
+        let (catalog, runtime_locks) = fixture_owners(&temp);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("lecture-copy.wayscriber-session");
-        std::fs::write(&source, b"primary").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
-            &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
-            "Lecture",
+        std::fs::write(&source, b"primary")
+            .expect("the duplicate-session test fixture operation should succeed");
+        let source_entry = catalog
+            .upsert_session_event_with_display_name(
+                &source,
+                wayscriber::session::catalog::CatalogEvent::Saved,
+                "Lecture",
+            )
+            .expect("the duplicate-session test fixture operation should succeed");
+        let lock_path = catalog_lock_path(&catalog);
+        std::fs::remove_file(&lock_path)
+            .expect("the duplicate-session test fixture operation should succeed");
+        std::fs::create_dir(&lock_path)
+            .expect("the duplicate-session test fixture operation should succeed");
+
+        let result = duplicate_session_catalog_entry_sync(
+            &source_entry.id,
+            &target,
+            &inactive_status(),
+            &catalog,
+            &runtime_locks,
         )
-        .unwrap();
-        let lock_path = catalog_lock_path();
-        std::fs::remove_file(&lock_path).unwrap();
-        std::fs::create_dir(&lock_path).unwrap();
+        .expect("the duplicate-session test fixture operation should succeed");
 
-        let result =
-            duplicate_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status())
-                .unwrap();
-
-        std::fs::remove_dir(&lock_path).unwrap();
+        std::fs::remove_dir(&lock_path)
+            .expect("the duplicate-session test fixture operation should succeed");
         assert!(result.warning);
         assert!(
             result
                 .message
                 .contains("failed to update the session catalog")
         );
-        assert_eq!(std::fs::read(&target).unwrap(), b"primary");
+        assert_eq!(
+            std::fs::read(&target)
+                .expect("the duplicate-session test fixture operation should succeed"),
+            b"primary"
+        );
         assert_eq!(
             result.items.len(),
             1,
             "warning should keep the pre-copy catalog rows visible"
         );
         assert_eq!(
-            wayscriber::session::catalog::recent_sessions()
-                .unwrap()
+            catalog
+                .recent_sessions()
+                .expect("the duplicate-session test fixture operation should succeed")
                 .len(),
             1
         );
     }
 
-    fn catalog_lock_path() -> std::path::PathBuf {
-        let catalog_path = wayscriber::session::catalog::catalog_path();
-        let mut raw = OsString::from(catalog_path.as_os_str());
+    fn catalog_lock_path(
+        catalog: &wayscriber::session::catalog::SessionCatalog,
+    ) -> std::path::PathBuf {
+        let mut raw = OsString::from(catalog.path().as_os_str());
         raw.push(".lock");
         raw.into()
     }

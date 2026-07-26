@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::env;
@@ -62,11 +62,12 @@ impl Daemon {
             backoff.as_secs().max(1)
         );
         #[cfg(feature = "tray")]
-        self.tray_status
-            .set_overlay_error(Some(OverlaySpawnErrorInfo {
+        {
+            self.tray_status.overlay_error = Some(OverlaySpawnErrorInfo {
                 message,
                 next_retry_at: Some(next_retry_at),
-            }));
+            });
+        }
     }
 
     pub(super) fn clear_overlay_spawn_error(&mut self) {
@@ -74,7 +75,9 @@ impl Daemon {
         self.overlay_spawn_next_retry = None;
         self.overlay_spawn_backoff_logged = false;
         #[cfg(feature = "tray")]
-        self.tray_status.set_overlay_error(None);
+        {
+            self.tray_status.overlay_error = None;
+        }
     }
 
     fn overlay_spawn_candidates(&self) -> Vec<OverlaySpawnCandidate> {
@@ -190,6 +193,11 @@ impl Daemon {
     }
 
     pub(super) fn spawn_overlay_process(&mut self) -> Result<()> {
+        let process_broker = self
+            .process_broker
+            .as_ref()
+            .context("overlay spawn requires an explicit process broker handle")?
+            .clone();
         let candidates = self.overlay_spawn_candidates();
         if candidates.is_empty() {
             return Err(anyhow!("No overlay spawn candidates available"));
@@ -208,7 +216,7 @@ impl Daemon {
             let launch = self.build_overlay_launch();
             let attempt = (|| -> Result<u32> {
                 let daemon_watchdog = super::super::protocol_v2::open_daemon_watchdog()?;
-                let child = crate::process_broker::current()?.spawn_with_watchdog(
+                let child = process_broker.spawn_with_watchdog(
                     crate::process_broker::HelperKind::Overlay,
                     crate::process_broker::HelperLifetime::OwnedChild,
                     &candidate.program,
@@ -224,8 +232,6 @@ impl Daemon {
             })();
             match attempt {
                 Ok(pid) => {
-                    self.overlay_active
-                        .store(true, std::sync::atomic::Ordering::Release);
                     self.overlay_state = OverlayState::Visible;
                     self.active_named_session_file = self.effective_named_session_file();
                     self.pending_activation_token = None;

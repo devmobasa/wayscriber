@@ -25,6 +25,7 @@ pub struct ToolbarSurfaceManager {
     /// Timestamp when side hover started (for tooltip delay).
     pub(super) side_hover_start: Option<Instant>,
     pub(super) last_snapshot: Option<ToolbarSnapshot>,
+    pub(super) debug_color_logging: bool,
 }
 
 impl Default for ToolbarSurfaceManager {
@@ -50,13 +51,17 @@ impl Default for ToolbarSurfaceManager {
             top_hover_start: None,
             side_hover_start: None,
             last_snapshot: None,
+            debug_color_logging: false,
         }
     }
 }
 
 impl ToolbarSurfaceManager {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(debug_color_logging: bool) -> Self {
+        Self {
+            debug_color_logging,
+            ..Self::default()
+        }
     }
 
     /// Get cursor hint for the currently hovered toolbar, if any.

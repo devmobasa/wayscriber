@@ -1,6 +1,6 @@
 use super::DaemonRuntimeInfo;
 use super::queue::{clear_daemon_toggle_request_file, clear_file, write_file_atomic};
-use crate::paths::{daemon_lock_file, daemon_pid_file};
+use crate::paths::PreparedRuntimePaths;
 use crate::session::try_lock_exclusive;
 use anyhow::{Context, Result, anyhow};
 use log::warn;
@@ -9,8 +9,12 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
 
-pub(crate) fn write_daemon_pid_file(pid: u32, token: &str) -> Result<()> {
-    let path = daemon_pid_file();
+pub(crate) fn write_daemon_pid_file(
+    pid: u32,
+    token: &str,
+    runtime_paths: &PreparedRuntimePaths,
+) -> Result<()> {
+    let path = runtime_paths.daemon_pid_file();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create runtime directory {}", parent.display()))?;
@@ -24,12 +28,12 @@ pub(crate) fn write_daemon_pid_file(pid: u32, token: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn clear_daemon_pid_file() -> Result<()> {
-    clear_file(&daemon_pid_file())
+pub(crate) fn clear_daemon_pid_file(runtime_paths: &PreparedRuntimePaths) -> Result<()> {
+    clear_file(&runtime_paths.daemon_pid_file())
 }
 
-fn try_acquire_daemon_lock() -> Result<Option<File>> {
-    let path = daemon_lock_file();
+fn try_acquire_daemon_lock(runtime_paths: &PreparedRuntimePaths) -> Result<Option<File>> {
+    let path = runtime_paths.daemon_lock_file();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create runtime directory {}", parent.display()))?;
@@ -50,11 +54,11 @@ fn try_acquire_daemon_lock() -> Result<Option<File>> {
     }
 }
 
-fn clear_stale_daemon_state() {
-    if let Err(err) = clear_daemon_pid_file() {
+fn clear_stale_daemon_state(runtime_paths: &PreparedRuntimePaths) {
+    if let Err(err) = clear_daemon_pid_file(runtime_paths) {
         warn!("Failed to clear stale daemon pid file: {}", err);
     }
-    if let Err(err) = clear_daemon_toggle_request_file() {
+    if let Err(err) = clear_daemon_toggle_request_file(runtime_paths) {
         warn!("Failed to clear stale daemon command file: {}", err);
     }
 }
@@ -71,15 +75,19 @@ fn parse_daemon_runtime_info(raw: &str) -> Result<DaemonRuntimeInfo> {
     Ok(DaemonRuntimeInfo { pid, token: None })
 }
 
-pub(super) fn read_daemon_runtime_file() -> Result<DaemonRuntimeInfo> {
-    let path = daemon_pid_file();
+pub(super) fn read_daemon_runtime_file(
+    runtime_paths: &PreparedRuntimePaths,
+) -> Result<DaemonRuntimeInfo> {
+    let path = runtime_paths.daemon_pid_file();
     let raw =
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
     parse_daemon_runtime_info(&raw)
 }
 
-fn read_daemon_runtime_file_if_exists() -> Result<Option<DaemonRuntimeInfo>> {
-    let path = daemon_pid_file();
+fn read_daemon_runtime_file_if_exists(
+    runtime_paths: &PreparedRuntimePaths,
+) -> Result<Option<DaemonRuntimeInfo>> {
+    let path = runtime_paths.daemon_pid_file();
     let raw = match fs::read_to_string(&path) {
         Ok(raw) => raw,
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
@@ -90,8 +98,11 @@ fn read_daemon_runtime_file_if_exists() -> Result<Option<DaemonRuntimeInfo>> {
     parse_daemon_runtime_info(&raw).map(Some)
 }
 
-pub(super) fn clear_stale_daemon_state_if_matches(expected: &DaemonRuntimeInfo) {
-    let Some(_lock_file) = (match try_acquire_daemon_lock() {
+pub(super) fn clear_stale_daemon_state_if_matches(
+    expected: &DaemonRuntimeInfo,
+    runtime_paths: &PreparedRuntimePaths,
+) {
+    let Some(_lock_file) = (match try_acquire_daemon_lock(runtime_paths) {
         Ok(lock_file) => lock_file,
         Err(err) => {
             warn!(
@@ -104,20 +115,22 @@ pub(super) fn clear_stale_daemon_state_if_matches(expected: &DaemonRuntimeInfo) 
         return;
     };
 
-    match read_daemon_runtime_file_if_exists() {
-        Ok(Some(current)) if &current == expected => clear_stale_daemon_state(),
+    match read_daemon_runtime_file_if_exists(runtime_paths) {
+        Ok(Some(current)) if &current == expected => clear_stale_daemon_state(runtime_paths),
         Ok(_) => {}
         Err(err) => warn!("Failed to inspect daemon pid before stale cleanup: {}", err),
     }
 }
 
-pub(super) fn read_daemon_runtime_info() -> Result<DaemonRuntimeInfo> {
-    if let Some(_lock_file) = try_acquire_daemon_lock()? {
-        clear_stale_daemon_state();
+pub(super) fn read_daemon_runtime_info(
+    runtime_paths: &PreparedRuntimePaths,
+) -> Result<DaemonRuntimeInfo> {
+    if let Some(_lock_file) = try_acquire_daemon_lock(runtime_paths)? {
+        clear_stale_daemon_state(runtime_paths);
         return Err(anyhow!("wayscriber daemon is not running"));
     }
 
-    read_daemon_runtime_file()
+    read_daemon_runtime_file(runtime_paths)
 }
 
 pub(super) fn signal_daemon_pid(pid: u32) -> Result<()> {

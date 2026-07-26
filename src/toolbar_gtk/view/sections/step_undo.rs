@@ -2,9 +2,6 @@
 //! the per-direction step rows (multi-step button, minus / count / plus,
 //! delay slider), and the global undo/redo delay sliders.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::toolbar_icons;
@@ -128,11 +125,12 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
 
     // The nudge events read the live count so a click after a backend
     // update never over- or under-shoots.
-    let steps = Rc::new(Cell::new(if is_undo {
+    let initial_steps = if is_undo {
         snapshot.custom_undo_steps
     } else {
         snapshot.custom_redo_steps
-    }));
+    };
+    let steps = gtk4::Adjustment::new(initial_steps as f64, 1.0, usize::MAX as f64, 1.0, 1.0, 0.0);
     let cluster = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(4.0));
 
     let minus = nudge_button(
@@ -147,12 +145,12 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     let minus_sender = ctx.feedback.clone();
     let minus_steps = steps.clone();
     minus.connect_clicked(move |_| {
-        let next = minus_steps.get().saturating_sub(1).max(1);
+        let next = (minus_steps.value() as usize).saturating_sub(1).max(1);
         send_event(&minus_sender, set_steps_event(is_undo, next));
     });
     cluster.append(&minus);
 
-    let steps_label = gtk4::Label::new(Some(&steps_text(steps.get())));
+    let steps_label = gtk4::Label::new(Some(&steps_text(initial_steps)));
     steps_label.set_size_request(ctx.px(54.0), -1);
     cluster.append(&steps_label);
 
@@ -168,7 +166,7 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     let plus_sender = ctx.feedback.clone();
     let plus_steps = steps.clone();
     plus.connect_clicked(move |_| {
-        let next = plus_steps.get().saturating_add(1);
+        let next = (plus_steps.value() as usize).saturating_add(1);
         send_event(&plus_sender, set_steps_event(is_undo, next));
     });
     cluster.append(&plus);
@@ -205,7 +203,7 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
         } else {
             snapshot.custom_redo_steps
         };
-        steps.set(count);
+        steps.set_value(count as f64);
         steps_label.set_text(&steps_text(count));
         let secs = row_delay_secs(snapshot, is_undo);
         slider.set_value(secs);

@@ -62,11 +62,11 @@ pub(super) fn validate(
         HelperKind::SessionZenity => basename == "zenity",
         HelperKind::SessionKdialog => basename == "kdialog",
         HelperKind::Gsettings => basename == "gsettings",
-        HelperKind::Configurator => std::env::var_os(crate::env_vars::CONFIGURATOR_ENV)
-            .map_or_else(
-                || basename.contains("configurator"),
-                |configured| configured == program,
-            ),
+        HelperKind::Configurator => configurator_program_allowed(
+            &program,
+            &basename,
+            std::env::var_os(crate::env_vars::CONFIGURATOR_ENV).as_deref(),
+        ),
         HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open" | "cmd"),
         HelperKind::UpdateFetcher => matches!(basename.as_str(), "curl" | "wget"),
         #[cfg(test)]
@@ -96,6 +96,17 @@ pub(super) fn validate(
     Ok(())
 }
 
+pub(super) fn configurator_program_allowed(
+    program: &OsStr,
+    basename: &str,
+    configured: Option<&OsStr>,
+) -> bool {
+    configured.map_or_else(
+        || basename.contains("configurator"),
+        |configured| configured == program,
+    )
+}
+
 pub(super) fn command(
     program: OsWire,
     arguments: Vec<OsWire>,
@@ -103,6 +114,11 @@ pub(super) fn command(
 ) -> Command {
     let mut command = Command::new(program.into_os());
     command.args(arguments.into_iter().map(OsWire::into_os));
+    command
+        .env_remove(super::wire::BROKER_FD_ENV)
+        .env_remove(super::wire::BROKER_SHUTDOWN_FD_ENV)
+        .env_remove(super::wire::BROKER_TOKEN_ENV)
+        .env_remove(crate::env_vars::DAEMON_WATCHDOG_FD_ENV);
     for (name, value) in environment {
         let name = name.into_os();
         if let Some(value) = value {
@@ -112,4 +128,35 @@ pub(super) fn command(
         }
     }
     command
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn helper_commands_strip_every_private_bootstrap_marker() {
+        let command = command(
+            OsWire::from_os(OsStr::new("true"))
+                .expect("manifest fixture encodes its ASCII helper program"),
+            Vec::new(),
+            Vec::new(),
+        );
+        let removed = command
+            .get_envs()
+            .filter_map(|(name, value)| value.is_none().then_some(name))
+            .collect::<Vec<_>>();
+
+        for marker in [
+            super::super::wire::BROKER_FD_ENV,
+            super::super::wire::BROKER_SHUTDOWN_FD_ENV,
+            super::super::wire::BROKER_TOKEN_ENV,
+            crate::env_vars::DAEMON_WATCHDOG_FD_ENV,
+        ] {
+            assert!(
+                removed.contains(&OsStr::new(marker)),
+                "helper command retained private marker {marker}"
+            );
+        }
+    }
 }

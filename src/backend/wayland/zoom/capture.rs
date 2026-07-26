@@ -319,7 +319,11 @@ mod tests {
     #[tokio::test]
     async fn portal_capture_waits_for_suppression_preflight() {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().expect("runtime wake");
-        let mut state = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let mut state = ZoomState::new_with_runtime_wake(
+            None,
+            wake.try_sender()
+                .expect("test duplicates its zoom runtime eventfd"),
+        );
 
         state
             .start_capture(false, &tokio::runtime::Handle::current())

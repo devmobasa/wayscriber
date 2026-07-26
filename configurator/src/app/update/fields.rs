@@ -1,5 +1,5 @@
 use iced::Task;
-use wayscriber::config::{PerformanceFieldId, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::messages::Message;
 use crate::models::{
@@ -428,8 +428,7 @@ impl ConfiguratorApp {
 
     pub(super) fn handle_buffer_count_changed(&mut self, count: u32) -> Task<Message> {
         self.status = StatusMessage::idle();
-        self.draft
-            .set_performance_choice(PerformanceFieldId::BufferCount, count);
+        self.draft.set_performance_buffer_count(count);
         self.refresh_dirty_flag();
         Task::none()
     }
@@ -537,7 +536,7 @@ mod tests {
 
         let saved = app
             .draft
-            .to_config(&Config::default())
+            .to_config(&Config::default(), &crate::test_temp::path_resolver())
             .expect("expected quick color RGB to save");
 
         assert_eq!(

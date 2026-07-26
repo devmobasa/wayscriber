@@ -5,9 +5,7 @@
 use wayland_client::{Connection, QueueHandle};
 
 use super::WaylandState;
-use crate::toolbar_gtk::select::{
-    GtkPreconditions, ToolbarFrontend, requested_backend, resolve_frontend,
-};
+use crate::toolbar_gtk::select::{GtkPreconditions, ToolbarFrontend, resolve_frontend};
 use crate::toolbar_gtk::{GtkToolbarBridge, GtkToolbarFeedback, GtkToolbarUpdate};
 
 fn gtk_toolbar_feedback_blocked(input_state: &crate::input::InputState) -> bool {
@@ -72,18 +70,21 @@ impl WaylandState {
     /// Spawns the GTK toolbar thread when the resolved frontend is GTK.
     pub(in crate::backend::wayland) fn spawn_gtk_toolbar_if_selected(
         &mut self,
-        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
-    ) {
-        let request = requested_backend(&self.config);
+        runtime_wake: crate::backend::wayland::RuntimeWakeSender,
+    ) -> std::io::Result<()> {
+        let request = self.runtime_options.requested_toolbar_backend(&self.config);
         let preconditions = GtkPreconditions {
             feature_compiled: cfg!(feature = "toolbar-gtk"),
             layer_shell: self.layer_shell.is_some(),
-            force_inline: super::force_inline_toolbars_requested(&self.config),
+            force_inline: super::force_inline_toolbars_requested_with_env(
+                &self.config,
+                self.runtime_options.force_inline_toolbars(),
+            ),
             main_surface_uses_overlay_layer: self.data.main_surface_uses_overlay_layer,
         };
         match resolve_frontend(request, preconditions) {
             ToolbarFrontend::Gtk => {
-                self.gtk_toolbar = GtkToolbarBridge::spawn(runtime_wake);
+                self.gtk_toolbar = GtkToolbarBridge::spawn(runtime_wake)?;
                 if self.gtk_toolbar.is_some() {
                     log::info!("GTK toolbars enabled; built-in toolbar surfaces stay unmapped");
                 } else {
@@ -99,6 +100,7 @@ impl WaylandState {
                 }
             }
         }
+        Ok(())
     }
 
     /// Drains pending GTK toolbar feedback into the shared toolbar-event
@@ -109,7 +111,7 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
     ) {
         let (pending, failed) = {
-            let Some(bridge) = self.gtk_toolbar.as_ref() else {
+            let Some(bridge) = self.gtk_toolbar.as_mut() else {
                 return;
             };
             bridge.drain_feedback()
@@ -201,7 +203,7 @@ impl WaylandState {
                     seq,
                     phase,
                 } => {
-                    super::drag_log(format!(
+                    self.runtime_options.drag_log(format!(
                         "gtk top receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
                         surface_size.width, surface_size.height,
                     ));
@@ -215,7 +217,7 @@ impl WaylandState {
                     seq,
                     phase,
                 } => {
-                    super::drag_log(format!(
+                    self.runtime_options.drag_log(format!(
                         "gtk side receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
                         surface_size.width, surface_size.height,
                     ));

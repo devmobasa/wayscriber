@@ -1,7 +1,6 @@
 use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 
-use crate::backend::wayland::state::drag_log;
 use crate::input::state::HelpOverlayPressSource;
 use crate::input::{HelpOverlayReleaseOutcome, MouseButton};
 use crate::ui::ZoomChipPress;
@@ -133,7 +132,7 @@ impl WaylandState {
             }
         }
 
-        if debug_toolbar_drag_logging_enabled() {
+        if self.runtime_options.debug_toolbar_drag_logging() {
             debug!(
                 "pointer release: button={}, on_toolbar={}, inline_active={}, drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
                 button,
@@ -176,7 +175,7 @@ impl WaylandState {
         }
         if inline_active {
             if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
-                drag_log(format!(
+                self.runtime_options.drag_log(format!(
                     "pointer release: inline handled, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                     event.position.0,
                     event.position.1,
@@ -187,7 +186,7 @@ impl WaylandState {
                 return;
             }
             if self.pointer_over_toolbar() || self.toolbar_dragging() {
-                drag_log(format!(
+                self.runtime_options.drag_log(format!(
                     "pointer release: inline end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                     event.position.0,
                     event.position.1,
@@ -204,7 +203,7 @@ impl WaylandState {
                 self.finish_toolbar_item_drag(true);
                 self.set_toolbar_dragging(false);
             }
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "pointer release: toolbar end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                 event.position.0,
                 event.position.1,
@@ -219,7 +218,7 @@ impl WaylandState {
         if button == BTN_LEFT && self.is_move_dragging() {
             self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "pointer release: main surface end drag, pos=({:.3}, {:.3})",
                 event.position.0, event.position.1
             ));

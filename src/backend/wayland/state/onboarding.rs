@@ -334,9 +334,13 @@ impl WaylandState {
                     "Press {} to search actions.",
                     self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
                 ),
-                "status_bar" => format!(
-                    "Click the {} segment in the status bar to switch boards and pages.",
-                    status_bar_entry.expect("status-bar hint requires a visible picker entry")
+                "status_bar" => status_bar_entry.map_or_else(
+                    || "Use the status bar to switch boards and pages.".to_string(),
+                    |entry| {
+                        format!(
+                            "Click the {entry} segment in the status bar to switch boards and pages."
+                        )
+                    },
                 ),
                 "canvas_popover" => {
                     "Open \u{201c}Canvas\u{2026}\u{201d} from the \u{2026} overflow for boards, \

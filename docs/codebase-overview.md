@@ -8,7 +8,12 @@ This document explains how the application boots, how user input travels through
 
 1. **Binary entry (`src/main.rs` and `src/lib.rs`)**
    - `src/main.rs` only returns `wayscriber::run_from_env()`.
-   - The library facade uses the manual parser in `src/cli.rs`, prints help/version or argument diagnostics, initializes logging for runtime commands, and maps application errors to process exit codes.
+   - Internal broker-child dispatch is the literal first branch. The library facade then uses the
+     manual parser in `src/cli.rs`, prints help/version or argument diagnostics without creating an
+     ordinary runtime root, and maps application errors to process exit codes.
+   - Each ordinary invocation captures one `PathEnvironment`, constructs one `PathResolver`, and
+     owns its process broker, logger, signal source, and mode-specific runtime owners until orderly
+     shutdown. No entry lease or process-global application owner serializes independent calls.
 
 2. **Mode selection (`src/app/`)**
    - `--daemon`: instantiate `daemon::Daemon` with the optional initial board mode and call `run()`.
@@ -21,6 +26,9 @@ This document explains how the application boots, how user input travels through
    - `domain`: owns stable action, tool, color, and board value identities used across higher layers.
    - `config`: loads user settings, key bindings, and drawing defaults.
    - `session`: builds configured or named session targets, validates `--session-file`, loads saved state, and records named-session catalog entries.
+   - `paths`: applies pure HOME/XDG/user-path policy. `PreparedRuntimePaths` is the filesystem
+     boundary that creates and verifies the private runtime directory before daemon, tray, and
+     protocol owners receive it.
 
 ---
 
@@ -29,9 +37,12 @@ This document explains how the application boots, how user input travels through
 **Modules:** `src/daemon/` (control, core, overlay, tray, shortcuts, and setup), plus the public
 backend entry in `src/backend/mod.rs`.
 
-1. The app creates the authenticated process broker before any singleton lock. `Daemon::run` then
-   acquires the daemon lock, installs the owned Unix signal listener and queue watcher, and
-   publishes the strict v2 runtime identity only after every discovery source is active.
+1. The app first protects and consumes any inherited watchdog capability, then prepares the
+   authenticated process-broker subprocess, installs the root-owned Linux signal descriptor,
+   starts the daemon-death watchdog, and only then activates other ordinary worker threads.
+   `Daemon::run` acquires the daemon lock and installs the queue watcher before it publishes the
+   strict v2 runtime identity. The daemon control loop polls the root signal descriptor directly;
+   there is no signal-listener thread or process-global signal queue.
 2. It optionally starts the status tray and portal global-shortcut listener.
 3. Typed `--daemon-toggle` requests publish canonical, generation-bound controls and atomically
    rename an ordered queue reference. The watched queue wakes directly; typed discovery never uses
@@ -42,8 +53,10 @@ backend entry in `src/backend/mod.rs`.
 5. Overlay candidates and runtime helpers are created only by the pre-lock process broker. The
    daemon owns generation/pidfd decisions while the broker owns wait/reap; overlay readiness is
    accepted only after the child wins its lock and publishes matching process identity.
-6. Queue renames, producer eventfds, signals, and child pidfds drive the loop without a lifecycle
-   polling tick. Shutdown invalidates readiness, terminates owned work, and joins listeners.
+6. Queue renames, producer eventfds, the root signal descriptor, and child pidfds drive the loop
+   without a lifecycle polling tick. Shutdown invalidates readiness, terminates owned work, and
+   joins the watchdog, broker actor, tray cleanup, and other retained runtime workers before the
+   root restores its prior signal mask.
 
 The complete route, recovery, process-site, compatibility, and rollback contracts are documented
 in [Daemon Protocol v2 and Process Ownership](daemon-protocol-v2.md).
@@ -184,6 +197,9 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 ## 8. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
+- **`ConfigStore`** owns one already-resolved config identity. Runtime and configurator roots inject
+  it instead of asking config functions to rediscover process environment or current-directory
+  state.
 - **`ConfigDocument`** is the configurator-facing edit owner. It keeps validated `Config`, the
   lossless TOML source, unknown-path diagnostics, source path, and exact source revision behind one
   interface. Guarded saves merge known fields while retaining comments and unsupported settings,
@@ -196,6 +212,22 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 - The Performance section is the first bounded scalar-metadata slice: core config owns its field
   IDs, paths, labels, help/search terms, and numeric constraints while the configurator keeps typed
   draft fields and messages.
+
+### Public owner-injection compatibility
+
+The path/ownership refactor intentionally changes Rust source APIs for embedded callers. Callers
+must capture or construct `PathEnvironment`, create a `PathResolver`, and pass explicit
+`ConfigStore`, `SessionCatalog`, `PreparedRuntimePaths`, and logger/process-broker handles to the
+operations that need them. Removed no-argument path projections are not retained as ambient
+compatibility shims. `Config::json_schema()` also returns a serialization `Result` rather than
+asserting infallibility. Serialized config, session, and daemon compatibility formats are unchanged.
+
+The process-global `log` facade is no longer installed by Wayscriber. Root lifecycle, path,
+persistence-availability, and terminal application diagnostics use the explicit logger event
+interface. Dependency-generated records and legacy facade-only records are intentionally not
+routed into that owner; new runtime code that requires retained diagnostics must receive the
+root-owned logger handle explicitly. If the configured file sink fails, the owner continues on
+standard error.
 
 ### Runtime UI preference persistence
 

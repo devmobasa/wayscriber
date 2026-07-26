@@ -1,13 +1,9 @@
 #[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
-use crate::config::Config;
-#[cfg(feature = "tray")]
 use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
 #[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
-#[cfg(feature = "tray")]
-use crate::paths::log_dir;
 #[cfg(feature = "tray")]
 use crate::session::{clear_session, options_from_config};
 #[cfg(feature = "tray")]
@@ -23,11 +19,12 @@ use std::fs;
 
 #[cfg(feature = "tray")]
 fn spawn_detached(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     kind: crate::process_broker::HelperKind,
     program: &OsStr,
     arguments: &[OsString],
 ) -> anyhow::Result<crate::process_broker::BrokerChild> {
-    crate::process_broker::current()?.spawn(
+    process_broker.spawn(
         kind,
         crate::process_broker::HelperLifetime::DetachedAfterExec,
         program,
@@ -59,6 +56,7 @@ fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
 impl WayscriberTray {
     pub(super) fn launch_configurator(&self) {
         match spawn_detached(
+            &self.process_broker,
             crate::process_broker::HelperKind::Configurator,
             OsStr::new(&self.configurator_binary),
             &[],
@@ -119,6 +117,7 @@ impl WayscriberTray {
         };
 
         match spawn_detached(
+            &self.process_broker,
             crate::process_broker::HelperKind::About,
             exe.as_os_str(),
             &["--about".into()],
@@ -136,6 +135,7 @@ impl WayscriberTray {
     /// `update_check`, which only ever hands out validated wayscriber.com links.
     pub(super) fn open_update_instructions(&self, url: &str) {
         match spawn_detached(
+            &self.process_broker,
             crate::process_broker::HelperKind::DesktopOpen,
             OsStr::new("xdg-open"),
             &[OsString::from(url)],
@@ -145,7 +145,7 @@ impl WayscriberTray {
         }
     }
 
-    pub(super) fn dispatch_overlay_action(&self, action: TrayAction) {
+    pub(super) fn dispatch_overlay_action(&mut self, action: TrayAction) {
         let action_str = action.as_str();
         // Tray producers carry only an action intent. The daemon controller
         // resolves the current child generation and owns any signal decision.
@@ -160,20 +160,31 @@ impl WayscriberTray {
             Err(super::super::types::OverlayActionPublishError::Wake(error)) => {
                 warn!("Queued tray action {action_str}, but failed to wake daemon: {error}");
             }
+            Err(super::super::types::OverlayActionPublishError::Disconnected) => {
+                warn!("Failed to queue tray action {action_str}: daemon owner disconnected");
+            }
+            Err(super::super::types::OverlayActionPublishError::InvalidCapacity) => {
+                warn!("Failed to queue tray action {action_str}: invalid capacity release");
+            }
         }
     }
 
     pub(super) fn clear_session_files(&self) {
-        match Config::load() {
+        match self.config_store.load() {
             Ok(loaded) => {
-                let config_dir = match Config::config_directory_from_source(&loaded.source) {
+                let config_dir = match self.config_store.config_directory() {
                     Ok(dir) => dir,
                     Err(err) => {
                         warn!("Failed to resolve config directory: {}", err);
                         return;
                     }
                 };
-                match options_from_config(&loaded.config.session, &config_dir, None) {
+                match options_from_config(
+                    &loaded.config.session,
+                    &config_dir,
+                    None,
+                    &self.path_resolver,
+                ) {
                     Ok(opts) => match clear_session(&opts) {
                         Ok(outcome) => {
                             info!("Cleared session files: {:?}", outcome);
@@ -188,13 +199,20 @@ impl WayscriberTray {
     }
 
     pub(super) fn open_log_folder(&self) {
-        let dir = log_dir();
+        let dir = match self.path_resolver.log_dir() {
+            Ok(dir) => dir,
+            Err(error) => {
+                warn!("Unable to resolve log directory: {error}");
+                return;
+            }
+        };
         if let Err(err) = fs::create_dir_all(&dir) {
             warn!("Failed to create log directory {}: {}", dir.display(), err);
             return;
         }
 
         match spawn_detached(
+            &self.process_broker,
             crate::process_broker::HelperKind::DesktopOpen,
             OsStr::new("xdg-open"),
             &[dir.as_os_str().into()],
@@ -205,16 +223,11 @@ impl WayscriberTray {
     }
 
     pub(super) fn open_config_file(&self) -> bool {
-        let path = match Config::get_config_path() {
-            Ok(p) => p,
-            Err(err) => {
-                warn!("Unable to resolve config path: {}", err);
-                return false;
-            }
-        };
+        let path = self.config_store.config_path();
 
-        let (opener, arguments) = opener_arguments(&path);
+        let (opener, arguments) = opener_arguments(path);
         match spawn_detached(
+            &self.process_broker,
             crate::process_broker::HelperKind::DesktopOpen,
             &opener,
             &arguments,

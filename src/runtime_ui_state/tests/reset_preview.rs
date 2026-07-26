@@ -16,9 +16,10 @@ fn supported_reset_rejects_a_nonmissing_acknowledgement_without_partial_publish(
             new_source: present_revision("not-missing"),
             recovery_artifacts: Vec::new(),
         }),
-        SubmitSourceMutationResult::Rejected(
-            PipelineProtocolError::ResetDidNotProduceMissingSource
-        )
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::ResetDidNotProduceMissingSource,
+            ..
+        }
     ));
     assert_eq!(controller.authority_epoch(), original_epoch);
     assert_eq!(controller.pipeline().stable_source(), &missing_revision());
@@ -35,6 +36,37 @@ fn supported_reset_rejects_a_nonmissing_acknowledgement_without_partial_publish(
         SubmitSourceMutationResult::ResetCompleted { .. }
     ));
     assert_eq!(controller.authority_epoch(), original_epoch + 1);
+}
+
+#[test]
+fn post_integration_reset_state_failure_terminalizes_persistence() -> Result<(), &'static str> {
+    let mut controller = controller();
+    let reset_through = match controller.request_supported_reset() {
+        RequestResetResult::Started { through, .. } => through,
+        _ => return Err("fixture must start a supported reset"),
+    };
+    let Some(reset) = controller.take_source_mutation() else {
+        return Err("fixture must dispatch the reset mutation");
+    };
+    controller.supported_reset = None;
+
+    assert!(matches!(
+        controller.submit_source_mutation(SourceMutationResult::Applied {
+            id: reset.id,
+            applied_through: reset.accepted_through,
+            new_source: missing_revision(),
+            recovery_artifacts: Vec::new(),
+        }),
+        SubmitSourceMutationResult::Terminalized {
+            error: PipelineProtocolError::ResetTransactionMissing,
+            ..
+        }
+    ));
+    assert!(controller.receipt(reset_through).is_some());
+    assert!(!controller.pipeline().has_source_mutation_in_flight());
+    assert!(controller.active_barrier().is_none());
+    assert!(controller.shutdown_complete());
+    Ok(())
 }
 
 #[test]
@@ -116,10 +148,12 @@ fn supported_reset_waits_for_in_flight_write_and_publishes_epoch_on_ack() {
 #[test]
 fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persistent() {
     let mut controller = RuntimeUiStateController::new(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("version-2"),
         RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
-    );
+    )
+    .expect("fixture unsupported source satisfies controller startup invariants");
     let target = InteractionSeedTarget::TopPinned;
     let session = controller
         .begin_runtime_preview(
@@ -128,15 +162,12 @@ fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persiste
         )
         .unwrap();
     assert!(matches!(session, RuntimeUiPreviewSession::LiveOnly(_)));
-    let result = controller.finish_preview(
-        PreviewFinishRequest::RuntimeUi {
-            session,
-            intent: RuntimePreviewFinishIntent::Commit(
-                RuntimeUiMutationValues::one(target.clone(), InteractionSeedValue::Bool(true))
-                    .unwrap(),
-            ),
-        },
-        |_, _| unreachable!("runtime preview must not invoke config writer"),
+    let result = controller.finish_runtime_preview(
+        session,
+        RuntimePreviewFinishIntent::Commit(
+            RuntimeUiMutationValues::one(target.clone(), InteractionSeedValue::Bool(true))
+                .expect("the test pairs a boolean value with a boolean target"),
+        ),
     );
     assert_eq!(result, PreviewFinishResult::AppliedLiveOnly);
     assert_eq!(
@@ -157,13 +188,12 @@ fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persiste
         )
         .unwrap();
     let mut applied = None;
-    let result = controller.finish_preview(
-        PreviewFinishRequest::ConfigPosition {
-            session: position,
-            intent: ConfigPositionFinishIntent::Commit(
-                ToolbarPositionSeed::new(50.0, 60.0).unwrap(),
-            ),
-        },
+    let result = controller.finish_config_position_preview(
+        position,
+        ConfigPositionFinishIntent::Commit(
+            ToolbarPositionSeed::new(50.0, 60.0)
+                .expect("the test supplies finite toolbar coordinates"),
+        ),
         |target, value| {
             applied = Some((target, value));
             Ok(())
@@ -189,10 +219,12 @@ fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persiste
 fn unsupported_reset_request_returns_a_revision_bound_confirmation_without_side_effects() {
     let source = present_revision("version-2");
     let mut controller = RuntimeUiStateController::new(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         source.clone(),
         RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
-    );
+    )
+    .expect("fixture unsupported source satisfies controller startup invariants");
     let epoch = controller.authority_epoch();
 
     let confirmation = match controller.request_runtime_ui_reset() {
@@ -225,10 +257,12 @@ fn unsupported_reset_request_returns_a_revision_bound_confirmation_without_side_
 fn cancelled_unsupported_reset_confirmation_is_single_use_and_has_no_side_effects() {
     let source = present_revision("version-2");
     let mut controller = RuntimeUiStateController::new(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         source.clone(),
         RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
-    );
+    )
+    .expect("fixture unsupported source satisfies controller startup invariants");
     let epoch = controller.authority_epoch();
     let confirmation = match controller.request_runtime_ui_reset() {
         RequestResetResult::RequiresUnsupportedConfirmation { confirmation, .. } => confirmation,
@@ -254,10 +288,12 @@ fn cancelled_unsupported_reset_confirmation_is_single_use_and_has_no_side_effect
 fn confirmed_unsupported_reset_uses_the_exact_source_and_publishes_only_after_ack() {
     let source = present_revision("version-2");
     let mut controller = RuntimeUiStateController::new(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         source.clone(),
         RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
-    );
+    )
+    .expect("fixture unsupported source satisfies controller startup invariants");
     let original_epoch = controller.authority_epoch();
     let confirmation = match controller.request_runtime_ui_reset() {
         RequestResetResult::RequiresUnsupportedConfirmation { confirmation, .. } => confirmation,
@@ -327,10 +363,12 @@ fn confirmed_unsupported_reset_uses_the_exact_source_and_publishes_only_after_ac
 #[test]
 fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source() {
     let mut controller = RuntimeUiStateController::new(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("version-2"),
         RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
-    );
+    )
+    .expect("fixture unsupported source satisfies controller startup invariants");
     let top = InteractionSeedTarget::TopPinned;
     let live_only = controller
         .begin_runtime_preview(
@@ -339,15 +377,12 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
         )
         .unwrap();
     assert_eq!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: live_only,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(top.clone(), InteractionSeedValue::Bool(true),)
-                        .unwrap(),
-                ),
-            },
-            |_, _| unreachable!(),
+        controller.finish_runtime_preview(
+            live_only,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(top.clone(), InteractionSeedValue::Bool(true))
+                    .expect("the test pairs a boolean value with a boolean target"),
+            ),
         ),
         PreviewFinishResult::AppliedLiveOnly
     );
@@ -402,18 +437,15 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
         Some(&DurabilityOutcome::ExternalSourceWon)
     );
     assert_eq!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: untouched,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(
-                        InteractionSeedTarget::SidePinned,
-                        InteractionSeedValue::Bool(true),
-                    )
-                    .unwrap(),
-                ),
-            },
-            |_, _| unreachable!(),
+        controller.finish_runtime_preview(
+            untouched,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(
+                    InteractionSeedTarget::SidePinned,
+                    InteractionSeedValue::Bool(true),
+                )
+                .expect("the test pairs a boolean value with a boolean target"),
+            ),
         ),
         PreviewFinishResult::AppliedLiveOnly
     );
@@ -423,10 +455,12 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
 #[test]
 fn shutdown_rejects_seed_updates_and_preexisting_preview_commits() {
     let mut controller = RuntimeUiStateController::new(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("version-2"),
         RuntimeUiFileStatus::UnsupportedReadOnly { version: Some(2) },
-    );
+    )
+    .expect("fixture unsupported source satisfies controller startup invariants");
     let runtime = controller
         .begin_runtime_preview(
             RuntimeUiMutationScope::one(InteractionSeedTarget::TopPinned),
@@ -450,30 +484,28 @@ fn shutdown_rejects_seed_updates_and_preexisting_preview_commits() {
         ValidateConfigInteractionResult::RejectedShuttingDown
     );
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: runtime,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(
-                        InteractionSeedTarget::TopPinned,
-                        InteractionSeedValue::Bool(true),
-                    )
-                    .unwrap(),
-                ),
-            },
-            |_, _| unreachable!("runtime preview must not invoke config writer"),
+        controller.finish_runtime_preview(
+            runtime,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(
+                    InteractionSeedTarget::TopPinned,
+                    InteractionSeedValue::Bool(true),
+                )
+                .expect("the test pairs a boolean value with a boolean target"),
+            ),
         ),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::ConfigPosition {
-                session: config,
-                intent: ConfigPositionFinishIntent::Commit(
-                    ToolbarPositionSeed::new(50.0, 60.0).unwrap(),
-                ),
-            },
-            |_, _| unreachable!("shutdown must reject config mutation"),
+        controller.finish_config_position_preview(
+            config,
+            ConfigPositionFinishIntent::Commit(
+                ToolbarPositionSeed::new(50.0, 60.0)
+                    .expect("the test supplies finite toolbar coordinates"),
+            ),
+            |_, _| Err(ConfigMutationError::new(
+                "test callback must not be invoked"
+            )),
         ),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
@@ -517,22 +549,16 @@ fn stale_runtime_and_config_preview_cancellations_do_not_restore_rollbacks() {
     ));
 
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: runtime,
-                intent: RuntimePreviewFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_runtime_preview(runtime, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::ConfigPosition {
-                session: config,
-                intent: ConfigPositionFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
+        controller.finish_config_position_preview(
+            config,
+            ConfigPositionFinishIntent::Cancel,
+            |_, _| Err(ConfigMutationError::new(
+                "test callback must not be invoked"
+            )),
         ),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
@@ -552,18 +578,15 @@ fn preview_release_during_failed_reset_is_resolved_once_without_replay() {
         result => panic!("reset failed to start: {result:?}"),
     };
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: preview,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(
-                        InteractionSeedTarget::TopPinned,
-                        InteractionSeedValue::Bool(true),
-                    )
-                    .unwrap(),
-                ),
-            },
-            |_, _| unreachable!(),
+        controller.finish_runtime_preview(
+            preview,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(
+                    InteractionSeedTarget::TopPinned,
+                    InteractionSeedValue::Bool(true),
+                )
+                .expect("the test pairs a boolean value with a boolean target"),
+            ),
         ),
         PreviewFinishResult::AbandonedDuringBarrier { barrier: active } if active == barrier
     ));
@@ -646,13 +669,7 @@ fn retained_authority_failure_resolves_previews_before_a_later_staged_reload() {
     };
     for session in [top, side] {
         assert_eq!(
-            controller.finish_preview(
-                PreviewFinishRequest::RuntimeUi {
-                    session,
-                    intent: RuntimePreviewFinishIntent::Cancel,
-                },
-                |_, _| unreachable!(),
-            ),
+            controller.finish_runtime_preview(session, RuntimePreviewFinishIntent::Cancel),
             PreviewFinishResult::AbandonedDuringBarrier { barrier }
         );
     }

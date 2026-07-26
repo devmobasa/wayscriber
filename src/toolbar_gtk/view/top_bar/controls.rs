@@ -2,7 +2,7 @@
 //!
 //! Owns construction and state-updater wiring for toolbar buttons and chrome.
 
-use super::popovers::attach_escape_dismiss;
+use super::popovers::{attach_closed_dismissal, attach_escape_dismiss};
 use super::*;
 
 use crate::ui::theme::set_color;
@@ -14,21 +14,24 @@ use crate::ui::theme::toolbar::{
 
 use super::super::super::widgets::rounded_rect_path;
 
-pub(super) fn event_for_toggle_state(
-    control: model::TopToolbarControl,
-    next_active: bool,
-) -> ToolbarEvent {
-    match control {
-        model::TopToolbarControl::ShapePicker => ToolbarEvent::ToggleShapePicker(next_active),
-        model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight) => {
-            ToolbarEvent::ToggleAllHighlight(next_active)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ToggleControl {
+    ShapePicker,
+    Highlight,
+    Pin,
+    Overflow,
+    HighlightRing,
+}
+
+impl ToggleControl {
+    pub(super) fn event(self, next_active: bool) -> ToolbarEvent {
+        match self {
+            Self::ShapePicker => ToolbarEvent::ToggleShapePicker(next_active),
+            Self::Highlight => ToolbarEvent::ToggleAllHighlight(next_active),
+            Self::Pin => ToolbarEvent::PinTopToolbar(next_active),
+            Self::Overflow => ToolbarEvent::ToggleTopOverflow(next_active),
+            Self::HighlightRing => ToolbarEvent::ToggleHighlightToolRing(next_active),
         }
-        model::TopToolbarControl::Pin => ToolbarEvent::PinTopToolbar(next_active),
-        model::TopToolbarControl::Overflow => ToolbarEvent::ToggleTopOverflow(next_active),
-        model::TopToolbarControl::HighlightRing => {
-            ToolbarEvent::ToggleHighlightToolRing(next_active)
-        }
-        _ => unreachable!("non-toggle control in GTK toggle adapter"),
     }
 }
 
@@ -42,7 +45,6 @@ impl TopBar {
         use_icons: bool,
         show_badge: bool,
     ) -> gtk4::Button {
-        assert!(matches!(control, model::TopToolbarControl::Tool(_)));
         self.action_button(
             snapshot,
             control,
@@ -58,17 +60,16 @@ impl TopBar {
     pub(super) fn shapes_picker_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
-        control: model::TopToolbarControl,
         button_size: (f64, f64),
         icon_size: f64,
         use_icons: bool,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::ShapePicker);
+        let control = model::TopToolbarControl::ShapePicker;
         let tooltip = control.tooltip(snapshot);
         let label = control.label(snapshot);
         let button = if use_icons {
             icon_button(
-                top_toolbar_icon_painter(control.icon(snapshot).expect("shape-picker icon")),
+                top_toolbar_icon_painter(model::TopToolbarIcon::ShapePicker),
                 button_size,
                 icon_size,
                 &tooltip,
@@ -81,12 +82,14 @@ impl TopBar {
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         let sender = self.feedback.clone();
-        let expected = self.shapes_expected_open.clone();
-        button.connect_clicked(move |_| {
-            send_event(&sender, event_for_toggle_state(control, !expected.get()));
+        button.connect_clicked(move |button| {
+            send_event(
+                &sender,
+                ToggleControl::ShapePicker.event(!button.has_css_class("active")),
+            );
         });
         let handle = button.clone();
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+        self.updaters.push(Box::new(move |snapshot| {
             set_active_class(&handle, control.active(snapshot));
         }));
 
@@ -101,15 +104,13 @@ impl TopBar {
         attach_escape_dismiss(
             &popover,
             &self.feedback,
-            event_for_toggle_state(control, false),
+            ToggleControl::ShapePicker.event(false),
         );
-        let sender = self.feedback.clone();
-        let expected = self.shapes_expected_open.clone();
-        popover.connect_closed(move |_| {
-            if expected.get() {
-                send_event(&sender, event_for_toggle_state(control, false));
-            }
-        });
+        attach_closed_dismissal(
+            &popover,
+            &self.feedback,
+            ToggleControl::ShapePicker.event(false),
+        );
         let capture_surface = CaptureSurfaceContent::empty();
         popover.set_child(Some(capture_surface.widget()));
         self.shapes_popover = Some(popover);
@@ -135,7 +136,7 @@ impl TopBar {
                 use_icons,
                 show_badge,
             )),
-            _ => unreachable!("utility adapter received non-utility control"),
+            _ => None,
         }
     }
 
@@ -148,10 +149,6 @@ impl TopBar {
         use_icons: bool,
         show_badge: bool,
     ) -> gtk4::Button {
-        assert!(matches!(
-            control,
-            model::TopToolbarControl::Undo | model::TopToolbarControl::Redo
-        ));
         self.action_button(
             snapshot,
             control,
@@ -173,9 +170,10 @@ impl TopBar {
     ) -> gtk4::Button {
         let tooltip = control.tooltip(snapshot);
         let label = control.label(snapshot);
-        let button = if use_icons {
+        let icon = control.icon(snapshot);
+        let button = if use_icons && let Some(icon) = icon {
             icon_button(
-                top_toolbar_icon_painter(control.icon(snapshot).expect("action icon")),
+                top_toolbar_icon_painter(icon),
                 button_size,
                 icon_size,
                 &tooltip,
@@ -191,22 +189,20 @@ impl TopBar {
             let badge = control.shortcut_badge(snapshot);
             add_button_shortcut_hint(&button, badge.as_deref(), use_icons);
         }
+        set_active_class(&button, control.active(snapshot));
         let sender = self.feedback.clone();
         if matches!(
             control,
             model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight)
         ) {
-            let active = Rc::new(Cell::new(control.active(snapshot)));
-            let click_active = active.clone();
-            button.connect_clicked(move |_| {
+            button.connect_clicked(move |button| {
                 send_event(
                     &sender,
-                    event_for_toggle_state(control, !click_active.get()),
+                    ToggleControl::Highlight.event(!button.has_css_class("active")),
                 );
             });
             let handle = button.clone();
-            self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                active.set(control.active(snapshot));
+            self.updaters.push(Box::new(move |snapshot| {
                 set_active_class(&handle, control.active(snapshot));
                 handle.set_sensitive(control.enabled(snapshot));
             }));
@@ -215,7 +211,7 @@ impl TopBar {
         let event = control.event(snapshot);
         button.connect_clicked(move |_| send_event(&sender, event.clone()));
         let handle = button.clone();
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+        self.updaters.push(Box::new(move |snapshot| {
             set_active_class(&handle, control.active(snapshot));
             handle.set_sensitive(control.enabled(snapshot));
         }));
@@ -232,11 +228,10 @@ impl TopBar {
     pub(super) fn preset_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
-        control: model::TopToolbarControl,
         index: usize,
         button_size: (f64, f64),
     ) -> gtk4::Button {
-        assert!(matches!(control, model::TopToolbarControl::Preset(_)));
+        let control = model::TopToolbarControl::Preset(index);
         let button = sized_button(button_size.0, button_size.1);
         set_control_widget_id(&button, control);
         button.add_css_class("preset");
@@ -313,44 +308,45 @@ impl TopBar {
             send_event(&sender, event.clone());
         });
         let handle = button.clone();
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+        self.updaters.push(Box::new(move |snapshot| {
             set_active_class(&handle, control.active(snapshot));
         }));
         button
     }
 
-    pub(super) fn pin_button(
-        &mut self,
-        snapshot: &ToolbarSnapshot,
-        control: model::TopToolbarControl,
-        size: f64,
-    ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::Pin);
+    pub(super) fn pin_button(&mut self, snapshot: &ToolbarSnapshot, size: f64) -> gtk4::Button {
+        let control = model::TopToolbarControl::Pin;
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("pin icon")),
+            top_toolbar_icon_painter(if snapshot.top_pinned {
+                model::TopToolbarIcon::Pin
+            } else {
+                model::TopToolbarIcon::Unpin
+            }),
             size * 0.62,
         );
         button.set_child(Some(&icon.area));
+        if snapshot.top_pinned {
+            button.add_css_class("pinned");
+        }
         let sender = self.feedback.clone();
-        let pinned = Rc::new(Cell::new(snapshot.top_pinned));
-        let click_pinned = pinned.clone();
-        button.connect_clicked(move |_| {
+        button.connect_clicked(move |button| {
             send_event(
                 &sender,
-                event_for_toggle_state(control, !click_pinned.get()),
+                ToggleControl::Pin.event(!button.has_css_class("pinned")),
             );
         });
         let handle = button.clone();
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-            pinned.set(snapshot.top_pinned);
-            icon.set_painter(top_toolbar_icon_painter(
-                control.icon(snapshot).expect("pin icon"),
-            ));
+        self.updaters.push(Box::new(move |snapshot| {
+            icon.set_painter(top_toolbar_icon_painter(if snapshot.top_pinned {
+                model::TopToolbarIcon::Pin
+            } else {
+                model::TopToolbarIcon::Unpin
+            }));
             if snapshot.top_pinned {
                 handle.add_css_class("pinned");
             } else {
@@ -368,28 +364,29 @@ impl TopBar {
     pub(super) fn overflow_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
-        control: model::TopToolbarControl,
         button_size: (f64, f64),
         icon_size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::Overflow);
+        let control = model::TopToolbarControl::Overflow;
         let button = sized_button(button_size.0, button_size.1);
         set_control_widget_id(&button, control);
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("overflow icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::Overflow),
             icon_size,
         );
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();
-        let expected = self.overflow_expected_open.clone();
-        button.connect_clicked(move |_| {
-            send_event(&sender, event_for_toggle_state(control, !expected.get()));
+        button.connect_clicked(move |button| {
+            send_event(
+                &sender,
+                ToggleControl::Overflow.event(!button.has_css_class("active")),
+            );
         });
         let handle = button.clone();
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+        self.updaters.push(Box::new(move |snapshot| {
             set_active_class(&handle, control.active(snapshot));
         }));
         let popover = gtk4::Popover::new();
@@ -400,15 +397,13 @@ impl TopBar {
         attach_escape_dismiss(
             &popover,
             &self.feedback,
-            event_for_toggle_state(control, false),
+            ToggleControl::Overflow.event(false),
         );
-        let sender = self.feedback.clone();
-        let expected = self.overflow_expected_open.clone();
-        popover.connect_closed(move |_| {
-            if expected.get() {
-                send_event(&sender, event_for_toggle_state(control, false));
-            }
-        });
+        attach_closed_dismissal(
+            &popover,
+            &self.feedback,
+            ToggleControl::Overflow.event(false),
+        );
         let capture_surface = CaptureSurfaceContent::empty();
         popover.set_child(Some(capture_surface.widget()));
         self.overflow_popover = Some(popover);
@@ -417,25 +412,16 @@ impl TopBar {
         // The Canvas/Session/Settings popovers anchor to the same ⋯ toggle
         // their menu entries live in; the entries themselves render inside
         // the overflow popover from the shared spec.
-        let (canvas_popover, canvas_capture) = self.menu_popover(
-            &button,
-            self.canvas_expected_open.clone(),
-            ToolbarEvent::ToggleCanvasPopover(false),
-        );
+        let (canvas_popover, canvas_capture) =
+            self.menu_popover(&button, ToolbarEvent::ToggleCanvasPopover(false));
         self.canvas_popover = Some(canvas_popover);
         self.canvas_capture_surface = Some(canvas_capture);
-        let (session_popover, session_capture) = self.menu_popover(
-            &button,
-            self.session_expected_open.clone(),
-            ToolbarEvent::ToggleSessionPopover(false),
-        );
+        let (session_popover, session_capture) =
+            self.menu_popover(&button, ToolbarEvent::ToggleSessionPopover(false));
         self.session_popover = Some(session_popover);
         self.session_capture_surface = Some(session_capture);
-        let (settings_popover, settings_capture) = self.menu_popover(
-            &button,
-            self.settings_expected_open.clone(),
-            ToolbarEvent::ToggleSettingsPopover(false),
-        );
+        let (settings_popover, settings_capture) =
+            self.menu_popover(&button, ToolbarEvent::ToggleSettingsPopover(false));
         self.settings_popover = Some(settings_popover);
         self.settings_capture_surface = Some(settings_capture);
         button
@@ -447,7 +433,6 @@ impl TopBar {
     fn menu_popover(
         &self,
         parent: &gtk4::Button,
-        expected_open: Rc<Cell<bool>>,
         dismiss: ToolbarEvent,
     ) -> (gtk4::Popover, CaptureSurfaceContent) {
         let popover = gtk4::Popover::new();
@@ -455,12 +440,7 @@ impl TopBar {
         popover.set_position(gtk4::PositionType::Bottom);
         popover.set_autohide(false);
         attach_escape_dismiss(&popover, &self.feedback, dismiss.clone());
-        let sender = self.feedback.clone();
-        popover.connect_closed(move |_| {
-            if expected_open.get() {
-                send_event(&sender, dismiss.clone());
-            }
-        });
+        attach_closed_dismissal(&popover, &self.feedback, dismiss);
         let capture_surface = CaptureSurfaceContent::empty();
         popover.set_child(Some(capture_surface.widget()));
         (popover, capture_surface)
@@ -469,13 +449,8 @@ impl TopBar {
     /// The chrome island's About entry. Styled like the other chrome buttons,
     /// but it opens a window instead of changing the toolbar, so it carries no
     /// active state.
-    pub(super) fn about_button(
-        &mut self,
-        snapshot: &ToolbarSnapshot,
-        control: model::TopToolbarControl,
-        size: f64,
-    ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::About);
+    pub(super) fn about_button(&mut self, snapshot: &ToolbarSnapshot, size: f64) -> gtk4::Button {
+        let control = model::TopToolbarControl::About;
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
@@ -484,7 +459,7 @@ impl TopBar {
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("about icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::About),
             size * 0.6,
         );
         button.set_child(Some(&icon.area));
@@ -499,10 +474,9 @@ impl TopBar {
     pub(super) fn minimize_button(
         &mut self,
         snapshot: &ToolbarSnapshot,
-        control: model::TopToolbarControl,
         size: f64,
     ) -> gtk4::Button {
-        assert_eq!(control, model::TopToolbarControl::Minimize);
+        let control = model::TopToolbarControl::Minimize;
         let button = sized_button(size, size);
         set_control_widget_id(&button, control);
         button.add_css_class("chrome");
@@ -511,7 +485,7 @@ impl TopBar {
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("minimize icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::Minimize),
             size * 0.6,
         );
         button.set_child(Some(&icon.area));

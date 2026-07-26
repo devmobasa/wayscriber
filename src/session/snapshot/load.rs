@@ -164,9 +164,7 @@ pub(super) fn load_snapshot_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<LoadSnapshotOutcome> {
-    let outcome = load_snapshot_with_expanded_limit_inner(options, max_expanded_size)?;
-    record_named_session_opened_for_outcome(options, &outcome);
-    Ok(outcome)
+    load_snapshot_with_expanded_limit_inner(options, max_expanded_size)
 }
 
 fn load_snapshot_with_expanded_limit_inner(
@@ -451,22 +449,6 @@ fn load_snapshot_path_with_outcome(
             }
             Ok(LoadSnapshotOutcome::Empty)
         }
-    }
-}
-
-fn record_named_session_opened_for_outcome(
-    options: &SessionOptions,
-    outcome: &LoadSnapshotOutcome,
-) {
-    if options.is_named_file()
-        && matches!(
-            outcome,
-            LoadSnapshotOutcome::Loaded(_)
-                | LoadSnapshotOutcome::LoadedFromBackup(_)
-                | LoadSnapshotOutcome::LoadedFromRecovery(_)
-        )
-    {
-        crate::session::catalog::record_named_session_opened(options);
     }
 }
 

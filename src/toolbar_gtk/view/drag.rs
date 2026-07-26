@@ -4,81 +4,216 @@
 //! while the main overlay renders a moving preview. This module owns the
 //! lifecycle mechanics that must remain identical across those adapters.
 
-use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
-
 use gtk4::prelude::*;
+use tokio::sync::mpsc;
 
-use super::super::widgets::FeedbackSender;
-use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
+use super::super::GtkToolbarDragPhase;
+
+const VIEW_INTENT_CAPACITY: usize = 32;
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::toolbar_gtk) enum DragIntent {
+    Begin { controller: u64 },
+    Tick { generation: u64 },
+    End { controller: u64, dx: f64, dy: f64 },
+    Cancel { controller: u64 },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::toolbar_gtk) enum ViewIntent {
+    Top(DragIntent),
+    Side(DragIntent),
+    Tooltip(TooltipIntent),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::toolbar_gtk) enum TooltipIntent {
+    Activated { source: u64 },
+}
+
+#[derive(Clone)]
+pub(in crate::toolbar_gtk) struct ViewIntentSender {
+    intents: mpsc::Sender<ViewIntent>,
+    failures: mpsc::UnboundedSender<String>,
+}
+
+impl ViewIntentSender {
+    pub(in crate::toolbar_gtk) fn channel() -> (
+        Self,
+        mpsc::Receiver<ViewIntent>,
+        mpsc::UnboundedReceiver<String>,
+    ) {
+        let (intents, intent_rx) = mpsc::channel(VIEW_INTENT_CAPACITY);
+        let (failures, failure_rx) = mpsc::unbounded_channel();
+        (Self { intents, failures }, intent_rx, failure_rx)
+    }
+
+    pub(super) fn send(&self, intent: ViewIntent) -> bool {
+        match self.intents.try_send(intent) {
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                let _ = self.failures.send(
+                    "GTK view-intent queue exhausted; restoring built-in toolbars".to_string(),
+                );
+                false
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => false,
+        }
+    }
+
+    pub(super) fn report_failure(&self, failure: String) {
+        let _ = self.failures.send(failure);
+    }
+}
 
 /// Keep only the newest start-relative `GestureDrag` offset and apply it once
 /// per compositor frame. The gesture-owning surface stays stationary, so the
 /// offset remains in one stable coordinate space for the whole drag.
 #[derive(Default)]
-pub(super) struct FrameCoalescedDrag {
-    next_generation: Cell<u64>,
-    pending: RefCell<VecDeque<(u64, DragFrame)>>,
+pub(super) struct DragOwnerState {
+    next_generation: u64,
+    active: Option<ActiveDrag>,
+    offsets: (f64, f64),
+    sequence: u64,
+    tick: Option<gtk4::TickCallbackId>,
+}
+
+struct ActiveDrag {
+    generation: u64,
+    origin: (f64, f64),
+    reserved: ReservedDragSequence,
+    ready: bool,
+    end_delta: Option<(f64, f64)>,
 }
 
 pub(super) struct DragFrame {
+    pub(super) origin: (f64, f64),
     pub(super) delta: (f64, f64),
     pub(super) phase: GtkToolbarDragPhase,
 }
 
-impl FrameCoalescedDrag {
-    pub(super) fn begin(&self) -> u64 {
-        let generation = self.next_generation.get().wrapping_add(1);
-        self.next_generation.set(generation);
+impl DragOwnerState {
+    pub(super) fn begin(&mut self) -> u64 {
+        self.remove_tick();
+        let generation = self.next_generation.wrapping_add(1);
+        self.next_generation = generation;
+        let reserved = ReservedDragSequence::reserve(self.sequence);
+        self.active = Some(ActiveDrag {
+            generation,
+            origin: self.offsets,
+            reserved,
+            ready: false,
+            end_delta: None,
+        });
         generation
     }
 
-    pub(super) fn update(&self, generation: u64, dx: f64, dy: f64) {
-        let mut pending = self.pending.borrow_mut();
-        if let Some((queued_generation, frame)) = pending.back_mut()
-            && *queued_generation == generation
-            && frame.phase != GtkToolbarDragPhase::End
-        {
-            frame.delta = (dx, dy);
-            return;
-        }
-        pending.push_back((
-            generation,
-            DragFrame {
-                delta: (dx, dy),
-                phase: GtkToolbarDragPhase::Move,
-            },
-        ));
+    pub(super) fn active(&self) -> bool {
+        self.active.is_some()
     }
 
-    pub(super) fn end(&self, generation: u64, dx: f64, dy: f64) {
-        let mut pending = self.pending.borrow_mut();
-        if let Some((queued_generation, frame)) = pending.back_mut()
-            && *queued_generation == generation
-            && frame.phase != GtkToolbarDragPhase::End
-        {
-            frame.delta = (dx, dy);
-            frame.phase = GtkToolbarDragPhase::End;
-            return;
+    pub(super) fn reserved_sequence(&self, generation: u64) -> Option<u64> {
+        self.active
+            .as_ref()
+            .filter(|active| active.generation == generation)
+            .map(|active| active.reserved.value())
+    }
+
+    pub(super) fn mark_ready(&mut self, generation: u64) -> bool {
+        let Some(active) = self.active.as_mut() else {
+            return false;
+        };
+        if active.generation != generation {
+            return false;
         }
-        pending.push_back((
-            generation,
-            DragFrame {
-                // Start-relative offsets are idempotent while the input
-                // surface is parked, so replaying the final coordinate cannot
-                // accumulate motion or produce a release jump.
-                delta: (dx, dy),
+        active.ready = true;
+        self.sequence = active.reserved.value();
+        true
+    }
+
+    pub(super) fn set_tick(&mut self, tick: gtk4::TickCallbackId) {
+        self.remove_tick();
+        self.tick = Some(tick);
+    }
+
+    pub(super) fn queue_end(&mut self, dx: f64, dy: f64) {
+        if let Some(active) = self.active.as_mut() {
+            active.end_delta = Some((dx, dy));
+        }
+    }
+
+    pub(super) fn take_frame(
+        &mut self,
+        generation: u64,
+        live_delta: Option<(f64, f64)>,
+    ) -> Option<DragFrame> {
+        let active = self.active.as_mut()?;
+        if active.generation != generation || !active.ready {
+            return None;
+        }
+        if let Some(delta) = active.end_delta.take() {
+            return Some(DragFrame {
+                origin: active.origin,
+                delta,
                 phase: GtkToolbarDragPhase::End,
-            },
-        ));
+            });
+        }
+        live_delta.map(|delta| DragFrame {
+            origin: active.origin,
+            delta,
+            phase: GtkToolbarDragPhase::Move,
+        })
     }
 
-    pub(super) fn take_frame(&self, generation: u64) -> Option<DragFrame> {
-        let mut pending = self.pending.borrow_mut();
-        let index = pending
-            .iter()
-            .position(|(queued_generation, _)| *queued_generation == generation)?;
-        pending.remove(index).map(|(_, frame)| frame)
+    #[cfg(test)]
+    pub(super) fn origin(&self) -> Option<(f64, f64)> {
+        self.active.as_ref().map(|active| active.origin)
+    }
+
+    pub(super) fn offsets(&self) -> (f64, f64) {
+        self.offsets
+    }
+
+    pub(super) fn set_offsets(&mut self, offsets: (f64, f64)) {
+        self.offsets = offsets;
+    }
+
+    pub(super) fn sequence(&self) -> u64 {
+        self.sequence
+    }
+
+    pub(super) fn advance_sequence(&mut self) -> u64 {
+        self.sequence = self.sequence.wrapping_add(1);
+        self.sequence
+    }
+
+    pub(super) fn cancel_action(&mut self) -> CancelledDragAction {
+        let Some(active) = self.active.take() else {
+            return CancelledDragAction::Ignore;
+        };
+        self.remove_tick();
+        if active.ready {
+            CancelledDragAction::Finish
+        } else {
+            CancelledDragAction::Reveal
+        }
+    }
+
+    pub(super) fn finish(&mut self) {
+        self.active = None;
+        self.remove_tick();
+    }
+
+    fn remove_tick(&mut self) {
+        if let Some(tick) = self.tick.take() {
+            tick.remove();
+        }
+    }
+}
+
+impl Drop for DragOwnerState {
+    fn drop(&mut self) {
+        self.remove_tick();
     }
 }
 
@@ -105,77 +240,12 @@ pub(super) enum CancelledDragAction {
 pub(super) struct ReservedDragSequence(u64);
 
 impl ReservedDragSequence {
-    pub(super) fn reserve(sequence: &Cell<u64>) -> Self {
-        Self(sequence.get().wrapping_add(1))
+    pub(super) fn reserve(sequence: u64) -> Self {
+        Self(sequence.wrapping_add(1))
     }
 
     pub(super) fn value(self) -> u64 {
         self.0
-    }
-
-    pub(super) fn publish(self, sequence: &Cell<u64>) {
-        sequence.set(self.0);
-    }
-}
-
-pub(super) fn cancelled_drag_action(generation: u64, ready_generation: u64) -> CancelledDragAction {
-    if generation == 0 {
-        CancelledDragAction::Ignore
-    } else if ready_generation == generation {
-        CancelledDragAction::Finish
-    } else {
-        CancelledDragAction::Reveal
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn cancel_move_drag(
-    kind: GtkToolbarKind,
-    window: &gtk4::Window,
-    visual: &gtk4::Box,
-    feedback: &FeedbackSender,
-    drag_active: &Cell<bool>,
-    active_generation: &Cell<u64>,
-    ready_generation: &Cell<u64>,
-    offsets: &Cell<(f64, f64)>,
-    seq: &Cell<u64>,
-) {
-    let generation = active_generation.replace(0);
-    let action = cancelled_drag_action(generation, ready_generation.replace(0));
-    if action == CancelledDragAction::Ignore {
-        return;
-    }
-    drag_active.set(false);
-    crate::toolbar_gtk::drag_debug_log(format!(
-        "{kind:?} cancel generation={generation} action={action:?}"
-    ));
-
-    if action == CancelledDragAction::Reveal {
-        super::set_visual_hidden(window, visual, kind, false);
-        return;
-    }
-
-    seq.set(seq.get().wrapping_add(1));
-    let (x, y) = offsets.get();
-    let surface_size = crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(window);
-    let end = match kind {
-        GtkToolbarKind::Top => GtkToolbarFeedback::SetTopOffset {
-            x,
-            y,
-            surface_size,
-            seq: seq.get(),
-            phase: GtkToolbarDragPhase::End,
-        },
-        GtkToolbarKind::Side => GtkToolbarFeedback::SetSideOffset {
-            x,
-            y,
-            surface_size,
-            seq: seq.get(),
-            phase: GtkToolbarDragPhase::End,
-        },
-    };
-    if feedback.send(end).is_err() {
-        super::set_visual_hidden(window, visual, kind, false);
     }
 }
 
@@ -216,19 +286,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn updates_are_coalesced_to_the_latest_start_relative_offset() {
-        let drag = FrameCoalescedDrag::default();
+    fn owner_reads_the_latest_start_relative_offset_on_each_tick() {
+        let mut drag = DragOwnerState::default();
         let first = drag.begin();
-        drag.update(first, 2.0, 3.0);
-        drag.update(first, 5.0, 7.0);
+        assert_eq!(drag.reserved_sequence(first), Some(1));
+        assert!(drag.mark_ready(first));
 
-        let frame = drag.take_frame(first).expect("latest motion is pending");
+        let frame = drag
+            .take_frame(first, Some((5.0, 7.0)))
+            .expect("the test supplied a live gesture offset for the active drag");
         assert_eq!(frame.delta, (5.0, 7.0));
         assert_eq!(frame.phase, GtkToolbarDragPhase::Move);
-        assert!(drag.take_frame(first).is_none());
+        assert!(drag.take_frame(first, None).is_none());
 
-        drag.end(first, 5.0, 7.0);
-        let frame = drag.take_frame(first).expect("drag end is pending");
+        drag.queue_end(8.0, 9.0);
+        let frame = drag
+            .take_frame(first, Some((10.0, 11.0)))
+            .expect("the test queued an end offset for the active drag");
+        assert_eq!(frame.delta, (8.0, 9.0));
+        assert_eq!(frame.phase, GtkToolbarDragPhase::End);
+    }
+
+    #[test]
+    fn start_sequence_is_published_only_when_the_surface_is_ready() {
+        let mut drag = DragOwnerState::default();
+        drag.set_offsets((12.0, 18.0));
+        let generation = drag.begin();
+
+        assert_eq!(drag.origin(), Some((12.0, 18.0)));
+        assert_eq!(drag.sequence(), 0);
+        assert_eq!(drag.reserved_sequence(generation), Some(1));
+        assert!(drag.mark_ready(generation));
+        assert_eq!(drag.sequence(), 1);
+        assert!(!drag.mark_ready(generation.wrapping_add(1)));
+    }
+
+    #[test]
+    fn queued_end_waits_until_start_is_ready() {
+        let mut drag = DragOwnerState::default();
+        let generation = drag.begin();
+        drag.queue_end(5.0, 7.0);
+
+        assert!(drag.take_frame(generation, None).is_none());
+        assert!(drag.mark_ready(generation));
+        let frame = drag
+            .take_frame(generation, None)
+            .expect("the test made the queued end ready");
         assert_eq!(frame.delta, (5.0, 7.0));
         assert_eq!(frame.phase, GtkToolbarDragPhase::End);
     }
@@ -251,54 +354,35 @@ mod tests {
     }
 
     #[test]
-    fn consecutive_drags_keep_separate_final_frames() {
-        let drag = FrameCoalescedDrag::default();
+    fn consecutive_drags_replace_the_previous_generation() {
+        let mut drag = DragOwnerState::default();
         let first = drag.begin();
-        drag.update(first, 4.0, 6.0);
-        drag.end(first, 4.0, 6.0);
+        assert!(drag.mark_ready(first));
+        drag.queue_end(4.0, 6.0);
         let second = drag.begin();
-        drag.update(second, 1.0, 2.0);
+        assert!(drag.mark_ready(second));
 
-        let first_frame = drag.take_frame(first).expect("first drag end is retained");
-        assert_eq!(first_frame.delta, (4.0, 6.0));
-        assert_eq!(first_frame.phase, GtkToolbarDragPhase::End);
-
+        assert!(drag.take_frame(first, None).is_none());
         let second_frame = drag
-            .take_frame(second)
-            .expect("second drag motion is retained");
+            .take_frame(second, Some((1.0, 2.0)))
+            .expect("the test supplied motion for the replacement drag");
         assert_eq!(second_frame.delta, (1.0, 2.0));
         assert_eq!(second_frame.phase, GtkToolbarDragPhase::Move);
     }
 
     #[test]
     fn cancellation_reveals_before_start_and_finishes_after_start() {
-        assert_eq!(cancelled_drag_action(0, 0), CancelledDragAction::Ignore);
-        assert_eq!(cancelled_drag_action(4, 0), CancelledDragAction::Reveal);
-        assert_eq!(cancelled_drag_action(4, 4), CancelledDragAction::Finish);
-    }
+        let mut drag = DragOwnerState::default();
+        assert_eq!(drag.cancel_action(), CancelledDragAction::Ignore);
 
-    #[test]
-    fn cancellation_before_start_does_not_advance_sequence_or_rehide_visual() {
-        let sequence = Cell::new(7);
-        let reserved = ReservedDragSequence::reserve(&sequence);
+        let before_ready = drag.begin();
+        assert_eq!(drag.cancel_action(), CancelledDragAction::Reveal);
+        assert_eq!(drag.sequence(), 0);
 
-        assert_eq!(reserved.value(), 8);
-        assert_eq!(cancelled_drag_action(4, 0), CancelledDragAction::Reveal);
-        assert_eq!(sequence.get(), 7);
-        assert!(!super::super::drag_visual_should_be_hidden(
-            None,
-            GtkToolbarKind::Top,
-            false,
-            sequence.get(),
-            7,
-        ));
-    }
-
-    #[test]
-    fn successful_start_publishes_the_reserved_sequence() {
-        let sequence = Cell::new(7);
-        let reserved = ReservedDragSequence::reserve(&sequence);
-        reserved.publish(&sequence);
-        assert_eq!(sequence.get(), 8);
+        let ready = drag.begin();
+        assert_ne!(ready, before_ready);
+        assert!(drag.mark_ready(ready));
+        assert_eq!(drag.cancel_action(), CancelledDragAction::Finish);
+        assert_eq!(drag.sequence(), 1);
     }
 }

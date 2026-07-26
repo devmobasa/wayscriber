@@ -1,6 +1,5 @@
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RuntimeStateFileIdentity {
@@ -32,14 +31,14 @@ impl RuntimeStateResolvedParent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RuntimeStatePathIdentity {
     source_path: PathBuf,
-    followed_links: Arc<[(PathBuf, PathBuf)]>,
+    followed_links: Box<[(PathBuf, PathBuf)]>,
     resolved_parent: Option<RuntimeStateResolvedParent>,
 }
 
 impl RuntimeStatePathIdentity {
     pub(crate) fn new(
         source_path: PathBuf,
-        followed_links: impl Into<Arc<[(PathBuf, PathBuf)]>>,
+        followed_links: impl Into<Box<[(PathBuf, PathBuf)]>>,
     ) -> Self {
         Self {
             source_path,
@@ -49,7 +48,7 @@ impl RuntimeStatePathIdentity {
     }
 
     pub(crate) fn direct(source_path: impl Into<PathBuf>) -> Self {
-        Self::new(source_path.into(), Arc::from([]))
+        Self::new(source_path.into(), Vec::new().into_boxed_slice())
     }
 
     pub(crate) fn observed(
@@ -58,7 +57,7 @@ impl RuntimeStatePathIdentity {
     ) -> Self {
         Self {
             source_path: source_path.into(),
-            followed_links: Arc::from([]),
+            followed_links: Vec::new().into_boxed_slice(),
             resolved_parent: Some(resolved_parent),
         }
     }
@@ -84,7 +83,7 @@ pub(crate) enum RuntimeStateSourceRevision {
     },
     Present {
         path: RuntimeStatePathIdentity,
-        bytes: Arc<[u8]>,
+        bytes: Box<[u8]>,
         file_identity: Option<RuntimeStateFileIdentity>,
     },
 }
@@ -94,7 +93,7 @@ impl RuntimeStateSourceRevision {
         Self::Missing { path }
     }
 
-    pub(crate) fn present(path: RuntimeStatePathIdentity, bytes: impl Into<Arc<[u8]>>) -> Self {
+    pub(crate) fn present(path: RuntimeStatePathIdentity, bytes: impl Into<Box<[u8]>>) -> Self {
         Self::Present {
             path,
             bytes: bytes.into(),
@@ -104,7 +103,7 @@ impl RuntimeStateSourceRevision {
 
     pub(crate) fn present_observed(
         path: RuntimeStatePathIdentity,
-        bytes: impl Into<Arc<[u8]>>,
+        bytes: impl Into<Box<[u8]>>,
         file_identity: RuntimeStateFileIdentity,
     ) -> Self {
         Self::Present {
@@ -143,7 +142,7 @@ impl RuntimeStateSourceRevision {
                 ..
             } => Self::Present {
                 path,
-                bytes: Arc::clone(bytes),
+                bytes: bytes.clone(),
                 file_identity: *file_identity,
             },
         }
@@ -215,6 +214,54 @@ impl RuntimeStateSourceObservation {
 pub(crate) struct RuntimeStateRecoveryArtifact {
     pub(crate) path: PathBuf,
     pub(crate) observation: RuntimeStateSourceObservation,
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+
+    #[test]
+    fn cloned_source_revision_owns_independent_bytes_and_link_storage() {
+        let path = RuntimeStatePathIdentity::new(
+            PathBuf::from("/tmp/runtime-ui.toml"),
+            vec![(
+                PathBuf::from("/tmp/runtime-ui.toml"),
+                PathBuf::from("/tmp/runtime-ui-target.toml"),
+            )]
+            .into_boxed_slice(),
+        );
+        let original = RuntimeStateSourceRevision::present(path, vec![1, 2, 3].into_boxed_slice());
+        let cloned = original.clone();
+
+        let (original_path, original_bytes, cloned_path, cloned_bytes) = match (&original, &cloned)
+        {
+            (
+                RuntimeStateSourceRevision::Present {
+                    path: original_path,
+                    bytes: original_bytes,
+                    ..
+                },
+                RuntimeStateSourceRevision::Present {
+                    path: cloned_path,
+                    bytes: cloned_bytes,
+                    ..
+                },
+            ) => Some((original_path, original_bytes, cloned_path, cloned_bytes)),
+            _ => None,
+        }
+        .expect("fixture explicitly constructs and clones a present source revision");
+
+        assert_eq!(original_bytes, cloned_bytes);
+        assert!(!std::ptr::eq(
+            original_bytes.as_ptr(),
+            cloned_bytes.as_ptr()
+        ));
+        assert_eq!(original_path.followed_links(), cloned_path.followed_links());
+        assert!(!std::ptr::eq(
+            original_path.followed_links().as_ptr(),
+            cloned_path.followed_links().as_ptr()
+        ));
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

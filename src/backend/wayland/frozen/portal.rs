@@ -25,8 +25,12 @@ impl FrozenState {
 
         let runtime_wake = self
             .runtime_wake
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?;
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?
+            .try_duplicate()
+            .map_err(|error| {
+                anyhow::anyhow!("failed to duplicate portal capture runtime wake: {error}")
+            })?;
         self.portal_in_progress = true;
         self.portal_target_output_id = self.active_output_id;
 
@@ -143,6 +147,7 @@ mod tests {
     use super::*;
     use crate::backend::wayland::frozen::FrozenState;
     use crate::backend::wayland::portal_task::PORTAL_CAPTURE_TIMEOUT;
+    use crate::backend::wayland::{RuntimeWakeSender, RuntimeWakeSource};
     use crate::input::state::test_support::make_test_input_state;
 
     fn image(byte: u8) -> FrozenImage {
@@ -154,30 +159,36 @@ mod tests {
         }
     }
 
-    async fn poll_until_finished(frozen: &mut FrozenState, input: &mut InputState) {
+    fn runtime_sender(wake: &RuntimeWakeSource) -> RuntimeWakeSender {
+        wake.try_sender()
+            .expect("test duplicates its frozen-capture runtime eventfd")
+    }
+
+    async fn poll_until_finished(frozen: &mut FrozenState, input: &mut InputState) -> bool {
         for _ in 0..100 {
             frozen.poll_portal_capture(input, Instant::now());
             if !frozen.portal_in_progress {
-                return;
+                return true;
             }
             tokio::task::yield_now().await;
         }
-        panic!("frozen portal task did not finish");
+        false
     }
 
     #[tokio::test]
     async fn poll_portal_applies_image() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a frozen-capture runtime eventfd");
+        let mut frozen = FrozenState::new_with_runtime_wake(None, runtime_sender(&wake));
         let mut input = make_test_input_state();
 
         frozen.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             async { Ok((None, None, image(0))) },
         ));
         frozen.portal_in_progress = true;
-        poll_until_finished(&mut frozen, &mut input).await;
+        assert!(poll_until_finished(&mut frozen, &mut input).await);
 
         assert!(!input.frozen_active());
         assert!(frozen.has_pending_image());
@@ -187,7 +198,7 @@ mod tests {
 
         frozen
             .activate_pending_image(2, 1, &mut input)
-            .expect("activate pending image");
+            .expect("test staged an image matching the target dimensions");
 
         assert!(input.frozen_active());
         assert!(frozen.image.is_some());
@@ -195,23 +206,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn domain_error_and_task_panic_restore_the_frozen_lifecycle() {
-        for panic_task in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-            let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+    async fn domain_error_and_task_abort_restore_the_frozen_lifecycle() {
+        for abort_task in [false, true] {
+            let wake = crate::backend::wayland::RuntimeWakeSource::new()
+                .expect("test creates a frozen-capture runtime eventfd");
+            let mut frozen = FrozenState::new_with_runtime_wake(None, runtime_sender(&wake));
             let mut input = make_test_input_state();
-            frozen.portal_task = Some(if panic_task {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                    panic!("expected frozen portal panic")
-                })
+            frozen.portal_task = Some(if abort_task {
+                PortalTask::aborted_for_test(
+                    &tokio::runtime::Handle::current(),
+                    runtime_sender(&wake),
+                )
             } else {
-                PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                    Err("portal denied".to_string())
-                })
+                PortalTask::spawn(
+                    &tokio::runtime::Handle::current(),
+                    runtime_sender(&wake),
+                    async { Err("portal denied".to_string()) },
+                )
             });
             frozen.portal_in_progress = true;
 
-            poll_until_finished(&mut frozen, &mut input).await;
+            assert!(poll_until_finished(&mut frozen, &mut input).await);
 
             assert!(!frozen.is_in_progress());
             assert!(frozen.portal_task.is_none());
@@ -224,14 +239,16 @@ mod tests {
     async fn disconnect_and_deadline_expiry_restore_without_a_producer_result() {
         let now = Instant::now();
         for timed_out in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-            let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+            let wake = crate::backend::wayland::RuntimeWakeSource::new()
+                .expect("test creates a frozen-capture runtime eventfd");
+            let mut frozen = FrozenState::new_with_runtime_wake(None, runtime_sender(&wake));
             let mut input = make_test_input_state();
             frozen.portal_task = Some(if timed_out {
                 PortalTask::spawn_at_for_test(
                     &tokio::runtime::Handle::current(),
-                    wake.handle(),
-                    now.checked_sub(PORTAL_CAPTURE_TIMEOUT).unwrap(),
+                    runtime_sender(&wake),
+                    now.checked_sub(PORTAL_CAPTURE_TIMEOUT)
+                        .expect("test start instant is later than the portal timeout"),
                     std::future::pending(),
                 )
             } else {
@@ -250,19 +267,20 @@ mod tests {
 
     #[tokio::test]
     async fn stale_output_is_discarded_without_mutating_current_frozen_state() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a frozen-capture runtime eventfd");
+        let mut frozen = FrozenState::new_with_runtime_wake(None, runtime_sender(&wake));
         let mut input = make_test_input_state();
         input.set_frozen_active(true);
         frozen.set_active_output(None, Some(2));
         frozen.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             async { Ok((Some(1), None, image(9))) },
         ));
         frozen.portal_in_progress = true;
 
-        poll_until_finished(&mut frozen, &mut input).await;
+        assert!(poll_until_finished(&mut frozen, &mut input).await);
 
         assert!(input.frozen_active());
         assert!(!frozen.has_pending_image());
@@ -271,19 +289,20 @@ mod tests {
 
     #[tokio::test]
     async fn supersession_is_ignored_and_explicit_cancel_owns_task_cancellation() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a frozen-capture runtime eventfd");
+        let mut frozen = FrozenState::new_with_runtime_wake(None, runtime_sender(&wake));
         let mut input = make_test_input_state();
         frozen.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             std::future::pending(),
         ));
         frozen.portal_in_progress = true;
 
         frozen
             .capture_via_portal(&tokio::runtime::Handle::current())
-            .unwrap();
+            .expect("test retains its existing frozen portal task during supersession");
         assert!(frozen.portal_task.is_some());
         frozen.cancel(&mut input);
         assert!(frozen.portal_task.is_none());

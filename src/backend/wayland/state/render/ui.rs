@@ -137,6 +137,7 @@ impl WaylandState {
                     &self.config.ui.status_bar_style,
                     width,
                     height,
+                    &self.theme,
                 );
             }
 
@@ -150,30 +151,32 @@ impl WaylandState {
                     &self.config.ui.status_bar_style,
                     width,
                     height,
+                    &self.theme,
                 );
             }
 
             // Render help overlay if toggled
             if self.input_state.show_help {
                 let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
-                let scroll_max = crate::ui::render_help_overlay(
+                let frozen_enabled = self.frozen_enabled();
+                let board_enabled = self.input_state.boards.board_count() > 1;
+                let frame = crate::ui::render_help_overlay(
+                    &mut self.help_overlay_renderer,
                     ctx,
                     &self.config.ui.help_overlay_style,
                     width,
                     height,
-                    self.frozen_enabled(),
+                    frozen_enabled,
                     self.input_state.help_overlay_page,
                     &bindings,
                     self.input_state.help_overlay_search.as_str(),
                     self.config.ui.help_overlay_context_filter,
-                    self.input_state.boards.board_count() > 1,
+                    board_enabled,
                     self.config.capture.enabled,
                     self.input_state.help_overlay_scroll,
                     self.input_state.help_overlay_quick_mode,
                 );
-                self.input_state.help_overlay_scroll_max = scroll_max;
-                self.input_state.help_overlay_scroll =
-                    self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
+                self.input_state.install_help_overlay_render_frame(frame);
             }
 
             if self.input_state.is_board_picker_open() {
@@ -222,16 +225,39 @@ impl WaylandState {
                     .input_state
                     .radial_menu_mark_painted_if_due(std::time::Instant::now())
                 {
-                    crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
+                    crate::ui::render_radial_menu(
+                        ctx,
+                        &self.input_state,
+                        width,
+                        height,
+                        &self.theme,
+                    );
                 }
             } else {
                 self.input_state.clear_radial_menu_layout();
             }
 
-            self.input_state.ui_toast_bounds =
-                crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
-            crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
-            crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
+            self.input_state.ui_toast_bounds = crate::ui::render_ui_toast(
+                ctx,
+                &self.input_state,
+                width,
+                height,
+                self.config.ui.reduced_motion.motion_enabled(),
+            );
+            crate::ui::render_preset_toast(
+                ctx,
+                &self.input_state,
+                width,
+                height,
+                self.config.ui.reduced_motion.motion_enabled(),
+            );
+            crate::ui::render_blocked_feedback(
+                ctx,
+                &self.input_state,
+                width,
+                height,
+                self.config.ui.reduced_motion.motion_enabled(),
+            );
 
             if !self.zoom.active && !self.input_state.is_board_picker_open() {
                 if self.input_state.is_properties_panel_open() {

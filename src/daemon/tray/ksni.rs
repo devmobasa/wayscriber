@@ -18,13 +18,11 @@ use crate::label_format::format_binding_label;
 #[cfg(feature = "tray")]
 use crate::tray_action::TrayAction;
 #[cfg(feature = "tray")]
-use log::{info, warn};
+use log::warn;
 #[cfg(feature = "tray")]
 use std::env;
 #[cfg(feature = "tray")]
 use std::path::PathBuf;
-#[cfg(feature = "tray")]
-use std::sync::atomic::Ordering;
 #[cfg(feature = "tray")]
 use std::time::{Duration, Instant};
 
@@ -54,8 +52,8 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn tool_tip(&self) -> ksni::ToolTip {
-        let status = self.tray_status.snapshot();
-        let overlay_active = self.overlay_active.load(Ordering::Acquire);
+        let status = self.snapshot.status.clone();
+        let overlay_active = self.snapshot.overlay_active;
         let TrayStatus {
             overlay_error,
             watcher_offline,
@@ -117,14 +115,14 @@ impl ksni::Tray for WayscriberTray {
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
         let use_theme_icons = menu_theme_icons_enabled();
-        let overlay_active = self.overlay_active.load(Ordering::Acquire);
-        let toggle_label = toggle_overlay_menu_label();
+        let overlay_active = self.snapshot.overlay_active;
+        let toggle_label = toggle_overlay_menu_label(&self.process_broker, &self.path_resolver);
 
         let mut items: Vec<MenuItem<Self>> = Vec::new();
 
         // The update notice leads the menu only while there is one, and opens
         // instructions — Wayscriber never installs anything itself.
-        if let Some(update) = self.tray_status.snapshot().available_update {
+        if let Some(update) = self.snapshot.status.available_update.clone() {
             let update_url = update.update_url.clone();
             items.push(
                 StandardItem {
@@ -296,6 +294,7 @@ impl ksni::Tray for WayscriberTray {
                         activate: Box::new(|this: &mut Self| {
                             let target = !this.session_resume_enabled;
                             let persisted = update_session_resume_in_config(
+                                &this.config_store,
                                 target,
                                 this.session_resume_enabled,
                             );
@@ -342,15 +341,15 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn watcher_online(&self) {
-        if self.tray_status.set_watcher_online() {
-            info!("StatusNotifierWatcher is online");
+        if let Err(error) = self.status_publisher.watcher_online() {
+            warn!("Failed to publish online tray watcher state: {error}");
         }
     }
 
     fn watcher_offline(&self, reason: ksni::OfflineReason) -> bool {
         let reason_text = format!("{reason:?}");
-        if self.tray_status.set_watcher_offline(reason_text.clone()) {
-            warn!("StatusNotifierWatcher is offline: {}", reason_text);
+        if let Err(error) = self.status_publisher.watcher_offline(reason_text) {
+            warn!("Failed to publish offline tray watcher state: {error}");
         }
         true
     }
@@ -455,9 +454,12 @@ fn installed_icon_theme_path() -> Option<PathBuf> {
 }
 
 #[cfg(feature = "tray")]
-fn toggle_overlay_menu_label() -> String {
+fn toggle_overlay_menu_label(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    paths: &crate::paths::PathResolver,
+) -> String {
     let base = "Toggle Overlay";
-    match configured_toggle_shortcut_hint() {
+    match configured_toggle_shortcut_hint(process_broker, paths) {
         Some(shortcut) => format!("{base} ({shortcut})"),
         None => base.to_string(),
     }

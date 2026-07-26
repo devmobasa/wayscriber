@@ -56,7 +56,6 @@ impl InputState {
                     } else {
                         let before = shape.bounding_box();
                         Self::translate_shape(&mut shape.shape, dx, dy);
-                        shape.invalidate_bounds();
                         let after = shape.bounding_box();
                         Some((before, after))
                     }

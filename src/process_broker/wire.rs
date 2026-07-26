@@ -1,4 +1,6 @@
 use std::ffi::{OsStr, OsString};
+use std::io;
+use std::time::Duration;
 
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
@@ -68,13 +70,53 @@ pub(super) enum OutputMode {
 pub(super) struct BrokerRequest {
     pub(super) token: String,
     pub(super) request_id: String,
+    pub(super) admission_deadline_monotonic_ns: u64,
     pub(super) operation: BrokerOperation,
+}
+
+pub(super) fn monotonic_now_ns() -> io::Result<u64> {
+    let mut value = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: value is a writable timespec and CLOCK_MONOTONIC is process-independent.
+    if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut value) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let seconds = u64::try_from(value.tv_sec)
+        .map_err(|_| io::Error::other("monotonic clock returned negative seconds"))?;
+    let nanos = u64::try_from(value.tv_nsec)
+        .map_err(|_| io::Error::other("monotonic clock returned negative nanoseconds"))?;
+    seconds
+        .checked_mul(1_000_000_000)
+        .and_then(|base| base.checked_add(nanos))
+        .ok_or_else(|| io::Error::other("monotonic clock nanoseconds overflow"))
+}
+
+pub(super) fn admission_deadline_after(budget: Duration) -> io::Result<u64> {
+    let budget_ns = u64::try_from(budget.as_nanos())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "admission budget overflow"))?;
+    monotonic_now_ns()?
+        .checked_add(budget_ns)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "admission deadline overflow"))
+}
+
+pub(super) fn ensure_admission_deadline(deadline_monotonic_ns: u64) -> Result<()> {
+    if monotonic_now_ns()? >= deadline_monotonic_ns {
+        bail!("process broker admission deadline expired");
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "operation", deny_unknown_fields)]
 pub(super) enum BrokerOperation {
     Ping,
+    ReadFile {
+        path: OsWire,
+        timeout_ms: u64,
+        byte_limit: usize,
+    },
     Run {
         kind: HelperKind,
         program: OsWire,
@@ -139,9 +181,24 @@ pub(super) enum BrokerOutcome {
         status: i32,
     },
     Acknowledged,
+    FileRead {
+        result: BrokerFileReadWire,
+        bytes: BlobWire,
+    },
     Error {
         message: String,
     },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "result", deny_unknown_fields)]
+pub(super) enum BrokerFileReadWire {
+    Ready,
+    Empty,
+    TooLarge,
+    NotRegular,
+    TimedOut,
+    ReadFailed { reason: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -182,4 +239,14 @@ pub(crate) struct BrokerOutput {
     pub(crate) stderr: Vec<u8>,
     pub(crate) timed_out: bool,
     pub(crate) stdout_limit_reached: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BrokerFileRead {
+    Ready(Vec<u8>),
+    Empty,
+    TooLarge { limit: usize },
+    NotRegular,
+    TimedOut,
+    ReadFailed { reason: String },
 }

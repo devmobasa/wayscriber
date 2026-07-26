@@ -5,17 +5,36 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::env_vars::{LOG_FILE_ENV, LOG_MAX_SIZE_ENV};
-use crate::{paths, time_utils};
+use crate::time_utils;
 
 const BYTES_PER_MB: u64 = 1024 * 1024;
 const DEFAULT_LOG_MAX_BYTES: u64 = 10 * BYTES_PER_MB;
 
-pub(super) fn resolve_log_target() -> LogFileTarget {
-    if let Ok(path) = env::var(LOG_FILE_ENV)
-        && !path.trim().is_empty()
-    {
+pub(super) struct LogTargetResolution {
+    pub(super) target: Option<LogFileTarget>,
+    pub(super) diagnostic: Option<String>,
+}
+
+pub(super) fn resolve_log_target(paths: &crate::paths::PathResolver) -> LogTargetResolution {
+    let mut diagnostic = None;
+    if let Some(raw) = env::var_os(LOG_FILE_ENV).filter(|value| !value.is_empty()) {
+        let Some(path) = raw.to_str() else {
+            diagnostic = Some(format!(
+                "Ignoring non-Unicode {LOG_FILE_ENV}; using the normal log target"
+            ));
+            return default_log_target(paths, diagnostic);
+        };
         let trimmed = path.trim();
-        let expanded = paths::expand_tilde(trimmed);
+        let expanded =
+            match paths.require_absolute_user_path(trimmed, crate::paths::PathCapability::Log) {
+                Ok(path) => path,
+                Err(error) => {
+                    diagnostic = Some(format!(
+                        "Ignoring invalid {LOG_FILE_ENV}: {error}; using the normal log target"
+                    ));
+                    return default_log_target(paths, diagnostic);
+                }
+            };
         let mut treat_as_dir = trimmed.ends_with('/') || trimmed.ends_with('\\');
         if !treat_as_dir && let Ok(metadata) = fs::metadata(&expanded) {
             treat_as_dir = metadata.is_dir();
@@ -25,18 +44,39 @@ pub(super) fn resolve_log_target() -> LogFileTarget {
         } else {
             expanded.extension().is_none()
         };
-        return LogFileTarget {
-            base: expanded,
-            treat_as_dir,
-            append_date,
+        return LogTargetResolution {
+            target: Some(LogFileTarget {
+                base: expanded,
+                treat_as_dir,
+                append_date,
+            }),
+            diagnostic,
         };
     }
 
-    LogFileTarget {
-        base: paths::log_dir(),
-        treat_as_dir: true,
-        append_date: true,
-    }
+    default_log_target(paths, diagnostic)
+}
+
+fn default_log_target(
+    paths: &crate::paths::PathResolver,
+    mut diagnostic: Option<String>,
+) -> LogTargetResolution {
+    let target = match paths.log_dir() {
+        Ok(base) => Some(LogFileTarget {
+            base,
+            treat_as_dir: true,
+            append_date: true,
+        }),
+        Err(error) => {
+            let suffix = format!("File logging is unavailable: {error}; retaining stderr output");
+            diagnostic = Some(match diagnostic {
+                Some(existing) => format!("{existing}. {suffix}"),
+                None => suffix,
+            });
+            None
+        }
+    };
+    LogTargetResolution { target, diagnostic }
 }
 
 fn resolve_log_max_bytes() -> u64 {

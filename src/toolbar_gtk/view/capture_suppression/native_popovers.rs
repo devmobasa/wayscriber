@@ -1,32 +1,34 @@
 //! Capture suppression for GTK-owned `GtkPopover` surfaces.
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use gtk4::glib::variant::ToVariant;
 use gtk4::prelude::*;
 
 use super::set_native_widget_input_enabled;
 use crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS;
-use crate::toolbar_gtk::view::{CaptureProofTarget, CaptureSurfaceContent};
+use crate::toolbar_gtk::view::{CaptureProofTarget, CaptureProofWithdrawal, CaptureSurfaceContent};
 
 const CAPTURE_MENU_PROOF_ID: &str = "wayscriber-capture-proof";
+pub(super) const CAPTURE_POPOVER_SELECTED_CLASS: &str = "wayscriber-capture-popover-selected";
+const CAPTURE_POPOVER_PROOF_PENDING_CLASS: &str = "wayscriber-capture-popover-proof-pending";
 
 #[derive(Default)]
 pub(super) struct NativePopoverCapture {
-    captures: RefCell<Vec<NativePopoverSurface>>,
+    captures: Vec<NativePopoverSurface>,
 }
 
 impl NativePopoverCapture {
     pub(super) fn enroll(
-        &self,
+        &mut self,
         popover: &gtk4::Popover,
         selected_for_capture: bool,
         input_enabled: bool,
     ) {
-        let mut captures = self.captures.borrow_mut();
-        captures.retain(NativePopoverSurface::is_attached);
-        if let Some(capture) = captures.iter().find(|capture| capture.matches(popover)) {
+        self.captures.retain(NativePopoverSurface::is_attached);
+        if let Some(capture) = self
+            .captures
+            .iter_mut()
+            .find(|capture| capture.matches(popover))
+        {
             capture.set_selected(selected_for_capture);
             if selected_for_capture {
                 capture.set_capture_state(true, input_enabled);
@@ -48,23 +50,22 @@ impl NativePopoverCapture {
             return;
         }
 
-        let capture = NativePopoverSurface::new(popover);
+        let mut capture = NativePopoverSurface::new(popover);
         capture.set_selected(true);
         capture.set_capture_state(true, input_enabled);
-        captures.push(capture);
+        self.captures.push(capture);
     }
 
-    pub(super) fn set_suppressed(&self, suppressed: bool) {
+    pub(super) fn set_suppressed(&mut self, suppressed: bool) {
         if !suppressed {
-            for capture in self.captures.take() {
+            for capture in self.captures.drain(..) {
                 capture.restore();
             }
             return;
         }
 
-        let mut captures = self.captures.borrow_mut();
-        captures.retain(NativePopoverSurface::is_attached);
-        for capture in captures.iter() {
+        self.captures.retain(NativePopoverSurface::is_attached);
+        for capture in &mut self.captures {
             let selected = capture
                 .popover()
                 .is_some_and(|popover| popover.is_visible() || popover.is_mapped());
@@ -77,31 +78,29 @@ impl NativePopoverCapture {
     }
 
     pub(super) fn set_input_enabled(&self, enabled: bool) {
-        for capture in self.captures.borrow().iter() {
+        for capture in &self.captures {
             if let Some(popover) = capture.popover() {
                 set_native_widget_input_enabled(popover.upcast_ref(), enabled);
             }
         }
     }
 
-    pub(super) fn capture_targets(&self) -> Vec<CaptureProofTarget> {
+    pub(super) fn capture_targets(&mut self) -> Vec<CaptureProofTarget> {
         self.captures
-            .borrow()
-            .iter()
+            .iter_mut()
             .filter_map(NativePopoverSurface::capture_target)
             .collect()
     }
 
-    pub(super) fn pending_capture_targets(&self) -> Vec<CaptureProofTarget> {
+    pub(super) fn pending_capture_targets(&mut self) -> Vec<CaptureProofTarget> {
         self.captures
-            .borrow()
-            .iter()
+            .iter_mut()
             .filter_map(NativePopoverSurface::pending_capture_target)
             .collect()
     }
 
-    pub(super) fn mark_proven(&self) {
-        for capture in self.captures.borrow().iter() {
+    pub(super) fn mark_proven(&mut self) {
+        for capture in &mut self.captures {
             capture.mark_in_flight_proven();
         }
     }
@@ -110,10 +109,7 @@ impl NativePopoverCapture {
 struct NativePopoverSurface {
     popover: gtk4::glib::WeakRef<gtk4::Popover>,
     content: NativePopoverContent,
-    selected_for_capture: Rc<Cell<bool>>,
-    proof_epoch: Rc<Cell<u64>>,
-    proven_epoch: Cell<u64>,
-    in_flight_epoch: Cell<Option<u64>>,
+    in_flight_paintable: Option<gtk4::gdk::Paintable>,
     map_handler: gtk4::glib::SignalHandlerId,
     unmap_handler: gtk4::glib::SignalHandlerId,
 }
@@ -121,28 +117,20 @@ struct NativePopoverSurface {
 impl NativePopoverSurface {
     fn new(popover: &gtk4::Popover) -> Self {
         let content = NativePopoverContent::new(popover);
-        let selected_for_capture = Rc::new(Cell::new(false));
-        let proof_epoch = Rc::new(Cell::new(0));
-
-        let mapped_selected = Rc::clone(&selected_for_capture);
-        let mapped_epoch = Rc::clone(&proof_epoch);
-        let map_handler = popover.connect_map(move |_| {
-            mapped_selected.set(true);
-            rearm_proof(&mapped_epoch);
+        let map_content = content.surface().clone();
+        let map_handler = popover.connect_map(move |popover| {
+            popover.add_css_class(CAPTURE_POPOVER_SELECTED_CLASS);
+            rearm_proof(popover, &map_content);
         });
 
-        let unmapped_selected = Rc::clone(&selected_for_capture);
-        let unmap_handler = popover.connect_unmap(move |_| {
-            unmapped_selected.set(false);
+        let unmap_handler = popover.connect_unmap(move |popover| {
+            popover.remove_css_class(CAPTURE_POPOVER_SELECTED_CLASS);
         });
 
         Self {
             popover: popover.downgrade(),
             content,
-            selected_for_capture,
-            proof_epoch,
-            proven_epoch: Cell::new(0),
-            in_flight_epoch: Cell::new(None),
+            in_flight_paintable: None,
             map_handler,
             unmap_handler,
         }
@@ -161,16 +149,23 @@ impl NativePopoverSurface {
             .is_some_and(|candidate| candidate == *popover)
     }
 
-    fn set_selected(&self, selected: bool) {
-        let was_selected = self.selected_for_capture.replace(selected);
-        if selected && !was_selected {
-            rearm_proof(&self.proof_epoch);
-        } else if !selected {
-            self.in_flight_epoch.set(None);
+    fn set_selected(&mut self, selected: bool) {
+        let Some(popover) = self.popover() else {
+            return;
+        };
+        let was_selected = popover.has_css_class(CAPTURE_POPOVER_SELECTED_CLASS);
+        if selected {
+            popover.add_css_class(CAPTURE_POPOVER_SELECTED_CLASS);
+            if !was_selected {
+                rearm_proof(&popover, self.content.surface());
+            }
+        } else {
+            popover.remove_css_class(CAPTURE_POPOVER_SELECTED_CLASS);
+            self.in_flight_paintable = None;
         }
     }
 
-    fn set_capture_state(&self, suppressed: bool, input_enabled: bool) {
+    fn set_capture_state(&mut self, suppressed: bool, input_enabled: bool) {
         let Some(popover) = self.popover() else {
             return;
         };
@@ -183,53 +178,61 @@ impl NativePopoverSurface {
         set_native_widget_input_enabled(popover.upcast_ref(), input_enabled);
     }
 
-    fn restore(self) {
+    fn restore(mut self) {
         let Some(popover) = self.popover() else {
             return;
         };
         popover.disconnect(self.map_handler);
         popover.disconnect(self.unmap_handler);
         popover.remove_css_class(CAPTURE_TRANSPARENT_CLASS);
+        popover.remove_css_class(CAPTURE_POPOVER_SELECTED_CLASS);
+        popover.remove_css_class(CAPTURE_POPOVER_PROOF_PENDING_CLASS);
         self.content.restore(&popover);
         set_native_widget_input_enabled(popover.upcast_ref(), true);
     }
 
-    fn capture_target(&self) -> Option<CaptureProofTarget> {
-        if !self.selected_for_capture.get() {
+    fn capture_target(&mut self) -> Option<CaptureProofTarget> {
+        let popover = self.popover()?;
+        if !popover.has_css_class(CAPTURE_POPOVER_SELECTED_CLASS) {
             return None;
         }
-        self.in_flight_epoch.set(Some(self.proof_epoch.get()));
-        let selected_for_capture = Rc::clone(&self.selected_for_capture);
-        self.popover().map(|popover| {
-            CaptureProofTarget::new_withdrawable_with_callback(
-                "gtk-owned-popover",
-                &popover,
-                self.content.surface(),
-                move || selected_for_capture.set(false),
-            )
-        })
+        self.in_flight_paintable = self.content.surface().proof.paintable();
+        Some(CaptureProofTarget::new_withdrawable_with_cleanup(
+            "gtk-owned-popover",
+            &popover,
+            self.content.surface(),
+            CaptureProofWithdrawal::RemoveWidgetClass(CAPTURE_POPOVER_SELECTED_CLASS),
+        ))
     }
 
-    fn pending_capture_target(&self) -> Option<CaptureProofTarget> {
-        let epoch = self.proof_epoch.get();
-        if !self.selected_for_capture.get() || epoch == self.proven_epoch.get() {
+    fn pending_capture_target(&mut self) -> Option<CaptureProofTarget> {
+        let popover = self.popover()?;
+        if !popover.has_css_class(CAPTURE_POPOVER_SELECTED_CLASS)
+            || !popover.has_css_class(CAPTURE_POPOVER_PROOF_PENDING_CLASS)
+        {
             return None;
         }
         self.capture_target()
     }
 
-    fn mark_in_flight_proven(&self) {
-        let Some(epoch) = self.in_flight_epoch.replace(None) else {
+    fn mark_in_flight_proven(&mut self) {
+        let Some(in_flight) = self.in_flight_paintable.take() else {
             return;
         };
-        if self.selected_for_capture.get() && self.proof_epoch.get() == epoch {
-            self.proven_epoch.set(epoch);
+        let Some(popover) = self.popover() else {
+            return;
+        };
+        if popover.has_css_class(CAPTURE_POPOVER_SELECTED_CLASS)
+            && self.content.surface().proof.paintable().as_ref() == Some(&in_flight)
+        {
+            popover.remove_css_class(CAPTURE_POPOVER_PROOF_PENDING_CLASS);
         }
     }
 }
 
-fn rearm_proof(epoch: &Cell<u64>) {
-    epoch.set(epoch.get().wrapping_add(1));
+fn rearm_proof(popover: &gtk4::Popover, content: &CaptureSurfaceContent) {
+    content.refresh_transparent_proof();
+    popover.add_css_class(CAPTURE_POPOVER_PROOF_PENDING_CLASS);
 }
 
 enum NativePopoverContent {
@@ -237,7 +240,7 @@ enum NativePopoverContent {
     Menu {
         surface: CaptureSurfaceContent,
         proof_model: gtk4::gio::Menu,
-        original_model: RefCell<Option<gtk4::gio::MenuModel>>,
+        original_model: Option<gtk4::gio::MenuModel>,
     },
 }
 
@@ -247,7 +250,7 @@ impl NativePopoverContent {
             return Self::Menu {
                 surface: CaptureSurfaceContent::empty(),
                 proof_model: capture_menu_proof_model(),
-                original_model: RefCell::new(menu.menu_model()),
+                original_model: menu.menu_model(),
             };
         }
 
@@ -268,7 +271,7 @@ impl NativePopoverContent {
         }
     }
 
-    fn set_transparent(&self, popover: &gtk4::Popover, transparent: bool) {
+    fn set_transparent(&mut self, popover: &gtk4::Popover, transparent: bool) {
         if let Self::Wrapped(surface) = self {
             let wrapper = surface.widget().clone().upcast::<gtk4::Widget>();
             if popover.child().as_ref() != Some(&wrapper) {
@@ -303,7 +306,7 @@ impl NativePopoverContent {
         };
         let proof_model_object = proof_model.clone().upcast::<gtk4::gio::MenuModel>();
         if menu.menu_model().as_ref() != Some(&proof_model_object) {
-            original_model.replace(menu.menu_model());
+            *original_model = menu.menu_model();
             menu.set_menu_model(Some(proof_model));
         }
         if surface.widget().parent().is_none()
@@ -313,7 +316,7 @@ impl NativePopoverContent {
         }
     }
 
-    fn restore(&self, popover: &gtk4::Popover) {
+    fn restore(&mut self, popover: &gtk4::Popover) {
         self.surface().set_transparent(false);
         match self {
             Self::Wrapped(surface) => {
@@ -339,7 +342,7 @@ impl NativePopoverContent {
                     if surface.widget().parent().is_some() {
                         menu.remove_child(surface.widget());
                     }
-                    menu.set_menu_model(original_model.borrow().as_ref());
+                    menu.set_menu_model(original_model.as_ref());
                 }
             }
         }

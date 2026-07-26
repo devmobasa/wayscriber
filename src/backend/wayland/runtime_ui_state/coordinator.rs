@@ -10,7 +10,7 @@ impl ToolbarRuntimeState {
         config: &Config,
         input: &InputState,
         path: &Path,
-        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+        runtime_wake: crate::backend::wayland::RuntimeWakeSender,
     ) -> Result<Self> {
         let parent = path
             .parent()
@@ -23,13 +23,16 @@ impl ToolbarRuntimeState {
         })?;
 
         let mut board_pin_seeds = board_pin_seeds_from_input(input);
-        let store = RuntimeUiStateStore::new(path);
+        let store = RuntimeUiStateStore::try_new(path)
+            .context("failed to initialize runtime UI state writer identity")?;
         let inspection = store.inspect().map_err(|error| {
             anyhow::anyhow!("failed to inspect runtime UI state: {}", error.message())
         })?;
         retain_stored_board_pin_seeds_for_session_restore(&mut board_pin_seeds, &inspection);
         let seeds = runtime_seeds_from_config(config, &board_pin_seeds)?;
-        let bootstrap = inspection.into_controller_bootstrap(seeds);
+        let bootstrap = inspection
+            .into_controller_bootstrap(store.controller_id(), seeds)
+            .map_err(|error| anyhow::anyhow!("failed to bootstrap runtime UI state: {error:?}"))?;
         let startup_incident = bootstrap.startup_incident;
         if let Some(incident) = startup_incident {
             log::warn!(
@@ -78,7 +81,7 @@ impl ToolbarRuntimeState {
     }
 
     pub(in crate::backend::wayland) fn begin_toolbar_mutation(
-        &self,
+        &mut self,
         target: ToolbarRuntimeUiPersistenceTarget,
         input: &InputState,
     ) -> Option<PreparedToolbarMutation> {
@@ -113,13 +116,9 @@ impl ToolbarRuntimeState {
         } else {
             RuntimePreviewFinishIntent::Cancel
         };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent,
-            },
-            |_, _| unreachable!("runtime toolbar mutation cannot write config"),
-        );
+        let result = self
+            .controller
+            .finish_runtime_preview(prepared.session, intent);
         self.finish_result(result)
     }
 
@@ -179,13 +178,9 @@ impl ToolbarRuntimeState {
         } else {
             RuntimePreviewFinishIntent::Cancel
         };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: active.session,
-                intent,
-            },
-            |_, _| unreachable!("item-order preview cannot write config"),
-        );
+        let result = self
+            .controller
+            .finish_runtime_preview(active.session, intent);
         self.finish_result(result)
     }
 
@@ -240,22 +235,20 @@ impl ToolbarRuntimeState {
             ConfigPositionTarget::Top => positions.top,
             ConfigPositionTarget::Side => positions.side,
         };
-        let guarded_positions_are_finite = active.target.seed_targets().into_iter().all(|target| {
-            let raw = match target {
-                InteractionSeedTarget::TopPosition => positions.top,
-                InteractionSeedTarget::SidePosition => positions.side,
-                _ => unreachable!("config position target returned a runtime-owned seed"),
-            };
-            ToolbarPositionSeed::new(raw.0, raw.1).is_some()
-        });
+        let top_is_finite = ToolbarPositionSeed::new(positions.top.0, positions.top.1).is_some();
+        let guarded_positions_are_finite = match active.target {
+            ConfigPositionTarget::Top => top_is_finite,
+            ConfigPositionTarget::Side => {
+                top_is_finite
+                    && ToolbarPositionSeed::new(positions.side.0, positions.side.1).is_some()
+            }
+        };
         let Some(position) = ToolbarPositionSeed::new(position.0, position.1)
             .filter(|_| guarded_positions_are_finite)
         else {
-            let result = self.controller.finish_preview(
-                PreviewFinishRequest::ConfigPosition {
-                    session: active.session,
-                    intent: ConfigPositionFinishIntent::Cancel,
-                },
+            let result = self.controller.finish_config_position_preview(
+                active.session,
+                ConfigPositionFinishIntent::Cancel,
                 apply_config,
             );
             return (self.finish_result(result), false);
@@ -265,13 +258,9 @@ impl ToolbarRuntimeState {
         } else {
             ConfigPositionFinishIntent::Cancel
         };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::ConfigPosition {
-                session: active.session,
-                intent,
-            },
-            apply_config,
-        );
+        let result =
+            self.controller
+                .finish_config_position_preview(active.session, intent, apply_config);
         let applied_config = matches!(result, PreviewFinishResult::AppliedConfig { .. });
         (self.finish_result(result), applied_config)
     }
@@ -318,22 +307,21 @@ impl ToolbarRuntimeState {
                 .iter()
                 .any(|guard| changed.contains(&guard.target))
         });
-        let position_rollback = position_drag_aborted.then(|| {
-            let mut rollback = self
-                .position_drag
-                .take()
-                .expect("aborted position drag was just observed")
-                .session
-                .rollback;
-            // A side drag is guarded by both position seeds because its final
-            // save can reconcile the top X offset. If only one guard changes,
-            // the changed target must come from the new live authority while
-            // every other previewed target returns to its pre-drag value.
-            rollback
-                .values
-                .retain(|target, _| !changed.contains(target));
-            rollback
-        });
+        let position_rollback = if position_drag_aborted {
+            self.position_drag.take().map(|active| {
+                let mut rollback = active.session.rollback;
+                // A side drag is guarded by both position seeds because its final
+                // save can reconcile the top X offset. If only one guard changes,
+                // the changed target must come from the new live authority while
+                // every other previewed target returns to its pre-drag value.
+                rollback
+                    .values
+                    .retain(|target, _| !changed.contains(target));
+                rollback
+            })
+        } else {
+            None
+        };
         apply_live_toolbar_state(input, self.controller.live_state(), |target| {
             changed.contains(target)
         });
@@ -409,7 +397,10 @@ impl ToolbarRuntimeState {
         }
         self.dispatch_writer_command();
         while !self.controller.shutdown_complete() {
-            let completion = match self.writer.as_ref().expect("writer checked").recv() {
+            let Some(writer) = self.writer.as_ref() else {
+                break;
+            };
+            let completion = match writer.recv() {
                 Ok(completion) => completion,
                 Err(error) => {
                     log::error!("Runtime UI writer stopped during shutdown: {error}");
@@ -599,11 +590,23 @@ impl ToolbarRuntimeState {
             SubmitSourceMutationResult::Integrated { recovery_artifacts } => {
                 self.note_recovery_artifacts(&recovery_artifacts)
             }
-            SubmitSourceMutationResult::Rejected(error) => {
+            SubmitSourceMutationResult::RejectedUnconsumed { result, error } => {
                 self.note_lifecycle_error(format!(
                     "Runtime UI writer completion was rejected: {error:?}"
                 ));
                 log::error!("Runtime UI writer completion was rejected: {error:?}");
+                self.controller
+                    .settle_rejected_source_mutation_for_shutdown(result, error);
+            }
+            SubmitSourceMutationResult::Terminalized {
+                error,
+                recovery_artifacts,
+            } => {
+                self.note_recovery_artifacts(&recovery_artifacts);
+                self.note_lifecycle_error(format!(
+                    "Runtime UI writer completion terminalized persistence: {error:?}"
+                ));
+                log::error!("Runtime UI writer completion terminalized persistence: {error:?}");
             }
             _ => {}
         }

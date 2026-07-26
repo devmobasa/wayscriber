@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
 
 use crate::config::{SessionCompression, SessionConfig, SessionStorageMode};
-use crate::paths::{data_dir, expand_tilde};
+use crate::paths::PathResolver;
 
 use super::identifiers::resolve_display_id;
 use super::types::{CompressionMode, SessionOptions, session_file_parent_dir};
@@ -14,8 +14,9 @@ pub fn options_from_config(
     session_cfg: &SessionConfig,
     config_dir: &Path,
     display_id: Option<&str>,
+    paths: &PathResolver,
 ) -> Result<SessionOptions> {
-    let base_dir = configured_base_dir(session_cfg, config_dir)?;
+    let base_dir = configured_base_dir(session_cfg, config_dir, paths)?;
     Ok(options_from_settings(session_cfg, base_dir, display_id))
 }
 
@@ -30,10 +31,14 @@ pub fn options_from_config_for_named_file(
     options
 }
 
-fn configured_base_dir(session_cfg: &SessionConfig, config_dir: &Path) -> Result<PathBuf> {
+fn configured_base_dir(
+    session_cfg: &SessionConfig,
+    config_dir: &Path,
+    paths: &PathResolver,
+) -> Result<PathBuf> {
     Ok(match session_cfg.storage {
         SessionStorageMode::Auto => {
-            let root = data_dir().unwrap_or_else(|| config_dir.to_path_buf());
+            let root = paths.data_dir()?;
             root.join("wayscriber")
         }
         SessionStorageMode::Config => config_dir.to_path_buf(),
@@ -41,7 +46,7 @@ fn configured_base_dir(session_cfg: &SessionConfig, config_dir: &Path) -> Result
             let raw = session_cfg.custom_directory.as_ref().ok_or_else(|| {
                 anyhow!("session.custom_directory must be set when storage = \"custom\"")
             })?;
-            let expanded = expand_tilde(raw);
+            let expanded = paths.expand_tilde(raw)?;
             if expanded.as_os_str().is_empty() {
                 return Err(anyhow!(
                     "session.custom_directory resolved to an empty path"

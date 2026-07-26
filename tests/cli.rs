@@ -1,11 +1,12 @@
+use std::collections::hash_map::RandomState;
 use std::fs;
+use std::hash::{BuildHasher, Hasher};
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::Stdio;
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(unix)]
 use std::thread;
 #[cfg(unix)]
@@ -20,8 +21,6 @@ use wayscriber::env_vars::{
 };
 use wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG;
 
-static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
-
 struct TempDir {
     path: PathBuf,
 }
@@ -32,8 +31,8 @@ impl TempDir {
         let pid = std::process::id();
 
         for _ in 0..100 {
-            let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
-            let path = base.join(format!("wayscriber-cli-test-{pid}-{id}"));
+            let id = RandomState::new().build_hasher().finish();
+            let path = base.join(format!("wayscriber-cli-test-{pid}-{id:016x}"));
             match fs::create_dir(&path) {
                 Ok(()) => return Ok(Self { path }),
                 Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -760,35 +759,20 @@ fn session_info_reports_saved_snapshot() {
     write_session_config(&temp, &session_dir);
 
     let display = "test-session";
-    let original_config = std::env::var_os(XDG_CONFIG_HOME_ENV);
-    unsafe {
-        std::env::set_var(XDG_CONFIG_HOME_ENV, temp.path());
-    }
-    let original_display = std::env::var_os(WAYLAND_DISPLAY_ENV);
-    unsafe {
-        std::env::set_var(WAYLAND_DISPLAY_ENV, display);
-    }
-
-    let loaded = wayscriber::config::Config::load().unwrap();
-    let config_dir =
-        wayscriber::config::Config::config_directory_from_source(&loaded.source).unwrap();
+    let config_store = wayscriber::config::ConfigStore::at_path(
+        temp.path().join("wayscriber").join("config.toml"),
+    );
+    let loaded = config_store.load().unwrap();
+    let config_dir = config_store.config_directory().unwrap();
+    let paths = wayscriber::paths::PathResolver::from_process_environment();
     let mut options = wayscriber::session::options_from_config(
         &loaded.config.session,
         &config_dir,
         Some(display),
+        &paths,
     )
     .unwrap();
     options.set_output_identity(Some("DP-1"));
-
-    match original_config {
-        Some(value) => unsafe { std::env::set_var(XDG_CONFIG_HOME_ENV, value) },
-        None => unsafe { std::env::remove_var(XDG_CONFIG_HOME_ENV) },
-    }
-
-    match original_display {
-        Some(value) => unsafe { std::env::set_var(WAYLAND_DISPLAY_ENV, value) },
-        None => unsafe { std::env::remove_var(WAYLAND_DISPLAY_ENV) },
-    }
 
     let mut frame = wayscriber::draw::Frame::new();
     frame.add_shape(wayscriber::draw::Shape::Line {

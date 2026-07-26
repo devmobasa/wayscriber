@@ -2,9 +2,8 @@
 
 use super::*;
 use crate::toolbar_gtk::GtkToolbarFeedback;
-use crate::toolbar_gtk::widgets::emit_secondary_press;
+use crate::toolbar_gtk::widgets::{emit_secondary_press, test_feedback_channel};
 use crate::ui::toolbar::ToolbarBindingHints;
-use std::sync::mpsc::channel;
 
 /// Both palette gestures on one GTK swatch: the primary click selects the
 /// slot, the secondary press opens its recolor popup. Widget construction
@@ -37,11 +36,11 @@ fn side_palette_swatch_selects_on_primary_and_recolors_on_secondary() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let (tx, rx) = channel::<GtkToolbarFeedback>();
+    let (feedback, mailbox) = test_feedback_channel();
     let mut updaters: Vec<crate::toolbar_gtk::view::Updater> = Vec::new();
     let ctx = SectionCtx {
         snapshot: &snapshot,
-        feedback: FeedbackSender::new(tx),
+        feedback,
         scale: 1.0,
         use_icons: true,
         updaters: &mut updaters,
@@ -61,7 +60,7 @@ fn side_palette_swatch_selects_on_primary_and_recolors_on_secondary() {
 
     button.emit_clicked();
     assert_eq!(
-        rx.recv().expect("primary click event"),
+        mailbox.receive_one().expect("primary click event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::SetQuickColor {
                 color,
@@ -74,7 +73,7 @@ fn side_palette_swatch_selects_on_primary_and_recolors_on_secondary() {
 
     emit_secondary_press(button.upcast_ref());
     assert_eq!(
-        rx.recv().expect("secondary click event"),
+        mailbox.receive_one().expect("secondary click event"),
         GtkToolbarFeedback::Event {
             event: ToolbarEvent::EditQuickColor { index },
             rebind_requested: false,
@@ -90,21 +89,41 @@ fn side_palette_swatch_selects_on_primary_and_recolors_on_secondary() {
 }
 
 #[test]
-fn newer_hex_paste_request_supersedes_pending_callback() {
-    let requests = HexPasteRequests::default();
-    let older = requests.begin();
-    let newer = requests.begin();
+fn hex_paste_request_marker_is_single_owner_and_edit_invalidates_it() {
+    const CHILD_ENV: &str = "WAYSCRIBER_GTK_HEX_PASTE_MARKER_CHILD";
+    const TEST_NAME: &str = "toolbar_gtk::view::sections::colors::tests::hex_paste_request_marker_is_single_owner_and_edit_invalidates_it";
 
-    assert!(!requests.is_current(older));
-    assert!(requests.is_current(newer));
-}
+    if std::env::var_os(CHILD_ENV).is_none() {
+        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .arg(TEST_NAME)
+            .arg("--exact")
+            .arg("--test-threads=1")
+            .env(CHILD_ENV, "1")
+            .status()
+            .expect("run isolated GTK hex-paste marker test");
+        assert!(
+            status.success(),
+            "isolated GTK hex-paste marker test failed"
+        );
+        return;
+    }
 
-#[test]
-fn editing_hex_text_invalidates_pending_paste_callback() {
-    let requests = HexPasteRequests::default();
-    let pending = requests.begin();
+    if let Err(error) = gtk4::init() {
+        eprintln!("skipping GTK hex-paste marker test: {error}");
+        return;
+    }
 
-    requests.invalidate();
+    let entry = gtk4::Entry::new();
+    let older = begin_hex_paste_request(&entry);
+    assert!(older.widget().is_some(), "first request owns the marker");
 
-    assert!(!requests.is_current(pending));
+    let newer = begin_hex_paste_request(&entry);
+    assert!(
+        older.widget().is_none(),
+        "new request supersedes the old one"
+    );
+    assert!(newer.widget().is_some(), "new request owns the marker");
+
+    invalidate_hex_paste_request(&entry);
+    assert!(newer.widget().is_none(), "editing invalidates the request");
 }

@@ -16,14 +16,12 @@ use super::types::HelpRowHit;
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
-use cache::get_or_build_overlay_layout;
+use cache::HelpOverlayLayoutCache;
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
-pub use cache::invalidate_help_overlay_cache;
-#[cfg(test)]
-pub use hit::install_help_hit_map_for_test;
-pub use hit::{HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at};
+pub(crate) use hit::HelpOverlayHitMap;
+pub use hit::HelpOverlayRegion;
 
 const BULLET: &str = "\u{2022}";
 
@@ -35,9 +33,56 @@ const REPLAY_FOOTER_ICON_GAP: f64 = 7.0;
 /// Gap between the footer pills.
 const FOOTER_PILL_GAP: f64 = 10.0;
 
+/// Measured resources retained by one help-overlay rendering root.
+pub struct HelpOverlayRenderer {
+    layout_cache: HelpOverlayLayoutCache,
+}
+
+impl HelpOverlayRenderer {
+    pub fn new() -> Self {
+        Self {
+            layout_cache: HelpOverlayLayoutCache::new(),
+        }
+    }
+
+    /// Drop retained measurements. The next frame will rebuild them from its
+    /// complete layout key.
+    pub fn invalidate(&mut self) {
+        self.layout_cache.invalidate();
+    }
+}
+
+impl Default for HelpOverlayRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Owned output of one help-overlay render pass.
+pub struct HelpOverlayRenderFrame {
+    scroll_max: f64,
+    hit_map: HelpOverlayHitMap,
+}
+
+impl HelpOverlayRenderFrame {
+    pub fn scroll_max(&self) -> f64 {
+        self.scroll_max
+    }
+
+    /// Region under `(x, y)` in this exact rendered frame.
+    pub fn region_at(&self, x: f64, y: f64) -> Option<HelpOverlayRegion> {
+        self.hit_map.region_at(x, y)
+    }
+
+    pub(crate) fn into_parts(self) -> (f64, HelpOverlayHitMap) {
+        (self.scroll_max, self.hit_map)
+    }
+}
+
 /// Render help overlay showing all keybindings
 #[allow(clippy::too_many_arguments)]
 pub fn render_help_overlay(
+    renderer: &mut HelpOverlayRenderer,
     ctx: &cairo::Context,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
@@ -51,7 +96,7 @@ pub fn render_help_overlay(
     capture_enabled: bool,
     scroll_offset: f64,
     quick_mode: bool,
-) -> f64 {
+) -> HelpOverlayRenderFrame {
     let title_text = if quick_mode {
         "Quick Reference"
     } else {
@@ -118,7 +163,7 @@ pub fn render_help_overlay(
     };
     let close_hint_text: &str = &close_hint_owned;
 
-    let layout = get_or_build_overlay_layout(
+    let layout = renderer.layout_cache.get_or_build(
         ctx,
         style,
         screen_width,
@@ -396,7 +441,7 @@ pub fn render_help_overlay(
         None,
     );
 
-    hit::store_help_hit_map(
+    let hit_map = HelpOverlayHitMap::from_rendered_frame(
         (
             layout.box_x,
             layout.box_y,
@@ -407,7 +452,10 @@ pub fn render_help_overlay(
         &row_hits,
     );
 
-    layout.scroll_max
+    HelpOverlayRenderFrame {
+        scroll_max: layout.scroll_max,
+        hit_map,
+    }
 }
 
 /// One footer pill: an action plus the glyph drawn beside its registry label.

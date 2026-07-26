@@ -1,3 +1,4 @@
+mod blocking_jobs;
 mod boards;
 mod color_picker;
 mod config;
@@ -17,22 +18,16 @@ use super::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(crate) fn update_message(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::ConfigLoaded(result) => self.handle_config_loaded(result),
+            Message::BlockingJobReady(id) => self.handle_blocking_job_ready(id),
             Message::ReloadRequested => self.handle_reload_requested(),
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
             Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
             Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
             Message::SaveRequested => self.handle_save_requested(),
-            Message::ConfigSaved(result) => self.handle_config_saved(result),
-            Message::DaemonStatusLoaded(request_id, result) => {
-                self.handle_daemon_status_loaded(request_id, result)
-            }
             Message::DaemonShortcutInputChanged(value) => {
                 self.handle_daemon_shortcut_input_changed(value)
             }
             Message::DaemonActionRequested(action) => self.handle_daemon_action_requested(action),
-            Message::DaemonActionCompleted(result) => self.handle_daemon_action_completed(result),
-            Message::SessionCatalogLoaded(result) => self.handle_session_catalog_loaded(result),
             Message::SessionCatalogRefreshRequested => {
                 self.handle_session_catalog_refresh_requested()
             }
@@ -70,9 +65,6 @@ impl ConfiguratorApp {
                 self.handle_session_catalog_clear_confirmed(id)
             }
             Message::SessionCatalogClearCanceled => self.handle_session_catalog_clear_canceled(),
-            Message::SessionCatalogActionCompleted(result) => {
-                self.handle_session_catalog_action_completed(result)
-            }
             Message::SearchChanged(value) => self.handle_search_changed(value),
             Message::SearchCleared => self.handle_search_cleared(),
             Message::SearchFocusRequested => self.handle_search_focus_requested(),

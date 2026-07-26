@@ -64,7 +64,8 @@ fn supported_write_connects_controller_to_restart_inspection() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
 
     let write = commit_top_pinned(&mut controller);
@@ -78,7 +79,10 @@ fn supported_write_connects_controller_to_restart_inspection() {
     let inspection = store.inspect().unwrap();
     assert_eq!(inspection.status, RuntimeUiFileStatus::Supported);
     assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o077, 0);
-    let restarted = inspection.into_controller_bootstrap(seeds()).controller;
+    let restarted = inspection
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
+        .controller;
     assert_eq!(
         restarted
             .live_state()
@@ -95,7 +99,8 @@ fn external_change_before_missing_write_wins_without_overwrite() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
     let external = b"version = 27\nfuture = true\n";
@@ -142,7 +147,8 @@ fn active_file_appearing_after_claim_is_not_overwritten() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
     let external = b"version = 88\nfuture = 'external'\n";
@@ -270,7 +276,8 @@ fn uncertain_post_install_result_blocks_the_controller() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
 
@@ -332,7 +339,8 @@ fn missing_source_install_error_with_unchanged_source_is_an_untouched_failure() 
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
     let mut removed_prepared_temp = false;
@@ -384,7 +392,8 @@ fn malformed_startup_enters_the_recovery_barrier() {
     let mut bootstrap = RuntimeUiStateStore::new(path)
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds());
+        .into_controller_bootstrap(ControllerId::fixture(0, 1), seeds())
+        .expect("fixture inspection satisfies controller startup invariants");
     let incident = bootstrap.startup_incident.expect("startup incident");
     assert!(matches!(
         bootstrap
@@ -427,7 +436,8 @@ future_boards = true
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let permit = controller
         .begin_mutation(RuntimeUiMutationScope::one(
@@ -584,7 +594,8 @@ value = true
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let cleanup = controller
         .take_source_mutation()
@@ -689,7 +700,11 @@ fn confirmed_unsupported_reset_runs_end_to_end_through_the_controller() {
     let unsupported = b"version = 73\nfuture = 'preserve me'\n";
     fs::write(&path, unsupported).unwrap();
     let store = RuntimeUiStateStore::new(&path);
-    let mut bootstrap = store.inspect().unwrap().into_controller_bootstrap(seeds());
+    let mut bootstrap = store
+        .inspect()
+        .expect("fixture runtime-state path is inspectable")
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants");
     assert!(bootstrap.startup_incident.is_none());
     let confirmation = match bootstrap.controller.request_runtime_ui_reset() {
         RequestResetResult::RequiresUnsupportedConfirmation {
@@ -727,7 +742,8 @@ fn confirmed_unsupported_reset_runs_end_to_end_through_the_controller() {
     let restarted = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     assert_eq!(
         restarted
@@ -751,7 +767,8 @@ fn missing_source_rejects_parent_symlink_retarget_before_write() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
 
@@ -777,7 +794,8 @@ fn missing_source_rejects_replacement_of_the_resolved_parent_directory() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
 
@@ -808,7 +826,8 @@ fn parent_symlink_retarget_after_claim_retains_the_original_artifact() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
 
@@ -844,7 +863,8 @@ fn resolved_parent_replacement_after_claim_retains_the_original_artifact() {
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let write = commit_top_pinned(&mut controller);
 
@@ -895,7 +915,8 @@ future_entry = "must not return"
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
 
     let permit = controller
@@ -948,7 +969,8 @@ future_entry = "must not return"
     let mut controller = store
         .inspect()
         .unwrap()
-        .into_controller_bootstrap(seeds())
+        .into_controller_bootstrap(store.controller_id(), seeds())
+        .expect("fixture inspection satisfies controller startup invariants")
         .controller;
     let mut changed_seeds = ValidatedInteractionSeeds::new();
     changed_seeds

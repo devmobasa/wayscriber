@@ -1,31 +1,31 @@
 use super::super::draft::ConfigDraft;
-use super::super::performance_fields::{parse_performance_u32, validate_performance_u32};
+use super::super::performance_fields::{parse_performance_range, validate_performance_choice};
 use crate::models::error::FormError;
-use wayscriber::config::{Config, PerformanceFieldId};
+use wayscriber::config::{Config, PERFORMANCE_FIELDS};
 
 impl ConfigDraft {
     pub(super) fn apply_performance(&self, config: &mut Config, errors: &mut Vec<FormError>) {
-        if let Some(value) = validate_performance_u32(
-            PerformanceFieldId::BufferCount,
+        match validate_performance_choice(
+            PERFORMANCE_FIELDS.buffer_count(),
             self.performance_buffer_count,
-            errors,
         ) {
-            config.performance.buffer_count = value;
+            Ok(value) => config.performance.buffer_count = value,
+            Err(error) => errors.push(error),
         }
         config.performance.enable_vsync = self.performance_enable_vsync;
-        if let Some(value) = parse_performance_u32(
-            PerformanceFieldId::MaxFpsNoVsync,
+        match parse_performance_range(
+            PERFORMANCE_FIELDS.max_fps_no_vsync(),
             &self.performance_max_fps_no_vsync,
-            errors,
         ) {
-            config.performance.max_fps_no_vsync = value;
+            Ok(value) => config.performance.max_fps_no_vsync = value,
+            Err(error) => errors.push(error),
         }
-        if let Some(value) = parse_performance_u32(
-            PerformanceFieldId::UiAnimationFps,
+        match parse_performance_range(
+            PERFORMANCE_FIELDS.ui_animation_fps(),
             &self.performance_ui_animation_fps,
-            errors,
         ) {
-            config.performance.ui_animation_fps = value;
+            Ok(value) => config.performance.ui_animation_fps = value,
+            Err(error) => errors.push(error),
         }
     }
 }

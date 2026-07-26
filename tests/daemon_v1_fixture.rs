@@ -1,20 +1,19 @@
+use std::collections::hash_map::RandomState;
 use std::fs;
+use std::hash::{BuildHasher, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 const FROZEN_V1_SOURCE: &str = include_str!("fixtures/frozen_daemon_v1.rs");
-static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
-
 struct TempDir(PathBuf);
 
 impl TempDir {
     fn new() -> std::io::Result<Self> {
         for _ in 0..100 {
-            let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+            let id = RandomState::new().build_hasher().finish();
             let path = std::env::temp_dir().join(format!(
-                "wayscriber-daemon-v1-fixture-{}-{id}",
+                "wayscriber-daemon-v1-fixture-{}-{id:016x}",
                 std::process::id()
             ));
             match fs::create_dir(&path) {

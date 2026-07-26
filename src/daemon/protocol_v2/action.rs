@@ -20,8 +20,7 @@ const MAX_ACTIONS: usize = 2048;
 const MAX_ACTION_QUARANTINE: usize = 1024;
 
 #[cfg(test)]
-static ANONYMOUS_PUBLISH_FAILURES: std::sync::LazyLock<std::sync::Mutex<BTreeMap<PathBuf, usize>>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(BTreeMap::new()));
+const ANONYMOUS_PUBLISH_FAILURE_FILE: &str = ".test-anonymous-publish-failures";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "owner", deny_unknown_fields)]
@@ -95,7 +94,7 @@ pub(crate) struct ClaimedAction {
 
 #[derive(Debug)]
 pub(crate) enum ActionClaimOutcome {
-    Claimed(ClaimedAction),
+    Claimed(Box<ClaimedAction>),
     Idle,
     Deferred,
 }
@@ -103,34 +102,41 @@ pub(crate) enum ActionClaimOutcome {
 #[derive(Debug)]
 pub(crate) enum ActionFinishOutcome {
     Complete,
-    Deferred(ClaimedAction),
+    Deferred(Box<ClaimedAction>),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ActionJournal {
+    command_root: PathBuf,
     root: PathBuf,
 }
 
-fn action_root() -> PathBuf {
-    super::command_root().join("actions")
+fn action_root(command_root: &Path) -> PathBuf {
+    command_root.join("actions")
 }
 
 #[cfg(test)]
-fn consume_anonymous_publish_failure(root: &Path) -> bool {
-    let mut failures = ANONYMOUS_PUBLISH_FAILURES
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let remove = match failures.get_mut(root) {
-        Some(remaining) => {
-            *remaining -= 1;
-            *remaining == 0
-        }
-        None => return false,
+fn consume_anonymous_publish_failure(root: &Path) -> Result<bool> {
+    let path = root.join(ANONYMOUS_PUBLISH_FAILURE_FILE);
+    let raw = match fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error).context("failed to read action failure fixture"),
     };
-    if remove {
-        failures.remove(root);
+    let remaining: usize = raw
+        .parse()
+        .context("action failure fixture contains an invalid count")?;
+    if remaining <= 1 {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("failed to clear action failure fixture"),
+        }
+    } else {
+        fs::write(&path, (remaining - 1).to_string())
+            .context("failed to update action failure fixture")?;
     }
-    true
+    Ok(true)
 }
 
 fn queue_dir(root: &Path) -> PathBuf {
@@ -313,8 +319,8 @@ fn validate_record(record: &ActionRecord) -> Result<()> {
 }
 
 impl ActionJournal {
-    pub(crate) fn open() -> Result<Self> {
-        let root = action_root();
+    pub(crate) fn open(command_root: PathBuf) -> Result<Self> {
+        let root = action_root(&command_root);
         create_private_directory(&root)?;
         create_private_directory(&queue_dir(&root))?;
         create_private_directory(&quarantine_dir(&root))?;
@@ -325,18 +331,20 @@ impl ActionJournal {
         {
             bail!("action quarantine capacity exhausted");
         }
-        Ok(Self { root })
+        Ok(Self { command_root, root })
     }
 
     #[cfg(test)]
-    pub(crate) fn fail_next_anonymous_publications(&self, count: usize) {
-        let mut failures = ANONYMOUS_PUBLISH_FAILURES
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+    pub(crate) fn fail_next_anonymous_publications(&self, count: usize) -> Result<()> {
+        let path = self.root.join(ANONYMOUS_PUBLISH_FAILURE_FILE);
         if count == 0 {
-            failures.remove(&self.root);
+            match fs::remove_file(path) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(error).context("failed to clear action failure fixture"),
+            }
         } else {
-            failures.insert(self.root.clone(), count);
+            fs::write(path, count.to_string()).context("failed to write action failure fixture")
         }
     }
 
@@ -519,7 +527,7 @@ impl ActionJournal {
         action: TrayAction,
     ) -> Result<PreparedAction> {
         #[cfg(test)]
-        if consume_anonymous_publish_failure(&self.root) {
+        if consume_anonymous_publish_failure(&self.root)? {
             bail!("injected anonymous action admission failure");
         }
         validate_token(daemon_token)?;
@@ -547,7 +555,7 @@ impl ActionJournal {
                 })
             })
         })? {
-            ActionClaimOutcome::Claimed(action) => Ok(Some(action)),
+            ActionClaimOutcome::Claimed(action) => Ok(Some(*action)),
             ActionClaimOutcome::Idle => Ok(None),
             ActionClaimOutcome::Deferred => {
                 bail!("blocking action claim unexpectedly deferred")
@@ -709,6 +717,7 @@ impl ActionJournal {
                         write_record(&path, &record)?;
                         let finished = if nonblocking {
                             super::command::try_finish_command_action(
+                                &self.command_root,
                                 command_identity,
                                 &prepared,
                                 super::command::CommandActionResult::NoEffect,
@@ -716,6 +725,7 @@ impl ActionJournal {
                             )?
                         } else {
                             super::command::finish_command_action(
+                                &self.command_root,
                                 command_identity,
                                 &prepared,
                                 false,
@@ -743,6 +753,7 @@ impl ActionJournal {
                 ) => {
                     let finished = if nonblocking {
                         super::command::try_finish_command_action(
+                            &self.command_root,
                             command_identity,
                             &prepared,
                             super::command::CommandActionResult::Applied,
@@ -750,6 +761,7 @@ impl ActionJournal {
                         )?
                     } else {
                         super::command::finish_command_action(
+                            &self.command_root,
                             command_identity,
                             &prepared,
                             true,
@@ -772,6 +784,7 @@ impl ActionJournal {
                 ) => {
                     let finished = if nonblocking {
                         super::command::try_finish_command_action(
+                            &self.command_root,
                             command_identity,
                             &prepared,
                             super::command::CommandActionResult::NoEffect,
@@ -779,6 +792,7 @@ impl ActionJournal {
                         )?
                     } else {
                         super::command::finish_command_action(
+                            &self.command_root,
                             command_identity,
                             &prepared,
                             false,
@@ -801,6 +815,7 @@ impl ActionJournal {
                 ) => {
                     let finished = if nonblocking {
                         super::command::try_finish_command_action(
+                            &self.command_root,
                             command_identity,
                             &prepared,
                             super::command::CommandActionResult::Indeterminate,
@@ -808,6 +823,7 @@ impl ActionJournal {
                         )?
                     } else {
                         super::command::finish_command_action_indeterminate(
+                            &self.command_root,
                             command_identity,
                             &prepared,
                             reason,
@@ -848,11 +864,11 @@ impl ActionJournal {
             };
             write_record(&path, &record)?;
             unlock(&lock)?;
-            return Ok(ActionClaimOutcome::Claimed(ClaimedAction {
+            return Ok(ActionClaimOutcome::Claimed(Box::new(ClaimedAction {
                 journal: self.clone(),
                 record,
                 path,
-            }));
+            })));
         }
         unlock(&lock)?;
         Ok(ActionClaimOutcome::Idle)
@@ -890,7 +906,13 @@ impl ActionJournal {
         reason: &str,
     ) -> Result<()> {
         self.abandon(prepared, reason)?;
-        super::command::finish_command_action(command_identity, prepared, false, Some(reason))?;
+        super::command::finish_command_action(
+            &self.command_root,
+            command_identity,
+            prepared,
+            false,
+            Some(reason),
+        )?;
         let lock = open_journal_lock(&self.root)?;
         let terminal: ActionRecord = read_record(&prepared.path)?;
         if terminal.action_id != prepared.action_id
@@ -948,7 +970,13 @@ impl ClaimedAction {
                 digest: self.record.payload_digest.clone(),
                 path: self.path.clone(),
             };
-            super::command::finish_command_action(command_identity, &prepared, applied, reason)?;
+            super::command::finish_command_action(
+                &self.journal.command_root,
+                command_identity,
+                &prepared,
+                applied,
+                reason,
+            )?;
         }
         let lock = open_journal_lock(&self.journal.root)?;
         let terminal: ActionRecord = read_record(&self.path)?;
@@ -967,7 +995,7 @@ impl ClaimedAction {
     ) -> Result<ActionFinishOutcome> {
         if matches!(self.record.state, JournalState::Claimed { .. }) {
             let Some(lock) = try_open_journal_lock(&self.journal.root, true)? else {
-                return Ok(ActionFinishOutcome::Deferred(self));
+                return Ok(ActionFinishOutcome::Deferred(Box::new(self)));
             };
             let current: ActionRecord = read_record(&self.path)?;
             if current != self.record {
@@ -1006,17 +1034,18 @@ impl ClaimedAction {
                 super::command::CommandActionResult::NoEffect
             };
             if !super::command::try_finish_command_action(
+                &self.journal.command_root,
                 command_identity,
                 &prepared,
                 result,
                 reason,
             )? {
-                return Ok(ActionFinishOutcome::Deferred(self));
+                return Ok(ActionFinishOutcome::Deferred(Box::new(self)));
             }
         }
 
         let Some(lock) = try_open_journal_lock(&self.journal.root, true)? else {
-            return Ok(ActionFinishOutcome::Deferred(self));
+            return Ok(ActionFinishOutcome::Deferred(Box::new(self)));
         };
         let terminal: ActionRecord = read_record(&self.path)?;
         if terminal != self.record {
@@ -1049,10 +1078,7 @@ fn parse_action_name(name: &str) -> Result<(u64, String)> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
     use super::*;
-    use crate::env_vars::XDG_RUNTIME_DIR_ENV;
 
     #[test]
     fn action_digests_match_protocol_v2_golden_values() {
@@ -1065,7 +1091,8 @@ mod tests {
             daemon_token: DAEMON_TOKEN.into(),
         };
         assert_eq!(
-            digest_payload(ACTION_ID, 42, &anonymous, TrayAction::CaptureRegion).unwrap(),
+            digest_payload(ACTION_ID, 42, &anonymous, TrayAction::CaptureRegion)
+                .expect("fixture anonymous action fields are canonical"),
             "53a40b0ef73b768dfa543746835ac6704255db3b9c9c1ad6b06a38f98a13a9c1"
         );
 
@@ -1074,56 +1101,54 @@ mod tests {
             daemon_token: DAEMON_TOKEN.into(),
         };
         assert_eq!(
-            digest_payload(ACTION_ID, 42, &command, TrayAction::ToggleHelp).unwrap(),
+            digest_payload(ACTION_ID, 42, &command, TrayAction::ToggleHelp)
+                .expect("fixture command action fields are canonical"),
             "c8aa91f67acd22621252e0e95cee6221cc02a9f1ca72cdc78e46eb3fd0dabf33"
         );
     }
 
-    fn with_runtime<T>(run: impl FnOnce() -> T) -> T {
-        let _guard = crate::test_env::lock();
-        let temp = crate::test_temp::tempdir().unwrap();
-        let previous = env::var_os(XDG_RUNTIME_DIR_ENV);
-        // SAFETY: serialized by the test environment mutex.
-        unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, temp.path()) };
-        super::super::command::prepare_layout(&super::super::command_root()).unwrap();
-        let result = run();
-        if let Some(previous) = previous {
-            // SAFETY: serialized by the test environment mutex.
-            unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, previous) };
-        } else {
-            // SAFETY: serialized by the test environment mutex.
-            unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) };
-        }
-        result
+    fn with_runtime<T>(run: impl FnOnce(&Path) -> T) -> T {
+        let temp = crate::test_temp::tempdir().expect("fixture creates its runtime directory");
+        let root = temp.path().join("daemon-commands").join("v2");
+        super::super::command::prepare_layout(&root)
+            .expect("fixture prepares its protocol-v2 command layout");
+        run(&root)
     }
 
     #[test]
     fn anonymous_actions_keep_global_order_and_terminal_tombstones() {
-        with_runtime(|| {
-            let journal = ActionJournal::open().unwrap();
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
+        with_runtime(|root| {
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
             journal
                 .publish_anonymous(&token, TrayAction::LightDrawOn)
-                .unwrap();
+                .expect("fixture publishes its first anonymous action");
             journal
                 .publish_anonymous(&token, TrayAction::LightDrawOff)
-                .unwrap();
+                .expect("fixture publishes its second anonymous action");
             let first = journal
                 .claim_next(&token, |_, _| Ok(false))
-                .unwrap()
-                .unwrap();
+                .expect("fixture scans its anonymous action queue")
+                .expect("fixture queue contains its first anonymous action");
             assert_eq!(first.action(), TrayAction::LightDrawOn);
-            first.finish(true, None).unwrap();
+            first
+                .finish(true, None)
+                .expect("fixture completes its first anonymous action");
             let second = journal
                 .claim_next(&token, |_, _| Ok(false))
-                .unwrap()
-                .unwrap();
+                .expect("fixture scans its remaining anonymous action queue")
+                .expect("fixture queue contains its second anonymous action");
             assert_eq!(second.action(), TrayAction::LightDrawOff);
-            second.finish(false, Some("not active")).unwrap();
+            second
+                .finish(false, Some("not active"))
+                .expect("fixture abandons its second anonymous action");
             assert!(
                 journal
                     .claim_next(&token, |_, _| Ok(false))
-                    .unwrap()
+                    .expect("fixture scans its exhausted anonymous action queue")
                     .is_none()
             );
         });
@@ -1131,28 +1156,33 @@ mod tests {
 
     #[test]
     fn command_action_stays_ineligible_until_exact_commit_predicate() {
-        with_runtime(|| {
-            let journal = ActionJournal::open().unwrap();
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
-            let command = super::super::ProtocolId::generate().unwrap().to_string();
+        with_runtime(|root| {
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
+            let command = super::super::ProtocolId::generate()
+                .expect("fixture generates its command identity")
+                .to_string();
             let prepared = journal
                 .prepare_command(&command, &token, TrayAction::ToggleFreeze)
-                .unwrap();
+                .expect("fixture prepares its command-owned action");
             journal
                 .publish_anonymous(&token, TrayAction::CaptureRegion)
-                .unwrap();
+                .expect("fixture publishes its later anonymous action");
             assert!(
                 journal
                     .claim_next(&token, |_, _| Ok(false))
-                    .unwrap()
+                    .expect("fixture scans while its head command is uncommitted")
                     .is_none()
             );
             let claimed = journal
                 .claim_next(&token, |identity, candidate| {
                     Ok(identity == command && candidate.action_id == prepared.action_id)
                 })
-                .unwrap()
-                .unwrap();
+                .expect("fixture scans with its exact commit predicate")
+                .expect("exact predicate makes the command action claimable");
             assert_eq!(
                 claimed.owner(),
                 &ActionOwner::Command {
@@ -1166,10 +1196,14 @@ mod tests {
 
     #[test]
     fn event_loop_claim_and_finish_defer_instead_of_waiting_for_locks() {
-        with_runtime(|| {
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
-            let owner = super::super::command::CommandOwner::open(&token).unwrap();
-            let journal = ActionJournal::open().unwrap();
+        with_runtime(|root| {
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
+            let owner = super::super::command::CommandOwner::open(&token, root.to_path_buf())
+                .expect("fixture opens its v2 command owner");
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
             let request = super::super::wire::DaemonRequestV2 {
                 mode: None,
                 freeze: false,
@@ -1180,47 +1214,64 @@ mod tests {
                 session_file: None,
                 overlay_action: Some(TrayAction::ToggleFreeze),
             };
-            let _client = super::super::command::ClientCommand::publish(&request, &token).unwrap();
-            let mut command = owner.claim_next().unwrap().unwrap();
+            let _client = super::super::command::ClientCommand::publish(&request, &token, root)
+                .expect("fixture publishes its command-owned action request");
+            let mut command = owner
+                .claim_next()
+                .expect("fixture scans its v2 command queue")
+                .expect("fixture queue contains its action command");
             let command_identity = command.identity().to_owned();
-            let _prepared = command.prepare_action(&journal).unwrap().unwrap();
+            let _prepared = command
+                .prepare_action(&journal)
+                .expect("fixture prepares its command action")
+                .expect("open fixture command produces an action envelope");
             command
                 .commit(super::super::wire::EffectKind::DeliverReadyAction)
-                .unwrap();
+                .expect("fixture commits its command action");
 
-            let held_journal_lock = open_journal_lock(&journal.root).unwrap();
+            let held_journal_lock = open_journal_lock(&journal.root)
+                .expect("fixture exclusively holds its action journal lock");
             assert!(matches!(
                 journal
                     .try_claim_next(&token, |identity, candidate| {
-                        super::super::command::try_claim_command_action(identity, candidate)
+                        super::super::command::try_claim_command_action(root, identity, candidate)
                     })
-                    .unwrap(),
+                    .expect("fixture performs a nonblocking journal claim"),
                 ActionClaimOutcome::Deferred
             ));
-            unlock(&held_journal_lock).unwrap();
+            unlock(&held_journal_lock).expect("fixture releases its action journal lock");
 
             // The command claim still owns decision.lock, so the action claimant
             // must defer without sleeping on the Wayland event-loop thread.
             assert!(matches!(
                 journal
                     .try_claim_next(&token, |identity, candidate| {
-                        super::super::command::try_claim_command_action(identity, candidate)
+                        super::super::command::try_claim_command_action(root, identity, candidate)
                     })
-                    .unwrap(),
+                    .expect("fixture performs a nonblocking command-action claim"),
                 ActionClaimOutcome::Deferred
             ));
-            command.defer().unwrap();
+            command
+                .defer()
+                .expect("fixture releases its command decision lock");
 
-            let ActionClaimOutcome::Claimed(action) = journal
+            let claim_outcome = journal
                 .try_claim_next(&token, |identity, candidate| {
-                    super::super::command::try_claim_command_action(identity, candidate)
+                    super::super::command::try_claim_command_action(root, identity, candidate)
                 })
-                .unwrap()
-            else {
-                panic!("released command lock should make the action claimable");
+                .expect("fixture retries its nonblocking command-action claim");
+            let action = match claim_outcome {
+                ActionClaimOutcome::Claimed(action) => action,
+                other => {
+                    assert!(
+                        matches!(other, ActionClaimOutcome::Claimed(_)),
+                        "released command lock should make the action claimable: {other:?}"
+                    );
+                    return;
+                }
             };
 
-            let decision_path = super::super::command_root()
+            let decision_path = root
                 .join("controls")
                 .join(command_identity)
                 .join("decision.lock");
@@ -1228,21 +1279,32 @@ mod tests {
                 .read(true)
                 .write(true)
                 .open(decision_path)
-                .unwrap();
+                .expect("fixture opens its command decision lock");
             assert_eq!(
                 unsafe { libc::flock(held_decision.as_raw_fd(), libc::LOCK_EX) },
                 0
             );
-            let ActionFinishOutcome::Deferred(action) = action.try_finish(true, None).unwrap()
-            else {
-                panic!("contended command finish should defer");
+            let finish_outcome = action
+                .try_finish(true, None)
+                .expect("fixture attempts a nonblocking action finish");
+            let action = match finish_outcome {
+                ActionFinishOutcome::Deferred(action) => action,
+                other => {
+                    assert!(
+                        matches!(other, ActionFinishOutcome::Deferred(_)),
+                        "contended command finish should defer: {other:?}"
+                    );
+                    return;
+                }
             };
             assert_eq!(
                 unsafe { libc::flock(held_decision.as_raw_fd(), libc::LOCK_UN) },
                 0
             );
             assert!(matches!(
-                action.try_finish(true, None).unwrap(),
+                action
+                    .try_finish(true, None)
+                    .expect("fixture retries action finish after releasing contention"),
                 ActionFinishOutcome::Complete
             ));
         });
@@ -1250,10 +1312,14 @@ mod tests {
 
     #[test]
     fn cancellation_during_action_preparation_leaves_a_collectable_tombstone() {
-        with_runtime(|| {
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
-            let owner = super::super::command::CommandOwner::open(&token).unwrap();
-            let journal = ActionJournal::open().unwrap();
+        with_runtime(|root| {
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
+            let owner = super::super::command::CommandOwner::open(&token, root.to_path_buf())
+                .expect("fixture opens its v2 command owner");
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
             let client = super::super::command::ClientCommand::publish(
                 &super::super::wire::DaemonRequestV2 {
                     mode: None,
@@ -1266,10 +1332,15 @@ mod tests {
                     overlay_action: Some(TrayAction::ToggleFreeze),
                 },
                 &token,
+                root,
             )
-            .unwrap();
-            let command = owner.claim_next().unwrap().unwrap();
-            let held_journal_lock = open_journal_lock(&journal.root).unwrap();
+            .expect("fixture publishes its cancelable action command");
+            let command = owner
+                .claim_next()
+                .expect("fixture scans its v2 command queue")
+                .expect("fixture queue contains its cancelable command");
+            let held_journal_lock = open_journal_lock(&journal.root)
+                .expect("fixture holds its action journal lock during preparation");
             let worker_journal = journal.clone();
             let worker = std::thread::spawn(move || {
                 let mut command = command;
@@ -1278,31 +1349,50 @@ mod tests {
             });
 
             assert_eq!(
-                client.cancel().unwrap(),
+                client
+                    .cancel()
+                    .expect("fixture cancels its uncommitted action command"),
                 super::super::command::TerminalCommandResult::Canceled
             );
-            unlock(&held_journal_lock).unwrap();
-            let (outcome, command) = worker.join().unwrap();
-            assert!(outcome.unwrap().is_none());
-            command.defer().unwrap();
+            unlock(&held_journal_lock).expect("fixture releases its action journal lock");
+            let (outcome, command) = worker
+                .join()
+                .expect("fixture action-preparation worker exits normally");
+            assert!(
+                outcome
+                    .expect("fixture preparation reconciles its canceled command")
+                    .is_none()
+            );
+            command
+                .defer()
+                .expect("fixture releases its canceled command claim");
 
             assert!(
                 journal
                     .claim_next(&token, |_, _| Ok(false))
-                    .unwrap()
+                    .expect("fixture scans after canceled action preparation")
                     .is_none()
             );
-            assert_eq!(owner.collect_terminal().unwrap(), 1);
+            assert_eq!(
+                owner
+                    .collect_terminal()
+                    .expect("fixture collects its canceled command tombstone"),
+                1
+            );
         });
     }
 
     #[test]
     fn canceled_command_reconciles_prepared_and_crash_left_action_envelopes() {
         for record_preparation in [false, true] {
-            with_runtime(|| {
-                let token = super::super::ProtocolToken::generate().unwrap().to_string();
-                let owner = super::super::command::CommandOwner::open(&token).unwrap();
-                let journal = ActionJournal::open().unwrap();
+            with_runtime(|root| {
+                let token = super::super::ProtocolToken::generate()
+                    .expect("fixture generates its daemon protocol token")
+                    .to_string();
+                let owner = super::super::command::CommandOwner::open(&token, root.to_path_buf())
+                    .expect("fixture opens its v2 command owner");
+                let journal = ActionJournal::open(root.to_path_buf())
+                    .expect("fixture opens its action journal");
                 let client = super::super::command::ClientCommand::publish(
                     &super::super::wire::DaemonRequestV2 {
                         mode: None,
@@ -1315,41 +1405,63 @@ mod tests {
                         overlay_action: Some(TrayAction::ToggleFreeze),
                     },
                     &token,
+                    root,
                 )
-                .unwrap();
-                let mut command = owner.claim_next().unwrap().unwrap();
+                .expect("fixture publishes its cancelable action command");
+                let mut command = owner
+                    .claim_next()
+                    .expect("fixture scans its v2 command queue")
+                    .expect("fixture queue contains its cancelable command");
                 if record_preparation {
-                    command.prepare_action(&journal).unwrap().unwrap();
+                    command
+                        .prepare_action(&journal)
+                        .expect("fixture records command action preparation")
+                        .expect("open fixture command produces an action envelope");
                 } else {
                     journal
                         .prepare_command(command.identity(), &token, TrayAction::ToggleFreeze)
-                        .unwrap();
+                        .expect("fixture leaves a crash-style prepared action envelope");
                 }
-                command.defer().unwrap();
+                command
+                    .defer()
+                    .expect("fixture releases its uncommitted command claim");
                 assert_eq!(
-                    client.cancel().unwrap(),
+                    client
+                        .cancel()
+                        .expect("fixture cancels its uncommitted action command"),
                     super::super::command::TerminalCommandResult::Canceled
                 );
 
                 assert!(matches!(
                     journal
                         .try_claim_next(&token, |identity, candidate| {
-                            super::super::command::try_claim_command_action(identity, candidate)
+                            super::super::command::try_claim_command_action(
+                                root, identity, candidate,
+                            )
                         })
-                        .unwrap(),
+                        .expect("fixture reconciles its canceled action envelope"),
                     ActionClaimOutcome::Idle
                 ));
-                assert_eq!(owner.collect_terminal().unwrap(), 1);
+                assert_eq!(
+                    owner
+                        .collect_terminal()
+                        .expect("fixture collects its canceled command tombstone"),
+                    1
+                );
             });
         }
     }
 
     #[test]
     fn orphaned_claim_becomes_committed_indeterminate_without_replay() {
-        with_runtime(|| {
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
-            let owner = super::super::command::CommandOwner::open(&token).unwrap();
-            let journal = ActionJournal::open().unwrap();
+        with_runtime(|root| {
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
+            let owner = super::super::command::CommandOwner::open(&token, root.to_path_buf())
+                .expect("fixture opens its v2 command owner");
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
             let request = super::super::wire::DaemonRequestV2 {
                 mode: None,
                 freeze: false,
@@ -1360,34 +1472,52 @@ mod tests {
                 session_file: None,
                 overlay_action: Some(TrayAction::ToggleFreeze),
             };
-            let client = super::super::command::ClientCommand::publish(&request, &token).unwrap();
-            let mut command = owner.claim_next().unwrap().unwrap();
-            command.prepare_action(&journal).unwrap().unwrap();
+            let client = super::super::command::ClientCommand::publish(&request, &token, root)
+                .expect("fixture publishes its command-owned action request");
+            let mut command = owner
+                .claim_next()
+                .expect("fixture scans its v2 command queue")
+                .expect("fixture queue contains its action command");
+            command
+                .prepare_action(&journal)
+                .expect("fixture prepares its command action")
+                .expect("open fixture command produces an action envelope");
             command
                 .commit(super::super::wire::EffectKind::DeliverReadyAction)
-                .unwrap();
-            command.defer().unwrap();
+                .expect("fixture commits its command action");
+            command
+                .defer()
+                .expect("fixture releases its committed command claim");
 
-            let ActionClaimOutcome::Claimed(orphaned) = journal
+            let claim_outcome = journal
                 .try_claim_next(&token, |identity, candidate| {
-                    super::super::command::try_claim_command_action(identity, candidate)
+                    super::super::command::try_claim_command_action(root, identity, candidate)
                 })
-                .unwrap()
-            else {
-                panic!("committed action should be claimable");
+                .expect("fixture claims its committed command action");
+            let orphaned = match claim_outcome {
+                ActionClaimOutcome::Claimed(action) => action,
+                other => {
+                    assert!(
+                        matches!(other, ActionClaimOutcome::Claimed(_)),
+                        "committed action should be claimable: {other:?}"
+                    );
+                    return;
+                }
             };
             drop(orphaned);
 
             assert!(matches!(
                 journal
                     .try_claim_next(&token, |identity, candidate| {
-                        super::super::command::try_claim_command_action(identity, candidate)
+                        super::super::command::try_claim_command_action(root, identity, candidate)
                     })
-                    .unwrap(),
+                    .expect("fixture reconciles its orphaned committed action"),
                 ActionClaimOutcome::Idle
             ));
             assert!(matches!(
-                client.wait().unwrap(),
+                client
+                    .wait()
+                    .expect("fixture client observes its reconciled terminal result"),
                 super::super::command::TerminalCommandResult::CommittedIndeterminate(_)
             ));
         });
@@ -1395,24 +1525,32 @@ mod tests {
 
     #[test]
     fn digest_and_filename_tampering_fail_closed() {
-        with_runtime(|| {
-            let journal = ActionJournal::open().unwrap();
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
+        with_runtime(|root| {
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
             let action = journal
                 .publish_anonymous(&token, TrayAction::CaptureRegion)
-                .unwrap();
+                .expect("fixture publishes its anonymous action");
+            let bytes = fs::read(&action.path).expect("fixture reads its published action record");
             let mut record: serde_json::Value =
-                serde_json::from_slice(&fs::read(&action.path).unwrap()).unwrap();
+                serde_json::from_slice(&bytes).expect("fixture parses its published action record");
             record["action"] = serde_json::json!("capture_full");
-            fs::write(&action.path, serde_json::to_vec(&record).unwrap()).unwrap();
+            let tampered =
+                serde_json::to_vec(&record).expect("fixture serializes its tampered action record");
+            fs::write(&action.path, tampered).expect("fixture writes its tampered action record");
             assert!(
                 journal
                     .claim_next(&token, |_, _| Ok(false))
-                    .unwrap()
+                    .expect("fixture scans its tampered action queue")
                     .is_none()
             );
             assert_eq!(
-                fs::read_dir(quarantine_dir(&journal.root)).unwrap().count(),
+                fs::read_dir(quarantine_dir(&journal.root))
+                    .expect("fixture reads its action quarantine")
+                    .count(),
                 1
             );
         });
@@ -1420,48 +1558,66 @@ mod tests {
 
     #[test]
     fn filename_order_tampering_and_revision_overflow_fail_closed() {
-        with_runtime(|| {
-            let journal = ActionJournal::open().unwrap();
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
+        with_runtime(|root| {
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
             let action = journal
                 .publish_anonymous(&token, TrayAction::CaptureRegion)
-                .unwrap();
+                .expect("fixture publishes its anonymous action");
             let changed_path = queue_dir(&journal.root).join(action_name(
-                action.action_order.checked_add(1).unwrap(),
+                action
+                    .action_order
+                    .checked_add(1)
+                    .expect("fixture action order has room for one increment"),
                 &action.action_id,
             ));
-            fs::rename(&action.path, changed_path).unwrap();
+            fs::rename(&action.path, changed_path)
+                .expect("fixture changes its action filename order");
             assert!(
                 journal
                     .claim_next(&token, |_, _| Ok(false))
-                    .unwrap()
+                    .expect("fixture scans its filename-tampered action queue")
                     .is_none()
             );
             assert_eq!(
-                fs::read_dir(quarantine_dir(&journal.root)).unwrap().count(),
+                fs::read_dir(quarantine_dir(&journal.root))
+                    .expect("fixture reads its action quarantine")
+                    .count(),
                 1
             );
         });
 
-        with_runtime(|| {
-            let journal = ActionJournal::open().unwrap();
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
+        with_runtime(|root| {
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
             let action = journal
                 .publish_anonymous(&token, TrayAction::CaptureRegion)
-                .unwrap();
-            let mut record: ActionRecord = read_record(&action.path).unwrap();
+                .expect("fixture publishes its anonymous action");
+            let mut record: ActionRecord =
+                read_record(&action.path).expect("fixture reads its published action record");
             record.record_revision = u64::MAX;
-            write_record(&action.path, &record).unwrap();
+            write_record(&action.path, &record)
+                .expect("fixture writes its maximum-revision action record");
             assert!(journal.abandon(&action, "not applied").is_err());
         });
     }
 
     #[test]
     fn rollback_keeps_an_indeterminate_command_action_tombstone() {
-        with_runtime(|| {
-            let token = super::super::ProtocolToken::generate().unwrap().to_string();
-            let owner = super::super::CommandOwner::open(&token).unwrap();
-            let journal = ActionJournal::open().unwrap();
+        with_runtime(|root| {
+            let token = super::super::ProtocolToken::generate()
+                .expect("fixture generates its daemon protocol token")
+                .to_string();
+            let owner = super::super::command::CommandOwner::open(&token, root.to_path_buf())
+                .expect("fixture opens its v2 command owner");
+            let journal =
+                ActionJournal::open(root.to_path_buf()).expect("fixture opens its action journal");
             let client = super::super::ClientCommand::publish(
                 &super::super::DaemonRequestV2 {
                     mode: None,
@@ -1474,20 +1630,33 @@ mod tests {
                     overlay_action: Some(TrayAction::ToggleFreeze),
                 },
                 &token,
+                root,
             )
-            .unwrap();
-            let mut claim = owner.claim_next().unwrap().unwrap();
-            let prepared = claim.prepare_action(&journal).unwrap().unwrap();
+            .expect("fixture publishes its command-owned action request");
+            let mut claim = owner
+                .claim_next()
+                .expect("fixture scans its v2 command queue")
+                .expect("fixture queue contains its action command");
+            let prepared = claim
+                .prepare_action(&journal)
+                .expect("fixture prepares its command action")
+                .expect("open fixture command produces an action envelope");
             claim
                 .commit(super::super::EffectKind::StartAndDeliverAction)
-                .unwrap();
-            claim.defer().unwrap();
+                .expect("fixture commits its command action");
+            claim
+                .defer()
+                .expect("fixture releases its committed command claim");
 
-            super::super::prepare_rollback_compatibility().unwrap();
-            let tombstone: ActionRecord = read_record(&prepared.path).unwrap();
+            super::super::prepare_rollback_compatibility_at_root(root)
+                .expect("fixture prepares protocol-v2 rollback compatibility");
+            let tombstone: ActionRecord =
+                read_record(&prepared.path).expect("fixture reads its rollback action tombstone");
             assert!(matches!(tombstone.state, JournalState::Abandoned { .. }));
             assert!(matches!(
-                client.wait().unwrap(),
+                client
+                    .wait()
+                    .expect("fixture client observes its rollback terminal result"),
                 super::super::TerminalCommandResult::CommittedIndeterminate(_)
             ));
         });

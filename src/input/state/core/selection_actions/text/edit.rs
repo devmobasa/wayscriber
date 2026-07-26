@@ -129,7 +129,6 @@ impl InputState {
                     }
                     _ => {}
                 }
-                shape.invalidate_bounds();
                 let after = shape.bounding_box();
                 Some((before, after))
             } else {

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 
-use crate::backend::wayland::backend::runtime_wake::RuntimeWakeHandle;
+use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSender;
 #[cfg(test)]
 use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
 use crate::session::{
@@ -185,7 +185,10 @@ pub(in crate::backend::wayland) struct PersistenceController {
 }
 
 impl PersistenceController {
-    pub(in crate::backend::wayland) fn start(wake: RuntimeWakeHandle) -> Result<Self> {
+    pub(in crate::backend::wayland) fn start(
+        wake: RuntimeWakeSender,
+        catalog: crate::session::catalog::SessionCatalog,
+    ) -> Result<Self> {
         assert_send_static::<SessionSnapshot>();
         assert_send_static::<LoadSnapshotOutcome>();
         assert_send_static::<PersistenceOperation>();
@@ -195,7 +198,7 @@ impl PersistenceController {
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let worker = thread::Builder::new()
             .name("wayscriber-persistence".to_string())
-            .spawn(move || worker_main(request_rx, completion_tx, wake))
+            .spawn(move || worker_main(request_rx, completion_tx, wake, catalog))
             .context("failed to start session persistence worker")?;
 
         Ok(Self {
@@ -209,9 +212,15 @@ impl PersistenceController {
     }
 
     #[cfg(test)]
-    pub(in crate::backend::wayland) fn start_for_test() -> Result<Self> {
+    pub(in crate::backend::wayland) fn start_for_test(
+        catalog: crate::session::catalog::SessionCatalog,
+    ) -> Result<Self> {
         let wake = RuntimeWakeSource::new().context("failed to create test runtime wake source")?;
-        Self::start(wake.handle())
+        Self::start(
+            wake.try_sender()
+                .context("failed to duplicate test runtime wake sender")?,
+            catalog,
+        )
     }
 
     pub(in crate::backend::wayland) fn is_active(&self) -> bool {
@@ -383,9 +392,9 @@ impl PersistenceController {
                 "cannot stop persistence worker while a request is active"
             ));
         }
-        if self.worker.is_none() {
+        let Some(worker) = self.worker.take() else {
             return Ok(());
-        }
+        };
 
         let mut shutdown_error = None;
         if self.healthy
@@ -395,7 +404,7 @@ impl PersistenceController {
             shutdown_error = Some(err);
         }
         self.request_tx.take();
-        let join = self.worker.take().expect("worker presence checked").join();
+        let join = worker.join();
         self.active_id = None;
         if join.is_err() {
             self.healthy = false;
@@ -433,7 +442,8 @@ impl Drop for PersistenceController {
 fn worker_main(
     request_rx: Receiver<PersistenceRequest>,
     completion_tx: SyncSender<PersistenceCompletion>,
-    wake: RuntimeWakeHandle,
+    wake: RuntimeWakeSender,
+    catalog: crate::session::catalog::SessionCatalog,
 ) {
     let publisher = PersistenceCompletionPublisher::new(completion_tx, wake);
     while let Ok(request) = request_rx.recv() {
@@ -447,7 +457,7 @@ fn worker_main(
         let shutdown = matches!(operation, PersistenceOperation::Shutdown);
         let started = Instant::now();
         log::debug!("Persistence worker starting {label} request {id:?}");
-        let result = execute(operation);
+        let result = execute(operation, &catalog);
         let execution_time = started.elapsed();
         let worker_thread_id = thread::current().id();
         let finished_at = Instant::now();
@@ -469,11 +479,11 @@ fn worker_main(
 
 struct PersistenceCompletionPublisher {
     completion_tx: Option<SyncSender<PersistenceCompletion>>,
-    wake: RuntimeWakeHandle,
+    wake: RuntimeWakeSender,
 }
 
 impl PersistenceCompletionPublisher {
-    fn new(completion_tx: SyncSender<PersistenceCompletion>, wake: RuntimeWakeHandle) -> Self {
+    fn new(completion_tx: SyncSender<PersistenceCompletion>, wake: RuntimeWakeSender) -> Self {
         Self {
             completion_tx: Some(completion_tx),
             wake,
@@ -507,7 +517,10 @@ impl Drop for PersistenceCompletionPublisher {
     }
 }
 
-fn execute(operation: PersistenceOperation) -> Result<PersistenceOutcome> {
+fn execute(
+    operation: PersistenceOperation,
+    catalog: &crate::session::catalog::SessionCatalog,
+) -> Result<PersistenceOutcome> {
     match operation {
         PersistenceOperation::Save {
             snapshot,
@@ -534,6 +547,9 @@ fn execute(operation: PersistenceOperation) -> Result<PersistenceOutcome> {
             let committed_board_data = report.as_ref().is_some_and(|report| {
                 !matches!(report.outcome, SaveSnapshotOutcome::ClearedEmpty) && snapshot_board_data
             });
+            if report.is_some() {
+                catalog.record_named_session_saved(&options);
+            }
             Ok(PersistenceOutcome::Save(SaveCompletion {
                 report,
                 committed_board_data,
@@ -548,18 +564,22 @@ fn execute(operation: PersistenceOperation) -> Result<PersistenceOutcome> {
             let report = session::save_snapshot_as_with_report(&snapshot, &options, overwrite)?;
             let committed_board_data =
                 !matches!(report.outcome, SaveSnapshotOutcome::ClearedEmpty) && snapshot_board_data;
-            session::catalog::record_named_session_saved(&options);
+            catalog.record_named_session_saved(&options);
             Ok(PersistenceOutcome::SaveAs {
                 report,
                 committed_board_data,
             })
         }
-        PersistenceOperation::LoadConfigured { options } => Ok(PersistenceOutcome::Load(
-            session::load_snapshot_with_outcome(&options)?,
-        )),
-        PersistenceOperation::LoadNamedCandidate { options } => Ok(PersistenceOutcome::Load(
-            session::load_named_session_candidate(&options)?,
-        )),
+        PersistenceOperation::LoadConfigured { options } => {
+            let outcome = session::load_snapshot_with_outcome(&options)?;
+            record_opened_catalog_outcome(catalog, &options, &outcome);
+            Ok(PersistenceOutcome::Load(outcome))
+        }
+        PersistenceOperation::LoadNamedCandidate { options } => {
+            let outcome = session::load_named_session_candidate(&options)?;
+            record_opened_catalog_outcome(catalog, &options, &outcome);
+            Ok(PersistenceOutcome::Load(outcome))
+        }
         PersistenceOperation::Inspect { options } => Ok(PersistenceOutcome::Inspection(
             session::inspect_session(&options)?,
         )),
@@ -591,17 +611,32 @@ fn execute(operation: PersistenceOperation) -> Result<PersistenceOutcome> {
             super::has_session_artifact(&options),
         )),
         PersistenceOperation::RecordNamedOpened { options } => {
-            session::catalog::record_named_session_opened(&options);
+            catalog.record_named_session_opened(&options);
             Ok(PersistenceOutcome::Unit)
         }
         PersistenceOperation::ForgetNamedSessionByPath { path } => Ok(
-            PersistenceOutcome::CatalogForgotten(session::catalog::forget_session_by_path(&path)?),
+            PersistenceOutcome::CatalogForgotten(catalog.forget_session_by_path(&path)?),
         ),
         #[cfg(test)]
         PersistenceOperation::PanicForTest => {
             panic!("intentional persistence worker panic for disconnect testing")
         }
         PersistenceOperation::Shutdown => Ok(PersistenceOutcome::Unit),
+    }
+}
+
+fn record_opened_catalog_outcome(
+    catalog: &crate::session::catalog::SessionCatalog,
+    options: &SessionOptions,
+    outcome: &LoadSnapshotOutcome,
+) {
+    if matches!(
+        outcome,
+        LoadSnapshotOutcome::Loaded(_)
+            | LoadSnapshotOutcome::LoadedFromBackup(_)
+            | LoadSnapshotOutcome::LoadedFromRecovery(_)
+    ) {
+        catalog.record_named_session_opened(options);
     }
 }
 
@@ -680,10 +715,24 @@ mod tests {
         options
     }
 
-    fn controller_with_wake() -> (RuntimeWakeSource, PersistenceController) {
+    fn test_catalog(root: &std::path::Path) -> crate::session::catalog::SessionCatalog {
+        crate::session::catalog::SessionCatalog::at_path(root.join("sessions.json"))
+    }
+
+    fn controller_with_wake() -> (
+        crate::test_temp::TempDir,
+        RuntimeWakeSource,
+        PersistenceController,
+    ) {
+        let temp = crate::test_temp::tempdir().unwrap();
         let wake = RuntimeWakeSource::new().unwrap();
-        let controller = PersistenceController::start(wake.handle()).unwrap();
-        (wake, controller)
+        let controller = PersistenceController::start(
+            wake.try_sender()
+                .expect("test duplicates its persistence runtime eventfd"),
+            test_catalog(temp.path()),
+        )
+        .expect("test starts its persistence controller");
+        (temp, wake, controller)
     }
 
     fn wait_for_runtime_wake(wake: &RuntimeWakeSource) {
@@ -714,7 +763,7 @@ mod tests {
     fn real_worker_publishes_completion_before_waking_runtime() {
         let temp = crate::test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
-        let (wake, mut controller) = controller_with_wake();
+        let (_temp, wake, mut controller) = controller_with_wake();
         controller
             .try_submit(7, PersistenceOperation::HasArtifacts { options })
             .unwrap();
@@ -736,7 +785,7 @@ mod tests {
     fn production_error_completion_wakes_runtime_and_worker_remains_healthy() {
         let temp = crate::test_temp::tempdir().unwrap();
         let missing = temp.path().join("missing.wayscriber-session");
-        let (wake, mut controller) = controller_with_wake();
+        let (_temp, wake, mut controller) = controller_with_wake();
         controller
             .try_submit(0, PersistenceOperation::ValidateNamedOpen { path: missing })
             .unwrap();
@@ -751,7 +800,7 @@ mod tests {
 
     #[test]
     fn worker_panic_closes_completion_channel_before_waking_runtime() {
-        let (wake, mut controller) = controller_with_wake();
+        let (_temp, wake, mut controller) = controller_with_wake();
         controller
             .try_submit(0, PersistenceOperation::PanicForTest)
             .unwrap();
@@ -771,7 +820,7 @@ mod tests {
     fn synchronous_barriers_and_shutdown_tolerate_redundant_unread_wake() {
         let temp = crate::test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
-        let (wake, mut controller) = controller_with_wake();
+        let (_temp, wake, mut controller) = controller_with_wake();
 
         assert!(matches!(
             controller
@@ -787,7 +836,8 @@ mod tests {
     fn real_worker_executes_production_operation_off_caller_thread() {
         let temp = crate::test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
-        let mut controller = PersistenceController::start_for_test().unwrap();
+        let mut controller =
+            PersistenceController::start_for_test(test_catalog(temp.path())).unwrap();
         controller
             .try_submit(7, PersistenceOperation::HasArtifacts { options })
             .unwrap();
@@ -812,7 +862,8 @@ mod tests {
             boards: Vec::new(),
             tool_state: None,
         };
-        let mut controller = PersistenceController::start_for_test().unwrap();
+        let mut controller =
+            PersistenceController::start_for_test(test_catalog(temp.path())).unwrap();
         let outcome = controller
             .run(
                 0,
@@ -847,7 +898,8 @@ mod tests {
         let temp = crate::test_temp::tempdir().unwrap();
         let missing = temp.path().join("missing.wayscriber-session");
         let options = test_options(temp.path().to_path_buf());
-        let mut controller = PersistenceController::start_for_test().unwrap();
+        let mut controller =
+            PersistenceController::start_for_test(test_catalog(temp.path())).unwrap();
         assert!(
             controller
                 .run(0, PersistenceOperation::ValidateNamedOpen { path: missing })
@@ -881,7 +933,8 @@ mod tests {
             boards: Vec::new(),
             tool_state: None,
         };
-        let mut controller = PersistenceController::start_for_test().unwrap();
+        let mut controller =
+            PersistenceController::start_for_test(test_catalog(temp.path())).unwrap();
 
         assert!(
             controller
@@ -929,7 +982,8 @@ mod tests {
 
         let mut options = test_options(temp.path().to_path_buf());
         options.set_named_file_target(alias_path);
-        let mut controller = PersistenceController::start_for_test().unwrap();
+        let mut controller =
+            PersistenceController::start_for_test(test_catalog(temp.path())).unwrap();
         let err = controller
             .run(
                 0,
@@ -952,7 +1006,8 @@ mod tests {
         std::fs::write(&current_path, b"{}").unwrap();
         let mut options = test_options(temp.path().to_path_buf());
         options.set_named_file_target(current_path.clone());
-        let mut controller = PersistenceController::start_for_test().unwrap();
+        let mut controller =
+            PersistenceController::start_for_test(test_catalog(temp.path())).unwrap();
 
         let outcome = controller
             .run(

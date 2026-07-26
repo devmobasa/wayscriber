@@ -48,18 +48,6 @@ pub(crate) enum ConfigPositionFinishIntent {
     Cancel,
 }
 
-#[derive(Debug)]
-pub(crate) enum PreviewFinishRequest {
-    RuntimeUi {
-        session: RuntimeUiPreviewSession,
-        intent: RuntimePreviewFinishIntent,
-    },
-    ConfigPosition {
-        session: ConfigPositionPreviewSession,
-        intent: ConfigPositionFinishIntent,
-    },
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConfigMutationError {
     message: String,
@@ -143,7 +131,7 @@ pub(crate) struct AbandonedPreviewResolution {
 
 impl RuntimeUiStateController {
     pub(crate) fn begin_runtime_preview(
-        &self,
+        &mut self,
         scope: RuntimeUiMutationScope,
         rollback: PreviewRollbackSnapshot,
     ) -> Result<RuntimeUiPreviewSession, BeginPreviewError> {
@@ -162,12 +150,10 @@ impl RuntimeUiStateController {
                     .seeds
                     .guards(&targets)
                     .map_err(BeginPreviewError::MissingSeed)?;
-                let session_id = self.next_preview_session_id.get();
-                self.next_preview_session_id.set(
-                    session_id
-                        .checked_add(1)
-                        .ok_or(BeginPreviewError::MutationIdExhausted)?,
-                );
+                let session_id = self.next_preview_session_id;
+                self.next_preview_session_id = session_id
+                    .checked_add(1)
+                    .ok_or(BeginPreviewError::MutationIdExhausted)?;
                 Ok(RuntimeUiPreviewSession::LiveOnly(
                     RuntimeLiveOnlyPreviewSession {
                         guard: RuntimeUiLiveOnlyGuard {
@@ -203,13 +189,13 @@ impl RuntimeUiStateController {
                         BeginPreviewError::MutationIdExhausted
                     }
                     BeginMutationError::ShuttingDown => BeginPreviewError::ShuttingDown,
-                    BeginMutationError::UnsupportedVersion => unreachable!(),
+                    BeginMutationError::UnsupportedVersion => BeginPreviewError::InvalidAuthority,
                 }),
         }
     }
 
     pub(crate) fn begin_config_position_preview(
-        &self,
+        &mut self,
         target: ConfigPositionTarget,
         rollback: PreviewRollbackSnapshot,
     ) -> Result<ConfigPositionPreviewSession, BeginPreviewError> {
@@ -227,9 +213,24 @@ impl RuntimeUiStateController {
             })
     }
 
-    pub(crate) fn finish_preview(
+    pub(crate) fn finish_runtime_preview(
         &mut self,
-        request: PreviewFinishRequest,
+        session: RuntimeUiPreviewSession,
+        intent: RuntimePreviewFinishIntent,
+    ) -> PreviewFinishResult {
+        self.drain_lifecycle_controls();
+        if let Some(barrier) = &self.active_barrier {
+            let barrier = barrier.id;
+            self.record_abandoned_runtime_preview(barrier, session, intent);
+            return PreviewFinishResult::AbandonedDuringBarrier { barrier };
+        }
+        self.apply_runtime_preview(session, intent)
+    }
+
+    pub(crate) fn finish_config_position_preview(
+        &mut self,
+        session: ConfigPositionPreviewSession,
+        intent: ConfigPositionFinishIntent,
         apply_config: impl FnOnce(
             ConfigPositionTarget,
             ToolbarPositionSeed,
@@ -238,56 +239,47 @@ impl RuntimeUiStateController {
         self.drain_lifecycle_controls();
         if let Some(barrier) = &self.active_barrier {
             let barrier = barrier.id;
-            self.record_abandoned_preview(barrier, request);
+            self.record_abandoned_config_position_preview(barrier, session, intent);
             return PreviewFinishResult::AbandonedDuringBarrier { barrier };
         }
-        match request {
-            PreviewFinishRequest::RuntimeUi { session, intent } => {
-                self.finish_runtime_preview(session, intent)
+        match intent {
+            ConfigPositionFinishIntent::Cancel => {
+                let ConfigPositionPreviewSession { permit, rollback } = session;
+                match self.validate_config_interaction(permit) {
+                    ValidateConfigInteractionResult::Accepted(_) => {
+                        PreviewFinishResult::Cancelled { rollback }
+                    }
+                    ValidateConfigInteractionResult::RejectedControllerBusy(barrier) => {
+                        PreviewFinishResult::AbandonedDuringBarrier { barrier }
+                    }
+                    ValidateConfigInteractionResult::RejectedWrongController
+                    | ValidateConfigInteractionResult::RejectedShuttingDown
+                    | ValidateConfigInteractionResult::RejectedStaleAuthority
+                    | ValidateConfigInteractionResult::RejectedSeedChanged => {
+                        PreviewFinishResult::RejectedStaleAuthority { rollback }
+                    }
+                }
             }
-            PreviewFinishRequest::ConfigPosition { session, intent } => match intent {
-                ConfigPositionFinishIntent::Cancel => {
-                    let ConfigPositionPreviewSession { permit, rollback } = session;
-                    match self.validate_config_interaction(permit) {
-                        ValidateConfigInteractionResult::Accepted(_) => {
-                            PreviewFinishResult::Cancelled { rollback }
-                        }
-                        ValidateConfigInteractionResult::RejectedControllerBusy(barrier) => {
-                            unreachable!(
-                                "barrier {barrier:?} cannot begin inside serialized preview finish"
-                            )
-                        }
-                        ValidateConfigInteractionResult::RejectedWrongController
-                        | ValidateConfigInteractionResult::RejectedShuttingDown
-                        | ValidateConfigInteractionResult::RejectedStaleAuthority
-                        | ValidateConfigInteractionResult::RejectedSeedChanged => {
-                            PreviewFinishResult::RejectedStaleAuthority { rollback }
+            ConfigPositionFinishIntent::Commit(position) => {
+                let ConfigPositionPreviewSession { permit, rollback } = session;
+                match self.validate_config_interaction(permit) {
+                    ValidateConfigInteractionResult::Accepted(target) => {
+                        match apply_config(target, position) {
+                            Ok(()) => PreviewFinishResult::AppliedConfig { target },
+                            Err(error) => PreviewFinishResult::FailedConfig { error, rollback },
                         }
                     }
-                }
-                ConfigPositionFinishIntent::Commit(position) => {
-                    let ConfigPositionPreviewSession { permit, rollback } = session;
-                    match self.validate_config_interaction(permit) {
-                        ValidateConfigInteractionResult::Accepted(target) => {
-                            match apply_config(target, position) {
-                                Ok(()) => PreviewFinishResult::AppliedConfig { target },
-                                Err(error) => PreviewFinishResult::FailedConfig { error, rollback },
-                            }
-                        }
-                        ValidateConfigInteractionResult::RejectedControllerBusy(barrier) => {
-                            unreachable!(
-                                "barrier {barrier:?} cannot begin inside serialized preview finish"
-                            )
-                        }
-                        ValidateConfigInteractionResult::RejectedWrongController
-                        | ValidateConfigInteractionResult::RejectedShuttingDown
-                        | ValidateConfigInteractionResult::RejectedStaleAuthority
-                        | ValidateConfigInteractionResult::RejectedSeedChanged => {
-                            PreviewFinishResult::RejectedStaleAuthority { rollback }
-                        }
+                    ValidateConfigInteractionResult::RejectedControllerBusy(barrier) => {
+                        PreviewFinishResult::AbandonedDuringBarrier { barrier }
+                    }
+                    ValidateConfigInteractionResult::RejectedWrongController
+                    | ValidateConfigInteractionResult::RejectedShuttingDown
+                    | ValidateConfigInteractionResult::RejectedStaleAuthority
+                    | ValidateConfigInteractionResult::RejectedSeedChanged => {
+                        PreviewFinishResult::RejectedStaleAuthority { rollback }
                     }
                 }
-            },
+            }
         }
     }
 
@@ -331,7 +323,7 @@ impl RuntimeUiStateController {
         resolved
     }
 
-    fn finish_runtime_preview(
+    fn apply_runtime_preview(
         &mut self,
         session: RuntimeUiPreviewSession,
         intent: RuntimePreviewFinishIntent,
@@ -425,34 +417,36 @@ impl RuntimeUiStateController {
         }
     }
 
-    fn record_abandoned_preview(
+    fn record_abandoned_runtime_preview(
         &mut self,
         barrier: ControllerBarrierId,
-        request: PreviewFinishRequest,
+        session: RuntimeUiPreviewSession,
+        intent: RuntimePreviewFinishIntent,
     ) {
-        let (session, finish) = match request {
-            PreviewFinishRequest::RuntimeUi { session, intent } => (
-                AbandonedPreviewSession::RuntimeUi(session),
-                match intent {
-                    RuntimePreviewFinishIntent::Commit(_) => {
-                        AbandonedPreviewFinish::CommitRequested
-                    }
-                    RuntimePreviewFinishIntent::Cancel => AbandonedPreviewFinish::CancelRequested,
-                },
-            ),
-            PreviewFinishRequest::ConfigPosition { session, intent } => (
-                AbandonedPreviewSession::ConfigPosition(session),
-                match intent {
-                    ConfigPositionFinishIntent::Commit(_) => {
-                        AbandonedPreviewFinish::CommitRequested
-                    }
-                    ConfigPositionFinishIntent::Cancel => AbandonedPreviewFinish::CancelRequested,
-                },
-            ),
+        let finish = match intent {
+            RuntimePreviewFinishIntent::Commit(_) => AbandonedPreviewFinish::CommitRequested,
+            RuntimePreviewFinishIntent::Cancel => AbandonedPreviewFinish::CancelRequested,
         };
         self.abandoned_previews.push(BarrierAbandonedPreview {
             barrier,
-            session,
+            session: AbandonedPreviewSession::RuntimeUi(session),
+            finish,
+        });
+    }
+
+    fn record_abandoned_config_position_preview(
+        &mut self,
+        barrier: ControllerBarrierId,
+        session: ConfigPositionPreviewSession,
+        intent: ConfigPositionFinishIntent,
+    ) {
+        let finish = match intent {
+            ConfigPositionFinishIntent::Commit(_) => AbandonedPreviewFinish::CommitRequested,
+            ConfigPositionFinishIntent::Cancel => AbandonedPreviewFinish::CancelRequested,
+        };
+        self.abandoned_previews.push(BarrierAbandonedPreview {
+            barrier,
+            session: AbandonedPreviewSession::ConfigPosition(session),
             finish,
         });
     }

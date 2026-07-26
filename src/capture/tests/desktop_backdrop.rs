@@ -29,7 +29,7 @@ fn desktop_backdrop_accepts_exact_active_output_size() {
     assert_eq!(result.stride, 16);
     assert_eq!(result.logical_to_image_scale_x, 2.0);
     assert_eq!(result.logical_to_image_scale_y, 2.0);
-    assert_eq!(result.data.as_ref(), data.as_slice());
+    assert_eq!(result.data.as_slice(), data.as_slice());
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn desktop_backdrop_crops_multi_output_capture_to_active_output() {
 
     assert_eq!(result.width, 2);
     assert_eq!(result.height, 1);
-    assert_eq!(result.data.as_ref(), &[2, 2, 2, 255, 3, 3, 3, 255]);
+    assert_eq!(result.data.as_slice(), &[2, 2, 2, 255, 3, 3, 3, 255]);
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn desktop_backdrop_crops_mixed_scale_output_using_screenshot_origin() {
 
     assert_eq!(geometry.physical_origin(), Some((6, 0)));
     assert_eq!(
-        result.data.as_ref(),
+        result.data.as_slice(),
         &[6, 6, 6, 255, 7, 7, 7, 255, 8, 8, 8, 255, 9, 9, 9, 255]
     );
 }
@@ -153,7 +153,7 @@ fn desktop_backdrop_crops_rotated_output_using_transformed_size() {
     assert_eq!(result.width, 4);
     assert_eq!(result.height, 2);
     assert_eq!(
-        result.data.as_ref(),
+        result.data.as_slice(),
         &[
             0, 0, 0, 255, 1, 1, 1, 255, 2, 2, 2, 255, 3, 3, 3, 255, 6, 6, 6, 255, 7, 7, 7, 255, 8,
             8, 8, 255, 9, 9, 9, 255,

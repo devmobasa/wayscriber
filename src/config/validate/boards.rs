@@ -69,13 +69,16 @@ impl Config {
                 boards.items.insert(0, item);
             } else {
                 warn!("No transparent board defined; adding default overlay board");
-                boards.items.insert(
-                    0,
-                    BoardsConfig::default_items()
-                        .into_iter()
-                        .find(|item| item.background.is_transparent())
-                        .expect("default items include transparent board"),
-                );
+                let mut overlay = BoardsConfig::default_overlay_item();
+                let normalized = seen.normalize_unique(&overlay.id, boards.items.len());
+                if normalized.changes.deduplicated {
+                    warn!(
+                        "Default overlay board id '{}' deduplicated to '{}'",
+                        overlay.id, normalized.value
+                    );
+                }
+                overlay.id = normalized.value;
+                boards.items.insert(0, overlay);
             }
         }
 
@@ -96,13 +99,15 @@ impl Config {
                 .items
                 .iter()
                 .find(|item| item.background.is_transparent())
-                .map(|item| item.id.clone())
-                .unwrap_or_else(|| boards.items[0].id.clone());
-            warn!(
-                "Default board '{}' not found; falling back to '{}'",
-                boards.default_board, fallback
-            );
-            boards.default_board = fallback;
+                .or_else(|| boards.items.first())
+                .map(|item| item.id.clone());
+            if let Some(fallback) = fallback {
+                warn!(
+                    "Default board '{}' not found; falling back to '{}'",
+                    boards.default_board, fallback
+                );
+                boards.default_board = fallback;
+            }
         }
     }
 }

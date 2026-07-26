@@ -23,8 +23,6 @@
 
 pub mod css;
 
-use std::sync::OnceLock;
-
 /// RGB color tuple (0.0–1.0 channels).
 pub type Rgb = (f64, f64, f64);
 
@@ -655,7 +653,7 @@ pub mod toolbar {
 /// Chrome color set for one theme variant. Consumed by surfaces as they
 /// migrate to runtime theming (M2+); the const tokens above remain the
 /// canonical dark values in the meantime.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
     /// Floating island/pill surfaces
     pub surface_pill: Rgba,
@@ -749,22 +747,14 @@ pub enum ThemeMode {
     Light,
 }
 
-static CURRENT: OnceLock<Theme> = OnceLock::new();
-
-/// Install the theme for this process. Call once at startup after config is
-/// loaded; later calls are no-ops (first writer wins).
-pub fn init(mode: ThemeMode) {
-    let theme = match mode {
-        ThemeMode::Light => Theme::light(),
-        ThemeMode::Auto | ThemeMode::Dark => Theme::dark(),
-    };
-    let _ = CURRENT.set(theme);
-}
-
-/// The active theme. Falls back to dark if `init` was never called (tests,
-/// early rendering).
-pub fn current() -> &'static Theme {
-    CURRENT.get_or_init(Theme::dark)
+impl Theme {
+    /// Construct the theme owned by one UI root.
+    pub fn from_mode(mode: ThemeMode) -> Self {
+        match mode {
+            ThemeMode::Light => Theme::light(),
+            ThemeMode::Auto | ThemeMode::Dark => Theme::dark(),
+        }
+    }
 }
 
 // ============================================================================
@@ -888,8 +878,9 @@ mod tests {
     }
 
     #[test]
-    fn current_falls_back_to_dark_without_init() {
-        assert_eq!(*current(), Theme::dark());
+    fn mode_constructs_an_independent_theme_value() {
+        assert_eq!(Theme::from_mode(ThemeMode::Auto), Theme::dark());
+        assert_eq!(Theme::from_mode(ThemeMode::Light), Theme::light());
     }
 
     #[test]

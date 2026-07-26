@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 #[cfg(unix)]
 use std::{
     ffi::CString,
@@ -11,13 +10,19 @@ use std::{
 };
 
 use super::config::options_from_config;
-use super::identifiers::{resolve_display_id, sanitize_identifier};
+use super::identifiers::{resolve_display_id_with_env, sanitize_identifier};
 use super::types::{SessionOptions, SessionTarget};
 use super::validation;
 use crate::config::{SessionConfig, SessionStorageMode};
-use crate::env_vars::WAYLAND_DISPLAY_ENV;
+use crate::env_vars::HOME_ENV;
+use crate::paths::{PathEnvironment, PathResolver};
 
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
+fn path_resolver() -> PathResolver {
+    PathResolver::from_environment(PathEnvironment::for_test(&[(
+        HOME_ENV,
+        std::ffi::OsStr::new("/tmp"),
+    )]))
+}
 
 #[test]
 fn sanitize_identifier_replaces_non_alphanumeric() {
@@ -33,28 +38,12 @@ fn sanitize_identifier_empty_defaults_to_default() {
 
 #[test]
 fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
-    use std::env;
-
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-    let prev = env::var_os(WAYLAND_DISPLAY_ENV);
-    // SAFETY: serialized via ENV_MUTEX
-    unsafe {
-        env::set_var(WAYLAND_DISPLAY_ENV, "wayland-0");
-    }
-
-    let from_arg = resolve_display_id(Some("custom-display"));
+    let from_arg = resolve_display_id_with_env(Some("custom-display"), Some("wayland-0"));
     assert_eq!(from_arg, "custom_display");
 
-    let from_env = resolve_display_id(None);
+    let from_env = resolve_display_id_with_env(None, Some("wayland-0"));
     assert_eq!(from_env, "wayland_0");
-
-    match prev {
-        Some(v) => unsafe { env::set_var(WAYLAND_DISPLAY_ENV, v) },
-        None => unsafe { env::remove_var(WAYLAND_DISPLAY_ENV) },
-    }
+    assert_eq!(resolve_display_id_with_env(None, None), "default");
 }
 
 #[test]
@@ -65,11 +54,14 @@ fn options_from_config_clamps_max_persisted_undo_depth() {
         ..SessionConfig::default()
     };
 
-    let opts = options_from_config(&cfg, Path::new("/tmp"), Some("display")).unwrap();
+    let paths = path_resolver();
+    let opts = options_from_config(&cfg, Path::new("/tmp"), Some("display"), &paths)
+        .expect("session config fixture has a valid explicit base and display");
     assert_eq!(opts.max_persisted_undo_depth, Some(10));
 
     cfg.max_persisted_undo_depth = Some(2_000);
-    let opts2 = options_from_config(&cfg, Path::new("/tmp"), Some("display")).unwrap();
+    let opts2 = options_from_config(&cfg, Path::new("/tmp"), Some("display"), &paths)
+        .expect("updated session config fixture remains valid");
     assert_eq!(opts2.max_persisted_undo_depth, Some(1_000));
 }
 
@@ -165,7 +157,8 @@ fn force_resume_persistence_enables_all_session_payloads() {
 
 #[test]
 fn named_file_foreground_validation_accepts_writable_parent_and_cleans_probe() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp =
+        crate::test_temp::tempdir().expect("foreground-validation fixture owns a temporary parent");
     let path = temp.path().join("lecture-04.wayscriber-session");
 
     validation::validate_named_session_file_for_foreground(&path)
@@ -189,7 +182,7 @@ fn named_file_foreground_validation_accepts_writable_parent_and_cleans_probe() {
 #[cfg(unix)]
 #[test]
 fn named_file_open_validation_rejects_existing_session_in_readonly_parent() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("read-only-parent fixture owns a temporary root");
     let parent = temp.path().join("readonly-parent");
     fs::create_dir(&parent).expect("create parent");
     let path = parent.join("lecture-04.wayscriber-session");
@@ -207,7 +200,8 @@ fn named_file_open_validation_rejects_existing_session_in_readonly_parent() {
 
 #[test]
 fn named_file_offline_validation_allows_missing_parent() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp =
+        crate::test_temp::tempdir().expect("offline-validation fixture owns a temporary root");
     let path = temp
         .path()
         .join("missing")
@@ -221,7 +215,8 @@ fn named_file_offline_validation_allows_missing_parent() {
 
 #[test]
 fn named_file_validation_rejects_missing_directory_shaped_path() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp =
+        crate::test_temp::tempdir().expect("directory-shaped-path fixture owns a temporary root");
     let raw_path = format!("{}/", temp.path().join("lecture").display());
     let path = PathBuf::from(raw_path);
 
@@ -250,7 +245,7 @@ fn named_file_validation_rejects_missing_directory_shaped_path() {
 #[cfg(unix)]
 #[test]
 fn named_file_validation_rejects_fifo_target() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("FIFO-target fixture owns a temporary root");
     let path = temp.path().join("session-fifo.wayscriber-session");
     make_fifo(&path);
 
@@ -279,7 +274,7 @@ fn named_file_validation_rejects_fifo_target() {
 #[cfg(unix)]
 #[test]
 fn named_file_validation_rejects_symlink_target() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("symlink-target fixture owns a temporary root");
     let target = temp.path().join("real-session.wayscriber-session");
     let link = temp.path().join("linked-session.wayscriber-session");
     fs::write(&target, b"{}").expect("write symlink target");

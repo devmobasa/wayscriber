@@ -41,6 +41,7 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
     session_state: &mut SessionState,
     target_path: &Path,
     now: Instant,
+    catalog: &stored_session::catalog::SessionCatalog,
 ) -> Result<RuntimeOpenSessionReport> {
     let current_options = session_state
         .options()
@@ -98,7 +99,7 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
     input_state.clear_session_dirty();
     let opened_path = candidate_options.session_file_path();
     session_state.commit_runtime_open(candidate_options.clone(), loaded_board_data);
-    stored_session::catalog::record_named_session_opened(&candidate_options);
+    catalog.record_named_session_opened(&candidate_options);
 
     Ok(RuntimeOpenSessionReport {
         previous_path,
@@ -115,6 +116,7 @@ pub(in crate::backend::wayland) fn save_named_session_as_runtime(
     target_path: &Path,
     overwrite: stored_session::SaveAsOverwrite,
     now: Instant,
+    catalog: &stored_session::catalog::SessionCatalog,
 ) -> Result<RuntimeSaveAsSessionReport> {
     let current_options = session_state
         .options()
@@ -159,7 +161,7 @@ pub(in crate::backend::wayland) fn save_named_session_as_runtime(
     input_state.clear_session_dirty();
     let saved_path = target_options.session_file_path();
     session_state.commit_runtime_save_as(target_options.clone(), now, saved_board_data);
-    stored_session::catalog::record_named_session_saved(&target_options);
+    catalog.record_named_session_saved(&target_options);
 
     Ok(RuntimeSaveAsSessionReport {
         previous_path,

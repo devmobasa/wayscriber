@@ -1,12 +1,10 @@
 //! Owned capacity-one task used by frozen and zoom portal fallbacks.
 
 use std::future::Future;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
 use std::time::{Duration, Instant};
 
-use super::RuntimeWakeHandle;
+use super::RuntimeWakeSender;
 
 pub(super) const PORTAL_CAPTURE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -24,9 +22,21 @@ pub(super) enum PortalPoll<T> {
 
 pub(super) struct PortalTask<T> {
     receiver: Receiver<PortalMessage<T>>,
-    worker: Option<tokio::task::JoinHandle<()>>,
-    expected_cancel: Arc<AtomicBool>,
+    worker: Option<PortalWorker>,
     started_at: Instant,
+}
+
+struct PortalWorker {
+    cancel: Option<tokio::sync::oneshot::Sender<()>>,
+    _supervisor: tokio::task::JoinHandle<()>,
+}
+
+impl PortalWorker {
+    fn cancel(&mut self) {
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(());
+        }
+    }
 }
 
 impl<T> PortalTask<T>
@@ -35,7 +45,7 @@ where
 {
     pub(super) fn spawn(
         runtime: &tokio::runtime::Handle,
-        runtime_wake: RuntimeWakeHandle,
+        runtime_wake: RuntimeWakeSender,
         future: impl Future<Output = T> + Send + 'static,
     ) -> Self {
         Self::spawn_at(runtime, runtime_wake, Instant::now(), future)
@@ -43,28 +53,48 @@ where
 
     fn spawn_at(
         runtime: &tokio::runtime::Handle,
-        runtime_wake: RuntimeWakeHandle,
+        runtime_wake: RuntimeWakeSender,
         started_at: Instant,
         future: impl Future<Output = T> + Send + 'static,
     ) -> Self {
+        let task = runtime.spawn(future);
+        Self::spawn_joined_at(runtime, runtime_wake, started_at, task)
+    }
+
+    fn spawn_joined_at(
+        runtime: &tokio::runtime::Handle,
+        runtime_wake: RuntimeWakeSender,
+        started_at: Instant,
+        mut task: tokio::task::JoinHandle<T>,
+    ) -> Self {
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        let expected_cancel = Arc::new(AtomicBool::new(false));
-        let task_cancel = Arc::clone(&expected_cancel);
-        let worker = runtime.spawn(async move {
-            let guard = PortalTaskExitGuard::new(sender, runtime_wake, task_cancel);
-            let mut tasks = tokio::task::JoinSet::new();
-            tasks.spawn(future);
-            let message = match tasks.join_next().await {
-                Some(Ok(value)) => PortalMessage::Ready(value),
-                Some(Err(error)) => PortalMessage::Failed(format!("portal task failed: {error}")),
-                None => PortalMessage::Failed("portal task ended without a result".to_string()),
-            };
-            guard.publish(message);
+        let (cancel, mut cancellation) = tokio::sync::oneshot::channel();
+        let supervisor = runtime.spawn(async move {
+            let reporter = PortalTaskReporter::new(sender, runtime_wake);
+            tokio::select! {
+                biased;
+                _ = &mut cancellation => {
+                    task.abort();
+                    let _ = task.await;
+                    reporter.cancel();
+                }
+                result = &mut task => {
+                    let message = match result {
+                        Ok(value) => PortalMessage::Ready(value),
+                        Err(error) => {
+                            PortalMessage::Failed(format!("portal task failed: {error}"))
+                        }
+                    };
+                    reporter.publish(message);
+                }
+            }
         });
         Self {
             receiver,
-            worker: Some(worker),
-            expected_cancel,
+            worker: Some(PortalWorker {
+                cancel: Some(cancel),
+                _supervisor: supervisor,
+            }),
             started_at,
         }
     }
@@ -72,7 +102,7 @@ where
     #[cfg(test)]
     pub(super) fn spawn_at_for_test(
         runtime: &tokio::runtime::Handle,
-        runtime_wake: RuntimeWakeHandle,
+        runtime_wake: RuntimeWakeSender,
         started_at: Instant,
         future: impl Future<Output = T> + Send + 'static,
     ) -> Self {
@@ -86,8 +116,38 @@ where
         Self {
             receiver,
             worker: None,
-            expected_cancel: Arc::new(AtomicBool::new(false)),
             started_at,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn aborted_for_test(
+        runtime: &tokio::runtime::Handle,
+        runtime_wake: RuntimeWakeSender,
+    ) -> Self {
+        let task = runtime.spawn(std::future::pending::<T>());
+        task.abort();
+        Self::spawn_joined_at(runtime, runtime_wake, Instant::now(), task)
+    }
+
+    #[cfg(test)]
+    pub(super) fn unexpected_supervisor_exit_for_test(
+        runtime: &tokio::runtime::Handle,
+        runtime_wake: RuntimeWakeSender,
+    ) -> Self {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (cancel, cancellation) = tokio::sync::oneshot::channel();
+        let supervisor = runtime.spawn(async move {
+            let _cancellation = cancellation;
+            let _reporter = PortalTaskReporter::new(sender, runtime_wake);
+        });
+        Self {
+            receiver,
+            worker: Some(PortalWorker {
+                cancel: Some(cancel),
+                _supervisor: supervisor,
+            }),
+            started_at: Instant::now(),
         }
     }
 
@@ -112,73 +172,70 @@ where
     }
 
     pub(super) fn cancel(&mut self) {
-        self.expected_cancel.store(true, Ordering::Release);
-        if let Some(worker) = self.worker.take() {
-            worker.abort();
+        if let Some(worker) = &mut self.worker {
+            worker.cancel();
         }
     }
 }
 
 impl<T> Drop for PortalTask<T> {
     fn drop(&mut self) {
-        self.expected_cancel.store(true, Ordering::Release);
-        if let Some(worker) = self.worker.take() {
-            worker.abort();
+        if let Some(worker) = &mut self.worker {
+            worker.cancel();
         }
     }
 }
 
-struct PortalTaskExitGuard<T> {
+struct PortalTaskReporter<T> {
     sender: Option<SyncSender<PortalMessage<T>>>,
-    runtime_wake: RuntimeWakeHandle,
-    expected_cancel: Arc<AtomicBool>,
-    terminal_published: bool,
+    runtime_wake: RuntimeWakeSender,
 }
 
-impl<T> PortalTaskExitGuard<T> {
-    fn new(
-        sender: SyncSender<PortalMessage<T>>,
-        runtime_wake: RuntimeWakeHandle,
-        expected_cancel: Arc<AtomicBool>,
-    ) -> Self {
+impl<T> PortalTaskReporter<T> {
+    fn new(sender: SyncSender<PortalMessage<T>>, runtime_wake: RuntimeWakeSender) -> Self {
         Self {
             sender: Some(sender),
             runtime_wake,
-            expected_cancel,
-            terminal_published: false,
         }
     }
 
     fn publish(mut self, message: PortalMessage<T>) {
-        let result = self
-            .sender
-            .as_ref()
-            .expect("portal sender retained until terminal publication")
-            .try_send(message);
+        self.publish_and_wake(message);
+    }
+
+    fn cancel(mut self) {
         self.sender.take();
-        self.terminal_published = true;
-        match result {
-            Ok(()) | Err(TrySendError::Disconnected(_)) => {}
-            Err(TrySendError::Full(_)) => {
-                log::error!("Portal task found an impossible full terminal channel");
+    }
+
+    fn publish_and_wake(&mut self, message: PortalMessage<T>) {
+        let Some(sender) = self.sender.take() else {
+            return;
+        };
+        let publication = sender.try_send(message);
+        drop(sender);
+        match publication {
+            Ok(()) => {
+                if let Err(error) = self.runtime_wake.wake() {
+                    log::error!("Failed to wake runtime for portal completion: {error}");
+                }
             }
-        }
-        if let Err(error) = self.runtime_wake.wake() {
-            log::error!("Failed to wake runtime for portal completion: {error}");
+            Err(TrySendError::Disconnected(_)) => {}
+            Err(TrySendError::Full(_)) => {
+                log::error!("Portal task terminal channel was already full");
+                if let Err(error) = self.runtime_wake.wake() {
+                    log::error!("Failed to wake runtime for queued portal completion: {error}");
+                }
+            }
         }
     }
 }
 
-impl<T> Drop for PortalTaskExitGuard<T> {
+impl<T> Drop for PortalTaskReporter<T> {
     fn drop(&mut self) {
-        if self.terminal_published {
-            return;
-        }
-        self.sender.take();
-        if !self.expected_cancel.load(Ordering::Acquire)
-            && let Err(error) = self.runtime_wake.wake()
-        {
-            log::error!("Failed to wake runtime for disconnected portal task: {error}");
+        if self.sender.is_some() {
+            self.publish_and_wake(PortalMessage::Failed(
+                "portal task supervisor exited without a terminal result".to_string(),
+            ));
         }
     }
 }
@@ -186,9 +243,15 @@ impl<T> Drop for PortalTaskExitGuard<T> {
 #[cfg(test)]
 mod tests {
     use std::os::fd::AsRawFd;
+    use std::sync::mpsc;
 
     use super::*;
-    use crate::backend::wayland::RuntimeWakeSource;
+    use crate::backend::wayland::{RuntimeWakeSender, RuntimeWakeSource};
+
+    fn runtime_sender(wake: &RuntimeWakeSource) -> RuntimeWakeSender {
+        wake.try_sender()
+            .expect("test duplicates its portal-task runtime eventfd")
+    }
 
     fn wait_for_wake(wake: &RuntimeWakeSource) {
         let mut pollfd = libc::pollfd {
@@ -200,44 +263,119 @@ mod tests {
         assert_eq!(unsafe { libc::poll(&mut pollfd, 1, 1_000) }, 1);
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn publishes_before_waking() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut task =
-            PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                17
-            });
-        wait_for_wake(&wake);
-        assert!(matches!(task.poll(), PortalPoll::Ready(17)));
+    async fn wait_for_disconnect<T>(task: &mut PortalTask<T>) -> bool
+    where
+        T: Send + 'static,
+    {
+        for _ in 0..100 {
+            match task.poll() {
+                PortalPoll::Disconnected => return true,
+                PortalPoll::Pending => tokio::task::yield_now().await,
+                PortalPoll::Ready(_) | PortalPoll::Failed(_) => return false,
+            }
+        }
+        false
+    }
+
+    struct DropNotice(mpsc::Sender<()>);
+
+    impl Drop for DropNotice {
+        fn drop(&mut self) {
+            let _ = self.0.send(());
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn panic_is_an_explicit_failure_before_wake() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut task =
-            PortalTask::<u64>::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                panic!("expected portal panic")
-            });
+    async fn publishes_and_drops_the_sender_before_waking() {
+        let wake = RuntimeWakeSource::new().expect("test creates a portal-task runtime eventfd");
+        let mut task = PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            runtime_sender(&wake),
+            async { 17 },
+        );
+        wait_for_wake(&wake);
+        assert!(matches!(task.poll(), PortalPoll::Ready(17)));
+        assert!(matches!(task.poll(), PortalPoll::Disconnected));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn aborted_child_is_an_explicit_failure_before_wake() {
+        let wake = RuntimeWakeSource::new().expect("test creates a portal-task runtime eventfd");
+        let mut task = PortalTask::<u64>::aborted_for_test(
+            &tokio::runtime::Handle::current(),
+            runtime_sender(&wake),
+        );
         wait_for_wake(&wake);
         assert!(matches!(
             task.poll(),
-            PortalPoll::Failed(reason) if reason.contains("expected portal panic")
+            PortalPoll::Failed(reason) if reason.starts_with("portal task failed:")
         ));
+        assert!(matches!(task.poll(), PortalPoll::Disconnected));
     }
 
-    #[tokio::test]
-    async fn expected_cancel_aborts_without_waking_failure() {
-        let wake = RuntimeWakeSource::new().unwrap();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unexpected_supervisor_exit_is_a_typed_failure_before_wake() {
+        let wake = RuntimeWakeSource::new().expect("test creates a portal-task runtime eventfd");
+        let mut task = PortalTask::<u64>::unexpected_supervisor_exit_for_test(
+            &tokio::runtime::Handle::current(),
+            runtime_sender(&wake),
+        );
+        wait_for_wake(&wake);
+        assert!(matches!(
+            task.poll(),
+            PortalPoll::Failed(reason)
+                if reason == "portal task supervisor exited without a terminal result"
+        ));
+        assert!(matches!(task.poll(), PortalPoll::Disconnected));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn expected_cancel_drops_the_child_without_waking_failure() {
+        let wake = RuntimeWakeSource::new().expect("test creates a portal-task runtime eventfd");
+        let (drop_sender, drop_receiver) = mpsc::channel();
+        let drop_notice = DropNotice(drop_sender);
         let mut task = PortalTask::spawn(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             async move {
+                let _drop_notice = drop_notice;
                 std::future::pending::<()>().await;
                 1
             },
         );
         task.cancel();
-        tokio::task::yield_now().await;
+        drop_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("test cancellation drops its pending portal future");
+        let mut pollfd = libc::pollfd {
+            fd: wake.poll_fd().as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        // SAFETY: the descriptor and pollfd are valid for this non-blocking poll.
+        assert_eq!(unsafe { libc::poll(&mut pollfd, 1, 0) }, 0);
+        assert!(wait_for_disconnect(&mut task).await);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn owner_drop_requests_silent_teardown() {
+        let wake = RuntimeWakeSource::new().expect("test creates a portal-task runtime eventfd");
+        let (drop_sender, drop_receiver) = mpsc::channel();
+        let drop_notice = DropNotice(drop_sender);
+        let task = PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            runtime_sender(&wake),
+            async move {
+                let _drop_notice = drop_notice;
+                std::future::pending::<()>().await;
+            },
+        );
+
+        drop(task);
+
+        drop_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("test owner drop tears down its pending portal future");
         let mut pollfd = libc::pollfd {
             fd: wake.poll_fd().as_raw_fd(),
             events: libc::POLLIN,
@@ -249,11 +387,11 @@ mod tests {
 
     #[tokio::test]
     async fn deadline_uses_injected_start_instant() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::new().expect("test creates a portal-task runtime eventfd");
         let start = Instant::now();
         let task = PortalTask::spawn_at(
             &tokio::runtime::Handle::current(),
-            wake.handle(),
+            runtime_sender(&wake),
             start,
             std::future::pending::<()>(),
         );

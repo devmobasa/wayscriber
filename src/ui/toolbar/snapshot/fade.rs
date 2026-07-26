@@ -69,14 +69,20 @@ impl TopStripFade {
 
     /// Re-evaluate the target from `inputs` and advance the transition to
     /// `now`. Returns the current fade value.
-    pub fn update(&mut self, inputs: &TopStripFadeInputs, now: Instant) -> f64 {
+    pub fn update(
+        &mut self,
+        inputs: &TopStripFadeInputs,
+        now: Instant,
+        motion_enabled: bool,
+    ) -> f64 {
         if inputs.wants_dim() {
             self.envelope
-                .retarget(TOP_STRIP_DIM_LEVEL, TOP_STRIP_FADE_OUT, now);
+                .retarget(TOP_STRIP_DIM_LEVEL, TOP_STRIP_FADE_OUT, now, motion_enabled);
         } else {
-            self.envelope.retarget(1.0, TOP_STRIP_RESTORE, now);
+            self.envelope
+                .retarget(1.0, TOP_STRIP_RESTORE, now, motion_enabled);
         }
-        self.envelope.advance(now)
+        self.envelope.advance(now, motion_enabled)
     }
 
     /// Current fade value (1.0 = full, [`TOP_STRIP_DIM_LEVEL`] = dimmed).
@@ -120,7 +126,6 @@ impl TopStripFade {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::anim::override_motion_for_test;
 
     fn inputs(idle_secs: u64) -> TopStripFadeInputs {
         TopStripFadeInputs {
@@ -133,12 +138,11 @@ mod tests {
 
     #[test]
     fn strip_dims_after_the_idle_delay_and_restores_on_pointer_approach() {
-        let _motion = override_motion_for_test(true);
         let mut fade = TopStripFade::new();
         let start = Instant::now();
 
         // Not yet idle long enough: full, with a wakeup at the 4s mark.
-        assert_eq!(fade.update(&inputs(1), start), 1.0);
+        assert_eq!(fade.update(&inputs(1), start, true), 1.0);
         assert!(!fade.animating());
         assert_eq!(
             fade.wake_after(&inputs(1)),
@@ -148,16 +152,16 @@ mod tests {
         // Past the idle delay: the fade-out toward 0.55 starts (still at
         // full for zero elapsed time) and requests animation ticks.
         let dim_start = start + Duration::from_millis(1);
-        assert_eq!(fade.update(&inputs(5), dim_start), 1.0);
+        assert_eq!(fade.update(&inputs(5), dim_start, true), 1.0);
         assert!(fade.animating());
         assert_eq!(fade.wake_after(&inputs(5)), Some(TOP_STRIP_FADE_TICK));
 
         // Halfway through the 300ms fade-out: an intermediate value.
-        let mid = fade.update(&inputs(5), dim_start + TOP_STRIP_FADE_OUT / 2);
+        let mid = fade.update(&inputs(5), dim_start + TOP_STRIP_FADE_OUT / 2, true);
         assert!(mid < 1.0 && mid > TOP_STRIP_DIM_LEVEL, "dimming: {mid}");
 
         // The transition settles exactly at the dim level and stops ticking.
-        let settled = fade.update(&inputs(5), dim_start + TOP_STRIP_FADE_OUT);
+        let settled = fade.update(&inputs(5), dim_start + TOP_STRIP_FADE_OUT, true);
         assert_eq!(settled, TOP_STRIP_DIM_LEVEL);
         assert!(!fade.animating());
         assert_eq!(fade.wake_after(&inputs(5)), None);
@@ -166,14 +170,17 @@ mod tests {
         let mut near = inputs(9);
         near.pointer_near = true;
         let restore_start = dim_start + TOP_STRIP_FADE_OUT;
-        assert_eq!(fade.update(&near, restore_start), TOP_STRIP_DIM_LEVEL);
+        assert_eq!(fade.update(&near, restore_start, true), TOP_STRIP_DIM_LEVEL);
         assert!(fade.animating(), "restore transition in flight");
-        let rising = fade.update(&near, restore_start + TOP_STRIP_RESTORE / 2);
+        let rising = fade.update(&near, restore_start + TOP_STRIP_RESTORE / 2, true);
         assert!(
             rising > TOP_STRIP_DIM_LEVEL && rising < 1.0,
             "rising: {rising}"
         );
-        assert_eq!(fade.update(&near, restore_start + TOP_STRIP_RESTORE), 1.0);
+        assert_eq!(
+            fade.update(&near, restore_start + TOP_STRIP_RESTORE, true),
+            1.0
+        );
         assert!(!fade.animating());
         // Fully restored under the pointer: nothing to wake for.
         assert_eq!(fade.wake_after(&near), None);
@@ -181,20 +188,20 @@ mod tests {
 
     #[test]
     fn draw_activity_restores_a_dimmed_strip() {
-        let _motion = override_motion_for_test(true);
         let mut fade = TopStripFade::new();
         let start = Instant::now();
-        fade.update(&inputs(10), start);
-        fade.update(&inputs(10), start + TOP_STRIP_FADE_OUT);
+        fade.update(&inputs(10), start, true);
+        fade.update(&inputs(10), start + TOP_STRIP_FADE_OUT, true);
         assert_eq!(fade.value(), TOP_STRIP_DIM_LEVEL);
 
         // A stroke resets the idle clock; the strip fades back to full.
         let after_stroke = inputs(0);
-        fade.update(&after_stroke, start + TOP_STRIP_FADE_OUT);
+        fade.update(&after_stroke, start + TOP_STRIP_FADE_OUT, true);
         assert_eq!(
             fade.update(
                 &after_stroke,
-                start + TOP_STRIP_FADE_OUT + TOP_STRIP_RESTORE
+                start + TOP_STRIP_FADE_OUT + TOP_STRIP_RESTORE,
+                true,
             ),
             1.0
         );
@@ -202,30 +209,28 @@ mod tests {
 
     #[test]
     fn menus_and_reduced_chrome_force_full_opacity() {
-        let _motion = override_motion_for_test(true);
         let mut fade = TopStripFade::new();
         let start = Instant::now();
 
         let mut menu_open = inputs(30);
         menu_open.menus_open = true;
-        assert_eq!(fade.update(&menu_open, start), 1.0);
+        assert_eq!(fade.update(&menu_open, start, true), 1.0);
         assert_eq!(fade.wake_after(&menu_open), None, "no dim pending");
 
         let mut minimal = inputs(30);
         minimal.reduced_chrome = true;
-        assert_eq!(fade.update(&minimal, start), 1.0);
+        assert_eq!(fade.update(&minimal, start, true), 1.0);
         assert_eq!(fade.wake_after(&minimal), None);
     }
 
     #[test]
     fn stalled_pending_transitions_request_an_immediate_wake() {
-        let _motion = override_motion_for_test(true);
         let mut fade = TopStripFade::new();
         let start = Instant::now();
 
         // The last update ran before the idle deadline, so the envelope
         // still targets full and is settled...
-        assert_eq!(fade.update(&inputs(3), start), 1.0);
+        assert_eq!(fade.update(&inputs(3), start, true), 1.0);
         assert!(!fade.animating());
         // ...and by the time the loop computes its timeout the deadline has
         // passed. The stalled dim must request an immediate wake instead of
@@ -235,8 +240,8 @@ mod tests {
         // Mirror case: dimmed and settled, then a restore trigger appears
         // before any update has retargeted the envelope.
         let mut fade = TopStripFade::new();
-        fade.update(&inputs(10), start);
-        fade.update(&inputs(10), start + TOP_STRIP_FADE_OUT);
+        fade.update(&inputs(10), start, true);
+        fade.update(&inputs(10), start + TOP_STRIP_FADE_OUT, true);
         assert_eq!(fade.value(), TOP_STRIP_DIM_LEVEL);
         assert!(!fade.animating());
         let mut near = inputs(10);
@@ -246,11 +251,10 @@ mod tests {
 
     #[test]
     fn reduced_motion_snaps_between_full_and_dim_without_ticking() {
-        let _motion = override_motion_for_test(false);
         let mut fade = TopStripFade::new();
         let start = Instant::now();
 
-        assert_eq!(fade.update(&inputs(1), start), 1.0);
+        assert_eq!(fade.update(&inputs(1), start, false), 1.0);
         // The 4s idle trigger still needs its wakeup under reduced motion.
         assert_eq!(
             fade.wake_after(&inputs(1)),
@@ -258,13 +262,13 @@ mod tests {
         );
 
         // Hard snap: no intermediate values, no animation ticking.
-        assert_eq!(fade.update(&inputs(5), start), TOP_STRIP_DIM_LEVEL);
+        assert_eq!(fade.update(&inputs(5), start, false), TOP_STRIP_DIM_LEVEL);
         assert!(!fade.animating());
         assert_eq!(fade.wake_after(&inputs(5)), None);
 
         let mut near = inputs(9);
         near.pointer_near = true;
-        assert_eq!(fade.update(&near, start), 1.0);
+        assert_eq!(fade.update(&near, start, false), 1.0);
         assert!(!fade.animating());
     }
 }

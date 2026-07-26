@@ -95,7 +95,7 @@ impl ToolbarRuntimeState {
             }
         };
         RuntimeUiPersistenceSnapshot {
-            path: self.runtime_path.clone(),
+            path: Some(self.runtime_path.clone()),
             mode,
             detail: self.lifecycle.detail.clone(),
             recovery_artifacts: self.lifecycle.recovery_artifacts.clone(),

@@ -23,7 +23,7 @@ impl WaylandState {
         };
 
         if enable_background_mode {
-            match crate::daemon::setup::setup_background_mode() {
+            match crate::daemon::setup::setup_background_mode(&self.path_resolver) {
                 Ok(summary) => {
                     mark_background_mode_prompt(self.onboarding.state_mut(), true);
                     self.onboarding.save();

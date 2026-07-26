@@ -7,10 +7,7 @@
 //! drift from the rest of the action surfaces. There are deliberately no
 //! layout config keys; only `radial_menu_mouse_binding` exists.
 
-use std::sync::OnceLock;
-
 use crate::domain::Action;
-use crate::input::tool::Tool;
 
 /// Number of segments in the primary compass ring.
 pub const TOOL_SEGMENT_COUNT: usize = 8;
@@ -74,7 +71,7 @@ impl RadialParent {
     /// leading edge).
     pub fn children(self) -> &'static [Action] {
         match self {
-            RadialParent::Shapes => shapes_children(),
+            RadialParent::Shapes => &SHAPES_CHILDREN,
             RadialParent::Notes => &NOTES_CHILDREN,
         }
     }
@@ -87,22 +84,15 @@ const NOTES_CHILDREN: [Action; 2] = [Action::SelectStepMarkerTool, Action::Enter
 /// source of truth) filtered to the radial-eligible members: Arrow already
 /// owns the SE compass slice, and the exotic polygon variants stay behind
 /// the toolbar's shape picker — the Polygon wedge is the family's radial
-/// entry point.
-fn shapes_children() -> &'static [Action] {
-    static CHILDREN: OnceLock<Vec<Action>> = OnceLock::new();
-    CHILDREN.get_or_init(|| {
-        crate::ui::toolbar::model::shape_tools()
-            .iter()
-            .filter(|tool| {
-                matches!(
-                    tool,
-                    Tool::Line | Tool::Rect | Tool::Ellipse | Tool::Blur | Tool::RegularPolygon
-                )
-            })
-            .filter_map(|tool| tool.action())
-            .collect()
-    })
-}
+/// entry point. `shapes_sub_ring_matches_shape_tools_catalog` guards this
+/// compile-time table against toolbar catalog drift without ambient caching.
+const SHAPES_CHILDREN: [Action; 5] = [
+    Action::SelectLineTool,
+    Action::SelectRectTool,
+    Action::SelectEllipseTool,
+    Action::SelectBlurTool,
+    Action::SelectRegularPolygonTool,
+];
 
 /// What a compass slice does when selected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

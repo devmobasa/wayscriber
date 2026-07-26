@@ -1,6 +1,14 @@
 use super::super::*;
 use crate::config::{SessionConfig, SessionStorageMode};
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
+use crate::paths::{PathEnvironment, PathResolver};
+
+fn path_resolver() -> PathResolver {
+    PathResolver::from_environment(PathEnvironment::for_test(&[(
+        crate::env_vars::HOME_ENV,
+        std::ffi::OsStr::new("/tmp"),
+    )]))
+}
 
 #[test]
 fn options_from_config_custom_storage() {
@@ -14,7 +22,8 @@ fn options_from_config_custom_storage() {
         ..SessionConfig::default()
     };
 
-    let mut options = options_from_config(&cfg, temp.path(), Some("display-1")).unwrap();
+    let mut options =
+        options_from_config(&cfg, temp.path(), Some("display-1"), &path_resolver()).unwrap();
     assert_eq!(options.base_dir, custom_dir);
     assert!(options.persist_transparent);
     options.set_output_identity(Some("DP-1"));
@@ -43,7 +52,7 @@ fn options_from_config_config_storage_uses_config_dir() {
         std::env::remove_var(WAYLAND_DISPLAY_ENV);
     }
 
-    let mut options = options_from_config(&cfg, temp.path(), None).unwrap();
+    let mut options = options_from_config(&cfg, temp.path(), None, &path_resolver()).unwrap();
     if let Some(value) = original_display {
         unsafe { std::env::set_var(WAYLAND_DISPLAY_ENV, value) }
     }

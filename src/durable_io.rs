@@ -1,7 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
@@ -13,8 +12,6 @@ pub use model::{
     AtomicWriteOptions, DurableIoError, DurableIoOperation, OverwriteMode, PermissionPolicy,
     SymlinkPolicy,
 };
-
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 struct Destination {
@@ -299,7 +296,13 @@ fn create_temp_file(
     parent: &Path,
     file_name: &std::ffi::OsStr,
 ) -> Result<(PathBuf, File), DurableIoError> {
-    create_temp_file_from_candidates((0..64).map(|_| next_temp_path(parent, file_name)))
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    create_temp_file_from_candidates(
+        (0..64).map(|attempt| temp_path(parent, file_name, stamp, attempt)),
+    )
 }
 
 fn create_temp_file_from_candidates<I>(candidates: I) -> Result<(PathBuf, File), DurableIoError>
@@ -326,20 +329,10 @@ where
     })
 }
 
-fn next_temp_path(parent: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+fn temp_path(parent: &Path, file_name: &std::ffi::OsStr, stamp: u128, attempt: u8) -> PathBuf {
     let mut name = std::ffi::OsString::from(".");
     name.push(file_name);
-    name.push(format!(
-        ".{}.{}.{}.tmp",
-        std::process::id(),
-        stamp,
-        sequence
-    ));
+    name.push(format!(".{}.{}.{}.tmp", std::process::id(), stamp, attempt));
     parent.join(name)
 }
 
@@ -482,5 +475,7 @@ fn io_error(operation: DurableIoOperation, path: &Path, source: io::Error) -> Du
     }
 }
 
+#[cfg(test)]
+mod ownership_tests;
 #[cfg(test)]
 mod tests;

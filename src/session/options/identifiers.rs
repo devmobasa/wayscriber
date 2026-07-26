@@ -13,18 +13,27 @@ pub(super) fn sanitize_identifier(raw: &str) -> String {
 }
 
 pub(super) fn resolve_display_id(display_id: Option<&str>) -> String {
-    if let Some(id) = display_id {
-        return sanitize_identifier(id);
+    if let Some(display_id) = display_id {
+        return sanitize_identifier(display_id);
     }
 
-    match env::var(WAYLAND_DISPLAY_ENV) {
-        Ok(value) => {
-            log::info!("Session display id from {WAYLAND_DISPLAY_ENV}='{}'", value);
-            sanitize_identifier(&value)
+    let environment_display = env::var(WAYLAND_DISPLAY_ENV).ok();
+    match environment_display.as_deref() {
+        Some(value) => {
+            log::info!("Session display id from {WAYLAND_DISPLAY_ENV}='{value}'");
         }
-        Err(_) => {
+        None => {
             log::info!("Session display id fallback to 'default' ({WAYLAND_DISPLAY_ENV} missing)");
-            "default".to_string()
         }
     }
+    resolve_display_id_with_env(None, environment_display.as_deref())
+}
+
+pub(super) fn resolve_display_id_with_env(
+    display_id: Option<&str>,
+    environment_display: Option<&str>,
+) -> String {
+    display_id
+        .or(environment_display)
+        .map_or_else(|| "default".to_string(), sanitize_identifier)
 }

@@ -3,18 +3,24 @@ use super::super::*;
 use crate::env_vars::{FORCE_INLINE_TOOLBARS_ENV, XDG_ACTIVATION_TOKEN_ENV};
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
+    pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> std::io::Result<Self> {
         let WaylandStateInit {
             globals,
             config,
+            config_store,
+            path_resolver,
+            runtime_paths,
+            logger,
             input_state,
             onboarding,
             palette_recents,
             capture_manager,
             session_options,
             persistence,
+            session_catalog,
             runtime_ui,
             runtime_ui_unavailable,
+            process_broker,
             runtime_wake,
             tokio_handle,
             exit_after_capture_mode,
@@ -40,6 +46,7 @@ impl WaylandState {
             output_state,
             seat_state,
         } = globals;
+        let runtime_options = WaylandRuntimeOptions::from_env();
 
         #[cfg(feature = "tablet-input")]
         let tablet_settings = {
@@ -62,7 +69,10 @@ impl WaylandState {
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
         data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
-        let force_inline_toolbars = force_inline_toolbars_requested(&config);
+        let force_inline_toolbars = force_inline_toolbars_requested_with_env(
+            &config,
+            runtime_options.force_inline_toolbars(),
+        );
         data.inline_toolbars =
             layer_shell.is_none() || force_inline_toolbars || main_surface_uses_overlay_layer;
         if force_inline_toolbars {
@@ -79,7 +89,7 @@ impl WaylandState {
         data.toolbar_top_offset_y = config.ui.toolbar.top_offset_y;
         data.toolbar_side_offset = config.ui.toolbar.side_offset;
         data.toolbar_side_offset_x = config.ui.toolbar.side_offset_x;
-        drag_log(format!(
+        runtime_options.drag_log(format!(
             "load offsets from config: top_offset=({}, {}), side_offset=({}, {})",
             data.toolbar_top_offset,
             data.toolbar_top_offset_y,
@@ -89,29 +99,31 @@ impl WaylandState {
         let zoom_manager = screencopy_manager.clone();
         let ui_animation_interval =
             WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);
+        let theme = crate::ui::theme::Theme::from_mode(config.ui.theme.to_theme_mode());
 
         let buffer_count = config.performance.buffer_count as usize;
         let clipboard_operation_ids = ClipboardOperationIdSource::new();
-        let clipboard_publish = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
+        let clipboard_publish_wake = runtime_wake.try_duplicate()?;
+        let clipboard_paste_wake = runtime_wake.try_duplicate()?;
+        let clipboard_hex_copy_wake = runtime_wake.try_duplicate()?;
+        let clipboard_hex_paste_wake = runtime_wake.try_duplicate()?;
+        let clipboard_text_copy_wake = runtime_wake.try_duplicate()?;
+        let clipboard_text_paste_wake = runtime_wake.try_duplicate()?;
+        let frozen_wake = runtime_wake.try_duplicate()?;
+        let zoom_wake = runtime_wake.try_duplicate()?;
+        let clipboard_publish = ClipboardOperationController::new(clipboard_publish_wake);
+        let clipboard_paste = ClipboardOperationController::new(clipboard_paste_wake);
+        let clipboard_hex_copy = ClipboardOperationController::new(clipboard_hex_copy_wake);
+        let clipboard_hex_paste = ClipboardOperationController::new(clipboard_hex_paste_wake);
+        let clipboard_text_copy = ClipboardOperationController::new(clipboard_text_copy_wake);
+        let clipboard_text_paste = ClipboardOperationController::new(clipboard_text_paste_wake);
+        let session_dialog = super::super::toolbar::SessionFileDialogController::new(
+            runtime_wake,
+            process_broker.clone(),
+            &path_resolver,
         );
-        let clipboard_paste = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let clipboard_hex_copy = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let clipboard_text_copy = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let clipboard_text_paste =
-            ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
 
-        Self {
+        Ok(Self {
             registry_state,
             compositor_state,
             layer_shell,
@@ -123,20 +135,31 @@ impl WaylandState {
             output_state,
             seat_state,
             surface: SurfaceState::new(),
-            toolbar: ToolbarSurfaceManager::new(),
+            toolbar: ToolbarSurfaceManager::new(runtime_options.debug_toolbar_color_logging()),
             data,
             buffer_damage: BufferDamageTracker::new(buffer_count),
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
+            help_overlay_renderer: crate::ui::HelpOverlayRenderer::new(),
             spotlight_dimmed_last_frame: false,
             config,
+            config_store,
+            path_resolver,
+            runtime_paths,
+            logger,
+            theme,
             runtime_ui,
+            session_catalog,
             runtime_ui_unavailable,
             runtime_ui_unavailable_previews: Default::default(),
+            process_broker: process_broker.clone(),
+            runtime_options,
             input_state,
+            clipboard_operation_ids,
             palette_recents,
             clipboard_publish,
             clipboard_paste,
             clipboard_hex_copy,
+            clipboard_hex_paste,
             pending_hex_copy: None,
             clipboard_text_copy,
             pending_text_copy: Default::default(),
@@ -147,8 +170,8 @@ impl WaylandState {
             ui_animation_next_tick: None,
             ui_animation_interval,
             capture: CaptureState::new(capture_manager),
-            frozen: FrozenState::new_with_runtime_wake(screencopy_manager, runtime_wake.clone()),
-            zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake.clone()),
+            frozen: FrozenState::new_with_runtime_wake(screencopy_manager, frozen_wake),
+            zoom: ZoomState::new_with_runtime_wake(zoom_manager, zoom_wake),
             perf: perf::PerfMetrics::from_env(),
             exit_after_capture_mode,
             themed_pointer: None,
@@ -216,11 +239,11 @@ impl WaylandState {
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             persistence,
-            session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),
+            session_dialog,
             durable_action_finish: None,
             durable_action_retry_at: None,
             tokio_handle,
-        }
+        })
     }
 }
 

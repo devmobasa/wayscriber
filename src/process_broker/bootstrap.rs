@@ -1,7 +1,5 @@
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
 
 #[cfg(not(test))]
 use std::ffi::CString;
@@ -10,15 +8,87 @@ use std::os::unix::ffi::OsStrExt;
 
 use anyhow::{Context, Result};
 
-use super::client::{BrokerInner, ProcessBroker};
-use super::wire::BrokerOperation;
+#[cfg(test)]
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+#[cfg(test)]
+use std::time::Duration;
+
 #[cfg(not(test))]
 use super::wire::{
     BROKER_FD, BROKER_FD_ENV, BROKER_SHUTDOWN_FD, BROKER_SHUTDOWN_FD_ENV, BROKER_TOKEN_ENV,
 };
 
+pub(super) struct BrokerBootstrap {
+    pub(super) socket: OwnedFd,
+    pub(super) shutdown: OwnedFd,
+    pub(super) token: String,
+    pub(super) server: BrokerServer,
+}
+
+pub(super) enum BrokerServer {
+    #[cfg(not(test))]
+    Process(libc::pid_t),
+    #[cfg(test)]
+    Thread(std::thread::JoinHandle<()>),
+}
+
 #[cfg(test)]
-pub(super) fn start() -> Result<ProcessBroker> {
+pub(super) struct BrokerAdmissionControl {
+    paused: Receiver<()>,
+    release: SyncSender<()>,
+}
+
+#[cfg(test)]
+impl BrokerAdmissionControl {
+    pub(super) fn wait_until_paused(&self, timeout: Duration) -> Result<()> {
+        self.paused
+            .recv_timeout(timeout)
+            .context("test broker did not reach its admission gate")
+    }
+
+    pub(super) fn release(&self) -> Result<()> {
+        self.release
+            .send(())
+            .context("test broker admission gate is no longer waiting")
+    }
+}
+
+impl BrokerServer {
+    pub(super) fn wait(self) {
+        match self {
+            #[cfg(not(test))]
+            Self::Process(child_pid) => wait_for_broker_process(child_pid),
+            #[cfg(test)]
+            Self::Thread(thread) => {
+                let _ = thread.join();
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn start() -> Result<BrokerBootstrap> {
+    start_test_broker(None)
+}
+
+#[cfg(test)]
+pub(super) fn start_with_admission_gate() -> Result<(BrokerBootstrap, BrokerAdmissionControl)> {
+    let (paused, wait_for_pause) = sync_channel(1);
+    let (release, wait_for_release) = sync_channel(1);
+    let bootstrap = start_test_broker(Some((paused, wait_for_release)))?;
+    Ok((
+        bootstrap,
+        BrokerAdmissionControl {
+            paused: wait_for_pause,
+            release,
+        },
+    ))
+}
+
+#[cfg(test)]
+fn start_test_broker(
+    admission_gate: Option<(SyncSender<()>, Receiver<()>)>,
+) -> Result<BrokerBootstrap> {
     let (parent_socket, child_socket) = socket_pair("test broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("test broker shutdown")?;
     let token = crate::daemon::protocol_v2::ProtocolToken::generate()?.to_string();
@@ -28,32 +98,34 @@ pub(super) fn start() -> Result<ProcessBroker> {
         .spawn(move || {
             let _socket = child_socket;
             let _shutdown = shutdown_reader;
-            let _ = super::server::run_loop_for_test(
-                _socket.as_raw_fd(),
-                _shutdown.as_raw_fd(),
-                &thread_token,
-            );
+            let result = if let Some((paused, release)) = admission_gate {
+                super::server::run_loop_for_test_with_admission_gate(
+                    _socket.as_raw_fd(),
+                    _shutdown.as_raw_fd(),
+                    &thread_token,
+                    paused,
+                    release,
+                )
+            } else {
+                super::server::run_loop_for_test(
+                    _socket.as_raw_fd(),
+                    _shutdown.as_raw_fd(),
+                    &thread_token,
+                )
+            };
+            let _ = result;
         })
         .context("failed to start test broker thread")?;
-    let broker = ProcessBroker {
-        inner: Arc::new(BrokerInner {
-            socket: parent_socket,
-            shutdown: shutdown_writer,
-            token,
-            child_pid: 0,
-            exchange_lock: Mutex::new(()),
-            healthy: AtomicBool::new(true),
-            test_thread: Mutex::new(Some(thread)),
-        }),
-    };
-    broker
-        .request(BrokerOperation::Ping)
-        .context("test process broker handshake failed")?;
-    Ok(broker)
+    Ok(BrokerBootstrap {
+        socket: parent_socket,
+        shutdown: shutdown_writer,
+        token,
+        server: BrokerServer::Thread(thread),
+    })
 }
 
 #[cfg(not(test))]
-pub(super) fn start() -> Result<ProcessBroker> {
+pub(super) fn start() -> Result<BrokerBootstrap> {
     let (parent_socket, child_socket) = socket_pair("broker")?;
     let (shutdown_writer, shutdown_reader) = socket_pair("broker shutdown")?;
     let token = crate::daemon::protocol_v2::ProtocolToken::generate()
@@ -86,9 +158,18 @@ pub(super) fn start() -> Result<ProcessBroker> {
         .map(|value| value.as_ptr())
         .collect::<Vec<_>>();
     envp.push(std::ptr::null());
+    let descriptor_limit = descriptor_close_limit()?;
 
+    let null_descriptor: OwnedFd = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")
+        .context("failed to open broker standard-I/O sink")?
+        .into();
+    let null_exec = duplicate_for_exec(&null_descriptor)?;
     let child_socket_exec = duplicate_for_exec(&child_socket)?;
     let shutdown_exec = duplicate_for_exec(&shutdown_reader)?;
+    let null_fd = null_exec.as_raw_fd();
     let child_fd = child_socket_exec.as_raw_fd();
     let shutdown_fd = shutdown_exec.as_raw_fd();
     // SAFETY: clone has fork-like SIGCHLD semantics; the child branch uses
@@ -97,6 +178,8 @@ pub(super) fn start() -> Result<ProcessBroker> {
     if pid < 0 {
         return Err(io::Error::last_os_error()).context("raw clone for broker failed");
     }
+    // BEGIN RAW-CLONE CHILD STUB. Keep the matching checker boundary in
+    // tools/check-process-sites.py synchronized with this marker.
     if pid == 0 {
         // Raw-clone child stub: no allocation, formatting, logging,
         // unwinding, Rust destructors, or dynamic loader calls are allowed.
@@ -109,38 +192,73 @@ pub(super) fn start() -> Result<ProcessBroker> {
             if libc::syscall(libc::SYS_dup3, shutdown_fd, BROKER_SHUTDOWN_FD, 0) < 0 {
                 libc::syscall(libc::SYS_exit_group, 126);
             }
+            if libc::syscall(libc::SYS_dup3, null_fd, libc::STDIN_FILENO, 0) < 0 {
+                libc::syscall(libc::SYS_exit_group, 126);
+            }
+            if libc::syscall(libc::SYS_dup3, null_fd, libc::STDOUT_FILENO, 0) < 0 {
+                libc::syscall(libc::SYS_exit_group, 126);
+            }
+            if libc::syscall(libc::SYS_dup3, null_fd, libc::STDERR_FILENO, 0) < 0 {
+                libc::syscall(libc::SYS_exit_group, 126);
+            }
             if libc::syscall(libc::SYS_setpgid, 0, 0) < 0 {
                 libc::syscall(libc::SYS_exit_group, 126);
             }
-            let _ = libc::syscall(libc::SYS_close_range, 5_u32, u32::MAX, 0_u32);
+            if libc::syscall(libc::SYS_close_range, 5_u32, u32::MAX, 0_u32) < 0 {
+                // Linux before close_range, or a sandbox that denies it, still
+                // gets deterministic descriptor hygiene. The upper bound was
+                // captured before raw clone so this branch needs only fixed
+                // close syscalls and touches no allocator or dynamic loader.
+                let mut descriptor = 5_u32;
+                while descriptor < descriptor_limit {
+                    libc::syscall(libc::SYS_close, descriptor);
+                    descriptor += 1;
+                }
+            }
             libc::syscall(libc::SYS_execve, exe.as_ptr(), argv.as_ptr(), envp.as_ptr());
             libc::syscall(libc::SYS_exit_group, 127);
             libc::_exit(127);
         }
     }
+    // END RAW-CLONE CHILD STUB.
+    drop(null_descriptor);
+    drop(null_exec);
     drop(child_socket);
     drop(child_socket_exec);
     drop(shutdown_reader);
     drop(shutdown_exec);
-    let broker = ProcessBroker {
-        inner: Arc::new(BrokerInner {
-            socket: parent_socket,
-            shutdown: shutdown_writer,
-            token,
-            child_pid: pid,
-            exchange_lock: Mutex::new(()),
-            healthy: AtomicBool::new(true),
-        }),
-    };
-    if let Err(error) = broker.request(BrokerOperation::Ping) {
-        // SAFETY: pid is the raw-clone broker child created above.
-        unsafe {
-            libc::kill(pid, libc::SIGKILL);
-        }
-        wait_for_broker_process(pid);
-        return Err(error).context("process broker exec/authentication handshake failed");
+    Ok(BrokerBootstrap {
+        socket: parent_socket,
+        shutdown: shutdown_writer,
+        token,
+        server: BrokerServer::Process(pid),
+    })
+}
+
+#[cfg(not(test))]
+fn descriptor_close_limit() -> Result<u32> {
+    let mut limit = std::mem::MaybeUninit::<libc::rlimit>::uninit();
+    // SAFETY: getrlimit initializes the complete output value on success.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, limit.as_mut_ptr()) } != 0 {
+        return Err(io::Error::last_os_error())
+            .context("failed to resolve broker descriptor close bound");
     }
-    Ok(broker)
+    let limit = unsafe {
+        // SAFETY: getrlimit succeeded above.
+        limit.assume_init()
+    };
+    let kernel_limit = std::fs::read_to_string("/proc/sys/fs/nr_open")
+        .context("failed to read the kernel descriptor ceiling")?
+        .trim()
+        .parse::<libc::rlim_t>()
+        .context("kernel descriptor ceiling is not numeric")?;
+    // Use both hard ceilings so another embedding thread cannot open above a
+    // concurrently raised soft limit between this preflight and raw clone.
+    let raw_limit = limit
+        .rlim_max
+        .min(kernel_limit)
+        .min((i32::MAX as libc::rlim_t) + 1);
+    u32::try_from(raw_limit).map_err(|_| anyhow::anyhow!("broker descriptor close bound overflow"))
 }
 
 #[cfg(not(test))]
@@ -178,6 +296,7 @@ fn socket_pair(label: &str) -> Result<(OwnedFd, OwnedFd)> {
     })
 }
 
+#[cfg(not(test))]
 pub(super) fn wait_for_broker_process(child_pid: libc::pid_t) {
     if child_pid <= 0 {
         return;

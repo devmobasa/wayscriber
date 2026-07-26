@@ -8,6 +8,7 @@ use wayland_client::{Connection, QueueHandle};
 pub(super) fn populate_session_snapshot(
     snapshot: &mut ToolbarSnapshot,
     options: Option<&crate::session::SessionOptions>,
+    session_catalog: &catalog::SessionCatalog,
 ) {
     let active_path = options.map(|options| options.session_file_path());
     snapshot.active_session_name = active_path.as_deref().map(session_display_name);
@@ -18,7 +19,7 @@ pub(super) fn populate_session_snapshot(
     let session_surface_open = snapshot.active_side_pane == crate::ui::toolbar::SidePane::Session
         || snapshot.session_popover_open;
     snapshot.recent_sessions = if session_surface_open {
-        recent_session_snapshots(active_path.as_deref())
+        recent_session_snapshots(active_path.as_deref(), session_catalog)
     } else {
         Vec::new()
     };
@@ -83,8 +84,9 @@ fn format_byte_count(bytes: u64) -> String {
 
 fn recent_session_snapshots(
     current_path: Option<&Path>,
+    session_catalog: &catalog::SessionCatalog,
 ) -> Vec<crate::ui::toolbar::SessionRecentSnapshot> {
-    let recent = match catalog::recent_sessions() {
+    let recent = match session_catalog.recent_sessions() {
         Ok(recent) => recent,
         Err(err) => {
             log::warn!("Failed to read session catalog for toolbar recents: {err:#}");
@@ -441,12 +443,13 @@ impl WaylandState {
 pub(super) fn forget_missing_recent_session_after_open_error(
     path: &Path,
     err: &AnyhowError,
+    session_catalog: &catalog::SessionCatalog,
 ) -> bool {
     if !missing_session_error_matches_path(path, err) {
         return false;
     }
 
-    match catalog::forget_session_by_path(path) {
+    match session_catalog.forget_session_by_path(path) {
         Ok(true) => true,
         Ok(false) => {
             log::warn!(

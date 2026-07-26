@@ -1,467 +1,459 @@
 use std::io;
-use std::os::fd::{FromRawFd, OwnedFd, RawFd};
-use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 
-mod listener;
-
-#[cfg(test)]
-pub(crate) use listener::SignalListenerFailure;
-pub(crate) use listener::{SignalListener, SignalListenerHealth, spawn_listener};
-
-const MAX_SIGNAL_SLOTS: usize = 8;
-const GATE_STATE_BITS: u32 = 2;
-const GATE_STATE_MASK: u64 = (1 << GATE_STATE_BITS) - 1;
-const GATE_INACTIVE: u64 = 0;
-const GATE_ACTIVE: u64 = 1;
-const GATE_STOPPING: u64 = 2;
-const GATE_SETTING_UP: u64 = 3;
-const MAX_GATE_EPOCH: u64 = u64::MAX >> GATE_STATE_BITS;
-
-#[cfg(not(target_has_atomic = "64"))]
-compile_error!("wayscriber signal handling requires lock-free 64-bit atomics");
-#[cfg(not(target_has_atomic = "ptr"))]
-compile_error!("wayscriber signal handling requires lock-free pointer-sized atomics");
-#[cfg(not(target_has_atomic = "32"))]
-compile_error!("wayscriber signal handling requires lock-free 32-bit atomics");
-#[cfg(not(target_has_atomic = "8"))]
-compile_error!("wayscriber signal handling requires lock-free 8-bit atomics");
-
-static HANDLER_GATE_TOKEN: AtomicU64 = AtomicU64::new(GATE_INACTIVE);
-static ACTIVE_HANDLERS: AtomicUsize = AtomicUsize::new(0);
-static SIGNAL_WRITE_FD: AtomicI32 = AtomicI32::new(-1);
-static REGISTERED_SIGNALS: [AtomicI32; MAX_SIGNAL_SLOTS] =
-    [const { AtomicI32::new(0) }; MAX_SIGNAL_SLOTS];
-static PENDING_SIGNALS: [std::sync::atomic::AtomicBool; MAX_SIGNAL_SLOTS] =
-    [const { std::sync::atomic::AtomicBool::new(false) }; MAX_SIGNAL_SLOTS];
-
-fn gate_token(epoch: u64, state: u64) -> u64 {
-    (epoch << GATE_STATE_BITS) | state
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SignalProfile {
+    Daemon,
+    Overlay,
 }
 
-fn gate_epoch(token: u64) -> u64 {
-    token >> GATE_STATE_BITS
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ShutdownSignal {
+    Interrupt,
+    Terminate,
 }
 
-fn gate_state(token: u64) -> u64 {
-    token & GATE_STATE_MASK
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SignalEvent {
+    ToggleOverlay,
+    TrayAction,
+    Shutdown(ShutdownSignal),
 }
 
-fn validate_signals(signals: &[libc::c_int]) -> io::Result<()> {
-    if signals.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "at least one signal must be registered",
-        ));
-    }
-    if signals.len() > MAX_SIGNAL_SLOTS {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "too many signals registered",
-        ));
-    }
-
-    for (index, &signal) in signals.iter().enumerate() {
-        if signal <= 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "signal numbers must be positive",
-            ));
-        }
-        if signals[..index].contains(&signal) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "duplicate signals are not supported",
-            ));
-        }
-    }
-    Ok(())
+/// The event-source seam consumed by the daemon and overlay roots.
+///
+/// Production supplies one process signal descriptor. Tests supply independent
+/// pollable fakes, so signal behavior does not require process-global fixtures.
+pub(crate) trait SignalEventSource {
+    fn poll_fd(&self) -> io::Result<BorrowedFd<'_>>;
+    fn drain(&mut self) -> io::Result<Vec<SignalEvent>>;
 }
 
-fn reserve_listener_epoch() -> io::Result<u64> {
-    loop {
-        let current = HANDLER_GATE_TOKEN.load(Ordering::SeqCst);
-        if gate_state(current) != GATE_INACTIVE || ACTIVE_HANDLERS.load(Ordering::SeqCst) != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "a signal listener is already active",
-            ));
-        }
-        let epoch = gate_epoch(current)
-            .checked_add(1)
-            .filter(|epoch| *epoch <= MAX_GATE_EPOCH)
-            .ok_or_else(|| io::Error::other("signal listener epoch space exhausted"))?;
-        let setting_up = gate_token(epoch, GATE_SETTING_UP);
-        match HANDLER_GATE_TOKEN.compare_exchange(
-            current,
-            setting_up,
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-        ) {
-            Ok(_) => return Ok(epoch),
-            Err(_) => continue,
-        }
-    }
+#[cfg(target_os = "linux")]
+enum SignalOwnerState {
+    Active {
+        admission: OwnedFd,
+        descriptor: OwnedFd,
+        previous_mask: libc::sigset_t,
+    },
+    RestorePending {
+        admission: OwnedFd,
+        previous_mask: libc::sigset_t,
+    },
+    Finished,
 }
 
-fn publish_listener_active(epoch: u64) {
-    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_ACTIVE), Ordering::SeqCst);
+/// Root-owned Linux signal adapter.
+///
+/// Installation blocks the selected signals on the calling thread. Threads
+/// created afterward inherit that mask and the owning runtime polls signalfd
+/// directly; no process-global handler state or signal-listener thread exists.
+/// A PID-scoped abstract socket admits exactly one real owner and rejects a
+/// competing runtime before either thread's mask is changed.
+#[cfg(target_os = "linux")]
+pub(crate) struct SignalOwner {
+    profile: SignalProfile,
+    state: SignalOwnerState,
+    // Signal masks are thread-local. Keeping the owner !Send makes the thread
+    // that installed the mask responsible for restoring it.
+    _thread_affinity: std::marker::PhantomData<*mut ()>,
 }
 
-fn rollback_listener_reservation(epoch: u64) {
-    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_INACTIVE), Ordering::SeqCst);
-}
-
-fn begin_listener_teardown(epoch: u64) -> io::Result<()> {
-    HANDLER_GATE_TOKEN
-        .compare_exchange(
-            gate_token(epoch, GATE_ACTIVE),
-            gate_token(epoch, GATE_STOPPING),
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-        )
-        .map(|_| ())
-        .map_err(|actual| {
-            io::Error::other(format!(
-                "signal listener gate changed unexpectedly during teardown ({actual:#x})"
-            ))
-        })
-}
-
-fn finish_listener_teardown(epoch: u64) {
-    HANDLER_GATE_TOKEN.store(gate_token(epoch, GATE_INACTIVE), Ordering::SeqCst);
-}
-
-fn wait_for_admitted_handlers() {
-    // This counter and HANDLER_GATE_TOKEN form a Dekker-style admission
-    // handshake. Sequential consistency is required so teardown cannot miss
-    // a handler that is concurrently rechecking the closed gate on weakly
-    // ordered CPUs and then close a descriptor that handler is about to use.
-    while ACTIVE_HANDLERS.load(Ordering::SeqCst) != 0 {
-        std::thread::yield_now();
-    }
-}
-
-fn publish_registered_signals(signals: &[libc::c_int]) {
-    clear_registered_signals();
-    for (index, &signal) in signals.iter().enumerate() {
-        REGISTERED_SIGNALS[index].store(signal, Ordering::Release);
-    }
-}
-
-fn clear_registered_signals() {
-    for index in 0..MAX_SIGNAL_SLOTS {
-        PENDING_SIGNALS[index].store(false, Ordering::Release);
-        REGISTERED_SIGNALS[index].store(0, Ordering::Release);
-    }
-}
-
-fn create_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
-    let mut fds = [-1; 2];
-    // SAFETY: `fds` points to two valid c_int slots for libc to fill.
-    if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-
-    if let Err(err) = configure_pipe(fds[0], fds[1]) {
-        close_fd(fds[0]);
-        close_fd(fds[1]);
-        return Err(err);
-    }
-
-    // SAFETY: pipe returned two fresh descriptors and ownership is transferred
-    // exactly once into these wrappers.
-    Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
-}
-
-fn configure_pipe(read_fd: RawFd, write_fd: RawFd) -> io::Result<()> {
-    set_fd_flag(read_fd, libc::FD_CLOEXEC)?;
-    set_fd_flag(write_fd, libc::FD_CLOEXEC)?;
-    set_status_flag(write_fd, libc::O_NONBLOCK)
-}
-
-fn set_fd_flag(fd: RawFd, flag: libc::c_int) -> io::Result<()> {
-    // SAFETY: `fd` is an open file descriptor owned by this module.
-    let current = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-    if current < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: `fd` is valid and `current | flag` is a valid F_SETFD bitset.
-    if unsafe { libc::fcntl(fd, libc::F_SETFD, current | flag) } < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-fn set_status_flag(fd: RawFd, flag: libc::c_int) -> io::Result<()> {
-    // SAFETY: `fd` is an open file descriptor owned by this module.
-    let current = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-    if current < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: `fd` is valid and `current | flag` is a valid F_SETFL bitset.
-    if unsafe { libc::fcntl(fd, libc::F_SETFL, current | flag) } < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-fn install_handler(signal: libc::c_int) -> io::Result<libc::sigaction> {
-    // SAFETY: Zeroed sigaction is immediately initialized before use.
-    let mut action = unsafe { std::mem::zeroed::<libc::sigaction>() };
-    action.sa_sigaction = signal_handler as *const () as usize;
-    action.sa_flags = signal_action_flags();
-
-    // SAFETY: `action.sa_mask` points to a valid sigset_t field.
-    if unsafe { libc::sigemptyset(&mut action.sa_mask) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-
-    // SAFETY: Zeroed sigaction is filled by libc when installation succeeds.
-    let mut previous = unsafe { std::mem::zeroed::<libc::sigaction>() };
-    // SAFETY: Installs a process-wide handler for the requested signal.
-    if unsafe { libc::sigaction(signal, &action, &mut previous) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(previous)
-}
-
-fn restore_handlers(handlers: &[(libc::c_int, libc::sigaction)]) {
-    for (signal, previous) in handlers.iter().rev() {
-        // SAFETY: `previous` was returned by `sigaction` for the same signal.
-        let _ = unsafe { libc::sigaction(*signal, previous, std::ptr::null_mut()) };
-    }
-}
-
-fn signal_action_flags() -> libc::c_int {
-    libc::SA_RESTART
-}
-
-extern "C" fn signal_handler(signal: libc::c_int) {
-    let _errno_guard = ErrnoGuard::new();
-    let token = HANDLER_GATE_TOKEN.load(Ordering::SeqCst);
-    if gate_state(token) != GATE_ACTIVE {
-        return;
-    }
-
-    #[cfg(test)]
-    test_hooks::pause_if_requested(test_hooks::PAUSE_AFTER_TOKEN_READ);
-
-    ACTIVE_HANDLERS.fetch_add(1, Ordering::SeqCst);
-
-    #[cfg(test)]
-    test_hooks::pause_if_requested(test_hooks::PAUSE_AFTER_ADMISSION);
-
-    if HANDLER_GATE_TOKEN.load(Ordering::SeqCst) != token {
-        ACTIVE_HANDLERS.fetch_sub(1, Ordering::SeqCst);
-        return;
-    }
-
-    #[cfg(test)]
-    test_hooks::DESCRIPTOR_ACCESSES.fetch_add(1, Ordering::AcqRel);
-
-    if mark_pending(signal) {
-        let fd = SIGNAL_WRITE_FD.load(Ordering::Acquire);
-        if fd >= 0 {
-            let wakeup = 1u8;
-            // SAFETY: the exact active gate protects this stable nonblocking
-            // descriptor until every admitted handler has decremented.
-            let _ = unsafe {
-                libc::write(
-                    fd,
-                    (&wakeup as *const u8).cast::<libc::c_void>(),
-                    std::mem::size_of::<u8>(),
-                )
+#[cfg(target_os = "linux")]
+impl SignalOwner {
+    pub(crate) fn install(profile: SignalProfile) -> io::Result<Self> {
+        let mask = signal_mask(profile)?;
+        // Admission must precede the thread-local mask change. A concurrent
+        // runtime therefore fails without partially installing signal state.
+        let admission = acquire_signal_owner_admission()?;
+        let previous_mask = block_signals(&mask)?;
+        let raw_descriptor = unsafe {
+            // SAFETY: `mask` is initialized and remains borrowed for this call.
+            libc::signalfd(-1, &mask, libc::SFD_CLOEXEC | libc::SFD_NONBLOCK)
+        };
+        if raw_descriptor < 0 {
+            let descriptor_error = io::Error::last_os_error();
+            return match restore_signals(&previous_mask) {
+                Ok(()) => Err(descriptor_error),
+                Err(restore_error) => Err(io::Error::other(format!(
+                    "signalfd setup failed ({descriptor_error}); restoring the previous signal mask also failed ({restore_error})"
+                ))),
             };
         }
-    }
 
-    ACTIVE_HANDLERS.fetch_sub(1, Ordering::SeqCst);
-}
-
-struct ErrnoGuard {
-    location: *mut libc::c_int,
-    saved: libc::c_int,
-}
-
-impl ErrnoGuard {
-    fn new() -> Self {
-        let location = errno_location();
-        let saved = if location.is_null() {
-            0
-        } else {
-            // SAFETY: `location` points to the current thread's errno slot.
-            unsafe { *location }
+        let descriptor = unsafe {
+            // SAFETY: signalfd returned one fresh descriptor and ownership is
+            // transferred exactly once into this owner.
+            OwnedFd::from_raw_fd(raw_descriptor)
         };
-        Self { location, saved }
+        Ok(Self {
+            profile,
+            state: SignalOwnerState::Active {
+                admission,
+                descriptor,
+                previous_mask,
+            },
+            _thread_affinity: std::marker::PhantomData,
+        })
     }
-}
 
-impl Drop for ErrnoGuard {
-    fn drop(&mut self) {
-        if !self.location.is_null() {
-            // SAFETY: `location` points to the current thread's errno slot.
-            unsafe { *self.location = self.saved };
-        }
+    pub(crate) fn finish(&mut self) -> io::Result<()> {
+        self.finish_with(restore_signals)
     }
-}
 
-#[cfg(any(
-    target_os = "emscripten",
-    target_os = "hurd",
-    target_os = "linux",
-    target_os = "redox"
-))]
-fn errno_location() -> *mut libc::c_int {
-    // SAFETY: Returns the current thread's errno slot on these libc targets.
-    unsafe { libc::__errno_location() }
-}
-
-#[cfg(any(target_os = "android", target_os = "cygwin", target_os = "netbsd"))]
-fn errno_location() -> *mut libc::c_int {
-    // SAFETY: Returns the current thread's errno slot on these libc targets.
-    unsafe { libc::__errno() }
-}
-
-#[cfg(any(
-    target_os = "freebsd",
-    target_os = "ios",
-    target_os = "macos",
-    target_os = "tvos",
-    target_os = "visionos",
-    target_os = "watchos"
-))]
-fn errno_location() -> *mut libc::c_int {
-    // SAFETY: Returns the current thread's errno slot on these libc targets.
-    unsafe { libc::__error() }
-}
-
-#[cfg(target_os = "dragonfly")]
-fn errno_location() -> *mut libc::c_int {
-    // SAFETY: Returns the current thread's errno slot on DragonFly BSD.
-    unsafe { libc::__errno_location() }
-}
-
-#[cfg(any(target_os = "illumos", target_os = "solaris"))]
-fn errno_location() -> *mut libc::c_int {
-    // SAFETY: Returns the current thread's errno slot on Solaris-family targets.
-    unsafe { libc::___errno() }
-}
-
-#[cfg(not(any(
-    target_os = "android",
-    target_os = "cygwin",
-    target_os = "dragonfly",
-    target_os = "emscripten",
-    target_os = "freebsd",
-    target_os = "hurd",
-    target_os = "illumos",
-    target_os = "ios",
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "netbsd",
-    target_os = "redox",
-    target_os = "solaris",
-    target_os = "tvos",
-    target_os = "visionos",
-    target_os = "watchos"
-)))]
-fn errno_location() -> *mut libc::c_int {
-    std::ptr::null_mut()
-}
-
-fn mark_pending(signal: libc::c_int) -> bool {
-    for index in 0..MAX_SIGNAL_SLOTS {
-        if REGISTERED_SIGNALS[index].load(Ordering::Acquire) == signal {
-            return !PENDING_SIGNALS[index].swap(true, Ordering::AcqRel);
-        }
-    }
-    false
-}
-
-fn dispatch_pending_signals(on_signal: &dyn Fn(libc::c_int)) -> bool {
-    let mut dispatched = false;
-    for index in 0..MAX_SIGNAL_SLOTS {
-        let signal = REGISTERED_SIGNALS[index].load(Ordering::Acquire);
-        if signal > 0 && PENDING_SIGNALS[index].swap(false, Ordering::AcqRel) {
-            dispatched = true;
-            on_signal(signal);
-        }
-    }
-    dispatched
-}
-
-fn write_pipe_hint(fd: RawFd) -> io::Result<()> {
-    let wakeup = 1u8;
-    loop {
-        // SAFETY: `fd` is the owner-retained nonblocking pipe write end.
-        let result = unsafe {
-            libc::write(
-                fd,
-                (&wakeup as *const u8).cast::<libc::c_void>(),
-                std::mem::size_of::<u8>(),
-            )
+    fn finish_with(
+        &mut self,
+        restore: impl FnOnce(&libc::sigset_t) -> io::Result<()>,
+    ) -> io::Result<()> {
+        let state = std::mem::replace(&mut self.state, SignalOwnerState::Finished);
+        let (admission, previous_mask) = match state {
+            SignalOwnerState::Active {
+                admission,
+                descriptor,
+                previous_mask,
+            } => {
+                drop(descriptor);
+                (admission, previous_mask)
+            }
+            SignalOwnerState::RestorePending {
+                admission,
+                previous_mask,
+            } => (admission, previous_mask),
+            SignalOwnerState::Finished => return Ok(()),
         };
-        if result == 1 {
-            return Ok(());
-        }
-        if result < 0 {
-            let err = io::Error::last_os_error();
-            match err.kind() {
-                io::ErrorKind::Interrupted => continue,
-                io::ErrorKind::WouldBlock => return Ok(()),
-                _ => return Err(err),
+
+        match restore(&previous_mask) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.state = SignalOwnerState::RestorePending {
+                    admission,
+                    previous_mask,
+                };
+                Err(error)
             }
         }
+    }
+
+    fn active_descriptor(&self) -> io::Result<&OwnedFd> {
+        match &self.state {
+            SignalOwnerState::Active { descriptor, .. } => Ok(descriptor),
+            SignalOwnerState::RestorePending { .. } | SignalOwnerState::Finished => {
+                Err(io::Error::new(
+                    io::ErrorKind::NotConnected,
+                    "signal owner is already stopped",
+                ))
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn acquire_signal_owner_admission() -> io::Result<OwnedFd> {
+    let raw_descriptor = unsafe {
+        // SAFETY: socket has no pointer arguments and returns a fresh descriptor
+        // on success. CLOEXEC keeps this process-local admission capability out
+        // of every later helper exec.
+        libc::socket(libc::AF_UNIX, libc::SOCK_DGRAM | libc::SOCK_CLOEXEC, 0)
+    };
+    if raw_descriptor < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let descriptor = unsafe {
+        // SAFETY: socket returned one fresh descriptor transferred exactly once.
+        OwnedFd::from_raw_fd(raw_descriptor)
+    };
+
+    let mut address = std::mem::MaybeUninit::<libc::sockaddr_un>::zeroed();
+    let address = unsafe {
+        // SAFETY: an all-zero sockaddr_un is a valid starting representation;
+        // the family and complete abstract-name extent are initialized below.
+        address.assume_init_mut()
+    };
+    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    let name = format!("wayscriber-signal-owner-{}", std::process::id());
+    let name = name.as_bytes();
+    let path_capacity = address.sun_path.len().saturating_sub(1);
+    if name.len() > path_capacity {
         return Err(io::Error::new(
-            io::ErrorKind::WriteZero,
-            format!("signal pipe returned a short write ({result} bytes)"),
+            io::ErrorKind::InvalidInput,
+            "process-scoped signal admission name exceeds sockaddr_un capacity",
         ));
     }
+    for (slot, byte) in address.sun_path[1..].iter_mut().zip(name.iter().copied()) {
+        *slot = byte as libc::c_char;
+    }
+    let address_length = std::mem::offset_of!(libc::sockaddr_un, sun_path) + 1 + name.len();
+    let address_length = libc::socklen_t::try_from(address_length).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "process-scoped signal admission address length overflow",
+        )
+    })?;
+    let bind_result = unsafe {
+        // SAFETY: address is initialized through the exact abstract-name extent
+        // passed to bind, and descriptor remains owned for this call.
+        libc::bind(
+            descriptor.as_raw_fd(),
+            (address as *mut libc::sockaddr_un).cast::<libc::sockaddr>(),
+            address_length,
+        )
+    };
+    if bind_result == 0 {
+        return Ok(descriptor);
+    }
+
+    let error = io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::EADDRINUSE) {
+        Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "a real signal owner is already active in this process",
+        ))
+    } else {
+        Err(error)
+    }
 }
 
-fn close_fd(fd: RawFd) {
-    if fd >= 0 {
-        // SAFETY: Closing an owned descriptor during setup rollback.
-        let _ = unsafe { libc::close(fd) };
+#[cfg(target_os = "linux")]
+impl SignalEventSource for SignalOwner {
+    fn poll_fd(&self) -> io::Result<BorrowedFd<'_>> {
+        Ok(self.active_descriptor()?.as_fd())
+    }
+
+    fn drain(&mut self) -> io::Result<Vec<SignalEvent>> {
+        let descriptor = self.active_descriptor()?.as_raw_fd();
+        let mut events = Vec::new();
+        loop {
+            let mut info = std::mem::MaybeUninit::<libc::signalfd_siginfo>::uninit();
+            let count = unsafe {
+                // SAFETY: `info` has exactly the size passed to read and the
+                // owner retains the nonblocking signalfd for this operation.
+                libc::read(
+                    descriptor,
+                    info.as_mut_ptr().cast::<libc::c_void>(),
+                    std::mem::size_of::<libc::signalfd_siginfo>(),
+                )
+            };
+            if count < 0 {
+                let error = io::Error::last_os_error();
+                match error.kind() {
+                    io::ErrorKind::Interrupted => continue,
+                    io::ErrorKind::WouldBlock => return Ok(events),
+                    _ => return Err(error),
+                }
+            }
+            if count == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "signal descriptor closed unexpectedly",
+                ));
+            }
+            if count as usize != std::mem::size_of::<libc::signalfd_siginfo>() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("signal descriptor returned a short record ({count} bytes)"),
+                ));
+            }
+            let info = unsafe {
+                // SAFETY: a complete signalfd_siginfo record was read above.
+                info.assume_init()
+            };
+            events.push(decode_signal(self.profile, info.ssi_signo as libc::c_int)?);
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for SignalOwner {
+    fn drop(&mut self) {
+        let _ = self.finish();
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn signal_mask(profile: SignalProfile) -> io::Result<libc::sigset_t> {
+    let mut mask = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+    if unsafe {
+        // SAFETY: sigemptyset initializes the entire output mask.
+        libc::sigemptyset(mask.as_mut_ptr())
+    } != 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    let mut mask = unsafe {
+        // SAFETY: sigemptyset succeeded above.
+        mask.assume_init()
+    };
+    for &signal in signals_for_profile(profile) {
+        if unsafe {
+            // SAFETY: `mask` is initialized and every supplied signal number
+            // is a supported process signal.
+            libc::sigaddset(&mut mask, signal)
+        } != 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(mask)
+}
+
+#[cfg(target_os = "linux")]
+fn block_signals(mask: &libc::sigset_t) -> io::Result<libc::sigset_t> {
+    let mut previous = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+    let error = unsafe {
+        // SAFETY: both masks point to correctly sized storage. pthread_sigmask
+        // returns an error number directly rather than setting errno.
+        libc::pthread_sigmask(libc::SIG_BLOCK, mask, previous.as_mut_ptr())
+    };
+    if error != 0 {
+        return Err(io::Error::from_raw_os_error(error));
+    }
+    Ok(unsafe {
+        // SAFETY: pthread_sigmask initialized the previous mask on success.
+        previous.assume_init()
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn restore_signals(previous: &libc::sigset_t) -> io::Result<()> {
+    let error = unsafe {
+        // SAFETY: the owner restores the mask captured on this same thread.
+        libc::pthread_sigmask(libc::SIG_SETMASK, previous, std::ptr::null_mut())
+    };
+    if error == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::from_raw_os_error(error))
+    }
+}
+
+fn signals_for_profile(profile: SignalProfile) -> &'static [libc::c_int] {
+    match profile {
+        SignalProfile::Daemon => &[libc::SIGUSR1, libc::SIGTERM, libc::SIGINT],
+        SignalProfile::Overlay => &[libc::SIGUSR1, libc::SIGUSR2, libc::SIGTERM, libc::SIGINT],
+    }
+}
+
+fn decode_signal(profile: SignalProfile, signal: libc::c_int) -> io::Result<SignalEvent> {
+    match signal {
+        libc::SIGUSR1 => Ok(SignalEvent::ToggleOverlay),
+        libc::SIGUSR2 if profile == SignalProfile::Overlay => Ok(SignalEvent::TrayAction),
+        libc::SIGTERM => Ok(SignalEvent::Shutdown(ShutdownSignal::Terminate)),
+        libc::SIGINT => Ok(SignalEvent::Shutdown(ShutdownSignal::Interrupt)),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("signal profile {profile:?} received unexpected signal {signal}"),
+        )),
+    }
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+pub(crate) struct SignalOwner;
+
+#[cfg(all(unix, not(target_os = "linux")))]
+impl SignalOwner {
+    pub(crate) fn install(_profile: SignalProfile) -> io::Result<Self> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "root-owned signal descriptors are currently supported on Linux",
+        ))
+    }
+
+    pub(crate) fn finish(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+impl SignalEventSource for SignalOwner {
+    fn poll_fd(&self) -> io::Result<BorrowedFd<'_>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "signal descriptor is unavailable on this platform",
+        ))
+    }
+
+    fn drain(&mut self) -> io::Result<Vec<SignalEvent>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "signal descriptor is unavailable on this platform",
+        ))
     }
 }
 
 #[cfg(test)]
-mod test_hooks {
-    use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+pub(crate) struct FakeSignalSource {
+    read: std::os::unix::net::UnixStream,
+    write: std::os::unix::net::UnixStream,
+    pending: std::collections::VecDeque<SignalEvent>,
+    failure: Option<io::ErrorKind>,
+}
 
-    pub(super) const PAUSE_AFTER_TOKEN_READ: u8 = 1;
-    pub(super) const PAUSE_AFTER_ADMISSION: u8 = 2;
-    pub(super) const PAUSE_AFTER_HANDLER_INSTALL: u8 = 3;
-    pub(super) static PAUSE_STAGE: AtomicU8 = AtomicU8::new(0);
-    pub(super) static HANDLER_PAUSED: AtomicBool = AtomicBool::new(false);
-    pub(super) static RESUME_HANDLER: AtomicBool = AtomicBool::new(false);
-    pub(super) static DESCRIPTOR_ACCESSES: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+impl FakeSignalSource {
+    pub(crate) fn new() -> io::Result<Self> {
+        let (read, write) = std::os::unix::net::UnixStream::pair()?;
+        read.set_nonblocking(true)?;
+        write.set_nonblocking(true)?;
+        Ok(Self {
+            read,
+            write,
+            pending: std::collections::VecDeque::new(),
+            failure: None,
+        })
+    }
 
-    pub(super) fn pause_if_requested(stage: u8) {
-        if PAUSE_STAGE.load(Ordering::Acquire) != stage {
-            return;
+    pub(crate) fn publish(&mut self, event: SignalEvent) -> io::Result<()> {
+        self.pending.push_back(event);
+        match std::io::Write::write(&mut self.write, &[1]) {
+            Ok(1) => Ok(()),
+            Ok(count) => Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                format!("fake signal source wrote {count} wake bytes"),
+            )),
+            Err(error) => Err(error),
         }
-        HANDLER_PAUSED.store(true, Ordering::Release);
-        while !RESUME_HANDLER.load(Ordering::Acquire) {
-            std::hint::spin_loop();
-            std::thread::yield_now();
+    }
+
+    pub(crate) fn fail_next_drain(&mut self, kind: io::ErrorKind) -> io::Result<()> {
+        self.failure = Some(kind);
+        match std::io::Write::write(&mut self.write, &[1]) {
+            Ok(1) => Ok(()),
+            Ok(count) => Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                format!("fake signal source wrote {count} wake bytes"),
+            )),
+            Err(error) => Err(error),
         }
     }
 }
 
 #[cfg(test)]
-pub(crate) fn test_signal_lock() -> std::sync::MutexGuard<'static, ()> {
-    use std::sync::{Mutex, OnceLock};
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
+impl SignalEventSource for FakeSignalSource {
+    fn poll_fd(&self) -> io::Result<BorrowedFd<'_>> {
+        Ok(self.read.as_fd())
+    }
 
-#[cfg(test)]
-pub(crate) fn deliver_signal_for_test(signal: libc::c_int) {
-    signal_handler(signal);
+    fn drain(&mut self) -> io::Result<Vec<SignalEvent>> {
+        let mut buffer = [0_u8; 64];
+        loop {
+            match std::io::Read::read(&mut self.read, &mut buffer) {
+                Ok(0) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "fake signal source closed unexpectedly",
+                    ));
+                }
+                Ok(_) => continue,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+                Err(error) => return Err(error),
+            }
+        }
+        if let Some(kind) = self.failure.take() {
+            return Err(io::Error::new(kind, "injected fake signal-source failure"));
+        }
+        Ok(self.pending.drain(..).collect())
+    }
 }
 
 #[cfg(test)]

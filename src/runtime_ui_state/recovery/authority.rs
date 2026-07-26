@@ -28,6 +28,12 @@ impl RuntimeUiStateController {
         &mut self,
         observation: RuntimeStateSourceObservation,
     ) -> SubmitPersistenceRecoveryResult {
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        if self.incident.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        }
         self.apply_incident_staged_reload();
         if let Some(incident) = &self.incident {
             self.pipeline
@@ -39,7 +45,9 @@ impl RuntimeUiStateController {
                 Some(observation),
             );
         }
-        let incident = self.incident.take().expect("active incident");
+        let Some(incident) = self.incident.take() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         self.close_barrier_and_resolve_previews_after_seed_changes(
             incident.barrier,
             AbandonedPreviewResolutionReason::CancelledUnderRetainedAuthority,
@@ -87,6 +95,12 @@ impl RuntimeUiStateController {
         writer_observation: Option<RuntimeStateSourceObservation>,
         path_effect: RuntimeStateObservedPathEffect,
     ) -> SubmitPersistenceRecoveryResult {
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        if self.incident.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        }
         let observation = inspection.observation;
         if !observation.is_consistent() {
             return self.finish_still_unhealthy(
@@ -108,6 +122,10 @@ impl RuntimeUiStateController {
                 Some(observation),
             );
         }
+        let Some(next_authority_epoch) = self.authority_epoch.checked_add(1) else {
+            return self
+                .finish_recovery_state_failure(RecoveryStateFailure::AuthorityEpochExhausted);
+        };
         let (file_status, acknowledged_wire) = match &observation.envelope {
             RuntimeStateObservedEnvelope::Missing => {
                 (RuntimeUiFileStatus::Missing, RuntimeUiWireState::default())
@@ -163,10 +181,7 @@ impl RuntimeUiStateController {
         self.passthrough = acknowledged_wire.passthrough;
         self.live_only_overlay.clear();
         self.file_status = file_status;
-        self.authority_epoch = self
-            .authority_epoch
-            .checked_add(1)
-            .expect("authority epoch exhausted");
+        self.authority_epoch = next_authority_epoch;
         self.apply_incident_staged_reload();
         if (self.model.reconcile(&self.seeds) | self.passthrough.reconcile_entries(&self.model))
             && matches!(self.file_status, RuntimeUiFileStatus::Supported)
@@ -180,12 +195,15 @@ impl RuntimeUiStateController {
         if matches!(self.file_status, RuntimeUiFileStatus::Supported)
             && self.canonical_recovery_wire() != *self.pipeline.acknowledged_wire()
         {
-            self.active_recovery.as_mut().expect("active attempt").kind =
-                RecoveryAttemptKind::ExternalAuthorityCleanup {
-                    writer_observation,
-                    authority: observation.clone(),
-                    path_effect,
-                };
+            let Some(active) = self.active_recovery.as_mut() else {
+                return self
+                    .finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+            };
+            active.kind = RecoveryAttemptKind::ExternalAuthorityCleanup {
+                writer_observation,
+                authority: observation.clone(),
+                path_effect,
+            };
             if let Some(incident) = &mut self.incident
                 && matches!(incident.cleanup, RecoveryCleanupState::Clean)
             {
@@ -203,7 +221,12 @@ impl RuntimeUiStateController {
         authority: RuntimeStateSourceObservation,
         path_effect: RuntimeStateObservedPathEffect,
     ) -> SubmitPersistenceRecoveryResult {
-        let incident = self.incident.take().expect("active incident");
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        let Some(incident) = self.incident.take() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         self.close_barrier_and_resolve_previews(
             incident.barrier,
             AbandonedPreviewResolutionReason::DiscardedForAuthorityChange,
@@ -229,12 +252,24 @@ impl RuntimeUiStateController {
         &mut self,
         observed: RuntimeStateSourceObservation,
     ) -> SubmitPersistenceRecoveryResult {
-        self.apply_incident_staged_reload();
-        let (incident_id, barrier_id) = {
-            let attempt = self.active_recovery.as_ref().expect("active attempt");
-            (attempt.incident, attempt.barrier)
+        let (incident_id, barrier_id) = match self.active_recovery.as_ref() {
+            Some(attempt) => (attempt.incident, attempt.barrier),
+            None => {
+                return self
+                    .finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+            }
         };
-        let next_handle = self.rotate_and_checkout_handle();
+        if self.incident.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        }
+        self.apply_incident_staged_reload();
+        let next_handle = match self.rotate_and_checkout_handle() {
+            Ok(handle) => handle,
+            Err(error) => return self.finish_recovery_state_failure(error),
+        };
+        let Some(incident) = self.incident.as_ref() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         let confirmation = InvalidStateResetConfirmation {
             controller: self.id,
             incident: incident_id,
@@ -247,7 +282,7 @@ impl RuntimeUiStateController {
             recovery: next_handle,
             observed,
             confirmation,
-            evidence: evidence(self.incident.as_ref().expect("incident")),
+            evidence: evidence(incident),
         };
         if let Some(barrier) = &mut self.active_barrier {
             barrier.phase = ControllerBarrierPhase::PersistenceUnhealthy {
@@ -263,9 +298,23 @@ impl RuntimeUiStateController {
         active: RuntimeStateSourceObservation,
         path_effect: RuntimeStateObservedPathEffect,
     ) -> SubmitPersistenceRecoveryResult {
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        if self.incident.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        }
         self.apply_incident_staged_reload();
-        let incident_id = self.incident.as_ref().expect("incident").id;
-        let recovery = self.rotate_and_checkout_handle();
+        let Some(incident_id) = self.incident.as_ref().map(|incident| incident.id) else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
+        let recovery = match self.rotate_and_checkout_handle() {
+            Ok(handle) => handle,
+            Err(error) => return self.finish_recovery_state_failure(error),
+        };
+        let Some(incident) = self.incident.as_ref() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         let confirmed = RuntimeStateSourceObservation {
             revision: confirmed_revision,
             envelope: RuntimeStateObservedEnvelope::PresentWithoutReadableVersion,
@@ -274,7 +323,7 @@ impl RuntimeUiStateController {
             recovery,
             confirmed,
             active,
-            evidence: evidence(self.incident.as_ref().expect("incident")),
+            evidence: evidence(incident),
             path_effect,
         };
         if let Some(barrier) = &mut self.active_barrier {
@@ -290,8 +339,15 @@ impl RuntimeUiStateController {
         observation: RuntimeStateSourceObservation,
         recovery_path: std::path::PathBuf,
     ) -> SubmitPersistenceRecoveryResult {
-        self.install_preserved_invalid_authority();
-        let incident = self.incident.take().expect("incident");
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        if let Err(error) = self.install_preserved_invalid_authority() {
+            return self.finish_recovery_state_failure(error);
+        }
+        let Some(incident) = self.incident.take() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         self.close_barrier_and_resolve_previews(
             incident.barrier,
             AbandonedPreviewResolutionReason::DiscardedForAuthorityChange,
@@ -305,7 +361,16 @@ impl RuntimeUiStateController {
         self.deliver_terminal(result)
     }
 
-    pub(super) fn install_preserved_invalid_authority(&mut self) {
+    pub(super) fn install_preserved_invalid_authority(
+        &mut self,
+    ) -> Result<(), RecoveryStateFailure> {
+        if self.incident.is_none() {
+            return Err(RecoveryStateFailure::MissingIncident);
+        }
+        let next_authority_epoch = self
+            .authority_epoch
+            .checked_add(1)
+            .ok_or(RecoveryStateFailure::AuthorityEpochExhausted)?;
         self.apply_incident_staged_reload();
         let abandoned_cleanup = self.incident.as_ref().and_then(|incident| {
             if let RecoveryCleanupState::Pending { through } = incident.cleanup {
@@ -317,27 +382,22 @@ impl RuntimeUiStateController {
         if let Some(through) = abandoned_cleanup {
             self.pipeline.settle_external([through]);
         }
-        let held = self
-            .incident
-            .as_mut()
-            .map(|incident| {
-                incident.retry_desired_through = None;
-                incident.cleanup = RecoveryCleanupState::Clean;
-                std::mem::take(&mut incident.held_replacements)
-            })
-            .unwrap_or_default();
+        let Some(incident) = self.incident.as_mut() else {
+            return Err(RecoveryStateFailure::MissingIncident);
+        };
+        incident.retry_desired_through = None;
+        incident.cleanup = RecoveryCleanupState::Clean;
+        let held = std::mem::take(&mut incident.held_replacements);
         self.pipeline.settle_held_external(&held);
         self.pipeline.discard_pending_for_external_authority();
         self.model.clear();
         self.passthrough = WirePassthrough::default();
         self.live_only_overlay.clear();
         self.file_status = RuntimeUiFileStatus::Missing;
-        self.authority_epoch = self
-            .authority_epoch
-            .checked_add(1)
-            .expect("epoch exhausted");
+        self.authority_epoch = next_authority_epoch;
         self.live_state =
             RuntimeUiLiveState::rebuild(&self.seeds, &self.model, &self.live_only_overlay);
+        Ok(())
     }
 
     pub(super) fn finish_still_unhealthy(
@@ -345,17 +405,27 @@ impl RuntimeUiStateController {
         error: RuntimeStateIoError,
         active: Option<RuntimeStateSourceObservation>,
     ) -> SubmitPersistenceRecoveryResult {
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        if self.incident.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        }
         let active = self.retain_or_fallback_active(active);
         self.apply_incident_staged_reload();
-        let attempt = self
-            .active_recovery
-            .as_ref()
-            .map(|attempt| attempt.id)
-            .unwrap_or(RecoveryAttemptId(0));
-        let recovery = self.rotate_and_checkout_handle();
+        let Some(attempt) = self.active_recovery.as_ref().map(|attempt| attempt.id) else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        };
+        let recovery = match self.rotate_and_checkout_handle() {
+            Ok(handle) => handle,
+            Err(error) => return self.finish_recovery_state_failure(error),
+        };
+        let Some(incident) = self.incident.as_ref() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         if let Some(barrier) = &mut self.active_barrier {
             barrier.phase = ControllerBarrierPhase::PersistenceUnhealthy {
-                incident: self.incident.as_ref().expect("incident").id,
+                incident: incident.id,
             };
         }
         let result = PersistenceRecoveryResult::StillUnhealthy {
@@ -363,7 +433,7 @@ impl RuntimeUiStateController {
             attempt,
             error,
             active,
-            evidence: evidence(self.incident.as_ref().expect("incident")),
+            evidence: evidence(incident),
         };
         self.deliver_terminal(result)
     }
@@ -371,26 +441,48 @@ impl RuntimeUiStateController {
     pub(super) fn finish_cancelled_attempt(
         &mut self,
         active: Option<RuntimeStateSourceObservation>,
-    ) {
+    ) -> SubmitPersistenceRecoveryResult {
+        if self.active_recovery.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+        }
+        if self.incident.is_none() {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        }
         let active = self.retain_or_fallback_active(active);
         self.apply_incident_staged_reload();
-        let (attempt_id, incident_id) = {
-            let attempt = self.active_recovery.as_ref().expect("active attempt");
-            (attempt.id, attempt.incident)
+        let (attempt_id, incident_id) = match self.active_recovery.as_ref() {
+            Some(attempt) => (attempt.id, attempt.incident),
+            None => {
+                return self
+                    .finish_recovery_state_failure(RecoveryStateFailure::MissingActiveAttempt);
+            }
         };
-        let recovery = self.rotate_and_checkout_handle();
+        let recovery = match self.rotate_and_checkout_handle() {
+            Ok(handle) => handle,
+            Err(error) => return self.finish_recovery_state_failure(error),
+        };
+        let Some(incident) = self.incident.as_ref() else {
+            return self.finish_recovery_state_failure(RecoveryStateFailure::MissingIncident);
+        };
         let result = PersistenceRecoveryResult::Cancelled {
             recovery,
             attempt: attempt_id,
             active,
-            evidence: evidence(self.incident.as_ref().expect("incident")),
+            evidence: evidence(incident),
         };
         if let Some(barrier) = &mut self.active_barrier {
             barrier.phase = ControllerBarrierPhase::PersistenceUnhealthy {
                 incident: incident_id,
             };
         }
-        let _ = self.deliver_terminal(result);
+        self.deliver_terminal(result)
+    }
+
+    pub(super) fn finish_current_attempt_cancelled(
+        &mut self,
+        active: Option<RuntimeStateSourceObservation>,
+    ) -> SubmitPersistenceRecoveryResult {
+        self.finish_cancelled_attempt(active)
     }
 
     pub(super) fn retain_or_fallback_active(
@@ -419,11 +511,11 @@ impl RuntimeUiStateController {
         let incident = self.incident.take()?;
         let error = RuntimeStateIoError::new("runtime-state persistence shut down");
         self.pipeline
-            .settle_held_failed(&incident.held_replacements, error.clone());
+            .settle_held_pending_failed(&incident.held_replacements, error.clone());
         if let RecoveryCleanupState::Pending { through }
         | RecoveryCleanupState::InFlight { through, .. } = incident.cleanup
         {
-            self.pipeline.settle_failed([through], error);
+            self.pipeline.settle_pending_failed([through], error);
         }
         self.close_barrier_and_resolve_previews(
             incident.barrier,
@@ -433,23 +525,90 @@ impl RuntimeUiStateController {
     }
 
     pub(super) fn finish_recovery_shutdown(&mut self) -> SubmitPersistenceRecoveryResult {
-        let active = self.active_recovery.take();
-        let attempt = active
-            .as_ref()
-            .map_or(RecoveryAttemptId(0), |active| active.id);
-        let incident = self
-            .settle_incident_for_shutdown()
-            .expect("active recovery owns an incident");
-        if let Some(active) = active {
-            let result = PersistenceRecoveryResult::Shutdown {
-                incident: incident.id,
-                evidence: evidence(&incident),
-            };
-            if let Err(undelivered) = active.completion.send(result) {
-                drop(undelivered.0);
-            }
+        self.finish_recovery_shutdown_with_reason(RecoveryShutdownReason::Requested, None)
+    }
+
+    pub(super) fn finish_recovery_state_failure(
+        &mut self,
+        reason: RecoveryStateFailure,
+    ) -> SubmitPersistenceRecoveryResult {
+        self.finish_recovery_state_failure_with_evidence(reason, None)
+    }
+
+    pub(super) fn finish_recovery_state_failure_with_evidence(
+        &mut self,
+        reason: RecoveryStateFailure,
+        fallback_evidence: Option<PersistenceRecoveryEvidence>,
+    ) -> SubmitPersistenceRecoveryResult {
+        self.finish_recovery_shutdown_with_reason(
+            RecoveryShutdownReason::StateFailure(reason),
+            fallback_evidence,
+        )
+    }
+
+    fn finish_recovery_shutdown_with_reason(
+        &mut self,
+        reason: RecoveryShutdownReason,
+        fallback_evidence: Option<PersistenceRecoveryEvidence>,
+    ) -> SubmitPersistenceRecoveryResult {
+        let state_failure = matches!(&reason, RecoveryShutdownReason::StateFailure(_));
+        if state_failure {
+            self.shutting_down = true;
+            self.pipeline.terminal_shutdown(RuntimeStateIoError::new(
+                "runtime-state persistence shut down after a recovery state failure",
+            ));
         }
-        let _ = self.pipeline.request_shutdown();
+        let Some(active) = self.active_recovery.take() else {
+            return SubmitPersistenceRecoveryResult::BlockedControllerState {
+                reason: match reason {
+                    RecoveryShutdownReason::Requested => RecoveryStateFailure::MissingActiveAttempt,
+                    RecoveryShutdownReason::StateFailure(reason) => reason,
+                },
+            };
+        };
+        let attempt = active.id;
+        let settled_incident = self.settle_incident_for_shutdown();
+        if settled_incident.is_none() {
+            self.close_barrier_and_resolve_previews(
+                active.barrier,
+                AbandonedPreviewResolutionReason::CancelledUnderRetainedAuthority,
+            );
+        }
+        let (incident, recovery_evidence) = match settled_incident.as_ref() {
+            Some(incident) => (incident.id, evidence(incident)),
+            None => {
+                let recovery_evidence = match fallback_evidence {
+                    Some(evidence) => evidence,
+                    None => PersistenceRecoveryEvidence {
+                        recovery_artifacts: Vec::new(),
+                        path_effect_history: Vec::new(),
+                    },
+                };
+                (active.incident, recovery_evidence)
+            }
+        };
+        let reason = if state_failure {
+            reason
+        } else {
+            match self.pipeline.request_shutdown() {
+                Ok(()) => reason,
+                Err(error) => {
+                    self.shutting_down = true;
+                    self.pipeline.terminal_shutdown(RuntimeStateIoError::new(format!(
+                        "runtime-state persistence shut down after recovery shutdown failed: {error:?}"
+                    )));
+                    RecoveryShutdownReason::StateFailure(RecoveryStateFailure::Pipeline(error))
+                }
+            }
+        };
+        let result = PersistenceRecoveryResult::Shutdown {
+            incident,
+            evidence: recovery_evidence,
+            reason,
+        };
+        if let Err(undelivered) = active.completion.send(result) {
+            drop(undelivered.0);
+        }
         SubmitPersistenceRecoveryResult::Terminal { attempt }
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     onboarding::OnboardingState,
     ui::toolbar::model::{
         ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPersistenceTarget,
-        ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget,
+        ToolbarPreApplyEffect,
     },
 };
 use wayland_client::{Connection, QueueHandle};
@@ -196,7 +196,7 @@ impl WaylandState {
             && self.input_state.toolbar_side_pane == crate::ui::toolbar::SidePane::Draw;
         let mut snapshot =
             ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
-        populate_session_snapshot(&mut snapshot, self.session.options());
+        populate_session_snapshot(&mut snapshot, self.session.options(), &self.session_catalog);
         snapshot.runtime_ui_persistence = self
             .runtime_ui
             .as_ref()
@@ -382,7 +382,7 @@ impl WaylandState {
             (ToolbarBackendRoute::MoveTopToolbar, ToolbarEvent::MoveTopToolbar { x, y }) => {
                 let inline_active = self.inline_toolbars_active();
                 let coord_is_screen = inline_active;
-                drag_log(format!(
+                self.runtime_options.drag_log(format!(
                     "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
                     *x, *y, coord_is_screen, inline_active
                 ));
@@ -399,7 +399,7 @@ impl WaylandState {
             (ToolbarBackendRoute::MoveSideToolbar, ToolbarEvent::MoveSideToolbar { x, y }) => {
                 let inline_active = self.inline_toolbars_active();
                 let coord_is_screen = inline_active;
-                drag_log(format!(
+                self.runtime_options.drag_log(format!(
                     "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
                     *x, *y, coord_is_screen, inline_active
                 ));
@@ -424,7 +424,11 @@ impl WaylandState {
         let thickness_event = policy.tablet_thickness_sensitive;
 
         let pane_switch = matches!(event, ToolbarEvent::SetSidePane(_));
-        let starts_item_drag = matches!(event, ToolbarEvent::StartToolbarItemDrag { .. });
+        let item_drag_group = match &event {
+            ToolbarEvent::StartToolbarItemDrag { group, .. } => Some(*group),
+            _ => None,
+        };
+        let starts_item_drag = item_drag_group.is_some();
         if matches!(event, ToolbarEvent::DragToolbarItemOver { .. })
             && !self.toolbar_item_drag_update_allowed()
         {
@@ -437,19 +441,16 @@ impl WaylandState {
             ToolbarPersistence::RuntimeUi(target) => Some(target),
             ToolbarPersistence::Ephemeral | ToolbarPersistence::Config(_) => None,
         };
-        if starts_item_drag {
-            let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
-                unreachable!("item drag start must carry its order-group runtime target");
-            };
-            if !self.begin_toolbar_item_drag_preview(group) {
-                return;
-            }
+        if let Some(group) = item_drag_group
+            && !self.begin_toolbar_item_drag_preview(group)
+        {
+            return;
         }
         let pin_change = ToolbarPinChange::from_event(&event);
         let prepared_runtime = if starts_item_drag {
             None
         } else if let Some(target) = runtime_target {
-            match self.runtime_ui.as_ref() {
+            match self.runtime_ui.as_mut() {
                 Some(runtime) => match runtime.begin_toolbar_mutation(target, &self.input_state) {
                     Some(prepared) => Some(prepared),
                     None => return,

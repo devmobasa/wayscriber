@@ -7,7 +7,10 @@ use super::setup::setup_wayland;
 use super::state_init::init_state;
 use super::surface::create_overlay_surface;
 
-pub(super) fn run_backend(backend: &mut WaylandBackend) -> Result<()> {
+pub(super) fn run_backend(
+    backend: &mut WaylandBackend,
+    signal_source: &mut dyn crate::unix_signals::SignalEventSource,
+) -> Result<()> {
     info!("Starting Wayland backend");
 
     let setup = setup_wayland()?;
@@ -23,7 +26,9 @@ pub(super) fn run_backend(backend: &mut WaylandBackend) -> Result<()> {
         &runtime.qh,
         &mut runtime.state,
         &runtime.runtime_wake,
+        signal_source,
     );
+    runtime.state.shutdown_clipboard_producers();
 
     match outcome.loop_error {
         Some(e) => Err(e),

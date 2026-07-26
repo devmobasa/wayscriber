@@ -18,10 +18,6 @@ use super::{
     MAX_COMMAND_QUEUE_REFERENCES, MAX_COMMAND_ROOT_ENTRIES, MAX_COMMAND_STAGING_DIRECTORIES,
 };
 
-pub(crate) fn command_root() -> PathBuf {
-    crate::paths::daemon_command_dir().join("v2")
-}
-
 pub(super) fn creating_dir(root: &Path) -> PathBuf {
     root.join(".creating")
 }

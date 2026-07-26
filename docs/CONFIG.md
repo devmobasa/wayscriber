@@ -71,9 +71,30 @@ overwriting a changed file.
 ## Configuration File Location
 
 The configuration file should be placed at:
-- Linux: `~/.config/wayscriber/config.toml`
+- Linux: `$XDG_CONFIG_HOME/wayscriber/config.toml`, or
+  `~/.config/wayscriber/config.toml` when `XDG_CONFIG_HOME` is unset or empty.
 - The directory will be created automatically when you first create the config file. If the config
   path is a dangling symlink, missing parent directories for its final target are created as well.
+
+### Path and logging environment rules
+
+Wayscriber captures path-related environment values once when an ordinary application root starts:
+
+- An absolute, non-empty `HOME` wins. If `HOME` is unset or empty, an absolute, non-empty
+  `USERPROFILE` is accepted. A relative `HOME` is an error and does not fall through to
+  `USERPROFILE`; Wayscriber never substitutes the current working directory.
+- `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_PICTURES_DIR`, and
+  `XDG_RUNTIME_DIR` must be absolute when set and non-empty. A relative value produces an error for
+  the capability that needs it instead of silently anchoring it to the current directory.
+- Runtime control files normally use `$XDG_RUNTIME_DIR/wayscriber`. If `XDG_RUNTIME_DIR` is unset
+  or empty, they use `$XDG_DATA_HOME/wayscriber/runtime` (normally
+  `~/.local/share/wayscriber/runtime`). The final runtime directory must be a real directory owned
+  by the current user with no group or other permissions; symlinks and unsafe ownership or modes
+  are rejected.
+- `WAYSCRIBER_LOG_FILE`, when set and non-empty, must name an absolute file. An invalid relative
+  override is diagnosed and ignored in favor of the normal absolute log target under the Wayscriber
+  data directory. If file logging cannot be opened or written, diagnostics continue on standard
+  error so daemon launches retain journal output.
 
 ## Example Configuration
 
@@ -1118,6 +1139,10 @@ exit_after_capture = false
 ```
 
 **Tips:**
+- `save_directory` must be absolute after the supported leading `~/` expansion. The configurator
+  rejects relative values when saving. A relative value loaded at runtime disables only the file
+  delivery that needs it and reports that operation's failure; it does not change the process
+  working directory or redirect output there.
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
 - `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.

@@ -5,8 +5,8 @@ use super::super::fields::{
 };
 use super::draft::ConfigDraft;
 use wayscriber::config::{
-    PerformanceFieldId, ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag,
-    section_flag_for_item, set_section_visibility,
+    ToolbarItemId, ToolbarItemOrderGroup, ToolbarSectionFlag, section_flag_for_item,
+    set_section_visibility,
 };
 
 impl ConfigDraft {
@@ -156,7 +156,7 @@ impl ConfigDraft {
                 self.drawing_default_fill_enabled = value;
             }
             ToggleField::PerformanceVsync => {
-                self.set_performance_bool(PerformanceFieldId::EnableVsync, value);
+                self.set_performance_vsync(value);
             }
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiStatusBarInteractive => self.ui_status_bar_interactive = value,
@@ -316,10 +316,10 @@ impl ConfigDraft {
             TextField::ArrowLength => self.arrow_length = value,
             TextField::ArrowAngle => self.arrow_angle = value,
             TextField::PerformanceMaxFpsNoVsync => {
-                self.set_performance_text(PerformanceFieldId::MaxFpsNoVsync, value);
+                self.set_performance_max_fps_no_vsync(value);
             }
             TextField::PerformanceUiAnimationFps => {
-                self.set_performance_text(PerformanceFieldId::UiAnimationFps, value);
+                self.set_performance_ui_animation_fps(value);
             }
             TextField::HistoryUndoAllDelayMs => self.history_undo_all_delay_ms = value,
             TextField::HistoryRedoAllDelayMs => self.history_redo_all_delay_ms = value,

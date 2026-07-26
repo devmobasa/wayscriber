@@ -71,6 +71,17 @@ pub(crate) struct PersistenceIncident {
 }
 
 #[derive(Debug)]
+pub(super) struct PreparedPersistenceIncident {
+    pub(super) barrier: ControllerBarrierId,
+    pub(super) next_barrier_id: Option<u64>,
+    pub(super) id: PersistenceIncidentId,
+    pub(super) next_incident_id: u64,
+    pub(super) handle_id: RecoveryHandleId,
+    pub(super) next_handle_id: u64,
+    pub(super) pending_reset_through: Option<AcceptedStateRevision>,
+}
+
+#[derive(Debug)]
 pub(crate) struct PersistenceRecoveryHandle {
     controller_id: ControllerId,
     incident: PersistenceIncidentId,
@@ -232,7 +243,7 @@ impl RecoveryCanonicalWritePurpose {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum RecoveryAttemptKind {
     RetryPending,
     DiscardPendingAndAdoptObserved,
@@ -339,6 +350,31 @@ pub(crate) enum RecoveryBeginRejection {
     AttemptAlreadyRunning,
     InvalidActionOrConfirmation,
     ShuttingDown,
+    AttemptIdExhausted,
+    CommandIdExhausted,
+    ControllerState(RecoveryStateFailure),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RecoveryStateFailure {
+    MissingIncident,
+    MissingActiveAttempt,
+    MissingBarrier,
+    IncidentMismatch,
+    BarrierMismatch,
+    HandleStateMismatch,
+    InvalidAttemptPhase,
+    AuthorityEpochExhausted,
+    CommandIdExhausted,
+    HandleIdExhausted,
+    LeaseNonceExhausted,
+    Pipeline(PipelineProtocolError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RecoveryShutdownReason {
+    Requested,
+    StateFailure(RecoveryStateFailure),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -412,6 +448,7 @@ pub(crate) enum PersistenceRecoveryResult {
     Shutdown {
         incident: PersistenceIncidentId,
         evidence: PersistenceRecoveryEvidence,
+        reason: RecoveryShutdownReason,
     },
 }
 
@@ -431,6 +468,7 @@ pub(crate) enum BeginPersistenceRecoveryResult {
 pub(crate) enum CheckoutPersistenceRecoveryHandleResult {
     CheckedOut(PersistenceRecoveryHandle),
     AlreadyCheckedOut,
+    LeaseNonceExhausted,
     RejectedWrongControllerOrIncident,
     RejectedNotUnhealthy,
 }
@@ -459,6 +497,9 @@ pub(crate) enum SubmitPersistenceRecoveryResult {
         reason: RecoveryCompletionProtocolError,
         evidence: PersistenceRecoveryEvidence,
         reinspection_dispatched: Option<RecoveryCommandId>,
+    },
+    BlockedControllerState {
+        reason: RecoveryStateFailure,
     },
 }
 

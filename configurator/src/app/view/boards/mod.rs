@@ -91,10 +91,7 @@ impl ConfiguratorApp {
                 .push(row![add_button].spacing(8));
         }
 
-        let loaded_legacy_boards = self
-            .base_document
-            .as_ref()
-            .is_some_and(|document| document.config().boards.is_none());
+        let loaded_legacy_boards = self.base_document.loaded_legacy_boards();
         if (show_general || show_all) && loaded_legacy_boards {
             column = column.push(
                 text(

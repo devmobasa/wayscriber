@@ -80,13 +80,14 @@ impl TopBar {
                     chip.button
                         .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("color chip event");
-                    chip.button.connect_clicked(move |_| {
-                        send_event(&sender, event.clone());
-                    });
+                    if let Some(event) = control.event(snapshot) {
+                        chip.button.connect_clicked(move |_| {
+                            send_event(&sender, event.clone());
+                        });
+                    }
                     chip.button.set_valign(gtk4::Align::Center);
                     append_gap(&pill, chip.button.as_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         chip.set_color(snapshot.color);
                     }));
                 }
@@ -104,10 +105,11 @@ impl TopBar {
                         .button
                         .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("swatch event");
-                    swatch.button.connect_clicked(move |_| {
-                        send_event(&sender, event.clone());
-                    });
+                    if let Some(event) = control.event(snapshot) {
+                        swatch.button.connect_clicked(move |_| {
+                            send_event(&sender, event.clone());
+                        });
+                    }
                     install_quick_color_recolor(&swatch.button, index, &self.feedback);
                     swatch.button.set_valign(gtk4::Align::Center);
                     let is_last = index + 1 == swatch_count;
@@ -116,14 +118,16 @@ impl TopBar {
                         swatch.button.upcast_ref(),
                         if is_last { gap } else { SWATCH_GAP },
                     );
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         swatch.set_selected(entry_color == snapshot.color);
                     }));
                 }
                 model::StylePillControl::ThicknessSlider
                 | model::StylePillControl::OpacitySlider
                 | model::StylePillControl::FontSizeSlider => {
-                    let (slider_spec, value) = control.slider(snapshot).expect("slider control");
+                    let Some((slider_spec, value)) = control.slider(snapshot) else {
+                        continue;
+                    };
                     let format = match control {
                         model::StylePillControl::ThicknessSlider => format_px as fn(f64) -> String,
                         model::StylePillControl::OpacitySlider => format_percent,
@@ -159,7 +163,7 @@ impl TopBar {
                     slider.root.set_size_request(px(STYLE_SLIDER_W), -1);
                     slider.root.set_valign(gtk4::Align::Center);
                     append_gap(&pill, slider.root.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         let value = match control {
                             model::StylePillControl::ThicknessSlider => snapshot.thickness,
                             model::StylePillControl::OpacitySlider => snapshot.marker_opacity,
@@ -174,15 +178,16 @@ impl TopBar {
                     // precise-entry popup (the shared event path, like the
                     // color chip's overlay picker popup).
                     let button = pill_button(
-                        &control.value_text(snapshot).expect("numeral text"),
+                        &control.value_text(snapshot).unwrap_or_default(),
                         sz(STYLE_VALUE_W),
                         sz(STYLE_ROW_H),
                     );
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("numeral event");
-                    button.connect_clicked(move |_| {
-                        send_event(&sender, event.clone());
-                    });
+                    if let Some(event) = control.event(snapshot) {
+                        button.connect_clicked(move |_| {
+                            send_event(&sender, event.clone());
+                        });
+                    }
                     set_semantic_widget_id(&button, control.id().as_ref());
                     if let Some(tooltip) = control.tooltip(snapshot) {
                         button.set_tooltip_text(Some(&tooltip));
@@ -190,8 +195,8 @@ impl TopBar {
                     let accessible_label = control.label(snapshot);
                     button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     append_gap(&pill, button.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        button.set_label(&control.value_text(snapshot).expect("numeral text"));
+                    self.updaters.push(Box::new(move |snapshot| {
+                        button.set_label(&control.value_text(snapshot).unwrap_or_default());
                     }));
                 }
                 model::StylePillControl::FillToggle | model::StylePillControl::AutoNumberToggle => {
@@ -204,26 +209,22 @@ impl TopBar {
                     check.set_active(control.active(snapshot));
                     check.set_valign(gtk4::Align::Center);
                     let sender = self.feedback.clone();
-                    let syncing = Rc::new(Cell::new(false));
-                    let toggle_sync = syncing.clone();
-                    check.connect_toggled(move |check| {
-                        if !toggle_sync.get() {
-                            let event = match control {
-                                model::StylePillControl::FillToggle => {
-                                    ToolbarEvent::ToggleFill(check.is_active())
-                                }
-                                _ => ToolbarEvent::ToggleArrowLabels(check.is_active()),
-                            };
-                            send_event(&sender, event);
-                        }
+                    let feedback_handler = check.connect_toggled(move |check| {
+                        let event = match control {
+                            model::StylePillControl::FillToggle => {
+                                ToolbarEvent::ToggleFill(check.is_active())
+                            }
+                            _ => ToolbarEvent::ToggleArrowLabels(check.is_active()),
+                        };
+                        send_event(&sender, event);
                     });
                     append_gap(&pill, check.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         let active = control.active(snapshot);
                         if check.is_active() != active {
-                            syncing.set(true);
+                            check.block_signal(&feedback_handler);
                             check.set_active(active);
-                            syncing.set(false);
+                            check.unblock_signal(&feedback_handler);
                         }
                     }));
                 }
@@ -235,13 +236,14 @@ impl TopBar {
                         button.set_tooltip_text(Some(&tooltip));
                     }
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("reset event");
-                    button.connect_clicked(move |_| {
-                        send_event(&sender, event.clone());
-                    });
+                    if let Some(event) = control.event(snapshot) {
+                        button.connect_clicked(move |_| {
+                            send_event(&sender, event.clone());
+                        });
+                    }
                     append_gap(&pill, button.upcast_ref(), gap);
                     let handle = button.clone();
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         // The next-number tooltip tracks the counter live.
                         if let Some(tooltip) = control.tooltip(snapshot) {
                             handle.set_tooltip_text(Some(&tooltip));
@@ -262,12 +264,13 @@ impl TopBar {
                     let accessible_label = control.label(snapshot);
                     button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("selection cycle event");
-                    button.connect_clicked(move |_| {
-                        send_event(&sender, event.clone());
-                    });
+                    if let Some(event) = control.event(snapshot) {
+                        button.connect_clicked(move |_| {
+                            send_event(&sender, event.clone());
+                        });
+                    }
                     append_gap(&pill, button.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         button.set_label(&control.value_text(snapshot).unwrap_or_default());
                         button.set_sensitive(control.enabled(snapshot));
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
@@ -277,7 +280,9 @@ impl TopBar {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
                     set_semantic_widget_id(&row, control.id().as_ref());
                     row.set_valign(gtk4::Align::Center);
-                    let steps = control.steps(snapshot).expect("stepper halves");
+                    let Some(steps) = control.steps(snapshot) else {
+                        continue;
+                    };
                     let mut handles: Vec<gtk4::Button> = Vec::new();
                     let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
                     set_semantic_widget_id(&minus, steps[0].id);
@@ -303,7 +308,7 @@ impl TopBar {
                         });
                     }
                     append_gap(&pill, row.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         value.set_label(&control.value_text(snapshot).unwrap_or_default());
                         let enabled = control.enabled(snapshot);
                         for button in &handles {
@@ -319,7 +324,9 @@ impl TopBar {
                     // A clear gap before the segment so Sans│Mono never crowd
                     // the preceding numeral ("72pt") to its left (M7-C3).
                     row.set_margin_start(px(STYLE_SEGMENT_LEAD));
-                    let segments = control.segments(snapshot).expect("segment halves");
+                    let Some(segments) = control.segments(snapshot) else {
+                        continue;
+                    };
                     let mut handles: Vec<(gtk4::Button, &'static str)> = Vec::new();
                     for segment in &segments {
                         let button = pill_button(segment.label, -1.0, sz(STYLE_TAB_H));
@@ -338,7 +345,7 @@ impl TopBar {
                         row.append(&button);
                     }
                     append_gap(&pill, row.upcast_ref(), gap);
-                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                    self.updaters.push(Box::new(move |snapshot| {
                         let Some(segments) = control.segments(snapshot) else {
                             return;
                         };
@@ -357,7 +364,7 @@ impl TopBar {
         self.root.append(&pill);
 
         // The pill fades with the islands above it.
-        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+        self.updaters.push(Box::new(move |snapshot| {
             pill.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
         }));
     }

@@ -1,7 +1,6 @@
 use crate::draw::shape::Shape;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
-use std::cell::Cell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unique identifier for a drawn shape within a frame.
@@ -10,14 +9,6 @@ pub type ShapeId = u64;
 /// Maximum allowed compound nesting depth in persisted history.
 pub const MAX_COMPOUND_DEPTH: usize = 16;
 
-/// Memoized bounding-box state for a [`DrawnShape`].
-#[derive(Clone, Copy, Debug, Default)]
-enum CachedBounds {
-    #[default]
-    Unknown,
-    Known(Option<Rect>),
-}
-
 /// A shape stored in a frame with additional metadata.
 #[derive(Clone, Debug)]
 pub struct DrawnShape {
@@ -25,11 +16,6 @@ pub struct DrawnShape {
     pub shape: Shape,
     pub created_at: u64,
     pub locked: bool,
-    /// Memoized `shape.bounding_box()`. Recomputing bounds is O(points) for
-    /// strokes and hits the text-measurement cache for text shapes, and the
-    /// render culling loop queries every shape every frame — so memoize.
-    /// Any code that mutates `shape` in place must call [`Self::invalidate_bounds`].
-    cached_bounds: Cell<CachedBounds>,
 }
 
 impl DrawnShape {
@@ -39,7 +25,6 @@ impl DrawnShape {
             shape,
             created_at: current_timestamp_ms(),
             locked: false,
-            cached_bounds: Cell::new(CachedBounds::Unknown),
         }
     }
 
@@ -49,38 +34,21 @@ impl DrawnShape {
             shape,
             created_at,
             locked,
-            cached_bounds: Cell::new(CachedBounds::Unknown),
         }
     }
 
-    /// Bounding box of the shape, memoized across frames.
+    /// Bounding box of the current shape.
     ///
-    /// In debug builds a stale cache (a mutation site missing
-    /// [`Self::invalidate_bounds`]) trips an assertion, so the test suite
-    /// catches invalidation bugs while release builds get the O(1) fast path.
+    /// Derived geometry is computed from the shape that this value owns. The
+    /// render owner may cache frame-level culling data; the domain value does
+    /// not mutate itself through a shared reference.
     pub fn bounding_box(&self) -> Option<Rect> {
-        if let CachedBounds::Known(bounds) = self.cached_bounds.get() {
-            debug_assert_eq!(
-                bounds,
-                self.shape.bounding_box(),
-                "stale DrawnShape bounds cache: a mutation site is missing invalidate_bounds()"
-            );
-            return bounds;
-        }
-        let bounds = self.shape.bounding_box();
-        self.cached_bounds.set(CachedBounds::Known(bounds));
-        bounds
-    }
-
-    /// Drops the memoized bounding box; call after mutating `shape` in place.
-    pub fn invalidate_bounds(&self) {
-        self.cached_bounds.set(CachedBounds::Unknown);
+        self.shape.bounding_box()
     }
 
     /// Replaces the shape, keeping the bounds cache consistent.
     pub fn set_shape(&mut self, shape: Shape) {
         self.shape = shape;
-        self.invalidate_bounds();
     }
 }
 
@@ -250,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn bounding_box_is_memoized_and_stable() {
+    fn bounding_box_is_derived_and_stable() {
         let drawn = DrawnShape::with_metadata(1, line(0, 0, 10, 10), 0, false);
         let first = drawn.bounding_box();
         let second = drawn.bounding_box();
@@ -259,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn set_shape_refreshes_cached_bounds() {
+    fn set_shape_updates_derived_bounds() {
         let mut drawn = DrawnShape::with_metadata(1, line(0, 0, 10, 10), 0, false);
         let before = drawn.bounding_box().expect("line has bounds");
         drawn.set_shape(line(100, 100, 150, 150));
@@ -269,14 +237,13 @@ mod tests {
     }
 
     #[test]
-    fn invalidate_bounds_recomputes_after_in_place_mutation() {
+    fn in_place_mutation_is_reflected_without_interior_cache_state() {
         let mut drawn = DrawnShape::with_metadata(1, line(0, 0, 10, 10), 0, false);
         let _ = drawn.bounding_box();
         if let Shape::Line { x1, x2, .. } = &mut drawn.shape {
             *x1 += 500;
             *x2 += 500;
         }
-        drawn.invalidate_bounds();
         assert_eq!(drawn.bounding_box(), drawn.shape.bounding_box());
     }
 }

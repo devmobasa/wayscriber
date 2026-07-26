@@ -1,15 +1,15 @@
 use super::super::base::InputState;
-use crate::config::Config;
 use crate::env_vars::CONFIGURATOR_ENV;
 use crate::input::state::{Toast, ToastPriority};
 use std::ffi::{OsStr, OsString};
 
 fn spawn_detached(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     kind: crate::process_broker::HelperKind,
     program: &OsStr,
     arguments: &[OsString],
 ) -> anyhow::Result<crate::process_broker::BrokerChild> {
-    crate::process_broker::current()?.spawn(
+    process_broker.spawn(
         kind,
         crate::process_broker::HelperLifetime::DetachedAfterExec,
         program,
@@ -43,7 +43,10 @@ impl InputState {
     /// toplevel opened underneath it would be invisible and unfocusable. Exiting
     /// is what the configurator already does for the same reason; in daemon mode
     /// this just returns to the hidden state, so the cost is one toggle.
-    pub(crate) fn launch_about(&mut self) {
+    pub(crate) fn launch_about(
+        &mut self,
+        process_broker: &crate::process_broker::ProcessBrokerHandle,
+    ) {
         let executable = match std::env::current_exe() {
             Ok(path) => path,
             Err(err) => {
@@ -58,6 +61,7 @@ impl InputState {
         };
 
         match spawn_detached(
+            process_broker,
             crate::process_broker::HelperKind::About,
             executable.as_os_str(),
             &["--about".into()],
@@ -77,11 +81,16 @@ impl InputState {
         }
     }
 
-    pub(crate) fn launch_configurator(&mut self) {
+    pub(crate) fn launch_configurator(
+        &mut self,
+        process_broker: &crate::process_broker::ProcessBrokerHandle,
+        config_path: &std::path::Path,
+    ) {
         let binary = std::env::var(CONFIGURATOR_ENV)
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
         match spawn_detached(
+            process_broker,
             crate::process_broker::HelperKind::Configurator,
             OsStr::new(&binary),
             &[],
@@ -96,7 +105,7 @@ impl InputState {
             Err(err) => {
                 log::error!("Failed to launch wayscriber-configurator using '{binary}': {err:#}");
                 log::error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
-                if self.open_config_file_default() {
+                if self.open_config_file_default(process_broker, config_path) {
                     log::info!(
                         "Opened config file with default application because wayscriber-configurator was unavailable"
                     );
@@ -112,7 +121,10 @@ impl InputState {
     }
 
     /// Opens the most recent capture directory using the desktop default application.
-    pub(crate) fn open_capture_folder(&mut self) {
+    pub(crate) fn open_capture_folder(
+        &mut self,
+        process_broker: &crate::process_broker::ProcessBrokerHandle,
+    ) {
         let Some(path) = self.last_capture_path.clone() else {
             self.push_toast(
                 ToastPriority::Info,
@@ -137,6 +149,7 @@ impl InputState {
 
         let (opener, arguments) = opener_arguments(&folder);
         match spawn_detached(
+            process_broker,
             crate::process_broker::HelperKind::DesktopOpen,
             &opener,
             &arguments,
@@ -165,22 +178,14 @@ impl InputState {
     }
 
     /// Opens the primary config file using the desktop default application.
-    pub(crate) fn open_config_file_default(&mut self) -> bool {
-        let path = match Config::get_config_path() {
-            Ok(p) => p,
-            Err(err) => {
-                log::error!("Unable to resolve config path: {}", err);
-                self.push_toast(
-                    ToastPriority::Critical,
-                    "launcher",
-                    Toast::error("Unable to resolve config path."),
-                );
-                return false;
-            }
-        };
-
-        let (opener, arguments) = opener_arguments(&path);
+    pub(crate) fn open_config_file_default(
+        &mut self,
+        process_broker: &crate::process_broker::ProcessBrokerHandle,
+        path: &std::path::Path,
+    ) -> bool {
+        let (opener, arguments) = opener_arguments(path);
         match spawn_detached(
+            process_broker,
             crate::process_broker::HelperKind::DesktopOpen,
             &opener,
             &arguments,

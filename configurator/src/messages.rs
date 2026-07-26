@@ -1,40 +1,33 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 
-use wayscriber::config::{ConfigDocument, ToolbarItemId, ToolbarItemOrderGroup};
-
+use crate::app::BlockingJobId;
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
-    ColorPickerValue, DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption,
-    DragMouseButton, DragToolField, DragToolOption, EraserModeOption, FontStyleOption,
-    FontWeightOption, KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption,
-    PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
-    PdfPageSizeOption, PdfTransparentBackgroundOption, PresenterToolBehaviorOption,
-    PresenterToolbarModeOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
-    PresetToggleField, QuadField, ReducedMotionOption, RenderProfileExportOption,
-    RenderProfileMappingSide, RenderProfileTextField, SessionCatalogActionResult,
-    SessionCatalogItem, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiTabId, UiThemeOption,
-    ZoomChipDisplayOption,
+    ColorPickerValue, DaemonAction, DragColorOption, DragMouseButton, DragToolField,
+    DragToolOption, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
+    KeybindingsTabId, NamedColorOption, OverrideOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
+    RenderProfileTextField, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField,
+    UiTabId, UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 
 #[derive(Debug, Clone)]
-pub enum Message {
-    ConfigLoaded(Result<(Arc<ConfigDocument>, Option<String>), String>),
+pub(crate) enum Message {
+    BlockingJobReady(BlockingJobId),
     ReloadRequested,
     ResetToDefaultsRequested,
     ResetToDefaultsConfirmed,
     ResetToDefaultsCanceled,
     SaveRequested,
-    ConfigSaved(Result<(Option<PathBuf>, Arc<ConfigDocument>), String>),
-    DaemonStatusLoaded(u64, Result<DaemonRuntimeStatus, String>),
     DaemonShortcutInputChanged(String),
     DaemonActionRequested(DaemonAction),
-    DaemonActionCompleted(Result<DaemonActionResult, String>),
-    SessionCatalogLoaded(Result<Vec<SessionCatalogItem>, String>),
     SessionCatalogRefreshRequested,
     SessionCatalogForgetRequested(String),
     SessionCatalogRenameInputChanged(String, String),
@@ -48,7 +41,6 @@ pub enum Message {
     SessionCatalogClearRequested(String),
     SessionCatalogClearConfirmed(String),
     SessionCatalogClearCanceled,
-    SessionCatalogActionCompleted(Result<SessionCatalogActionResult, String>),
     SearchChanged(String),
     SearchCleared,
     SearchFocusRequested,

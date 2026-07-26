@@ -100,12 +100,15 @@ impl PersistencePipeline {
 
     pub(crate) fn hold_trailing_replacements(&mut self) -> Vec<HeldReplacementStage> {
         let mut held = Vec::new();
-        while matches!(self.pending.back(), Some(PendingStage::Replace(_))) {
-            let PendingStage::Replace(stage) = self.pending.pop_back().expect("tail checked")
-            else {
-                unreachable!();
-            };
-            held.push(stage.into());
+        loop {
+            match self.pending.pop_back() {
+                Some(PendingStage::Replace(stage)) => held.push(stage.into()),
+                Some(stage) => {
+                    self.pending.push_back(stage);
+                    break;
+                }
+                None => break,
+            }
         }
         held.reverse();
         held
@@ -197,6 +200,41 @@ impl PersistencePipeline {
         true
     }
 
+    pub(crate) fn has_pending_reset(&self, through: AcceptedStateRevision) -> bool {
+        self.pending.iter().any(|stage| {
+            matches!(
+                stage,
+                PendingStage::ResetSupported {
+                    through: staged, ..
+                } | PendingStage::ResetUnsupportedIfUnchanged {
+                    through: staged, ..
+                } if *staged == through
+            )
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn remove_pending_reset_for_test(&mut self, through: AcceptedStateRevision) -> bool {
+        let Some(index) = self.pending.iter().position(|stage| {
+            matches!(
+                stage,
+                PendingStage::ResetSupported {
+                    through: staged, ..
+                } | PendingStage::ResetUnsupportedIfUnchanged {
+                    through: staged, ..
+                } if *staged == through
+            )
+        }) else {
+            return false;
+        };
+        self.pending.remove(index).is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn exhaust_mutation_id_for_test(&mut self) {
+        self.next_mutation_id = u64::MAX;
+    }
+
     pub(crate) fn dispatch_recovery_replace(
         &mut self,
         snapshot: RuntimeUiWireState,
@@ -211,9 +249,8 @@ impl PersistencePipeline {
             SourceMutationKind::Replace(snapshot),
             covered,
         )?;
-        Ok(self
-            .take_outbound()
-            .expect("recovery replacement dispatched synchronously"))
+        self.take_outbound()
+            .ok_or(PipelineProtocolError::MutationNotDispatched)
     }
 
     pub(crate) fn preflight_recovery_replace(&self) -> Result<(), PipelineProtocolError> {

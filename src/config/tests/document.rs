@@ -1,9 +1,6 @@
 use super::super::*;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 struct TempConfig {
     root: PathBuf,
@@ -12,12 +9,12 @@ struct TempConfig {
 
 impl TempConfig {
     fn new(name: &str) -> Self {
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "wayscriber-config-document-{}-{sequence}-{name}",
+            "wayscriber-config-document-{}-{name}",
             std::process::id()
         ));
-        fs::create_dir_all(&root).expect("create temporary config directory");
+        fs::create_dir(&root)
+            .expect("test case name and process ID establish a unique temporary directory");
         let path = root.join("config.toml");
         Self { root, path }
     }
@@ -90,7 +87,14 @@ future_knob = 7 # preserve nested unknown
             "missing preserved text: {preserved}"
         );
     }
-    assert!(saved.find("future_root").unwrap() < saved.find("[performance]").unwrap());
+    assert!(
+        saved
+            .find("future_root")
+            .expect("fixture output retains the future root")
+            < saved
+                .find("[performance]")
+                .expect("fixture output retains the performance table")
+    );
     assert!(saved.contains("buffer_count = 4 # keep buffer explanation"));
     assert!(saved.contains("max_fps_no_vsync = 144"));
     assert!(saved.contains("ui_animation_fps = 240 # clamp this known value"));
@@ -158,7 +162,10 @@ future_font_weight = 600
         .save_with_backup(document.config().clone())
         .expect("save config with future export settings");
 
-    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read unchanged future-export fixture"),
+        original
+    );
 }
 
 #[test]
@@ -218,7 +225,14 @@ fn changing_an_omitted_value_inserts_only_that_value() {
     assert!(saved.contains("# intentionally sparse"));
     assert!(saved.contains("[performance]"));
     assert!(saved.contains("max_fps_no_vsync = 144"));
-    assert!(saved.find("# intentionally sparse").unwrap() < saved.find("[performance]").unwrap());
+    assert!(
+        saved
+            .find("# intentionally sparse")
+            .expect("fixture output retains the sparse marker")
+            < saved
+                .find("[performance]")
+                .expect("fixture output adds the performance table")
+    );
     assert!(!saved.contains("buffer_count"));
     assert!(!saved.contains("[drawing]"));
     assert!(!saved.contains("[session]"));
@@ -265,7 +279,10 @@ future_knob = 17
     assert!(!saved.contains("buffer_count"));
     assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
     let backup = outcome.backup_path().expect("repair backup");
-    assert_eq!(fs::read_to_string(backup).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(backup).expect("read repair backup fixture"),
+        original
+    );
     ConfigDocument::load_from_path(&temp.path).expect("repaired config is valid");
 }
 
@@ -283,11 +300,16 @@ fn editing_load_can_repair_malformed_toml_with_a_backup() {
         .expect("repair malformed config");
 
     assert_eq!(
-        fs::read_to_string(&temp.path).unwrap(),
+        fs::read_to_string(&temp.path).expect("read repaired malformed fixture"),
         format!("config_revision = {CURRENT_CONFIG_REVISION}\n")
     );
     assert_eq!(
-        fs::read_to_string(outcome.backup_path().expect("repair backup")).unwrap(),
+        fs::read_to_string(
+            outcome
+                .backup_path()
+                .expect("repair backup exists for fixture")
+        )
+        .expect("read malformed fixture backup"),
         original
     );
 }
@@ -315,7 +337,7 @@ future_entry_option = "cannot be separated safely"
         .save_with_backup(document.config().clone())
         .expect("repair invalid collection");
 
-    let saved = fs::read_to_string(&temp.path).unwrap();
+    let saved = fs::read_to_string(&temp.path).expect("read repaired collection fixture");
     assert!(saved.contains("future_root = \"preserve me\""));
     assert!(!saved.contains("future_drawing_option"));
     assert!(!saved.contains("quick_colors"));
@@ -386,7 +408,10 @@ fn no_op_save_preserves_semantically_equal_scalar_formatting() {
         .save_with_backup(document.config().clone())
         .expect("save precise scalar");
 
-    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read scalar-formatting fixture"),
+        original
+    );
 }
 
 #[test]
@@ -401,7 +426,10 @@ fn no_op_save_preserves_integer_spelling_for_float_fields() {
         .save_with_backup(document.config().clone())
         .expect("save integer-form float without changes");
 
-    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read integer-float fixture"),
+        original
+    );
 }
 
 #[test]
@@ -434,9 +462,21 @@ future_profile_key = "keep"
     assert!(!saved.contains("show_page_badge_with_status_bar"));
     assert!(saved.contains("show_floating_badge_always = true"));
     assert!(
-        saved.find("show_floating_badge_always").unwrap() < saved.find("show_status_bar").unwrap()
+        saved
+            .find("show_floating_badge_always")
+            .expect("fixture output contains canonical floating badge field")
+            < saved
+                .find("show_status_bar")
+                .expect("fixture output contains status bar field")
     );
-    assert!(saved.find("show_status_bar").unwrap() < saved.find("show_frozen_badge").unwrap());
+    assert!(
+        saved
+            .find("show_status_bar")
+            .expect("fixture output contains status bar field")
+            < saved
+                .find("show_frozen_badge")
+                .expect("fixture output contains frozen badge field")
+    );
     assert!(!saved.contains("[ui.toolbar.mode_overrides.full]"));
     assert!(saved.contains("[ui.toolbar.mode_overrides.regular]"));
     assert!(!saved.contains("[[render_profiles.items]]"));
@@ -509,7 +549,10 @@ name = "Second"
         .save_with_backup(document.config().clone())
         .expect("save separated profiles without changes");
 
-    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read separated profiles fixture"),
+        original
+    );
 }
 
 #[test]
@@ -536,7 +579,10 @@ to = "#AAAAAA"
         .save_with_backup(document.config().clone())
         .expect("save separated mapping without changes");
 
-    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read separated mapping fixture"),
+        original
+    );
 }
 
 #[test]
@@ -574,7 +620,13 @@ name = "Second"
     let profiles = value["render_profiles"]["profiles"]
         .as_array()
         .expect("profiles array");
-    assert_eq!(profiles[0]["mappings"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        profiles[0]["mappings"]
+            .as_array()
+            .expect("first profile fixture contains mappings")
+            .len(),
+        1
+    );
     assert!(profiles[1].get("mappings").is_none());
 }
 
@@ -686,7 +738,9 @@ future_owner = "mapping-b"
 
     let saved = fs::read_to_string(&temp.path).expect("read nested profiles");
     let value: toml::Value = toml::from_str(&saved).expect("parse nested profiles");
-    let profiles = value["render_profiles"]["profiles"].as_array().unwrap();
+    let profiles = value["render_profiles"]["profiles"]
+        .as_array()
+        .expect("saved profile fixture contains a profiles array");
     assert_eq!(profiles[0]["id"].as_str(), Some("b"));
     assert_eq!(
         profiles[0]["mappings"][0]["future_owner"].as_str(),
@@ -857,7 +911,16 @@ future_owner = "keep-with-whiteboard"
 "#,
     );
     let document = ConfigDocument::load_from_path(&temp.path).expect("load boards");
-    assert_eq!(document.config().boards.as_ref().unwrap().items.len(), 2);
+    assert_eq!(
+        document
+            .config()
+            .boards
+            .as_ref()
+            .expect("boards fixture produces a boards config")
+            .items
+            .len(),
+        2
+    );
 
     document
         .save_with_backup(document.config().clone())
@@ -903,7 +966,12 @@ future_owner = "owner-overlay"
 "#,
     );
     let document = ConfigDocument::load_from_path(&temp.path).expect("load boards");
-    let boards = &document.config().boards.as_ref().unwrap().items;
+    let boards = &document
+        .config()
+        .boards
+        .as_ref()
+        .expect("deduplicated-board fixture produces a boards config")
+        .items;
     assert_eq!(boards[0].id, "duplicate-2");
     assert_eq!(boards[1].id, "duplicate");
 
@@ -942,7 +1010,16 @@ future_owner = "keep"
 "#,
     );
     let document = ConfigDocument::load_from_path(&temp.path).expect("load truncated boards");
-    assert_eq!(document.config().boards.as_ref().unwrap().items.len(), 1);
+    assert_eq!(
+        document
+            .config()
+            .boards
+            .as_ref()
+            .expect("truncated-board fixture produces a boards config")
+            .items
+            .len(),
+        1
+    );
     let mut updated = document.config().clone();
     updated.performance.max_fps_no_vsync = 144;
     document
@@ -983,8 +1060,12 @@ future_owner = "second"
         .save_with_backup(updated)
         .expect("save inserted quick color");
 
-    let value: toml::Value = toml::from_str(&fs::read_to_string(&temp.path).unwrap()).unwrap();
-    let entries = value["drawing"]["quick_colors"].as_array().unwrap();
+    let saved = fs::read_to_string(&temp.path).expect("read inserted quick-color fixture");
+    let value: toml::Value =
+        toml::from_str(&saved).expect("inserted quick-color fixture remains valid TOML");
+    let entries = value["drawing"]["quick_colors"]
+        .as_array()
+        .expect("inserted quick-color fixture contains an array");
     assert_eq!(entries[0]["label"].as_str(), Some("New"));
     assert!(entries[0].get("future_owner").is_none());
     assert_eq!(entries[1]["future_owner"].as_str(), Some("first"));
@@ -1069,7 +1150,11 @@ fn exact_revision_detects_same_timestamp_content_replacement() {
         .save_with_backup(document.config().clone())
         .expect_err("same-time content replacement must conflict");
     assert!(error.to_string().contains("changed on disk"));
-    assert!(fs::read_to_string(&temp.path).unwrap().contains("144"));
+    assert!(
+        fs::read_to_string(&temp.path)
+            .expect("read same-timestamp replacement fixture")
+            .contains("144")
+    );
 }
 
 #[test]
@@ -1159,8 +1244,10 @@ fn exact_revision_detects_changed_symlink_target_with_identical_content() {
     let temp = TempConfig::new("symlink-target");
     let first = temp.root.join("first.toml");
     let second = temp.root.join("second.toml");
-    fs::write(&first, "[performance]\nmax_fps_no_vsync = 120\n").unwrap();
-    fs::write(&second, "[performance]\nmax_fps_no_vsync = 120\n").unwrap();
+    fs::write(&first, "[performance]\nmax_fps_no_vsync = 120\n")
+        .expect("write first symlink-target fixture");
+    fs::write(&second, "[performance]\nmax_fps_no_vsync = 120\n")
+        .expect("write second symlink-target fixture");
     symlink(&first, &temp.path).expect("create source symlink");
     let document = ConfigDocument::load_from_path(&temp.path).expect("load symlinked source");
     fs::remove_file(&temp.path).expect("remove old symlink");
@@ -1193,12 +1280,12 @@ fn dangling_symlink_loads_defaults_and_first_save_creates_its_target() {
     assert!(target.is_file());
     assert!(
         fs::symlink_metadata(&temp.path)
-            .unwrap()
+            .expect("inspect dangling fixture symlink")
             .file_type()
             .is_symlink()
     );
     assert_eq!(
-        fs::read_to_string(target).unwrap(),
+        fs::read_to_string(target).expect("read created dangling-symlink target"),
         format!("config_revision = {CURRENT_CONFIG_REVISION}\n")
     );
 }
@@ -1218,12 +1305,12 @@ fn dangling_symlink_save_creates_missing_target_parent_directories() {
         .expect("save through dangling symlink with missing target parents");
 
     assert_eq!(
-        fs::read_to_string(target).unwrap(),
+        fs::read_to_string(target).expect("read nested dangling-symlink target"),
         format!("config_revision = {CURRENT_CONFIG_REVISION}\n")
     );
     assert!(
         fs::symlink_metadata(&temp.path)
-            .unwrap()
+            .expect("inspect nested dangling fixture symlink")
             .file_type()
             .is_symlink()
     );
@@ -1241,9 +1328,9 @@ fn document_save_follows_multi_level_symlink_chain() {
         &target,
         "config_revision = 1\n[performance]\nmax_fps_no_vsync = 120\n",
     )
-    .unwrap();
-    symlink(&target, &intermediate).unwrap();
-    symlink(&intermediate, &temp.path).unwrap();
+    .expect("write multi-level symlink target fixture");
+    symlink(&target, &intermediate).expect("create intermediate fixture symlink");
+    symlink(&intermediate, &temp.path).expect("create outer fixture symlink");
 
     let document = ConfigDocument::load_from_path(&temp.path).expect("load symlink chain");
     let mut updated = document.config().clone();
@@ -1252,16 +1339,20 @@ fn document_save_follows_multi_level_symlink_chain() {
         .save_with_backup(updated)
         .expect("save through symlink chain");
 
-    assert!(fs::read_to_string(target).unwrap().contains("144"));
+    assert!(
+        fs::read_to_string(target)
+            .expect("read multi-level symlink target")
+            .contains("144")
+    );
     assert!(
         fs::symlink_metadata(&temp.path)
-            .unwrap()
+            .expect("inspect outer multi-level fixture symlink")
             .file_type()
             .is_symlink()
     );
     assert!(
         fs::symlink_metadata(intermediate)
-            .unwrap()
+            .expect("inspect intermediate fixture symlink")
             .file_type()
             .is_symlink()
     );
@@ -1287,20 +1378,27 @@ fn document_save_preserves_symlink_permissions_and_backs_up_source_contents() {
         .save_with_backup(updated)
         .expect("save symlinked document");
     let backup = outcome.backup_path().expect("existing source gets backup");
-    assert_eq!(fs::read_to_string(backup).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(backup).expect("read symlinked config backup fixture"),
+        original
+    );
     assert!(
         fs::symlink_metadata(&temp.path)
-            .unwrap()
+            .expect("inspect preserved config symlink fixture")
             .file_type()
             .is_symlink()
     );
     assert!(
         fs::read_to_string(&target)
-            .unwrap()
+            .expect("read updated symlink target fixture")
             .contains("max_fps_no_vsync = 144")
     );
     assert_eq!(
-        fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+        fs::metadata(&target)
+            .expect("inspect updated symlink target permissions")
+            .permissions()
+            .mode()
+            & 0o777,
         0o600
     );
 }
@@ -1359,13 +1457,57 @@ fn performance_metadata_is_unique_and_matches_example_and_docs() {
             metadata.path
         );
         assert!(value_at_path(&example_value, metadata.path).is_some());
-        assert!(
-            docs.contains(metadata.path.rsplit('.').next().unwrap()),
-            "docs missing {}",
-            metadata.path
-        );
+        let field_name = metadata
+            .path
+            .rsplit('.')
+            .next()
+            .expect("performance metadata fixture path has a field segment");
+        assert!(docs.contains(field_name), "docs missing {}", metadata.path);
     }
     assert_eq!(ids.len(), PerformanceFieldId::ALL.len());
+}
+
+#[test]
+fn typed_performance_metadata_matches_the_legacy_public_projection() {
+    let presentations = PERFORMANCE_FIELDS.presentations();
+
+    assert_eq!(presentations.len(), PERFORMANCE_FIELD_METADATA.len());
+    for (id, (presentation, legacy)) in PerformanceFieldId::ALL
+        .into_iter()
+        .zip(presentations.into_iter().zip(PERFORMANCE_FIELD_METADATA))
+    {
+        assert_eq!(legacy.id, id);
+        assert_eq!(legacy.path, presentation.path());
+        assert_eq!(legacy.group, presentation.group());
+        assert_eq!(legacy.label, presentation.label());
+        assert_eq!(legacy.help, presentation.help());
+        assert_eq!(legacy.search_terms, presentation.search_terms());
+        assert_eq!(performance_field_metadata(id), legacy);
+        assert!(std::ptr::eq(performance_field_metadata(id), legacy));
+    }
+
+    assert_eq!(
+        performance_field_metadata(PerformanceFieldId::BufferCount)
+            .constraint
+            .unsigned_choices(),
+        Some(PERFORMANCE_FIELDS.buffer_count().choices())
+    );
+    assert!(matches!(
+        performance_field_metadata(PerformanceFieldId::EnableVsync).constraint,
+        ScalarConstraint::Boolean
+    ));
+    assert_eq!(
+        performance_field_metadata(PerformanceFieldId::MaxFpsNoVsync)
+            .constraint
+            .unsigned_range(),
+        Some(PERFORMANCE_FIELDS.max_fps_no_vsync().bounds())
+    );
+    assert_eq!(
+        performance_field_metadata(PerformanceFieldId::UiAnimationFps)
+            .constraint
+            .unsigned_range(),
+        Some(PERFORMANCE_FIELDS.ui_animation_fps().bounds())
+    );
 }
 
 #[test]

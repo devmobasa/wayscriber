@@ -1,6 +1,6 @@
 use iced::widget::{column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
-use wayscriber::config::{PerformanceFieldId, performance_field_metadata};
+use wayscriber::config::PERFORMANCE_FIELDS;
 
 use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
@@ -18,24 +18,18 @@ impl ConfiguratorApp {
         &self,
         search: Option<&TabSearchSummary>,
     ) -> Element<'_, Message> {
-        let buffer_metadata = performance_field_metadata(PerformanceFieldId::BufferCount);
-        let vsync_metadata = performance_field_metadata(PerformanceFieldId::EnableVsync);
-        let max_fps_metadata = performance_field_metadata(PerformanceFieldId::MaxFpsNoVsync);
-        let animation_metadata = performance_field_metadata(PerformanceFieldId::UiAnimationFps);
-        let buffer_counts = buffer_metadata
-            .constraint
-            .unsigned_choices()
-            .expect("buffer count metadata must declare choices");
-        let max_fps_range = max_fps_metadata
-            .constraint
-            .unsigned_range()
-            .expect("max FPS metadata must declare a range");
-        let animation_range = animation_metadata
-            .constraint
-            .unsigned_range()
-            .expect("animation FPS metadata must declare a range");
+        let buffer_field = PERFORMANCE_FIELDS.buffer_count();
+        let vsync_field = PERFORMANCE_FIELDS.enable_vsync();
+        let max_fps_field = PERFORMANCE_FIELDS.max_fps_no_vsync();
+        let animation_field = PERFORMANCE_FIELDS.ui_animation_fps();
+        let buffer_metadata = buffer_field.presentation();
+        let vsync_metadata = vsync_field.presentation();
+        let max_fps_metadata = max_fps_field.presentation();
+        let animation_metadata = animation_field.presentation();
+        let max_fps_range = max_fps_field.bounds();
+        let animation_range = animation_field.bounds();
         let buffer_pick = pick_list(
-            buffer_counts,
+            buffer_field.choices(),
             Some(self.draft.performance_buffer_count),
             Message::BufferCountChanged,
         );
@@ -57,25 +51,25 @@ impl ConfiguratorApp {
             content = content
                 .push(text("Rendering").size(16))
                 .push(labeled_control(
-                    buffer_metadata.label,
+                    buffer_metadata.label(),
                     buffer_control,
                     self.defaults.performance_buffer_count.to_string(),
                     self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
                 ))
-                .push(text(buffer_metadata.help).size(12))
+                .push(text(buffer_metadata.help()).size(12))
                 .push(toggle_row(
-                    vsync_metadata.label,
+                    vsync_metadata.label(),
                     self.draft.performance_enable_vsync,
                     self.defaults.performance_enable_vsync,
                     ToggleField::PerformanceVsync,
                 ))
-                .push(text(vsync_metadata.help).size(12))
+                .push(text(vsync_metadata.help()).size(12))
                 .push(labeled_input_with_feedback(
-                    max_fps_metadata.label,
+                    max_fps_metadata.label(),
                     &self.draft.performance_max_fps_no_vsync,
                     &self.defaults.performance_max_fps_no_vsync,
                     TextField::PerformanceMaxFpsNoVsync,
-                    Some(max_fps_metadata.help),
+                    Some(max_fps_metadata.help()),
                     validate_u32_range(
                         &self.draft.performance_max_fps_no_vsync,
                         max_fps_range.0,
@@ -88,11 +82,11 @@ impl ConfiguratorApp {
             content = content
                 .push(text("Animations").size(16))
                 .push(labeled_input_with_feedback(
-                    animation_metadata.label,
+                    animation_metadata.label(),
                     &self.draft.performance_ui_animation_fps,
                     &self.defaults.performance_ui_animation_fps,
                     TextField::PerformanceUiAnimationFps,
-                    Some(animation_metadata.help),
+                    Some(animation_metadata.help()),
                     validate_u32_range(
                         &self.draft.performance_ui_animation_fps,
                         animation_range.0,

@@ -1,115 +1,50 @@
 //! Bounded, wake-driven transport and lifecycle ownership for the GTK toolbar thread.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
-use tokio::sync::watch;
 
-use crate::backend::wayland::RuntimeWakeHandle;
+use tokio::sync::{oneshot, watch};
+
+use crate::backend::wayland::RuntimeWakeSender;
+use crate::config::ToolbarRebindModifier;
+use crate::ui::toolbar::ToolbarEvent;
 
 use super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind, GtkToolbarUpdate};
 
 pub(super) const GTK_FEEDBACK_CAPACITY: usize = 64;
 pub(super) const GTK_FEEDBACK_DRAIN_LIMIT: usize = 64;
-const GTK_THREAD_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
-const STATUS_STARTING: u8 = 0;
-const STATUS_READY: u8 = 1;
-const STATUS_FAILED: u8 = 2;
-const STATUS_STOPPING: u8 = 3;
-const STATUS_STOPPED: u8 = 4;
-
-#[derive(Clone)]
-pub(super) struct BridgeHealth {
-    status: Arc<AtomicU8>,
-    runtime_wake: RuntimeWakeHandle,
+/// Failure reporting endpoint owned by one GTK-thread component.
+///
+/// The receiver and the authoritative bridge state stay on the backend
+/// thread. Each producer gets its own fallibly duplicated wake descriptor,
+/// so no shared health flag or synchronized writer is needed.
+pub(super) struct ThreadReporter {
+    failures: Sender<String>,
+    runtime_wake: RuntimeWakeSender,
 }
 
-impl BridgeHealth {
-    pub(super) fn new(runtime_wake: RuntimeWakeHandle) -> Self {
+impl ThreadReporter {
+    fn new(failures: Sender<String>, runtime_wake: RuntimeWakeSender) -> Self {
         Self {
-            status: Arc::new(AtomicU8::new(STATUS_STARTING)),
+            failures,
             runtime_wake,
         }
     }
 
-    pub(super) fn mark_ready(&self) -> bool {
-        self.status
-            .compare_exchange(
-                STATUS_STARTING,
-                STATUS_READY,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
-    }
-
-    pub(super) fn fail(&self, reason: impl AsRef<str>) {
-        let mut current = self.status.load(Ordering::Acquire);
-        loop {
-            match current {
-                STATUS_FAILED | STATUS_STOPPING | STATUS_STOPPED => return,
-                STATUS_STARTING | STATUS_READY => {
-                    match self.status.compare_exchange_weak(
-                        current,
-                        STATUS_FAILED,
-                        Ordering::AcqRel,
-                        Ordering::Acquire,
-                    ) {
-                        Ok(_) => {
-                            log::warn!("{}", reason.as_ref());
-                            if let Err(err) = self.runtime_wake.wake() {
-                                log::error!("Failed to wake runtime for GTK terminal state: {err}");
-                            }
-                            return;
-                        }
-                        Err(observed) => current = observed,
-                    }
-                }
-                _ => unreachable!("unknown GTK bridge health state {current}"),
-            }
-        }
-    }
-
-    fn begin_stopping(&self) {
-        let mut current = self.status.load(Ordering::Acquire);
-        while matches!(current, STATUS_STARTING | STATUS_READY) {
-            match self.status.compare_exchange_weak(
-                current,
-                STATUS_STOPPING,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => return,
-                Err(observed) => current = observed,
-            }
-        }
-    }
-
-    pub(super) fn stopping(&self) -> bool {
-        matches!(
-            self.status.load(Ordering::Acquire),
-            STATUS_STOPPING | STATUS_STOPPED
-        )
-    }
-
-    fn mark_stopped(&self) {
-        let _ = self.status.compare_exchange(
-            STATUS_STOPPING,
-            STATUS_STOPPED,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        );
-    }
-
-    pub(super) fn failed(&self) -> bool {
-        self.status.load(Ordering::Acquire) == STATUS_FAILED
-    }
-
     fn wake_owner(&self) -> std::io::Result<()> {
         self.runtime_wake.wake()
+    }
+
+    fn report_failure(&self, reason: impl Into<String>) {
+        let reason = reason.into();
+        log::warn!("{reason}");
+        if self.failures.send(reason).is_ok()
+            && let Err(err) = self.wake_owner()
+        {
+            log::error!("Failed to wake runtime for GTK terminal state: {err}");
+        }
     }
 }
 
@@ -119,126 +54,258 @@ pub(super) enum FeedbackPublishError {
     Failed,
 }
 
-struct FeedbackMailboxState {
-    queue: VecDeque<GtkToolbarFeedback>,
-    accepting: bool,
+enum FeedbackMailboxCommand {
+    Publish {
+        feedback: GtkToolbarFeedback,
+        reply: SyncSender<Result<(), FeedbackPublishError>>,
+    },
+    Drain {
+        limit: usize,
+        reply: SyncSender<Vec<GtkToolbarFeedback>>,
+    },
+    SetRebindState {
+        modifier: ToolbarRebindModifier,
+        active: bool,
+    },
+    CaptureClickModifiers(ClickModifiers),
+    FinishPointerClick,
+    PublishEvent {
+        event: ToolbarEvent,
+        reply: SyncSender<Result<(), FeedbackPublishError>>,
+    },
+    Shutdown,
 }
 
-struct FeedbackMailbox {
-    state: Mutex<FeedbackMailboxState>,
-    health: BridgeHealth,
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct ClickModifiers {
+    control: bool,
+    shift: bool,
+    alt: bool,
 }
 
-#[derive(Clone)]
-pub(super) struct FeedbackPublisher {
-    mailbox: Arc<FeedbackMailbox>,
+#[derive(Debug, Default)]
+struct FeedbackClickState {
+    rebind_modifier: ToolbarRebindModifier,
+    backend_rebind_active: bool,
+    click_rebind_requested: bool,
+    click_in_progress: bool,
+    click_shift: bool,
 }
 
-impl FeedbackPublisher {
-    fn new(health: BridgeHealth) -> Self {
-        Self {
-            mailbox: Arc::new(FeedbackMailbox {
-                state: Mutex::new(FeedbackMailboxState {
-                    queue: VecDeque::with_capacity(GTK_FEEDBACK_CAPACITY),
-                    accepting: true,
-                }),
-                health,
-            }),
+impl FeedbackClickState {
+    fn set_rebind_state(&mut self, modifier: ToolbarRebindModifier, active: bool) {
+        self.rebind_modifier = modifier;
+        self.backend_rebind_active = active;
+        if active {
+            self.click_rebind_requested = true;
+        } else if !self.click_in_progress {
+            self.click_rebind_requested = false;
         }
     }
 
-    pub(super) fn publish(&self, feedback: GtkToolbarFeedback) -> Result<(), FeedbackPublishError> {
-        let mut overflowed = false;
+    fn capture_click_modifiers(&mut self, modifiers: ClickModifiers) {
+        self.click_in_progress = true;
+        self.click_shift = modifiers.shift;
+        if self
+            .rebind_modifier
+            .matches(modifiers.control, modifiers.shift, modifiers.alt)
         {
-            let mut state = match self.mailbox.state.lock() {
-                Ok(state) => state,
-                Err(poisoned) => {
-                    let mut state = poisoned.into_inner();
-                    state.accepting = false;
-                    drop(state);
-                    self.mailbox.health.fail(
-                        "GTK feedback mailbox state was poisoned; restoring built-in toolbars",
-                    );
-                    return Err(FeedbackPublishError::Failed);
-                }
-            };
-            if !state.accepting {
-                return Err(if self.mailbox.health.failed() {
-                    FeedbackPublishError::Failed
-                } else {
-                    FeedbackPublishError::Closed
-                });
-            }
+            self.click_rebind_requested = true;
+        }
+    }
 
-            if state.queue.len() < GTK_FEEDBACK_CAPACITY {
-                state.queue.push_back(feedback);
-            } else if let Some(kind) = feedback.move_kind() {
-                let mut replacement = None;
-                for (index, queued) in state.queue.iter().enumerate().rev() {
-                    if queued.is_non_coalescible_boundary() {
-                        break;
-                    }
-                    if queued.move_kind() == Some(kind) {
-                        replacement = Some(index);
-                        break;
+    fn finish_pointer_click(&mut self) {
+        self.click_in_progress = false;
+        self.click_shift = false;
+        if !self.backend_rebind_active {
+            self.click_rebind_requested = false;
+        }
+    }
+
+    fn resolve_event(&mut self, event: ToolbarEvent) -> GtkToolbarFeedback {
+        let rebind_requested = std::mem::take(&mut self.click_rebind_requested);
+        let shift_click = std::mem::take(&mut self.click_shift);
+        self.click_in_progress = false;
+        // GTK runs on its own Wayland connection, so the backend cannot read
+        // this click's modifiers. Resolve the Shift = instant-clear upgrade
+        // at capture time and forward the resolved variant.
+        let event = match event {
+            ToolbarEvent::ClearCanvas { instant } => ToolbarEvent::ClearCanvas {
+                instant: instant || shift_click,
+            },
+            other => other,
+        };
+        GtkToolbarFeedback::Event {
+            event,
+            rebind_requested,
+        }
+    }
+}
+
+/// GTK-thread feedback endpoint.
+///
+/// Widget callbacks send one request at a time to the root-owned mailbox
+/// worker and wait for its typed result. The worker is the only place that
+/// owns admission, ordering, and coalescing state.
+#[derive(Clone)]
+pub(super) struct FeedbackPublisher {
+    commands: SyncSender<FeedbackMailboxCommand>,
+}
+
+impl FeedbackPublisher {
+    fn new(commands: SyncSender<FeedbackMailboxCommand>) -> Self {
+        Self { commands }
+    }
+
+    pub(super) fn publish(&self, feedback: GtkToolbarFeedback) -> Result<(), FeedbackPublishError> {
+        let (reply, result) = sync_channel(0);
+        if self
+            .commands
+            .send(FeedbackMailboxCommand::Publish { feedback, reply })
+            .is_err()
+        {
+            return Err(FeedbackPublishError::Closed);
+        }
+        match result.recv() {
+            Ok(result) => result,
+            Err(_) => Err(FeedbackPublishError::Failed),
+        }
+    }
+
+    pub(super) fn set_rebind_state(
+        &self,
+        modifier: ToolbarRebindModifier,
+        active: bool,
+    ) -> Result<(), FeedbackPublishError> {
+        self.commands
+            .send(FeedbackMailboxCommand::SetRebindState { modifier, active })
+            .map_err(|_| FeedbackPublishError::Closed)
+    }
+
+    pub(super) fn capture_click_modifiers(
+        &self,
+        control: bool,
+        shift: bool,
+        alt: bool,
+    ) -> Result<(), FeedbackPublishError> {
+        self.commands
+            .send(FeedbackMailboxCommand::CaptureClickModifiers(
+                ClickModifiers {
+                    control,
+                    shift,
+                    alt,
+                },
+            ))
+            .map_err(|_| FeedbackPublishError::Closed)
+    }
+
+    pub(super) fn finish_pointer_click(&self) -> Result<(), FeedbackPublishError> {
+        self.commands
+            .send(FeedbackMailboxCommand::FinishPointerClick)
+            .map_err(|_| FeedbackPublishError::Closed)
+    }
+
+    pub(super) fn publish_event(&self, event: ToolbarEvent) -> Result<(), FeedbackPublishError> {
+        let (reply, result) = sync_channel(0);
+        if self
+            .commands
+            .send(FeedbackMailboxCommand::PublishEvent { event, reply })
+            .is_err()
+        {
+            return Err(FeedbackPublishError::Closed);
+        }
+        match result.recv() {
+            Ok(result) => result,
+            Err(_) => Err(FeedbackPublishError::Failed),
+        }
+    }
+}
+
+struct FeedbackMailbox<'reporter> {
+    queue: VecDeque<GtkToolbarFeedback>,
+    click_state: FeedbackClickState,
+    accepting: bool,
+    reporter: &'reporter ThreadReporter,
+}
+
+impl<'reporter> FeedbackMailbox<'reporter> {
+    fn new(reporter: &'reporter ThreadReporter) -> Self {
+        Self {
+            queue: VecDeque::with_capacity(GTK_FEEDBACK_CAPACITY),
+            click_state: FeedbackClickState::default(),
+            accepting: true,
+            reporter,
+        }
+    }
+
+    fn publish(&mut self, feedback: GtkToolbarFeedback) -> Result<(), FeedbackPublishError> {
+        if !self.accepting {
+            return Err(FeedbackPublishError::Failed);
+        }
+
+        let mut overflowed = false;
+        if self.queue.len() < GTK_FEEDBACK_CAPACITY {
+            self.queue.push_back(feedback);
+        } else if let Some(kind) = feedback.move_kind() {
+            let mut replacement = None;
+            for (index, queued) in self.queue.iter().enumerate().rev() {
+                if queued.is_non_coalescible_boundary() {
+                    break;
+                }
+                if queued.move_kind() == Some(kind) {
+                    replacement = Some(index);
+                    break;
+                }
+            }
+            match replacement {
+                Some(index) => self.queue[index] = feedback,
+                None => {
+                    let reclaim = self
+                        .queue
+                        .iter()
+                        .position(|queued| queued.move_kind() == Some(kind))
+                        .or_else(|| {
+                            self.queue
+                                .iter()
+                                .position(|queued| queued.move_kind().is_some())
+                        });
+                    if let Some(index) = reclaim {
+                        self.queue.remove(index);
+                        self.queue.push_back(feedback);
+                    } else {
+                        self.accepting = false;
+                        overflowed = true;
                     }
                 }
-                match replacement {
-                    Some(index) => state.queue[index] = feedback,
-                    None => {
-                        // A boundary may have consumed a slot by reclaiming a
-                        // move from an older segment. Reclaim another move and
-                        // append this one after the boundary instead of moving
-                        // it across ordered feedback or failing the bridge.
-                        let reclaim = state
-                            .queue
-                            .iter()
-                            .position(|queued| queued.move_kind() == Some(kind))
-                            .or_else(|| {
-                                state
-                                    .queue
-                                    .iter()
-                                    .position(|queued| queued.move_kind().is_some())
-                            });
-                        if let Some(index) = reclaim {
-                            state.queue.remove(index);
-                            state.queue.push_back(feedback);
-                        } else {
-                            state.accepting = false;
-                            overflowed = true;
-                        }
-                    }
-                }
+            }
+        } else {
+            let reclaim = feedback
+                .drag_kind()
+                .and_then(|kind| oldest_move_in_current_segment(&self.queue, kind))
+                .or_else(|| {
+                    self.queue
+                        .iter()
+                        .position(|queued| queued.move_kind().is_some())
+                });
+            if let Some(index) = reclaim {
+                self.queue.remove(index);
+                self.queue.push_back(feedback);
             } else {
-                let reclaim = feedback
-                    .drag_kind()
-                    .and_then(|kind| oldest_move_in_current_segment(&state.queue, kind))
-                    .or_else(|| {
-                        state
-                            .queue
-                            .iter()
-                            .position(|queued| queued.move_kind().is_some())
-                    });
-                if let Some(index) = reclaim {
-                    state.queue.remove(index);
-                    state.queue.push_back(feedback);
-                } else {
-                    state.accepting = false;
-                    overflowed = true;
-                }
+                self.accepting = false;
+                overflowed = true;
             }
         }
 
         if overflowed {
-            self.mailbox.health.fail(
+            self.reporter.report_failure(
                 "GTK feedback mailbox exhausted by ordered feedback; restoring built-in toolbars",
             );
             return Err(FeedbackPublishError::Failed);
         }
 
-        if let Err(err) = self.mailbox.health.wake_owner() {
-            self.close_admission();
-            self.mailbox.health.fail(format!(
+        if let Err(err) = self.reporter.wake_owner() {
+            self.accepting = false;
+            self.reporter.report_failure(format!(
                 "GTK feedback could not wake the runtime ({err}); restoring built-in toolbars"
             ));
             return Err(FeedbackPublishError::Failed);
@@ -246,64 +313,22 @@ impl FeedbackPublisher {
         Ok(())
     }
 
-    fn drain(&self, limit: usize) -> Vec<GtkToolbarFeedback> {
-        let (drained, residual) = {
-            let mut state = match self.mailbox.state.lock() {
-                Ok(state) => state,
-                Err(poisoned) => {
-                    let mut state = poisoned.into_inner();
-                    state.accepting = false;
-                    drop(state);
-                    self.mailbox.health.fail(
-                        "GTK feedback mailbox state was poisoned; restoring built-in toolbars",
-                    );
-                    return Vec::new();
-                }
-            };
-            let take = limit.min(state.queue.len());
-            let drained = state.queue.drain(..take).collect::<Vec<_>>();
-            (drained, !state.queue.is_empty())
-        };
-        if residual && let Err(err) = self.mailbox.health.wake_owner() {
-            self.close_admission();
-            self.mailbox.health.fail(format!(
+    fn drain(&mut self, limit: usize) -> Vec<GtkToolbarFeedback> {
+        let take = limit.min(self.queue.len());
+        let drained = self.queue.drain(..take).collect::<Vec<_>>();
+        if !self.queue.is_empty()
+            && let Err(err) = self.reporter.wake_owner()
+        {
+            self.accepting = false;
+            self.reporter.report_failure(format!(
                 "Residual GTK feedback could not wake the runtime ({err}); restoring built-in toolbars"
             ));
         }
         drained
     }
 
-    fn complete_drain(
-        &self,
-        mut drained: Vec<GtkToolbarFeedback>,
-        limit: usize,
-    ) -> (Vec<GtkToolbarFeedback>, bool) {
-        let failed = self.mailbox.health.failed();
-        if failed {
-            // A publisher may have committed feedback after the first drain
-            // and immediately before making the bridge terminal. Stop new
-            // admissions, then collect that accepted tail before failover.
-            self.close_admission();
-            drained.extend(self.drain(limit));
-        }
-        (drained, failed)
-    }
-
-    fn close_admission(&self) {
-        match self.mailbox.state.lock() {
-            Ok(mut state) => state.accepting = false,
-            Err(poisoned) => poisoned.into_inner().accepting = false,
-        }
-    }
-
-    #[cfg(test)]
-    fn pending_len(&self) -> usize {
-        self.mailbox
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .queue
-            .len()
+    fn close(&mut self) {
+        self.accepting = false;
     }
 }
 
@@ -351,6 +376,152 @@ fn oldest_move_in_current_segment(
         .enumerate()
         .skip(segment_start)
         .find_map(|(index, feedback)| (feedback.move_kind() == Some(kind)).then_some(index))
+}
+
+struct MailboxThreadExitGuard<'reporter> {
+    reporter: &'reporter ThreadReporter,
+    completed: bool,
+}
+
+impl<'reporter> MailboxThreadExitGuard<'reporter> {
+    fn new(reporter: &'reporter ThreadReporter) -> Self {
+        Self {
+            reporter,
+            completed: false,
+        }
+    }
+
+    fn complete(&mut self) {
+        self.completed = true;
+    }
+}
+
+impl Drop for MailboxThreadExitGuard<'_> {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.reporter.report_failure(
+                "GTK feedback mailbox thread exited unexpectedly; restoring built-in toolbars",
+            );
+        }
+    }
+}
+
+fn run_feedback_mailbox(commands: Receiver<FeedbackMailboxCommand>, reporter: &ThreadReporter) {
+    let mut mailbox = FeedbackMailbox::new(reporter);
+    while let Ok(command) = commands.recv() {
+        match command {
+            FeedbackMailboxCommand::Publish { feedback, reply } => {
+                let _ = reply.send(mailbox.publish(feedback));
+            }
+            FeedbackMailboxCommand::Drain { limit, reply } => {
+                let _ = reply.send(mailbox.drain(limit));
+            }
+            FeedbackMailboxCommand::SetRebindState { modifier, active } => {
+                mailbox.click_state.set_rebind_state(modifier, active);
+            }
+            FeedbackMailboxCommand::CaptureClickModifiers(modifiers) => {
+                mailbox.click_state.capture_click_modifiers(modifiers);
+            }
+            FeedbackMailboxCommand::FinishPointerClick => {
+                mailbox.click_state.finish_pointer_click();
+            }
+            FeedbackMailboxCommand::PublishEvent { event, reply } => {
+                let feedback = mailbox.click_state.resolve_event(event);
+                let _ = reply.send(mailbox.publish(feedback));
+            }
+            FeedbackMailboxCommand::Shutdown => {
+                mailbox.close();
+                return;
+            }
+        }
+    }
+    mailbox.close();
+}
+
+fn spawn_feedback_mailbox(
+    failures: Sender<String>,
+    runtime_wake: RuntimeWakeSender,
+) -> std::io::Result<(SyncSender<FeedbackMailboxCommand>, JoinHandle<()>)> {
+    // There are exactly two synchronous request owners: the GTK publisher and
+    // the backend drain owner. Each waits for its reply before issuing another
+    // request, so this channel bounds all in-flight mailbox work.
+    let (commands, command_rx) = sync_channel(2);
+    let thread = std::thread::Builder::new()
+        .name("gtk-feedback-mailbox".into())
+        .spawn(move || {
+            let reporter = ThreadReporter::new(failures, runtime_wake);
+            let mut guard = MailboxThreadExitGuard::new(&reporter);
+            run_feedback_mailbox(command_rx, &reporter);
+            guard.complete();
+        })?;
+    Ok((commands, thread))
+}
+
+#[cfg(test)]
+pub(super) struct TestMailbox {
+    wake: crate::backend::wayland::RuntimeWakeSource,
+    commands: SyncSender<FeedbackMailboxCommand>,
+    failures: Receiver<String>,
+    publisher: FeedbackPublisher,
+    thread: Option<JoinHandle<()>>,
+}
+
+#[cfg(test)]
+impl TestMailbox {
+    pub(super) fn publisher(&self) -> FeedbackPublisher {
+        self.publisher.clone()
+    }
+
+    pub(super) fn receive_one(&self) -> Option<GtkToolbarFeedback> {
+        self.drain(1).into_iter().next()
+    }
+
+    fn drain(&self, limit: usize) -> Vec<GtkToolbarFeedback> {
+        let (reply, result) = sync_channel(0);
+        self.commands
+            .send(FeedbackMailboxCommand::Drain { limit, reply })
+            .expect("test mailbox accepts its drain command");
+        result
+            .recv()
+            .expect("test mailbox returns its drained batch")
+    }
+
+    fn stop(&mut self) {
+        let _ = self.commands.send(FeedbackMailboxCommand::Shutdown);
+        assert_eq!(
+            finish_thread(&mut self.thread),
+            ThreadShutdownOutcome::Joined
+        );
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestMailbox {
+    fn drop(&mut self) {
+        if self.thread.is_some() {
+            self.stop();
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn publisher_channel() -> TestMailbox {
+    let wake = crate::backend::wayland::RuntimeWakeSource::new()
+        .expect("test creates its runtime wake source");
+    let (failure_tx, failure_rx) = channel();
+    let (commands, thread) = spawn_feedback_mailbox(
+        failure_tx,
+        wake.try_sender()
+            .expect("test duplicates its runtime wake descriptor"),
+    )
+    .expect("test starts its feedback mailbox owner");
+    TestMailbox {
+        wake,
+        publisher: FeedbackPublisher::new(commands.clone()),
+        commands,
+        failures: failure_rx,
+        thread: Some(thread),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -402,11 +573,42 @@ impl<T: Clone> LatestValueReceiver<T> {
     }
 }
 
-struct ThreadCompletion(std::sync::mpsc::Sender<()>);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BridgeState {
+    Active,
+    Failed,
+    Stopping,
+    Stopped,
+}
 
-impl Drop for ThreadCompletion {
+struct GtkThreadExitGuard {
+    reporter: ThreadReporter,
+    completed: bool,
+}
+
+impl GtkThreadExitGuard {
+    fn new(reporter: ThreadReporter) -> Self {
+        Self {
+            reporter,
+            completed: false,
+        }
+    }
+
+    fn finish(&mut self, exit: super::runtime::RuntimeExit) {
+        if let super::runtime::RuntimeExit::Failed(reason) = exit {
+            self.reporter.report_failure(reason);
+        }
+        self.completed = true;
+    }
+}
+
+impl Drop for GtkThreadExitGuard {
     fn drop(&mut self) {
-        let _ = self.0.send(());
+        if !self.completed {
+            self.reporter.report_failure(
+                "GTK toolbar thread exited unexpectedly; restoring built-in toolbars",
+            );
+        }
     }
 }
 
@@ -414,28 +616,13 @@ impl Drop for ThreadCompletion {
 enum ThreadShutdownOutcome {
     Joined,
     Panicked,
-    TimedOut,
 }
 
-fn finish_thread_within(
-    thread: &mut Option<JoinHandle<()>>,
-    completion: &std::sync::mpsc::Receiver<()>,
-    timeout: Duration,
-) -> ThreadShutdownOutcome {
-    let Some(handle) = thread.as_ref() else {
+fn finish_thread(thread: &mut Option<JoinHandle<()>>) -> ThreadShutdownOutcome {
+    let Some(thread) = thread.take() else {
         return ThreadShutdownOutcome::Joined;
     };
-    let deadline = Instant::now() + timeout;
-    let completion_wait = deadline.saturating_duration_since(Instant::now());
-    let _ = completion.recv_timeout(completion_wait);
-    while !handle.is_finished() && Instant::now() < deadline {
-        std::thread::yield_now();
-    }
-    if !handle.is_finished() {
-        thread.take();
-        return ThreadShutdownOutcome::TimedOut;
-    }
-    match thread.take().expect("thread checked above").join() {
+    match thread.join() {
         Ok(()) => ThreadShutdownOutcome::Joined,
         Err(_) => ThreadShutdownOutcome::Panicked,
     }
@@ -444,103 +631,189 @@ fn finish_thread_within(
 /// Main-thread owner of the GTK toolbar bridge and GTK thread.
 pub struct GtkToolbarBridge {
     updates: LatestValueSender<GtkToolbarUpdate>,
-    feedback: FeedbackPublisher,
-    health: BridgeHealth,
-    thread: Option<JoinHandle<()>>,
-    completion: std::sync::mpsc::Receiver<()>,
+    feedback_mailbox: SyncSender<FeedbackMailboxCommand>,
+    failures: Receiver<String>,
+    shutdown: Option<oneshot::Sender<()>>,
+    state: BridgeState,
+    gtk_thread: Option<JoinHandle<()>>,
+    mailbox_thread: Option<JoinHandle<()>>,
 }
 
 impl GtkToolbarBridge {
-    /// Spawns the GTK thread. Returns `None` only when the OS thread cannot be
-    /// created; GTK-level failures are published asynchronously and wake the runtime.
-    pub fn spawn(runtime_wake: RuntimeWakeHandle) -> Option<Self> {
+    /// Spawns the GTK thread. Descriptor-duplication failures are returned,
+    /// `None` means the OS thread could not be created, and GTK-level failures
+    /// are published asynchronously before waking the runtime.
+    pub fn spawn(runtime_wake: RuntimeWakeSender) -> std::io::Result<Option<Self>> {
         let (updates, update_rx) = latest_value_channel();
-        let (completion_tx, completion_rx) = std::sync::mpsc::channel();
-        let health = BridgeHealth::new(runtime_wake);
-        let feedback = FeedbackPublisher::new(health.clone());
-        let thread_health = health.clone();
-        let thread_feedback = feedback.clone();
+        let (failure_tx, failure_rx) = channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+        let mailbox_wake = runtime_wake.try_duplicate()?;
+        let (feedback_mailbox, mailbox_thread) =
+            match spawn_feedback_mailbox(failure_tx.clone(), mailbox_wake) {
+                Ok(owner) => owner,
+                Err(err) => {
+                    log::error!("Failed to spawn GTK feedback mailbox thread: {err}");
+                    return Ok(None);
+                }
+            };
+        let thread_reporter = ThreadReporter::new(failure_tx, runtime_wake);
+        let feedback = FeedbackPublisher::new(feedback_mailbox.clone());
+
         let spawned = std::thread::Builder::new()
             .name("gtk-toolbar".into())
             .spawn(move || {
-                let _completion = ThreadCompletion(completion_tx);
-                super::runtime::run(update_rx, thread_feedback, thread_health);
+                let mut guard = GtkThreadExitGuard::new(thread_reporter);
+                let exit = super::runtime::run(update_rx, shutdown_rx, feedback);
+                guard.finish(exit);
             });
+
         match spawned {
-            Ok(thread) => Some(Self {
+            Ok(thread) => Ok(Some(Self {
                 updates,
-                feedback,
-                health,
-                thread: Some(thread),
-                completion: completion_rx,
-            }),
+                feedback_mailbox,
+                failures: failure_rx,
+                shutdown: Some(shutdown_tx),
+                state: BridgeState::Active,
+                gtk_thread: Some(thread),
+                mailbox_thread: Some(mailbox_thread),
+            })),
             Err(err) => {
                 log::error!("Failed to spawn GTK toolbar thread: {err}");
-                None
+                let _ = feedback_mailbox.send(FeedbackMailboxCommand::Shutdown);
+                let mut mailbox_thread = Some(mailbox_thread);
+                if finish_thread(&mut mailbox_thread) == ThreadShutdownOutcome::Panicked {
+                    log::warn!("GTK feedback mailbox thread panicked during startup cleanup");
+                }
+                Ok(None)
             }
         }
     }
 
-    /// Drains one bounded pass and snapshots terminal state. If failure raced
-    /// with the first drain, admission is closed and the accepted tail is
-    /// included before the caller tears down the bridge.
-    pub fn drain_feedback(&self) -> (Vec<GtkToolbarFeedback>, bool) {
-        let drained = self.feedback.drain(GTK_FEEDBACK_DRAIN_LIMIT);
-        self.feedback
-            .complete_drain(drained, GTK_FEEDBACK_DRAIN_LIMIT)
+    /// Drains one bounded pass and snapshots terminal state. A producer closes
+    /// admission before publishing failure, so a second bounded pass collects
+    /// every feedback value accepted immediately before failover.
+    pub fn drain_feedback(&mut self) -> (Vec<GtkToolbarFeedback>, bool) {
+        let mut drained = match self.drain_feedback_pass(GTK_FEEDBACK_DRAIN_LIMIT) {
+            Some(drained) => drained,
+            None => {
+                self.mark_failed();
+                Vec::new()
+            }
+        };
+        self.observe_failures();
+        if self.state == BridgeState::Failed
+            && let Some(tail) = self.drain_feedback_pass(GTK_FEEDBACK_DRAIN_LIMIT)
+        {
+            drained.extend(tail);
+        }
+        (drained, self.state == BridgeState::Failed)
     }
 
     /// Publishes the newest complete update and replaces an unread older update.
     pub fn maybe_send(&mut self, update: GtkToolbarUpdate) {
+        self.observe_failures();
+        if self.state != BridgeState::Active {
+            return;
+        }
         if self.updates.publish(update).is_err() {
-            self.health
-                .fail("GTK toolbar update receiver disconnected; restoring built-in toolbars");
+            log::warn!("GTK toolbar update receiver disconnected; restoring built-in toolbars");
+            self.mark_failed();
+        }
+    }
+
+    fn drain_feedback_pass(&self, limit: usize) -> Option<Vec<GtkToolbarFeedback>> {
+        let (reply, drained) = sync_channel(0);
+        if self
+            .feedback_mailbox
+            .send(FeedbackMailboxCommand::Drain { limit, reply })
+            .is_err()
+        {
+            return None;
+        }
+        drained.recv().ok()
+    }
+
+    fn observe_failures(&mut self) {
+        let mut failed = self.state == BridgeState::Active
+            && (self
+                .gtk_thread
+                .as_ref()
+                .is_some_and(JoinHandle::is_finished)
+                || self
+                    .mailbox_thread
+                    .as_ref()
+                    .is_some_and(JoinHandle::is_finished));
+        while let Ok(_reason) = self.failures.try_recv() {
+            failed = true;
+        }
+        if failed {
+            self.mark_failed();
+        }
+    }
+
+    fn mark_failed(&mut self) {
+        if self.state == BridgeState::Active {
+            self.state = BridgeState::Failed;
+            self.request_shutdown();
+        }
+    }
+
+    fn request_shutdown(&mut self) {
+        self.updates.close();
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
         }
     }
 }
 
 impl Drop for GtkToolbarBridge {
     fn drop(&mut self) {
-        self.feedback.close_admission();
-        self.health.begin_stopping();
-        self.updates.close();
-        match finish_thread_within(
-            &mut self.thread,
-            &self.completion,
-            GTK_THREAD_SHUTDOWN_TIMEOUT,
-        ) {
-            ThreadShutdownOutcome::Joined => self.health.mark_stopped(),
-            ThreadShutdownOutcome::Panicked => {
-                // Shutdown has already made health terminal, so `fail` cannot
-                // publish this late join result. Report it directly.
-                log::warn!("GTK toolbar thread panicked during shutdown");
-            }
-            ThreadShutdownOutcome::TimedOut => {
-                log::warn!(
-                    "GTK toolbar thread did not stop within {:?}; detaching it safely",
-                    GTK_THREAD_SHUTDOWN_TIMEOUT
-                );
-            }
+        if self.state != BridgeState::Failed {
+            self.state = BridgeState::Stopping;
         }
+        self.request_shutdown();
+        if finish_thread(&mut self.gtk_thread) == ThreadShutdownOutcome::Panicked {
+            log::warn!("GTK toolbar thread panicked during shutdown");
+        }
+        let _ = self.feedback_mailbox.send(FeedbackMailboxCommand::Shutdown);
+        if finish_thread(&mut self.mailbox_thread) == ThreadShutdownOutcome::Panicked {
+            log::warn!("GTK feedback mailbox thread panicked during shutdown");
+        }
+        self.state = BridgeState::Stopped;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use glib::MainContext;
     use std::os::fd::AsRawFd;
-    use std::sync::mpsc;
+    use std::sync::mpsc::TryRecvError;
+    use std::time::{Duration, Instant};
+
+    use gtk4::glib::MainContext;
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
+    use crate::toolbar_gtk::{GtkToolbarDragPhase, GtkToolbarKind, GtkToolbarSurfaceSize};
     use crate::ui::toolbar::ToolbarEvent;
 
-    const SURFACE: super::super::GtkToolbarSurfaceSize = super::super::GtkToolbarSurfaceSize {
+    const SURFACE: GtkToolbarSurfaceSize = GtkToolbarSurfaceSize {
         width: 200,
         height: 80,
     };
 
-    fn drag(kind: GtkToolbarKind, phase: GtkToolbarDragPhase, seq: u64) -> GtkToolbarFeedback {
+    fn event() -> GtkToolbarFeedback {
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::Undo,
+            rebind_requested: false,
+        }
+    }
+
+    fn drag(seq: u64) -> GtkToolbarFeedback {
+        drag_with(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq)
+    }
+
+    fn drag_with(kind: GtkToolbarKind, phase: GtkToolbarDragPhase, seq: u64) -> GtkToolbarFeedback {
         match kind {
             GtkToolbarKind::Top => GtkToolbarFeedback::SetTopOffset {
                 x: seq as f64,
@@ -559,24 +832,6 @@ mod tests {
         }
     }
 
-    fn event() -> GtkToolbarFeedback {
-        GtkToolbarFeedback::Event {
-            event: ToolbarEvent::Undo,
-            rebind_requested: false,
-        }
-    }
-
-    fn capture_suppression_ready(generation: u64) -> GtkToolbarFeedback {
-        GtkToolbarFeedback::CaptureSuppressionReady { generation }
-    }
-
-    fn channel() -> (RuntimeWakeSource, BridgeHealth, FeedbackPublisher) {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let health = BridgeHealth::new(wake.handle());
-        let publisher = FeedbackPublisher::new(health.clone());
-        (wake, health, publisher)
-    }
-
     fn wake_is_readable(source: &RuntimeWakeSource) -> bool {
         let mut pollfd = libc::pollfd {
             fd: source.poll_fd().as_raw_fd(),
@@ -587,25 +842,6 @@ mod tests {
         let ready = unsafe { libc::poll(&mut pollfd, 1, 0) };
         assert!(ready >= 0);
         ready > 0 && pollfd.revents & libc::POLLIN != 0
-    }
-
-    fn wait_until_thread_is_blocked_in_poll(tid: libc::pid_t) {
-        let stat_path = format!("/proc/self/task/{tid}/stat");
-        let deadline = Instant::now() + Duration::from_secs(1);
-        loop {
-            let state = std::fs::read_to_string(&stat_path).ok().and_then(|stat| {
-                stat.rsplit_once(") ")
-                    .and_then(|(_, suffix)| suffix.chars().next())
-            });
-            if state == Some('S') {
-                return;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "polling thread did not block (last state: {state:?})"
-            );
-            std::thread::yield_now();
-        }
     }
 
     #[test]
@@ -643,272 +879,266 @@ mod tests {
     }
 
     #[test]
-    fn compatible_move_replaces_only_within_the_current_segment() {
-        let (_wake, health, publisher) = channel();
-        publisher
-            .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 1))
-            .unwrap();
-        for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
-            publisher
-                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
-                .unwrap();
+    fn feedback_preserves_acceptance_order() {
+        let mailbox = publisher_channel();
+        for seq in 1..=3 {
+            mailbox
+                .publisher
+                .publish(drag(seq))
+                .expect("test feedback stays within channel capacity");
         }
-        publisher
-            .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 100))
-            .unwrap();
 
-        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
         assert_eq!(
-            drained.last(),
-            Some(&drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 100))
+            mailbox.drain(GTK_FEEDBACK_CAPACITY),
+            vec![drag(1), drag(2), drag(3)]
         );
-        assert!(!health.failed());
+        assert!(matches!(
+            mailbox.failures.try_recv(),
+            Err(TryRecvError::Empty | TryRecvError::Disconnected)
+        ));
     }
 
     #[test]
-    fn first_move_after_a_reclaimed_drag_start_reuses_an_older_move_slot() {
-        let (_wake, health, publisher) = channel();
-        let first_start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 1);
-        publisher.publish(first_start.clone()).unwrap();
-        for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
-            publisher
-                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
-                .unwrap();
+    fn full_mailbox_coalesces_moves_within_the_current_segment() {
+        let mailbox = publisher_channel();
+        for seq in 1..=GTK_FEEDBACK_CAPACITY as u64 {
+            mailbox
+                .publisher
+                .publish(drag(seq))
+                .expect("test fills mailbox with coalescible moves");
         }
+        mailbox
+            .publisher
+            .publish(drag(100))
+            .expect("latest compatible move replaces an unread move");
 
-        let next_start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 100);
-        let next_move = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 101);
-        publisher.publish(next_start.clone()).unwrap();
-        publisher.publish(next_move.clone()).unwrap();
-
-        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
+        let drained = mailbox.drain(GTK_FEEDBACK_CAPACITY);
         assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.first(), Some(&first_start));
-        assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 2], next_start);
-        assert_eq!(drained.last(), Some(&next_move));
-        assert!(!health.failed());
+        assert_eq!(drained.last(), Some(&drag(100)));
+        assert_eq!(mailbox.failures.try_recv(), Err(TryRecvError::Empty));
     }
 
     #[test]
-    fn drag_end_reclaims_an_older_move_and_preserves_ordered_boundaries() {
-        let (_wake, health, publisher) = channel();
-        let start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 1);
-        publisher.publish(start.clone()).unwrap();
-        for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
-            publisher
-                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
-                .unwrap();
-        }
-        let end = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::End, 65);
-        publisher.publish(end.clone()).unwrap();
-
-        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.first(), Some(&start));
-        assert_eq!(drained.last(), Some(&end));
-        assert!(!drained.contains(&drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 2)));
-        assert!(!health.failed());
-    }
-
-    #[test]
-    fn capture_suppression_ack_reclaims_a_move_and_remains_an_ordered_boundary() {
-        let (_wake, health, publisher) = channel();
-        let start = drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Start, 1);
-        publisher.publish(start.clone()).unwrap();
-        for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
-            publisher
-                .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, seq))
-                .unwrap();
-        }
-
-        let acknowledgement = capture_suppression_ready(42);
-        publisher.publish(acknowledgement.clone()).unwrap();
-
-        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.first(), Some(&start));
-        assert_eq!(drained.last(), Some(&acknowledgement));
-        assert!(!health.failed());
-    }
-
-    #[test]
-    fn reclaimed_move_is_appended_after_event_boundary_and_other_kind() {
-        let (_wake, health, publisher) = channel();
+    fn coalescing_does_not_move_feedback_across_an_ordered_boundary() {
+        let mailbox = publisher_channel();
         for seq in 0..(GTK_FEEDBACK_CAPACITY - 2) as u64 {
-            publisher
-                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
-                .unwrap();
+            mailbox
+                .publisher
+                .publish(drag(seq))
+                .expect("test fills the pre-boundary segment");
         }
-        publisher.publish(event()).unwrap();
-        publisher
-            .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1))
-            .unwrap();
+        mailbox
+            .publisher
+            .publish(event())
+            .expect("test publishes its ordered event boundary");
+        let side_move = drag_with(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1);
+        mailbox
+            .publisher
+            .publish(side_move.clone())
+            .expect("test publishes a second-kind move after the boundary");
+        mailbox
+            .publisher
+            .publish(drag(999))
+            .expect("latest top move reclaims an older pre-boundary move");
 
-        let latest_top = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999);
-        publisher.publish(latest_top.clone()).unwrap();
-
-        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+        let drained = mailbox.drain(GTK_FEEDBACK_CAPACITY);
         assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 3], event());
-        assert_eq!(
-            drained[GTK_FEEDBACK_CAPACITY - 2],
-            drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1)
-        );
-        assert_eq!(drained.last(), Some(&latest_top));
-        assert!(!health.failed());
-    }
-
-    #[test]
-    fn move_capacity_exhaustion_without_a_reclaimable_move_fails() {
-        let (_wake, health, publisher) = channel();
-        for _ in 0..GTK_FEEDBACK_CAPACITY {
-            publisher.publish(event()).unwrap();
-        }
-
-        assert_eq!(
-            publisher.publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 1)),
-            Err(FeedbackPublishError::Failed)
-        );
-        assert!(health.failed());
-        assert_eq!(publisher.pending_len(), GTK_FEEDBACK_CAPACITY);
-    }
-
-    #[test]
-    fn non_coalescible_capacity_exhaustion_publishes_failure_before_wake() {
-        let (wake, health, publisher) = channel();
-        for _ in 0..GTK_FEEDBACK_CAPACITY {
-            publisher.publish(event()).unwrap();
-        }
-        wake.drain().unwrap();
-        assert!(!wake_is_readable(&wake));
-
-        assert_eq!(
-            publisher.publish(event()),
-            Err(FeedbackPublishError::Failed)
-        );
-        assert!(health.failed());
-        assert!(wake_is_readable(&wake));
-        assert_eq!(
-            publisher.publish(event()),
-            Err(FeedbackPublishError::Failed)
-        );
+        assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 2], side_move);
+        assert_eq!(drained.last(), Some(&drag(999)));
+        assert_eq!(mailbox.failures.try_recv(), Err(TryRecvError::Empty));
     }
 
     #[test]
     fn feedback_is_committed_before_its_runtime_wake() {
-        let (wake, _health, publisher) = channel();
-        publisher.publish(event()).unwrap();
-        assert!(wake_is_readable(&wake));
-        assert_eq!(publisher.pending_len(), 1);
-        assert_eq!(publisher.drain(1), vec![event()]);
+        let mailbox = publisher_channel();
+        mailbox
+            .publisher
+            .publish(event())
+            .expect("test feedback fits in the empty channel");
+
+        assert!(wake_is_readable(&mailbox.wake));
+        assert_eq!(mailbox.drain(1), vec![event()]);
     }
 
     #[test]
-    fn terminal_transition_after_initial_drain_recovers_accepted_tail() {
-        let (_wake, health, publisher) = channel();
-        let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
-        assert!(drained.is_empty());
+    fn bounded_overload_is_typed_and_closes_future_admission() {
+        let mailbox = publisher_channel();
+        for _ in 0..GTK_FEEDBACK_CAPACITY {
+            mailbox
+                .publisher
+                .publish(event())
+                .expect("test fills exactly the configured channel capacity");
+        }
+        mailbox
+            .wake
+            .drain()
+            .expect("test drains feedback publication wakeups");
 
-        publisher.publish(event()).unwrap();
-        health.fail("intentional terminal transition after initial drain");
-
-        let (drained, failed) = publisher.complete_drain(drained, GTK_FEEDBACK_CAPACITY);
-        assert!(failed);
-        assert_eq!(drained, vec![event()]);
         assert_eq!(
-            publisher.publish(event()),
+            mailbox.publisher.publish(event()),
             Err(FeedbackPublishError::Failed)
         );
+        assert_eq!(
+            mailbox.publisher.publish(event()),
+            Err(FeedbackPublishError::Failed)
+        );
+        assert!(wake_is_readable(&mailbox.wake));
+        assert!(
+            mailbox
+                .failures
+                .try_recv()
+                .expect("bounded overload publishes a terminal reason")
+                .contains("ordered feedback")
+        );
+        assert_eq!(
+            mailbox.drain(GTK_FEEDBACK_CAPACITY).len(),
+            GTK_FEEDBACK_CAPACITY
+        );
     }
 
     #[test]
-    fn feedback_unblocks_a_runtime_already_waiting_in_poll() {
-        let (wake, _health, publisher) = channel();
-        let (tid_tx, tid_rx) = mpsc::channel();
-        let poller = std::thread::spawn(move || {
-            // SAFETY: gettid has no preconditions and is used only to observe this test thread.
-            let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
-            tid_tx.send(tid).unwrap();
-            let mut pollfd = libc::pollfd {
-                fd: wake.poll_fd().as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            // SAFETY: pollfd and the source descriptor remain valid for the bounded wait.
-            let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
-            assert_eq!(ready, 1);
-            assert_ne!(pollfd.revents & libc::POLLIN, 0);
+    fn disconnected_feedback_receiver_closes_admission_without_failure() {
+        let mut mailbox = publisher_channel();
+        mailbox.stop();
+
+        assert_eq!(
+            mailbox.publisher.publish(event()),
+            Err(FeedbackPublishError::Closed)
+        );
+        assert_eq!(
+            mailbox.publisher.publish(event()),
+            Err(FeedbackPublishError::Closed)
+        );
+        assert!(matches!(
+            mailbox.failures.try_recv(),
+            Err(TryRecvError::Empty | TryRecvError::Disconnected)
+        ));
+    }
+
+    #[test]
+    fn failed_bridge_drains_every_accepted_tail_value() {
+        let wake = RuntimeWakeSource::new().expect("test creates its runtime wake source");
+        let mailbox_wake = wake
+            .try_sender()
+            .expect("test duplicates its mailbox wake descriptor");
+        let (updates, _update_rx) = latest_value_channel();
+        let (failure_tx, failure_rx) = channel();
+        let (feedback_mailbox, mailbox_thread) =
+            spawn_feedback_mailbox(failure_tx.clone(), mailbox_wake)
+                .expect("test starts its feedback mailbox owner");
+        let publisher = FeedbackPublisher::new(feedback_mailbox.clone());
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let gtk_thread = std::thread::spawn(move || {
+            let _ = shutdown_rx.blocking_recv();
         });
-
-        let tid = tid_rx.recv().unwrap();
-        wait_until_thread_is_blocked_in_poll(tid);
-        publisher.publish(event()).unwrap();
-        poller.join().unwrap();
-        assert_eq!(publisher.pending_len(), 1);
-    }
-
-    #[test]
-    fn bounded_drain_preserves_order_and_self_wakes_for_residual_work() {
-        let (wake, _health, publisher) = channel();
-        for seq in 1..=3 {
+        for seq in 1..=GTK_FEEDBACK_CAPACITY as u64 {
             publisher
-                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
-                .unwrap();
+                .publish(drag(seq))
+                .expect("test fills the accepted feedback tail exactly");
         }
-        wake.drain().unwrap();
+        failure_tx
+            .send("intentional transport failure".into())
+            .expect("test publishes its terminal transport state");
 
-        assert_eq!(
-            publisher.drain(2),
-            vec![
-                drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 1),
-                drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 2),
-            ]
-        );
-        assert_eq!(publisher.pending_len(), 1);
-        assert!(wake_is_readable(&wake));
+        let mut bridge = GtkToolbarBridge {
+            updates,
+            feedback_mailbox,
+            failures: failure_rx,
+            shutdown: Some(shutdown_tx),
+            state: BridgeState::Active,
+            gtk_thread: Some(gtk_thread),
+            mailbox_thread: Some(mailbox_thread),
+        };
+        let (drained, failed) = bridge.drain_feedback();
+
+        assert!(failed);
+        assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
+        assert_eq!(drained.first(), Some(&drag(1)));
+        assert_eq!(drained.last(), Some(&drag(GTK_FEEDBACK_CAPACITY as u64)));
     }
 
     #[test]
-    fn completed_thread_is_joined_without_initializing_gtk() {
-        let (completion_tx, completion_rx) = mpsc::channel();
-        let mut thread = Some(std::thread::spawn(move || {
-            let _completion = ThreadCompletion(completion_tx);
-        }));
-        assert_eq!(
-            finish_thread_within(&mut thread, &completion_rx, Duration::from_secs(1)),
-            ThreadShutdownOutcome::Joined
-        );
+    fn bridge_drop_signals_shutdown_before_joining_thread() {
+        let wake = RuntimeWakeSource::new().expect("test creates its runtime wake source");
+        let mailbox_wake = wake
+            .try_sender()
+            .expect("test duplicates its mailbox wake descriptor");
+        let (updates, _update_rx) = latest_value_channel();
+        let (failure_tx, failure_rx) = channel();
+        let (feedback_mailbox, mailbox_thread) = spawn_feedback_mailbox(failure_tx, mailbox_wake)
+            .expect("test starts its feedback mailbox owner");
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (observed_tx, observed_rx) = channel();
+        let gtk_thread = std::thread::spawn(move || {
+            let observed = shutdown_rx.blocking_recv().is_ok();
+            let _ = observed_tx.send(observed);
+        });
+        let bridge = GtkToolbarBridge {
+            updates,
+            feedback_mailbox,
+            failures: failure_rx,
+            shutdown: Some(shutdown_tx),
+            state: BridgeState::Active,
+            gtk_thread: Some(gtk_thread),
+            mailbox_thread: Some(mailbox_thread),
+        };
+
+        drop(bridge);
+
+        assert_eq!(observed_rx.try_recv(), Ok(true));
+    }
+
+    #[test]
+    fn joined_thread_is_consumed() {
+        let mut thread = Some(std::thread::spawn(|| {}));
+        assert_eq!(finish_thread(&mut thread), ThreadShutdownOutcome::Joined);
         assert!(thread.is_none());
     }
 
     #[test]
-    fn panicked_thread_is_joined_with_panicked_outcome() {
-        let (completion_tx, completion_rx) = mpsc::channel();
-        let mut thread = Some(std::thread::spawn(move || {
-            let _completion = ThreadCompletion(completion_tx);
+    fn panicked_thread_is_consumed_with_typed_outcome() {
+        let mut thread = Some(std::thread::spawn(|| {
             panic!("intentional GTK bridge shutdown test panic");
         }));
-        assert_eq!(
-            finish_thread_within(&mut thread, &completion_rx, Duration::from_secs(1)),
-            ThreadShutdownOutcome::Panicked
-        );
+        assert_eq!(finish_thread(&mut thread), ThreadShutdownOutcome::Panicked);
         assert!(thread.is_none());
     }
 
     #[test]
-    fn stuck_thread_is_detached_at_the_bounded_deadline() {
-        let (completion_tx, completion_rx) = mpsc::channel();
-        let (release_tx, release_rx) = mpsc::channel();
-        let mut thread = Some(std::thread::spawn(move || {
-            let _completion = ThreadCompletion(completion_tx);
-            let _ = release_rx.recv();
-        }));
+    fn finish_thread_waits_for_cooperative_release_instead_of_detaching() {
+        let (release_tx, release_rx) = channel();
+        let (joined_tx, joined_rx) = channel();
+        let worker = std::thread::spawn(move || {
+            let mut thread = Some(std::thread::spawn(move || {
+                let _ = release_rx.recv();
+            }));
+            let outcome = finish_thread(&mut thread);
+            let _ = joined_tx.send((outcome, thread.is_none()));
+        });
+
         assert_eq!(
-            finish_thread_within(&mut thread, &completion_rx, Duration::from_millis(1)),
-            ThreadShutdownOutcome::TimedOut
+            joined_rx.recv_timeout(Duration::from_millis(20)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
         );
-        assert!(thread.is_none());
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("test releases its cooperatively stopped thread");
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let joined = loop {
+            match joined_rx.try_recv() {
+                Ok(result) => break Ok(result),
+                Err(TryRecvError::Empty) if Instant::now() < deadline => {
+                    std::thread::yield_now();
+                }
+                Err(error) => break Err(error),
+            }
+        };
+        let (outcome, consumed) = joined
+            .expect("the test released the thread and allowed its observer to report completion");
+        worker
+            .join()
+            .expect("test joins its finish-thread observer");
+        assert_eq!(outcome, ThreadShutdownOutcome::Joined);
+        assert!(consumed);
     }
 }

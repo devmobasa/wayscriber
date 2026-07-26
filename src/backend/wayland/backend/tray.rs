@@ -28,7 +28,7 @@ fn defer_durable_action(
 }
 
 pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
-    let actions = crate::tray_action::take_pending_actions();
+    let actions = crate::tray_action::take_pending_actions(&state.runtime_paths);
     let mut processed = !actions.is_empty();
     for action in actions {
         apply_tray_action(state, action);
@@ -47,7 +47,7 @@ pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
         match action.try_finish(true, None) {
             Ok(ActionFinishOutcome::Complete) => {}
             Ok(ActionFinishOutcome::Deferred(action)) => {
-                defer_durable_action(state, Some(action));
+                defer_durable_action(state, Some(*action));
                 return processed;
             }
             Err(error) => {
@@ -59,14 +59,14 @@ pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
     }
 
     for _ in 0..MAX_DURABLE_ACTIONS_PER_DRAIN {
-        match crate::daemon::try_claim_overlay_action() {
+        match crate::daemon::try_claim_overlay_action(&state.runtime_paths) {
             Ok(ActionClaimOutcome::Claimed(action)) => {
                 apply_tray_action(state, action.action());
                 processed = true;
                 match action.try_finish(true, None) {
                     Ok(ActionFinishOutcome::Complete) => {}
                     Ok(ActionFinishOutcome::Deferred(action)) => {
-                        defer_durable_action(state, Some(action));
+                        defer_durable_action(state, Some(*action));
                         return processed;
                     }
                     Err(error) => {

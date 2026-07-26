@@ -1,7 +1,7 @@
 use tokio::task;
 
 use crate::capture::types::CaptureError;
-use crate::process_broker::{HelperKind, current};
+use crate::process_broker::{HelperKind, ProcessBrokerHandle};
 use std::ffi::OsStr;
 use std::time::Duration;
 
@@ -10,31 +10,33 @@ use std::time::Duration;
 const CAPTURE_OUTPUT_CAP: usize = 256 * 1024 * 1024;
 
 fn run_helper(
+    process_broker: &ProcessBrokerHandle,
     kind: HelperKind,
     program: &str,
     arguments: &[&str],
     timeout: Duration,
     output_cap: usize,
 ) -> Result<crate::process_broker::BrokerOutput, CaptureError> {
-    current()
-        .and_then(|broker| {
-            broker.run(
-                kind,
-                OsStr::new(program),
-                arguments.iter().map(OsStr::new),
-                Vec::new(),
-                timeout,
-                output_cap,
-            )
-        })
+    process_broker
+        .run(
+            kind,
+            OsStr::new(program),
+            arguments.iter().map(OsStr::new),
+            Vec::new(),
+            timeout,
+            output_cap,
+        )
         .map_err(|error| CaptureError::ImageError(format!("failed to run {program}: {error:#}")))
 }
 
 /// Capture the entire Wayland scene using `grim`.
-pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
-    task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
+pub async fn capture_full_screen_hyprland(
+    process_broker: ProcessBrokerHandle,
+) -> Result<Vec<u8>, CaptureError> {
+    task::spawn_blocking(move || -> Result<Vec<u8>, CaptureError> {
         log::debug!("Capturing full screen via grim");
         let output = run_helper(
+            &process_broker,
             HelperKind::Grim,
             "grim",
             &["-"],
@@ -65,12 +67,15 @@ pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
 }
 
 /// Capture the currently focused Hyprland window using `hyprctl` + `grim`.
-pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
-    task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
+pub async fn capture_active_window_hyprland(
+    process_broker: ProcessBrokerHandle,
+) -> Result<Vec<u8>, CaptureError> {
+    task::spawn_blocking(move || -> Result<Vec<u8>, CaptureError> {
         use serde_json::Value;
 
         // Query Hyprland for the active window geometry
         let output = run_helper(
+            &process_broker,
             HelperKind::Hyprctl,
             "hyprctl",
             &["activewindow", "-j"],
@@ -123,7 +128,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         let monitor_id = json.get("monitor").and_then(|v| v.as_i64());
         let monitor_name = json.get("monitor").and_then(|v| v.as_str());
 
-        if let Some(scale) = hyprland_monitor_scale(monitor_id, monitor_name)?
+        if let Some(scale) = hyprland_monitor_scale(&process_broker, monitor_id, monitor_name)?
             && (scale - 1.0).abs() > f64::EPSILON
         {
             log::debug!(
@@ -146,6 +151,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
 
         log::debug!("Capturing active window via grim: {}", geometry);
         let grim_output = run_helper(
+            &process_broker,
             HelperKind::Grim,
             "grim",
             &["-g", &geometry, "-"],
@@ -174,10 +180,13 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
 }
 
 /// Capture a user-selected region using `slurp` + `grim` (Hyprland/wlroots fast path).
-pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
-    task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
+pub async fn capture_selection_hyprland(
+    process_broker: ProcessBrokerHandle,
+) -> Result<Vec<u8>, CaptureError> {
+    task::spawn_blocking(move || -> Result<Vec<u8>, CaptureError> {
         // `slurp` outputs geometry in the format "x,y widthxheight"
         let output = run_helper(
+            &process_broker,
             HelperKind::Slurp,
             "slurp",
             &["-f", "%x,%y %wx%h"],
@@ -209,6 +218,7 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
 
         log::debug!("Capturing region via grim: {}", geometry);
         let grim_output = run_helper(
+            &process_broker,
             HelperKind::Grim,
             "grim",
             &["-g", geometry, "-"],
@@ -239,6 +249,7 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
 }
 
 fn hyprland_monitor_scale(
+    process_broker: &ProcessBrokerHandle,
     monitor_id: Option<i64>,
     monitor_name: Option<&str>,
 ) -> Result<Option<f64>, CaptureError> {
@@ -249,6 +260,7 @@ fn hyprland_monitor_scale(
     }
 
     let output = run_helper(
+        process_broker,
         HelperKind::Hyprctl,
         "hyprctl",
         &["monitors", "-j"],

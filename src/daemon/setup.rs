@@ -14,16 +14,18 @@ pub(crate) struct BackgroundModeSetupSummary {
     pub(crate) service_path: PathBuf,
 }
 
-pub(crate) fn setup_background_mode() -> Result<BackgroundModeSetupSummary> {
-    let service_path = ensure_user_service_file()?;
+pub(crate) fn setup_background_mode(
+    paths: &crate::paths::PathResolver,
+) -> Result<BackgroundModeSetupSummary> {
+    let service_path = ensure_user_service_file(paths)?;
     run_systemctl_user(&["daemon-reload"])?;
     run_systemctl_user(&["enable", "--now", USER_SERVICE_NAME])?;
     Ok(BackgroundModeSetupSummary { service_path })
 }
 
-fn ensure_user_service_file() -> Result<PathBuf> {
+fn ensure_user_service_file(paths: &crate::paths::PathResolver) -> Result<PathBuf> {
     let service_path =
-        user_service_unit_path().context("unable to resolve XDG config directory")?;
+        user_service_unit_path(paths).context("unable to resolve absolute XDG config directory")?;
     if let Some(parent) = service_path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!(

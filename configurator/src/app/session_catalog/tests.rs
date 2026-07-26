@@ -1,41 +1,9 @@
 use super::*;
-use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::MutexGuard;
 
 use crate::models::{
     DesktopEnvironment, LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,
 };
-use wayscriber::env_vars::XDG_RUNTIME_DIR_ENV;
-
-struct RuntimeEnvGuard {
-    previous: Option<OsString>,
-    _guard: MutexGuard<'static, ()>,
-}
-
-impl RuntimeEnvGuard {
-    fn set_xdg_runtime_dir(path: &Path) -> Self {
-        let guard = crate::test_env::lock();
-        let previous = std::env::var_os(XDG_RUNTIME_DIR_ENV);
-        unsafe {
-            std::env::set_var(XDG_RUNTIME_DIR_ENV, path);
-        }
-        Self {
-            previous,
-            _guard: guard,
-        }
-    }
-}
-
-impl Drop for RuntimeEnvGuard {
-    fn drop(&mut self) {
-        match self.previous.take() {
-            Some(value) => unsafe { std::env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-            None => unsafe { std::env::remove_var(XDG_RUNTIME_DIR_ENV) },
-        }
-    }
-}
-
 fn daemon_status(active: bool) -> DaemonRuntimeStatus {
     DaemonRuntimeStatus {
         desktop: DesktopEnvironment::Unknown,
@@ -56,8 +24,6 @@ fn daemon_status(active: bool) -> DaemonRuntimeStatus {
 
 #[test]
 fn session_clear_cached_status_blocker_blocks_running_daemon() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let status = daemon_status(true);
 
     let blocker =
@@ -68,8 +34,6 @@ fn session_clear_cached_status_blocker_blocks_running_daemon() {
 
 #[test]
 fn session_clear_cached_status_blocker_allows_inactive_daemon() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let status = daemon_status(false);
 
     let blocker = session_clear_cached_status_blocker(Some(&status));
@@ -79,8 +43,6 @@ fn session_clear_cached_status_blocker_allows_inactive_daemon() {
 
 #[test]
 fn session_duplicate_cached_status_blocker_uses_duplicate_status_message() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let blocker = session_duplicate_cached_status_blocker(None)
         .expect("unknown status should block duplicate");
 
@@ -89,8 +51,6 @@ fn session_duplicate_cached_status_blocker_uses_duplicate_status_message() {
 
 #[test]
 fn session_move_cached_status_blocker_uses_move_status_message() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let blocker =
         session_move_cached_status_blocker(None).expect("unknown status should block move");
 
@@ -99,8 +59,6 @@ fn session_move_cached_status_blocker_uses_move_status_message() {
 
 #[test]
 fn session_clear_cached_status_blocker_blocks_unknown_daemon_status() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let blocker =
         session_clear_cached_status_blocker(None).expect("unknown status should block clear");
 
@@ -109,8 +67,6 @@ fn session_clear_cached_status_blocker_blocks_unknown_daemon_status() {
 
 #[test]
 fn session_clear_tool_state_cached_status_blocker_uses_tool_state_status_message() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let blocker = session_clear_tool_state_cached_status_blocker(None)
         .expect("unknown status should block tool reset");
 
@@ -120,10 +76,13 @@ fn session_clear_tool_state_cached_status_blocker_uses_tool_state_status_message
 
 #[test]
 fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
+    let temp =
+        crate::test_temp::tempdir().expect("the runtime-lock test fixture should be created");
+    let paths = RuntimeLockPaths::fixture(temp.path());
+    let _daemon_lock = acquire_runtime_lock_for_clear(&paths, RuntimeLockKind::Daemon)
+        .expect("the fixture owns the daemon lock path");
     let error = acquire_runtime_lock_for_inactive_operation(
+        &paths,
         RuntimeLockKind::Daemon,
         CatalogOperation::Clear,
     )
@@ -134,10 +93,13 @@ fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
 
 #[test]
 fn cached_status_blocker_does_not_probe_runtime_locks() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
-    let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
+    let temp =
+        crate::test_temp::tempdir().expect("the runtime-lock test fixture should be created");
+    let paths = RuntimeLockPaths::fixture(temp.path());
+    let _daemon_lock = acquire_runtime_lock_for_clear(&paths, RuntimeLockKind::Daemon)
+        .expect("the fixture owns the daemon lock path");
+    let _overlay_lock = acquire_runtime_lock_for_clear(&paths, RuntimeLockKind::Overlay)
+        .expect("the fixture owns the overlay lock path");
     let status = daemon_status(false);
 
     let blocker = session_clear_cached_status_blocker(Some(&status));
@@ -150,17 +112,20 @@ fn cached_status_blocker_does_not_probe_runtime_locks() {
 
 #[test]
 fn clear_runtime_guards_hold_daemon_and_overlay_locks() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
-    let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
+    let temp =
+        crate::test_temp::tempdir().expect("the runtime-lock test fixture should be created");
+    let paths = RuntimeLockPaths::fixture(temp.path());
+    let _daemon_lock = acquire_runtime_lock_for_clear(&paths, RuntimeLockKind::Daemon)
+        .expect("the fixture owns the daemon lock path");
+    let _overlay_lock = acquire_runtime_lock_for_clear(&paths, RuntimeLockKind::Overlay)
+        .expect("the fixture owns the overlay lock path");
 
     assert!(matches!(
-        runtime_lock_active(RuntimeLockKind::Daemon, CatalogOperation::Clear),
+        runtime_lock_active(&paths, RuntimeLockKind::Daemon, CatalogOperation::Clear),
         Ok(true)
     ));
     assert!(matches!(
-        runtime_lock_active(RuntimeLockKind::Overlay, CatalogOperation::Clear),
+        runtime_lock_active(&paths, RuntimeLockKind::Overlay, CatalogOperation::Clear),
         Ok(true)
     ));
 }

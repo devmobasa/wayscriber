@@ -2,7 +2,6 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
-use std::sync::Arc;
 
 use super::{MAX_RUNTIME_UI_FILE_BYTES, RuntimeUiStateInspection, fs::PinnedPath};
 use crate::runtime_ui_state::{
@@ -80,12 +79,12 @@ pub(super) fn inspect_path(
     }
     verify_parent(path, &parent)?;
 
+    let decoded = decode_runtime_ui_file(&bytes);
     let revision = RuntimeStateSourceRevision::present_observed(
         path_identity,
-        Arc::<[u8]>::from(bytes.into_boxed_slice()),
+        bytes.into_boxed_slice(),
         before_fingerprint.identity,
     );
-    let decoded = decode_runtime_ui_file(revision.bytes().expect("present revision"));
     Ok(RuntimeUiStateInspection {
         observation: RuntimeStateSourceObservation {
             revision,
@@ -159,12 +158,12 @@ pub(super) fn inspect_pinned(
         )));
     }
 
+    let decoded = decode_runtime_ui_file(&bytes);
     let revision = RuntimeStateSourceRevision::present_observed(
         RuntimeStatePathIdentity::direct(reported_path),
-        Arc::<[u8]>::from(bytes.into_boxed_slice()),
+        bytes.into_boxed_slice(),
         before_fingerprint.identity,
     );
-    let decoded = decode_runtime_ui_file(revision.bytes().expect("present revision"));
     Ok(RuntimeUiStateInspection {
         observation: RuntimeStateSourceObservation {
             revision,

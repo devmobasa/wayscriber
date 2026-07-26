@@ -8,7 +8,6 @@
 
 use crate::domain::Action;
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
-use crate::paths::data_dir;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -21,6 +20,7 @@ pub(crate) use worker::PaletteRecentsWriter;
 
 const PALETTE_RECENTS_VERSION: u32 = 1;
 const PALETTE_RECENTS_FILE: &str = "palette_recents.toml";
+#[cfg(test)]
 const PALETTE_RECENTS_DIR: &str = "wayscriber";
 
 /// Maximum number of persisted (and in-memory) palette recents.
@@ -51,17 +51,23 @@ pub struct PaletteRecentsStore {
 }
 
 impl PaletteRecentsStore {
-    pub fn load() -> Self {
-        let Some(path) = palette_recents_path() else {
-            return Self {
-                recents: Vec::new(),
-                // No target path: there is nothing to persist, so treat the
-                // store as durable and never spin retrying an impossible write.
-                persisted: true,
-                path: None,
-            };
+    pub fn load(paths: &crate::paths::PathResolver) -> (Self, Option<String>) {
+        let path = match paths.wayscriber_data_dir() {
+            Ok(root) => root.join(PALETTE_RECENTS_FILE),
+            Err(error) => {
+                return (
+                    Self {
+                        recents: Vec::new(),
+                        persisted: true,
+                        path: None,
+                    },
+                    Some(format!(
+                        "Command-palette recents persistence is unavailable: {error}; changes remain live-only"
+                    )),
+                );
+            }
         };
-        Self::load_from_path(path)
+        (Self::load_from_path(path), None)
     }
 
     fn load_from_path(path: PathBuf) -> Self {
@@ -196,10 +202,6 @@ fn parse_recents(raw: &str) -> Vec<Action> {
         }
     }
     recents
-}
-
-fn palette_recents_path() -> Option<PathBuf> {
-    data_dir().map(|dir| dir.join(PALETTE_RECENTS_DIR).join(PALETTE_RECENTS_FILE))
 }
 
 #[cfg(test)]

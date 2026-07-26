@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
-use crate::{RESUME_SESSION_ENV, paths, session};
+use crate::{RESUME_SESSION_ENV, session};
 
 use super::super::helpers::resume_override_from_env;
 
@@ -12,9 +12,11 @@ pub(super) fn build_session_options(
     config: &Config,
     config_dir: &Path,
     named_session_file: Option<PathBuf>,
+    runtime_resume_override: Option<bool>,
+    path_resolver: &crate::paths::PathResolver,
 ) -> Option<session::SessionOptions> {
     let display_env = env::var(WAYLAND_DISPLAY_ENV).ok();
-    let resume_override = resume_override_from_env();
+    let resume_override = resume_override_from_env(runtime_resume_override);
     let mut session_options = if let Some(path) = named_session_file {
         let mut options = session::options_from_config_for_named_file(
             &config.session,
@@ -28,7 +30,12 @@ pub(super) fn build_session_options(
         );
         Some(options)
     } else {
-        match session::options_from_config(&config.session, config_dir, display_env.as_deref()) {
+        match session::options_from_config(
+            &config.session,
+            config_dir,
+            display_env.as_deref(),
+            path_resolver,
+        ) {
             Ok(opts) => Some(opts),
             Err(err) => {
                 warn!("Session persistence disabled: {}", err);
@@ -40,9 +47,13 @@ pub(super) fn build_session_options(
     match resume_override {
         Some(true) => {
             if session_options.is_none() {
-                let default_base = paths::data_dir()
-                    .unwrap_or_else(|| config_dir.to_path_buf())
-                    .join("wayscriber");
+                let default_base = match path_resolver.wayscriber_data_dir() {
+                    Ok(path) => path,
+                    Err(error) => {
+                        warn!("Session resume could not resolve data identity: {error}");
+                        return None;
+                    }
+                };
                 let display = display_env.clone().unwrap_or_else(|| "default".to_string());
                 session_options = Some(session::SessionOptions::new(default_base, display));
             }
@@ -115,11 +126,17 @@ mod tests {
         config.session.persist_blackboard = false;
         config.session.persist_history = false;
         config.session.restore_tool_state = false;
+        let paths =
+            crate::paths::PathResolver::from_environment(crate::paths::PathEnvironment::for_test(
+                &[(crate::env_vars::HOME_ENV, std::ffi::OsStr::new("/tmp"))],
+            ));
 
         let options = build_session_options(
             &config,
             Path::new("/tmp/config"),
             Some(PathBuf::from("/tmp/lecture-04.wayscriber-session")),
+            None,
+            &paths,
         )
         .expect("named session options should be available");
 

@@ -223,7 +223,7 @@ pub struct SessionRecentSnapshot {
 /// capabilities and publishes only safe, cloneable presentation data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeUiPersistenceSnapshot {
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub mode: RuntimeUiPersistenceMode,
     pub detail: Option<String>,
     pub recovery_artifacts: Vec<PathBuf>,

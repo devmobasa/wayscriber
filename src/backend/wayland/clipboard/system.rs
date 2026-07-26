@@ -6,14 +6,17 @@ use crate::input::state::ClipboardFingerprint;
 use command::{ClipboardCommandRunner, WlClipboardCommandRunner};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+#[cfg(test)]
 use std::io::Read;
-use std::sync::mpsc;
 use std::time::Duration;
 
 mod command;
 
-pub(super) fn publish_selection_clipboard(payload_json: &str) -> Result<(), String> {
-    publish_selection_with_runner(payload_json, &WlClipboardCommandRunner)
+pub(super) fn publish_selection_clipboard(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    payload_json: &str,
+) -> Result<(), String> {
+    publish_selection_with_runner(payload_json, &WlClipboardCommandRunner::new(process_broker))
 }
 
 fn publish_selection_with_runner(
@@ -40,10 +43,37 @@ fn publish_selection_with_runner(
     Ok(())
 }
 
-pub(in crate::backend::wayland) fn clipboard_fingerprint() -> Option<ClipboardFingerprint> {
-    clipboard_fingerprint_with_runner(&WlClipboardCommandRunner)
+pub(in crate::backend::wayland) fn clipboard_fingerprint(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    cancellation: &mut super::ClipboardCancellation,
+) -> Option<ClipboardFingerprint> {
+    let runner = WlClipboardCommandRunner::new(process_broker);
+    let offered = list_mime_types_with_runner(&runner).ok()?;
+    if cancellation.is_cancelled() {
+        return None;
+    }
+    let selected_mime_type =
+        image::choose_supported_mime(&offered).or_else(|| offered.first().cloned());
+    let content_sample = selected_mime_type.as_ref().and_then(|mime| {
+        read_clipboard_mime_prefix_with_runner(
+            mime,
+            CLIPBOARD_FINGERPRINT_BYTES,
+            CLIPBOARD_FINGERPRINT_TIMEOUT,
+            &runner,
+        )
+        .ok()
+    });
+    if cancellation.is_cancelled() {
+        return None;
+    }
+    Some(fingerprint_from_parts(
+        offered,
+        selected_mime_type,
+        content_sample,
+    ))
 }
 
+#[cfg(test)]
 fn clipboard_fingerprint_with_runner(
     runner: &impl ClipboardCommandRunner,
 ) -> Option<ClipboardFingerprint> {
@@ -59,6 +89,18 @@ fn clipboard_fingerprint_with_runner(
         )
         .ok()
     });
+    Some(fingerprint_from_parts(
+        offered,
+        selected_mime_type,
+        content_sample,
+    ))
+}
+
+fn fingerprint_from_parts(
+    offered: Vec<String>,
+    selected_mime_type: Option<String>,
+    content_sample: Option<ClipboardPrefixRead>,
+) -> ClipboardFingerprint {
     let bounded_content_hash = content_sample
         .as_ref()
         .map(|sample| content_hash(&sample.bytes));
@@ -66,17 +108,19 @@ fn clipboard_fingerprint_with_runner(
     let bounded_content_truncated = content_sample
         .as_ref()
         .is_some_and(|sample| sample.truncated);
-    Some(ClipboardFingerprint {
+    ClipboardFingerprint {
         offered_mime_types: offered,
         selected_mime_type,
         bounded_content_hash,
         bounded_content_len,
         bounded_content_truncated,
-    })
+    }
 }
 
-pub(super) fn list_mime_types() -> Result<Vec<String>, ClipboardReadError> {
-    list_mime_types_with_runner(&WlClipboardCommandRunner)
+pub(super) fn list_mime_types(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+) -> Result<Vec<String>, ClipboardReadError> {
+    list_mime_types_with_runner(&WlClipboardCommandRunner::new(process_broker))
 }
 
 fn list_mime_types_with_runner(
@@ -114,11 +158,17 @@ fn list_mime_types_with_runner(
 }
 
 pub(super) fn read_clipboard_mime(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     mime_type: &str,
     limit: usize,
     timeout: Duration,
 ) -> Result<Vec<u8>, ClipboardReadError> {
-    read_clipboard_mime_with_runner(mime_type, limit, timeout, &WlClipboardCommandRunner)
+    read_clipboard_mime_with_runner(
+        mime_type,
+        limit,
+        timeout,
+        &WlClipboardCommandRunner::new(process_broker),
+    )
 }
 
 fn read_clipboard_mime_with_runner(
@@ -189,40 +239,6 @@ fn clipboard_output(
             "wl-paste exited unsuccessfully: {stderr}"
         )))
     }
-}
-
-pub(super) fn read_pipe_with_timeout<R>(
-    reader: R,
-    limit: usize,
-    timeout: Duration,
-) -> Result<Vec<u8>, ClipboardReadError>
-where
-    R: Read + Send + 'static,
-{
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(read_limited(reader, limit));
-    });
-    rx.recv_timeout(timeout)
-        .map_err(|_| ClipboardReadError::TimedOut)?
-}
-
-fn read_limited<R: Read>(mut reader: R, limit: usize) -> Result<Vec<u8>, ClipboardReadError> {
-    let mut data = Vec::new();
-    let mut buffer = [0u8; 8192];
-    loop {
-        let read = reader.read(&mut buffer).map_err(|err| {
-            ClipboardReadError::Other(format!("Failed to read clipboard: {}", err))
-        })?;
-        if read == 0 {
-            break;
-        }
-        if data.len().saturating_add(read) > limit {
-            return Err(ClipboardReadError::TooLarge { limit });
-        }
-        data.extend_from_slice(&buffer[..read]);
-    }
-    Ok(data)
 }
 
 #[cfg(test)]

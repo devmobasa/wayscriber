@@ -65,25 +65,7 @@ pub struct BoardManager {
     default_board_id: String,
     template: BoardSpec,
     identity_generation: BoardIdentityGeneration,
-}
-
-impl Clone for BoardManager {
-    fn clone(&self) -> Self {
-        Self {
-            boards: self.boards.clone(),
-            pin_seeds: self.pin_seeds.clone(),
-            active_index: self.active_index,
-            max_count: self.max_count,
-            auto_create: self.auto_create,
-            show_badge: self.show_badge,
-            pan_enabled: self.pan_enabled,
-            show_pan_badge: self.show_pan_badge,
-            persist_customizations: self.persist_customizations,
-            default_board_id: self.default_board_id.clone(),
-            template: self.template.clone(),
-            identity_generation: BoardIdentityGeneration::fresh(),
-        }
-    }
+    next_identity_generation: u64,
 }
 
 impl BoardManager {
@@ -101,6 +83,7 @@ impl BoardManager {
             default_board_id: self.default_board_id.clone(),
             template: self.template.clone(),
             identity_generation: self.identity_generation,
+            next_identity_generation: self.next_identity_generation,
         }
     }
 }

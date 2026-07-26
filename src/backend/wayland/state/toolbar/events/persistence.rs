@@ -44,19 +44,24 @@ pub(super) fn apply_toolbar_ui_config_target(
     }
 }
 
+#[derive(Clone, Copy)]
+enum MasterVisibilityTarget {
+    FloatingBadge,
+    ZoomChip,
+}
+
 fn apply_toolbar_ui_visibility_value(
     config: &mut crate::config::Config,
-    target: ToolbarUiPersistenceTarget,
+    target: MasterVisibilityTarget,
     visible: bool,
 ) {
     match target {
-        ToolbarUiPersistenceTarget::FloatingBadge => {
+        MasterVisibilityTarget::FloatingBadge => {
             config.ui.show_floating_badge = visible;
         }
-        ToolbarUiPersistenceTarget::ZoomChip => {
+        MasterVisibilityTarget::ZoomChip => {
             config.ui.toolbar.show_zoom_chip = visible;
         }
-        _ => unreachable!("only master-visibility targets carry authored values"),
     }
 }
 
@@ -183,7 +188,7 @@ impl WaylandState {
             target,
         );
 
-        if let Err(err) = self.config.save() {
+        if let Err(err) = self.config_store.save(&self.config) {
             log::warn!("Failed to save toolbar config: {}", err);
         } else {
             log::debug!("Saved toolbar config");
@@ -206,19 +211,15 @@ impl WaylandState {
         &mut self,
         visible: bool,
     ) {
-        self.save_toolbar_ui_visibility_config(ToolbarUiPersistenceTarget::FloatingBadge, visible);
+        self.save_toolbar_ui_visibility_config(MasterVisibilityTarget::FloatingBadge, visible);
     }
 
     pub(in crate::backend::wayland) fn save_zoom_chip_visibility_config(&mut self, visible: bool) {
-        self.save_toolbar_ui_visibility_config(ToolbarUiPersistenceTarget::ZoomChip, visible);
+        self.save_toolbar_ui_visibility_config(MasterVisibilityTarget::ZoomChip, visible);
     }
 
-    fn save_toolbar_ui_visibility_config(
-        &mut self,
-        target: ToolbarUiPersistenceTarget,
-        visible: bool,
-    ) {
-        let save_result = crate::config::Config::update_file(|config| {
+    fn save_toolbar_ui_visibility_config(&mut self, target: MasterVisibilityTarget, visible: bool) {
+        let save_result = self.config_store.update_file(|config| {
             apply_toolbar_ui_visibility_value(config, target, visible);
         });
         match save_result {
@@ -231,7 +232,7 @@ impl WaylandState {
     }
 
     pub(super) fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {
-        let save_result = crate::config::Config::update_file(|config| {
+        let save_result = self.config_store.update_file(|config| {
             apply_toolbar_ui_config_target(config, &self.input_state, target);
         });
 
@@ -250,7 +251,7 @@ impl WaylandState {
     pub(super) fn save_toolbar_history_config(&mut self) {
         self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
 
-        if let Err(err) = self.config.save() {
+        if let Err(err) = self.config_store.save(&self.config) {
             log::warn!("Failed to save toolbar history config: {}", err);
         } else {
             log::debug!("Saved toolbar history config");
@@ -268,7 +269,7 @@ impl WaylandState {
         }
         self.config.ui.click_highlight.show_on_highlight_tool =
             self.input_state.highlight_tool_ring_enabled();
-        if let Err(err) = self.config.save() {
+        if let Err(err) = self.config_store.save(&self.config) {
             log::warn!("Failed to persist click highlight preferences: {}", err);
         }
     }
@@ -294,7 +295,7 @@ impl WaylandState {
     ) {
         let crate::input::state::QuickColorEdit { index, color } = edit;
         let mut outcome = QuickColorWrite::SlotMissing;
-        let save_result = crate::config::Config::update_file(|config| {
+        let save_result = self.config_store.update_file(|config| {
             outcome = config.drawing.quick_colors.set_color_at(index, color);
         });
         match (save_result, outcome) {
@@ -327,13 +328,13 @@ impl WaylandState {
         match action {
             crate::input::state::PresetAction::Save { slot, preset } => {
                 self.config.presets.set_slot(slot, Some(*preset));
-                if let Err(err) = self.config.save() {
+                if let Err(err) = self.config_store.save(&self.config) {
                     log::warn!("Failed to save preset slot {}: {}", slot, err);
                 }
             }
             crate::input::state::PresetAction::Clear { slot } => {
                 self.config.presets.set_slot(slot, None);
-                if let Err(err) = self.config.save() {
+                if let Err(err) = self.config_store.save(&self.config) {
                     log::warn!("Failed to clear preset slot {}: {}", slot, err);
                 }
             }

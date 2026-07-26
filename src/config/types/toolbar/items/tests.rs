@@ -69,6 +69,15 @@ fn resettable_visibility_ids_are_exactly_customizable_individual_items() {
 }
 
 #[test]
+fn factory_visibility_iterator_matches_resolved_defaults() {
+    let resolved = ToolbarItemsConfig::default().resolved();
+
+    for (id, setting) in factory_individual_toolbar_item_visibility_settings() {
+        assert_eq!(setting, item_visibility_setting(&resolved, id));
+    }
+}
+
+#[test]
 fn set_hidden_preserves_unknown_ids_while_mutating_known_ids() {
     let mut config = ToolbarItemsConfig {
         hidden: vec![

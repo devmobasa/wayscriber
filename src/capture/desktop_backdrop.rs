@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tokio::task;
 
 use crate::capture::{
@@ -12,7 +10,7 @@ use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
 
 pub(crate) async fn capture_desktop_backdrop(
     request: DesktopBackdropCaptureRequest,
-    dependencies: Arc<CaptureDependencies>,
+    dependencies: &mut CaptureDependencies,
 ) -> Result<DesktopBackdropCaptureResult, CaptureError> {
     log::info!(
         "Starting desktop backdrop capture for {:?}",
@@ -218,7 +216,7 @@ fn desktop_backdrop_result(
         .ok_or_else(|| CaptureError::ImageError("Desktop backdrop stride overflow".into()))?;
 
     Ok(DesktopBackdropCaptureResult {
-        data: Arc::from(data),
+        data,
         width: width_i32,
         height: height_i32,
         stride,

@@ -189,6 +189,35 @@ fn different_instance_private_payload_supersedes_then_applies_shapes() {
     ));
 }
 
+#[test]
+fn unresolved_private_payload_fails_closed_without_panicking() {
+    let completion = ClipboardPasteCompletion {
+        request: request_with_fallback_generation(Some(7)),
+        result: ClipboardPasteResult::PrivateSelection(WayscriberClipboardSelection {
+            schema_version: 1,
+            app_version: "test".to_string(),
+            app_instance_id: "other".to_string(),
+            copy_generation: 8,
+            shapes: vec![rect()],
+        }),
+    };
+
+    let plan = plan_paste_completion(completion, Some(42), None);
+
+    assert_eq!(
+        plan.effects,
+        vec![TransferEffect::SupersedeLocalGeneration { generation: 7 }]
+    );
+    assert!(matches!(
+        plan.action,
+        PasteAction::ShowWarning {
+            warning: TransferWarning::ClipboardError,
+            block_feedback: true,
+            ..
+        }
+    ));
+}
+
 fn request_with_fallback_generation(
     local_selection_fallback_generation: Option<u64>,
 ) -> ClipboardPasteRequest {

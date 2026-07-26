@@ -1,8 +1,7 @@
 use super::super::WaylandState;
-use crate::config::{Action, Config};
+use crate::config::Action;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
-use crate::env_vars::HOME_ENV;
 use crate::input::InputState;
 use crate::input::boards::BoardState;
 use crate::input::state::ClipboardPasteRequest;
@@ -81,7 +80,12 @@ impl WaylandState {
                 options.max_file_size_bytes,
                 visible_estimate.limit_exceeded
             );
-            return Ok(paste_persistence_decision(&estimate, options));
+            return Ok(paste_persistence_decision(
+                &estimate,
+                options,
+                self.config_store.config_path(),
+                &self.path_resolver,
+            ));
         }
 
         let full_estimate_started = Instant::now();
@@ -104,7 +108,12 @@ impl WaylandState {
             estimate.full.limit_exceeded,
             estimate.visible_without_history.limit_exceeded
         );
-        Ok(paste_persistence_decision(&estimate, options))
+        Ok(paste_persistence_decision(
+            &estimate,
+            options,
+            self.config_store.config_path(),
+            &self.path_resolver,
+        ))
     }
 
     fn snapshot_after_external_image_paste(
@@ -238,6 +247,8 @@ fn snapshot_pages_for_preflight(
 fn paste_persistence_decision(
     estimate: &session::SnapshotSaveEstimate,
     options: &session::SessionOptions,
+    config_path: &std::path::Path,
+    path_resolver: &crate::paths::PathResolver,
 ) -> PastePersistenceDecision {
     let limit = format_bytes(options.max_file_size_bytes);
     if let Some(limit_exceeded) = estimate.visible_without_history.limit_exceeded {
@@ -246,13 +257,21 @@ fn paste_persistence_decision(
             &estimate.visible_without_history,
             &limit,
             options,
+            config_path,
+            path_resolver,
         );
         return PastePersistenceDecision::Block { warning };
     }
 
     if let Some(limit_exceeded) = estimate.full.limit_exceeded {
         return PastePersistenceDecision::Allow {
-            warning: Some(full_limit_warning(limit_exceeded, &estimate.full, options)),
+            warning: Some(full_limit_warning(
+                limit_exceeded,
+                &estimate.full,
+                options,
+                config_path,
+                path_resolver,
+            )),
         };
     }
 
@@ -277,6 +296,8 @@ fn visible_limit_warning(
     estimate: &session::SnapshotPayloadEstimate,
     formatted_file_limit: &str,
     options: &session::SessionOptions,
+    config_path: &std::path::Path,
+    path_resolver: &crate::paths::PathResolver,
 ) -> SessionPasteWarning {
     match limit_exceeded {
         session::SaveLimitExceeded::WrittenSize { .. } => {
@@ -288,7 +309,7 @@ fn visible_limit_warning(
             );
             let body = format!(
                 "Paste would save as {written}, over the {formatted_file_limit} cap. Open Settings > Session > Max file size and set {suggested_limit_mb} MiB, or edit {}.",
-                config_path_display()
+                config_path_display(config_path, path_resolver)
             );
             SessionPasteWarning {
                 toast,
@@ -323,6 +344,8 @@ fn full_limit_warning(
     limit_exceeded: session::SaveLimitExceeded,
     estimate: &session::SnapshotPayloadEstimate,
     options: &session::SessionOptions,
+    config_path: &std::path::Path,
+    path_resolver: &crate::paths::PathResolver,
 ) -> SessionPasteWarning {
     match limit_exceeded {
         session::SaveLimitExceeded::WrittenSize { .. } => {
@@ -332,7 +355,7 @@ fn full_limit_warning(
                 format!("Image pasted. Undo history may be dropped. Set {suggested_limit_mb} MiB.");
             let body = format!(
                 "Drawing data fits, but undo history may be dropped on save. Set Session > Max file size to {suggested_limit_mb} MiB, or edit {}.",
-                config_path_display()
+                config_path_display(config_path, path_resolver)
             );
             SessionPasteWarning {
                 toast,
@@ -411,14 +434,15 @@ fn describe_limit(limit: session::SaveLimitExceeded) -> String {
     }
 }
 
-fn config_path_display() -> String {
-    Config::get_config_path()
-        .map(compact_path)
-        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
+fn config_path_display(
+    config_path: &std::path::Path,
+    path_resolver: &crate::paths::PathResolver,
+) -> String {
+    compact_path(config_path.to_path_buf(), path_resolver)
 }
 
-fn compact_path(path: PathBuf) -> String {
-    let Some(home) = std::env::var_os(HOME_ENV).map(PathBuf::from) else {
+fn compact_path(path: PathBuf, path_resolver: &crate::paths::PathResolver) -> String {
+    let Ok(home) = path_resolver.home_dir() else {
         return path.display().to_string();
     };
     match path.strip_prefix(&home) {

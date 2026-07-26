@@ -6,6 +6,23 @@ use crate::session::{CompressionMode, SnapshotPayloadEstimate, SnapshotSaveEstim
 use crate::util::Rect;
 use std::path::PathBuf;
 
+fn test_paste_persistence_decision(
+    estimate: &SnapshotSaveEstimate,
+    options: &session::SessionOptions,
+) -> PastePersistenceDecision {
+    let paths =
+        crate::paths::PathResolver::from_environment(crate::paths::PathEnvironment::for_test(&[(
+            crate::env_vars::HOME_ENV,
+            std::ffi::OsStr::new("/tmp"),
+        )]));
+    paste_persistence_decision(
+        estimate,
+        options,
+        std::path::Path::new("/tmp/config.toml"),
+        &paths,
+    )
+}
+
 #[test]
 fn paste_preflight_synthesizes_empty_persisted_target_board() {
     let input = make_test_input_state();
@@ -97,7 +114,7 @@ fn paste_decision_blocks_when_visible_data_exceeds_limit() {
     options.max_file_size_bytes = 10 * 1024 * 1024;
     let estimate = estimate(13 * 1024 * 1024, 13 * 1024 * 1024, &options);
 
-    match paste_persistence_decision(&estimate, &options) {
+    match test_paste_persistence_decision(&estimate, &options) {
         PastePersistenceDecision::Block { warning } => {
             assert!(warning.toast.contains("Image blocked"));
             assert!(warning.toast.contains("20 MiB"));
@@ -115,7 +132,7 @@ fn paste_decision_blocks_expanded_visible_data_with_restore_safety_message() {
         visible_without_history: expanded_payload_estimate(&options),
     };
 
-    match paste_persistence_decision(&estimate, &options) {
+    match test_paste_persistence_decision(&estimate, &options) {
         PastePersistenceDecision::Block { warning } => {
             assert!(warning.toast.contains("restore safety"));
             let body = warning
@@ -136,7 +153,7 @@ fn paste_decision_allows_with_warning_when_only_history_exceeds_limit() {
     options.max_file_size_bytes = 10 * 1024 * 1024;
     let estimate = estimate(12 * 1024 * 1024, 8 * 1024 * 1024, &options);
 
-    match paste_persistence_decision(&estimate, &options) {
+    match test_paste_persistence_decision(&estimate, &options) {
         PastePersistenceDecision::Allow {
             warning: Some(warning),
         } => {
@@ -156,7 +173,7 @@ fn paste_decision_warns_for_expanded_history_without_file_size_advice() {
         visible_without_history: payload_estimate(8 * 1024 * 1024, &options),
     };
 
-    match paste_persistence_decision(&estimate, &options) {
+    match test_paste_persistence_decision(&estimate, &options) {
         PastePersistenceDecision::Allow {
             warning: Some(warning),
         } => {
@@ -179,7 +196,7 @@ fn paste_decision_warns_when_full_payload_is_near_limit() {
     options.max_file_size_bytes = 10 * 1024 * 1024;
     let estimate = estimate(9 * 1024 * 1024, 9 * 1024 * 1024, &options);
 
-    match paste_persistence_decision(&estimate, &options) {
+    match test_paste_persistence_decision(&estimate, &options) {
         PastePersistenceDecision::Allow {
             warning: Some(warning),
         } => {

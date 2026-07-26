@@ -2,7 +2,6 @@ use crate::draw::Shape;
 use crate::draw::frame::ShapeSnapshot;
 use crate::input::tool::ToolPressBehavior;
 use crate::input::{DragTool, Tool, events::MouseButton};
-use std::sync::Arc;
 
 use super::super::core::MenuCommand;
 use super::super::{
@@ -419,7 +418,7 @@ impl InputState {
                     original_bounds,
                     start_x: x,
                     start_y: y,
-                    snapshots: Arc::new(snapshots),
+                    snapshots,
                 };
                 return;
             }

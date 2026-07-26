@@ -11,9 +11,7 @@ mod structure;
 #[cfg(test)]
 mod tests;
 
-use std::cell::Cell;
 use std::collections::BTreeSet;
-use std::rc::Rc;
 
 use gtk4::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
@@ -51,21 +49,21 @@ pub(in crate::toolbar_gtk) struct SideBar {
     /// same pane is built again — switching panes must not leak one
     /// pane's scroll into another (the backend keeps per-pane offsets
     /// too; this mirrors that behavior GTK-side).
-    saved_scroll: std::rc::Rc<std::cell::RefCell<Vec<(SidePane, f64)>>>,
-    drag_active: Rc<Cell<bool>>,
-    drag_blocked: Rc<Cell<bool>>,
+    saved_scroll: Vec<(SidePane, f64)>,
+    intents: super::drag::ViewIntentSender,
+    drag: super::drag::DragOwnerState,
     move_drag: Option<gtk4::GestureDrag>,
-    move_drag_cancel: Option<Rc<dyn Fn()>>,
-    offsets: Rc<Cell<(f64, f64)>>,
-    /// Monotonic counter for outgoing drag offsets; stale echoes from the
-    /// backend are ignored by comparing against it.
-    offset_seq: Rc<Cell<u64>>,
+    move_drag_controller: u64,
+    drag_blocked: bool,
     capture_suppressed: bool,
     mapped_before_capture: bool,
 }
 
 impl SideBar {
-    pub(in crate::toolbar_gtk) fn new(feedback: FeedbackSender) -> Self {
+    pub(in crate::toolbar_gtk) fn new(
+        feedback: FeedbackSender,
+        intents: super::drag::ViewIntentSender,
+    ) -> Self {
         let window = gtk4::Window::new();
         window.add_css_class("wayscriber-toolbar");
         window.init_layer_shell();
@@ -114,13 +112,12 @@ impl SideBar {
             chrome_updaters: Vec::new(),
             content_updaters: Vec::new(),
             scrolled: None,
-            saved_scroll: Rc::new(std::cell::RefCell::new(Vec::new())),
-            drag_active: Rc::new(Cell::new(false)),
-            drag_blocked: Rc::new(Cell::new(false)),
+            saved_scroll: Vec::new(),
+            intents,
+            drag: super::drag::DragOwnerState::default(),
             move_drag: None,
-            move_drag_cancel: None,
-            offsets: Rc::new(Cell::new((0.0, 0.0))),
-            offset_seq: Rc::new(Cell::new(0)),
+            move_drag_controller: 0,
+            drag_blocked: false,
             capture_suppressed: false,
             mapped_before_capture: false,
         }
@@ -138,19 +135,15 @@ impl SideBar {
             self.mapped_before_capture = false;
         }
         self.capture_suppressed = update.capture_suppressed;
-        self.drag_blocked
-            .set(update.modal_engaged || update.capture_suppressed);
-        if entering_capture_suppression && let Some(cancel) = self.move_drag_cancel.as_ref() {
-            cancel();
-        }
+        self.set_drag_blocked(update.modal_engaged || update.capture_suppressed);
         let presentation = super::toolbar_surface_presentation(
             update.side_visible,
             update.capture_suppressed,
             super::drag_visual_should_be_hidden(
                 update.drag_preview,
                 GtkToolbarKind::Side,
-                self.drag_active.get(),
-                self.offset_seq.get(),
+                self.drag.active(),
+                self.drag.sequence(),
                 update.side_offset_seq,
             ),
             self.mapped_before_capture,
@@ -183,7 +176,11 @@ impl SideBar {
             self.rebuild(snapshot);
             self.structure = Some(key);
         }
-        for updater in self.chrome_updaters.iter().chain(&self.content_updaters) {
+        for updater in self
+            .chrome_updaters
+            .iter_mut()
+            .chain(&mut self.content_updaters)
+        {
             updater(snapshot);
         }
         self.sync_viewport(snapshot);
@@ -221,22 +218,22 @@ impl SideBar {
     /// Mirror backend offsets into layer margins unless a local drag is in
     /// flight or the echo is older than what this bar already sent. Side
     /// offsets are (x, y) like the update carries them.
-    fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
-        if self.drag_active.get() || echo_seq < self.offset_seq.get() {
+    fn apply_offsets(&mut self, offsets: (f64, f64), echo_seq: u64) {
+        if self.drag.active() || echo_seq < self.drag.sequence() {
             crate::toolbar_gtk::drag_debug_log(format!(
                 "side echo rejected echo_seq={echo_seq} local_seq={} active={} backend=({:.3},{:.3}) local=({:.3},{:.3})",
-                self.offset_seq.get(),
-                self.drag_active.get(),
+                self.drag.sequence(),
+                self.drag.active(),
                 offsets.0,
                 offsets.1,
-                self.offsets.get().0,
-                self.offsets.get().1,
+                self.drag.offsets().0,
+                self.drag.offsets().1,
             ));
             return;
         }
         let (left, x) = super::drag::rounded_margin_and_offset(BASE_MARGIN.1 as f64, offsets.0);
         let (top, y) = super::drag::rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
-        self.offsets.set((x, y));
+        self.drag.set_offsets((x, y));
         self.window.set_margin(Edge::Left, left);
         self.window.set_margin(Edge::Top, top);
         crate::toolbar_gtk::drag_debug_log(format!(

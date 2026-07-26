@@ -18,7 +18,11 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn update_top_strip_fade(&mut self, now: Instant) {
         let inputs = self.top_strip_fade_inputs(now);
         let before = self.data.top_strip_fade.value();
-        let after = self.data.top_strip_fade.update(&inputs, now);
+        let after = self.data.top_strip_fade.update(
+            &inputs,
+            now,
+            self.config.ui.reduced_motion.motion_enabled(),
+        );
         // Layer-shell (and GTK) toolbars repaint from the changed snapshot on
         // their own; inline toolbars live on the canvas surface, so a fade
         // step must damage their rect and request a canvas redraw itself.

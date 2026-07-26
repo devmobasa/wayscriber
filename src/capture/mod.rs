@@ -21,6 +21,7 @@ mod pipeline;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use manager::CaptureManagerEvent;
 pub use manager::{CaptureManager, CapturePoll, CaptureRequestId, CaptureSubmitError};
 #[allow(unused_imports)]
 pub(crate) use pipeline::CaptureRequest;

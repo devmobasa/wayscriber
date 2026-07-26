@@ -2,9 +2,9 @@
 
 use super::WaylandState;
 use crate::backend::wayland::clipboard::{
-    self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPoll,
-    ClipboardPublishCompletion, FailedLocalSelectionProbe, PasteAction, TransferEffect,
-    TransferPlan, TransferWarning, transfer,
+    self, ClipboardPasteCompletion, ClipboardPasteProducerCompletion, ClipboardPasteResult,
+    ClipboardPoll, ClipboardPublishCompletion, FailedLocalSelectionProbe, PasteAction,
+    TransferEffect, TransferPlan, TransferWarning, transfer,
 };
 use crate::input::state::ClipboardPasteRequest;
 use crate::input::state::{Toast, ToastPriority};
@@ -15,6 +15,25 @@ mod session_paste;
 use session_paste::{PastePersistenceDecision, SessionPasteWarning};
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn shutdown_clipboard_producers(&mut self) {
+        release_shutdown_context(
+            "selection publish",
+            self.clipboard_publish.request_shutdown(),
+        );
+        release_shutdown_context("clipboard paste", self.clipboard_paste.request_shutdown());
+        release_shutdown_context("hex copy", self.clipboard_hex_copy.request_shutdown());
+        release_shutdown_context("hex paste", self.clipboard_hex_paste.request_shutdown());
+        release_shutdown_context("text copy", self.clipboard_text_copy.request_shutdown());
+        release_shutdown_context("text paste", self.clipboard_text_paste.request_shutdown());
+
+        self.clipboard_publish.finish_shutdown();
+        self.clipboard_paste.finish_shutdown();
+        self.clipboard_hex_copy.finish_shutdown();
+        self.clipboard_hex_paste.finish_shutdown();
+        self.clipboard_text_copy.finish_shutdown();
+        self.clipboard_text_paste.finish_shutdown();
+    }
+
     pub(in crate::backend::wayland) fn drain_clipboard_requests(&mut self) {
         if !self.clipboard_publish.is_active()
             && let Some(request) = self.input_state.take_pending_selection_clipboard_publish()
@@ -69,6 +88,15 @@ impl WaylandState {
                     failed_clipboard_publish_completion(generation),
                 );
             }
+            ClipboardPoll::Cancelled {
+                id,
+                context: generation,
+            } => {
+                log::info!("Clipboard publish operation {id} was cancelled");
+                self.apply_selection_clipboard_publish_completion(
+                    failed_clipboard_publish_completion(generation),
+                );
+            }
         }
     }
 
@@ -79,24 +107,7 @@ impl WaylandState {
                 id,
                 context: request,
                 outcome,
-            } => {
-                if outcome.request.id == request.id {
-                    self.apply_clipboard_paste_completion(ClipboardPasteCompletion {
-                        request,
-                        result: outcome.result,
-                    });
-                } else {
-                    log::error!(
-                        "Clipboard paste operation {id} returned request {}, expected {}",
-                        outcome.request.id,
-                        request.id
-                    );
-                    self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
-                        request,
-                        "clipboard producer returned a mismatched request",
-                    ));
-                }
-            }
+            } => self.apply_clipboard_paste_producer_completion(id, request, outcome),
             ClipboardPoll::ProducerFailed {
                 id,
                 context: request,
@@ -117,17 +128,35 @@ impl WaylandState {
                     "clipboard producer disconnected",
                 ));
             }
+            ClipboardPoll::Cancelled {
+                id,
+                context: request,
+            } => {
+                log::info!("Clipboard paste operation {id} was cancelled");
+                self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                    request,
+                    "clipboard producer was cancelled",
+                ));
+            }
         }
     }
 
     fn start_selection_clipboard_publish(&mut self, generation: u64, payload_json: String) {
         self.suppress_focus_exit_for(Duration::from_millis(1500));
-        if let Err(failure) =
-            self.clipboard_publish
-                .try_submit(generation, "clipboard-publish", move || {
-                    transfer::resolve_selection_clipboard_publish(generation, payload_json)
-                })
-        {
+        let process_broker = self.process_broker.clone();
+        if let Err(failure) = self.clipboard_publish.try_submit(
+            &mut self.clipboard_operation_ids,
+            generation,
+            "clipboard-publish",
+            move |cancellation| {
+                transfer::resolve_selection_clipboard_publish(
+                    &process_broker,
+                    generation,
+                    payload_json,
+                    cancellation,
+                )
+            },
+        ) {
             let (error, generation) = failure.into_parts();
             log::warn!("Could not submit clipboard publish operation: {error}");
             self.apply_selection_clipboard_publish_completion(failed_clipboard_publish_completion(
@@ -207,6 +236,64 @@ impl WaylandState {
         self.apply_paste_plan(plan);
     }
 
+    fn apply_clipboard_paste_producer_completion(
+        &mut self,
+        operation_id: clipboard::ClipboardOperationId,
+        context: ClipboardPasteRequest,
+        completion: ClipboardPasteProducerCompletion,
+    ) {
+        match completion {
+            ClipboardPasteProducerCompletion::Paste(completion) => {
+                if completion.request.id == context.id {
+                    self.apply_clipboard_paste_completion(ClipboardPasteCompletion {
+                        request: context,
+                        result: completion.result,
+                    });
+                } else {
+                    log::error!(
+                        "Clipboard paste operation {operation_id} returned request {}, expected {}",
+                        completion.request.id,
+                        context.id
+                    );
+                    self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                        context,
+                        "clipboard producer returned a mismatched request",
+                    ));
+                }
+            }
+            ClipboardPasteProducerCompletion::FingerprintProbe {
+                request,
+                generation,
+                expected,
+                current,
+            } => {
+                if request.id != context.id {
+                    log::error!(
+                        "Clipboard fingerprint operation {operation_id} returned request {}, expected {}",
+                        request.id,
+                        context.id
+                    );
+                    self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                        context,
+                        "clipboard fingerprint producer returned a mismatched request",
+                    ));
+                    return;
+                }
+                let local_shapes = self
+                    .input_state
+                    .local_selection_shapes_for_fallback(generation);
+                let plan = transfer::plan_after_fingerprint_probe(
+                    context,
+                    generation,
+                    expected,
+                    current,
+                    local_shapes,
+                );
+                self.apply_paste_plan(plan);
+            }
+        }
+    }
+
     fn apply_paste_plan(&mut self, plan: TransferPlan<PasteAction>) {
         for effect in plan.effects {
             self.apply_transfer_effect(effect);
@@ -235,20 +322,7 @@ impl WaylandState {
                 request,
                 generation,
                 expected,
-            } => {
-                let current = clipboard::clipboard_fingerprint();
-                let local_shapes = self
-                    .input_state
-                    .local_selection_shapes_for_fallback(generation);
-                let plan = transfer::plan_after_fingerprint_probe(
-                    request,
-                    generation,
-                    expected,
-                    current,
-                    local_shapes,
-                );
-                self.apply_paste_plan(plan);
-            }
+            } => self.start_system_clipboard_fingerprint_probe(request, generation, expected),
             PasteAction::ReadSystemClipboard { request } => {
                 self.start_system_clipboard_read(request);
             }
@@ -346,23 +420,63 @@ impl WaylandState {
     fn start_system_clipboard_read(&mut self, request: ClipboardPasteRequest) {
         log::info!("Reading system clipboard for paste request {}", request.id);
         let context = request.clone();
-        if let Err(failure) =
-            self.clipboard_paste
-                .try_submit(context, "clipboard-paste", move || {
-                    let started = Instant::now();
-                    let result = transfer::resolve_system_clipboard();
-                    log::info!(
-                        "System clipboard read for paste request {} completed in {:?}: {}",
-                        request.id,
-                        started.elapsed(),
-                        result.summary()
-                    );
-                    ClipboardPasteCompletion { request, result }
+        let process_broker = self.process_broker.clone();
+        if let Err(failure) = self.clipboard_paste.try_submit(
+            &mut self.clipboard_operation_ids,
+            context,
+            "clipboard-paste",
+            move |cancellation| {
+                let started = Instant::now();
+                let result = transfer::resolve_system_clipboard(&process_broker, cancellation);
+                log::info!(
+                    "System clipboard read for paste request {} completed in {:?}: {}",
+                    request.id,
+                    started.elapsed(),
+                    result.summary()
+                );
+                ClipboardPasteProducerCompletion::Paste(ClipboardPasteCompletion {
+                    request,
+                    result,
                 })
-        {
+            },
+        ) {
             let (error, request) = failure.into_parts();
             log::warn!(
                 "Could not submit clipboard paste operation for request {}: {error}",
+                request.id
+            );
+            self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                request,
+                &error.to_string(),
+            ));
+        }
+    }
+
+    fn start_system_clipboard_fingerprint_probe(
+        &mut self,
+        request: ClipboardPasteRequest,
+        generation: u64,
+        expected: Option<crate::input::state::ClipboardFingerprint>,
+    ) {
+        let context = request.clone();
+        let process_broker = self.process_broker.clone();
+        if let Err(failure) = self.clipboard_paste.try_submit(
+            &mut self.clipboard_operation_ids,
+            context,
+            "clipboard-fingerprint",
+            move |cancellation| {
+                let current = clipboard::clipboard_fingerprint(&process_broker, cancellation);
+                ClipboardPasteProducerCompletion::FingerprintProbe {
+                    request,
+                    generation,
+                    expected,
+                    current,
+                }
+            },
+        ) {
+            let (error, request) = failure.into_parts();
+            log::warn!(
+                "Could not submit clipboard fingerprint operation for request {}: {error}",
                 request.id
             );
             self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
@@ -506,6 +620,16 @@ impl WaylandState {
     }
 }
 
+fn release_shutdown_context<C>(label: &'static str, outcome: clipboard::ClipboardShutdown<C>) {
+    match outcome {
+        clipboard::ClipboardShutdown::Idle => {}
+        clipboard::ClipboardShutdown::Cancelled { id, context } => {
+            log::debug!("Cancelled clipboard {label} operation {id} during runtime teardown");
+            drop(context);
+        }
+    }
+}
+
 fn failed_clipboard_publish_completion(generation: u64) -> ClipboardPublishCompletion {
     ClipboardPublishCompletion {
         generation,
@@ -547,7 +671,8 @@ mod transport_tests {
             target_page_index: 2,
             target_page_generation: 3,
             anchor: PasteAnchor::VisibleCenter { x: 10, y: 20 },
-            visible_canvas_rect: Rect::new(0, 0, 100, 100).unwrap(),
+            visible_canvas_rect: Rect::new(0, 0, 100, 100)
+                .expect("clipboard request fixture uses positive rectangle dimensions"),
             screen_size: (100, 100),
             selection_clipboard_generation_at_request: 4,
             local_selection_fallback_generation: Some(5),

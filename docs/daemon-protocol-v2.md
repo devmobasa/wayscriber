@@ -67,7 +67,21 @@ The enforced process-site inventory is `tools/check-process-sites.py`. Direct pr
 limited to the broker, pre-runtime systemd setup, the separate configurator process, standalone
 About clipboard integration, and named test fixtures. The same check audits the raw-clone child
 stub: before `execve` it may reach only the fixed `fcntl`, `dup3`, `setpgid`, `close_range`,
-`execve`, and `exit_group` syscall set over prebuilt buffers.
+`close`, `execve`, and `exit_group` syscall set over prebuilt buffers. `close` is the
+precomputed-descriptor-bound fallback when `close_range` is unavailable or denied.
+Before that exec, file descriptors 0, 1, and 2 are deliberately replaced with `/dev/null`.
+This prevents a caller with closed standard streams from lending a private broker socket a
+standard descriptor number that would otherwise survive descriptor cleanup. Broker diagnostics
+therefore travel through its owning runtime and protocol responses, never inherited terminal
+streams.
+
+The broker is created before the application installs its root signal descriptor, so the broker
+and every helper it starts inherit the caller's exact pre-entry signal mask. Wayscriber does not
+silently unblock a signal the caller deliberately blocked. Ordinary application threads start
+after root signal installation and inherit the runtime signal mask instead.
+Within one process, a PID-scoped abstract Unix socket admits exactly one real signal owner; a
+competing runtime is rejected before its thread mask changes. Independent test roots use injected
+pollable event sources instead of competing for process signal delivery.
 
 ## Compatibility and rollback
 

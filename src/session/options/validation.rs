@@ -3,19 +3,14 @@ use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, anyhow};
-
-use crate::paths::expand_tilde;
 
 use super::super::primary::{
     PrimaryTargetKind, PrimaryTargetState, inspect_named_primary_target,
     open_session_artifact_for_read,
 };
 use super::types::session_file_parent_dir;
-
-static NEXT_WRITE_PROBE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 pub struct MissingNamedSessionFile {
@@ -77,8 +72,17 @@ impl fmt::Display for MissingNamedSessionParent {
 
 impl Error for MissingNamedSessionParent {}
 
-pub fn normalize_named_session_file_arg(raw: &str) -> std::path::PathBuf {
-    expand_tilde(raw)
+pub fn normalize_named_session_file_arg(
+    raw: &str,
+    paths: &crate::paths::PathResolver,
+    current_dir: &Path,
+) -> Result<PathBuf, crate::paths::PathResolutionError> {
+    let expanded = paths.expand_tilde(raw)?;
+    Ok(if expanded.is_absolute() {
+        expanded
+    } else {
+        current_dir.join(expanded)
+    })
 }
 
 pub fn validate_named_session_file_for_foreground(path: &Path) -> Result<()> {
@@ -172,8 +176,8 @@ fn require_existing_parent_dir(path: &Path) -> Result<PathBuf> {
 }
 
 fn validate_parent_writable_by_probe(parent: &Path, message: &str) -> Result<()> {
-    for _ in 0..100 {
-        let probe_path = write_probe_path(parent);
+    for attempt in 0..100 {
+        let probe_path = write_probe_path(parent, attempt);
         let probe_file = match OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -201,11 +205,10 @@ fn validate_parent_writable_by_probe(parent: &Path, message: &str) -> Result<()>
     ))
 }
 
-fn write_probe_path(parent: &Path) -> PathBuf {
-    let id = NEXT_WRITE_PROBE_ID.fetch_add(1, Ordering::Relaxed);
+fn write_probe_path(parent: &Path, attempt: u8) -> PathBuf {
     parent.join(format!(
-        ".wayscriber-session-write-test-{}-{id}",
-        std::process::id()
+        ".wayscriber-session-write-test-{}-{attempt}",
+        std::process::id(),
     ))
 }
 
@@ -273,5 +276,38 @@ fn validate_existing_parent_if_present(path: &Path, operation: &str) -> Result<O
                 parent.display()
             )
         }),
+    }
+}
+
+#[cfg(test)]
+mod probe_identity_tests {
+    use super::*;
+
+    #[test]
+    fn write_probe_candidates_have_operation_local_identity() {
+        let parent = Path::new("/test/session-parent");
+
+        assert_ne!(write_probe_path(parent, 0), write_probe_path(parent, 1));
+    }
+
+    #[test]
+    fn writable_probe_skips_collision_and_preserves_existing_candidate() {
+        let temp = crate::test_temp::tempdir()
+            .expect("test owns its named-session parent directory fixture");
+        let occupied = write_probe_path(temp.path(), 0);
+        fs::write(&occupied, b"existing probe owner")
+            .expect("test establishes the occupied first candidate");
+
+        validate_parent_writable_by_probe(temp.path(), "test parent must be writable")
+            .expect("probe skips the occupied candidate and removes its own file");
+
+        assert_eq!(
+            fs::read(&occupied).expect("occupied candidate remains owned by the test"),
+            b"existing probe owner"
+        );
+        assert!(
+            !write_probe_path(temp.path(), 1).exists(),
+            "successful probe removes only its own candidate"
+        );
     }
 }

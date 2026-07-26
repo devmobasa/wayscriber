@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{info, warn};
 use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 use std::env;
@@ -36,47 +36,75 @@ pub(super) struct BackendRuntime {
 }
 
 pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Result<BackendRuntime> {
-    let config::LoadedConfig {
-        config,
-        source,
-        exit_after_capture_mode,
-    } = config::load(backend.exit_after_capture_mode);
-    let config_dir = Config::config_directory_from_source(&source)?;
-    let session_options =
-        session::build_session_options(&config, &config_dir, backend.named_session_file.clone());
+    let loaded_config = config::load(
+        backend.exit_after_capture_mode,
+        &backend.config_store,
+        &backend.logger,
+    );
+    let config = loaded_config.config;
+    let exit_after_capture_mode = loaded_config.exit_after_capture_mode;
+    let config_dir = backend.config_store.config_directory()?;
+    let session_options = session::build_session_options(
+        &config,
+        &config_dir,
+        backend.named_session_file.clone(),
+        backend.session_resume_override,
+        &backend.path_resolver,
+    );
     let runtime_wake = RuntimeWakeSource::new()
         .map_err(|err| anyhow::anyhow!("failed to create runtime wake descriptor: {err}"))?;
-    let persistence =
-        crate::backend::wayland::session::PersistenceController::start(runtime_wake.handle())?;
+    let session_catalog =
+        crate::session::catalog::SessionCatalog::from_resolver(&backend.path_resolver)?;
+    let persistence = crate::backend::wayland::session::PersistenceController::start(
+        runtime_wake
+            .try_sender()
+            .context("failed to duplicate session persistence wake descriptor")?,
+        session_catalog.clone(),
+    )?;
     let output_prefs = output::resolve(&config);
 
     #[cfg(feature = "tablet-input")]
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
-    let runtime_ui_path = crate::paths::runtime_ui_state_file();
-    let (runtime_ui, runtime_ui_unavailable) =
-        match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
-            &config,
-            &input_state,
-            &runtime_ui_path,
-            runtime_wake.handle(),
-        ) {
-            Ok(runtime_ui) => {
-                runtime_ui.apply_startup_state(&mut input_state);
-                (Some(runtime_ui), None)
+    let (runtime_ui, runtime_ui_unavailable) = match backend.path_resolver.runtime_ui_state_file() {
+        Ok(runtime_ui_path) => {
+            match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
+                &config,
+                &input_state,
+                &runtime_ui_path,
+                runtime_wake
+                    .try_sender()
+                    .context("failed to duplicate runtime UI persistence wake descriptor")?,
+            ) {
+                Ok(runtime_ui) => {
+                    runtime_ui.apply_startup_state(&mut input_state);
+                    (Some(runtime_ui), None)
+                }
+                Err(error) => {
+                    warn!(
+                        "Runtime UI persistence is unavailable at {}: {error:#}",
+                        runtime_ui_path.display()
+                    );
+                    (
+                        None,
+                        Some(runtime_ui_unavailable_snapshot(
+                            Some(&runtime_ui_path),
+                            &error,
+                        )),
+                    )
+                }
             }
-            Err(error) => {
-                warn!(
-                    "Runtime UI persistence is unavailable at {}: {error:#}",
-                    runtime_ui_path.display()
-                );
-                (
-                    None,
-                    Some(runtime_ui_unavailable_snapshot(&runtime_ui_path, &error)),
-                )
-            }
-        };
+        }
+        Err(error) => {
+            let error = anyhow::anyhow!(error);
+            backend.logger.warn(
+                "wayscriber::runtime_ui_state",
+                format!("Runtime UI persistence path is unavailable: {error:#}"),
+            );
+            (None, Some(runtime_ui_unavailable_snapshot(None, &error)))
+        }
+    };
     input_state.set_session_preflight_options(session_options.clone());
     let screencopy_supported = setup.screencopy_manager.is_some();
     let portal_freeze_supported = screenshot_portal_available(&backend.tokio_runtime);
@@ -103,7 +131,10 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         },
     };
 
-    let mut onboarding = OnboardingStore::load();
+    let (mut onboarding, onboarding_warning) = OnboardingStore::load(&backend.path_resolver);
+    if let Some(warning) = onboarding_warning {
+        backend.logger.warn("wayscriber::onboarding", warning);
+    }
     {
         let state = onboarding.state_mut();
         state.sessions_seen = state.sessions_seen.saturating_add(1);
@@ -148,19 +179,28 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     onboarding.save();
 
     // Seed the palette's recent-commands history from its persisted store.
-    let palette_recents_store = crate::palette_recents::PaletteRecentsStore::load();
+    let (palette_recents_store, palette_warning) =
+        crate::palette_recents::PaletteRecentsStore::load(&backend.path_resolver);
+    if let Some(warning) = palette_warning {
+        backend.logger.warn("wayscriber::palette_recents", warning);
+    }
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
     let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
 
     apply_initial_mode(backend, &config, &mut input_state);
 
-    let capture_wake = runtime_wake.handle();
-    let capture_manager =
-        CaptureManager::with_completion_notifier(backend.tokio_runtime.handle(), move || {
+    let capture_wake = runtime_wake
+        .try_sender()
+        .context("failed to duplicate capture wake descriptor")?;
+    let capture_manager = CaptureManager::with_event_notifier(
+        backend.tokio_runtime.handle(),
+        backend.process_broker.clone(),
+        move || {
             if let Err(err) = capture_wake.wake() {
-                log::error!("Failed to wake runtime for capture completion: {err}");
+                log::error!("Failed to wake runtime for a capture worker event: {err}");
             }
-        });
+        },
+    );
     info!("Capture manager initialized");
 
     let freeze_on_start = if backend.freeze_on_start && !frozen_supported {
@@ -175,15 +215,23 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let mut state = WaylandState::new(WaylandStateInit {
         globals: setup.state_globals,
         config,
+        config_store: backend.config_store.clone(),
+        path_resolver: backend.path_resolver.clone(),
+        runtime_paths: backend.runtime_paths.clone(),
+        logger: backend.logger.clone(),
         input_state,
         onboarding,
         palette_recents,
         capture_manager,
         session_options,
         persistence,
+        session_catalog,
         runtime_ui,
         runtime_ui_unavailable,
-        runtime_wake: runtime_wake.handle(),
+        process_broker: backend.process_broker.clone(),
+        runtime_wake: runtime_wake
+            .try_sender()
+            .context("failed to duplicate Wayland state wake descriptor")?,
         tokio_handle,
         exit_after_capture_mode,
         frozen_enabled: frozen_supported,
@@ -195,12 +243,17 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         text_input_manager: setup.text_input_manager,
         #[cfg(feature = "tablet-input")]
         tablet_manager,
-    });
+    })
+    .context("failed to duplicate a Wayland state producer wake descriptor")?;
 
     // Decide the toolbar frontend before the first visibility sync so the
     // built-in surfaces are never created just to be torn down when the
     // GTK bars take over.
-    state.spawn_gtk_toolbar_if_selected(runtime_wake.handle());
+    state.spawn_gtk_toolbar_if_selected(
+        runtime_wake
+            .try_sender()
+            .context("failed to duplicate GTK toolbar wake descriptor")?,
+    )?;
     // Ensure pinned toolbars are created immediately if visible on startup.
     state.sync_toolbar_visibility(&setup.qh);
     Ok(BackendRuntime {
@@ -213,11 +266,11 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
 }
 
 fn runtime_ui_unavailable_snapshot(
-    path: &Path,
+    path: Option<&Path>,
     error: &anyhow::Error,
 ) -> crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
     crate::ui::toolbar::RuntimeUiPersistenceSnapshot {
-        path: path.to_path_buf(),
+        path: path.map(Path::to_path_buf),
         mode: crate::ui::toolbar::RuntimeUiPersistenceMode::Unavailable,
         detail: Some(format!(
             "Runtime preference persistence could not start: {error:#}. Runtime-only toolbar and board changes apply only to this process."
@@ -262,16 +315,18 @@ mod tests {
     fn runtime_ui_start_failure_remains_visible_to_toolbar_frontends() {
         let path = Path::new("/isolated/runtime-ui.toml");
         let snapshot = runtime_ui_unavailable_snapshot(
-            path,
+            Some(path),
             &anyhow::anyhow!("writer channel could not start"),
         );
 
-        assert_eq!(snapshot.path, path);
+        assert_eq!(snapshot.path.as_deref(), Some(path));
         assert_eq!(
             snapshot.mode,
             crate::ui::toolbar::RuntimeUiPersistenceMode::Unavailable
         );
-        let detail = snapshot.detail.expect("startup failure detail");
+        let detail = snapshot
+            .detail
+            .expect("fixture startup failure always carries its typed durability detail");
         assert!(detail.contains("writer channel could not start"));
         assert!(
             detail.contains("Runtime-only toolbar and board changes apply only to this process")

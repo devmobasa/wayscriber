@@ -5,9 +5,7 @@ use wayland_client::{
     protocol::{wl_surface, wl_touch},
 };
 
-use crate::backend::wayland::state::{
-    PerfInputSource, TouchTarget, WaylandState, debug_toolbar_drag_logging_enabled,
-};
+use crate::backend::wayland::state::{PerfInputSource, TouchTarget, WaylandState};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
@@ -447,7 +445,7 @@ impl WaylandState {
         }
 
         if target == TouchTarget::Toolbar {
-            if debug_toolbar_drag_logging_enabled() {
+            if self.runtime_options.debug_toolbar_drag_logging() {
                 debug!(
                     "touch release: target={:?}, drag_active={}, toolbar_dragging={}",
                     target,
@@ -504,7 +502,7 @@ impl WaylandState {
             return;
         }
 
-        if debug_toolbar_drag_logging_enabled() {
+        if self.runtime_options.debug_toolbar_drag_logging() {
             debug!(
                 "touch release: target={:?}, drag_active={}, toolbar_dragging={}",
                 target,

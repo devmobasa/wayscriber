@@ -19,7 +19,8 @@ impl BoardManager {
     }
 
     pub(crate) fn bump_board_identity_generation(&mut self) -> BoardIdentityGeneration {
-        self.identity_generation = BoardIdentityGeneration::fresh();
+        self.identity_generation = BoardIdentityGeneration(self.next_identity_generation);
+        self.next_identity_generation = self.next_identity_generation.wrapping_add(1).max(1);
         self.identity_generation
     }
 

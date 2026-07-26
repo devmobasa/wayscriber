@@ -39,8 +39,6 @@ mod session_override;
 pub mod shortcut_hint;
 pub mod systemd_user_service;
 #[cfg(test)]
-pub(crate) mod test_env;
-#[cfg(test)]
 pub(crate) mod test_temp;
 pub mod time_utils;
 mod toolbar_gtk;
@@ -56,30 +54,21 @@ pub mod util;
 pub(crate) mod zbus_stream;
 
 pub use config::Config;
-pub(crate) use session_override::{
-    RESUME_SESSION_ENV, decode_session_override, encode_session_override, runtime_session_override,
-    set_runtime_session_override,
-};
+pub(crate) use session_override::RESUME_SESSION_ENV;
 
 use std::process::ExitCode;
-use std::sync::Mutex;
 
 use cli::CliOutcome;
 
-static RUN_ENTRY_LEASE: Mutex<()> = Mutex::new(());
-
 /// Run wayscriber using the current process arguments and return its process exit status.
 pub fn run_from_env() -> ExitCode {
-    let _run_entry = RUN_ENTRY_LEASE
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some(exit_code) = process_broker::run_internal_broker_if_requested() {
         return exit_code;
     }
     match cli::Cli::parse() {
         Ok(CliOutcome::Run(cli)) => {
-            logger::init(cli.daemon || cli.active);
-            exit_code_for_app_result(app::run(cli))
+            let path_resolver = paths::PathResolver::from_process_environment();
+            exit_code_for_app_result(run_ordinary(cli, path_resolver))
         }
         Ok(CliOutcome::Help) => {
             cli::print_help();
@@ -95,6 +84,10 @@ pub fn run_from_env() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn run_ordinary(cli: cli::Cli, path_resolver: paths::PathResolver) -> anyhow::Result<()> {
+    app::run(cli, path_resolver)
 }
 
 fn exit_code_for_app_result(result: anyhow::Result<()>) -> ExitCode {

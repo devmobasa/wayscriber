@@ -176,6 +176,8 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
+    /// Hit geometry from this input state's last completed help-overlay frame.
+    pub(crate) help_overlay_hit_map: crate::ui::HelpOverlayHitMap,
     /// Help targets resolved under pending help-overlay presses, keyed by input
     /// modality so only the modality that owned a press can resolve it. Each
     /// matching release only runs a row when press and release land on the SAME

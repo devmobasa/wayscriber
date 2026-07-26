@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-
 /// Cached text measurement results from Pango layout.
 #[derive(Clone, Debug)]
 pub(crate) struct TextMeasurement {
@@ -43,107 +40,15 @@ impl TextMeasurement {
     }
 }
 
-/// Cache key for text measurements.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-struct TextCacheKey {
-    text: String,
-    font_desc_str: String,
-    /// Size in hundredths of points for stable hashing
-    size_hundredths: i32,
-    /// Wrap width in pixels, or -1 for no wrap
-    wrap_width: i32,
-}
-
-impl TextCacheKey {
-    fn new(text: &str, font_desc_str: &str, size: f64, wrap_width: Option<i32>) -> Self {
-        Self {
-            text: text.to_string(),
-            font_desc_str: font_desc_str.to_string(),
-            size_hundredths: (size * 100.0).round() as i32,
-            wrap_width: wrap_width.unwrap_or(-1),
-        }
-    }
-}
-
-/// Thread-local cache for text measurements.
-/// Uses an LRU-style eviction when cache exceeds max size.
-struct TextMeasurementCache {
-    entries: HashMap<TextCacheKey, TextMeasurement>,
-    access_order: Vec<TextCacheKey>,
-    max_entries: usize,
-}
-
-impl TextMeasurementCache {
-    fn new(max_entries: usize) -> Self {
-        Self {
-            entries: HashMap::with_capacity(max_entries),
-            access_order: Vec::with_capacity(max_entries),
-            max_entries,
-        }
-    }
-
-    fn get(&mut self, key: &TextCacheKey) -> Option<TextMeasurement> {
-        if let Some(measurement) = self.entries.get(key) {
-            // Move to end of access order (most recently used)
-            if let Some(pos) = self.access_order.iter().position(|k| k == key) {
-                self.access_order.remove(pos);
-                self.access_order.push(key.clone());
-            }
-            Some(measurement.clone())
-        } else {
-            None
-        }
-    }
-
-    fn insert(&mut self, key: TextCacheKey, measurement: TextMeasurement) {
-        // If key already exists, update it and move to end of access order
-        if self.entries.contains_key(&key) {
-            self.entries.insert(key.clone(), measurement);
-            if let Some(pos) = self.access_order.iter().position(|k| k == &key) {
-                self.access_order.remove(pos);
-            }
-            self.access_order.push(key);
-            return;
-        }
-
-        // Evict oldest entries if at capacity
-        while self.entries.len() >= self.max_entries && !self.access_order.is_empty() {
-            let oldest = self.access_order.remove(0);
-            self.entries.remove(&oldest);
-        }
-
-        self.entries.insert(key.clone(), measurement);
-        self.access_order.push(key);
-    }
-
-    #[allow(dead_code)]
-    fn clear(&mut self) {
-        self.entries.clear();
-        self.access_order.clear();
-    }
-}
-
-thread_local! {
-    static TEXT_CACHE: RefCell<TextMeasurementCache> = RefCell::new(TextMeasurementCache::new(256));
-    /// Shared dummy surface for measurement when no context available
-    static MEASUREMENT_SURFACE: RefCell<Option<(cairo::ImageSurface, cairo::Context)>> = const { RefCell::new(None) };
-}
-
-/// Get or create a measurement context (reuses a single surface instead of creating new ones).
+/// Run a measurement against a call-owned surface and context.
 fn with_measurement_context<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&cairo::Context) -> R,
 {
-    MEASUREMENT_SURFACE.with(|cell| {
-        let mut surface_ref = cell.borrow_mut();
-        if surface_ref.is_none() {
-            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
-            let ctx = cairo::Context::new(&surface).ok()?;
-            ctx.set_antialias(cairo::Antialias::Best);
-            *surface_ref = Some((surface, ctx));
-        }
-        surface_ref.as_ref().map(|(_, ctx)| f(ctx))
-    })
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
+    let ctx = cairo::Context::new(&surface).ok()?;
+    ctx.set_antialias(cairo::Antialias::Best);
+    Some(f(&ctx))
 }
 
 /// Build a Pango layout configured exactly like the measurement and render
@@ -181,8 +86,7 @@ fn snap_char_boundary(text: &str, byte: usize) -> usize {
     index
 }
 
-/// Measure text using Pango, with caching.
-/// Returns cached measurement if available, otherwise measures and caches.
+/// Measure text using Pango without ambient cache state.
 pub(crate) fn measure_text_cached(
     text: &str,
     font_desc_str: &str,
@@ -193,16 +97,8 @@ pub(crate) fn measure_text_cached(
         return None;
     }
 
-    let key = TextCacheKey::new(text, font_desc_str, size, wrap_width);
-
-    // Check cache first
-    let cached = TEXT_CACHE.with(|cache| cache.borrow_mut().get(&key));
-    if let Some(measurement) = cached {
-        return Some(measurement);
-    }
-
-    // Measure using shared context
-    let measurement = with_measurement_context(|ctx| {
+    let _ = size;
+    with_measurement_context(|ctx| {
         let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
         let (ink_rect, logical_rect) = layout.extents();
@@ -219,14 +115,7 @@ pub(crate) fn measure_text_cached(
             logical_height: logical_rect.height() as f64 / scale,
             baseline: layout.baseline() as f64 / scale,
         }
-    })?;
-
-    // Cache the result
-    TEXT_CACHE.with(|cache| {
-        cache.borrow_mut().insert(key, measurement.clone());
-    });
-
-    Some(measurement)
+    })
 }
 
 /// Measure text using cached measurements.
@@ -541,30 +430,9 @@ fn logical_bounds_in(layout: &pango::Layout) -> LogicalBounds {
     }
 }
 
-/// Clear the text measurement cache.
-/// Call this when font configuration changes.
-#[allow(dead_code)]
-pub fn invalidate_text_cache() {
-    TEXT_CACHE.with(|cache| cache.borrow_mut().clear());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn measurement(width: f64) -> TextMeasurement {
-        TextMeasurement {
-            ink_x: 0.0,
-            ink_y: 0.0,
-            ink_width: width,
-            ink_height: 10.0,
-            logical_x: 0.0,
-            logical_y: 0.0,
-            logical_width: width,
-            logical_height: 10.0,
-            baseline: 8.0,
-        }
-    }
 
     #[test]
     fn hit_test_maps_x_extremes_to_buffer_ends() {
@@ -624,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_returns_same_measurement() {
+    fn repeated_measurement_is_stable() {
         let text = "Hello World";
         let font = "Sans 12";
 
@@ -643,9 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn test_different_sizes_use_different_cache_keys() {
-        // Verify that measurements for different sizes are cached with different keys
-        // by checking that both requests succeed (cache doesn't confuse them)
+    fn different_font_descriptors_measure_independently() {
         let text = "Test";
         let font = "Sans";
 
@@ -655,14 +521,14 @@ mod tests {
         assert!(m1.is_some(), "12pt measurement should succeed");
         assert!(m2.is_some(), "24pt measurement should succeed");
 
-        // Request them again - should hit cache for both
+        // Request them again; independent call-owned contexts remain stable.
         let m1_cached = measure_text_cached(text, font, 12.0, None);
         let m2_cached = measure_text_cached(text, font, 24.0, None);
 
         let m1 = m1.unwrap();
         let m1_cached = m1_cached.unwrap();
 
-        // Verify cache returns consistent results for same parameters
+        // Verify repeated calls return consistent results for the same parameters.
         assert_eq!(m1.ink_width, m1_cached.ink_width);
         assert_eq!(m1.ink_height, m1_cached.ink_height);
 
@@ -674,58 +540,13 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_evicts_oldest_entry_at_capacity() {
-        let mut cache = TextMeasurementCache::new(2);
-        let key_a = TextCacheKey::new("A", "Sans", 12.0, None);
-        let key_b = TextCacheKey::new("B", "Sans", 12.0, None);
-        let key_c = TextCacheKey::new("C", "Sans", 12.0, None);
-
-        cache.insert(key_a.clone(), measurement(10.0));
-        cache.insert(key_b.clone(), measurement(20.0));
-        cache.insert(key_c.clone(), measurement(30.0));
-
-        assert!(cache.get(&key_a).is_none());
-        assert_eq!(cache.get(&key_b).unwrap().ink_width, 20.0);
-        assert_eq!(cache.get(&key_c).unwrap().ink_width, 30.0);
-    }
-
-    #[test]
-    fn test_get_refreshes_lru_order_before_eviction() {
-        let mut cache = TextMeasurementCache::new(2);
-        let key_a = TextCacheKey::new("A", "Sans", 12.0, None);
-        let key_b = TextCacheKey::new("B", "Sans", 12.0, None);
-        let key_c = TextCacheKey::new("C", "Sans", 12.0, None);
-
-        cache.insert(key_a.clone(), measurement(10.0));
-        cache.insert(key_b.clone(), measurement(20.0));
-        assert_eq!(cache.get(&key_a).unwrap().ink_width, 10.0);
-        cache.insert(key_c.clone(), measurement(30.0));
-
-        assert!(cache.get(&key_b).is_none());
-        assert_eq!(cache.get(&key_a).unwrap().ink_width, 10.0);
-        assert_eq!(cache.get(&key_c).unwrap().ink_width, 30.0);
-    }
-
-    #[test]
-    fn test_insert_existing_key_updates_cached_measurement() {
-        let mut cache = TextMeasurementCache::new(2);
-        let key = TextCacheKey::new("A", "Sans", 12.0, None);
-
-        cache.insert(key.clone(), measurement(10.0));
-        cache.insert(key.clone(), measurement(42.0));
-
-        assert_eq!(cache.get(&key).unwrap().ink_width, 42.0);
-        assert_eq!(cache.entries.len(), 1);
-    }
-
-    #[test]
     fn test_empty_text_returns_none() {
         let result = measure_text_cached("", "Sans 12", 12.0, None);
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_wrap_width_affects_cache_key() {
+    fn wrap_width_affects_measurement() {
         let text = "A very long text that would wrap";
         let font = "Sans 12";
 

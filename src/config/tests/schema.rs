@@ -2,7 +2,7 @@ use super::super::*;
 
 #[test]
 fn json_schema_includes_expected_sections() {
-    let schema = Config::json_schema();
+    let schema = Config::json_schema().expect("schema fixture serializes");
     let properties = schema
         .get("properties")
         .and_then(|value| value.as_object())
@@ -28,7 +28,7 @@ fn json_schema_includes_expected_sections() {
 
 #[test]
 fn performance_metadata_paths_exist_in_json_schema() {
-    let schema = Config::json_schema();
+    let schema = Config::json_schema().expect("schema fixture serializes");
     for metadata in PERFORMANCE_FIELD_METADATA {
         assert!(
             schema_contains_path(&schema, metadata.path),

@@ -31,6 +31,6 @@ pub(crate) use toolbar::view::top::plan_top_strip;
 mod zoom;
 
 pub use backend::WaylandBackend;
-pub(crate) use backend::runtime_wake::{RuntimeWakeHandle, RuntimeWakeSource};
+pub(crate) use backend::runtime_wake::{RuntimeWakeSender, RuntimeWakeSource};
 #[cfg(feature = "tablet-input")]
 pub use tablet_types::TabletToolType;

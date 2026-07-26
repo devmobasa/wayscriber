@@ -211,11 +211,13 @@ fn reload_cleanup_is_written_even_when_failed_reset_has_no_retry_snapshot() {
     apply_request(&mut original, &persisted, present_revision("r1"));
 
     let mut controller = RuntimeUiStateController::new_with_authority(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("r1"),
         RuntimeUiFileStatus::Supported,
         persisted_wire,
-    );
+    )
+    .expect("fixture supported source satisfies controller startup invariants");
     let reset_through = match controller.request_supported_reset() {
         RequestResetResult::Started { through, .. } => through,
         result => panic!("reset failed to start: {result:?}"),
@@ -281,11 +283,13 @@ fn reload_during_cleanup_acknowledgement_recomputes_and_writes_again() {
     apply_request(&mut original, &persisted, present_revision("r1"));
 
     let mut controller = RuntimeUiStateController::new_with_authority(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("r1"),
         RuntimeUiFileStatus::Supported,
         persisted_wire,
-    );
+    )
+    .expect("fixture supported source satisfies controller startup invariants");
     controller.request_supported_reset();
     let reset = controller.take_source_mutation().unwrap();
     let incident = match controller.submit_source_mutation(SourceMutationResult::Failed {
@@ -387,11 +391,13 @@ fn failed_recovery_cleanup_receipt_stays_failed_and_retry_allocates_a_new_one() 
     apply_request(&mut original, &persisted, present_revision("r1"));
 
     let mut controller = RuntimeUiStateController::new_with_authority(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("r1"),
         RuntimeUiFileStatus::Supported,
         persisted_wire,
-    );
+    )
+    .expect("fixture supported source satisfies controller startup invariants");
     controller.request_supported_reset();
     let reset = controller.take_source_mutation().unwrap();
     let incident = match controller.submit_source_mutation(SourceMutationResult::Failed {
@@ -581,11 +587,13 @@ fn external_conflict_pruning_keeps_recovery_barrier_until_cleanup_ack() {
 fn external_reinspection_settles_an_abandoned_cleanup_receipt_after_reload() {
     let persisted_wire = wire_with_top_pinned(true);
     let mut controller = RuntimeUiStateController::new_with_authority(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("r1"),
         RuntimeUiFileStatus::Supported,
         persisted_wire,
-    );
+    )
+    .expect("fixture supported source satisfies controller startup invariants");
     controller.request_supported_reset();
     let prerequisite = controller.take_source_mutation().unwrap();
     let incident = match controller.submit_source_mutation(SourceMutationResult::Failed {
@@ -676,11 +684,13 @@ fn external_reinspection_settles_an_abandoned_cleanup_receipt_after_reload() {
 fn preserve_invalid_settles_an_abandoned_cleanup_receipt() {
     let persisted_wire = wire_with_top_pinned(true);
     let mut controller = RuntimeUiStateController::new_with_authority(
+        ControllerId::fixture(1, 1),
         test_seeds(false, false),
         present_revision("r1"),
         RuntimeUiFileStatus::Supported,
         persisted_wire,
-    );
+    )
+    .expect("fixture supported source satisfies controller startup invariants");
     controller.request_supported_reset();
     let prerequisite = controller.take_source_mutation().unwrap();
     let incident = match controller.submit_source_mutation(SourceMutationResult::Failed {

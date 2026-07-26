@@ -1,5 +1,4 @@
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
-use crate::paths::data_dir;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -11,6 +10,7 @@ const ONBOARDING_VERSION: u32 = 5;
 pub(crate) const DRAWER_HINT_MAX: u32 = 2;
 pub(crate) const DEFERRED_HINT_REPEAT_MAX: u32 = 3;
 const ONBOARDING_FILE: &str = "onboarding.toml";
+#[cfg(test)]
 const ONBOARDING_DIR: &str = "wayscriber";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -217,15 +217,23 @@ pub struct OnboardingStore {
 }
 
 impl OnboardingStore {
-    pub fn load() -> Self {
-        let Some(path) = onboarding_path() else {
-            return Self {
-                state: OnboardingState::default(),
-                path: None,
-            };
+    pub fn load(paths: &crate::paths::PathResolver) -> (Self, Option<String>) {
+        let path = match paths.wayscriber_data_dir() {
+            Ok(root) => root.join(ONBOARDING_FILE),
+            Err(error) => {
+                return (
+                    Self {
+                        state: OnboardingState::default(),
+                        path: None,
+                    },
+                    Some(format!(
+                        "Onboarding persistence is unavailable: {error}; changes remain live-only"
+                    )),
+                );
+            }
         };
 
-        Self::load_from_path(path)
+        (Self::load_from_path(path), None)
     }
 
     fn load_from_path(path: PathBuf) -> Self {
@@ -323,10 +331,6 @@ impl OnboardingStore {
             }
         }
     }
-}
-
-fn onboarding_path() -> Option<PathBuf> {
-    data_dir().map(|dir| dir.join(ONBOARDING_DIR).join(ONBOARDING_FILE))
 }
 
 fn default_version() -> u32 {

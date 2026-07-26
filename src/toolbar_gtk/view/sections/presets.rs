@@ -7,12 +7,6 @@
 //! is structural (rebuild); preset content, the active highlight, and the
 //! transient feedback flash flow through updaters.
 
-/// Feedback flash tint, RGBA; `None` while no preset feedback is active.
-type FeedbackTint = std::rc::Rc<std::cell::Cell<Option<(f64, f64, f64, f64)>>>;
-
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use gtk4::prelude::*;
 
 use crate::config::action_label;
@@ -31,7 +25,7 @@ use crate::ui::toolbar::{PresetSlotSnapshot, ToolbarEvent, ToolbarSideSection, T
 use crate::ui_text::{UiTextStyle, text_layout};
 use crate::util::color_to_name;
 
-use super::super::super::icons::{IconPainter, tool_icon_painter};
+use super::super::super::icons::tool_icon_painter;
 use super::super::super::widgets::{
     COLOR_SWATCH_HAIRLINE_DARK, rounded_rect_path, send_event, set_active_class, sized_button,
 };
@@ -169,22 +163,27 @@ fn filled_slot(
 
     // Content, tooltip, active highlight, and feedback flash track later
     // snapshots (filled/empty flips are structural and rebuild instead).
-    let last = RefCell::new(preset.clone());
+    let mut last = preset.clone();
+    let mut last_feedback = None;
     let handle = button.clone();
     ctx.updaters.push(Box::new(move |snapshot| {
         set_active_class(&handle, snapshot.active_preset_slot == Some(slot));
-        if let Some(Some(current)) = snapshot.presets.get(slot_index)
-            && *last.borrow() != *current
-        {
-            face.apply(current);
-            handle.set_tooltip_text(Some(&preset_tooltip_text(
-                current,
-                slot,
-                snapshot.binding_hints.apply_preset(slot),
-            )));
-            *last.borrow_mut() = current.clone();
+        let feedback = feedback_overlay(snapshot, slot_index);
+        if let Some(Some(current)) = snapshot.presets.get(slot_index) {
+            let content_changed = last != *current;
+            if content_changed || last_feedback != feedback {
+                face.apply(current, feedback);
+            }
+            if content_changed {
+                handle.set_tooltip_text(Some(&preset_tooltip_text(
+                    current,
+                    slot,
+                    snapshot.binding_hints.apply_preset(slot),
+                )));
+                last = current.clone();
+            }
         }
-        face.set_feedback(feedback_overlay(snapshot, slot_index));
+        last_feedback = feedback;
     }));
 
     overlay.upcast()
@@ -202,16 +201,52 @@ fn empty_slot(ctx: &mut SectionCtx, slot_index: usize) -> gtk4::Widget {
         ctx.snapshot.binding_hints.save_preset(slot),
     )));
 
-    let hovered = Rc::new(Cell::new(false));
-    let feedback: FeedbackTint = Rc::new(Cell::new(None));
     let area = slot_area(size);
     let label = slot.to_string();
-    let draw_hovered = hovered.clone();
-    let draw_feedback_cell = feedback.clone();
-    area.set_draw_func(move |_, ctx, width, height| {
+    install_empty_slot_draw(&area, &label, None);
+    button.set_child(Some(&area));
+
+    let motion = gtk4::EventControllerMotion::new();
+    let enter_area = area.clone();
+    motion.connect_enter(move |_, _, _| {
+        enter_area.add_css_class("pointer-hover");
+        enter_area.queue_draw();
+    });
+    let leave_area = area.clone();
+    motion.connect_leave(move |_| {
+        leave_area.remove_css_class("pointer-hover");
+        leave_area.queue_draw();
+    });
+    button.add_controller(motion);
+
+    let sender = ctx.feedback.clone();
+    button.connect_clicked(move |_| {
+        send_event(&sender, ToolbarEvent::SavePreset(slot));
+    });
+
+    let mut last_feedback = None;
+    ctx.updaters.push(Box::new(move |snapshot| {
+        let feedback = feedback_overlay(snapshot, slot_index);
+        if last_feedback != feedback {
+            install_empty_slot_draw(&area, &label, feedback);
+            area.queue_draw();
+            last_feedback = feedback;
+        }
+    }));
+
+    button.upcast()
+}
+
+fn install_empty_slot_draw(
+    area: &gtk4::DrawingArea,
+    label: &str,
+    feedback: Option<(f64, f64, f64, f64)>,
+) {
+    let label = label.to_string();
+    area.set_draw_func(move |area, ctx, width, height| {
         let s = width.min(height) as f64;
         let k = s / SLOT_SIZE;
-        let hover = draw_hovered.get();
+        let hover = area.has_css_class("pointer-hover");
         // Dark backing + dashed outline the built-in empty slot draws.
         set_color_alpha(ctx, EMPTY_SLOT_BG_RGB, if hover { 0.45 } else { 0.35 });
         rounded_rect_path(ctx, k, k, s - 2.0 * k, s - 2.0 * k, 6.0 * k);
@@ -233,38 +268,8 @@ fn empty_slot(ctx: &mut SectionCtx, slot_index: usize) -> gtk4::Widget {
         );
         toolbar_icons::draw_icon_plus(ctx, (s - plus) / 2.0, (s - plus) / 2.0, plus);
         draw_keycap(ctx, s, &label, false);
-        draw_feedback(ctx, s, draw_feedback_cell.get());
+        draw_feedback(ctx, s, feedback);
     });
-    button.set_child(Some(&area));
-
-    let motion = gtk4::EventControllerMotion::new();
-    let enter_hovered = hovered.clone();
-    let enter_area = area.clone();
-    motion.connect_enter(move |_, _, _| {
-        enter_hovered.set(true);
-        enter_area.queue_draw();
-    });
-    let leave_area = area.clone();
-    motion.connect_leave(move |_| {
-        hovered.set(false);
-        leave_area.queue_draw();
-    });
-    button.add_controller(motion);
-
-    let sender = ctx.feedback.clone();
-    button.connect_clicked(move |_| {
-        send_event(&sender, ToolbarEvent::SavePreset(slot));
-    });
-
-    ctx.updaters.push(Box::new(move |snapshot| {
-        let overlay = feedback_overlay(snapshot, slot_index);
-        if feedback.get() != overlay {
-            feedback.set(overlay);
-            area.queue_draw();
-        }
-    }));
-
-    button.upcast()
 }
 
 /// The destructive clear badge: a red circle with a white ✕, exactly like
@@ -319,33 +324,32 @@ fn clear_badge(ctx: &SectionCtx, slot: usize) -> gtk4::Button {
 /// and redraw instead of rebuilding the widget tree.
 struct FilledFace {
     area: gtk4::DrawingArea,
-    color: Rc<Cell<(f64, f64, f64, f64)>>,
-    thickness: Rc<Cell<f64>>,
-    painter: Rc<Cell<IconPainter>>,
-    feedback: FeedbackTint,
+    label: String,
 }
 
 impl FilledFace {
     fn new(preset: &PresetSlotSnapshot, slot: usize, size: f64) -> Self {
         let area = slot_area(size);
-        let color = Rc::new(Cell::new((
+        let label = slot.to_string();
+        let face = Self { area, label };
+        face.apply(preset, None);
+        face
+    }
+
+    fn apply(&self, preset: &PresetSlotSnapshot, feedback: Option<(f64, f64, f64, f64)>) {
+        let color = (
             preset.color.r,
             preset.color.g,
             preset.color.b,
             preset.color.a,
-        )));
-        let thickness = Rc::new(Cell::new(preset.size));
-        let painter = Rc::new(Cell::new(tool_icon_painter(preset.tool)));
-        let feedback: FeedbackTint = Rc::new(Cell::new(None));
-        let label = slot.to_string();
-        let draw_color = color.clone();
-        let draw_thickness = thickness.clone();
-        let draw_painter = painter.clone();
-        let draw_feedback_cell = feedback.clone();
-        area.set_draw_func(move |_, ctx, width, height| {
+        );
+        let thickness = preset.size;
+        let painter = tool_icon_painter(preset.tool);
+        let label = self.label.clone();
+        self.area.set_draw_func(move |_, ctx, width, height| {
             let s = width.min(height) as f64;
             let k = s / SLOT_SIZE;
-            let (r, g, b, a) = draw_color.get();
+            let (r, g, b, a) = color;
             // Preset color tint over the button base. The tint keeps its own
             // fixed alphas rather than folding in the color's: it identifies
             // the slot, and a barely-there color would leave it unreadable.
@@ -360,9 +364,9 @@ impl FilledFace {
             // Centered tool icon.
             let icon = (s * 0.45).round();
             set_color(ctx, COLOR_TEXT_SECONDARY);
-            (draw_painter.get())(ctx, (s - icon) / 2.0, (s - icon) / 2.0, icon);
+            painter(ctx, (s - icon) / 2.0, (s - icon) / 2.0, icon);
             // Thickness preview line along the bottom.
-            let preview = (draw_thickness.get() / 50.0 * 6.0).clamp(1.0, 6.0) * k;
+            let preview = (thickness / 50.0 * 6.0).clamp(1.0, 6.0) * k;
             set_color(ctx, COLOR_PREVIEW_LINE);
             ctx.set_line_width(preview);
             ctx.move_to(4.0 * k, s - 6.0 * k);
@@ -390,34 +394,9 @@ impl FilledFace {
             rounded_rect_path(ctx, sx, sy, sw, sw, 4.0 * k);
             let _ = ctx.stroke();
             draw_keycap(ctx, s, &label, true);
-            draw_feedback(ctx, s, draw_feedback_cell.get());
+            draw_feedback(ctx, s, feedback);
         });
-        Self {
-            area,
-            color,
-            thickness,
-            painter,
-            feedback,
-        }
-    }
-
-    fn apply(&self, preset: &PresetSlotSnapshot) {
-        self.color.set((
-            preset.color.r,
-            preset.color.g,
-            preset.color.b,
-            preset.color.a,
-        ));
-        self.thickness.set(preset.size);
-        self.painter.set(tool_icon_painter(preset.tool));
         self.area.queue_draw();
-    }
-
-    fn set_feedback(&self, overlay: Option<(f64, f64, f64, f64)>) {
-        if self.feedback.get() != overlay {
-            self.feedback.set(overlay);
-            self.area.queue_draw();
-        }
     }
 }
 

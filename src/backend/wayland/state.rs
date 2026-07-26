@@ -58,12 +58,10 @@ use crate::{
         CaptureDestination, CaptureManager, DesktopBackdropCaptureRequest,
         DesktopBackdropCaptureResult, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
         DocumentDeliveryRequest, ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind,
-        RenderedDocument,
-        file::{FileSaveConfig, expand_tilde},
-        types::CaptureType,
+        RenderedDocument, file::FileSaveConfig, types::CaptureType,
     },
     config::{Action, Config},
-    input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
+    input::state::{ClipboardPasteRequest, HexPasteTarget, TextClipboardRequest, TextPasteTarget},
     input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -76,7 +74,7 @@ pub use self::data::{
 use super::{
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
     clipboard::{
-        ClipboardOperationController, ClipboardOperationIdSource, ClipboardPasteCompletion,
+        ClipboardOperationController, ClipboardOperationIdSource, ClipboardPasteProducerCompletion,
         ClipboardPublishCompletion,
     },
     frozen::FrozenState,
@@ -85,7 +83,10 @@ use super::{
     surface::SurfaceState,
     toolbar::{
         ToolbarSurfaceManager,
-        hit::{drag_intent_for_hit, intent_for_hit, quick_color_slot_for_hit},
+        hit::{
+            drag_intent_for_hit_with_color_logging, intent_for_hit_with_color_logging,
+            quick_color_slot_for_hit,
+        },
         layout::{side_size, top_size},
         render::{render_side_palette, render_top_strip},
     },
@@ -128,10 +129,8 @@ pub(in crate::backend::wayland) use self::perf::{
     PerfRenderProfileKind, PerfRenderSkipReason, damage_covers_logical_surface,
 };
 pub(super) use helpers::{
-    color_log, damage_summary, debug_damage_logging_enabled, debug_toolbar_color_logging_enabled,
-    debug_toolbar_drag_logging_enabled, drag_log, force_inline_toolbars_requested,
-    scale_damage_regions, surface_id, toolbar_drag_preview_enabled, toolbar_drag_throttle_interval,
-    toolbar_pointer_lock_enabled,
+    WaylandRuntimeOptions, damage_summary, force_inline_toolbars_requested_with_env,
+    scale_damage_regions, surface_id,
 };
 
 pub(in crate::backend::wayland) struct WaylandGlobals {
@@ -150,15 +149,21 @@ pub(in crate::backend::wayland) struct WaylandGlobals {
 pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: WaylandGlobals,
     pub config: Config,
+    pub config_store: crate::config::ConfigStore,
+    pub path_resolver: crate::paths::PathResolver,
+    pub runtime_paths: crate::paths::PreparedRuntimePaths,
+    pub logger: crate::logger::LoggerHandle,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
     pub persistence: crate::backend::wayland::session::PersistenceController,
+    pub session_catalog: crate::session::catalog::SessionCatalog,
     pub runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
-    pub runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+    pub runtime_wake: crate::backend::wayland::RuntimeWakeSender,
+    pub process_broker: crate::process_broker::ProcessBrokerHandle,
     pub tokio_handle: tokio::runtime::Handle,
     pub exit_after_capture_mode: ExitAfterCaptureMode,
     pub frozen_enabled: bool,
@@ -196,6 +201,8 @@ pub(super) struct WaylandState {
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
     /// Baked committed-shapes layer for panned canvas rendering.
     pub(super) canvas_layer_cache: canvas_layer::CanvasLayerCache,
+    /// Help-overlay measurements retained by this rendering root only.
+    pub(super) help_overlay_renderer: crate::ui::HelpOverlayRenderer,
     /// Whether the frame just rendered carried a spotlight dim layer.
     ///
     /// Removing the last spotlight makes `has_spotlight()` false, but the buffer
@@ -205,17 +212,28 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
+    pub(super) config_store: crate::config::ConfigStore,
+    pub(super) path_resolver: crate::paths::PathResolver,
+    pub(super) runtime_paths: crate::paths::PreparedRuntimePaths,
+    pub(super) logger: crate::logger::LoggerHandle,
+    pub(super) theme: crate::ui::theme::Theme,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
+    pub(super) session_catalog: crate::session::catalog::SessionCatalog,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:
         crate::backend::wayland::runtime_ui_state::UnavailablePersistencePreviews,
+    pub(super) process_broker: crate::process_broker::ProcessBrokerHandle,
+    pub(super) runtime_options: WaylandRuntimeOptions,
 
     // Input state
     pub(super) input_state: InputState,
+    pub(super) clipboard_operation_ids: ClipboardOperationIdSource,
     pub(super) clipboard_publish: ClipboardOperationController<u64, ClipboardPublishCompletion>,
     pub(super) clipboard_paste:
-        ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
+        ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteProducerCompletion>,
     pub(super) clipboard_hex_copy: ClipboardOperationController<String, Result<(), String>>,
+    pub(super) clipboard_hex_paste:
+        ClipboardOperationController<HexPasteTarget, Result<Option<String>, String>>,
     pub(super) pending_hex_copy: Option<String>,
     /// Async wl-copy pipeline for text-editor selections (Ctrl+C / Ctrl+X).
     pub(super) clipboard_text_copy:

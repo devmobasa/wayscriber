@@ -1,6 +1,6 @@
 //! Clipboard helpers for color hex values.
 
-use super::{ClipboardOperationController, WaylandState};
+use super::{ClipboardOperationController, ClipboardOperationIdSource, WaylandState};
 use crate::backend::wayland::clipboard::ClipboardPoll;
 use crate::draw::Color;
 use crate::input::state::{HexPasteTarget, Toast, ToastPriority};
@@ -15,11 +15,13 @@ impl WaylandState {
         log::info!("Hex copy requested: {}", hex);
         self.suppress_focus_exit_for(Duration::from_millis(1500));
 
+        let process_broker = self.process_broker.clone();
         if let Err(err) = queue_latest_clipboard_copy(
+            &mut self.clipboard_operation_ids,
             &mut self.clipboard_hex_copy,
             &mut self.pending_hex_copy,
             hex,
-            copy_text_via_command,
+            move |text| copy_text_via_command(&process_broker, text),
         ) {
             log::warn!("Failed to start hex clipboard copy: {err}");
             self.input_state.push_toast(
@@ -76,15 +78,25 @@ impl WaylandState {
                     Toast::warning("Failed to copy to clipboard"),
                 );
             }
+            ClipboardPoll::Cancelled { context: hex, .. } => {
+                log::info!("Hex copy producer was cancelled for {hex}");
+                self.input_state.push_toast(
+                    ToastPriority::Info,
+                    "color_picker",
+                    Toast::warning("Failed to copy to clipboard"),
+                );
+            }
         }
         self.start_pending_hex_copy_if_idle();
     }
 
     fn start_pending_hex_copy_if_idle(&mut self) {
+        let process_broker = self.process_broker.clone();
         if let Err(err) = submit_pending_clipboard_copy_if_idle(
+            &mut self.clipboard_operation_ids,
             &mut self.clipboard_hex_copy,
             &mut self.pending_hex_copy,
-            copy_text_via_command,
+            move |text| copy_text_via_command(&process_broker, text),
         ) {
             log::warn!("Failed to start pending hex clipboard copy: {err}");
             self.input_state.push_toast(
@@ -103,34 +115,63 @@ impl WaylandState {
         }
         log::info!("Hex paste requested");
         self.suppress_focus_exit_for(Duration::from_millis(1500));
-        let clipboard = match std::panic::catch_unwind(read_clipboard_text_via_command) {
-            Ok(Ok(text)) => text,
-            Ok(Err(ClipboardTextError::Empty)) => {
-                self.input_state.push_toast(
-                    ToastPriority::Info,
-                    "color_picker",
-                    Toast::warning("Clipboard empty"),
-                );
-                return;
+        let process_broker = self.process_broker.clone();
+        if let Err(error) = submit_hex_paste(
+            &mut self.clipboard_operation_ids,
+            &mut self.clipboard_hex_paste,
+            target,
+            move || match read_clipboard_text_via_command(&process_broker) {
+                Ok(text) => Ok(Some(text)),
+                Err(ClipboardTextError::Empty) => Ok(None),
+                Err(ClipboardTextError::Other(error)) => Err(error),
+            },
+        ) {
+            log::warn!("Failed to start hex clipboard paste: {error}");
+            self.push_hex_paste_failure("Failed to paste from clipboard");
+        }
+    }
+
+    pub(in crate::backend::wayland) fn poll_hex_paste_completion(&mut self) {
+        match self.clipboard_hex_paste.poll() {
+            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
+            ClipboardPoll::Ready {
+                context: target,
+                outcome: Ok(Some(clipboard)),
+                ..
+            } => self.apply_hex_paste(target, clipboard),
+            ClipboardPoll::Ready {
+                outcome: Ok(None), ..
+            } => self.push_hex_paste_failure("Clipboard empty"),
+            ClipboardPoll::Ready {
+                outcome: Err(error),
+                ..
+            } => {
+                log::warn!("wl-paste failed for hex paste: {error}");
+                self.push_hex_paste_failure("Failed to paste from clipboard");
             }
-            Ok(Err(ClipboardTextError::Other(err))) => {
-                log::warn!("wl-paste failed for hex paste: {}", err);
-                self.input_state.push_toast(
-                    ToastPriority::Info,
-                    "color_picker",
-                    Toast::warning("Failed to paste from clipboard"),
-                );
-                return;
+            ClipboardPoll::ProducerFailed { reason, .. } => {
+                log::error!("Hex paste producer failed: {reason}");
+                self.push_hex_paste_failure("Failed to paste from clipboard");
             }
-            Err(_) => {
-                log::error!("Hex paste panicked");
-                self.input_state.push_toast(
-                    ToastPriority::Info,
-                    "color_picker",
-                    Toast::warning("Failed to paste from clipboard"),
-                );
-                return;
+            ClipboardPoll::Disconnected { .. } => {
+                log::error!("Hex paste producer disconnected");
+                self.push_hex_paste_failure("Failed to paste from clipboard");
             }
+            ClipboardPoll::Cancelled { .. } => {
+                log::info!("Hex paste producer was cancelled");
+            }
+        }
+    }
+
+    fn push_hex_paste_failure(&mut self, message: &'static str) {
+        self.input_state
+            .push_toast(ToastPriority::Info, "color_picker", Toast::warning(message));
+    }
+
+    fn apply_hex_paste(&mut self, target: HexPasteTarget, clipboard: String) {
+        if !self.input_state.hex_paste_target_is_current(target) {
+            log::debug!("Discarding stale color-picker hex paste completion");
+            return;
         };
 
         if let Some(color) = parse_hex_color(clipboard.trim()) {
@@ -169,28 +210,47 @@ impl WaylandState {
 }
 
 fn start_clipboard_copy(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<String, Result<(), String>>,
     hex: String,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
     let worker_hex = hex.clone();
     controller
-        .try_submit(hex, "wayscriber-hex-copy", move || operation(&worker_hex))
+        .try_submit(ids, hex, "wayscriber-hex-copy", move |_cancellation| {
+            operation(&worker_hex)
+        })
+        .map(drop)
+        .map_err(|failure| failure.into_parts().0.to_string())
+}
+
+fn submit_hex_paste(
+    ids: &mut ClipboardOperationIdSource,
+    controller: &mut ClipboardOperationController<HexPasteTarget, Result<Option<String>, String>>,
+    target: HexPasteTarget,
+    operation: impl FnOnce() -> Result<Option<String>, String> + Send + 'static,
+) -> Result<(), String> {
+    controller
+        .try_submit(ids, target, "wayscriber-hex-paste", move |_cancellation| {
+            operation()
+        })
         .map(drop)
         .map_err(|failure| failure.into_parts().0.to_string())
 }
 
 pub(super) fn queue_latest_clipboard_copy(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<String, Result<(), String>>,
     pending: &mut Option<String>,
     hex: String,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
     *pending = Some(hex);
-    submit_pending_clipboard_copy_if_idle(controller, pending, operation)
+    submit_pending_clipboard_copy_if_idle(ids, controller, pending, operation)
 }
 
 pub(super) fn submit_pending_clipboard_copy_if_idle(
+    ids: &mut ClipboardOperationIdSource,
     controller: &mut ClipboardOperationController<String, Result<(), String>>,
     pending: &mut Option<String>,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
@@ -201,7 +261,7 @@ pub(super) fn submit_pending_clipboard_copy_if_idle(
     let Some(hex) = pending.take() else {
         return Ok(());
     };
-    start_clipboard_copy(controller, hex, operation)
+    start_clipboard_copy(ids, controller, hex, operation)
 }
 
 pub(super) enum ClipboardTextError {
@@ -209,17 +269,18 @@ pub(super) enum ClipboardTextError {
     Other(String),
 }
 
-pub(super) fn copy_text_via_command(text: &str) -> Result<(), String> {
-    let output = crate::process_broker::current()
-        .and_then(|broker| {
-            broker.publish(
-                crate::process_broker::HelperKind::WlCopy,
-                OsStr::new("wl-copy"),
-                [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
-                text.as_bytes().to_vec(),
-                Duration::from_secs(5),
-            )
-        })
+pub(super) fn copy_text_via_command(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+    text: &str,
+) -> Result<(), String> {
+    let output = process_broker
+        .publish(
+            crate::process_broker::HelperKind::WlCopy,
+            OsStr::new("wl-copy"),
+            [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
+            text.as_bytes().to_vec(),
+            Duration::from_secs(5),
+        )
         .map_err(|error| format!("Failed to run wl-copy: {error:#}"))?;
     if output.timed_out {
         return Err("wl-copy timed out".to_string());
@@ -235,18 +296,18 @@ pub(super) fn copy_text_via_command(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
-    let output = crate::process_broker::current()
-        .and_then(|broker| {
-            broker.run(
-                crate::process_broker::HelperKind::WlPaste,
-                OsStr::new("wl-paste"),
-                clipboard_text_read_args(),
-                Vec::new(),
-                Duration::from_secs(5),
-                1024 * 1024,
-            )
-        })
+pub(super) fn read_clipboard_text_via_command(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
+) -> Result<String, ClipboardTextError> {
+    let output = process_broker
+        .run(
+            crate::process_broker::HelperKind::WlPaste,
+            OsStr::new("wl-paste"),
+            clipboard_text_read_args(),
+            Vec::new(),
+            Duration::from_secs(5),
+            1024 * 1024,
+        )
         .map_err(|err| ClipboardTextError::Other(format!("Failed to run wl-paste: {err:#}")))?;
 
     if !output.timed_out && output.status == 0 {
@@ -301,27 +362,40 @@ mod tests {
 
     #[test]
     fn hex_copy_submission_stays_off_the_event_thread_until_completion() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let wake = RuntimeWakeSource::new().expect("hex-copy fixture creates a runtime eventfd");
+        let mut ids = ClipboardOperationIdSource::new();
+        let mut controller = ClipboardOperationController::new(
+            wake.try_sender()
+                .expect("hex-copy fixture duplicates its runtime eventfd"),
+        );
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
-        start_clipboard_copy(&mut controller, "#123456".to_string(), move |hex| {
-            assert_eq!(hex, "#123456");
-            started_tx.send(()).unwrap();
-            release_rx
-                .recv_timeout(Duration::from_secs(1))
-                .map_err(|error| error.to_string())?;
-            Ok(())
-        })
-        .unwrap();
+        start_clipboard_copy(
+            &mut ids,
+            &mut controller,
+            "#123456".to_string(),
+            move |hex| {
+                assert_eq!(hex, "#123456");
+                started_tx.send(()).map_err(|error| error.to_string())?;
+                release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                Ok(())
+            },
+        )
+        .expect("hex-copy fixture submits its first operation");
 
-        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("hex-copy worker announces that it started");
         assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
-        release_tx.send(()).unwrap();
+        release_tx
+            .send(())
+            .expect("hex-copy fixture retains its worker receiver");
         assert!(
-            wake.wait_readable(Some(Duration::from_secs(1))).unwrap(),
+            wake.wait_readable(Some(Duration::from_secs(1)))
+                .expect("hex-copy fixture polls its valid runtime eventfd"),
             "hex copy completion did not wake the event loop"
         );
         assert!(matches!(
@@ -335,51 +409,123 @@ mod tests {
     }
 
     #[test]
+    fn hex_paste_submission_stays_off_the_event_thread_until_completion() {
+        let wake = RuntimeWakeSource::new().expect("hex-paste fixture creates a runtime eventfd");
+        let mut ids = ClipboardOperationIdSource::new();
+        let mut controller = ClipboardOperationController::new(
+            wake.try_sender()
+                .expect("hex-paste fixture duplicates its runtime eventfd"),
+        );
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+
+        submit_hex_paste(
+            &mut ids,
+            &mut controller,
+            HexPasteTarget::ActiveTool,
+            move || {
+                started_tx.send(()).map_err(|error| error.to_string())?;
+                release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                Ok(Some("#123456".to_string()))
+            },
+        )
+        .expect("hex-paste fixture submits its operation");
+
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("hex-paste worker announces that it started");
+        assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
+        release_tx
+            .send(())
+            .expect("hex-paste fixture retains its worker receiver");
+        assert!(
+            wake.wait_readable(Some(Duration::from_secs(1)))
+                .expect("hex-paste fixture polls its valid runtime eventfd")
+        );
+        assert!(matches!(
+            controller.poll(),
+            ClipboardPoll::Ready {
+                context: HexPasteTarget::ActiveTool,
+                outcome: Ok(Some(text)),
+                ..
+            } if text == "#123456"
+        ));
+    }
+
+    #[test]
     fn active_hex_copy_retains_only_the_newest_pending_request() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+        let wake =
+            RuntimeWakeSource::new().expect("pending hex-copy fixture creates a runtime eventfd");
+        let mut ids = ClipboardOperationIdSource::new();
+        let mut controller = ClipboardOperationController::new(
+            wake.try_sender()
+                .expect("pending hex-copy fixture duplicates its runtime eventfd"),
+        );
         let mut pending = None;
         let (first_started_tx, first_started_rx) = mpsc::channel();
         let (first_release_tx, first_release_rx) = mpsc::channel();
 
         queue_latest_clipboard_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             "#111111".to_string(),
             move |hex| {
                 assert_eq!(hex, "#111111");
-                first_started_tx.send(()).unwrap();
+                first_started_tx
+                    .send(())
+                    .map_err(|error| error.to_string())?;
                 first_release_rx
                     .recv_timeout(Duration::from_secs(1))
                     .map_err(|error| error.to_string())?;
                 Ok(())
             },
         )
-        .unwrap();
+        .expect("pending hex-copy fixture submits its active operation");
         first_started_rx
             .recv_timeout(Duration::from_secs(1))
-            .unwrap();
+            .expect("active hex-copy worker announces that it started");
 
+        let (unexpected_tx, unexpected_rx) = mpsc::channel();
+        let second_unexpected_tx = unexpected_tx.clone();
         queue_latest_clipboard_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             "#222222".to_string(),
-            |_| -> Result<(), String> { panic!("busy submission must not run") },
+            move |_| {
+                let _ = second_unexpected_tx.send("second");
+                Ok(())
+            },
         )
-        .unwrap();
+        .expect("busy hex-copy fixture queues its second request");
         queue_latest_clipboard_copy(
+            &mut ids,
             &mut controller,
             &mut pending,
             "#333333".to_string(),
-            |_| -> Result<(), String> { panic!("busy submission must not run") },
+            move |_| {
+                let _ = unexpected_tx.send("newest");
+                Ok(())
+            },
         )
-        .unwrap();
+        .expect("busy hex-copy fixture replaces its pending request");
+        assert!(matches!(
+            unexpected_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected)
+        ));
         assert_eq!(pending.as_deref(), Some("#333333"));
         assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
 
-        first_release_tx.send(()).unwrap();
-        assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
+        first_release_tx
+            .send(())
+            .expect("pending hex-copy fixture retains its first worker receiver");
+        assert!(
+            wake.wait_readable(Some(Duration::from_secs(1)))
+                .expect("pending hex-copy fixture polls its valid runtime eventfd")
+        );
         assert!(matches!(
             controller.poll(),
             ClipboardPoll::Ready {
@@ -391,24 +537,36 @@ mod tests {
 
         let (newest_started_tx, newest_started_rx) = mpsc::channel();
         let (newest_release_tx, newest_release_rx) = mpsc::channel();
-        submit_pending_clipboard_copy_if_idle(&mut controller, &mut pending, move |hex| {
-            newest_started_tx.send(hex.to_string()).unwrap();
-            newest_release_rx
-                .recv_timeout(Duration::from_secs(1))
-                .map_err(|error| error.to_string())?;
-            Ok(())
-        })
-        .unwrap();
+        submit_pending_clipboard_copy_if_idle(
+            &mut ids,
+            &mut controller,
+            &mut pending,
+            move |hex| {
+                newest_started_tx
+                    .send(hex.to_string())
+                    .map_err(|error| error.to_string())?;
+                newest_release_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                Ok(())
+            },
+        )
+        .expect("pending hex-copy fixture submits its newest request");
         assert_eq!(pending, None);
         assert_eq!(
             newest_started_rx
                 .recv_timeout(Duration::from_secs(1))
-                .unwrap(),
+                .expect("newest hex-copy worker announces its request"),
             "#333333"
         );
 
-        newest_release_tx.send(()).unwrap();
-        assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
+        newest_release_tx
+            .send(())
+            .expect("pending hex-copy fixture retains its newest worker receiver");
+        assert!(
+            wake.wait_readable(Some(Duration::from_secs(1)))
+                .expect("newest hex-copy fixture polls its valid runtime eventfd")
+        );
         assert!(matches!(
             controller.poll(),
             ClipboardPoll::Ready {

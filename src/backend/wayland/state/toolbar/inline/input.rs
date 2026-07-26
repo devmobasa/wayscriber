@@ -12,21 +12,27 @@ impl WaylandState {
         }
         if self.toolbar.is_top_visible()
             && point_in_surface(self.data.inline_top_rect, position)
-            && let Some(intent) = self
-                .data
-                .inline_top_hits
-                .iter()
-                .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+            && let Some(intent) = self.data.inline_top_hits.iter().find_map(|hit| {
+                intent_for_hit_with_color_logging(
+                    hit,
+                    position.0,
+                    position.1,
+                    self.runtime_options.debug_toolbar_color_logging(),
+                )
+            })
         {
             return Some(intent);
         }
         if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
         {
-            return self
-                .data
-                .inline_side_hits
-                .iter()
-                .find_map(|hit| intent_for_hit(hit, position.0, position.1));
+            return self.data.inline_side_hits.iter().find_map(|hit| {
+                intent_for_hit_with_color_logging(
+                    hit,
+                    position.0,
+                    position.1,
+                    self.runtime_options.debug_toolbar_color_logging(),
+                )
+            });
         }
         None
     }
@@ -90,21 +96,27 @@ impl WaylandState {
         }
         if self.toolbar.is_top_visible()
             && point_in_surface(self.data.inline_top_rect, position)
-            && let Some(intent) = self
-                .data
-                .inline_top_hits
-                .iter()
-                .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+            && let Some(intent) = self.data.inline_top_hits.iter().find_map(|hit| {
+                drag_intent_for_hit_with_color_logging(
+                    hit,
+                    position.0,
+                    position.1,
+                    self.runtime_options.debug_toolbar_color_logging(),
+                )
+            })
         {
             return Some(intent);
         }
         if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
         {
-            return self
-                .data
-                .inline_side_hits
-                .iter()
-                .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1));
+            return self.data.inline_side_hits.iter().find_map(|hit| {
+                drag_intent_for_hit_with_color_logging(
+                    hit,
+                    position.0,
+                    position.1,
+                    self.runtime_options.debug_toolbar_color_logging(),
+                )
+            });
         }
         None
     }
@@ -205,7 +217,7 @@ impl WaylandState {
         }
         if let Some((intent, drag)) = self.inline_toolbar_hit_at(position) {
             if drag {
-                drag_log(format!(
+                self.runtime_options.drag_log(format!(
                     "inline press: drag_start pos=({:.3}, {:.3})",
                     position.0, position.1
                 ));
@@ -267,7 +279,7 @@ impl WaylandState {
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
             }
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "inline release: pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                 position.0,
                 position.1,

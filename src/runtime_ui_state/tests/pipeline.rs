@@ -17,9 +17,10 @@ fn contradictory_post_claim_restoration_is_rejected_without_settling() {
         });
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(
-            PipelineProtocolError::ContradictoryPostClaimObservation
-        )
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::ContradictoryPostClaimObservation,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -47,9 +48,10 @@ fn restored_managed_path_cannot_be_reported_as_a_recovery_artifact() {
         });
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(
-            PipelineProtocolError::ContradictoryPostClaimObservation
-        )
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::ContradictoryPostClaimObservation,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -71,7 +73,10 @@ fn inconsistent_conflict_observation_is_rejected_without_settling() {
         });
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(PipelineProtocolError::InconsistentSourceObservation)
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::InconsistentSourceObservation,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -89,7 +94,10 @@ fn conflict_matching_the_expected_source_is_rejected_without_settling() {
         });
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(PipelineProtocolError::ConflictMatchedExpectedSource)
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::ConflictMatchedExpectedSource,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -112,7 +120,10 @@ fn applied_source_from_another_path_is_rejected_without_settling() {
 
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(PipelineProtocolError::AppliedSourcePathMismatch)
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::AppliedSourcePathMismatch,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -135,9 +146,10 @@ fn retained_post_claim_path_must_name_a_reported_artifact() {
         });
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(
-            PipelineProtocolError::RetainedRecoveryArtifactMissing
-        )
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::RetainedRecoveryArtifactMissing,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -162,9 +174,10 @@ fn known_untouched_failure_cannot_report_recovery_artifacts() {
     });
     assert!(matches!(
         result,
-        SubmitSourceMutationResult::Rejected(
-            PipelineProtocolError::UntouchedResultReportedRecoveryArtifacts
-        )
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::UntouchedResultReportedRecoveryArtifacts,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());
@@ -194,6 +207,41 @@ fn rapid_non_coalesced_writes_chain_acknowledged_revisions() {
         controller.receipt(second),
         Some(&DurabilityOutcome::Persisted { source: revision_b })
     );
+}
+
+#[test]
+fn post_integration_resume_failure_terminalizes_pending_receipts() -> Result<(), &'static str> {
+    let mut controller = controller();
+    let first = commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
+    let Some(request) = controller.take_source_mutation() else {
+        return Err("fixture must dispatch the first replacement");
+    };
+    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    controller.pipeline.exhaust_mutation_id_for_test();
+
+    assert!(matches!(
+        controller.submit_source_mutation(SourceMutationResult::Applied {
+            id: request.id,
+            applied_through: request.accepted_through,
+            new_source: present_revision("first-persisted"),
+            recovery_artifacts: Vec::new(),
+        }),
+        SubmitSourceMutationResult::Terminalized {
+            error: PipelineProtocolError::MutationIdExhausted,
+            ..
+        }
+    ));
+    assert!(matches!(
+        controller.receipt(first),
+        Some(DurabilityOutcome::Persisted { .. })
+    ));
+    assert!(matches!(
+        controller.receipt(second),
+        Some(DurabilityOutcome::Failed(_))
+    ));
+    assert!(controller.active_barrier().is_none());
+    assert!(controller.shutdown_complete());
+    Ok(())
 }
 
 #[test]
@@ -344,7 +392,10 @@ fn duplicate_or_stale_source_ack_does_not_advance_stable_revision() {
     };
     assert!(matches!(
         controller.submit_source_mutation(wrong),
-        SubmitSourceMutationResult::Rejected(PipelineProtocolError::WrongMutationId { .. })
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::WrongMutationId { .. },
+            ..
+        }
     ));
     assert_eq!(controller.pipeline().stable_source(), &missing_revision());
     assert!(matches!(
@@ -357,7 +408,10 @@ fn duplicate_or_stale_source_ack_does_not_advance_stable_revision() {
     );
     assert!(matches!(
         apply_request(&mut controller, &request, present_revision("duplicate")),
-        SubmitSourceMutationResult::Rejected(PipelineProtocolError::NoMutationInFlight)
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::NoMutationInFlight,
+            ..
+        }
     ));
     assert_eq!(
         controller.pipeline().stable_source(),
@@ -376,7 +430,10 @@ fn source_ack_before_dispatch_and_completion_without_recovery_are_rejected() {
         .clone();
     assert!(matches!(
         apply_request(&mut controller, &request, present_revision("too-early")),
-        SubmitSourceMutationResult::Rejected(PipelineProtocolError::MutationNotDispatched)
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::MutationNotDispatched,
+            ..
+        }
     ));
     assert_eq!(controller.receipt(through), None);
     assert!(controller.take_source_mutation().is_some());
@@ -408,9 +465,10 @@ fn replacement_acknowledgement_requires_a_present_source() {
             new_source: missing_revision(),
             recovery_artifacts: Vec::new(),
         }),
-        SubmitSourceMutationResult::Rejected(
-            PipelineProtocolError::ReplaceDidNotProducePresentSource
-        )
+        SubmitSourceMutationResult::RejectedUnconsumed {
+            error: PipelineProtocolError::ReplaceDidNotProducePresentSource,
+            ..
+        }
     ));
     assert!(controller.pipeline().has_source_mutation_in_flight());
     assert!(controller.receipt(through).is_none());

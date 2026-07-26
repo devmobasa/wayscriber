@@ -75,13 +75,9 @@ fn recovery_payload(
     let full_started = Instant::now();
     let full_payload = payload_candidate(snapshot, options, last_modified)?;
     log_payload_candidate("recovery full", &full_payload, full_started.elapsed());
-    if full_payload.fits_expanded_limit(max_expanded_size) {
+    let Some(full_limit) = full_payload.expanded_limit_exceeded(max_expanded_size) else {
         return Ok(Some((full_payload, SaveSnapshotOutcome::Full)));
-    }
-
-    let full_limit = full_payload
-        .expanded_limit_exceeded(max_expanded_size)
-        .expect("full recovery payload should exceed expanded limit");
+    };
     warn!(
         "Full session recovery payload cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); trying visible data without undo/redo history",
         full_limit.description(),
@@ -101,13 +97,9 @@ fn recovery_payload(
         &visible_payload,
         visible_started.elapsed(),
     );
-    if visible_payload.fits_expanded_limit(max_expanded_size) {
+    let Some(visible_limit) = visible_payload.expanded_limit_exceeded(max_expanded_size) else {
         return Ok(Some((visible_payload, SaveSnapshotOutcome::VisibleOnly)));
-    }
-
-    let visible_limit = visible_payload
-        .expanded_limit_exceeded(max_expanded_size)
-        .expect("visible recovery payload should exceed expanded limit");
+    };
     Err(anyhow!(
         "Session recovery data cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping recovery",
         visible_limit.description(),

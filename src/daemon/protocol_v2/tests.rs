@@ -166,60 +166,49 @@ fn fail_stop_has_a_non_returning_signature() {
 
 #[test]
 fn only_an_identified_internal_overlay_can_claim_daemon_actions() {
-    let _environment = crate::test_env::lock();
     let temp = crate::test_temp::tempdir().unwrap();
-    let previous_runtime = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
-    let previous_generation = std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV);
-    // SAFETY: serialized by the test environment mutex.
-    unsafe {
-        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
-        std::env::remove_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV);
-    }
+    let paths =
+        crate::paths::PathResolver::from_environment(crate::paths::PathEnvironment::for_test(&[(
+            crate::env_vars::XDG_RUNTIME_DIR_ENV,
+            temp.path().as_os_str(),
+        )]));
+    let runtime_paths = crate::paths::PreparedRuntimePaths::prepare(&paths).unwrap();
+    let root = runtime_paths.protocol_v2_root();
     let token = ProtocolToken::generate().unwrap();
     let token_text = token.to_string();
-    let _owner = CommandOwner::open(&token_text).unwrap();
-    let journal = ActionJournal::open().unwrap();
+    let _owner = CommandOwner::open(&token_text, root.clone()).unwrap();
+    let journal = ActionJournal::open(root.clone()).unwrap();
     journal
         .publish_anonymous(&token_text, crate::tray_action::TrayAction::ToggleFreeze)
         .unwrap();
     let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
-    write_runtime_record_v2(&crate::paths::daemon_pid_file(), &runtime).unwrap();
+    write_runtime_record_v2(&runtime_paths.daemon_pid_file(), &runtime).unwrap();
 
     assert!(matches!(
-        try_claim_overlay_action().unwrap(),
+        try_claim_overlay_action_for_generation(&runtime_paths, None).unwrap(),
         ActionClaimOutcome::Idle
     ));
 
     let generation = ProtocolId::generate().unwrap().to_string();
-    // SAFETY: serialized by the test environment mutex.
-    unsafe {
-        std::env::set_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV, &generation);
-    }
-    publish_ready_from_environment().unwrap();
+    child::publish_ready_for_test(&root, &generation).unwrap();
     let started = std::time::Instant::now();
     assert!(matches!(
-        try_claim_overlay_action().unwrap(),
+        try_claim_overlay_action_for_generation(&runtime_paths, Some(&generation)).unwrap(),
         ActionClaimOutcome::Deferred
     ));
     assert!(
         started.elapsed() < std::time::Duration::from_millis(100),
         "missing enable proof blocked instead of deferring"
     );
-    child::enable_current_generation_for_test(&token_text).unwrap();
-    let ActionClaimOutcome::Claimed(action) = try_claim_overlay_action().unwrap() else {
-        panic!("enabled overlay should claim the durable action");
+    child::enable_current_generation_for_test(&root, &generation, &token_text).unwrap();
+    let outcome =
+        try_claim_overlay_action_for_generation(&runtime_paths, Some(&generation)).unwrap();
+    let ActionClaimOutcome::Claimed(action) = outcome else {
+        assert!(
+            matches!(outcome, ActionClaimOutcome::Claimed(_)),
+            "enabled overlay should claim the durable action"
+        );
+        return;
     };
     action.finish(true, None).unwrap();
-
-    // SAFETY: this test still holds the environment mutex.
-    unsafe {
-        match previous_runtime {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
-        }
-        match previous_generation {
-            Some(value) => std::env::set_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV, value),
-            None => std::env::remove_var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV),
-        }
-    }
 }

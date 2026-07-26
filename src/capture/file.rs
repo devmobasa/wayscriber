@@ -2,7 +2,7 @@
 
 use super::types::CaptureError;
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
-use crate::paths::{expand_tilde as expand_tilde_global, home_dir, pictures_dir};
+use crate::paths::{PathCapability, PathResolver};
 use crate::time_utils::{format_with_template, now_local};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,16 +18,37 @@ pub struct FileSaveConfig {
     pub format: String,
 }
 
+#[cfg(test)]
 impl Default for FileSaveConfig {
     fn default() -> Self {
         Self {
-            save_directory: pictures_dir()
-                .or_else(|| home_dir().map(|home| home.join("Pictures")))
-                .unwrap_or_else(|| PathBuf::from("~"))
-                .join("Wayscriber"),
+            save_directory: PathBuf::from("/tmp/wayscriber-capture-fixture"),
             filename_template: "screenshot_%Y-%m-%d_%H%M%S".to_string(),
             format: "png".to_string(),
         }
+    }
+}
+
+impl FileSaveConfig {
+    pub fn from_user_config(
+        paths: &PathResolver,
+        save_directory: &str,
+        filename_template: String,
+        format: String,
+    ) -> Result<Self, CaptureError> {
+        let save_directory = paths
+            .require_absolute_user_path(save_directory, PathCapability::Pictures)
+            .map_err(|error| match error {
+                crate::paths::PathResolutionError::RelativeUserPath { value, .. } => {
+                    CaptureError::InvalidDestination(value)
+                }
+                other => CaptureError::ImageError(other.to_string()),
+            })?;
+        Ok(Self {
+            save_directory,
+            filename_template,
+            format,
+        })
     }
 }
 
@@ -82,6 +103,9 @@ fn generate_file_path(directory: &Path, template: &str, format: &str) -> PathBuf
 /// # Returns
 /// The canonicalized path to the directory
 pub fn ensure_directory_exists(directory: &Path) -> Result<PathBuf, CaptureError> {
+    if !directory.is_absolute() {
+        return Err(CaptureError::InvalidDestination(directory.to_path_buf()));
+    }
     if !directory.exists() {
         log::info!("Creating screenshot directory: {}", directory.display());
         fs::create_dir_all(directory)?;
@@ -142,11 +166,6 @@ pub fn save_screenshot(
     Ok(file_path)
 }
 
-/// Expand tilde (~) in path strings.
-pub fn expand_tilde(path: &str) -> PathBuf {
-    expand_tilde_global(path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,27 +177,6 @@ mod tests {
         assert!(filename.ends_with(".png"));
         // Check that it contains a valid date (4 digits for year)
         assert!(filename.contains("202")); // Assuming we're in the 2020s
-    }
-
-    #[test]
-    fn test_expand_tilde() {
-        let expanded = expand_tilde("~/Pictures");
-        assert!(!expanded.to_string_lossy().starts_with("~"));
-
-        let no_tilde = expand_tilde("/absolute/path");
-        assert_eq!(no_tilde, PathBuf::from("/absolute/path"));
-    }
-
-    #[test]
-    fn test_default_config() {
-        let config = FileSaveConfig::default();
-        assert_eq!(config.format, "png");
-        assert!(
-            config
-                .save_directory
-                .to_string_lossy()
-                .contains("Wayscriber")
-        );
     }
 
     #[test]

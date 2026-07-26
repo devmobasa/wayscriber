@@ -126,7 +126,7 @@ impl RuntimeUiStateStore {
                 id,
                 format!("runtime-state replacement has an uncertain durability outcome: {error}"),
                 self.inspect().ok().map(|inspection| inspection.observation),
-                artifact_for(quarantine, claimed),
+                artifact_for(&quarantine, claimed),
                 RuntimeStateFailurePathEffect::UnknownAfterMutation,
             );
         }
@@ -141,7 +141,7 @@ impl RuntimeUiStateStore {
                         error.message()
                     ),
                     None,
-                    artifact_for(quarantine, claimed),
+                    artifact_for(&quarantine, claimed),
                     RuntimeStateFailurePathEffect::UnknownAfterMutation,
                 );
             }
@@ -156,7 +156,7 @@ impl RuntimeUiStateStore {
 
         let cleanup_artifact = match store_fs::remove_file(&quarantine) {
             Ok(()) => Vec::new(),
-            Err(_) => artifact_for(quarantine.clone(), claimed),
+            Err(_) => artifact_for(&quarantine, claimed),
         };
         if let Err(error) = target.operation_path.sync_parent() {
             return failed(

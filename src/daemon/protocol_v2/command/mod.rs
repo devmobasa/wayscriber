@@ -20,8 +20,6 @@ pub(super) use action_link::{
     CommandActionClaim, CommandActionResult, finish_command_action,
     finish_command_action_indeterminate, try_claim_command_action, try_finish_command_action,
 };
-pub(crate) use layout::command_root;
-
 #[cfg(test)]
 pub(crate) use layout::prepare_layout;
 

@@ -86,24 +86,19 @@ fn remove_known_content(
     for key in known_keys(previous, updated, None) {
         let previous_item = previous.and_then(|table| table.get(&key));
         let updated_item = updated.get(&key);
-        let known_tables = previous_item
-            .into_iter()
-            .chain(updated_item)
-            .filter_map(Item::as_table_like)
-            .collect::<Vec<_>>();
         let all_known_items_are_tables = previous_item
             .into_iter()
             .chain(updated_item)
             .all(|item| item.as_table_like().is_some());
+        let removal_table = updated_item
+            .and_then(Item::as_table_like)
+            .or_else(|| previous_item.and_then(Item::as_table_like));
 
         if all_known_items_are_tables
+            && let Some(updated_table) = removal_table
             && let Some(raw_table) = raw.get_mut(&key).and_then(Item::as_table_like_mut)
         {
             let previous_table = previous_item.and_then(Item::as_table_like);
-            let updated_table = updated_item
-                .and_then(Item::as_table_like)
-                .or_else(|| known_tables.first().copied())
-                .expect("a known table-like item is available");
             remove_known_content(raw_table, previous_table, updated_table);
         } else {
             raw.remove(&key);
@@ -252,9 +247,9 @@ fn changed_item(previous: Option<&Item>, updated: &Item, path: &str) -> Option<I
         return Some(updated.clone());
     };
     let mut changed = updated.clone();
-    let changed_table = changed
-        .as_table_like_mut()
-        .expect("a cloned table-like item remains table-like");
+    let Some(changed_table) = changed.as_table_like_mut() else {
+        return Some(updated.clone());
+    };
     changed_table.clear();
     merge_table_like(
         changed_table,
@@ -371,10 +366,7 @@ fn merge_value(
             while raw.len() > updated.len() {
                 raw.remove(raw.len() - 1);
             }
-            for index in 0..updated.len() {
-                let updated_value = updated
-                    .get(index)
-                    .expect("array index is bounded by updated length");
+            for (index, updated_value) in updated.iter().enumerate() {
                 if let Some(raw_value) = raw.get_mut(index) {
                     merge_value(
                         raw_value,
@@ -514,10 +506,14 @@ fn merge_array_of_tables(
     let mut rebuilt = ArrayOfTables::new();
 
     for (index, updated_table) in updated_tables.iter().copied().enumerate() {
-        let previous_table = matches.updated_previous[index]
+        let previous_table = matches
+            .updated_previous
+            .get(index)
+            .copied()
+            .flatten()
             .and_then(|index| previous_tables.get(index).copied())
             .map(|table| table as _);
-        let raw_index = matches.raw_for_updated[index];
+        let raw_index = matches.raw_for_updated.get(index).copied().flatten();
         let original_table = raw_index
             .and_then(|index| available.get(index))
             .and_then(Option::as_ref)
@@ -567,17 +563,24 @@ fn retained_table_position(
     raw_positions: &[Option<isize>],
     group_position: Option<isize>,
 ) -> Option<isize> {
-    raw_for_updated[updated_index]
+    let Some((before, current_and_after)) = raw_for_updated.split_at_checked(updated_index) else {
+        return group_position;
+    };
+    let Some((current, after)) = current_and_after.split_first() else {
+        return group_position;
+    };
+
+    current
         .and_then(|index| raw_positions.get(index).copied().flatten())
         .or_else(|| {
-            raw_for_updated[..updated_index]
+            before
                 .iter()
                 .rev()
                 .flatten()
                 .find_map(|index| raw_positions.get(*index).copied().flatten())
         })
         .or_else(|| {
-            raw_for_updated[updated_index + 1..]
+            after
                 .iter()
                 .flatten()
                 .find_map(|index| raw_positions.get(*index).copied().flatten())
@@ -768,23 +771,30 @@ fn merge_inline_array_of_tables(
     let mut available = raw_values.into_iter().map(Some).collect::<Vec<_>>();
     let mut rebuilt = Vec::with_capacity(updated_values.len() + matches.preserved_raw.len());
 
-    for (index, updated_value) in updated_values.iter().copied().enumerate() {
-        let previous_table =
-            matches.updated_previous[index].and_then(|index| previous_tables.get(index).copied());
-        let mut merged_value = matches.raw_for_updated[index]
+    for (index, (updated_value, updated_table)) in updated_values
+        .iter()
+        .copied()
+        .zip(updated_tables.iter().copied())
+        .enumerate()
+    {
+        let previous_table = matches
+            .updated_previous
+            .get(index)
+            .copied()
+            .flatten()
+            .and_then(|index| previous_tables.get(index).copied());
+        let mut merged_value = matches
+            .raw_for_updated
+            .get(index)
+            .copied()
+            .flatten()
             .and_then(|index| available.get_mut(index))
             .and_then(Option::take)
             .unwrap_or_else(|| updated_value.clone());
-        let merged_table = merged_value
-            .as_inline_table_mut()
-            .expect("validated inline-table array contains inline tables");
-        merge_table_like(
-            merged_table,
-            previous_table,
-            updated_tables[index],
-            None,
-            path,
-        );
+        let Some(merged_table) = merged_value.as_inline_table_mut() else {
+            return false;
+        };
+        merge_table_like(merged_table, previous_table, updated_table, None, path);
         rebuilt.push(merged_value);
     }
     for index in matches.preserved_raw {

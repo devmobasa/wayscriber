@@ -117,7 +117,7 @@ pub(crate) fn decode_standard(encoded: &str) -> Result<Vec<u8>, DecodeError> {
             decoded.push((a << 2) | (b >> 4));
             decoded.push((b << 4) | (c >> 2));
         }
-        _ => unreachable!("base64 remainder length was checked"),
+        _ => return Err(DecodeError::InvalidLength),
     }
 
     Ok(decoded)
@@ -170,38 +170,43 @@ mod tests {
         ];
 
         for (encoded, decoded) in vectors {
-            assert_eq!(decode_standard(encoded).unwrap(), decoded);
+            assert_eq!(
+                decode_standard(encoded)
+                    .expect("fixture supplies canonical padded standard base64"),
+                decoded
+            );
         }
     }
 
     #[test]
     fn rejects_invalid_base64() {
         assert_eq!(
-            decode_standard("A").unwrap_err(),
+            decode_standard("A").expect_err("fixture supplies an invalid one-symbol base64 value"),
             DecodeError::InvalidLength
         );
         assert_eq!(
-            decode_standard("Zg").unwrap_err(),
+            decode_standard("Zg").expect_err("fixture omits the required two-symbol padding"),
             DecodeError::InvalidPadding
         );
         assert_eq!(
-            decode_standard("Zm8").unwrap_err(),
+            decode_standard("Zm8").expect_err("fixture omits the required one-symbol padding"),
             DecodeError::InvalidPadding
         );
         assert_eq!(
-            decode_standard("A===").unwrap_err(),
+            decode_standard("A===").expect_err("fixture supplies excess base64 padding"),
             DecodeError::InvalidPadding
         );
         assert_eq!(
-            decode_standard("AA=A").unwrap_err(),
+            decode_standard("AA=A").expect_err("fixture places data after base64 padding"),
             DecodeError::InvalidPadding
         );
         assert_eq!(
-            decode_standard("Zg=A").unwrap_err(),
+            decode_standard("Zg=A").expect_err("fixture places data after base64 padding"),
             DecodeError::InvalidPadding
         );
         assert_eq!(
-            decode_standard("AB==").unwrap_err(),
+            decode_standard("AB==")
+                .expect_err("fixture supplies non-canonical trailing base64 bits"),
             DecodeError::NonCanonicalTrailingBits
         );
     }

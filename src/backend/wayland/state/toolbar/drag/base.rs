@@ -53,7 +53,7 @@ impl WaylandState {
             || self.toolbar_dragging()
             || self.data.gtk_drag_preview.is_some()
         {
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "inline_top_base_x: base={:.3}, side_visible={}, side_width={:.3}, side_start_y={:.3}, top_bottom_y={:.3}, allow_push={}, result={:.3}",
                 base,
                 side_visible,
@@ -80,7 +80,7 @@ impl WaylandState {
             return;
         }
         self.data.toolbar_top_offset += delta;
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "end move drag: preserve top position, old_base_x={old_base_x:.3}, new_base_x={new_base_x:.3}, delta={delta:.3}, top_offset=({}, {})",
             self.data.toolbar_top_offset, self.data.toolbar_top_offset_y,
         ));

@@ -15,7 +15,6 @@ pub use png::{BoardExportSnapshot, CanvasExportSnapshot, CanvasExportViewport, r
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
     use super::*;
     use crate::canvas_export::page::draw_canvas_page;
@@ -407,7 +406,7 @@ mod tests {
             },
         );
         export.backdrop = CanvasExportBackdropSnapshot::PersistedImage {
-            data: Arc::from(data),
+            data,
             width,
             height,
             stride,
@@ -433,7 +432,7 @@ mod tests {
             },
         );
         export.backdrop = CanvasExportBackdropSnapshot::PersistedImage {
-            data: Arc::from(vec![0u8; 8]),
+            data: vec![0u8; 8],
             width: 4,
             height: 4,
             stride: 16,

@@ -49,12 +49,17 @@ impl RuntimeUiModel {
         guards: &[SeedGuard],
         desired: &RuntimeUiMutationValues,
     ) -> bool {
+        if guards
+            .iter()
+            .any(|guard| !desired.values.contains_key(&guard.target))
+        {
+            return false;
+        }
         let before = self.clone();
         for guard in guards {
-            let value = desired
-                .values
-                .get(&guard.target)
-                .expect("mutation values validated against permit scope");
+            let Some(value) = desired.values.get(&guard.target) else {
+                continue;
+            };
             if value == &guard.normalized_seed {
                 self.overrides.remove(&guard.target);
             } else {
@@ -142,12 +147,17 @@ impl RuntimeUiLiveOnlyOverlay {
         guards: &[SeedGuard],
         desired: &RuntimeUiMutationValues,
     ) -> bool {
+        if guards
+            .iter()
+            .any(|guard| !desired.values.contains_key(&guard.target))
+        {
+            return false;
+        }
         let before = self.clone();
         for guard in guards {
-            let value = desired
-                .values
-                .get(&guard.target)
-                .expect("live-only values validated against guard scope");
+            let Some(value) = desired.values.get(&guard.target) else {
+                continue;
+            };
             if value == &guard.normalized_seed {
                 self.values.remove(&guard.target);
             } else {
@@ -245,6 +255,17 @@ pub(crate) struct RuntimeUiMutationValues {
 }
 
 impl RuntimeUiMutationValues {
+    pub(crate) fn board_pin(board_id: String, value: bool) -> Self {
+        Self {
+            values: [(
+                InteractionSeedTarget::BoardPin(board_id),
+                InteractionSeedValue::Bool(value),
+            )]
+            .into_iter()
+            .collect(),
+        }
+    }
+
     pub(crate) fn one(
         target: InteractionSeedTarget,
         value: InteractionSeedValue,

@@ -55,8 +55,10 @@ fn merge_keybinding_edit(
 
 fn load_and_merge_keybinding_edit(
     request: &KeybindingEditRequest,
+    config_store: &crate::config::ConfigStore,
 ) -> Result<Config, PrepareKeybindingEditError> {
-    let mut config = Config::load_unvalidated()
+    let mut config = config_store
+        .load_unvalidated()
         .map_err(PrepareKeybindingEditError::Load)?
         .config;
     config.apply_keybinding_migrations();
@@ -83,10 +85,13 @@ impl WaylandState {
         &mut self,
         request: KeybindingEditRequest,
     ) {
-        let next = match load_and_merge_keybinding_edit(&request) {
+        let next = match load_and_merge_keybinding_edit(&request, &self.config_store) {
             Ok(config) => config,
             Err(PrepareKeybindingEditError::Load(err)) => {
-                log::warn!("Failed to reload config before keybinding edit: {err}");
+                self.logger.warn(
+                    "wayscriber::keybindings",
+                    format!("Failed to reload config before keybinding edit: {err}"),
+                );
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     "keybindings",
@@ -138,8 +143,11 @@ impl WaylandState {
                 return;
             }
         };
-        if let Err(err) = next.save() {
-            log::warn!("Failed to save keybinding edit: {err}");
+        if let Err(err) = self.config_store.save(&next) {
+            self.logger.warn(
+                "wayscriber::keybindings",
+                format!("Failed to save keybinding edit: {err}"),
+            );
             self.input_state.push_toast(
                 ToastPriority::Critical,
                 "keybindings",
@@ -176,6 +184,7 @@ mod tests {
     #[test]
     fn editing_a_reloaded_config_preserves_unrelated_external_changes() {
         crate::config::test_helpers::with_temp_config_home(|config_root| {
+            let store = crate::config::test_helpers::test_config_store(config_root);
             let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).unwrap();
             fs::write(
@@ -184,10 +193,15 @@ mod tests {
             )
             .unwrap();
 
-            let merged = load_and_merge_keybinding_edit(&KeybindingEditRequest {
-                action: Action::SelectPenTool,
-                operation: KeybindingEditOperation::Replace(vec!["Ctrl+Alt+Shift+K".to_string()]),
-            })
+            let merged = load_and_merge_keybinding_edit(
+                &KeybindingEditRequest {
+                    action: Action::SelectPenTool,
+                    operation: KeybindingEditOperation::Replace(vec![
+                        "Ctrl+Alt+Shift+K".to_string(),
+                    ]),
+                },
+                &store,
+            )
             .unwrap_or_else(|_| panic!("reload and merge should succeed"));
 
             assert!(!merged.ui.show_status_bar);
@@ -257,6 +271,7 @@ mod tests {
     #[test]
     fn repairing_an_invalid_disk_keymap_preserves_unrelated_shortcuts() {
         crate::config::test_helpers::with_temp_config_home(|config_root| {
+            let store = crate::config::test_helpers::test_config_store(config_root);
             let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).unwrap();
             fs::write(
@@ -265,16 +280,17 @@ mod tests {
             )
             .unwrap();
 
-            let repaired = load_and_merge_keybinding_edit(&KeybindingEditRequest {
-                action: Action::ClearCanvas,
-                operation: KeybindingEditOperation::Replace(vec!["Ctrl+L".to_string()]),
-            })
+            let repaired = load_and_merge_keybinding_edit(
+                &KeybindingEditRequest {
+                    action: Action::ClearCanvas,
+                    operation: KeybindingEditOperation::Replace(vec!["Ctrl+L".to_string()]),
+                },
+                &store,
+            )
             .expect("disk-backed repair should succeed");
 
-            repaired.save().expect("repaired config should save");
-            let reloaded = Config::load()
-                .expect("repaired config should reload")
-                .config;
+            store.save(&repaired).expect("repaired config should save");
+            let reloaded = store.load().expect("repaired config should reload").config;
 
             assert_eq!(
                 reloaded
@@ -292,16 +308,20 @@ mod tests {
     #[test]
     fn unrelated_edit_cannot_overwrite_an_invalid_disk_keymap() {
         crate::config::test_helpers::with_temp_config_home(|config_root| {
+            let store = crate::config::test_helpers::test_config_store(config_root);
             let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).unwrap();
             let config_path = config_dir.join("config.toml");
             let original = "config_revision = 1\n\n[keybindings]\nclear_canvas = ['F']\nselect_pen_tool = ['F']\nundo = ['Ctrl+Alt+U']\n";
             fs::write(&config_path, original).unwrap();
 
-            let error = load_and_merge_keybinding_edit(&KeybindingEditRequest {
-                action: Action::Redo,
-                operation: KeybindingEditOperation::Replace(vec!["Ctrl+Alt+R".to_string()]),
-            })
+            let error = load_and_merge_keybinding_edit(
+                &KeybindingEditRequest {
+                    action: Action::Redo,
+                    operation: KeybindingEditOperation::Replace(vec!["Ctrl+Alt+R".to_string()]),
+                },
+                &store,
+            )
             .expect_err("an unrelated edit must not conceal the existing conflict");
 
             assert!(matches!(error, PrepareKeybindingEditError::Edit(_)));

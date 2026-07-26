@@ -1,4 +1,7 @@
-use super::{RuntimeUiStateInspection, RuntimeUiStateStore, fs as store_fs, inspection};
+use super::{
+    RuntimeStateWriterNamespace, RuntimeUiStateInspection, RuntimeUiStateStore, fs as store_fs,
+    inspection,
+};
 use crate::runtime_ui_state::{
     AcceptedStateRevision, RuntimeStateFailurePathEffect, RuntimeStateIoError,
     RuntimeStateObservedPathEffect, RuntimeStatePathIdentity, RuntimeStatePostClaimPathEffect,
@@ -14,12 +17,42 @@ mod result;
 
 use result::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MutationMode {
-    Replace,
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MutationOperation {
+    Replace(Vec<u8>),
     ResetSupported,
     ResetPreservingUnsupported,
     ResetPreservingInvalid,
+}
+
+enum PreparedMutation {
+    Replace {
+        bytes: Vec<u8>,
+        temp: store_fs::CleanupPath,
+    },
+    ResetSupported,
+    ResetPreservingUnsupported,
+    ResetPreservingInvalid,
+}
+
+impl PreparedMutation {
+    fn prepare(
+        operation: MutationOperation,
+        path: &store_fs::PinnedPath,
+        writer_namespace: RuntimeStateWriterNamespace,
+        mutation_id: SourceMutationId,
+    ) -> Result<Self, std::io::Error> {
+        Ok(match operation {
+            MutationOperation::Replace(bytes) => {
+                let temp =
+                    store_fs::create_synced_temp(path, writer_namespace, mutation_id, &bytes)?;
+                Self::Replace { bytes, temp }
+            }
+            MutationOperation::ResetSupported => Self::ResetSupported,
+            MutationOperation::ResetPreservingUnsupported => Self::ResetPreservingUnsupported,
+            MutationOperation::ResetPreservingInvalid => Self::ResetPreservingInvalid,
+        })
+    }
 }
 
 struct ClaimedSource {
@@ -62,8 +95,7 @@ impl RuntimeUiStateStore {
             mutation_id,
             AcceptedStateRevision(0),
             expected,
-            MutationMode::ResetPreservingInvalid,
-            None,
+            MutationOperation::ResetPreservingInvalid,
             &mut |_| {},
         )
     }
@@ -107,8 +139,7 @@ impl RuntimeUiStateStore {
                     id,
                     accepted_through,
                     expected_source,
-                    MutationMode::Replace,
-                    Some(bytes),
+                    MutationOperation::Replace(bytes),
                     hook,
                 )
             }
@@ -116,8 +147,7 @@ impl RuntimeUiStateStore {
                 id,
                 accepted_through,
                 expected_source,
-                MutationMode::ResetSupported,
-                None,
+                MutationOperation::ResetSupported,
                 hook,
             ),
             SourceMutationKind::ResetUnsupportedIfUnchanged {
@@ -134,8 +164,7 @@ impl RuntimeUiStateStore {
                     id,
                     accepted_through,
                     expected_source,
-                    MutationMode::ResetPreservingUnsupported,
-                    None,
+                    MutationOperation::ResetPreservingUnsupported,
                     hook,
                 )
             }
@@ -147,8 +176,7 @@ impl RuntimeUiStateStore {
         id: SourceMutationId,
         applied_through: AcceptedStateRevision,
         expected: RuntimeStateSourceRevision,
-        mode: MutationMode,
-        replacement: Option<Vec<u8>>,
+        operation: MutationOperation,
         hook: &mut dyn FnMut(MutationPoint),
     ) -> SourceMutationResult {
         if expected.path_identity().source_path() != self.path() {
@@ -212,17 +240,19 @@ impl RuntimeUiStateStore {
             expected_path,
         };
 
-        let mut temp = match replacement.as_deref() {
-            Some(bytes) => match store_fs::create_synced_temp(&target.operation_path, bytes) {
-                Ok(temp) => Some(temp),
-                Err(error) => {
-                    return self.failed_untouched(
-                        id,
-                        format!("could not prepare runtime-state write: {error}"),
-                    );
-                }
-            },
-            None => None,
+        let mut prepared = match PreparedMutation::prepare(
+            operation,
+            &target.operation_path,
+            self.writer_namespace,
+            id,
+        ) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                return self.failed_untouched(
+                    id,
+                    format!("could not prepare runtime-state write: {error}"),
+                );
+            }
         };
         let active = match self.inspect() {
             Ok(active) => active,
@@ -234,7 +264,7 @@ impl RuntimeUiStateStore {
                 active: active.observation,
             };
         }
-        if !status_allowed(mode, &active.status) {
+        if !status_allowed(&prepared, &active.status) {
             return failed(
                 id,
                 "runtime-state command is not permitted for the observed file status",
@@ -245,42 +275,45 @@ impl RuntimeUiStateStore {
         }
 
         if expected.bytes().is_none() {
-            return match mode {
-                MutationMode::Replace => self.install_at_missing(
+            return match &mut prepared {
+                PreparedMutation::Replace { bytes, temp } => self.install_at_missing(
                     id,
                     applied_through,
                     &target,
                     PreparedReplacement {
-                        temp: temp.as_mut().expect("replacement temp"),
-                        bytes: replacement.as_deref().expect("replacement bytes"),
+                        temp,
+                        bytes: bytes.as_slice(),
                     },
                     hook,
                 ),
-                MutationMode::ResetSupported => applied(id, applied_through, expected, Vec::new()),
-                MutationMode::ResetPreservingUnsupported | MutationMode::ResetPreservingInvalid => {
-                    failed(
-                        id,
-                        "preserving reset requires a present source",
-                        Some(active.observation),
-                        Vec::new(),
-                        untouched(),
-                    )
+                PreparedMutation::ResetSupported => {
+                    applied(id, applied_through, expected, Vec::new())
                 }
-            };
-        }
-
-        let quarantine = match store_fs::unique_recovery_path(&target.operation_path) {
-            Ok(path) => path,
-            Err(error) => {
-                return failed(
+                PreparedMutation::ResetPreservingUnsupported
+                | PreparedMutation::ResetPreservingInvalid => failed(
                     id,
-                    format!("could not reserve recovery path: {error}"),
+                    "preserving reset requires a present source",
                     Some(active.observation),
                     Vec::new(),
                     untouched(),
-                );
-            }
-        };
+                ),
+            };
+        }
+
+        let quarantine =
+            match store_fs::unique_recovery_path(&target.operation_path, self.writer_namespace, id)
+            {
+                Ok(path) => path,
+                Err(error) => {
+                    return failed(
+                        id,
+                        format!("could not reserve recovery path: {error}"),
+                        Some(active.observation),
+                        Vec::new(),
+                        untouched(),
+                    );
+                }
+            };
         if let Err(error) = store_fs::rename_noreplace(&target.operation_path, &quarantine) {
             let current = self.inspect().ok().map(|inspection| inspection.observation);
             if let Some(ref current) = current
@@ -333,8 +366,8 @@ impl RuntimeUiStateStore {
         }
         claimed.observation.revision = claimed_as_source;
 
-        match mode {
-            MutationMode::Replace => self.install_after_claim(
+        match &mut prepared {
+            PreparedMutation::Replace { bytes, temp } => self.install_after_claim(
                 id,
                 applied_through,
                 &target,
@@ -343,12 +376,12 @@ impl RuntimeUiStateStore {
                     inspection: claimed,
                 },
                 PreparedReplacement {
-                    temp: temp.as_mut().expect("replacement temp"),
-                    bytes: replacement.as_deref().expect("replacement bytes"),
+                    temp,
+                    bytes: bytes.as_slice(),
                 },
                 hook,
             ),
-            MutationMode::ResetSupported => self.finish_reset_after_claim(
+            PreparedMutation::ResetSupported => self.finish_reset_after_claim(
                 id,
                 applied_through,
                 &target,
@@ -359,18 +392,18 @@ impl RuntimeUiStateStore {
                 false,
                 hook,
             ),
-            MutationMode::ResetPreservingUnsupported | MutationMode::ResetPreservingInvalid => self
-                .finish_reset_after_claim(
-                    id,
-                    applied_through,
-                    &target,
-                    ClaimedSource {
-                        quarantine,
-                        inspection: claimed,
-                    },
-                    true,
-                    hook,
-                ),
+            PreparedMutation::ResetPreservingUnsupported
+            | PreparedMutation::ResetPreservingInvalid => self.finish_reset_after_claim(
+                id,
+                applied_through,
+                &target,
+                ClaimedSource {
+                    quarantine,
+                    inspection: claimed,
+                },
+                true,
+                hook,
+            ),
         }
     }
 

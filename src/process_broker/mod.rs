@@ -7,6 +7,7 @@
 mod bootstrap;
 mod client;
 mod execution;
+mod file_reader;
 mod manifest;
 mod server;
 mod transport;
@@ -15,6 +16,11 @@ mod wire;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use client::{BrokerChild, current, start_for_runtime};
+#[cfg(test)]
+pub(crate) use client::start_for_runtime;
+pub(crate) use client::{
+    BrokerChild, PreparedProcessBroker, ProcessBrokerHandle, ProcessBrokerOwner,
+    prepare_for_runtime,
+};
 pub(crate) use server::run_internal_broker_if_requested;
-pub(crate) use wire::{BrokerOutput, HelperKind, HelperLifetime};
+pub(crate) use wire::{BrokerFileRead, BrokerOutput, HelperKind, HelperLifetime};

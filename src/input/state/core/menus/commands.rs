@@ -2,7 +2,7 @@ use super::super::base::{InputState, PasteAnchor};
 use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
 use crate::domain::Action;
 use crate::draw::ShapeId;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{PendingBackendAction, Toast, ToastPriority};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;
 
@@ -356,7 +356,7 @@ impl InputState {
                 self.toggle_command_palette();
             }
             MenuCommand::OpenConfigFile => {
-                self.open_config_file_default();
+                self.set_pending_backend_action(PendingBackendAction::OpenConfigFile);
                 self.close_context_menu();
             }
         }

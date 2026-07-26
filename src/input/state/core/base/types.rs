@@ -21,8 +21,8 @@ use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 use std::time::Instant;
-use std::{ops::Range, sync::Arc};
 
 /// Current drawing mode state machine.
 ///
@@ -127,7 +127,7 @@ pub enum DrawingState {
         start_x: i32,
         start_y: i32,
         /// Snapshots of shapes prior to resizing (for undo/cancel)
-        snapshots: Arc<Vec<(ShapeId, ShapeSnapshot)>>,
+        snapshots: Vec<(ShapeId, ShapeSnapshot)>,
     },
 }
 
@@ -447,6 +447,10 @@ pub enum PendingBackendAction {
     BoardPdfExport(Action),
     ClearSavedToolState,
     EditKeybinding(KeybindingEditRequest),
+    LaunchAbout,
+    LaunchConfigurator,
+    OpenCaptureFolder,
+    OpenConfigFile,
     /// Persist the top-display preference changed by its keyboard action;
     /// toolbar-event paths persist via their exact event-policy target.
     PersistToolbarConfig,

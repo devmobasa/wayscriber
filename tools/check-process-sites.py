@@ -56,8 +56,8 @@ def audit_sites() -> list[str]:
 
 def audit_child_stub() -> list[str]:
     source = (ROOT / BROKER_BOOTSTRAP).read_text()
-    start_marker = "    if pid == 0 {"
-    end_marker = "    drop(child_socket);"
+    start_marker = "    // BEGIN RAW-CLONE CHILD STUB."
+    end_marker = "    // END RAW-CLONE CHILD STUB."
     if start_marker not in source or end_marker not in source:
         return [f"{BROKER_BOOTSTRAP}: raw-clone child-stub markers changed"]
     stub = source.split(start_marker, 1)[1].split(end_marker, 1)[0]
@@ -92,6 +92,7 @@ def audit_child_stub() -> list[str]:
         "setpgid",
         "exit_group",
         "close_range",
+        "close",
         "execve",
     }
     if unexpected_syscalls:

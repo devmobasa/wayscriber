@@ -1,59 +1,6 @@
 use crate::draw::shape::EmbeddedImage;
 use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
 use cairo::{Format, ImageSurface};
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
-use std::hash::{Hash, Hasher};
-use std::rc::Rc;
-
-const IMAGE_CACHE_ENTRIES: usize = 32;
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-struct ImageCacheKey {
-    mime_type: String,
-    len: usize,
-    hash: u64,
-    width: u32,
-    height: u32,
-}
-
-thread_local! {
-    static IMAGE_CACHE: RefCell<ImageSurfaceCache> = RefCell::new(ImageSurfaceCache::new());
-}
-
-struct ImageSurfaceCache {
-    entries: HashMap<ImageCacheKey, Rc<ImageSurface>>,
-    order: VecDeque<ImageCacheKey>,
-}
-
-impl ImageSurfaceCache {
-    fn new() -> Self {
-        Self {
-            entries: HashMap::new(),
-            order: VecDeque::new(),
-        }
-    }
-
-    fn get(&mut self, key: &ImageCacheKey) -> Option<Rc<ImageSurface>> {
-        self.entries.get(key).cloned()
-    }
-
-    fn insert(&mut self, key: ImageCacheKey, surface: Rc<ImageSurface>) -> Rc<ImageSurface> {
-        if self.entries.contains_key(&key) {
-            self.entries.insert(key.clone(), surface.clone());
-            return surface;
-        }
-
-        self.order.push_back(key.clone());
-        self.entries.insert(key, surface.clone());
-        while self.order.len() > IMAGE_CACHE_ENTRIES {
-            if let Some(oldest) = self.order.pop_front() {
-                self.entries.remove(&oldest);
-            }
-        }
-        surface
-    }
-}
 
 pub fn render_image_shape(
     ctx: &cairo::Context,
@@ -66,7 +13,7 @@ pub fn render_image_shape(
     if w == 0 || h == 0 {
         return;
     }
-    let Some(surface) = cached_surface(data) else {
+    let Some(surface) = decode_surface(data) else {
         render_missing_image_placeholder(ctx, x, y, w, h);
         return;
     };
@@ -84,29 +31,9 @@ pub fn render_image_shape(
         width / surface.width().max(1) as f64,
         height / surface.height().max(1) as f64,
     );
-    let _ = ctx.set_source_surface(surface.as_ref(), 0.0, 0.0);
+    let _ = ctx.set_source_surface(&surface, 0.0, 0.0);
     let _ = ctx.paint();
     let _ = ctx.restore();
-}
-
-fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
-    let key = ImageCacheKey {
-        mime_type: data.mime_type.clone(),
-        len: data.bytes.len(),
-        hash: content_hash(&data.bytes),
-        width: data.width,
-        height: data.height,
-    };
-
-    IMAGE_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(surface) = cache.get(&key) {
-            return Some(surface);
-        }
-
-        let surface = decode_surface(data).map(Rc::new)?;
-        Some(cache.insert(key, surface))
-    })
 }
 
 fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
@@ -146,12 +73,6 @@ fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
         stride as i32,
     )
     .ok()
-}
-
-fn content_hash(bytes: &[u8]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    hasher.finish()
 }
 
 fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32) {

@@ -1,5 +1,6 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
 use crate::input::InputState;
+use crate::input::state::PendingBackendAction;
 use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
 
 impl InputState {
@@ -45,17 +46,17 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_open_configurator(&mut self) -> bool {
-        self.launch_configurator();
+        self.set_pending_backend_action(PendingBackendAction::LaunchConfigurator);
         true
     }
 
     pub(super) fn apply_toolbar_open_about(&mut self) -> bool {
-        self.launch_about();
+        self.set_pending_backend_action(PendingBackendAction::LaunchAbout);
         true
     }
 
     pub(super) fn apply_toolbar_open_config_file(&mut self) -> bool {
-        self.open_config_file_default();
+        self.set_pending_backend_action(PendingBackendAction::OpenConfigFile);
         true
     }
 

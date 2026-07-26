@@ -1,9 +1,7 @@
 //! Colors section: HSV gradient picker, preview swatch + hex row, and the
 //! quick-color swatch rows with the more/less palette toggle.
 
-use std::cell::Cell;
 use std::f64::consts::PI;
-use std::rc::Rc;
 
 /// Combines the current HSV triple with a drag position into a new triple.
 type HsvApply = fn((f64, f64, f64), f64, f64) -> (f64, f64, f64);
@@ -60,25 +58,7 @@ const BODY_SPACING: f64 = 6.0;
 /// built-in swatch rows.
 type ColorSwatch = (Color, String, Option<Action>, usize);
 
-#[derive(Default)]
-struct HexPasteRequests {
-    generation: Cell<u64>,
-}
-
-impl HexPasteRequests {
-    fn invalidate(&self) {
-        self.generation.set(self.generation.get().wrapping_add(1));
-    }
-
-    fn begin(&self) -> u64 {
-        self.invalidate();
-        self.generation.get()
-    }
-
-    fn is_current(&self, generation: u64) -> bool {
-        self.generation.get() == generation
-    }
-}
+const HEX_PASTE_REQUEST_CONTROLLER_NAME: &str = "wayscriber-hex-paste-request";
 
 pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget> {
     let card = section_card(
@@ -94,20 +74,28 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
 
 // ===== HSV gradient picker =================================================
 
-/// The 2-D saturation/value area plus the hue bar. Both share one HSV cell:
-/// drags write it and emit `SetColorHsv`; snapshot updates only land when no
-/// drag is in flight (same rule as `SliderRow`).
+/// The 2-D saturation/value area plus the hue bar. GTK adjustments own the
+/// displayed HSV triple; drags update them and backend snapshots only land
+/// while neither gesture is active (the same rule as `SliderRow`).
 fn build_picker(ctx: &mut SectionCtx, body: &gtk4::Box) {
-    let hsv = Rc::new(Cell::new(effective_hsv(ctx.snapshot)));
-    let dragging = Rc::new(Cell::new(false));
+    let initial = effective_hsv(ctx.snapshot);
+    let hue = gtk4::Adjustment::new(initial.0, 0.0, 1.0, 0.0, 0.0, 0.0);
+    let saturation = gtk4::Adjustment::new(initial.1, 0.0, 1.0, 0.0, 0.0, 0.0);
+    let value = gtk4::Adjustment::new(initial.2, 0.0, 1.0, 0.0, 0.0, 0.0);
     let scale = ctx.scale;
 
     let sv_area = gtk4::DrawingArea::new();
     sv_area.set_content_height(ctx.px(SV_HEIGHT));
     sv_area.set_hexpand(true);
-    let draw_hsv = hsv.clone();
+    let draw_hue = hue.clone();
+    let draw_saturation = saturation.clone();
+    let draw_value = value.clone();
     sv_area.set_draw_func(move |_, cr, width, height| {
-        let (h, s, v) = draw_hsv.get();
+        let (h, s, v) = (
+            draw_hue.value(),
+            draw_saturation.value(),
+            draw_value.value(),
+        );
         let w = f64::from(width);
         let hgt = f64::from(height);
         draw_sat_val(cr, w, hgt, h);
@@ -117,9 +105,9 @@ fn build_picker(ctx: &mut SectionCtx, body: &gtk4::Box) {
     let hue_area = gtk4::DrawingArea::new();
     hue_area.set_content_height(ctx.px(HUE_HEIGHT));
     hue_area.set_hexpand(true);
-    let draw_hsv = hsv.clone();
+    let draw_hue = hue.clone();
     hue_area.set_draw_func(move |_, cr, width, height| {
-        let (h, _, _) = draw_hsv.get();
+        let h = draw_hue.value();
         let w = f64::from(width);
         let hgt = f64::from(height);
         draw_hue_bar(cr, w, hgt);
@@ -127,19 +115,17 @@ fn build_picker(ctx: &mut SectionCtx, body: &gtk4::Box) {
     });
 
     // SV area varies s/v at the current hue; hue bar varies h keeping s/v.
-    attach_picker_drag(
+    let sv_drag = attach_picker_drag(
         &sv_area,
         &hue_area,
-        &hsv,
-        &dragging,
+        PickerValues::new(&hue, &saturation, &value),
         ctx.feedback.clone(),
         |(h, _, _), tx, ty| (h, tx, 1.0 - ty),
     );
-    attach_picker_drag(
+    let hue_drag = attach_picker_drag(
         &hue_area,
         &sv_area,
-        &hsv,
-        &dragging,
+        PickerValues::new(&hue, &saturation, &value),
         ctx.feedback.clone(),
         |(_, s, v), tx, _| (tx, s, v),
     );
@@ -147,19 +133,80 @@ fn build_picker(ctx: &mut SectionCtx, body: &gtk4::Box) {
     body.append(&sv_area);
     body.append(&hue_area);
 
-    let update_hsv = hsv.clone();
-    let update_dragging = dragging.clone();
     ctx.updaters.push(Box::new(move |snapshot| {
-        if update_dragging.get() {
+        if sv_drag.is_active() || hue_drag.is_active() {
             return;
         }
         let next = effective_hsv(snapshot);
-        if next != update_hsv.get() {
-            update_hsv.set(next);
+        let current = (hue.value(), saturation.value(), value.value());
+        if next != current {
+            hue.set_value(next.0);
+            saturation.set_value(next.1);
+            value.set_value(next.2);
             sv_area.queue_draw();
             hue_area.queue_draw();
         }
     }));
+}
+
+#[derive(Clone)]
+struct PickerValues {
+    hue: gtk4::Adjustment,
+    saturation: gtk4::Adjustment,
+    value: gtk4::Adjustment,
+}
+
+impl PickerValues {
+    fn new(
+        hue: &gtk4::Adjustment,
+        saturation: &gtk4::Adjustment,
+        value: &gtk4::Adjustment,
+    ) -> Self {
+        Self {
+            hue: hue.clone(),
+            saturation: saturation.clone(),
+            value: value.clone(),
+        }
+    }
+
+    fn get(&self) -> (f64, f64, f64) {
+        (
+            self.hue.value(),
+            self.saturation.value(),
+            self.value.value(),
+        )
+    }
+
+    fn set(&self, (hue, saturation, value): (f64, f64, f64)) {
+        self.hue.set_value(hue);
+        self.saturation.set_value(saturation);
+        self.value.set_value(value);
+    }
+}
+
+#[derive(Clone)]
+struct PickerDragContext {
+    area: gtk4::DrawingArea,
+    peer: gtk4::DrawingArea,
+    values: PickerValues,
+    sender: FeedbackSender,
+    apply: HsvApply,
+}
+
+impl PickerDragContext {
+    fn apply_at(&self, x: f64, y: f64) {
+        let width = f64::from(self.area.width().max(1));
+        let height = f64::from(self.area.height().max(1));
+        let (h, s, v) = (self.apply)(
+            self.values.get(),
+            (x / width).clamp(0.0, 1.0),
+            (y / height).clamp(0.0, 1.0),
+        );
+        self.values.set((h, s, v));
+        self.area.queue_draw();
+        self.peer.queue_draw();
+        send_event(&self.sender, ToolbarEvent::SetColorHsv { h, s, v });
+    }
 }
 
 /// Press-and-drag picking on one gradient area. `apply` folds the clamped
@@ -168,50 +215,30 @@ fn build_picker(ctx: &mut SectionCtx, body: &gtk4::Box) {
 fn attach_picker_drag(
     area: &gtk4::DrawingArea,
     peer: &gtk4::DrawingArea,
-    hsv: &Rc<Cell<(f64, f64, f64)>>,
-    dragging: &Rc<Cell<bool>>,
+    values: PickerValues,
     sender: FeedbackSender,
     apply: HsvApply,
-) {
-    let apply_at: Rc<dyn Fn(f64, f64)> = Rc::new({
-        let hsv = hsv.clone();
-        let area = area.clone();
-        let peer = peer.clone();
-        move |x: f64, y: f64| {
-            let w = f64::from(area.width().max(1));
-            let hgt = f64::from(area.height().max(1));
-            let (h, s, v) = apply(
-                hsv.get(),
-                (x / w).clamp(0.0, 1.0),
-                (y / hgt).clamp(0.0, 1.0),
-            );
-            hsv.set((h, s, v));
-            area.queue_draw();
-            peer.queue_draw();
-            send_event(&sender, ToolbarEvent::SetColorHsv { h, s, v });
-        }
-    });
-
+) -> gtk4::GestureDrag {
+    let context = PickerDragContext {
+        area: area.clone(),
+        peer: peer.clone(),
+        values,
+        sender,
+        apply,
+    };
     let drag = gtk4::GestureDrag::new();
-    let start = Rc::new(Cell::new((0.0f64, 0.0f64)));
-    let begin_dragging = dragging.clone();
-    let begin_start = start.clone();
-    let begin_apply = apply_at.clone();
+    let begin_context = context.clone();
     drag.connect_drag_begin(move |_, x, y| {
-        begin_dragging.set(true);
-        begin_start.set((x, y));
-        begin_apply(x, y);
+        begin_context.apply_at(x, y);
     });
-    let update_apply = apply_at.clone();
-    drag.connect_drag_update(move |_, dx, dy| {
-        let (sx, sy) = start.get();
-        update_apply(sx + dx, sy + dy);
+    drag.connect_drag_update(move |gesture, dx, dy| {
+        let Some((start_x, start_y)) = gesture.start_point() else {
+            return;
+        };
+        context.apply_at(start_x + dx, start_y + dy);
     });
-    let end_dragging = dragging.clone();
-    drag.connect_drag_end(move |_, _, _| {
-        end_dragging.set(false);
-    });
-    area.add_controller(drag);
+    area.add_controller(drag.clone());
+    drag
 }
 
 /// HSV triple the picker should display. The remembered picker triple wins
@@ -306,26 +333,23 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     preview.set_tooltip_text(Some("Click to pick color"));
     // The whole color drives the redraw, alpha included: an alpha-only change
     // still repaints, and the swatch shows the transparency it will draw with.
-    let color_cell = Rc::new(Cell::new(ctx.snapshot.color));
     let preview_area = gtk4::DrawingArea::new();
     preview_area.set_content_width(ctx.px(PREVIEW_SIZE));
     preview_area.set_content_height(ctx.px(PREVIEW_SIZE));
     preview_area.set_can_target(false);
     let scale = ctx.scale;
-    let draw_color = color_cell.clone();
-    preview_area.set_draw_func(move |_, cr, width, height| {
-        let size = f64::from(width.min(height));
-        draw_preview_swatch(cr, size, draw_color.get(), scale);
-    });
+    install_preview_draw(&preview_area, ctx.snapshot.color, scale);
     preview.set_child(Some(&preview_area));
     let sender = ctx.feedback.clone();
     preview.connect_clicked(move |_| {
         send_event(&sender, ToolbarEvent::OpenColorPickerPopup);
     });
     row.append(&preview);
+    let mut current_color = ctx.snapshot.color;
     ctx.updaters.push(Box::new(move |snapshot| {
-        if color_cell.get() != snapshot.color {
-            color_cell.set(snapshot.color);
+        if current_color != snapshot.color {
+            current_color = snapshot.color;
+            install_preview_draw(&preview_area, current_color, scale);
             preview_area.queue_draw();
         }
     }));
@@ -410,19 +434,21 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     body.append(&row);
 }
 
+fn install_preview_draw(area: &gtk4::DrawingArea, color: Color, scale: f64) {
+    area.set_draw_func(move |_, cr, width, height| {
+        let size = f64::from(width.min(height));
+        draw_preview_swatch(cr, size, color, scale);
+    });
+}
+
 fn install_hex_paste_replacement(entry: &gtk4::Entry, sender: FeedbackSender) {
     let Some(text) = entry.delegate().and_downcast::<gtk4::Text>() else {
         log::warn!("GTK hex entry has no text delegate; using default paste behavior");
         return;
     };
-    let paste_requests = Rc::new(HexPasteRequests::default());
-    let changed_paste_requests = paste_requests.clone();
-    entry.connect_changed(move |_| {
-        changed_paste_requests.invalidate();
-    });
+    entry.connect_changed(invalidate_hex_paste_request);
     let weak_entry = entry.downgrade();
     let clipboard_sender = sender.clone();
-    let clipboard_paste_requests = paste_requests.clone();
     text.connect_paste_clipboard(move |text| {
         // GtkText owns Ctrl+V and the native context-menu Paste action. Stop
         // its insertion semantics because a color is one token, not text to
@@ -435,7 +461,6 @@ fn install_hex_paste_replacement(entry: &gtk4::Entry, sender: FeedbackSender) {
             &entry,
             &text.display().clipboard(),
             clipboard_sender.clone(),
-            clipboard_paste_requests.clone(),
         );
     });
 
@@ -456,31 +481,22 @@ fn install_hex_paste_replacement(entry: &gtk4::Entry, sender: FeedbackSender) {
         }
         gesture.set_state(gtk4::EventSequenceState::Claimed);
         entry.grab_focus();
-        read_hex_paste(
-            &entry,
-            &entry.primary_clipboard(),
-            sender.clone(),
-            paste_requests.clone(),
-        );
+        read_hex_paste(&entry, &entry.primary_clipboard(), sender.clone());
     });
     entry.add_controller(primary_paste);
 }
 
-fn read_hex_paste(
-    entry: &gtk4::Entry,
-    clipboard: &gtk4::gdk::Clipboard,
-    sender: FeedbackSender,
-    paste_requests: Rc<HexPasteRequests>,
-) {
-    let generation = paste_requests.begin();
+fn read_hex_paste(entry: &gtk4::Entry, clipboard: &gtk4::gdk::Clipboard, sender: FeedbackSender) {
+    let request = begin_hex_paste_request(entry);
     let weak_entry = entry.downgrade();
     clipboard.read_text_async(None::<&gtk4::gio::Cancellable>, move |result| {
         let Some(entry) = weak_entry.upgrade() else {
             return;
         };
-        if !paste_requests.is_current(generation) {
+        if request.widget().is_none() {
             return;
         }
+        entry.remove_controller(&request);
         let parsed = result
             .ok()
             .flatten()
@@ -493,6 +509,25 @@ fn read_hex_paste(
         entry.select_region(0, -1);
         send_event(&sender, ToolbarEvent::SetColor(color));
     });
+}
+
+fn begin_hex_paste_request(entry: &gtk4::Entry) -> gtk4::EventControllerLegacy {
+    invalidate_hex_paste_request(entry);
+    let request = gtk4::EventControllerLegacy::new();
+    request.set_name(Some(HEX_PASTE_REQUEST_CONTROLLER_NAME));
+    entry.add_controller(request.clone());
+    request
+}
+
+fn invalidate_hex_paste_request(entry: &gtk4::Entry) {
+    let controllers = entry.observe_controllers();
+    let request = (0..controllers.n_items())
+        .filter_map(|index| controllers.item(index))
+        .filter_map(|controller| controller.downcast::<gtk4::EventController>().ok())
+        .find(|controller| controller.name().as_deref() == Some(HEX_PASTE_REQUEST_CONTROLLER_NAME));
+    if let Some(request) = request {
+        entry.remove_controller(&request);
+    }
 }
 
 /// Rounded-square preview like the built-in `draw_swatch`, drawn one pixel
@@ -560,7 +595,7 @@ fn build_swatch_rows(ctx: &mut SectionCtx, body: &gtk4::Box) {
 
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(SWATCH_GAP));
     column.set_margin_top(ctx.px(PREVIEW_GAP_BOTTOM - BODY_SPACING));
-    let mut tracked: Vec<(Color, Rc<Cell<bool>>, gtk4::DrawingArea)> = Vec::new();
+    let mut tracked: Vec<(Color, gtk4::DrawingArea)> = Vec::new();
 
     let compact_toggle: Option<(ToolbarEvent, &'static str, IconPainter)> =
         if snapshot.show_more_colors || expanded.is_empty() {
@@ -589,10 +624,14 @@ fn build_swatch_rows(ctx: &mut SectionCtx, body: &gtk4::Box) {
     body.append(&column);
 
     ctx.updaters.push(Box::new(move |snapshot| {
-        for (color, selected, area) in &tracked {
+        for (color, area) in &tracked {
             let now = *color == snapshot.color;
-            if selected.get() != now {
-                selected.set(now);
+            if area.has_css_class("wayscriber-selected") != now {
+                if now {
+                    area.add_css_class("wayscriber-selected");
+                } else {
+                    area.remove_css_class("wayscriber-selected");
+                }
                 area.queue_draw();
             }
         }
@@ -603,7 +642,7 @@ fn swatch_row(
     ctx: &SectionCtx,
     colors: &[ColorSwatch],
     toggle: Option<(ToolbarEvent, &'static str, IconPainter)>,
-    tracked: &mut Vec<(Color, Rc<Cell<bool>>, gtk4::DrawingArea)>,
+    tracked: &mut Vec<(Color, gtk4::DrawingArea)>,
 ) -> gtk4::Box {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(SWATCH_GAP));
     for (color, name, action, index) in colors {
@@ -613,8 +652,7 @@ fn swatch_row(
             action.and_then(|action| ctx.snapshot.binding_hints.binding_for_action(action));
         let tooltip = format_quick_color_tooltip(name, binding);
         let color = *color;
-        let (button, selected, area) =
-            rect_swatch(ctx, color, color == ctx.snapshot.color, &tooltip);
+        let (button, area) = rect_swatch(ctx, color, color == ctx.snapshot.color, &tooltip);
         let sender = ctx.feedback.clone();
         button.connect_clicked(move |_| {
             send_event(
@@ -628,7 +666,7 @@ fn swatch_row(
         });
         install_quick_color_recolor(&button, index, &ctx.feedback);
         row.append(&button);
-        tracked.push((color, selected, area));
+        tracked.push((color, area));
     }
 
     if let Some((event, tooltip, painter)) = toggle {
@@ -656,17 +694,18 @@ fn rect_swatch(
     color: Color,
     selected: bool,
     tooltip: &str,
-) -> (gtk4::Button, Rc<Cell<bool>>, gtk4::DrawingArea) {
+) -> (gtk4::Button, gtk4::DrawingArea) {
     let button = sized_button(ctx.sz(SWATCH), ctx.sz(SWATCH));
     button.add_css_class("swatch");
     button.set_tooltip_text(Some(tooltip));
-    let selected_cell = Rc::new(Cell::new(selected));
     let area = gtk4::DrawingArea::new();
     area.set_content_width(ctx.px(SWATCH));
     area.set_content_height(ctx.px(SWATCH));
     area.set_can_target(false);
-    let draw_selected = selected_cell.clone();
-    area.set_draw_func(move |_, cr, width, height| {
+    if selected {
+        area.add_css_class("wayscriber-selected");
+    }
+    area.set_draw_func(move |area, cr, width, height| {
         let size = f64::from(width.min(height));
         let fill_path =
             |cr: &cairo::Context| rounded_rect_path(cr, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
@@ -685,7 +724,7 @@ fn rect_swatch(
         rounded_rect_path(cr, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
         let _ = cr.stroke();
 
-        if draw_selected.get() {
+        if area.has_css_class("wayscriber-selected") {
             set_color(cr, super::super::super::css::ACCENT);
             cr.set_line_width(2.0);
             rounded_rect_path(cr, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
@@ -693,7 +732,7 @@ fn rect_swatch(
         }
     });
     button.set_child(Some(&area));
-    (button, selected_cell, area)
+    (button, area)
 }
 
 // ===== Palette selection (ported from the built-in colors section) ========

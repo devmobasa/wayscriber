@@ -104,7 +104,7 @@ pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
     };
     // Modes are non-destructive presets: switching changes the baseline,
     // never the user's explicit section overrides.
-    let segments = vec![
+    let segments = [
         segment(
             ToolbarControlId::LayoutModeSimple,
             "Simple",
@@ -192,14 +192,11 @@ fn segmented_control(
     id: ToolbarControlId,
     active: ToolbarControlId,
     label: &'static str,
-    segments: Vec<ToolbarSegment>,
+    segments: [ToolbarSegment; 3],
 ) -> ToolbarControl {
     ToolbarControl {
         id,
-        kind: ToolbarControlKind::Segmented(
-            ToolbarSegmentedControl::try_new(Some(active), segments)
-                .expect("static segmented toolbar control is valid"),
-        ),
+        kind: ToolbarControlKind::Segmented(ToolbarSegmentedControl::from_fixed(active, segments)),
         enabled: true,
         active: true,
         presentation: ToolbarControlPresentation {

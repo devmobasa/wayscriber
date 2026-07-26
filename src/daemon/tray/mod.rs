@@ -5,26 +5,32 @@ mod runtime;
 #[cfg(feature = "tray")]
 mod shortcut_hint_io;
 
-pub(crate) use runtime::start_system_tray;
+pub(crate) use runtime::{TrayCleanupOwner, TrayRuntime, start_system_tray};
 
-#[cfg(feature = "tray")]
-use super::types::{
-    DaemonControlEvent, OverlayActionPublisher, TrayStatusShared, VisibilityPublisher,
-};
+use super::types::{DaemonControlEvent, OverlayActionPublisher, VisibilityPublisher};
 #[cfg(all(test, feature = "tray"))]
-use super::types::{OverlayActionIntents, VisibilityIntents};
+use super::types::{DaemonEventInbox, daemon_event_channel};
+#[cfg(feature = "tray")]
+use super::types::{TraySnapshot, TrayStatusPublisher};
 #[cfg(feature = "tray")]
 use crate::config::TrayIconStyle;
-#[cfg(feature = "tray")]
-use std::sync::Arc;
-#[cfg(feature = "tray")]
-use std::sync::atomic::AtomicBool;
+
+pub(super) struct TrayControl {
+    pub(super) visibility: VisibilityPublisher,
+    pub(super) action: OverlayActionPublisher,
+    pub(super) quit: DaemonControlEvent,
+}
 
 #[cfg(feature = "tray")]
-struct TrayControl {
-    visibility: VisibilityPublisher,
-    action: OverlayActionPublisher,
-    quit: DaemonControlEvent,
+struct TraySetup {
+    configurator_binary: String,
+    session_resume_enabled: bool,
+    icon_style: TrayIconStyle,
+    snapshot: TraySnapshot,
+    status_publisher: TrayStatusPublisher,
+    process_broker: crate::process_broker::ProcessBrokerHandle,
+    config_store: crate::config::ConfigStore,
+    path_resolver: crate::paths::PathResolver,
 }
 
 #[cfg(feature = "tray")]
@@ -33,28 +39,31 @@ pub(crate) struct WayscriberTray {
     configurator_binary: String,
     session_resume_enabled: bool,
     icon_style: TrayIconStyle,
-    overlay_active: Arc<AtomicBool>,
-    tray_status: Arc<TrayStatusShared>,
+    snapshot: TraySnapshot,
+    status_publisher: TrayStatusPublisher,
+    process_broker: crate::process_broker::ProcessBrokerHandle,
+    config_store: crate::config::ConfigStore,
+    path_resolver: crate::paths::PathResolver,
 }
 
 #[cfg(feature = "tray")]
 impl WayscriberTray {
-    fn new(
-        control: TrayControl,
-        configurator_binary: String,
-        session_resume_enabled: bool,
-        icon_style: TrayIconStyle,
-        overlay_active: Arc<AtomicBool>,
-        tray_status: Arc<TrayStatusShared>,
-    ) -> Self {
+    fn new(control: TrayControl, setup: TraySetup) -> Self {
         Self {
             control,
-            configurator_binary,
-            session_resume_enabled,
-            icon_style,
-            overlay_active,
-            tray_status,
+            configurator_binary: setup.configurator_binary,
+            session_resume_enabled: setup.session_resume_enabled,
+            icon_style: setup.icon_style,
+            snapshot: setup.snapshot,
+            status_publisher: setup.status_publisher,
+            process_broker: setup.process_broker,
+            config_store: setup.config_store,
+            path_resolver: setup.path_resolver,
         }
+    }
+
+    fn apply_snapshot(&mut self, snapshot: TraySnapshot) {
+        self.snapshot = snapshot;
     }
 
     fn request_toggle(&self) {
@@ -70,39 +79,51 @@ impl WayscriberTray {
     }
     #[cfg(test)]
     pub(crate) fn new_for_tests(
-        toggle_flag: Arc<AtomicBool>,
-        quit_flag: Arc<AtomicBool>,
         session_resume_enabled: bool,
-    ) -> Self {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        Self::new_for_tests_with_wake(
-            toggle_flag,
-            quit_flag,
-            session_resume_enabled,
-            wake.handle(),
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_for_tests_with_wake(
-        toggle_flag: Arc<AtomicBool>,
-        quit_flag: Arc<AtomicBool>,
-        session_resume_enabled: bool,
-        control_wake: crate::backend::wayland::RuntimeWakeHandle,
-    ) -> Self {
-        let visibility_intents = Arc::new(VisibilityIntents::with_ready(toggle_flag));
-        let action_intents = Arc::new(OverlayActionIntents::default());
-        Self::new(
+    ) -> (
+        Self,
+        DaemonEventInbox,
+        crate::backend::wayland::RuntimeWakeSource,
+        crate::process_broker::ProcessBrokerOwner,
+    ) {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a daemon tray runtime eventfd");
+        let (inbox, mut senders) = daemon_event_channel();
+        let process_broker = crate::process_broker::start_for_runtime()
+            .expect("test starts its explicit process broker owner");
+        let tray = Self::new(
             TrayControl {
-                visibility: visibility_intents.publisher(control_wake.clone()),
-                action: action_intents.publisher(control_wake.clone()),
-                quit: DaemonControlEvent::new(quit_flag, control_wake),
+                visibility: senders.visibility(
+                    wake.try_sender()
+                        .expect("test duplicates tray visibility wake ownership"),
+                ),
+                action: senders
+                    .overlay_actions(
+                        wake.try_sender()
+                            .expect("test duplicates tray action wake ownership"),
+                    )
+                    .expect("fixture claims its only overlay-action publisher"),
+                quit: senders.quit(
+                    wake.try_sender()
+                        .expect("test duplicates tray quit wake ownership"),
+                ),
             },
-            "true".into(),
-            session_resume_enabled,
-            TrayIconStyle::Auto,
-            Arc::new(AtomicBool::new(false)),
-            Arc::new(TrayStatusShared::new()),
-        )
+            TraySetup {
+                configurator_binary: "true".into(),
+                session_resume_enabled,
+                icon_style: TrayIconStyle::Auto,
+                snapshot: TraySnapshot::default(),
+                status_publisher: senders.tray_status(
+                    wake.try_sender()
+                        .expect("test duplicates tray status wake ownership"),
+                ),
+                process_broker: process_broker.handle(),
+                config_store: crate::config::ConfigStore::at_path(
+                    "/tmp/wayscriber-tray-test-config.toml",
+                ),
+                path_resolver: crate::paths::PathResolver::from_process_environment(),
+            },
+        );
+        (tray, inbox, wake, process_broker)
     }
 }

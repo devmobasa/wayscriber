@@ -378,7 +378,7 @@ impl InputState {
 
     pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
         let mut changed = false;
-        for (&id, &setting) in factory_individual_toolbar_item_visibility_settings() {
+        for (id, setting) in factory_individual_toolbar_item_visibility_settings() {
             changed |= self.toolbar_items.set_visibility_setting(id, setting);
         }
         if !changed {

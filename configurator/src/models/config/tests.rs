@@ -19,7 +19,7 @@ fn config_draft_round_trips_toolbar_rebind_modifier() {
 
     draft.ui_toolbar_rebind_modifier = ToolbarRebindModifierOption::ShiftAlt;
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("toolbar modifier round trip");
     assert_eq!(
         round_trip.ui.toolbar.rebind_modifier,
@@ -35,7 +35,7 @@ fn config_draft_round_trips_status_bar_interactive() {
 
     draft.set_toggle(ToggleField::UiStatusBarInteractive, false);
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("status bar interactive round trip");
     assert!(!round_trip.ui.status_bar_interactive);
 }
@@ -50,6 +50,15 @@ use wayscriber::config::{
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
+fn path_resolver() -> wayscriber::paths::PathResolver {
+    wayscriber::paths::PathResolver::from_environment(
+        wayscriber::paths::PathEnvironment::from_values(&[(
+            wayscriber::env_vars::HOME_ENV,
+            std::ffi::OsStr::new("/tmp"),
+        )]),
+    )
+}
+
 #[test]
 fn config_draft_to_config_reports_errors() {
     let mut draft = ConfigDraft::from_config(&Config::default());
@@ -63,7 +72,7 @@ fn config_draft_to_config_reports_errors() {
     };
 
     let errors = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect_err("expected validation errors");
     let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
 
@@ -84,7 +93,7 @@ fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
     let document = ConfigDocument::load_from_path(&path).expect("load sparse config");
     let draft = ConfigDraft::from_config(document.config());
     let updated = draft
-        .to_config(document.config())
+        .to_config(document.config(), &path_resolver())
         .expect("convert untouched sparse draft");
 
     document
@@ -106,7 +115,7 @@ fn config_draft_round_trips_precise_floats_without_truncation() {
 
     let draft = ConfigDraft::from_config(&config);
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("precise floats should round trip");
 
     assert_eq!(
@@ -132,7 +141,7 @@ fn sparse_configurator_edit_adds_only_the_edited_field_path() {
     let mut draft = ConfigDraft::from_config(document.config());
     draft.performance_max_fps_no_vsync = "144".to_string();
     let updated = draft
-        .to_config(document.config())
+        .to_config(document.config(), &path_resolver())
         .expect("convert sparse draft edit");
 
     document
@@ -177,7 +186,7 @@ fn config_draft_round_trips_quick_colors() {
     );
 
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("expected quick colors to round trip");
 
     assert_eq!(
@@ -202,7 +211,7 @@ fn config_draft_preserves_implicit_quick_color_defaults() {
     let draft = ConfigDraft::from_config(&config);
 
     let saved = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected implicit quick colors to save");
 
     assert_eq!(saved.drawing.quick_colors.configured_entry_count(), None);
@@ -235,7 +244,7 @@ color = "blue"
     let draft = ConfigDraft::from_config(document.config());
     assert_eq!(draft.drawing_quick_colors.entries.len(), 8);
     let updated = draft
-        .to_config(document.config())
+        .to_config(document.config(), &path_resolver())
         .expect("untouched sparse quick colors should round trip");
     assert_eq!(
         updated.drawing.quick_colors.configured_entry_count(),
@@ -259,7 +268,7 @@ fn config_draft_marks_changed_quick_colors_explicit() {
     draft.drawing_quick_colors.entries[8].label = "Pool cyan".to_string();
 
     let saved = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected changed quick colors to save");
 
     assert_eq!(
@@ -305,7 +314,7 @@ fn config_draft_switches_quick_color_named_hex_to_rgb_without_stale_rgb() {
     }
 
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("expected quick color RGB to save");
 
     assert_eq!(
@@ -330,7 +339,7 @@ fn config_draft_rejects_invalid_quick_colors() {
         entry.color.name = "chartreuse".to_string();
     }
     let errors = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect_err("expected invalid quick color errors");
     let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
 
@@ -353,7 +362,7 @@ fn config_draft_materializes_missing_quick_color_slots_and_labels() {
 
     draft.drawing_quick_colors.entries[0].label = " ".to_string();
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("blank labels should save with fallback labels");
 
     assert_eq!(round_trip.drawing.quick_colors.entries[0].label, "Red");
@@ -368,7 +377,7 @@ fn config_draft_accepts_quick_color_hex_string() {
     entry.color.name = "#FFB3BA".to_string();
 
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("expected quick color hex to save");
 
     assert_eq!(
@@ -384,7 +393,7 @@ fn config_draft_to_config_trims_custom_directory() {
     draft.session_custom_directory = "   ".to_string();
 
     let config = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("to_config should succeed");
     assert!(config.session.custom_directory.is_none());
 }
@@ -398,7 +407,7 @@ fn config_draft_round_trips_light_mode_click_highlight_policy() {
     assert!(!draft.click_highlight_force_in_light_mode);
 
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("expected config to round trip");
     assert!(!round_trip.ui.click_highlight.force_in_light_mode);
 }
@@ -421,7 +430,7 @@ fn config_draft_round_trips_toolbar_item_visibility_preserving_unknown_ids() {
     draft.set_toolbar_item_visible(ids::TOP_TOOL_PEN, false);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
 
     assert_eq!(
@@ -450,7 +459,7 @@ fn config_draft_preserves_legacy_toolbar_section_visibility_on_unrelated_save() 
 
     draft.ui_toolbar_use_icons = !draft.ui_toolbar_use_icons;
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected legacy toolbar visibility to round trip");
 
     assert!(!round_trip.ui.toolbar.show_zoom_actions);
@@ -481,7 +490,7 @@ fn config_draft_applies_active_mode_override_before_folding_legacy_visibility() 
 
         draft.ui_toolbar_use_icons = !draft.ui_toolbar_use_icons;
         let round_trip = draft
-            .to_config(&config)
+            .to_config(&config, &path_resolver())
             .expect("expected active mode override to survive an unrelated save");
 
         assert_eq!(round_trip.ui.toolbar.show_presets, override_value);
@@ -518,7 +527,7 @@ fn config_draft_round_trips_toolbar_item_order_preserving_unknown_ids() {
     draft.move_toolbar_item(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN, 1);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
 
     assert!(
@@ -561,7 +570,7 @@ fn config_draft_round_trips_render_profiles() {
 
     let draft = ConfigDraft::from_config(&config);
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected render profiles to round trip");
 
     assert_eq!(round_trip.render_profiles.active.as_deref(), Some("print"));
@@ -619,7 +628,7 @@ fn config_draft_round_trips_pdf_export() {
     );
 
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("expected PDF export to round trip");
 
     assert_eq!(
@@ -681,7 +690,7 @@ fn config_draft_blocks_invalid_pdf_export_values() {
         .set_component(0, "1.5".to_string());
 
     let errors = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect_err("expected PDF validation errors");
     let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
 
@@ -700,7 +709,7 @@ fn config_draft_blocks_empty_custom_pdf_template() {
     draft.export_pdf_label_template = "   ".to_string();
 
     let errors = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect_err("expected empty template validation error");
 
     assert!(errors.iter().any(|err| {
@@ -715,7 +724,7 @@ fn config_draft_ignores_invalid_pdf_template_for_non_custom_label_content() {
     draft.export_pdf_label_template = "{missing}".to_string();
 
     let round_trip = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("non-custom label content should ignore template errors");
 
     assert_eq!(
@@ -759,7 +768,7 @@ fn config_draft_reports_invalid_render_profile_hex() {
     draft.render_profiles.profiles.push(profile);
 
     let errors = draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect_err("expected invalid hex");
 
     assert!(
@@ -821,7 +830,7 @@ fn section_toggle_replaces_overlay_item_override_on_save() {
     draft.set_toggle(ToggleField::UiToolbarShowPresets, true);
 
     let saved = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("toolbar config should save");
     let resolved = saved.ui.toolbar.items.resolved();
     assert!(
@@ -857,7 +866,7 @@ fn config_draft_round_trips_toolbar_side_layout() {
         ToolbarSideLayoutOption::Pill
     );
     let saved = default_draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("default draft should convert");
     assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Pill);
 
@@ -874,7 +883,9 @@ fn config_draft_round_trips_toolbar_side_layout() {
     config.ui.toolbar.side_layout = ToolbarSideLayout::Panel;
     let draft = ConfigDraft::from_config(&config);
     assert_eq!(draft.ui_toolbar_side_layout, ToolbarSideLayoutOption::Panel);
-    let saved = draft.to_config(&config).expect("draft should convert");
+    let saved = draft
+        .to_config(&config, &path_resolver())
+        .expect("draft should convert");
     assert_eq!(saved.ui.toolbar.side_layout, ToolbarSideLayout::Panel);
 }
 
@@ -889,7 +900,7 @@ fn config_draft_round_trips_zoom_chip_display() {
         ZoomChipDisplayOption::Always
     );
     let saved = default_draft
-        .to_config(&Config::default())
+        .to_config(&Config::default(), &path_resolver())
         .expect("default draft should convert");
     assert_eq!(saved.ui.toolbar.zoom_chip_display, ZoomChipDisplay::Always);
 
@@ -902,7 +913,9 @@ fn config_draft_round_trips_zoom_chip_display() {
         draft.ui_toolbar_zoom_chip_display,
         ZoomChipDisplayOption::WhileZoomed
     );
-    let saved = draft.to_config(&config).expect("draft should convert");
+    let saved = draft
+        .to_config(&config, &path_resolver())
+        .expect("draft should convert");
     assert_eq!(
         saved.ui.toolbar.zoom_chip_display,
         ZoomChipDisplay::WhileZoomed
@@ -919,7 +932,9 @@ fn config_draft_round_trips_chrome_visibility_preferences() {
     assert!(!draft.ui_show_floating_badge);
     assert!(!draft.ui_toolbar_show_zoom_chip);
 
-    let saved = draft.to_config(&config).expect("draft should convert");
+    let saved = draft
+        .to_config(&config, &path_resolver())
+        .expect("draft should convert");
     assert!(!saved.ui.show_floating_badge);
     assert!(!saved.ui.toolbar.show_zoom_chip);
 }
@@ -964,7 +979,7 @@ fn config_draft_round_trips_presets_and_history() {
 
     let draft = ConfigDraft::from_config(&config);
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
 
     assert_eq!(
@@ -1039,7 +1054,7 @@ fn preset_tool_change_loads_selected_tool_profile_values() {
         .set_tool(ToolOption::Marker);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     let preset = round_trip.presets.get_slot(1).expect("preset");
     let settings = preset.tool_settings.as_ref().expect("tool settings");
@@ -1095,7 +1110,7 @@ fn preset_visible_edits_update_selected_tool_profile_only() {
     slot.size = "28".to_string();
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     let preset = round_trip.presets.get_slot(1).expect("preset");
     let settings = preset.tool_settings.as_ref().expect("tool settings");
@@ -1134,7 +1149,7 @@ fn config_draft_round_trips_drag_tool_mapping() {
     assert_eq!(draft.drawing_tab_drag_tool, ToolOption::Ellipse);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     assert_eq!(round_trip.drawing.drag_tool, config.drawing.drag_tool);
     assert_eq!(
@@ -1165,7 +1180,7 @@ fn config_draft_round_trips_polygon_sides() {
     assert_eq!(draft.drawing_polygon_sides, "8");
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     assert_eq!(round_trip.drawing.polygon_sides, 8);
 }
@@ -1179,7 +1194,7 @@ fn config_draft_round_trips_xdg_focus_loss_behavior() {
     assert!(draft.ui_xdg_keep_on_focus_loss);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     assert_eq!(
         round_trip.ui.xdg_focus_loss_behavior,
@@ -1196,7 +1211,7 @@ fn config_draft_round_trips_ui_theme() {
     assert_eq!(draft.ui_theme, UiThemeOption::Light);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     assert_eq!(round_trip.ui.theme, UiTheme::Light);
 }
@@ -1210,7 +1225,7 @@ fn config_draft_round_trips_ui_reduced_motion() {
     assert_eq!(draft.ui_reduced_motion, ReducedMotionOption::On);
 
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
     assert_eq!(round_trip.ui.reduced_motion, ReducedMotion::On);
 }
@@ -1222,7 +1237,7 @@ fn config_draft_preserves_tray_icon_style() {
 
     let draft = ConfigDraft::from_config(&config);
     let round_trip = draft
-        .to_config(&config)
+        .to_config(&config, &path_resolver())
         .expect("expected config to round trip");
 
     assert_eq!(

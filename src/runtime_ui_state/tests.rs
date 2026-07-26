@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::*;
 use crate::config::{ToolbarItemOrderGroup, toolbar_item_ids as item_ids};
 
@@ -16,10 +14,7 @@ fn present_revision(label: &str) -> RuntimeStateSourceRevision {
 }
 
 fn present_revision_at(path: RuntimeStatePathIdentity, label: &str) -> RuntimeStateSourceRevision {
-    RuntimeStateSourceRevision::present(
-        path,
-        Arc::<[u8]>::from(label.as_bytes().to_vec().into_boxed_slice()),
-    )
+    RuntimeStateSourceRevision::present(path, label.as_bytes().to_vec().into_boxed_slice())
 }
 
 fn observation(revision: RuntimeStateSourceRevision) -> RuntimeStateSourceObservation {
@@ -94,11 +89,17 @@ fn test_seeds(top_pinned: bool, side_pinned: bool) -> ValidatedInteractionSeeds 
 }
 
 fn controller() -> RuntimeUiStateController {
+    controller_with_id(ControllerId::fixture(1, 1))
+}
+
+fn controller_with_id(id: ControllerId) -> RuntimeUiStateController {
     RuntimeUiStateController::new(
+        id,
         test_seeds(false, false),
         missing_revision(),
         RuntimeUiFileStatus::Missing,
     )
+    .expect("fixture source status and authority satisfy controller startup invariants")
 }
 
 fn commit_bool(

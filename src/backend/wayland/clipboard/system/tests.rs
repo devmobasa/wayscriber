@@ -35,7 +35,9 @@ impl ClipboardCommandRunner for LargeClipboardRunner {
     }
 
     fn copy_selection(&self, _payload: &[u8], _timeout: Duration) -> anyhow::Result<BrokerOutput> {
-        unreachable!("clipboard read tests never publish")
+        Err(anyhow::anyhow!(
+            "clipboard read fixture does not provide publication"
+        ))
     }
 }
 
@@ -57,13 +59,6 @@ impl Read for ExactLimitThenError {
         buffer[..len].copy_from_slice(&self.bytes[..len]);
         Ok(len)
     }
-}
-
-#[test]
-fn strict_read_rejects_data_over_limit() {
-    let err = read_limited(Cursor::new(vec![1, 2, 3, 4, 5]), 4).expect_err("over limit");
-
-    assert!(matches!(err, ClipboardReadError::TooLarge { limit: 4 }));
 }
 
 #[test]

@@ -1296,7 +1296,7 @@ action = "toggle_radial_menu"
 # Enable screenshot shortcuts (set to false to disable all capture actions)
 enabled = true
 
-# Directory where PNG files are saved (supports ~ expansion)
+# Directory where PNG files are saved. Must be absolute after supported ~/ expansion.
 save_directory = "~/Pictures/Wayscriber"
 
 # Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S)

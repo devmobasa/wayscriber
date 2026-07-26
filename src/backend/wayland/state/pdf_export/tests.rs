@@ -2,7 +2,6 @@ use super::*;
 use crate::config::{PdfExportConfig, PdfFitMode};
 use crate::draw::{RED, Shape, WHITE};
 use crate::input::BoardSpec;
-use std::sync::Arc;
 
 fn board(id: &str, name: &str, background: BoardBackground, pages: Vec<Frame>) -> BoardState {
     BoardState {
@@ -172,7 +171,7 @@ fn transparent_pdf_pages_use_desktop_backdrop_when_supplied() {
         vec![Frame::new()],
     )];
     let backdrop = CanvasExportBackdropSnapshot::PersistedImage {
-        data: Arc::from(vec![0u8; 800 * 600 * 4]),
+        data: vec![0u8; 800 * 600 * 4],
         width: 800,
         height: 600,
         stride: 800 * 4,
@@ -202,7 +201,7 @@ fn solid_pdf_pages_keep_solid_backdrop_when_desktop_backdrop_supplied() {
         vec![Frame::new()],
     )];
     let backdrop = CanvasExportBackdropSnapshot::PersistedImage {
-        data: Arc::from(vec![0u8; 800 * 600 * 4]),
+        data: vec![0u8; 800 * 600 * 4],
         width: 800,
         height: 600,
         stride: 800 * 4,

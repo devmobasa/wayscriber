@@ -3,7 +3,7 @@ use super::{
     MAX_DAEMON_TOGGLE_REQUEST_AGE, current_unix_millis,
 };
 use crate::durable_io::AtomicWriteOptions;
-use crate::paths::{daemon_command_dir, daemon_command_file};
+use crate::paths::PreparedRuntimePaths;
 use anyhow::{Context, Result, anyhow};
 use log::warn;
 use std::ffi::OsStr;
@@ -71,8 +71,8 @@ fn remove_legacy_entries(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn clear_legacy_command_files() -> Result<()> {
-    let dir = daemon_command_dir();
+fn clear_legacy_command_files(runtime_paths: &PreparedRuntimePaths) -> Result<()> {
+    let dir = runtime_paths.daemon_command_dir();
     remove_legacy_entries(&dir)?;
 
     let responses = dir.join("responses");
@@ -110,8 +110,10 @@ fn clear_legacy_command_files() -> Result<()> {
     }
 }
 
-fn next_daemon_toggle_request_path() -> Result<std::path::PathBuf> {
-    let dir = daemon_command_dir();
+fn next_daemon_toggle_request_path(
+    runtime_paths: &PreparedRuntimePaths,
+) -> Result<std::path::PathBuf> {
+    let dir = runtime_paths.daemon_command_dir();
     fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create runtime directory {}", dir.display()))?;
     let stamp = SystemTime::now()
@@ -140,14 +142,15 @@ pub(super) fn write_file_atomic(path: &std::path::Path, payload: &[u8]) -> Resul
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
-pub(crate) fn clear_daemon_toggle_request_file() -> Result<()> {
-    clear_file(&daemon_command_file())?;
-    clear_legacy_command_files()
+pub(crate) fn clear_daemon_toggle_request_file(runtime_paths: &PreparedRuntimePaths) -> Result<()> {
+    clear_file(&runtime_paths.daemon_command_file())?;
+    clear_legacy_command_files(runtime_paths)
 }
 
 pub(super) fn write_daemon_toggle_request(
     request: &DaemonToggleRequest,
     daemon_token: &str,
+    runtime_paths: &PreparedRuntimePaths,
 ) -> Result<DaemonToggleCommand> {
     let envelope = DaemonToggleEnvelope {
         daemon_token: daemon_token.to_string(),
@@ -157,7 +160,7 @@ pub(super) fn write_daemon_toggle_request(
     };
     let payload =
         serde_json::to_vec(&envelope).context("failed to serialize daemon toggle request")?;
-    let path = next_daemon_toggle_request_path()?;
+    let path = next_daemon_toggle_request_path(runtime_paths)?;
     write_file_atomic(&path, &payload)?;
     let response_path = daemon_toggle_response_path_for_request(&path)?;
     Ok(DaemonToggleCommand {
@@ -168,8 +171,11 @@ pub(super) fn write_daemon_toggle_request(
     })
 }
 
-pub(crate) fn take_daemon_toggle_requests(expected_token: &str) -> Result<DaemonToggleCommands> {
-    let dir = daemon_command_dir();
+pub(crate) fn take_daemon_toggle_requests(
+    expected_token: &str,
+    runtime_paths: &PreparedRuntimePaths,
+) -> Result<DaemonToggleCommands> {
+    let dir = runtime_paths.daemon_command_dir();
     let mut paths = match fs::read_dir(&dir) {
         Ok(entries) => entries
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))

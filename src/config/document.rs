@@ -11,7 +11,6 @@ use std::fmt;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use toml_edit::{DocumentMut, TableLike};
 
 use merge::{
@@ -50,14 +49,14 @@ impl fmt::Display for ConfigDiagnostic {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 enum SourceRevision {
     Missing {
-        followed_links: Arc<[(PathBuf, PathBuf)]>,
+        followed_links: Vec<(PathBuf, PathBuf)>,
     },
     Present {
-        bytes: Arc<[u8]>,
-        followed_links: Arc<[(PathBuf, PathBuf)]>,
+        bytes: Vec<u8>,
+        followed_links: Vec<(PathBuf, PathBuf)>,
     },
 }
 
@@ -84,7 +83,6 @@ impl SourceRevision {
     fn read(path: &Path) -> Result<Self> {
         let (final_path, followed_links) = resolve_symlink_chain(path)
             .with_context(|| format!("Failed to resolve config source {}", path.display()))?;
-        let followed_links: Arc<[(PathBuf, PathBuf)]> = followed_links.into();
         let metadata = match fs::symlink_metadata(&final_path) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -106,7 +104,7 @@ impl SourceRevision {
         let bytes = fs::read(&final_path)
             .with_context(|| format!("Failed to read config from {}", final_path.display()))?;
         Ok(Self::Present {
-            bytes: Arc::from(bytes.into_boxed_slice()),
+            bytes,
             followed_links,
         })
     }
@@ -138,11 +136,11 @@ impl SourceRevision {
     fn after_write(&self, bytes: &[u8]) -> Self {
         let followed_links = match self {
             Self::Missing { followed_links } | Self::Present { followed_links, .. } => {
-                Arc::clone(followed_links)
+                followed_links.clone()
             }
         };
         Self::Present {
-            bytes: Arc::from(bytes),
+            bytes: bytes.to_vec(),
             followed_links,
         }
     }
@@ -160,11 +158,15 @@ pub struct ConfigDocument {
     repair_mode: bool,
 }
 
-impl ConfigDocument {
-    pub fn load() -> Result<Self> {
-        Self::load_from_path(Config::get_config_path()?)
-    }
+struct RevisionDocumentParts {
+    config: Config,
+    document: DocumentMut,
+    known_document: DocumentMut,
+    source: ConfigSource,
+    diagnostics: Vec<ConfigDiagnostic>,
+}
 
+impl ConfigDocument {
     pub fn load_from_path(path: impl Into<PathBuf>) -> Result<Self> {
         let source_path = path.into();
         let revision = SourceRevision::read(&source_path)?;
@@ -176,15 +178,11 @@ impl ConfigDocument {
     ///
     /// The returned warning contains the original parse failure. Saving the
     /// fallback document remains revision-guarded and creates a backup first.
-    pub fn load_for_editing() -> Result<(Self, Option<String>)> {
-        Self::load_for_editing_from_path(Config::get_config_path()?)
-    }
-
     pub fn load_for_editing_from_path(path: impl Into<PathBuf>) -> Result<(Self, Option<String>)> {
         let source_path = path.into();
         let revision = SourceRevision::read(&source_path)?;
-        match Self::from_revision(source_path.clone(), revision.clone()) {
-            Ok(document) => Ok((document, None)),
+        match Self::parse_revision(&source_path, &revision) {
+            Ok(parts) => Ok((Self::from_parts(source_path, revision, parts, false), None)),
             Err(error) if revision.bytes().is_some() => {
                 let document = revision
                     .bytes()
@@ -212,6 +210,14 @@ impl ConfigDocument {
     }
 
     fn from_revision(source_path: PathBuf, revision: SourceRevision) -> Result<Self> {
+        let parts = Self::parse_revision(&source_path, &revision)?;
+        Ok(Self::from_parts(source_path, revision, parts, false))
+    }
+
+    fn parse_revision(
+        source_path: &Path,
+        revision: &SourceRevision,
+    ) -> Result<RevisionDocumentParts> {
         match revision.bytes() {
             Some(bytes) => {
                 let input = std::str::from_utf8(bytes).with_context(|| {
@@ -223,32 +229,44 @@ impl ConfigDocument {
                 let parsed = parse_typed_config(input).with_context(|| {
                     format!("Failed to parse config from {}", source_path.display())
                 })?;
-                Ok(Self {
+                Ok(RevisionDocumentParts {
                     config: parsed.config,
                     document,
                     known_document: parsed.known_document,
-                    source_path,
                     source: ConfigSource::Primary,
-                    revision,
                     diagnostics: parsed.diagnostics,
-                    repair_mode: false,
                 })
             }
             None => {
                 let config = Config::default();
                 let document = DocumentMut::new();
                 let known_document = serialize_config_document(&config)?;
-                Ok(Self {
+                Ok(RevisionDocumentParts {
                     config,
                     document,
                     known_document,
-                    source_path,
                     source: ConfigSource::Default,
-                    revision,
                     diagnostics: Vec::new(),
-                    repair_mode: false,
                 })
             }
+        }
+    }
+
+    fn from_parts(
+        source_path: PathBuf,
+        revision: SourceRevision,
+        parts: RevisionDocumentParts,
+        repair_mode: bool,
+    ) -> Self {
+        Self {
+            config: parts.config,
+            document: parts.document,
+            known_document: parts.known_document,
+            source_path,
+            source: parts.source,
+            revision,
+            diagnostics: parts.diagnostics,
+            repair_mode,
         }
     }
 

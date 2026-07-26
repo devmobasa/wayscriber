@@ -6,8 +6,6 @@
 //! inline fallback (overlay-layer canvas on niri/sway, forced inline)
 //! would cover separate GTK surfaces just the same.
 
-use std::sync::OnceLock;
-
 use crate::config::{Config, ToolbarBackendKind};
 use crate::env_vars::TOOLBAR_BACKEND_ENV;
 
@@ -94,18 +92,21 @@ fn parse_backend_env(raw: &str) -> Option<ToolbarBackendKind> {
     }
 }
 
-fn backend_env_override() -> Option<ToolbarBackendKind> {
-    static OVERRIDE: OnceLock<Option<ToolbarBackendKind>> = OnceLock::new();
-    *OVERRIDE.get_or_init(|| {
-        std::env::var(TOOLBAR_BACKEND_ENV)
-            .ok()
-            .and_then(|raw| parse_backend_env(&raw))
-    })
+/// Reads the optional environment override for one runtime root. The caller
+/// owns the returned value for the lifetime of that root.
+pub(crate) fn backend_env_override_from_env() -> Option<ToolbarBackendKind> {
+    std::env::var(TOOLBAR_BACKEND_ENV)
+        .ok()
+        .and_then(|raw| parse_backend_env(&raw))
 }
 
-/// Backend request from config, with the env var taking precedence.
-pub fn requested_backend(config: &Config) -> ToolbarBackendKind {
-    backend_env_override().unwrap_or(config.ui.toolbar.backend)
+/// Backend request from config, with a previously captured environment value
+/// taking precedence.
+pub(crate) fn requested_backend_with_override(
+    config: &Config,
+    env_override: Option<ToolbarBackendKind>,
+) -> ToolbarBackendKind {
+    env_override.unwrap_or(config.ui.toolbar.backend)
 }
 
 #[cfg(test)]
@@ -195,5 +196,24 @@ mod tests {
         );
         assert_eq!(parse_backend_env(""), None);
         assert_eq!(parse_backend_env("nonsense"), None);
+    }
+
+    #[test]
+    fn captured_override_is_root_local_and_precedes_config() {
+        let mut config = Config::default();
+        config.ui.toolbar.backend = ToolbarBackendKind::Builtin;
+
+        assert_eq!(
+            requested_backend_with_override(&config, None),
+            ToolbarBackendKind::Builtin
+        );
+        assert_eq!(
+            requested_backend_with_override(&config, Some(ToolbarBackendKind::Gtk)),
+            ToolbarBackendKind::Gtk
+        );
+        assert_eq!(
+            requested_backend_with_override(&config, Some(ToolbarBackendKind::Auto)),
+            ToolbarBackendKind::Auto
+        );
     }
 }

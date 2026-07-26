@@ -2,9 +2,11 @@ use anyhow::{Context, Result, anyhow};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 const SESSION_FILE_EXTENSION: &str = "wayscriber-session";
+const SESSION_FILE_DIALOG_EXECUTION_BUDGET: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland::state) enum SessionFileDialogMode {
@@ -31,18 +33,26 @@ pub(in crate::backend::wayland::state) struct SessionFileDialogController {
     next_id: u64,
     active: Option<(u64, SessionFileDialogMode)>,
     receiver: Option<mpsc::Receiver<SessionFileDialogMessage>>,
-    runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+    worker: Option<JoinHandle<()>>,
+    runtime_wake: crate::backend::wayland::RuntimeWakeSender,
+    process_broker: crate::process_broker::ProcessBrokerHandle,
+    default_dir: Result<PathBuf, String>,
 }
 
 impl SessionFileDialogController {
     pub(in crate::backend::wayland::state) fn new(
-        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+        runtime_wake: crate::backend::wayland::RuntimeWakeSender,
+        process_broker: crate::process_broker::ProcessBrokerHandle,
+        paths: &crate::paths::PathResolver,
     ) -> Self {
         Self {
             next_id: 1,
             active: None,
             receiver: None,
+            worker: None,
             runtime_wake,
+            process_broker,
+            default_dir: paths.home_dir().map_err(|error| error.to_string()),
         }
     }
 
@@ -54,18 +64,31 @@ impl SessionFileDialogController {
         if self.active.is_some() {
             return Err(anyhow!("a session file dialog is already active"));
         }
+        let default_dir = self
+            .default_dir
+            .clone()
+            .map_err(|error| anyhow!("session chooser path is unavailable: {error}"))?;
         let id = self.next_id;
         self.next_id = self
             .next_id
             .checked_add(1)
             .ok_or_else(|| anyhow!("session dialog identity exhausted"))?;
         let (sender, receiver) = mpsc::sync_channel(1);
-        let wake = self.runtime_wake.clone();
-        std::thread::Builder::new()
+        let wake = self
+            .runtime_wake
+            .try_duplicate()
+            .context("failed to duplicate session dialog runtime wake")?;
+        let process_broker = self.process_broker.clone();
+        let worker = std::thread::Builder::new()
             .name(format!("wayscriber-session-dialog-{id}"))
             .spawn(move || {
-                let result = choose_session_file(mode, current_path.as_deref())
-                    .map_err(|error| format!("{error:#}"));
+                let result = choose_session_file(
+                    &process_broker,
+                    mode,
+                    current_path.as_deref(),
+                    &default_dir,
+                )
+                .map_err(|error| format!("{error:#}"));
                 let _ = sender.send((id, mode, result));
                 if let Err(error) = wake.wake() {
                     log::error!("Failed to wake runtime for session dialog completion: {error}");
@@ -74,6 +97,7 @@ impl SessionFileDialogController {
             .context("failed to start session dialog worker")?;
         self.active = Some((id, mode));
         self.receiver = Some(receiver);
+        self.worker = Some(worker);
         Ok(())
     }
 
@@ -98,31 +122,92 @@ impl SessionFileDialogController {
         };
         self.active = None;
         self.receiver = None;
+        self.join_finished_worker()?;
         let (id, mode, result) = received;
         if id != expected_id || mode != expected_mode {
             return Err(anyhow!("session dialog completion identity mismatch"));
         }
         Ok(Some(SessionFileDialogCompletion { mode, result }))
     }
+
+    fn join_finished_worker(&mut self) -> Result<()> {
+        let Some(worker) = self.worker.take() else {
+            return Ok(());
+        };
+        worker
+            .join()
+            .map_err(|_| anyhow!("session dialog worker panicked during teardown"))
+    }
 }
 
+impl Drop for SessionFileDialogController {
+    fn drop(&mut self) {
+        // Both chooser attempts share one execution deadline. At most one
+        // broker response-grace interval can extend past that deadline because
+        // an expired budget prevents the fallback from starting. Wayland state
+        // drops this owner while the broker actor is still live, so the worker
+        // can finish and be joined without reversing broker teardown order.
+        if let Err(error) = self.join_finished_worker() {
+            log::error!("Failed to join session dialog worker: {error:#}");
+        }
+    }
+}
+
+#[cfg(test)]
 pub(in crate::backend::wayland::state::toolbar::events) type SessionFileChooser =
     fn(SessionFileDialogMode, Option<&Path>) -> Result<Option<SessionFileDialogResult>>;
 
 pub(in crate::backend::wayland::state::toolbar::events) fn choose_session_file(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     mode: SessionFileDialogMode,
     current_path: Option<&Path>,
+    default_dir: &Path,
 ) -> Result<Option<PathBuf>> {
-    choose_session_file_from(
-        mode,
-        current_path,
-        &[
-            run_zenity_session_file_dialog,
-            run_kdialog_session_file_dialog,
-        ],
-    )
+    let now = Instant::now();
+    let deadline = now
+        .checked_add(SESSION_FILE_DIALOG_EXECUTION_BUDGET)
+        .ok_or_else(|| anyhow!("session file chooser deadline overflow"))?;
+    let mut errors = Vec::new();
+    for chooser in [
+        run_zenity_session_file_dialog as ProcessBrokerSessionFileChooser,
+        run_kdialog_session_file_dialog,
+    ] {
+        let Some(timeout) = remaining_chooser_budget(Instant::now(), deadline) else {
+            errors.push("session file chooser execution budget expired".into());
+            break;
+        };
+        match chooser(process_broker, mode, current_path, default_dir, timeout) {
+            Ok(Some(SessionFileDialogResult::Selected(path))) => return Ok(Some(path)),
+            Ok(Some(SessionFileDialogResult::Cancelled)) => return Ok(None),
+            Ok(None) => {}
+            Err(err) => {
+                let message = format!("{err:#}");
+                log::warn!("Session file chooser failed; trying fallback if available: {message}");
+                errors.push(message);
+            }
+        }
+    }
+    no_session_file_chooser_error(errors)
 }
 
+type ProcessBrokerSessionFileChooser = fn(
+    &crate::process_broker::ProcessBrokerHandle,
+    SessionFileDialogMode,
+    Option<&Path>,
+    &Path,
+    Duration,
+) -> Result<Option<SessionFileDialogResult>>;
+
+fn remaining_chooser_budget(now: Instant, deadline: Instant) -> Option<Duration> {
+    let remaining = deadline.saturating_duration_since(now);
+    if remaining.is_zero() {
+        None
+    } else {
+        Some(remaining)
+    }
+}
+
+#[cfg(test)]
 pub(in crate::backend::wayland::state::toolbar::events) fn choose_session_file_from(
     mode: SessionFileDialogMode,
     current_path: Option<&Path>,
@@ -142,21 +227,28 @@ pub(in crate::backend::wayland::state::toolbar::events) fn choose_session_file_f
         }
     }
 
-    if errors.is_empty() {
-        return Err(anyhow!(
-            "No supported session file chooser found; tried zenity and kdialog"
-        ));
-    }
+    no_session_file_chooser_error(errors)
+}
 
-    Err(anyhow!(
-        "No usable session file chooser found; tried zenity and kdialog: {}",
-        errors.join("; ")
-    ))
+fn no_session_file_chooser_error(errors: Vec<String>) -> Result<Option<PathBuf>> {
+    if errors.is_empty() {
+        Err(anyhow!(
+            "No supported session file chooser found; tried zenity and kdialog"
+        ))
+    } else {
+        Err(anyhow!(
+            "No usable session file chooser found; tried zenity and kdialog: {}",
+            errors.join("; ")
+        ))
+    }
 }
 
 fn run_zenity_session_file_dialog(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     mode: SessionFileDialogMode,
     current_path: Option<&Path>,
+    default_dir: &Path,
+    timeout: Duration,
 ) -> Result<Option<SessionFileDialogResult>> {
     let mut arguments = vec![
         OsString::from("--file-selection"),
@@ -168,15 +260,14 @@ fn run_zenity_session_file_dialog(
     ];
     match mode {
         SessionFileDialogMode::Open => {
-            if let Some(path) = current_path.and_then(Path::parent) {
-                arguments.push("--filename".into());
-                arguments.push(path.as_os_str().into());
-            }
+            let path = current_path.and_then(Path::parent).unwrap_or(default_dir);
+            arguments.push("--filename".into());
+            arguments.push(path.as_os_str().into());
         }
         SessionFileDialogMode::SaveAs => {
             arguments.push("--save".into());
             arguments.push("--filename".into());
-            arguments.push(default_save_as_path(current_path).into_os_string());
+            arguments.push(default_save_as_path(current_path, default_dir).into_os_string());
         }
     }
     arguments.extend([
@@ -186,15 +277,20 @@ fn run_zenity_session_file_dialog(
         "All files | *".into(),
     ]);
     run_session_file_dialog_command(
+        process_broker,
         crate::process_broker::HelperKind::SessionZenity,
         "zenity",
         arguments,
+        timeout,
     )
 }
 
 fn run_kdialog_session_file_dialog(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     mode: SessionFileDialogMode,
     current_path: Option<&Path>,
+    default_dir: &Path,
+    timeout: Duration,
 ) -> Result<Option<SessionFileDialogResult>> {
     let mut arguments = Vec::new();
     match mode {
@@ -204,38 +300,40 @@ fn run_kdialog_session_file_dialog(
                 current_path
                     .and_then(Path::parent)
                     .map(Path::to_path_buf)
-                    .unwrap_or_else(default_session_dir)
+                    .unwrap_or_else(|| default_dir.to_path_buf())
                     .into_os_string(),
             );
         }
         SessionFileDialogMode::SaveAs => {
             arguments.push("--getsavefilename".into());
-            arguments.push(default_save_as_path(current_path).into_os_string());
+            arguments.push(default_save_as_path(current_path, default_dir).into_os_string());
         }
     }
     arguments.push("Wayscriber sessions (*.wayscriber-session *.session);;All files (*)".into());
     run_session_file_dialog_command(
+        process_broker,
         crate::process_broker::HelperKind::SessionKdialog,
         "kdialog",
         arguments,
+        timeout,
     )
 }
 
 fn run_session_file_dialog_command(
+    process_broker: &crate::process_broker::ProcessBrokerHandle,
     kind: crate::process_broker::HelperKind,
     program: &'static str,
     arguments: Vec<OsString>,
+    timeout: Duration,
 ) -> Result<Option<SessionFileDialogResult>> {
-    let output = match crate::process_broker::current().and_then(|broker| {
-        broker.run(
-            kind,
-            OsStr::new(program),
-            &arguments,
-            Vec::new(),
-            Duration::from_secs(120),
-            64 * 1024,
-        )
-    }) {
+    let output = match process_broker.run(
+        kind,
+        OsStr::new(program),
+        &arguments,
+        Vec::new(),
+        timeout,
+        64 * 1024,
+    ) {
         Ok(output) => output,
         Err(err) if err.to_string().contains("No such file") => return Ok(None),
         Err(err) => return Err(anyhow!("failed to launch {program}: {err:#}")),
@@ -265,22 +363,20 @@ fn run_session_file_dialog_command(
     ))
 }
 
-fn default_session_dir() -> PathBuf {
-    crate::paths::home_dir().unwrap_or_else(std::env::temp_dir)
-}
-
 pub(in crate::backend::wayland::state::toolbar::events) fn default_save_as_path(
     current_path: Option<&Path>,
+    default_dir: &Path,
 ) -> PathBuf {
-    default_save_as_dir().join(save_as_file_name(current_path))
+    default_save_as_dir(default_dir).join(save_as_file_name(current_path))
 }
 
-fn default_save_as_dir() -> PathBuf {
-    let Some(home) = crate::paths::home_dir() else {
-        return std::env::temp_dir();
-    };
+fn default_save_as_dir(home: &Path) -> PathBuf {
     let documents = home.join("Documents");
-    if documents.is_dir() { documents } else { home }
+    if documents.is_dir() {
+        documents
+    } else {
+        home.to_path_buf()
+    }
 }
 
 pub(in crate::backend::wayland::state::toolbar::events) fn save_as_file_name(
@@ -320,14 +416,30 @@ pub(in crate::backend::wayland::state::toolbar::events) fn ensure_save_as_extens
 mod controller_tests {
     use super::*;
 
-    fn controller() -> SessionFileDialogController {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        SessionFileDialogController::new(wake.handle())
+    fn controller() -> (
+        crate::process_broker::ProcessBrokerOwner,
+        SessionFileDialogController,
+    ) {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("session-dialog fixture creates its runtime eventfd");
+        let process_broker_owner = crate::process_broker::start_for_runtime()
+            .expect("session-dialog fixture starts an isolated process broker");
+        let paths =
+            crate::paths::PathResolver::from_environment(crate::paths::PathEnvironment::for_test(
+                &[(crate::env_vars::HOME_ENV, std::ffi::OsStr::new("/tmp"))],
+            ));
+        let controller = SessionFileDialogController::new(
+            wake.try_sender()
+                .expect("test duplicates its session-dialog runtime eventfd"),
+            process_broker_owner.handle(),
+            &paths,
+        );
+        (process_broker_owner, controller)
     }
 
     #[test]
     fn completion_identity_mismatch_is_terminal_and_consumed_once() {
-        let mut controller = controller();
+        let (_process_broker_owner, mut controller) = controller();
         let (sender, receiver) = mpsc::sync_channel(1);
         controller.active = Some((7, SessionFileDialogMode::Open));
         controller.receiver = Some(receiver);
@@ -337,41 +449,68 @@ mod controller_tests {
                 SessionFileDialogMode::Open,
                 Ok(Some(PathBuf::from("/tmp/session"))),
             ))
-            .unwrap();
+            .expect("identity-mismatch fixture retains its completion receiver");
 
         assert!(controller.try_receive().is_err());
-        assert!(controller.try_receive().unwrap().is_none());
+        assert!(
+            controller
+                .try_receive()
+                .expect("terminal mismatch fixture permits a second poll")
+                .is_none()
+        );
     }
 
     #[test]
     fn worker_disconnect_produces_one_identified_failure() {
-        let mut controller = controller();
+        let (_process_broker_owner, mut controller) = controller();
         let (sender, receiver) = mpsc::sync_channel(1);
         controller.active = Some((9, SessionFileDialogMode::SaveAs));
         controller.receiver = Some(receiver);
         drop(sender);
 
-        let completion = controller.try_receive().unwrap().unwrap();
+        let completion = controller
+            .try_receive()
+            .expect("disconnected-worker fixture returns a typed completion")
+            .expect("disconnected-worker fixture has one terminal completion");
         assert_eq!(completion.mode, SessionFileDialogMode::SaveAs);
         assert!(
             completion
                 .result
-                .unwrap_err()
+                .expect_err("disconnected-worker fixture returns its typed failure reason")
                 .contains("without a completion")
         );
-        assert!(controller.try_receive().unwrap().is_none());
+        assert!(
+            controller
+                .try_receive()
+                .expect("disconnected-worker fixture permits a second poll")
+                .is_none()
+        );
     }
 
     #[test]
     fn active_dialog_rejects_overlap_before_spawning_worker() {
-        let mut controller = controller();
+        let (_process_broker_owner, mut controller) = controller();
         controller.active = Some((1, SessionFileDialogMode::Open));
         assert!(
             controller
                 .start(SessionFileDialogMode::SaveAs, None)
-                .unwrap_err()
+                .expect_err("active-dialog fixture rejects an overlapping request")
                 .to_string()
                 .contains("already active")
         );
+    }
+
+    #[test]
+    fn chooser_attempts_share_one_execution_budget() {
+        let now = Instant::now();
+        let deadline = now
+            .checked_add(Duration::from_secs(7))
+            .expect("budget fixture adds a small duration to a live instant");
+
+        assert_eq!(
+            remaining_chooser_budget(now, deadline),
+            Some(Duration::from_secs(7))
+        );
+        assert_eq!(remaining_chooser_budget(deadline, deadline), None);
     }
 }

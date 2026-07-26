@@ -4,7 +4,7 @@ use super::*;
 
 impl WaylandState {
     fn toolbar_drag_should_apply(&mut self) -> bool {
-        let Some(interval) = toolbar_drag_throttle_interval() else {
+        let Some(interval) = self.runtime_options.toolbar_drag_throttle_interval() else {
             return true;
         };
         let now = Instant::now();
@@ -22,7 +22,12 @@ impl WaylandState {
         &mut self,
         snapshot: &ToolbarSnapshot,
     ) {
-        if self.toolbar_drag_preview_active() || toolbar_drag_throttle_interval().is_none() {
+        if self.toolbar_drag_preview_active()
+            || self
+                .runtime_options
+                .toolbar_drag_throttle_interval()
+                .is_none()
+        {
             let _ = self.apply_toolbar_offsets(snapshot);
             self.data.toolbar_drag_pending_apply = false;
             self.data.last_toolbar_drag_apply = Some(Instant::now());
@@ -45,7 +50,7 @@ impl WaylandState {
         let width = self.surface.width() as f64;
         let height = self.surface.height() as f64;
         if width == 0.0 || height == 0.0 {
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "skip clamp: surface not configured (width={}, height={})",
                 width, height
             ));
@@ -86,7 +91,7 @@ impl WaylandState {
         self.data.toolbar_top_offset_y = clamped.top_y;
         self.data.toolbar_side_offset_x = clamped.side_x;
         self.data.toolbar_side_offset = clamped.side_y;
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "clamp offsets: before=({:.3}, {:.3})/({:.3}, {:.3}), after=({:.3}, {:.3})/({:.3}, {:.3}), max=({:.3}, {:.3})/({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
             before_top.0,
             before_top.1,
@@ -113,7 +118,7 @@ impl WaylandState {
         snapshot: &ToolbarSnapshot,
     ) -> (bool, bool) {
         if self.surface.width() == 0 || self.surface.height() == 0 {
-            drag_log(format!(
+            self.runtime_options.drag_log(format!(
                 "skip apply_toolbar_offsets: surface not configured (width={}, height={})",
                 self.surface.width(),
                 self.surface.height()
@@ -126,7 +131,8 @@ impl WaylandState {
         // drags use relative deltas instead, so the suppressed real surface can track
         // the preview and avoid a visible catch-up animation on release.
         if self.toolbar_drag_preview_active() && !self.pointer_lock_active() {
-            drag_log("skip apply_toolbar_offsets: drag preview active without pointer lock");
+            self.runtime_options
+                .drag_log("skip apply_toolbar_offsets: drag preview active without pointer lock");
             return (false, false);
         }
         if self.layer_shell.is_none() {
@@ -146,7 +152,7 @@ impl WaylandState {
                     side_y: self.data.toolbar_side_offset,
                 },
             );
-        drag_log(format!(
+        self.runtime_options.drag_log(format!(
             "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
             top_margin_left,
             top_margin_top,
@@ -159,7 +165,7 @@ impl WaylandState {
             self.surface.scale(),
             top_base_x
         ));
-        if debug_toolbar_drag_logging_enabled() {
+        if self.runtime_options.debug_toolbar_drag_logging() {
             debug!(
                 "apply_toolbar_offsets: top_margin_left={} (last={:?}), top_margin_top={} (last={:?}), side_margin_top={} (last={:?}), side_margin_left={} (last={:?}), offsets=({}, {})/({}, {}), top_base_x={}",
                 top_margin_left,

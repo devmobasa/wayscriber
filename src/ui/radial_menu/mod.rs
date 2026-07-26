@@ -44,7 +44,13 @@ const HINT_LABEL_LIFT: f64 = 6.0;
 const HINT_LABEL_DROP: f64 = 8.0;
 
 /// Render the radial menu overlay.
-pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
+pub fn render_radial_menu(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    width: u32,
+    height: u32,
+    theme: &theme::Theme,
+) {
     let (hover, expanded_sub_ring, size_dragging) = match &input_state.radial_menu_state {
         RadialMenuState::Open {
             hover,
@@ -60,7 +66,6 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
         None => return,
     };
 
-    let theme = theme::current();
     let swatches = input_state.radial_ring_swatches();
     let _ = ctx.save();
 

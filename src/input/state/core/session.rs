@@ -217,7 +217,6 @@ mod tests {
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::{BOARD_ID_BLACKBOARD, DrawingState, MouseButton, SelectionHandle, Tool};
     use crate::util::Rect;
-    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -277,7 +276,7 @@ mod tests {
                 original_bounds: Rect::new(0, 0, 20, 20).expect("valid rect"),
                 start_x: 10,
                 start_y: 20,
-                snapshots: Arc::new(Vec::new()),
+                snapshots: Vec::new(),
             },
         ];
 

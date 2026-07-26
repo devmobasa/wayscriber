@@ -131,8 +131,8 @@ impl WaylandState {
                         next_config.ui.toolbar.side_offset = accepted.1;
                     }
                 }
-                next_config
-                    .save()
+                self.config_store
+                    .save(&next_config)
                     .map_err(|error| ConfigMutationError::new(error.to_string()))
             });
         if applied_config {
@@ -216,12 +216,10 @@ impl WaylandState {
                     let applied = self
                         .input_state
                         .apply_board_pinned_runtime(&prepared.board_id, prepared.desired);
-                    let finish = self
-                        .runtime_ui
-                        .as_mut()
-                        .expect("runtime state remained available")
-                        .finish_board_pin_toggle(prepared, applied);
-                    self.apply_toolbar_runtime_finish(finish);
+                    if let Some(runtime) = self.runtime_ui.as_mut() {
+                        let finish = runtime.finish_board_pin_toggle(prepared, applied);
+                        self.apply_toolbar_runtime_finish(finish);
+                    }
                 }
                 PendingBoardRuntimeUiAction::IdentityDeleted { board_id } => {
                     if let Some(runtime) = self.runtime_ui.as_mut() {

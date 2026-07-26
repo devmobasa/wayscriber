@@ -304,10 +304,9 @@ impl WaylandState {
             return Ok(true);
         }
 
-        let pending = self
-            .session
-            .take_pending_output_transition()
-            .expect("pending transition checked above");
+        let Some(pending) = self.session.take_pending_output_transition() else {
+            return Ok(false);
+        };
         if let Err(err) = self.run_output_transition(
             pending.staged_options.clone(),
             pending.physical_output_identity.clone(),

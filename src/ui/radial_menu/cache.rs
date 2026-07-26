@@ -1,8 +1,8 @@
-//! Prerendered static wedge base for the radial menu.
+//! Call-owned static wedge base for the radial menu.
 //!
 //! The rest-state rings (color swatches, compass wedges with their glyphs,
-//! labels, and keycap hints, and the size-ring track) are rendered once into
-//! a thread-local `ImageSurface` and blitted per frame; hover overlays, the
+//! labels, and keycap hints, and the size-ring track) are rendered into a
+//! call-owned `ImageSurface` and blitted; hover overlays, the
 //! sub-ring, the size value arc, and the center well stay dynamic on top.
 //! The cache key covers everything the base bakes in — surface resolution,
 //! palette + recents, binding hints, the slice table, and the active
@@ -10,14 +10,11 @@
 //! process-fixed (`theme::init` is first-writer-wins), so it is not part of
 //! the key.
 
-use std::cell::RefCell;
-
 use cairo::{Context, Format, ImageSurface};
 
-use crate::input::state::{
-    InputState, RADIAL_COMPASS_SLICES, RadialMenuLayout, RadialRingSwatch, RadialSliceKind,
-    sub_ring_children,
-};
+use crate::input::state::{InputState, RadialMenuLayout, RadialRingSwatch};
+#[cfg(test)]
+use crate::input::state::{RADIAL_COMPASS_SLICES, RadialSliceKind, sub_ring_children};
 use crate::ui::theme;
 
 /// Extra logical padding around the outermost ring so borders and the round
@@ -27,6 +24,7 @@ const BASE_PAD: f64 = 2.0;
 /// Cache key for the static wedge base. Everything rendered into the base
 /// surface must be derivable from this key.
 #[derive(Clone, PartialEq, Debug)]
+#[cfg(test)]
 pub(super) struct BaseKey {
     /// Physical pixel size of the (square) base surface.
     px: i32,
@@ -44,16 +42,7 @@ pub(super) struct BaseKey {
     slices: String,
 }
 
-struct CachedBase {
-    key: BaseKey,
-    surface: ImageSurface,
-}
-
-thread_local! {
-    static BASE_CACHE: RefCell<Option<CachedBase>> = const { RefCell::new(None) };
-}
-
-/// Blit the (possibly rebuilt) static base centered on the layout center.
+/// Blit the static base centered on the layout center.
 /// Falls back to drawing the base directly when an offscreen surface cannot
 /// be created.
 pub(super) fn paint_base(
@@ -65,20 +54,7 @@ pub(super) fn paint_base(
 ) {
     let extent = base_extent(layout);
     let scale = base_scale(ctx);
-    let key = base_cache_key(input_state, swatches, extent, scale);
-
-    let surface = BASE_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(cached) = cache.as_ref().filter(|cached| cached.key == key) {
-            return Some(cached.surface.clone());
-        }
-        let surface = render_base_surface(input_state, layout, theme, swatches, extent, scale)?;
-        *cache = Some(CachedBase {
-            key,
-            surface: surface.clone(),
-        });
-        Some(surface)
-    });
+    let surface = render_base_surface(input_state, layout, theme, swatches, extent, scale);
 
     match surface {
         Some(surface) => {
@@ -120,6 +96,7 @@ fn base_scale(ctx: &cairo::Context) -> f64 {
 }
 
 /// Build the cache key for the current input state.
+#[cfg(test)]
 pub(super) fn base_cache_key(
     input_state: &InputState,
     swatches: &[RadialRingSwatch],
@@ -196,6 +173,7 @@ fn physical_size(extent: f64, scale: f64) -> i32 {
     ((extent * 2.0) * scale).ceil() as i32
 }
 
+#[cfg(test)]
 fn color_key(color: &crate::draw::Color) -> String {
     format!(
         "{:.4},{:.4},{:.4},{:.4}",
@@ -306,7 +284,7 @@ mod tests {
         let surface = render_base_surface(
             &state,
             &layout,
-            theme::current(),
+            &theme::Theme::dark(),
             &state.radial_ring_swatches(),
             EXTENT,
             1.0,
@@ -316,7 +294,7 @@ mod tests {
         // Walk the middle of the color ring; the base centers the menu at
         // (EXTENT, EXTENT) in its own surface.
         let radius = (layout.color_inner + layout.color_outer) / 2.0;
-        let samples = 64;
+        let samples = 64u32;
         let mut surface = surface;
         let stride = surface.stride() as usize;
         let data = surface.data().expect("pixel data");

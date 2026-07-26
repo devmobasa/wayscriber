@@ -1,166 +1,116 @@
 use std::io;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::os::fd::AsRawFd;
 
-#[cfg(unix)]
-use libc::{SIGINT, SIGTERM, SIGUSR1, SIGUSR2};
+use crate::unix_signals::{ShutdownSignal, SignalEvent, SignalEventSource};
 
-use super::runtime_wake::RuntimeWakeHandle;
-
-pub(super) struct OverlaySignalState {
-    exit_requested: Arc<AtomicBool>,
-    tray_action_requested: Arc<AtomicBool>,
-    #[cfg(unix)]
-    listener: crate::unix_signals::SignalListener,
+pub(super) struct OverlaySignalState<'source> {
+    source: &'source mut dyn SignalEventSource,
+    exit_requested: bool,
+    tray_action_requested: bool,
 }
 
-impl OverlaySignalState {
-    pub(super) fn exit_requested(&self) -> bool {
-        self.exit_requested.load(Ordering::Acquire)
-    }
-
-    pub(super) fn take_tray_action_requested(&self) -> bool {
-        self.tray_action_requested.swap(false, Ordering::AcqRel)
-    }
-
-    pub(super) fn failure(&self) -> Option<String> {
-        #[cfg(unix)]
-        {
-            match self.listener.health() {
-                crate::unix_signals::SignalListenerHealth::Failed(failure) => {
-                    Some(failure.to_string())
-                }
-                _ => None,
-            }
-        }
-
-        #[cfg(not(unix))]
-        {
-            None
+impl<'source> OverlaySignalState<'source> {
+    pub(super) fn new(source: &'source mut dyn SignalEventSource) -> Self {
+        Self {
+            source,
+            exit_requested: false,
+            tray_action_requested: false,
         }
     }
 
-    pub(super) fn stop_and_join(&mut self) -> io::Result<()> {
-        #[cfg(unix)]
-        {
-            let failure = self.failure();
-            self.listener.stop_and_join()?;
-            match failure {
-                Some(failure) => Err(io::Error::other(format!(
-                    "overlay signal listener failed before teardown: {failure}"
-                ))),
-                None => Ok(()),
-            }
-        }
-
-        #[cfg(not(unix))]
-        {
-            Ok(())
-        }
+    pub(super) fn poll_raw_fd(&self) -> io::Result<libc::c_int> {
+        Ok(self.source.poll_fd()?.as_raw_fd())
     }
-}
 
-pub(super) fn setup_signal_handlers(
-    runtime_wake: RuntimeWakeHandle,
-) -> io::Result<OverlaySignalState> {
-    let exit_requested = Arc::new(AtomicBool::new(false));
-    let tray_action_requested = Arc::new(AtomicBool::new(false));
-
-    #[cfg(unix)]
-    {
-        let signal_exit_requested = Arc::clone(&exit_requested);
-        let signal_tray_action_requested = Arc::clone(&tray_action_requested);
-        let listener_wake = runtime_wake;
-        let listener = crate::unix_signals::spawn_listener(
-            &[SIGTERM, SIGINT, SIGUSR1, SIGUSR2],
-            move |signal| match signal {
-                SIGUSR1 => {
-                    // SIGUSR1 is reserved for daemon toggle; ignore in overlay.
+    pub(super) fn drain_events(&mut self) -> io::Result<()> {
+        for event in self.source.drain()? {
+            match event {
+                SignalEvent::ToggleOverlay => {
+                    // SIGUSR1 belongs to daemon visibility control. Overlay
+                    // processes intentionally consume and ignore it.
                     log::debug!("Overlay received SIGUSR1; ignoring");
                 }
-                SIGUSR2 => {
+                SignalEvent::TrayAction => {
                     log::debug!("Overlay received SIGUSR2 for tray action");
-                    signal_tray_action_requested.store(true, Ordering::Release);
+                    self.tray_action_requested = true;
                 }
-                _ => {
-                    log::debug!("Overlay received signal {signal}; scheduling graceful shutdown");
-                    signal_exit_requested.store(true, Ordering::Release);
+                SignalEvent::Shutdown(signal) => {
+                    let name = match signal {
+                        ShutdownSignal::Interrupt => "SIGINT",
+                        ShutdownSignal::Terminate => "SIGTERM",
+                    };
+                    log::debug!("Overlay received {name}; scheduling graceful shutdown");
+                    self.exit_requested = true;
                 }
-            },
-            move || {
-                if let Err(err) = listener_wake.wake() {
-                    log::warn!("Failed to wake overlay after signal publication: {err}");
-                }
-            },
-        )?;
-
-        Ok(OverlaySignalState {
-            exit_requested,
-            tray_action_requested,
-            listener,
-        })
+            }
+        }
+        Ok(())
     }
 
-    #[cfg(not(unix))]
-    {
-        let _ = runtime_wake;
-        Ok(OverlaySignalState {
-            exit_requested,
-            tray_action_requested,
-        })
+    pub(super) fn exit_requested(&self) -> bool {
+        self.exit_requested
+    }
+
+    pub(super) fn take_tray_action_requested(&mut self) -> bool {
+        std::mem::take(&mut self.tray_action_requested)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::os::fd::AsRawFd;
-
     use super::*;
-    use crate::backend::wayland::RuntimeWakeSource;
+    use crate::unix_signals::{FakeSignalSource, ShutdownSignal};
 
-    fn wait_for_wake(source: &RuntimeWakeSource) {
-        let mut pollfd = libc::pollfd {
-            fd: source.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: source retains the descriptor throughout this bounded wait.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
-        assert_eq!(ready, 1);
-        assert_ne!(pollfd.revents & libc::POLLIN, 0);
-        source.drain().unwrap();
-    }
-
-    #[cfg(unix)]
     #[test]
-    fn tray_signal_publishes_state_then_wakes_overlay_owner() {
-        let _guard = crate::unix_signals::test_signal_lock();
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut signals = setup_signal_handlers(wake.handle()).unwrap();
+    fn tray_and_shutdown_events_are_owned_by_overlay_state() {
+        let mut source = FakeSignalSource::new().expect("fixture creates its signal source");
+        source
+            .publish(SignalEvent::TrayAction)
+            .expect("fixture publishes its tray event");
+        source
+            .publish(SignalEvent::Shutdown(ShutdownSignal::Terminate))
+            .expect("fixture publishes its shutdown event");
+        let mut signals = OverlaySignalState::new(&mut source);
 
-        crate::unix_signals::deliver_signal_for_test(SIGUSR2);
-        wait_for_wake(&wake);
+        signals
+            .drain_events()
+            .expect("fixture drains its overlay signal events");
 
         assert!(signals.take_tray_action_requested());
-        assert!(signals.failure().is_none());
-        signals.stop_and_join().unwrap();
+        assert!(!signals.take_tray_action_requested());
+        assert!(signals.exit_requested());
     }
 
-    #[cfg(unix)]
     #[test]
-    fn listener_failure_is_published_before_overlay_owner_wake() {
-        let _guard = crate::unix_signals::test_signal_lock();
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut signals = setup_signal_handlers(wake.handle()).unwrap();
+    fn daemon_toggle_signal_is_consumed_without_exiting_overlay() {
+        let mut source = FakeSignalSource::new().expect("fixture creates its signal source");
+        source
+            .publish(SignalEvent::ToggleOverlay)
+            .expect("fixture publishes its daemon-only toggle event");
+        let mut signals = OverlaySignalState::new(&mut source);
 
-        signals.listener.inject_read_error(libc::EIO);
-        wait_for_wake(&wake);
+        signals
+            .drain_events()
+            .expect("fixture drains its ignored overlay signal event");
 
-        let failure = signals.failure().expect("listener failure");
-        assert!(failure.contains("os error Some(5)"), "{failure}");
-        let stop_err = signals.stop_and_join().unwrap_err();
-        assert!(stop_err.to_string().contains("failed before teardown"));
+        assert!(!signals.exit_requested());
+        assert!(!signals.take_tray_action_requested());
+    }
+
+    #[test]
+    fn source_failure_is_reported_to_the_overlay_owner() {
+        let mut source = FakeSignalSource::new().expect("fixture creates its signal source");
+        source
+            .fail_next_drain(io::ErrorKind::BrokenPipe)
+            .expect("fixture wakes its failed signal source");
+        let mut signals = OverlaySignalState::new(&mut source);
+
+        assert_eq!(
+            signals
+                .drain_events()
+                .expect_err("fixture observes the source failure")
+                .kind(),
+            io::ErrorKind::BrokenPipe
+        );
     }
 }

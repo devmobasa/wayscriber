@@ -181,7 +181,7 @@ pub(super) fn build_top_view_planned(
                 | model::TopToolbarControl::SessionMenu
                 | model::TopToolbarControl::SettingsMenu
                 | model::TopToolbarControl::HighlightRing => {
-                    unreachable!("control belongs outside the main strip")
+                    continue;
                 }
             },
         }
@@ -321,12 +321,14 @@ pub(super) fn build_top_view_planned(
             ));
             continue;
         }
-        let kind = match control {
-            model::TopToolbarControl::Pin => WidgetKind::PinButton {
+        let Some(kind) = (match control {
+            model::TopToolbarControl::Pin => Some(WidgetKind::PinButton {
                 pinned: control.active(snapshot),
-            },
-            model::TopToolbarControl::Minimize => WidgetKind::MinimizeButton,
-            _ => unreachable!("non-chrome control in chrome specification"),
+            }),
+            model::TopToolbarControl::Minimize => Some(WidgetKind::MinimizeButton),
+            _ => None,
+        }) else {
+            continue;
         };
         tree.push(WidgetNode::new(
             control.id().render_id().into_owned(),
@@ -411,23 +413,23 @@ fn build_top_minimized_tab(
     width: f64,
     height: f64,
 ) -> WidgetTree {
-    let control = match spec.strip() {
-        [model::TopToolbarNode::Control(control)] => *control,
-        _ => unreachable!("minimized specification contains one restore control"),
-    };
     let mut tree = WidgetTree::new((width, height));
     tree.push(WidgetNode::decor(
         "top.panel",
         (0.0, 0.0, width, height),
         WidgetKind::Panel,
     ));
+    let [model::TopToolbarNode::Control(control)] = spec.strip() else {
+        return tree;
+    };
+    let Some(icon) = control.icon(snapshot) else {
+        return tree;
+    };
     tree.push(WidgetNode::new(
         control.id().render_id().into_owned(),
         (0.0, 0.0, width, height),
         WidgetKind::IconButton {
-            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                control.icon(snapshot).expect("restore icon"),
-            )),
+            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(icon)),
             icon_size: (height * 0.75).min(18.0),
             style: ButtonStyle::plain(),
         },
@@ -448,18 +450,18 @@ fn build_top_micro_chip(
     width: f64,
     height: f64,
 ) -> WidgetTree {
-    let control = match spec.strip() {
-        [model::TopToolbarNode::Control(control)] => *control,
-        _ => unreachable!("micro specification contains one chip control"),
-    };
     let mut tree = WidgetTree::new((width, height));
+    let [model::TopToolbarNode::Control(control)] = spec.strip() else {
+        return tree;
+    };
+    let Some(icon) = control.icon(snapshot) else {
+        return tree;
+    };
     tree.push(WidgetNode::new(
         control.id().render_id().into_owned(),
         (0.0, 0.0, width, height),
         WidgetKind::MicroChip {
-            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                control.icon(snapshot).expect("micro chip tool icon"),
-            )),
+            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(icon)),
             ring_color: (
                 snapshot.color.r,
                 snapshot.color.g,
@@ -660,7 +662,12 @@ fn push_style_pill(
             model::StylePillControl::ThicknessSlider
             | model::StylePillControl::OpacitySlider
             | model::StylePillControl::FontSizeSlider => {
-                let (slider_spec, value) = control.slider(snapshot).expect("slider control");
+                let Some((slider_spec, value)) = control.slider(snapshot) else {
+                    continue;
+                };
+                let Some(event) = control.event(snapshot) else {
+                    continue;
+                };
                 let kind = match control {
                     model::StylePillControl::ThicknessSlider => HitKind::DragSetThickness {
                         min: slider_spec.min,
@@ -685,7 +692,7 @@ fn push_style_pill(
                         t: slider_spec.t_from_value(value),
                     },
                     Some(Interaction {
-                        event: control.event(snapshot).expect("slider event"),
+                        event,
                         kind,
                         tooltip: None,
                     }),
@@ -703,7 +710,7 @@ fn push_style_pill(
                             row_h,
                         ),
                         WidgetKind::Label(LabelSpec::new(
-                            control.value_text(snapshot).expect("opacity readout"),
+                            control.value_text(snapshot).unwrap_or_default(),
                             TOP_LABEL_FONT_SIZE,
                             true,
                         )),
@@ -724,7 +731,7 @@ fn push_style_pill(
                     ),
                     WidgetKind::TextButton {
                         label: LabelSpec::new(
-                            control.value_text(snapshot).expect("numeral text"),
+                            control.value_text(snapshot).unwrap_or_default(),
                             TOP_LABEL_FONT_SIZE,
                             true,
                         ),
@@ -806,7 +813,9 @@ fn push_style_pill(
             }
             model::StylePillControl::SelectionStepper(_) => {
                 let enabled = control.enabled(snapshot);
-                let steps = control.steps(snapshot).expect("stepper halves");
+                let Some(steps) = control.steps(snapshot) else {
+                    continue;
+                };
                 let step_w = ToolbarLayoutSpec::TOP_STYLE_STEP_W;
                 let value_w = ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W;
                 let step_style = if enabled {
@@ -849,7 +858,9 @@ fn push_style_pill(
             }
             model::StylePillControl::FontFamilySegment
             | model::StylePillControl::EraserModeSegment => {
-                let segments = control.segments(snapshot).expect("segment halves");
+                let Some(segments) = control.segments(snapshot) else {
+                    continue;
+                };
                 // A clear gap before the segment so Sans│Mono never crowd the
                 // preceding numeral ("72pt") to its left (M7-C3).
                 x += ToolbarLayoutSpec::TOP_STYLE_SEGMENT_LEAD;
@@ -1064,16 +1075,15 @@ fn control_button_node_with_tooltip(
             _ => ButtonStyle::active(control.active(snapshot)),
         }
     };
-    let kind = if use_icons {
+    let icon = use_icons.then(|| control.icon(snapshot)).flatten();
+    let kind = if let Some(icon) = icon {
         let icon_size = if control == model::TopToolbarControl::ShapePicker {
             ToolbarLayoutSpec::TOP_ICON_SIZE
         } else {
             ToolbarLayoutSpec::TOP_ICON_SIZE.min((rect.2 - 4.0).max(8.0))
         };
         WidgetKind::IconButton {
-            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                control.icon(snapshot).expect("button icon"),
-            )),
+            glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(icon)),
             icon_size,
             style,
         }

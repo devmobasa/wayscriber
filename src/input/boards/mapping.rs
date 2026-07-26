@@ -124,6 +124,22 @@ impl BoardSpec {
 
 impl BoardManager {
     pub fn from_config(config: BoardsConfig) -> Self {
+        Self::from_config_with_identity(config, BoardIdentityGeneration::initial(), 2)
+    }
+
+    /// Consume this board root and construct its replacement from configuration
+    /// while preserving the root-owned identity sequence.
+    pub fn replaced_from_config(self, config: BoardsConfig) -> Self {
+        let identity_generation = BoardIdentityGeneration(self.next_identity_generation);
+        let next_identity_generation = self.next_identity_generation.wrapping_add(1).max(1);
+        Self::from_config_with_identity(config, identity_generation, next_identity_generation)
+    }
+
+    fn from_config_with_identity(
+        config: BoardsConfig,
+        identity_generation: BoardIdentityGeneration,
+        next_identity_generation: u64,
+    ) -> Self {
         let pin_seeds = config
             .items
             .iter()
@@ -165,7 +181,8 @@ impl BoardManager {
             persist_customizations: config.persist_customizations,
             default_board_id: config.default_board,
             template,
-            identity_generation: BoardIdentityGeneration::fresh(),
+            identity_generation,
+            next_identity_generation,
         }
     }
 

@@ -76,7 +76,7 @@ impl RuntimeUiStateStore {
         claimed: RuntimeUiStateInspection,
         reason: impl Into<String>,
     ) -> SourceMutationResult {
-        let artifacts = artifact_for(quarantine.clone(), claimed);
+        let artifacts = artifact_for(&quarantine, claimed);
         if artifacts.is_empty() {
             return failed(
                 id,

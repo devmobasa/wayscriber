@@ -1,16 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 
-#[cfg(all(test, feature = "portal"))]
-use super::types::DaemonControlEvent;
 use super::types::VisibilityPublisher;
+#[cfg(all(test, feature = "portal"))]
+use super::types::{DaemonControlMessage, daemon_event_channel};
 
 #[cfg(feature = "portal")]
 use crate::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
-#[cfg(feature = "portal")]
-use std::sync::atomic::Ordering;
-
 #[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "portal")]
@@ -78,11 +73,9 @@ impl GlobalShortcutsListener {
 
 pub(super) fn start_global_shortcuts_listener(
     visibility: VisibilityPublisher,
-    quit_flag: Arc<AtomicBool>,
 ) -> Option<GlobalShortcutsListener> {
     #[cfg(feature = "portal")]
     {
-        let listener_quit_flag = quit_flag.clone();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let preferred_trigger = std::env::var(PORTAL_SHORTCUT_ENV)
             .ok()
@@ -94,7 +87,10 @@ pub(super) fn start_global_shortcuts_listener(
             .unwrap_or_else(|| DEFAULT_PORTAL_APP_ID.to_string());
 
         let thread = std::thread::spawn(move || {
-            let runtime = match tokio::runtime::Runtime::new() {
+            let runtime = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
                 Ok(runtime) => runtime,
                 Err(err) => {
                     warn!(
@@ -109,7 +105,7 @@ pub(super) fn start_global_shortcuts_listener(
                 if let Err(err) =
                     run_listener(visibility, preferred_trigger, portal_app_id, shutdown_rx).await
                 {
-                    if listener_quit_flag.load(Ordering::Acquire) {
+                    if err.downcast_ref::<ListenerShutdown>().is_some() {
                         info!(
                             "Global shortcuts portal listener stopped during shutdown: {}",
                             err
@@ -127,10 +123,24 @@ pub(super) fn start_global_shortcuts_listener(
     }
     #[cfg(not(feature = "portal"))]
     {
-        let _ = (visibility, quit_flag);
+        let _ = visibility;
         None
     }
 }
+
+#[cfg(feature = "portal")]
+#[derive(Debug)]
+struct ListenerShutdown(String);
+
+#[cfg(feature = "portal")]
+impl std::fmt::Display for ListenerShutdown {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "shutdown requested while waiting for {}", self.0)
+    }
+}
+
+#[cfg(feature = "portal")]
+impl std::error::Error for ListenerShutdown {}
 
 #[cfg(feature = "portal")]
 #[proxy(
@@ -305,13 +315,26 @@ mod tests {
 
     #[test]
     fn global_shortcut_publication_wakes_daemon_owner() {
-        let toggle = Arc::new(AtomicBool::new(false));
-        let (event, wake) = DaemonControlEvent::for_test(Arc::clone(&toggle));
+        let (inbox, senders) = daemon_event_channel();
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("test creates a daemon runtime eventfd");
+        let event = senders.quit(
+            wake.try_sender()
+                .expect("test duplicates its daemon runtime eventfd"),
+        );
 
-        event.raise("global shortcut test").unwrap();
+        event
+            .raise("global shortcut test")
+            .expect("fixture daemon owner remains connected");
 
-        assert!(toggle.load(Ordering::Acquire));
-        assert!(wake.wait_readable(Some(Duration::ZERO)).unwrap());
+        assert!(
+            wake.wait_readable(Some(Duration::ZERO))
+                .expect("fixture wake remains readable")
+        );
+        assert!(matches!(
+            inbox.drain().controls.as_slice(),
+            [DaemonControlMessage::Quit]
+        ));
     }
 
     #[test]
@@ -319,10 +342,13 @@ mod tests {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let (observed_tx, observed_rx) = std::sync::mpsc::channel();
         let thread = std::thread::spawn(move || {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let runtime = tokio::runtime::Runtime::new()
+                .expect("fixture creates its global-shortcut Tokio runtime");
             runtime.block_on(async move {
                 let _ = shutdown_rx.await;
-                observed_tx.send(()).unwrap();
+                observed_tx
+                    .send(())
+                    .expect("fixture shutdown observer remains connected");
             });
         });
         let mut listener = GlobalShortcutsListener {
@@ -331,23 +357,34 @@ mod tests {
         };
 
         listener.request_shutdown();
-        observed_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-        listener.join().unwrap();
+        observed_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture listener observes shutdown without a timer");
+        listener
+            .join()
+            .expect("fixture listener thread exits normally");
     }
 
     #[test]
     fn shutdown_interrupts_a_pending_portal_operation() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let runtime = tokio::runtime::Runtime::new()
+            .expect("fixture creates its global-shortcut Tokio runtime");
         runtime.block_on(async {
             let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
             let (polled_tx, polled_rx) = tokio::sync::oneshot::channel();
             let operation = async move {
-                polled_tx.send(()).unwrap();
+                polled_tx
+                    .send(())
+                    .expect("fixture pending-operation observer remains connected");
                 std::future::pending::<()>().await
             };
             let shutdown_task = tokio::spawn(async move {
-                polled_rx.await.unwrap();
-                shutdown_tx.send(()).unwrap();
+                polled_rx
+                    .await
+                    .expect("fixture observes the pending portal operation");
+                shutdown_tx
+                    .send(())
+                    .expect("fixture portal shutdown receiver remains connected");
             });
 
             let result = tokio::time::timeout(
@@ -356,9 +393,11 @@ mod tests {
             )
             .await
             .expect("shutdown did not interrupt the pending portal operation")
-            .unwrap_err();
+            .expect_err("fixture shutdown must interrupt the pending portal operation");
             assert!(result.to_string().contains("shutdown"));
-            shutdown_task.await.unwrap();
+            shutdown_task
+                .await
+                .expect("fixture shutdown task exits normally");
         });
     }
 }
@@ -477,7 +516,7 @@ async fn await_portal_operation<T>(
     tokio::select! {
         biased;
         _ = &mut *shutdown => {
-            Err(anyhow!("shutdown requested while waiting for {description}"))
+            Err(ListenerShutdown(description.to_string()).into())
         }
         output = operation => Ok(output),
     }

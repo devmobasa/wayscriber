@@ -8,7 +8,7 @@ impl SideBar {
         // consumed makes the surface catch up after button release. Keep the
         // allocated height stable for the gesture; the final backend echo
         // applies the viewport for the accepted resting position.
-        if self.drag_active.get() {
+        if self.drag.active() {
             return;
         }
         let Some(scrolled) = &self.scrolled else {
@@ -29,9 +29,8 @@ impl SideBar {
         // it is only restored into the same pane.
         if let (Some(scrolled), Some(key)) = (&self.scrolled, &self.structure) {
             let value = scrolled.vadjustment().value();
-            let mut saved = self.saved_scroll.borrow_mut();
-            saved.retain(|(pane, _)| *pane != key.pane);
-            saved.push((key.pane, value));
+            self.saved_scroll.retain(|(pane, _)| *pane != key.pane);
+            self.saved_scroll.push((key.pane, value));
         }
         while let Some(child) = self.root.first_child() {
             self.root.remove(&child);
@@ -140,20 +139,26 @@ impl SideBar {
         // scroll.
         let adjustment = scrolled.vadjustment();
         let pane = snapshot.active_side_pane;
-        let pending = std::cell::Cell::new(
-            self.saved_scroll
-                .borrow()
-                .iter()
-                .find(|(saved_pane, _)| *saved_pane == pane)
-                .map(|(_, value)| *value)
-                .unwrap_or(0.0),
-        );
+        let target = self
+            .saved_scroll
+            .iter()
+            .find(|(saved_pane, _)| *saved_pane == pane)
+            .map(|(_, value)| *value)
+            .unwrap_or(0.0);
+        let weak_scrolled = scrolled.downgrade();
         adjustment.connect_changed(move |adjustment| {
-            let target = pending.get();
+            let Some(scrolled) = weak_scrolled.upgrade() else {
+                return;
+            };
+            if scrolled.has_css_class("wayscriber-scroll-restored") {
+                return;
+            }
             let reachable = adjustment.upper() - adjustment.page_size();
-            if target > 0.0 && reachable >= target {
-                adjustment.set_value(target);
-                pending.set(0.0);
+            if target <= 0.0 || reachable >= target {
+                if target > 0.0 {
+                    adjustment.set_value(target);
+                }
+                scrolled.add_css_class("wayscriber-scroll-restored");
             }
         });
         self.scrolled = Some(scrolled);
