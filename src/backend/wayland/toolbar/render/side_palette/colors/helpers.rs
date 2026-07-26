@@ -458,6 +458,10 @@ mod tests {
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
 
+    /// Breathing room around the measured value for font-metric differences
+    /// between desktop distributions and CI images.
+    const HEX_TEXT_MIN_HORIZONTAL_SLACK: f64 = 8.0;
+
     /// The chip shows `#RRGGBBAA` for a translucent color, so it must be wide
     /// enough for nine characters beside its copy icon. Too narrow and the
     /// centered value runs under that icon.
@@ -473,9 +477,10 @@ mod tests {
             );
             let extents =
                 crate::ui_text::measure_text(style, &widest, None).expect("hex value measures");
+            let required = extents.width() + HEX_TEXT_MIN_HORIZONTAL_SLACK;
             assert!(
-                extents.width() <= area,
-                "{widest} needs {:.1}px but the chip only offers {area:.1}px",
+                required <= area,
+                "{widest} needs {:.1}px plus {HEX_TEXT_MIN_HORIZONTAL_SLACK:.1}px of slack but the chip only offers {area:.1}px",
                 extents.width()
             );
         }

@@ -57,8 +57,8 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PREVIEW_GAP_BOTTOM: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HEX_INPUT_HEIGHT: f64 = 20.0;
     /// Wide enough for the nine-character `#RRGGBBAA` a translucent color
-    /// prints, alongside the copy icon inside the chip.
-    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HEX_INPUT_WIDTH: f64 = 86.0;
+    /// prints across supported Sans font metrics, alongside the copy icon.
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HEX_INPUT_WIDTH: f64 = 96.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_EXPAND_ICON_SIZE: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_COLOR_DOT_SIZE: f64 = 14.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_LABEL_OFFSET_Y: f64 = 12.0;
