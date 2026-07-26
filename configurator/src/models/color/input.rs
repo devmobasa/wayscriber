@@ -28,6 +28,15 @@ impl ColorInput {
                 rgb: [r.to_string(), g.to_string(), b.to_string()],
                 selected_named: NamedColorOption::Custom,
             },
+            // The configurator's RGB fields carry no alpha channel, so a
+            // translucent color is shown as its hex form rather than being
+            // silently flattened to opaque by the three RGB boxes.
+            ColorSpec::Rgba(_) => Self {
+                mode: ColorMode::Named,
+                name: wayscriber::input::state::color_to_hex(spec.to_color()),
+                rgb: color_to_rgb_strings(spec.to_color()),
+                selected_named: NamedColorOption::Custom,
+            },
         }
     }
 
@@ -73,7 +82,7 @@ impl ColorInput {
                 if value.is_empty() {
                     return Err(FormError::new(
                         field.to_string(),
-                        "Please enter a color name or #RRGGBB hex color.",
+                        "Please enter a color name or #RRGGBB / #RRGGBBAA hex color.",
                     ));
                 }
 
@@ -83,7 +92,7 @@ impl ColorInput {
                     Err(_) => {
                         return Err(FormError::new(
                             field.to_string(),
-                            "Expected #RRGGBB hex color.",
+                            "Expected #RRGGBB or #RRGGBBAA hex color.",
                         ));
                     }
                 }
@@ -93,7 +102,7 @@ impl ColorInput {
                 } else {
                     Err(FormError::new(
                         field.to_string(),
-                        "Expected a known color name or #RRGGBB hex color.",
+                        "Expected a known color name or #RRGGBB / #RRGGBBAA hex color.",
                     ))
                 }
             }

@@ -1,3 +1,4 @@
+use wayscriber::config::action_meta_iter;
 use wayscriber::config::keybindings::KeybindingsConfig;
 
 use super::draft::KeybindingsDraft;
@@ -130,5 +131,78 @@ fn board_pdf_export_keybinding_field_reads_and_writes_config() {
     assert_eq!(
         config.capture.export_all_boards_pdf_file,
         vec!["Ctrl+Alt+A".to_string()]
+    );
+}
+
+/// Saving in the configurator rebuilds `KeybindingsConfig` from `default()` and
+/// writes back only the fields present in `KeybindingField::all()`. A binding
+/// missing from that registry is therefore silently reset to its default the
+/// next time the user saves *any* unrelated setting.
+///
+/// This walks every configurable action, so a new binding added to the main
+/// crate without a matching `KeybindingField` fails here rather than quietly
+/// eating the user's config.
+#[test]
+fn every_configurable_action_survives_a_configurator_save() {
+    let mut source = KeybindingsConfig::default();
+    let mut expected = Vec::new();
+
+    for meta in action_meta_iter() {
+        if source.bindings_for_action(meta.action).is_none() {
+            continue; // runtime-only action with no persisted field
+        }
+        // A value no default uses, so a reset to defaults is unmistakable.
+        let sentinel = format!("Ctrl+Alt+Shift+F{}", expected.len() % 12 + 1);
+        source
+            .set_bindings_for_action(meta.action, vec![sentinel.clone()])
+            .expect("action reported as configurable");
+        expected.push((meta.action, sentinel));
+    }
+
+    let saved = KeybindingsDraft::from_config(&source)
+        .to_config()
+        .expect("draft round-trips without parse errors");
+
+    let mut lost = Vec::new();
+    for (action, sentinel) in expected {
+        let bindings = saved
+            .bindings_for_action(action)
+            .expect("action is configurable");
+        if bindings != [sentinel.as_str()] {
+            lost.push(action);
+        }
+    }
+
+    assert!(
+        lost.is_empty(),
+        "these actions have no KeybindingField, so saving would erase the user's \
+         hand-written bindings: {lost:?}"
+    );
+}
+
+#[test]
+fn blur_style_and_spotlight_bindings_read_and_write_config() {
+    let mut config = KeybindingsConfig::default();
+    config.tools.cycle_blur_style = vec!["Ctrl+Shift+Y".to_string()];
+    config.tools.select_spotlight_tool = vec!["Ctrl+Shift+G".to_string()];
+
+    let draft = KeybindingsDraft::from_config(&config);
+    assert_eq!(
+        draft.value_for(KeybindingField::CycleBlurStyle),
+        Some("Ctrl+Shift+Y")
+    );
+    assert_eq!(
+        draft.value_for(KeybindingField::SelectSpotlightTool),
+        Some("Ctrl+Shift+G")
+    );
+
+    let saved = draft.to_config().expect("round-trip");
+    assert_eq!(
+        saved.tools.cycle_blur_style,
+        vec!["Ctrl+Shift+Y".to_string()]
+    );
+    assert_eq!(
+        saved.tools.select_spotlight_tool,
+        vec!["Ctrl+Shift+G".to_string()]
     );
 }

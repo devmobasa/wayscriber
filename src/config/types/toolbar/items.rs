@@ -65,6 +65,7 @@ const DEFAULT_TOP_TOOLS_ORDER: &[ToolbarItemId] = &[
     ids::TOP_TOOL_ELLIPSE,
     ids::TOP_TOOL_ARROW,
     ids::TOP_TOOL_BLUR,
+    ids::TOP_TOOL_SPOTLIGHT,
     ids::TOP_TOOL_TRIANGLE,
     ids::TOP_TOOL_PARALLELOGRAM,
     ids::TOP_TOOL_RHOMBUS,

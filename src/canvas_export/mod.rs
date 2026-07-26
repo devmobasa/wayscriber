@@ -3,7 +3,9 @@ mod pdf;
 mod pdf_labels;
 mod png;
 
-pub use page::{CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot};
+pub use page::{
+    CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, SpotlightPassSnapshot,
+};
 #[allow(unused_imports)]
 pub use pdf::{
     BoardPdfExportSnapshot, PdfPageExportSnapshot, PdfPageLayout, PdfPageMetadata,
@@ -19,7 +21,7 @@ mod tests {
     use crate::canvas_export::page::draw_canvas_page;
     use crate::canvas_export::png::render_canvas_surface;
     use crate::config::{PdfExportConfig, RenderColorMappingConfig, RenderProfileConfig};
-    use crate::draw::{BLACK, Frame, RED, Shape, WHITE};
+    use crate::draw::{BLACK, BlurStyle, Frame, RED, Shape, WHITE};
     use crate::render_profiles::RenderColorProfile;
 
     fn snapshot(frame: Frame, viewport: CanvasExportViewport) -> CanvasExportSnapshot {
@@ -28,6 +30,7 @@ mod tests {
             backdrop: CanvasExportBackdropSnapshot::Transparent,
             board: BoardExportSnapshot { frame },
             render_profile: None,
+            spotlight: Default::default(),
         }
     }
 
@@ -39,6 +42,7 @@ mod tests {
             viewport_height: 20,
             origin_x: 0,
             origin_y: 0,
+            spotlight: Default::default(),
         }
     }
 
@@ -283,6 +287,64 @@ mod tests {
         assert_eq!(pixel(&mut surface, 6, 6), 0);
     }
 
+    /// The spotlight pass has to run after the shapes. Eraser strokes clear their
+    /// path and replay the original backdrop into it, so a dim layer painted
+    /// before them would be punched away and every past erasure would show as a
+    /// bright trail outside the openings.
+    #[test]
+    fn erased_regions_outside_a_spotlight_stay_dimmed() {
+        let mut frame = Frame::new();
+        // Opening on the left; the eraser sweeps across the dimmed right half.
+        frame.add_shape(Shape::Spotlight {
+            cx: 20,
+            cy: 60,
+            rx: 14,
+            ry: 14,
+        });
+        frame.add_shape(Shape::EraserStroke {
+            points: vec![(40, 60), (110, 60)],
+            brush: crate::draw::EraserBrush {
+                size: 12.0,
+                kind: crate::draw::EraserKind::Circle,
+            },
+        });
+
+        let mut surface = render_canvas_surface(&snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 120,
+                logical_height: 120,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        ))
+        .expect("render export surface");
+
+        let alpha_at = |surface: &mut cairo::ImageSurface, x: usize, y: usize| {
+            surface.flush();
+            let stride = surface.stride() as usize;
+            surface.data().expect("surface data")[y * stride + x * 4 + 3]
+        };
+
+        let on_erased_path = alpha_at(&mut surface, 80, 60);
+        let untouched_surround = alpha_at(&mut surface, 80, 15);
+        assert!(
+            on_erased_path > 0,
+            "the erased path must still carry the dim layer, got alpha {on_erased_path}"
+        );
+        assert!(
+            on_erased_path.abs_diff(untouched_surround) <= 8,
+            "erased path ({on_erased_path}) should be dimmed like its surroundings \
+             ({untouched_surround}), not punched bright"
+        );
+        assert_eq!(
+            alpha_at(&mut surface, 20, 60),
+            0,
+            "the spotlight opening itself stays clear"
+        );
+    }
+
     #[test]
     fn export_blur_uses_placeholder_without_persisted_backdrop() {
         let mut frame = Frame::new();
@@ -292,6 +354,7 @@ mod tests {
             w: 8,
             h: 8,
             strength: 12.0,
+            style: BlurStyle::Gaussian,
         });
         let mut surface = render_canvas_surface(&snapshot(
             frame,
@@ -331,6 +394,7 @@ mod tests {
             w: 8,
             h: 8,
             strength: 12.0,
+            style: BlurStyle::Gaussian,
         });
         let mut export = snapshot(
             frame,

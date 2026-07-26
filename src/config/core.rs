@@ -4,7 +4,7 @@ use super::types::TabletInputConfig;
 use super::types::{
     ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, ExportConfig,
     HistoryConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig,
-    SessionConfig, TrayConfig, UiConfig, UpdatesConfig,
+    SessionConfig, SpotlightConfig, TrayConfig, UiConfig, UpdatesConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +72,10 @@ pub struct Config {
     #[serde(default)]
     pub arrow: ArrowConfig,
 
+    /// Spotlight tool settings
+    #[serde(default)]
+    pub spotlight: SpotlightConfig,
+
     /// Performance tuning options
     #[serde(default)]
     pub performance: PerformanceConfig,
@@ -134,6 +138,7 @@ impl Default for Config {
             presets: PresetSlotsConfig::default(),
             history: HistoryConfig::default(),
             arrow: ArrowConfig::default(),
+            spotlight: SpotlightConfig::default(),
             performance: PerformanceConfig::default(),
             ui: UiConfig::default(),
             tray: TrayConfig::default(),

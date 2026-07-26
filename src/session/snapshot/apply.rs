@@ -104,6 +104,8 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     );
     input.eraser_kind = tool_state.eraser_kind;
     let _ = input.set_eraser_mode(tool_state.eraser_mode);
+    let _ = input.set_blur_style(tool_state.blur_style);
+    input.restore_recent_colors(tool_state.recent_colors.clone());
     if let Some(opacity) = tool_state.marker_opacity {
         let _ = input.set_marker_opacity(opacity);
     }

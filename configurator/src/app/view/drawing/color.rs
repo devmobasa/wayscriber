@@ -216,7 +216,7 @@ fn quick_named_color_section(app: &ConfiguratorApp, index: usize) -> Element<'_,
 
     if color.selected_named_is_custom() {
         column = column.push(
-            text_input("Known color name or #RRGGBB", &color.name)
+            text_input("Known color name or #RRGGBB[AA]", &color.name)
                 .on_input(move |value| {
                     Message::TextChanged(TextField::QuickColorName(index), value)
                 })
@@ -225,7 +225,7 @@ fn quick_named_color_section(app: &ConfiguratorApp, index: usize) -> Element<'_,
 
         if color.preview_color().is_none() && !color.name.trim().is_empty() {
             column = column.push(
-                text("Use a known color name or #RRGGBB")
+                text("Use a known color name, #RRGGBB, or #RRGGBBAA for alpha")
                     .size(12)
                     .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.6, 0.6))),
             );

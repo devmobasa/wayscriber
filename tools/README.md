@@ -91,6 +91,22 @@ Packaging-only hotfix policy:
   - Usage: `./tools/build-package-repos.sh`
   - Env: `ARTIFACT_ROOT`, `OUTPUT_ROOT`, `GPG_PRIVATE_KEY_B64`, etc.
 
+## nixpkgs
+
+Wayscriber is packaged in `nixpkgs`, where version bumps are opened
+automatically by the nixpkgs-update bot. The bot only rewrites the version and
+hashes, so build-level changes still need a pull request from us. See
+`packaging/nixpkgs/README.md`.
+
+- **check-nixpkgs-recipe.py** - Check the nixpkgs build declares what the default features need
+  - Uses locked Cargo metadata, so it works with Python 3.10 without an extra TOML parser
+  - Maps every direct normal Cargo dependency, including target-specific dependencies, to the nixpkgs system packages it links
+  - Keeps required native inputs, including the GTK application wrapper, aligned between the recipe and flake
+  - Fails when a Linux default-feature dependency is missing from `packaging/nixpkgs/package.nix` or `flake.nix`
+  - Fails on any new direct normal dependency until its system requirements are declared
+  - Runs as a hard gate in GitHub CI and before release packaging
+  - Usage: `./tools/check-nixpkgs-recipe.py`
+
 ## AUR (Arch User Repository)
 
 - **update-aur.sh** - Interactive AUR update

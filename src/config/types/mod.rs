@@ -15,6 +15,7 @@ mod presenter_mode;
 mod presets;
 mod render_profiles;
 mod session;
+mod spotlight;
 mod status_bar;
 #[cfg(feature = "tablet-input")]
 mod tablet;
@@ -54,6 +55,7 @@ pub use render_profiles::{
     RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig,
 };
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
+pub use spotlight::SpotlightConfig;
 pub use status_bar::StatusBarStyle;
 #[cfg(feature = "tablet-input")]
 pub use tablet::{StylusButtonBinding, TabletInputConfig};

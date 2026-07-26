@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::draw::{
-    Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES, clamp_regular_sides,
+    BlurStyle, Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES,
+    clamp_regular_sides,
 };
 use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
@@ -60,6 +61,12 @@ pub struct ToolStateSnapshot {
     #[serde(default = "default_eraser_mode_for_snapshot")]
     pub eraser_mode: EraserMode,
     #[serde(default)]
+    pub blur_style: BlurStyle,
+    /// Recently applied colours, most-recent-first. Absent in sessions written
+    /// before recents were persisted, which restore an empty list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_colors: Vec<Color>,
+    #[serde(default)]
     pub marker_opacity: Option<f64>,
     #[serde(default)]
     pub fill_enabled: Option<bool>,
@@ -92,6 +99,8 @@ impl ToolStateSnapshot {
             eraser_size: input.eraser_size,
             eraser_kind: input.eraser_kind,
             eraser_mode: input.eraser_mode,
+            blur_style: input.blur_style,
+            recent_colors: input.recent_colors().to_vec(),
             marker_opacity: Some(input.marker_opacity),
             fill_enabled: Some(input.fill_enabled),
             tool_override: input.session_tool_override(),
@@ -128,6 +137,8 @@ impl ToolStateSnapshot {
             eraser_size: config.drawing.default_eraser_size,
             eraser_kind: EraserKind::Circle,
             eraser_mode: config.drawing.default_eraser_mode,
+            blur_style: config.drawing.default_blur_style,
+            recent_colors: Vec::new(),
             marker_opacity: Some(config.drawing.marker_opacity),
             fill_enabled: Some(config.drawing.default_fill_enabled),
             tool_override: None,

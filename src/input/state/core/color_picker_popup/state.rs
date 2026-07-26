@@ -8,11 +8,13 @@ use crate::input::state::core::base::QuickColorEdit;
 
 use super::{
     ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
-    color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
+    PickerDrag, color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
 };
 
 fn hex_is_complete_for_live_preview(value: &str) -> bool {
-    value.strip_prefix('#').unwrap_or(value).len() == 6
+    // Six digits is a complete opaque color and eight a complete translucent
+    // one. Seven is mid-alpha-pair, so it must not flash a provisional color.
+    matches!(value.strip_prefix('#').unwrap_or(value).len(), 6 | 8)
 }
 
 /// Upper bound on the characters a title carries out of an authored label. This
@@ -104,7 +106,8 @@ impl InputState {
             current_color: color,
             hex_editing: false,
             hex_buffer: hex,
-            dragging: false,
+            dragging: None,
+            picker_hsv: rgb_to_hsv(color.r, color.g, color.b),
             hex_selected: false,
             hover_pos: None,
         };
@@ -232,11 +235,18 @@ impl InputState {
                     if self.color_for_tool(tool) == original_color {
                         let _ = self.preview_color_for_tool(tool, color);
                         self.active_preset_slot = None;
+                        self.note_recent_color(color);
                         self.mark_session_dirty();
                     }
                 }
                 None => {
                     self.active_preset_slot = None;
+                    // Accepting is where a mixed color becomes the color in
+                    // use, so it belongs in recents. This commits on the
+                    // popup's own target rather than through
+                    // `apply_color_from_ui`, which is what records every other
+                    // UI color source.
+                    self.note_recent_color(color);
                     self.mark_session_dirty();
                 }
             }
@@ -344,12 +354,61 @@ impl InputState {
         self.color_picker_popup_layout = None;
     }
 
-    /// Sets the current color from gradient coordinates.
+    /// Sets the current color from a position in the saturation/value square.
+    ///
+    /// `norm_x` is saturation and `norm_y` runs from full value at the top to
+    /// black at the bottom. Hue comes from the remembered triple rather than
+    /// the pointer, so the square and the hue bar stay independent.
     pub fn color_picker_popup_set_from_gradient(&mut self, norm_x: f64, norm_y: f64) {
-        let hue = norm_x.clamp(0.0, 1.0);
+        let saturation = norm_x.clamp(0.0, 1.0);
         let value = (1.0 - norm_y).clamp(0.0, 1.0);
-        let color = hsv_to_rgb(hue, 1.0, value);
+        let hue = self.color_picker_popup_hsv().map_or(0.0, |(h, _, _)| h);
+        let color = self.color_picker_popup_with_alpha(hsv_to_rgb(hue, saturation, value));
+        self.color_picker_popup_remember_hsv((hue, saturation, value));
+        self.color_picker_popup_set_color_internal(color);
+    }
 
+    /// Re-applies the live alpha to a color rebuilt from HSV.
+    ///
+    /// `hsv_to_rgb` always returns an opaque color, so without this every drag
+    /// on the square or the hue bar would silently reset a translucent color to
+    /// fully opaque.
+    fn color_picker_popup_with_alpha(&self, color: Color) -> Color {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { current_color, .. } => Color {
+                a: current_color.a,
+                ..color
+            },
+            ColorPickerPopupState::Hidden => color,
+        }
+    }
+
+    /// Sets the color's alpha from a position on the alpha bar.
+    pub fn color_picker_popup_set_alpha(&mut self, norm_x: f64) {
+        let alpha = norm_x.clamp(0.0, 1.0);
+        let ColorPickerPopupState::Open { current_color, .. } = &self.color_picker_popup_state
+        else {
+            return;
+        };
+        let color = Color {
+            a: alpha,
+            ..*current_color
+        };
+        self.color_picker_popup_set_color_internal(color);
+    }
+
+    /// The live color's alpha, if the popup is open.
+    pub fn color_picker_popup_alpha(&self) -> Option<f64> {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { current_color, .. } => Some(current_color.a),
+            ColorPickerPopupState::Hidden => None,
+        }
+    }
+
+    /// Commits a color the picker computed itself: updates the live color and
+    /// hex buffer and previews it on the edit target. Shared by the
+    /// saturation/value square and the hue bar so they cannot drift.
+    fn color_picker_popup_set_color_internal(&mut self, color: Color) {
         let mut live_color = None;
         if let ColorPickerPopupState::Open {
             current_color,
@@ -393,8 +452,8 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    /// Updates whether we're dragging on the gradient.
-    pub fn color_picker_popup_set_dragging(&mut self, dragging: bool) {
+    /// Records which picker area a drag is steering, or `None` to end it.
+    pub fn color_picker_popup_set_dragging(&mut self, dragging: Option<PickerDrag>) {
         if let ColorPickerPopupState::Open {
             dragging: drag_state,
             ..
@@ -404,12 +463,47 @@ impl InputState {
         }
     }
 
-    /// Returns true if we're currently dragging on the gradient.
+    /// Whether any picker drag is in flight.
     pub fn color_picker_popup_is_dragging(&self) -> bool {
-        matches!(
-            &self.color_picker_popup_state,
-            ColorPickerPopupState::Open { dragging: true, .. }
-        )
+        self.color_picker_popup_drag_target().is_some()
+    }
+
+    /// Takes the in-flight drag target, ending the drag.
+    pub(in crate::input::state) fn color_picker_popup_take_drag_target(
+        &mut self,
+    ) -> Option<PickerDrag> {
+        let target = self.color_picker_popup_drag_target();
+        if target.is_some() {
+            self.color_picker_popup_set_dragging(None);
+        }
+        target
+    }
+
+    /// Steers one picker control from a pointer position.
+    ///
+    /// Shared by press, drag-motion and release so all three read the pointer
+    /// the same way: whichever control the gesture started on keeps steering,
+    /// even once the pointer leaves that control's bounds.
+    pub(crate) fn color_picker_popup_apply_drag(&mut self, target: PickerDrag, x: f64, y: f64) {
+        let Some(layout) = self.color_picker_popup_layout() else {
+            return;
+        };
+        match target {
+            PickerDrag::SatVal => {
+                let (saturation, value) = layout.sv_from_point(x, y);
+                self.color_picker_popup_set_from_gradient(saturation, 1.0 - value);
+            }
+            PickerDrag::Hue => self.color_picker_popup_set_hue(layout.hue_from_point(x)),
+            PickerDrag::Alpha => self.color_picker_popup_set_alpha(layout.alpha_from_point(x)),
+        }
+    }
+
+    /// The picker area a drag is steering, if one is in flight.
+    pub fn color_picker_popup_drag_target(&self) -> Option<PickerDrag> {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { dragging, .. } => *dragging,
+            ColorPickerPopupState::Hidden => None,
+        }
     }
 
     /// Sets whether the hex input field is focused.
@@ -488,8 +582,8 @@ impl InputState {
                 return;
             }
 
-            // Max length is 7 with # prefix or 6 without
-            let max_len = if hex_buffer.starts_with('#') { 7 } else { 6 };
+            // Eight digits so an alpha pair can be typed, plus the # prefix.
+            let max_len = if hex_buffer.starts_with('#') { 9 } else { 8 };
             if hex_buffer.len() >= max_len {
                 return;
             }
@@ -608,15 +702,61 @@ impl InputState {
         parse_hex_color(hex_buffer).is_some() || hex_buffer.is_empty() || hex_buffer == "#"
     }
 
-    /// Gets the gradient position for the current color.
-    pub fn color_picker_popup_gradient_position(&self) -> Option<(f64, f64)> {
-        match &self.color_picker_popup_state {
-            ColorPickerPopupState::Open { current_color, .. } => {
-                let (hue, _, value) = rgb_to_hsv(current_color.r, current_color.g, current_color.b);
-                Some((hue, 1.0 - value))
-            }
-            ColorPickerPopupState::Hidden => None,
+    /// The HSV triple the picker is showing, if it is open.
+    ///
+    /// Prefers the remembered triple while it still resolves to the current
+    /// color. Grey, black and white all convert back to a hue of zero, so
+    /// without this the hue bar would jump to red whenever value or saturation
+    /// reached an edge.
+    pub fn color_picker_popup_hsv(&self) -> Option<(f64, f64, f64)> {
+        let ColorPickerPopupState::Open {
+            current_color,
+            picker_hsv,
+            ..
+        } = &self.color_picker_popup_state
+        else {
+            return None;
+        };
+        let (h, s, v) = *picker_hsv;
+        let remembered = hsv_to_rgb(h, s, v);
+        if (remembered.r - current_color.r).abs() < 1e-3
+            && (remembered.g - current_color.g).abs() < 1e-3
+            && (remembered.b - current_color.b).abs() < 1e-3
+        {
+            return Some((h, s, v));
         }
+        Some(rgb_to_hsv(
+            current_color.r,
+            current_color.g,
+            current_color.b,
+        ))
+    }
+
+    fn color_picker_popup_remember_hsv(&mut self, hsv: (f64, f64, f64)) {
+        if let ColorPickerPopupState::Open { picker_hsv, .. } = &mut self.color_picker_popup_state {
+            *picker_hsv = hsv;
+        }
+    }
+
+    /// Sets the current color from a position on the hue bar, keeping
+    /// saturation and value where they are.
+    pub fn color_picker_popup_set_hue(&mut self, norm_x: f64) {
+        let hue = norm_x.clamp(0.0, 1.0);
+        let (_, saturation, value) = self.color_picker_popup_hsv().unwrap_or((0.0, 1.0, 1.0));
+        let color = self.color_picker_popup_with_alpha(hsv_to_rgb(hue, saturation, value));
+        self.color_picker_popup_remember_hsv((hue, saturation, value));
+        self.color_picker_popup_set_color_internal(color);
+    }
+
+    /// Position within the saturation/value square for the current color.
+    pub fn color_picker_popup_gradient_position(&self) -> Option<(f64, f64)> {
+        let (_, saturation, value) = self.color_picker_popup_hsv()?;
+        Some((saturation, 1.0 - value))
+    }
+
+    /// Position along the hue bar for the current color.
+    pub fn color_picker_popup_hue_position(&self) -> Option<f64> {
+        self.color_picker_popup_hsv().map(|(hue, _, _)| hue)
     }
 
     /// Sets the hover position within the popup.

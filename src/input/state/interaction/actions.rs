@@ -41,6 +41,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectStepMarkerTool
         | Action::SelectEraserTool
         | Action::ToggleEraserMode
+        | Action::CycleBlurStyle
         | Action::SelectPenTool
         | Action::SelectLineTool
         | Action::SelectRectTool
@@ -52,6 +53,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectFreeformPolygonTool
         | Action::SelectArrowTool
         | Action::SelectBlurTool
+        | Action::SelectSpotlightTool
         | Action::SelectHighlightTool
         | Action::IncreaseFontSize
         | Action::DecreaseFontSize

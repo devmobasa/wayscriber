@@ -1,5 +1,5 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::draw::{Color, FontDescriptor, clamp_regular_sides};
+use crate::draw::{BlurStyle, Color, FontDescriptor, clamp_regular_sides};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
@@ -176,7 +176,11 @@ impl InputState {
         self.tool_override = tool;
         self.active_preset_slot = None;
 
-        if tool == Some(Tool::Blur) && !self.frozen_active && !self.pending_frozen_toggle {
+        if tool == Some(Tool::Blur)
+            && self.blur_style.needs_backdrop()
+            && !self.frozen_active
+            && !self.pending_frozen_toggle
+        {
             self.request_frozen_toggle();
             self.push_toast(
                 ToastPriority::Info,
@@ -371,6 +375,35 @@ impl InputState {
 
     pub(crate) fn eraser_hit_radius(&self) -> f64 {
         (self.eraser_size / 2.0).max(1.0)
+    }
+
+    /// Sets how the blur tool obscures its region. Returns true if changed.
+    pub fn set_blur_style(&mut self, style: BlurStyle) -> bool {
+        if self.blur_style == style {
+            return false;
+        }
+        self.blur_style = style;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.mark_session_dirty();
+        true
+    }
+
+    /// Steps to the next blur style, wrapping around.
+    pub fn cycle_blur_style(&mut self) -> bool {
+        if !self.set_blur_style(self.blur_style.next()) {
+            return false;
+        }
+
+        if self.blur_style.needs_backdrop()
+            && self.active_tool() == Tool::Blur
+            && !self.frozen_active
+            && !self.pending_frozen_toggle
+        {
+            self.request_frozen_toggle();
+        }
+
+        true
     }
 
     /// Sets the font descriptor used for text rendering. Returns true if changed.

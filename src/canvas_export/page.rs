@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::capture::CaptureError;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, Shape, render_blur_rect,
-    render_eraser_stroke, render_shape,
+    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, render_blur_rect,
+    render_eraser_stroke, render_shape, render_spotlight_pass, spotlight_regions_for_frame,
 };
 
 #[derive(Debug, Clone)]
@@ -14,6 +14,24 @@ pub struct CanvasPageExportSnapshot {
     pub viewport_height: u32,
     pub origin_x: i32,
     pub origin_y: i32,
+    /// Dim/feather settings for the spotlight pass, mirroring the live overlay.
+    pub spotlight: SpotlightPassSnapshot,
+}
+
+/// Spotlight appearance carried into an export.
+#[derive(Debug, Clone, Copy)]
+pub struct SpotlightPassSnapshot {
+    pub dim_opacity: f64,
+    pub feather: f64,
+}
+
+impl Default for SpotlightPassSnapshot {
+    fn default() -> Self {
+        Self {
+            dim_opacity: 0.6,
+            feather: 0.35,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +259,7 @@ fn draw_canvas_page_contents(
         backdrop.paint(ctx);
     }
     let replay_ctx = backdrop.replay_context();
+
     for drawn_shape in &page.frame.shapes {
         match &drawn_shape.shape {
             Shape::EraserStroke { points, brush } => {
@@ -252,6 +271,7 @@ fn draw_canvas_page_contents(
                 w,
                 h,
                 strength,
+                style,
             } => render_blur_rect(
                 ctx,
                 BlurRectParams {
@@ -260,6 +280,7 @@ fn draw_canvas_page_contents(
                     w: *w,
                     h: *h,
                     strength: *strength,
+                    style: *style,
                     cacheable: false,
                 },
                 &replay_ctx,
@@ -267,6 +288,19 @@ fn draw_canvas_page_contents(
             other => render_shape(ctx, other),
         }
     }
+
+    // After the shapes, matching the live canvas: eraser strokes clear their path
+    // and replay the backdrop, so a dim layer painted earlier would be punched
+    // away. Runs regardless of `paint_backdrop` — a PDF page with a solid
+    // backdrop is already filled page-wide but still needs dimming.
+    render_spotlight_pass(
+        ctx,
+        &spotlight_regions_for_frame(&page.frame),
+        SpotlightPass {
+            dim_opacity: page.spotlight.dim_opacity,
+            feather: page.spotlight.feather,
+        },
+    );
 }
 
 fn validate_persisted_image_backdrop(

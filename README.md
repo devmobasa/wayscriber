@@ -118,6 +118,8 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Freehand pen, highlighter, eraser (circle/rect)
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows with optional auto-numbered labels; step markers for walkthroughs
+- Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
+- Spotlight tool: dims everything except the regions you draw
 - Multiline text and sticky notes with smoothing
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
@@ -172,6 +174,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
 - Light passthrough (layer-shell): draw while input passes through to the app underneath — see [Light passthrough mode](#light-passthrough-mode)
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. On GNOME, this uses the screenshot portal when available
+- Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Dim strength and edge softness are configurable under `[spotlight]`
 
 ### Callouts and zoom
 - **Numbered callouts:** auto-numbered arrow labels and step markers; reset arrow labels with <kbd>Ctrl+Shift+R</kbd>
@@ -192,11 +195,11 @@ Pick the path that matches your setup:
 | Fast CLI install with auto-updates on Debian/Ubuntu/Mint/Pop!_OS | [Debian and Ubuntu](#debian-and-ubuntu) |
 | Fast CLI install with auto-updates on Fedora/RHEL/Rocky/Alma/Nobara | [Fedora and RHEL](#fedora-and-rhel) |
 | Arch, Manjaro, CachyOS, or another Arch-based distro | [AUR](#arch-linux-aur), preferably `wayscriber-bin` for the prebuilt package |
-| Nix profile, `nix run`, or NixOS flake setup | [NixOS and Nix](#nixos-and-nix) |
+| NixOS, or the Nix package manager on another distro | [NixOS and Nix](#nixos-and-nix) — `nixpkgs` for the standard install, the project flake for the newest release and the Configurator |
 | One-off package (browser or terminal) without adding a repo | [GitHub Releases](#github-releases-one-off) |
 | Hacking on wayscriber or building a local binary | [From source](#from-source) |
 
-Repo, AUR, and Nix installs are the best default for CLI users because they use the normal system update flow. GitHub `.deb`/`.rpm` downloads are one-off installs (no auto-updates); use them only when you do not want to add a repo.
+Distro repositories, the AUR, and declarative NixOS installs are the best default for CLI users because they follow the normal system update flow. Packages installed with `nix profile` are updated separately with `nix profile upgrade`. GitHub `.deb`/`.rpm` downloads are one-off installs (no auto-updates); use them only when you do not want to add a repo.
 
 Install the main `wayscriber` package first. `wayscriber-configurator` is an optional GUI settings app and does not include the `wayscriber` binary.
 
@@ -245,63 +248,134 @@ For a one-off `.rpm` without adding the repo, see [GitHub Releases](#github-rele
 ### Arch Linux (AUR)
 
 Also use this path for Manjaro, CachyOS, and other Arch-based distros.
+The examples use `yay` as the default AUR helper; equivalent `paru` commands are shown for each package.
 
 ```bash
-yay -S wayscriber-bin    # prebuilt binary
-# or:
-yay -S wayscriber        # build from source
+# Prebuilt binary:
+yay -S wayscriber-bin
+paru -S wayscriber-bin
+
+# Or build from source:
+yay -S wayscriber
+paru -S wayscriber
+
 # Optional GUI configurator:
 yay -S wayscriber-configurator
+paru -S wayscriber-configurator
 ```
-
-Use your preferred AUR helper if you do not use `yay`.
 
 ### NixOS and Nix
 
-**Run without installing:**
-```bash
-nix run github:devmobasa/wayscriber -- --active
-```
+Wayscriber is packaged in [`nixpkgs`](https://search.nixos.org/packages?query=wayscriber). On NixOS, install it declaratively. `nix profile` is mainly useful when running Nix on another Linux distro.
 
-**Install to profile:**
-```bash
-nix profile install github:devmobasa/wayscriber
-# Optional GUI configurator:
-nix profile install github:devmobasa/wayscriber#wayscriber-configurator
-```
+**Which version you get:**
 
-**Add to NixOS configuration (flake-based):**
+| Source | Tracks |
+|--------|--------|
+| `nixpkgs-unstable` | Follows Wayscriber releases, usually within a few weeks |
+| Stable channels (`nixos-25.11`, `nixos-26.05`, …) | Pinned when the release branch was cut; version bumps are not backported |
+| This project's flake | The tag or branch recorded in your `flake.lock` |
+
+If you are on a stable NixOS channel and want the newest release, use [the project flake](#latest-release-and-configurator) rather than waiting for `nixpkgs`.
+
+**NixOS, from nixpkgs** — add Wayscriber to `configuration.nix` or another NixOS module:
 ```nix
-# flake.nix
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    wayscriber.url = "github:devmobasa/wayscriber";
-  };
+{ pkgs, ... }:
 
-  outputs = { nixpkgs, wayscriber, ... }: {
-    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [{
-        environment.systemPackages = [
-          wayscriber.packages.x86_64-linux.default
-        ];
-      }];
-    };
-  };
+{
+  environment.systemPackages = with pkgs; [
+    wayscriber
+
+    # Optional screenshot and clipboard helpers on wlroots compositors:
+    grim
+    slurp
+    wl-clipboard
+  ];
 }
 ```
 
-**Development shell:**
-```bash
-nix develop github:devmobasa/wayscriber
+Then rebuild with `sudo nixos-rebuild switch`, or `sudo nixos-rebuild switch --flake .#myhost` for a flake-based configuration.
+
+**Home Manager:**
+```nix
+{ pkgs, ... }:
+
+{
+  home.packages = [ pkgs.wayscriber ];
+}
 ```
 
-Unpinned GitHub flake URLs follow the default branch. Pin a release tag when you want reproducible release installs:
+Then run `home-manager switch`.
+
+The `nixpkgs` build installs the `wayscriber` binary. The desktop entry, icons, and the `wayscriber.service` systemd user unit come with the flake packages below, which also provide the optional Configurator.
+
+**Try without installing:**
 ```bash
-nix run 'github:devmobasa/wayscriber?ref=v0.9.19' -- --active
-nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19'
-nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19#wayscriber-configurator'
+# The nixpkgs version:
+nix run nixpkgs#wayscriber -- --active
+# Or the current upstream development branch:
+nix run github:devmobasa/wayscriber -- --active
+```
+
+`nix run` does not add `wayscriber` to your `PATH`.
+
+<a id="latest-release-and-configurator"></a>
+**Latest release and Configurator on NixOS**
+
+The project flake provides release-pinned packages plus the optional Configurator. Replace `RELEASE_TAG` with a published tag, such as the one shown on the [latest release](https://github.com/devmobasa/wayscriber/releases/latest), when adding the input to your existing `flake.nix`:
+```nix
+inputs.wayscriber.url = "github:devmobasa/wayscriber?ref=RELEASE_TAG";
+```
+
+Make it available in `outputs`:
+```nix
+outputs = { nixpkgs, wayscriber, ... }: {
+  # Your existing outputs...
+};
+```
+
+Then add this module to the `modules` list of your `nixosSystem`:
+```nix
+({ pkgs, ... }:
+
+  let
+    wayscriberPackages =
+      wayscriber.packages.${pkgs.stdenv.hostPlatform.system};
+  in
+  {
+    environment.systemPackages = [
+      wayscriberPackages.wayscriber
+      wayscriberPackages.wayscriber-configurator
+    ];
+
+    # Required before `systemctl --user enable --now wayscriber.service` works.
+    systemd.packages = [ wayscriberPackages.wayscriber ];
+  }
+)
+```
+
+Your `flake.lock` pins the exact Wayscriber revision. To upgrade to a newer release, change `RELEASE_TAG` in `flake.nix` to the new published tag, then update only this input:
+```bash
+nix flake update wayscriber
+sudo nixos-rebuild switch --flake .#myhost
+```
+
+**Nix on another Linux distro** — when running the Nix package manager on Ubuntu, Fedora, or elsewhere, a user profile install is reasonable:
+```bash
+nix profile install nixpkgs#wayscriber
+```
+
+For the current upstream development branch and the optional Configurator:
+```bash
+nix profile install github:devmobasa/wayscriber#wayscriber
+nix profile install github:devmobasa/wayscriber#wayscriber-configurator
+```
+
+Profile installs do not update with the rest of the system; upgrade them with `nix profile upgrade wayscriber` (and `nix profile upgrade wayscriber-configurator`), or remove them with `nix profile remove wayscriber`.
+
+**Development shell** (for contributing or building locally, not for installing):
+```bash
+nix develop github:devmobasa/wayscriber
 ```
 
 ### GitHub Releases (one-off)
@@ -467,7 +541,12 @@ Prefer a GUI? Open `wayscriber-configurator`, go to the **Daemon** tab, and clic
 
 Bind `wayscriber --daemon-toggle` to a global shortcut in your compositor or desktop environment. The configurator's **Daemon** tab can also do this: set a shortcut and click **Apply Shortcut** (GNOME: writes a GNOME custom shortcut; KDE/Plasma: writes the systemd drop-in env `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcuts).
 
-Hyprland:
+Hyprland Lua config (`~/.config/hypr/bindings.lua`):
+```lua
+o.bind("SUPER + D", "Toggle Wayscriber", "wayscriber --daemon-toggle")
+```
+
+Traditional Hyprland config (`~/.config/hypr/hyprland.conf`):
 ```conf
 bind = SUPER, D, exec, wayscriber --daemon-toggle
 ```
@@ -513,6 +592,17 @@ on shorter or scaled displays:
 Supported desktops use a theme-adaptive symbolic tray icon. Hosts that do not reliably resolve named icons (including Omarchy/Quickshell, Noctalia/Quickshell, and COSMIC) automatically receive scale-aware colored pixmaps, including a 48px HiDPI rendition. Set `[tray].icon_style` to `"auto"` (default), `"symbolic"`, or `"colored"` to choose the main tray icon style; restart the daemon after changing it. Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray. If the tray icon is still blank or the menu shows square placeholders, start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`; this environment override takes precedence over the TOML setting.
 
 **Alternative — compositor autostart instead of systemd:**
+
+For Hyprland Lua, add these to the matching files:
+```lua
+-- ~/.config/hypr/autostart.lua
+o.launch_on_start("wayscriber --daemon")
+
+-- ~/.config/hypr/bindings.lua
+o.bind("SUPER + D", "Toggle Wayscriber", "wayscriber --daemon-toggle")
+```
+
+Traditional Hyprland config:
 ```conf
 exec-once = wayscriber --daemon
 bind = SUPER, D, exec, wayscriber --daemon-toggle
@@ -538,7 +628,12 @@ wayscriber --freeze   # start with screen frozen
 
 `whiteboard` and `blackboard` are built in; `blueprint` is an example of a custom board defined in `config.toml` (`[[boards.items]]` — see [Configuration](#configuration)).
 
-Bind to a key (Hyprland example):
+Bind to a key (Hyprland Lua config):
+```lua
+o.bind("SUPER + D", "Open Wayscriber", "wayscriber --active")
+```
+
+Traditional Hyprland config:
 ```conf
 bind = SUPER, D, exec, wayscriber --active
 ```
@@ -627,14 +722,20 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Rectangle | <kbd>Ctrl</kbd> + drag |
 | Ellipse/Circle | <kbd>Tab</kbd> + drag |
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
-| Triangle / parallelogram / rhombus / regular polygon | Toolbar Polygons picker (bindable) |
-| Freeform polygon | Toolbar Polygons picker, then click vertices; <kbd>Enter</kbd> or double-click to finish |
+| Triangle / parallelogram / rhombus / regular polygon | **Shape picker** in the top strip (bindable) |
+| Freeform polygon | **Shape picker**, then click vertices; <kbd>Enter</kbd> or double-click to finish |
+| Blur | **Shape picker** (bindable) — drag a region; style via **Cycle Blur Style** |
+| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-The polygon tools are available from the toolbar picker; their default keybindings are intentionally empty. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
+**Where the Shape picker is.** The top strip shows the common tools inline and puts the rest behind a single **Shape picker** button. What sits inline depends on the strip mode: the simple strip keeps Select, Pen, Marker, Step marker, and Eraser inline, while the full strip adds Line and Arrow. Everything else — rectangle, ellipse, blur, spotlight, and the polygons — is one click away inside the picker.
+
+Every tool is also its own toolbar item, so you can show, hide, and reorder them from the settings popover (gear icon) or via `ui.toolbar.items` in `config.toml`. That is how the screenshot button ships hidden by default.
+
+These tools' default keybindings are intentionally empty; bind them under `[keybindings.tools]` if you reach for them often. Drag and mouse-button mappings are configurable — see [Drag-tool mappings](#drag-tool-mappings).
 
 </details>
 
@@ -919,7 +1020,13 @@ Enabled user services start when you log in, not at boot — if the daemon is mi
 loginctl enable-linger $USER
 ```
 
-Or use compositor autostart instead:
+Or use compositor autostart instead. For Hyprland Lua, add this to
+`~/.config/hypr/autostart.lua`:
+```lua
+o.launch_on_start("wayscriber --daemon")
+```
+
+Traditional Hyprland config:
 ```conf
 exec-once = wayscriber --daemon
 ```

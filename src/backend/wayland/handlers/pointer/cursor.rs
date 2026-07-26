@@ -50,7 +50,8 @@ impl WaylandState {
                 if self.input_state.color_picker_popup_is_dragging() {
                     return CursorIcon::Crosshair;
                 }
-                return match layout.cursor_hint_at(mx as f64, my as f64) {
+                let recent_count = self.input_state.recent_colors().len();
+                return match layout.cursor_hint_at(mx as f64, my as f64, recent_count) {
                     ColorPickerCursorHint::Text => CursorIcon::Text,
                     ColorPickerCursorHint::Crosshair => CursorIcon::Crosshair,
                     ColorPickerCursorHint::Pointer => CursorIcon::Pointer,

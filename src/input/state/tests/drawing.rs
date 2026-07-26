@@ -1,4 +1,5 @@
 use super::*;
+use crate::draw::BlurStyle;
 use crate::input::{DragBinding, DragButtonBindings, DragToolBindings};
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -594,6 +595,30 @@ fn blur_drag_requests_frozen_capture_on_press() {
     state.on_mouse_press(MouseButton::Left, 12, 14);
 
     assert!(state.take_pending_frozen_toggle());
+    assert!(matches!(
+        state.state,
+        DrawingState::Drawing {
+            tool: Tool::Blur,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn black_out_drag_does_not_request_frozen_capture_on_press() {
+    let mut state = create_test_input_state();
+    assert!(state.set_blur_style(BlurStyle::BlackOut));
+    assert!(state.set_drag_tool_bindings(left_drag_bindings(
+        Tool::Blur,
+        Tool::Line,
+        Tool::Rect,
+        Tool::Arrow,
+        Tool::Ellipse,
+    )));
+
+    state.on_mouse_press(MouseButton::Left, 12, 14);
+
+    assert!(!state.take_pending_frozen_toggle());
     assert!(matches!(
         state.state,
         DrawingState::Drawing {

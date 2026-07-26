@@ -76,6 +76,9 @@ jobs:
       - name: Check version metadata
         run: bash tools/check-version-consistency.sh --release-version "${{ steps.meta.outputs.version }}"
 
+      - name: Check nixpkgs recipe dependencies
+        run: ./tools/check-nixpkgs-recipe.py
+
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:

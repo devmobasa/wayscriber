@@ -98,7 +98,8 @@ impl ReducedMotion {
     }
 }
 
-/// Color specification - either a named color, `#RRGGBB` hex string, or RGB values.
+/// Color specification - either a named color, a `#RRGGBB` / `#RRGGBBAA` hex
+/// string, or RGB(A) values.
 ///
 /// # Examples
 /// ```toml
@@ -108,26 +109,38 @@ impl ReducedMotion {
 /// # Hex color
 /// default_color = "#FFB3BA"
 ///
+/// # Hex color with alpha
+/// default_color = "#FFB3BA80"
+///
 /// # Custom RGB color (0-255 per component)
 /// default_color = [255, 128, 0]  # Orange
+///
+/// # Custom RGBA color (0-255 per component)
+/// default_color = [255, 128, 0, 128]  # Half-transparent orange
 /// ```
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ColorSpec {
-    /// Named color, or `#RRGGBB` hex color
+    /// Named color, or `#RRGGBB` / `#RRGGBBAA` hex color
     Name(String),
     /// RGB color as [red, green, blue] where each component is 0-255
     Rgb([u8; 3]),
+    /// RGBA color as [red, green, blue, alpha] where each component is 0-255.
+    ///
+    /// Only written for colors that are actually translucent, so an opaque
+    /// palette serializes exactly as it did before alpha existed.
+    Rgba([u8; 4]),
 }
 
 impl ColorSpec {
     /// Converts the color specification to a [`Color`] struct.
     ///
-    /// Hex colors accept only `#RRGGBB`. Named colors are mapped to the tuned palette
-    /// values using `util::name_to_color()`. Unknown color names and invalid hex values
-    /// default to the tuned palette red with a warning. RGB arrays are converted from
-    /// 0-255 range to 0.0-1.0 range with full opacity.
+    /// Hex colors accept `#RRGGBB`, or `#RRGGBBAA` to carry alpha. Named colors are
+    /// mapped to the tuned palette values using `util::name_to_color()`. Unknown color
+    /// names and invalid hex values default to the tuned palette red with a warning.
+    /// Three-component RGB arrays are converted from 0-255 range to 0.0-1.0 range with
+    /// full opacity; four-component arrays take their alpha from the fourth.
     pub fn to_color(&self) -> Color {
         match self {
             ColorSpec::Name(name) => match crate::util::parse_config_hex_color(name) {
@@ -148,14 +161,29 @@ impl ColorSpec {
                 b: *b as f64 / 255.0,
                 a: 1.0,
             },
+            ColorSpec::Rgba([r, g, b, a]) => Color {
+                r: *r as f64 / 255.0,
+                g: *g as f64 / 255.0,
+                b: *b as f64 / 255.0,
+                a: *a as f64 / 255.0,
+            },
         }
     }
 }
 
 impl From<Color> for ColorSpec {
+    /// Opaque colors keep the three-component form they have always had, so
+    /// adding alpha rewrites nobody's config file. Only a genuinely translucent
+    /// color produces the four-component form.
     fn from(color: Color) -> Self {
         let clamp = |v: f64| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round().min(255.0) as u8 };
-        ColorSpec::Rgb([clamp(color.r), clamp(color.g), clamp(color.b)])
+        let (r, g, b) = (clamp(color.r), clamp(color.g), clamp(color.b));
+        let alpha = clamp(color.a);
+        if alpha == u8::MAX {
+            ColorSpec::Rgb([r, g, b])
+        } else {
+            ColorSpec::Rgba([r, g, b, alpha])
+        }
     }
 }
 

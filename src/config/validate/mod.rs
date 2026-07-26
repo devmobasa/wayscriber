@@ -12,6 +12,7 @@ mod performance;
 mod presets;
 mod render_profiles;
 mod session;
+mod spotlight;
 #[cfg(feature = "tablet-input")]
 mod tablet;
 mod ui;
@@ -29,6 +30,8 @@ impl Config {
     /// - `default_font_size`: 8.0 - 72.0
     /// - `arrow.length`: 5.0 - 50.0
     /// - `arrow.angle_degrees`: 15.0 - 60.0
+    /// - `spotlight.dim_opacity`: 0.1 - 0.95
+    /// - `spotlight.feather`: 0.0 - 0.9
     /// - `buffer_count`: 2 - 4
     pub fn validate_and_clamp(&mut self) {
         self.validate_drawing();
@@ -37,6 +40,7 @@ impl Config {
         self.validate_tablet();
         self.validate_history();
         self.validate_arrow();
+        self.validate_spotlight();
         self.validate_performance();
         self.validate_fonts();
         self.validate_boards();

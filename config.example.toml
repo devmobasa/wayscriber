@@ -97,6 +97,10 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 # Toggle eraser behavior mode
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Select the spotlight tool (unbound by default)
+select_spotlight_tool = []
+# Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
+cycle_blur_style = []
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []
@@ -944,8 +948,8 @@ backup_retention = 1
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
 # (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
-# Or #RRGGBB hex: "#FFB3BA"
-# Or RGB array: [255, 0, 0]
+# Or #RRGGBB hex: "#FFB3BA", or #RRGGBBAA for alpha: "#FFB3BA80"
+# Or RGB array: [255, 0, 0], or RGBA array: [255, 0, 0, 128]
 default_color = "red"
 
 # Default pen thickness in pixels (1.0 - 50.0)
@@ -956,6 +960,13 @@ default_eraser_size = 12.0
 
 # Default eraser mode: "brush" (pixel erase) or "stroke" (erase whole stroke)
 default_eraser_mode = "brush"
+
+# How the blur tool obscures its region by default
+# "gaussian"  - softens detail (historical behavior)
+# "pixelate"  - coarse mosaic of averaged blocks; block size follows the tool size
+# "secure"    - collapses the region to one averaged color; no detail survives
+# "black-out" - opaque black fill; needs no captured background
+default_blur_style = "gaussian"
 
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
@@ -991,7 +1002,8 @@ tab_drag_tool = "ellipse"
 # Optional per-mouse-button drag mapping. These override the flat drag_tool
 # fields above when present. Right/middle default to their built-in behavior
 # unless configured here. Use "default" for a button's built-in behavior.
-# Colors are optional and can be names, #RRGGBB hex strings, or RGB arrays.
+# Colors are optional and can be names, #RRGGBB or #RRGGBBAA hex strings, or
+# RGB/RGBA arrays.
 #
 # [drawing.drag_tools.left]
 # drag_tool = "pen"
@@ -1050,17 +1062,19 @@ text_background_enabled = false
 # hand, missing shortcut positions use built-in defaults and help-overlay badges
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
-# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays. The hex values below are the tuned built-in defaults; named colors
-# ("red", "green", ...) resolve to these same tuned values, so named entries,
-# the default pen color, and board auto-adjust pens all match these swatches.
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex (or
+# #RRGGBBAA to carry alpha), or RGB/RGBA arrays. The hex values below are the
+# tuned built-in defaults; named colors ("red", "green", ...) resolve to these
+# same tuned values, so named entries, the default pen color, and board
+# auto-adjust pens all match these swatches.
 #
 # Right-clicking a swatch in the overlay opens the color picker for that slot
-# and saves the accepted color back here as an RGB array, keeping the slot's
-# label and shortcut. The first such edit writes the whole list, so a palette
-# left out of this file stops tracking future built-in defaults. That picker's
-# "Default" button loads the color shipped for the slot again (built-in slots
-# only), still requiring OK to save.
+# and saves the accepted color back here as an RGB array, or an RGBA array when
+# the color is translucent, keeping the slot's label and shortcut. The first
+# such edit writes the whole list, so a palette left out of this file stops
+# tracking future built-in defaults. That picker's "Default" button loads the
+# color shipped for the slot again (built-in slots only), still requiring OK to
+# save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"
@@ -1128,7 +1142,7 @@ name = "Red pen"
 # "rhombus", "regular-polygon", "freeform-polygon", "arrow", "marker",
 # "highlight", "eraser", "select"
 tool = "pen"
-# Color: name or RGB array
+# Color: name, #RRGGBB or #RRGGBBAA hex string, or RGB/RGBA array
 color = "red"
 # Size: pen thickness or eraser size
 size = 3.0
@@ -1154,12 +1168,12 @@ show_status_bar = true
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [arrow]
-# Arrowhead length in pixels
+# Minimum arrowhead length in pixels. The head also scales with stroke width
+# (three times the thickness), so this acts as the floor for thin strokes.
 length = 20.0
 
-# Arrowhead angle in degrees (15-60)
-# 30 degrees gives a nice balanced arrow
-angle_degrees = 30.0
+# Arrowhead half-angle in degrees (15-60). Smaller is a sharper, narrower head.
+angle_degrees = 24.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = false
@@ -1167,6 +1181,17 @@ head_at_end = false
 # ═══════════════════════════════════════════════════════════════════════════════
 # PERFORMANCE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Spotlight tool: dims the whole overlay except the regions you draw, so
+# attention lands where you point. Select the tool from the toolbar or bind
+# `select_spotlight_tool`.
+[spotlight]
+# How strongly the area outside every spotlight is dimmed (0.1 - 0.95)
+dim_opacity = 0.6
+
+# Fraction of each spotlight radius spent fading out at the edge (0.0 - 0.9).
+# 0.0 gives a hard-edged opening.
+feather = 0.35
 
 [performance]
 # Number of buffers for rendering (2, 3, or 4)

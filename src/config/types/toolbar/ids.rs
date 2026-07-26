@@ -14,6 +14,7 @@ pub const TOP_TOOL_RECT: ToolbarItemId = ToolbarItemId::from_known("top.tool.rec
 pub const TOP_TOOL_ELLIPSE: ToolbarItemId = ToolbarItemId::from_known("top.tool.ellipse");
 pub const TOP_TOOL_ARROW: ToolbarItemId = ToolbarItemId::from_known("top.tool.arrow");
 pub const TOP_TOOL_BLUR: ToolbarItemId = ToolbarItemId::from_known("top.tool.blur");
+pub const TOP_TOOL_SPOTLIGHT: ToolbarItemId = ToolbarItemId::from_known("top.tool.spotlight");
 pub const TOP_TOOL_TRIANGLE: ToolbarItemId = ToolbarItemId::from_known("top.tool.triangle");
 pub const TOP_TOOL_PARALLELOGRAM: ToolbarItemId =
     ToolbarItemId::from_known("top.tool.parallelogram");

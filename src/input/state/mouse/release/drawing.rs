@@ -47,6 +47,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             size: drawing_thickness,
             marker_opacity: state.marker_opacity,
             fill_enabled: state.fill_enabled,
+            blur_style: state.blur_style,
             arrow_length: state.arrow_length,
             arrow_angle: state.arrow_angle,
             arrow_head_at_end: state.arrow_head_at_end,

@@ -90,8 +90,8 @@ Controls the default appearance of annotations.
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
 # (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
-# Or #RRGGBB hex: "#FFB3BA"
-# Or RGB array: [255, 0, 0]
+# Or #RRGGBB hex: "#FFB3BA" (or #RRGGBBAA for alpha: "#FFB3BA80")
+# Or RGB array: [255, 0, 0] (or RGBA: [255, 0, 0, 128])
 default_color = "red"
 
 # Default pen thickness in pixels (1.0 - 50.0)
@@ -102,6 +102,13 @@ default_eraser_size = 12.0
 
 # Default eraser mode ("brush" or "stroke")
 default_eraser_mode = "brush"
+
+# How the blur tool obscures its region by default
+# "gaussian"  - softens detail (historical behavior)
+# "pixelate"  - coarse mosaic of averaged blocks; block size follows the tool size
+# "secure"    - collapses the region to one averaged color; no detail survives
+# "black-out" - opaque black fill; needs no captured background
+default_blur_style = "gaussian"
 
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
@@ -141,17 +148,19 @@ tab_drag_tool = "ellipse"
 # hand, missing shortcut positions use built-in defaults and help-overlay badges
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
-# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays. The hex values below are the tuned built-in defaults; named colors
-# ("red", "green", ...) resolve to these same tuned values, so named entries,
-# the default pen color, and board auto-adjust pens all match these swatches.
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex (or
+# #RRGGBBAA to carry alpha), or RGB/RGBA arrays. The hex values below are the
+# tuned built-in defaults; named colors ("red", "green", ...) resolve to these
+# same tuned values, so named entries, the default pen color, and board
+# auto-adjust pens all match these swatches.
 #
 # Right-clicking a swatch in the overlay opens the color picker for that slot
-# and saves the accepted color back here as an RGB array, keeping the slot's
-# label and shortcut. The first such edit writes the whole list, so a palette
-# left out of this file stops tracking future built-in defaults. That picker's
-# "Default" button loads the color shipped for the slot again (built-in slots
-# only), still requiring OK to save.
+# and saves the accepted color back here as an RGB array, or an RGBA array when
+# the color is translucent, keeping the slot's label and shortcut. The first
+# such edit writes the whole list, so a palette left out of this file stops
+# tracking future built-in defaults. That picker's "Default" button loads the
+# color shipped for the slot again (built-in slots only), still requiring OK to
+# save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"
@@ -218,8 +227,9 @@ drag_tool = "default"
 
 **Color Options:**
 - **Named colors**: `"red"` (`#F5333F`), `"green"` (`#2EC27E`), `"blue"` (`#3584E4`), `"yellow"` (`#F6D32D`), `"orange"` (`#FF7800`), `"pink"` (`#C061CB`), `"white"` (`#FFFFFF`), `"black"` (`#241F31`) — named colors resolve to the tuned quick color palette
-- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
-- **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
+- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`, or `"#RRGGBBAA"` such as `"#FFB3BA80"` to carry alpha. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
+- **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc. A fourth component sets alpha: `[255, 0, 0, 128]`.
+- **Alpha**: colors are opaque unless an alpha component says otherwise, and opaque colors are written back in the three-component form they have always used — so adding alpha never rewrites an existing palette. The marker and highlighter multiply their own opacity on top of any color alpha rather than replacing it.
 
 **Quick Colors:**
 - `[[drawing.quick_colors]]` entries define an ordered palette.
@@ -234,6 +244,7 @@ drag_tool = "default"
 - **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-50px)
 - **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-50px)
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
+- **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Regular polygon sides**: Use the side toolbar Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -259,12 +270,12 @@ Controls the appearance of arrow annotations.
 
 ```toml
 [arrow]
-# Arrowhead length in pixels
+# Minimum arrowhead length in pixels. The head also scales with stroke width
+# (three times the thickness), so this acts as the floor for thin strokes.
 length = 20.0
 
-# Arrowhead angle in degrees (15-60)
-# 30 degrees gives a nice balanced arrow
-angle_degrees = 30.0
+# Arrowhead half-angle in degrees (15-60). Smaller is a sharper, narrower head.
+angle_degrees = 24.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = false
@@ -280,6 +291,17 @@ head_at_end = false
 Configure 3-5 tool presets that you can apply or update via hotkeys or the toolbar strip.
 
 ```toml
+# Spotlight tool: dims the whole overlay except the regions you draw, so
+# attention lands where you point. Select the tool from the toolbar or bind
+# `select_spotlight_tool`.
+[spotlight]
+# How strongly the area outside every spotlight is dimmed (0.1 - 0.95)
+dim_opacity = 0.6
+
+# Fraction of each spotlight radius spent fading out at the edge (0.0 - 0.9).
+# 0.0 gives a hard-edged opening.
+feather = 0.35
+
 [presets]
 slot_count = 5
 
@@ -1336,6 +1358,8 @@ select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+cycle_blur_style = []              # blur -> pixelate -> secure -> black out
+select_spotlight_tool = []         # dim everything except a region
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []

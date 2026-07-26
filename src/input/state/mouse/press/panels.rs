@@ -1,4 +1,5 @@
 use crate::input::events::MouseButton;
+use crate::input::state::core::PickerDrag;
 
 use super::super::super::InputState;
 
@@ -90,12 +91,18 @@ impl InputState {
                 if !action_pressed && let Some(layout) = self.color_picker_popup_layout() {
                     let fx = x as f64;
                     let fy = y as f64;
-                    // Start dragging if clicking on gradient
-                    if layout.point_in_gradient(fx, fy) {
-                        self.color_picker_popup_set_dragging(true);
-                        let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
-                        let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
-                        self.color_picker_popup_set_from_gradient(norm_x, norm_y);
+                    let target = if layout.point_in_sv(fx, fy) {
+                        Some(PickerDrag::SatVal)
+                    } else if layout.point_in_hue(fx, fy) {
+                        Some(PickerDrag::Hue)
+                    } else if layout.point_in_alpha(fx, fy) {
+                        Some(PickerDrag::Alpha)
+                    } else {
+                        None
+                    };
+                    if let Some(target) = target {
+                        self.color_picker_popup_set_dragging(Some(target));
+                        self.color_picker_popup_apply_drag(target, fx, fy);
                         self.color_picker_popup_set_hex_editing(false);
                     }
                 }

@@ -32,6 +32,8 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
             eraser_size: 12.0,
             eraser_kind: crate::draw::EraserKind::Circle,
             eraser_mode: EraserMode::Brush,
+            blur_style: Default::default(),
+            recent_colors: Vec::new(),
             marker_opacity: Some(0.32),
             fill_enabled: Some(false),
             tool_override: None,

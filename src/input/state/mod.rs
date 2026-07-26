@@ -4,6 +4,7 @@ mod highlight;
 pub(crate) mod interaction;
 mod mouse;
 mod render;
+mod spotlight;
 #[cfg(test)]
 mod tests;
 
@@ -14,25 +15,27 @@ pub(crate) use core::board_picker::{
 };
 #[cfg(test)]
 pub(crate) use core::build_text_input_preview;
-pub use core::color_picker_popup::{color_to_hex, parse_hex_color};
+pub use core::color_picker_popup::{HEX_INPUT_MAX_CHARS, color_to_hex, parse_hex_color};
 #[allow(unused_imports)]
 pub use core::{
     BLOCKED_ACTION_DURATION_MS, BoardPickerCursorHint, BoardPickerLayout,
-    COLOR_PICKER_PREVIEW_SIZE, COMMAND_PALETTE_MAX_VISIBLE, ColorPickerCursorHint,
-    ColorPickerPopupLayout, ColorPickerPopupState, CommandPaletteCursorHint, CommandPaletteListRow,
-    CompassDir, CompositorCapabilities, ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind,
-    ContextMenuState, DesktopEnvironment, DrawingState, EyedropperCaptureSource, EyedropperUiState,
-    HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome, ImeCompositionState,
-    ImePreedit, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
-    PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PrecisionEntryState, PresetAction,
-    PresetFeedbackKind, PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit,
-    RADIAL_COMPASS_SLICES, RADIAL_PAINT_DELAY, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout,
-    RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice, RadialSliceKind,
-    SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START, SelectionAxis, SelectionHandle,
-    SelectionPropertyEntry, SelectionPropertyKind, SelectionState, ShellMode, TextInputMode, Toast,
-    ToastPriority, ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind,
-    ZoomAction, color_picker_rgb_to_hsv, compass_slice, size_ring_angle_for_value,
-    size_ring_value_for_angle, slice_parent, sub_ring_child_count, sub_ring_children,
+    COLOR_PICKER_POPUP_HEIGHT, COLOR_PICKER_POPUP_WIDTH, COLOR_PICKER_PREVIEW_SIZE,
+    COLOR_PICKER_RECENT_SWATCH_COUNT, COLOR_PICKER_RECENT_SWATCH_SIZE, COMMAND_PALETTE_MAX_VISIBLE,
+    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState, CommandPaletteCursorHint,
+    CommandPaletteListRow, CompassDir, CompositorCapabilities, ContextMenuCursorHint,
+    ContextMenuEntry, ContextMenuKind, ContextMenuState, DesktopEnvironment, DrawingState,
+    EyedropperCaptureSource, EyedropperUiState, HelpOverlayClick, HelpOverlayCursorHint,
+    HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState, MAX_STROKE_THICKNESS,
+    MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
+    PickerDrag, PrecisionEntryState, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
+    PressureThicknessEntryMode, QuickColorEdit, RADIAL_COMPASS_SLICES, RADIAL_PAINT_DELAY,
+    RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent, RadialRingSwatch,
+    RadialSegmentId, RadialSlice, RadialSliceKind, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
+    SelectionAxis, SelectionHandle, SelectionPropertyEntry, SelectionPropertyKind, SelectionState,
+    ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue, TourStep,
+    UI_TOAST_DURATION_MS, UiToastKind, ZoomAction, color_picker_rgb_to_hsv, compass_slice,
+    size_ring_angle_for_value, size_ring_value_for_angle, slice_parent, sub_ring_child_count,
+    sub_ring_children,
 };
 pub(crate) use core::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,

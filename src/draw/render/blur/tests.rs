@@ -1,11 +1,11 @@
 use super::{
-    BlurCacheKey, BlurRenderCache, BlurSurfaceStats, CachedBlurRegion, blur_overlay_palette,
-    blur_recipe,
+    BackdropStyle, BlurCacheKey, BlurRenderCache, BlurSurfaceStats, CachedBlurRegion,
+    blur_overlay_palette, blur_recipe,
 };
 
 #[test]
 fn blur_recipe_keeps_default_strength_heavily_blurred_but_not_overwashed() {
-    let recipe = blur_recipe(12.0);
+    let recipe = blur_recipe(12.0, BackdropStyle::Gaussian);
 
     assert!(recipe.primary_factor >= 18.0);
     assert!(recipe.secondary_factor > recipe.primary_factor);
@@ -14,8 +14,8 @@ fn blur_recipe_keeps_default_strength_heavily_blurred_but_not_overwashed() {
 
 #[test]
 fn blur_recipe_clamps_extremes() {
-    let min = blur_recipe(-10.0);
-    let max = blur_recipe(500.0);
+    let min = blur_recipe(-10.0, BackdropStyle::Gaussian);
+    let max = blur_recipe(500.0, BackdropStyle::Gaussian);
 
     assert_eq!(min.primary_factor, 8.0);
     assert_eq!(min.secondary_factor, 10.0);
@@ -64,6 +64,7 @@ fn blur_render_cache_returns_cached_entry_for_same_key() {
         src_h: 40,
         primary_factor: 18,
         secondary_factor: 24,
+        style: BackdropStyle::Gaussian,
     };
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).expect("surface");
     cache.insert(
@@ -97,6 +98,7 @@ fn blur_render_cache_evicts_oldest_entry_when_budget_is_exceeded() {
         src_h: 2,
         primary_factor: 18,
         secondary_factor: 24,
+        style: BackdropStyle::Gaussian,
     };
     let make_entry = || CachedBlurRegion {
         surface: cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).expect("surface"),

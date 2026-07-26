@@ -53,6 +53,7 @@ pub enum ToolOption {
     FreeformPolygon,
     Arrow,
     Blur,
+    Spotlight,
     Marker,
     StepMarker,
     Highlight,
@@ -74,6 +75,7 @@ impl ToolOption {
             Self::FreeformPolygon,
             Self::Arrow,
             Self::Blur,
+            Self::Spotlight,
             Self::Marker,
             Self::StepMarker,
             Self::Highlight,
@@ -95,6 +97,7 @@ impl ToolOption {
             Self::FreeformPolygon => "Freeform polygon",
             Self::Arrow => "Arrow",
             Self::Blur => "Blur",
+            Self::Spotlight => "Spotlight",
             Self::Marker => "Marker",
             Self::StepMarker => "Step",
             Self::Highlight => "Highlight",
@@ -116,6 +119,7 @@ impl ToolOption {
             Self::FreeformPolygon => Tool::FreeformPolygon,
             Self::Arrow => Tool::Arrow,
             Self::Blur => Tool::Blur,
+            Self::Spotlight => Tool::Spotlight,
             Self::Marker => Tool::Marker,
             Self::StepMarker => Tool::StepMarker,
             Self::Highlight => Tool::Highlight,
@@ -137,6 +141,7 @@ impl ToolOption {
             Tool::FreeformPolygon => Self::FreeformPolygon,
             Tool::Arrow => Self::Arrow,
             Tool::Blur => Self::Blur,
+            Tool::Spotlight => Self::Spotlight,
             Tool::Marker => Self::Marker,
             Tool::StepMarker => Self::StepMarker,
             Tool::Highlight => Self::Highlight,
@@ -336,14 +341,18 @@ impl DragColorOption {
             Self::Pink => "Pink",
             Self::White => "White",
             Self::Black => "Black",
-            Self::Custom => "Custom RGB",
+            // Covers every spec that is not a palette name: RGB and RGBA
+            // arrays, and hex strings in either length. Selecting it keeps
+            // whatever the file already holds, so naming one form would be
+            // wrong for the others.
+            Self::Custom => "Custom",
         }
     }
 
     pub fn from_color(color: Option<&ColorSpec>) -> Self {
         match color {
             None => Self::Current,
-            Some(ColorSpec::Rgb(_)) => Self::Custom,
+            Some(ColorSpec::Rgb(_) | ColorSpec::Rgba(_)) => Self::Custom,
             Some(ColorSpec::Name(name)) => match name.trim().to_lowercase().as_str() {
                 "red" => Self::Red,
                 "green" => Self::Green,

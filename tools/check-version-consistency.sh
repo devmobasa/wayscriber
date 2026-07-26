@@ -13,6 +13,10 @@ Checks that release/version metadata agrees across:
   * packaging/.SRCINFO
   * flake.nix
 
+Also rejects hardcoded release tags in README.md install examples, which go
+stale on the next release. Use a placeholder such as RELEASE_TAG, or link to
+the latest release, instead.
+
 Repo packaging metadata is a release template and must use sha256sums=('SKIP').
 Release/AUR automation writes the real source archive checksum after the tag
 exists.
@@ -204,6 +208,19 @@ require_template_sha256sums(
 flake_text = read_text("flake.nix")
 if "builtins.fromTOML (builtins.readFile ./Cargo.toml)" not in flake_text:
     errors.append("flake.nix package version should be derived from Cargo.toml")
+
+# Install examples that pin a concrete tag are stale one release later.
+readme_pin_patterns = (
+    (r"wayscriber\?ref=v?\d+\.\d+\.\d+(?:\.\d+)?", "pinned flake ref"),
+    (r"/releases/(?:tag|download)/v?\d+\.\d+\.\d+(?:\.\d+)?", "pinned release URL"),
+)
+readme_text = read_text("README.md")
+for pattern, label in readme_pin_patterns:
+    for match in sorted(set(re.findall(pattern, readme_text))):
+        errors.append(
+            f"README.md: {label} '{match}' goes stale on the next release; "
+            "use a RELEASE_TAG placeholder or link to /releases/latest"
+        )
 
 if errors:
     print("Version consistency check failed:", file=sys.stderr)

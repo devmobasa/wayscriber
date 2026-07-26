@@ -280,6 +280,64 @@ mod tests {
         assert_ne!(base, key_for(&state));
     }
 
+    /// The ring segments are annular, so their checkerboard has to be clipped
+    /// to the path. Without one a fully transparent swatch painted nothing at
+    /// all and the menu showed whatever it floats over.
+    #[test]
+    fn a_transparent_ring_swatch_paints_the_checkerboard() {
+        let mut state = make_test_input_state();
+        state.set_quick_colors(crate::config::QuickColorPalette::from_entries(
+            (0..8)
+                .map(|index| crate::config::QuickColorPaletteEntry {
+                    label: format!("Clear {index}"),
+                    color: Color {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    },
+                })
+                .collect(),
+        ));
+        state.open_radial_menu(960.0, 540.0);
+        state.update_radial_menu_layout(1920, 1080);
+        let layout = state.radial_menu_layout.expect("radial layout");
+
+        let surface = render_base_surface(
+            &state,
+            &layout,
+            theme::current(),
+            &state.radial_ring_swatches(),
+            EXTENT,
+            1.0,
+        )
+        .expect("base surface");
+
+        // Walk the middle of the color ring; the base centers the menu at
+        // (EXTENT, EXTENT) in its own surface.
+        let radius = (layout.color_inner + layout.color_outer) / 2.0;
+        let samples = 64;
+        let mut surface = surface;
+        let stride = surface.stride() as usize;
+        let data = surface.data().expect("pixel data");
+        let covered = (0..samples)
+            .filter(|step| {
+                let angle = std::f64::consts::TAU * f64::from(*step) / f64::from(samples);
+                let x = (EXTENT + radius * angle.cos()).round() as usize;
+                let y = (EXTENT + radius * angle.sin()).round() as usize;
+                // ARGB32 is native-endian, so alpha is the last byte.
+                data[y * stride + x * 4 + 3] > 0
+            })
+            .count();
+
+        // Not every sample lands on a segment: the ring has gaps between
+        // swatches, and a sample can fall in one.
+        assert!(
+            covered > samples as usize / 2,
+            "transparent ring painted no checkerboard: {covered}/{samples} samples covered"
+        );
+    }
+
     /// Changing a compass action's primary binding label (the baked keycap
     /// hints) invalidates the key.
     #[test]

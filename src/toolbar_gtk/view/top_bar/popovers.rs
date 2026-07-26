@@ -423,6 +423,10 @@ impl TopBar {
         let gap = (GAP * scale).round() as i32;
         let content = gtk4::Box::new(gtk4::Orientation::Vertical, gap);
         set_semantic_widget_id(&content, "top.shapes.panel");
+        // A popover is its own GTK native, so the toolbar window's capture
+        // controller never sees clicks in here. Without this, the rebind chord
+        // is invisible to every tool button in the picker.
+        install_click_modifier_capture(&content, &self.feedback);
 
         for row in model::visible_shape_picker_rows(snapshot, is_simple) {
             let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, gap);

@@ -1,6 +1,6 @@
 use crate::config::enums::ColorSpec;
 use crate::domain::{Action, Color, DragBindableTool, DragTool, EraserMode};
-use crate::draw::shape::REGULAR_POLYGON_DEFAULT_SIDES;
+use crate::draw::shape::{BlurStyle, REGULAR_POLYGON_DEFAULT_SIDES};
 use serde::{Deserialize, Serialize};
 
 /// Maximum quick colors rendered by dense palette UIs.
@@ -13,8 +13,9 @@ pub const QUICK_COLOR_RENDER_LIMIT: usize = 24;
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingConfig {
-    /// Default pen color - either a named color (red, green, blue, yellow, orange, pink, white, black)
-    /// or an RGB array like `[255, 0, 0]` for red
+    /// Default pen color - a named color (red, green, blue, yellow, orange, pink, white,
+    /// black), a `#RRGGBB` or `#RRGGBBAA` hex string, or an RGB(A) array like
+    /// `[255, 0, 0]` / `[255, 0, 0, 128]`. See [`ColorSpec`] for the accepted forms.
     #[serde(default = "default_color")]
     pub default_color: ColorSpec,
 
@@ -36,6 +37,10 @@ pub struct DrawingConfig {
     /// Default eraser behavior (brush or stroke)
     #[serde(default = "default_eraser_mode")]
     pub default_eraser_mode: EraserMode,
+
+    /// How the blur tool obscures its region by default
+    #[serde(default = "default_blur_style")]
+    pub default_blur_style: BlurStyle,
 
     /// Default marker opacity multiplier (0.05 - 0.9), applied to the current color alpha
     #[serde(default = "default_marker_opacity")]
@@ -120,6 +125,7 @@ impl Default for DrawingConfig {
             default_thickness: default_thickness(),
             default_eraser_size: default_eraser_size(),
             default_eraser_mode: default_eraser_mode(),
+            default_blur_style: default_blur_style(),
             marker_opacity: default_marker_opacity(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
@@ -827,13 +833,19 @@ fn quick_color_label(entry: &QuickColorConfig, index: usize) -> String {
     }
 }
 
+/// Fingerprint of one palette color for [`QuickColorPalette::cache_key`].
+///
+/// Alpha is always included: the radial menu caches its static surface by this
+/// key, so an alpha-only recolor of an inactive slot must still invalidate it.
+/// This never reaches a config file, so widening it costs no compatibility.
 fn color_cache_key(color: Color) -> String {
     let clamp = |v: f64| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round().min(255.0) as u8 };
     format!(
-        "#{:02X}{:02X}{:02X}",
+        "#{:02X}{:02X}{:02X}{:02X}",
         clamp(color.r),
         clamp(color.g),
-        clamp(color.b)
+        clamp(color.b),
+        clamp(color.a)
     )
 }
 
@@ -847,6 +859,10 @@ fn default_eraser_size() -> f64 {
 
 fn default_eraser_mode() -> EraserMode {
     EraserMode::Brush
+}
+
+fn default_blur_style() -> BlurStyle {
+    BlurStyle::Gaussian
 }
 
 fn default_marker_opacity() -> f64 {

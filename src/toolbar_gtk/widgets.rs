@@ -166,9 +166,18 @@ pub(super) fn install_click_modifier_capture(
 ) {
     let click = gtk4::GestureClick::new();
     click.set_propagation_phase(gtk4::PropagationPhase::Capture);
-    let feedback = feedback.clone();
+    let press_feedback = feedback.clone();
     click.connect_pressed(move |gesture, _, _, _| {
-        feedback.capture_click_modifiers(gesture.current_event_state());
+        press_feedback.capture_click_modifiers(gesture.current_event_state());
+    });
+    // Mirror the toolbar window's controller: a click that never activates a
+    // button (cancelled, or dragged off it) still has to clear the pending
+    // rebind, or the next ordinary click would be treated as a rebind. The idle
+    // hop lets the button's own `clicked` handler consume the flag first.
+    let release_feedback = feedback.clone();
+    click.connect_released(move |_, _, _, _| {
+        let release_feedback = release_feedback.clone();
+        gtk4::glib::idle_add_local_once(move || release_feedback.finish_pointer_click());
     });
     widget.as_ref().add_controller(click);
 }
@@ -472,9 +481,15 @@ impl SwatchButton {
             let (r, g, b, a) = draw_color.get();
             // Rounded square with a subtle inner hairline, matching the
             // built-in bars. The fill is inset so the selected accent ring
-            // (2px stroke, ~2px gap) fits inside the drawing area.
+            // (2px stroke, ~2px gap) fits inside the drawing area. A
+            // translucent color sits on the checkerboard, as the built-in
+            // bars paint it.
+            let swatch_path = |ctx: &cairo::Context| {
+                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0)
+            };
+            crate::ui::checkerboard_behind(ctx, a, swatch_path);
             ctx.set_source_rgba(r, g, b, a);
-            rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+            swatch_path(ctx);
             let _ = ctx.fill();
             set_color(ctx, COLOR_SWATCH_HAIRLINE);
             ctx.set_line_width(1.0);
