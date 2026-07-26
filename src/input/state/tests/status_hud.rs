@@ -213,6 +213,44 @@ fn status_hud_click_help_segment_returns_toggle_help_action() {
     assert!(!input.is_radial_menu_open());
 }
 
+/// The version chip is the HUD's route to About. It is optional, so it is the
+/// first piece the width ladder sheds — but where it fits, clicking it must
+/// dispatch the action rather than open a surface in place.
+#[test]
+fn status_hud_click_version_chip_returns_open_about_action() {
+    let mut input = create_test_input_state();
+    update_hud_layout(&mut input, 1920, 1080);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::About);
+
+    let (hit, action) = input.check_status_hud_click(x, y);
+    assert!(hit);
+    assert_eq!(action, Some(Action::OpenAbout));
+    // Dispatched by the backend; nothing opens inside the overlay.
+    assert!(!input.is_board_picker_open());
+    assert!(!input.is_color_picker_popup_open());
+    assert!(!input.is_radial_menu_open());
+}
+
+/// A narrow HUD sheds the version chip before the mandatory segments, so a
+/// version badge can never cost the board name or the help hint their space.
+#[test]
+fn a_narrow_status_hud_sheds_the_version_chip_first() {
+    let mut input = create_test_input_state();
+    update_hud_layout(&mut input, 420, 720);
+    let layout = input.status_hud_layout().expect("status hud layout");
+
+    let kinds: Vec<StatusHudSegmentKind> =
+        layout.segments.iter().map(|segment| segment.kind).collect();
+    assert!(
+        !kinds.contains(&StatusHudSegmentKind::About),
+        "the version chip sheds under width pressure: {kinds:?}"
+    );
+    assert!(
+        kinds.contains(&StatusHudSegmentKind::Board),
+        "the board chip survives: {kinds:?}"
+    );
+}
+
 #[test]
 fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
     let mut input = create_test_input_state();
