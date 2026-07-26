@@ -9,6 +9,7 @@ pub(crate) mod protocol_v2;
 pub(crate) mod setup;
 mod tray;
 mod types;
+mod update_watch;
 
 #[cfg(test)]
 mod tests;

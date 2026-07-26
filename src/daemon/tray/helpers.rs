@@ -132,6 +132,19 @@ impl WayscriberTray {
         }
     }
 
+    /// Open the update instructions the watcher recorded. The URL comes from
+    /// `update_check`, which only ever hands out validated wayscriber.com links.
+    pub(super) fn open_update_instructions(&self, url: &str) {
+        match spawn_detached(
+            crate::process_broker::HelperKind::DesktopOpen,
+            OsStr::new("xdg-open"),
+            &[OsString::from(url)],
+        ) {
+            Ok(child) => info!("Opened update instructions {url} (pid {})", child.id()),
+            Err(err) => warn!("Failed to open update instructions {url}: {err}"),
+        }
+    }
+
     pub(super) fn dispatch_overlay_action(&self, action: TrayAction) {
         let action_str = action.as_str();
         // Tray producers carry only an action intent. The daemon controller

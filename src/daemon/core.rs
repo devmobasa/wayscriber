@@ -39,6 +39,7 @@ use super::types::{
     AlreadyRunningError, BackendRunner, DaemonControlEvent, OverlayActionIntents, OverlayState,
     VisibilityIntents,
 };
+use super::update_watch::start_update_watch;
 
 // Some desktop custom shortcut runners, observed on KDE, can launch the same
 // plain `--daemon-toggle` command twice about 400-600ms apart from one key press.
@@ -72,6 +73,7 @@ pub struct Daemon {
     pub(super) tray_enabled: bool,
     pub(super) backend_runner: Option<Arc<BackendRunner>>,
     pub(super) tray_thread: Option<JoinHandle<()>>,
+    pub(super) update_watch_thread: Option<JoinHandle<()>>,
     pub(super) global_shortcuts_listener: Option<GlobalShortcutsListener>,
     pub(super) overlay_child: OverlayChildOwner,
     pub(super) overlay_active: Arc<AtomicBool>,
@@ -119,6 +121,7 @@ impl Daemon {
             tray_enabled,
             backend_runner: None,
             tray_thread: None,
+            update_watch_thread: None,
             global_shortcuts_listener: None,
             overlay_child: OverlayChildOwner::default(),
             overlay_active: Arc::new(AtomicBool::new(false)),
@@ -163,6 +166,7 @@ impl Daemon {
             tray_enabled: true,
             backend_runner: Some(backend_runner),
             tray_thread: None,
+            update_watch_thread: None,
             global_shortcuts_listener: None,
             overlay_child: OverlayChildOwner::default(),
             overlay_active: Arc::new(AtomicBool::new(false)),
@@ -388,6 +392,17 @@ impl Daemon {
             }
         } else {
             info!("System tray disabled; running daemon without tray");
+        }
+
+        // Update notices are independent of the tray: without it the answer
+        // still reaches the desktop notification and the About window.
+        {
+            #[cfg(feature = "tray")]
+            let update_sink = self.tray_status.clone();
+            #[cfg(not(feature = "tray"))]
+            let update_sink = ();
+            self.update_watch_thread =
+                start_update_watch(quit_event.clone(), self.overlay_active.clone(), update_sink);
         }
 
         match current_shortcut_runtime_backend() {
@@ -791,6 +806,12 @@ impl Daemon {
             match handle.join() {
                 Ok(()) => info!("System tray thread joined"),
                 Err(err) => warn!("System tray thread panicked: {:?}", err),
+            }
+        }
+        if let Some(handle) = self.update_watch_thread.take() {
+            match handle.join() {
+                Ok(()) => info!("Update watcher thread joined"),
+                Err(err) => warn!("Update watcher thread panicked: {:?}", err),
             }
         }
         if let Some(listener) = self.global_shortcuts_listener.take() {
