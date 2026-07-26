@@ -538,9 +538,12 @@ pub struct InputState {
     pub board_picker_layout: Option<BoardPickerLayout>,
     /// Cached layout details for the status HUD (segmented status bar)
     pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
-    /// Last screen/config inputs used to build the status HUD. Retained when
-    /// the effective layout is empty so a content toggle can synchronously
-    /// refresh `status_hud_layout` before the next rendered frame.
+    /// Last screen/config inputs used to build the status HUD. Retained while
+    /// UI rendering is active so a content toggle can synchronously refresh
+    /// `status_hud_layout`, keeping policy exact — including width degradation
+    /// on narrow outputs — until the next rendered frame. Suppression clears
+    /// this so policy cannot mistake configured content for chrome that is
+    /// currently on screen.
     pub(in crate::input::state::core) status_hud_rebuild_inputs: Option<StatusHudRebuildInputs>,
     /// Set when the internal pointer-routing chain consumed a left press on
     /// the status HUD (tablet and other paths that bypass the backend's own

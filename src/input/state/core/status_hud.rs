@@ -31,19 +31,8 @@ impl InputState {
 
     pub fn status_hud_effectively_visible(&self) -> bool {
         self.show_status_bar
-            && self.status_hud_rebuild_inputs.as_ref().map_or_else(
-                || self.status_hud_layout.is_some(),
-                |inputs| {
-                    compute_status_hud_layout(
-                        self,
-                        inputs.position,
-                        &inputs.style,
-                        inputs.screen_width,
-                        inputs.screen_height,
-                    )
-                    .is_some()
-                },
-            )
+            && self.status_hud_rebuild_inputs.is_some()
+            && self.status_hud_layout.is_some()
     }
 
     pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
@@ -83,10 +72,30 @@ impl InputState {
             StatusBarItem::Help => self.show_status_help = visible,
             StatusBarItem::About => self.show_status_about = visible,
         }
-        self.rebuild_status_hud_layout_from_cached_inputs();
-        self.dirty_tracker.mark_full();
+        self.refresh_status_hud_layout();
         self.needs_redraw = true;
         true
+    }
+
+    /// Recompute the measured cache in place after a content or eligibility
+    /// change, using the inputs of the last rendered frame. Policy (floating
+    /// badge, chrome recovery) stays exact — including width degradation on
+    /// narrow outputs — between the mutation and the next frame, and hover is
+    /// re-derived so a vanished segment cannot stay lit. Damage stays with
+    /// the render effect pass, which re-measures with that frame's inputs.
+    pub(crate) fn refresh_status_hud_layout(&mut self) {
+        let Some(inputs) = self.status_hud_rebuild_inputs.clone() else {
+            self.status_hud_layout = None;
+            self.status_hud_hover = None;
+            return;
+        };
+        self.update_status_hud_layout_for_pointer(
+            inputs.position,
+            &inputs.style,
+            inputs.screen_width,
+            inputs.screen_height,
+            false,
+        );
     }
 
     pub fn status_hud_layout(&self) -> Option<&StatusHudLayout> {
@@ -142,20 +151,6 @@ impl InputState {
             // a highlight while the cursor is off-surface or over a toolbar.
             self.needs_redraw = true;
         }
-    }
-
-    fn rebuild_status_hud_layout_from_cached_inputs(&mut self) {
-        let Some(inputs) = self.status_hud_rebuild_inputs.clone() else {
-            self.status_hud_hover = None;
-            return;
-        };
-        self.update_status_hud_layout_for_pointer(
-            inputs.position,
-            &inputs.style,
-            inputs.screen_width,
-            inputs.screen_height,
-            false,
-        );
     }
 
     pub fn clear_status_hud_layout(&mut self) {

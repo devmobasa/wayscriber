@@ -412,6 +412,46 @@ fn disabling_every_content_item_removes_the_hud_and_restores_badge_fallback() {
 }
 
 #[test]
+fn changing_status_hud_content_leaves_damage_to_the_effect_pass() {
+    let mut input = create_test_input_state();
+    input.update_screen_dimensions(1280, 720);
+    update_hud_layout(&mut input, 1280, 720);
+    let _ = input.take_dirty_region_report();
+
+    assert!(input.set_status_bar_item_visible(StatusBarItem::About, false));
+
+    assert!(input.needs_redraw, "the HUD change still schedules a frame");
+    assert!(
+        input.take_dirty_region_report().regions.is_empty(),
+        "the render effect pass owns the old/new HUD footprint damage"
+    );
+}
+
+#[test]
+fn changing_status_hud_master_or_interactivity_leaves_damage_to_the_effect_pass() {
+    let mut input = create_test_input_state();
+    input.update_screen_dimensions(1280, 720);
+    update_hud_layout(&mut input, 1280, 720);
+    let _ = input.take_dirty_region_report();
+
+    assert!(
+        input.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetStatusBarInteractive(
+            false,
+        ))
+    );
+    assert!(
+        input.take_dirty_region_report().regions.is_empty(),
+        "interactivity only changes pixels inside the HUD footprint"
+    );
+
+    assert!(input.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::ToggleStatusBar(false)));
+    assert!(
+        input.take_dirty_region_report().regions.is_empty(),
+        "the effect pass owns HUD and fallback transitions"
+    );
+}
+
+#[test]
 fn status_hud_press_routing_consumes_left_press_over_interactive_hud() {
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
