@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use crate::config::{Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
+use crate::config::{
+    Action, StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode,
+};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{EraserMode, Tool};
 
@@ -424,6 +426,10 @@ pub enum ToolbarEvent {
     ToggleToolPreview(bool),
     /// Toggle status bar visibility
     ToggleStatusBar(bool),
+    /// Allow or reject interaction with visible status-bar segments.
+    SetStatusBarInteractive(bool),
+    /// Show or hide one independently configurable status-bar item.
+    SetStatusBarItemVisible(StatusBarItem, bool),
     /// Toggle board label in the status bar
     ToggleStatusBoardBadge(bool),
     /// Toggle page counter in the status bar
@@ -466,6 +472,8 @@ pub enum ToolbarEvent {
     SetToolbarItemCustomizationOpen(bool),
     /// Select the Settings drawer toolbar-item customization group.
     SetToolbarItemCustomizationGroup(Option<ToolbarItemCustomizeGroup>),
+    /// Show or hide the Settings drawer status-bar content sub-panel.
+    SetStatusBarContentsOpen(bool),
     /// Toggle the simple-mode shape picker
     ToggleShapePicker(bool),
     /// Drag handle for top toolbar (toolbar coords; screen coords when inline toolbars are active)

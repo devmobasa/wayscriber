@@ -32,6 +32,19 @@ impl ConfiguratorApp {
                 self.defaults.ui_status_bar_interactive,
                 ToggleField::UiStatusBarInteractive,
             ),
+            text("Contents").size(18),
+            toggle_row(
+                "Show active output",
+                self.draft.ui_active_output_badge,
+                self.defaults.ui_active_output_badge,
+                ToggleField::UiActiveOutputBadge,
+            ),
+            toggle_row(
+                "Show selection dimensions",
+                self.draft.ui_show_status_selection_info,
+                self.defaults.ui_show_status_selection_info,
+                ToggleField::UiShowStatusSelectionInfo,
+            ),
             toggle_row(
                 "Show board label",
                 self.draft.ui_show_status_board_badge,
@@ -45,11 +58,48 @@ impl ConfiguratorApp {
                 ToggleField::UiShowStatusPageBadge,
             ),
             toggle_row(
+                "Show current color",
+                self.draft.ui_show_status_color,
+                self.defaults.ui_show_status_color,
+                ToggleField::UiShowStatusColor,
+            ),
+            toggle_row(
+                "Show active tool",
+                self.draft.ui_show_status_tool,
+                self.defaults.ui_show_status_tool,
+                ToggleField::UiShowStatusTool,
+            ),
+            toggle_row(
+                "Show tool size",
+                self.draft.ui_show_status_size,
+                self.defaults.ui_show_status_size,
+                ToggleField::UiShowStatusSize,
+            ),
+            toggle_row(
+                "Show context indicators",
+                self.draft.ui_show_status_context_indicators,
+                self.defaults.ui_show_status_context_indicators,
+                ToggleField::UiShowStatusContextIndicators,
+            ),
+            toggle_row(
                 "Show toolbar hint while toolbars are hidden",
                 self.draft.ui_show_toolbar_hint,
                 self.defaults.ui_show_toolbar_hint,
                 ToggleField::UiShowToolbarHint,
             ),
+            toggle_row(
+                "Show Help shortcut",
+                self.draft.ui_show_status_help,
+                self.defaults.ui_show_status_help,
+                ToggleField::UiShowStatusHelp,
+            ),
+            toggle_row(
+                "Show About and version",
+                self.draft.ui_show_status_about,
+                self.defaults.ui_show_status_about,
+                ToggleField::UiShowStatusAbout,
+            ),
+            text("Additional Badges").size(18),
             toggle_row(
                 "Show board/page badge",
                 self.draft.ui_show_floating_badge,

@@ -61,8 +61,10 @@ pub enum StatusHudSegmentKind {
     Page,
     /// Color dot: opens the color picker popup.
     Color,
-    /// Tool + size chip: opens the radial menu at the pointer.
+    /// Active tool chip: opens the radial menu at the pointer.
     Tool,
+    /// Active tool size chip: opens the radial menu at the pointer.
+    Size,
     /// Help hint chip: toggles the help overlay.
     Help,
     /// Hidden-toolbar hint chip (shown only while no toolbar surface is
@@ -226,6 +228,15 @@ impl StatusHudPiece {
             None => dot_diameter,
         }
     }
+
+    fn layout_advance(&self, dot_diameter: f64, separator_advance: f64) -> f64 {
+        let natural = self.advance(dot_diameter);
+        if self.kind.is_some() {
+            natural.max((MIN_INTERACTIVE_WIDTH - separator_advance).max(0.0))
+        } else {
+            natural
+        }
+    }
 }
 
 /// Compute the status HUD layout headlessly (no rendering context; text goes
@@ -244,14 +255,15 @@ pub fn compute_status_hud_layout(
     let sep_advance = sep_extents.x_advance();
 
     let mut pieces = build_cluster_pieces(input_state);
+    let prefix_text = build_prefix_text(input_state);
+    if pieces.is_empty() && prefix_text.is_none() {
+        return None;
+    }
     for piece in &mut pieces {
         if let Some(text) = &piece.text {
             piece.extents = Some(measure_text(text_style, text, None)?);
         }
     }
-
-    let prefix_text = build_prefix_text(input_state);
-
     // Degradation ladder while the width budget binds: shed optional display
     // pieces (last first), then truncate the board name progressively down
     // to the compact "Board i/N" form, then drop the help chip. The
@@ -297,6 +309,12 @@ pub fn compute_status_hud_layout(
         }
         break measurement;
     };
+    // Optional pieces can all be shed by the width-degradation ladder. Do
+    // not leave behind a padding-only pill: it is not effective HUD chrome
+    // and must not suppress the fallback badge/recovery paths.
+    if pieces.is_empty() && prefix_text.is_none() {
+        return None;
+    }
     // Unconditional backstop: even a mandatory cluster that still overflows
     // never widens the pill past the budget. Rendering clips content to the
     // pill and hit rects are clamped inside it below.
@@ -328,12 +346,14 @@ pub fn compute_status_hud_layout(
             y_bearing: measurement.prefix_bearing,
         };
         cursor += measurement.prefix_width;
-        runs.push(StatusHudRun::Text {
-            text: SEGMENT_SEPARATOR.to_string(),
-            x: cursor,
-            accent: false,
-        });
-        cursor += sep_advance;
+        if !pieces.is_empty() {
+            runs.push(StatusHudRun::Text {
+                text: SEGMENT_SEPARATOR.to_string(),
+                x: cursor,
+                accent: false,
+            });
+            cursor += sep_advance;
+        }
         prefix
     });
 
@@ -346,7 +366,9 @@ pub fn compute_status_hud_layout(
             });
             cursor += sep_advance;
         }
-        let advance = piece.advance(dot_diameter);
+        let natural_advance = piece.advance(dot_diameter);
+        let advance = piece.layout_advance(dot_diameter, sep_advance);
+        let content_x = cursor + (advance - natural_advance) / 2.0;
         if let Some(kind) = piece.kind {
             // Hit target: the piece plus half a separator on each side, at
             // full pill height (>= MIN_INTERACTIVE_HEIGHT by construction),
@@ -365,7 +387,7 @@ pub fn compute_status_hud_layout(
         match &piece.text {
             Some(text) => runs.push(StatusHudRun::Text {
                 text: text.clone(),
-                x: cursor,
+                x: content_x,
                 // The clickable-affordance underline must not advertise a
                 // click that a display-only HUD
                 // (`[ui] status_bar_interactive = false`) will reject; the
@@ -373,7 +395,7 @@ pub fn compute_status_hud_layout(
                 accent: piece.kind == Some(StatusHudSegmentKind::Toolbar)
                     && input_state.status_bar_interactive,
             }),
-            None => runs.push(StatusHudRun::Dot { x: cursor }),
+            None => runs.push(StatusHudRun::Dot { x: content_x }),
         }
         cursor += advance;
     }
@@ -457,42 +479,51 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
         ));
     }
 
-    pieces.push(StatusHudPiece::dot());
+    if input_state.show_status_color {
+        pieces.push(StatusHudPiece::dot());
+    }
 
     let tool = input_state.active_tool();
-    pieces.push(StatusHudPiece::text(
-        format!(
-            "{} · {}px",
-            tool_display_name(input_state, tool),
-            input_state.size_for_active_tool() as i32
-        ),
-        Some(StatusHudSegmentKind::Tool),
-        false,
-    ));
+    if input_state.show_status_tool {
+        pieces.push(StatusHudPiece::text(
+            tool_display_name(input_state, tool).to_string(),
+            Some(StatusHudSegmentKind::Tool),
+            false,
+        ));
+    }
+    if input_state.show_status_size {
+        pieces.push(StatusHudPiece::text(
+            format!("{}px", input_state.size_for_active_tool() as i32),
+            Some(StatusHudSegmentKind::Size),
+            false,
+        ));
+    }
 
-    if matches!(
-        input_state.state,
-        DrawingState::TextInput { .. } | DrawingState::PendingTextClick { .. }
-    ) {
-        pieces.push(StatusHudPiece::text(
-            format!("Text {}px", input_state.current_font_size as i32),
-            None,
-            true,
-        ));
-    }
-    if input_state.click_highlight_enabled() {
-        pieces.push(StatusHudPiece::text(
-            action_display_label(Action::ToggleClickHighlight).to_string(),
-            None,
-            true,
-        ));
-    }
-    if input_state.highlight_tool_active() {
-        pieces.push(StatusHudPiece::text(
-            action_display_label(Action::SelectHighlightTool).to_string(),
-            None,
-            true,
-        ));
+    if input_state.show_status_context_indicators {
+        if matches!(
+            input_state.state,
+            DrawingState::TextInput { .. } | DrawingState::PendingTextClick { .. }
+        ) {
+            pieces.push(StatusHudPiece::text(
+                format!("Text {}px", input_state.current_font_size as i32),
+                None,
+                true,
+            ));
+        }
+        if input_state.click_highlight_enabled() {
+            pieces.push(StatusHudPiece::text(
+                action_display_label(Action::ToggleClickHighlight).to_string(),
+                None,
+                true,
+            ));
+        }
+        if input_state.highlight_tool_active() {
+            pieces.push(StatusHudPiece::text(
+                action_display_label(Action::SelectHighlightTool).to_string(),
+                None,
+                true,
+            ));
+        }
     }
 
     // Hidden-toolbar hint: when every toolbar surface is gone (F9 toggle or
@@ -513,27 +544,31 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
         ));
     }
 
-    let binding = help_binding_label(input_state);
-    let help_label = if binding.is_empty() {
-        action_display_label(Action::ToggleHelp).to_string()
-    } else {
-        format!("{} {}", binding, action_display_label(Action::ToggleHelp))
-    };
-    pieces.push(StatusHudPiece::text(
-        help_label,
-        Some(StatusHudSegmentKind::Help),
-        false,
-    ));
+    if input_state.show_status_help {
+        let binding = help_binding_label(input_state);
+        let help_label = if binding.is_empty() {
+            action_display_label(Action::ToggleHelp).to_string()
+        } else {
+            format!("{} {}", binding, action_display_label(Action::ToggleHelp))
+        };
+        pieces.push(StatusHudPiece::text(
+            help_label,
+            Some(StatusHudSegmentKind::Help),
+            false,
+        ));
+    }
 
     // Version chip, last in the row: it states which build is running and
     // opens About when clicked. Marked optional so it is the first piece shed
     // when the width budget binds — a version badge must never cost the board
     // name or the help hint their space.
-    pieces.push(StatusHudPiece::text(
-        format!("About v{}", crate::build_info::version()),
-        Some(StatusHudSegmentKind::About),
-        true,
-    ));
+    if input_state.show_status_about {
+        pieces.push(StatusHudPiece::text(
+            format!("About v{}", crate::build_info::version()),
+            Some(StatusHudSegmentKind::About),
+            true,
+        ));
+    }
 
     pieces
 }
@@ -542,19 +577,21 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
 /// output label), or `None` when nothing applies.
 fn build_prefix_text(input_state: &InputState) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
-    if let Some(bounds) = input_state.selection_bounds() {
+    if input_state.show_active_output_badge
+        && let Some(label) = input_state.active_output_label.as_ref()
+    {
+        let label = crate::util::truncate_with_ellipsis(label, 28);
+        parts.push(format!("Output: {label}"));
+    }
+    if input_state.show_status_selection_info
+        && let Some(bounds) = input_state.selection_bounds()
+    {
         let count = input_state.selected_shape_ids().len();
         parts.push(if count == 1 {
             format!("{}×{}px", bounds.width, bounds.height)
         } else {
             format!("{} items: {}×{}px", count, bounds.width, bounds.height)
         });
-    }
-    if input_state.show_active_output_badge
-        && let Some(label) = input_state.active_output_label.as_ref()
-    {
-        let label = crate::util::truncate_with_ellipsis(label, 28);
-        parts.push(format!("Output: {label}"));
     }
     (!parts.is_empty()).then(|| parts.join(SEGMENT_SEPARATOR))
 }
@@ -615,7 +652,10 @@ fn widen_narrow_segments(segments: &mut [StatusHudSegment], pill_x: f64, pill_wi
 }
 
 fn cluster_width(pieces: &[StatusHudPiece], sep_advance: f64, dot_diameter: f64) -> f64 {
-    let piece_widths: f64 = pieces.iter().map(|piece| piece.advance(dot_diameter)).sum();
+    let piece_widths: f64 = pieces
+        .iter()
+        .map(|piece| piece.layout_advance(dot_diameter, sep_advance))
+        .sum();
     piece_widths + sep_advance * pieces.len().saturating_sub(1) as f64
 }
 
@@ -680,10 +720,15 @@ fn measure_status_bar(
     let sep_advance = measure_text(text_style, SEGMENT_SEPARATOR, None)?.x_advance();
 
     let has_prefix = !prefix_text.is_empty();
+    let separator_advance = if has_prefix && cluster_width > 0.0 {
+        sep_advance
+    } else {
+        0.0
+    };
     let (prefix_budget, prefix_width, prefix_height, prefix_bearing, prefix_advance, overflow) =
         if has_prefix {
             let min_prefix_budget = (max_width * MIN_PREFIX_BUDGET_FRACTION).min(max_width);
-            let available = max_width - cluster_width - sep_advance;
+            let available = max_width - cluster_width - separator_advance;
             let prefix_budget = available.max(min_prefix_budget).max(1.0);
             // The floor binds when the cluster leaves less room than the
             // prefix is guaranteed; the caller sheds optional pieces then.
@@ -695,7 +740,7 @@ fn measure_status_bar(
                 width,
                 extents.height(),
                 extents.y_bearing(),
-                width + sep_advance,
+                width + separator_advance,
                 overflow,
             )
         } else {
@@ -1028,8 +1073,10 @@ fn tool_action_label(tool: Tool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig, StatusBarStyle};
-    use crate::draw::{Color, FontDescriptor};
+    use crate::config::{
+        BoardsConfig, KeybindingsConfig, PresenterModeConfig, StatusBarItem, StatusBarStyle,
+    };
+    use crate::draw::{Color, FontDescriptor, Shape};
     use crate::input::{ClickHighlightSettings, EraserMode};
 
     /// Worst-case prefix: selection info plus a long output label on a
@@ -1121,6 +1168,134 @@ mod tests {
         state.show_active_output_badge = true;
         state.active_output_label = Some("DP-3 Dell UltraSharp U2723QE 3840x2160@60".to_string());
         state
+    }
+
+    #[test]
+    fn configurable_core_segments_keep_fixed_order_and_split_tool_from_size() {
+        let state = make_state();
+        let pieces = build_cluster_pieces(&state);
+        let kinds: Vec<_> = pieces.iter().filter_map(|piece| piece.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                StatusHudSegmentKind::Board,
+                StatusHudSegmentKind::Page,
+                StatusHudSegmentKind::Color,
+                StatusHudSegmentKind::Tool,
+                StatusHudSegmentKind::Size,
+                StatusHudSegmentKind::Help,
+                StatusHudSegmentKind::About,
+            ]
+        );
+
+        let tool = pieces
+            .iter()
+            .find(|piece| piece.kind == Some(StatusHudSegmentKind::Tool))
+            .expect("tool piece");
+        let size = pieces
+            .iter()
+            .find(|piece| piece.kind == Some(StatusHudSegmentKind::Size))
+            .expect("size piece");
+        assert_eq!(tool.text.as_deref(), Some("Pen"));
+        assert_eq!(size.text.as_deref(), Some("4px"));
+    }
+
+    #[test]
+    fn each_core_content_flag_removes_only_its_segment() {
+        let cases = [
+            (StatusBarItem::Board, StatusHudSegmentKind::Board),
+            (StatusBarItem::Page, StatusHudSegmentKind::Page),
+            (StatusBarItem::Color, StatusHudSegmentKind::Color),
+            (StatusBarItem::Tool, StatusHudSegmentKind::Tool),
+            (StatusBarItem::Size, StatusHudSegmentKind::Size),
+            (StatusBarItem::Help, StatusHudSegmentKind::Help),
+            (StatusBarItem::About, StatusHudSegmentKind::About),
+        ];
+
+        for (item, kind) in cases {
+            let mut state = make_state();
+            assert!(state.set_status_bar_item_visible(item, false));
+            let pieces = build_cluster_pieces(&state);
+            assert!(
+                !pieces.iter().any(|piece| piece.kind == Some(kind)),
+                "{item:?} should remove {kind:?}"
+            );
+            for (_, other_kind) in cases {
+                if other_kind != kind {
+                    assert!(
+                        pieces.iter().any(|piece| piece.kind == Some(other_kind)),
+                        "disabling {item:?} unexpectedly removed {other_kind:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
+        let mut state = make_state();
+        state.show_active_output_badge = true;
+        state.active_output_label = Some("DP-3".to_string());
+        let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 10,
+            y: 20,
+            w: 30,
+            h: 40,
+            fill: false,
+            color: state.current_color,
+            thick: state.current_thickness,
+        });
+        state.set_selection(vec![shape_id]);
+
+        assert_eq!(
+            build_prefix_text(&state).as_deref(),
+            Some("Output: DP-3 · 34×44px")
+        );
+
+        state.set_status_bar_item_visible(StatusBarItem::ActiveOutput, false);
+        assert_eq!(build_prefix_text(&state).as_deref(), Some("34×44px"));
+        state.set_status_bar_item_visible(StatusBarItem::SelectionInfo, false);
+        assert_eq!(build_prefix_text(&state), None);
+    }
+
+    #[test]
+    fn context_indicator_flag_gates_transient_status_text() {
+        let mut state = make_state();
+        assert!(state.toggle_click_highlight());
+        let label = action_display_label(Action::ToggleClickHighlight);
+        assert!(
+            build_cluster_pieces(&state)
+                .iter()
+                .any(|piece| piece.text.as_deref() == Some(label))
+        );
+
+        state.set_status_bar_item_visible(StatusBarItem::ContextIndicators, false);
+        assert!(
+            !build_cluster_pieces(&state)
+                .iter()
+                .any(|piece| piece.text.as_deref() == Some(label))
+        );
+    }
+
+    #[test]
+    fn shedding_the_last_optional_piece_does_not_leave_an_empty_pill() {
+        let mut state = make_state();
+        for item in StatusBarItem::ALL {
+            state.set_status_bar_item_visible(item, false);
+        }
+        state.set_status_bar_item_visible(StatusBarItem::About, true);
+
+        assert!(
+            compute_status_hud_layout(
+                &state,
+                StatusPosition::BottomLeft,
+                &StatusBarStyle::default(),
+                80,
+                60,
+            )
+            .is_none(),
+            "a width-shed optional item must not leave padding-only HUD chrome"
+        );
     }
 
     /// The M0 unconditional cap: even worst-case mandatory content on small

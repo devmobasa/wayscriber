@@ -310,9 +310,11 @@ impl TopBar {
             if open {
                 let content_key = SettingsMenuContentKey::of(snapshot);
                 if self.settings_content_key.as_ref() != Some(&content_key) {
+                    let (content, updaters) = self.build_settings_popover_content(snapshot, scale);
                     if let Some(surface) = self.settings_capture_surface.as_ref() {
-                        surface.set_content(&self.build_settings_popover_content(snapshot, scale));
+                        surface.set_content(&content);
                     }
+                    self.settings_updaters = updaters;
                     self.settings_content_key = Some(content_key);
                 }
             }
@@ -396,14 +398,14 @@ impl TopBar {
         &self,
         snapshot: &ToolbarSnapshot,
         scale: f64,
-    ) -> gtk4::Widget {
-        let mut scratch_updaters = Vec::new();
+    ) -> (gtk4::Widget, Vec<Updater>) {
+        let mut updaters = Vec::new();
         let mut ctx = super::super::sections::SectionCtx {
             snapshot,
             feedback: self.feedback.clone(),
             scale,
             use_icons: snapshot.use_icons,
-            updaters: &mut scratch_updaters,
+            updaters: &mut updaters,
         };
         let content = match model::ToolbarSettingsModel::for_popover(snapshot) {
             Some(settings) => {
@@ -411,13 +413,14 @@ impl TopBar {
             }
             None => gtk4::Box::new(gtk4::Orientation::Vertical, 0),
         };
-        menu_popover_viewport(
+        let widget = menu_popover_viewport(
             &content,
             "top.menu.settings.panel",
             MENU_CONTENT_W,
             scale,
             &self.feedback,
-        )
+        );
+        (widget, updaters)
     }
 
     pub(super) fn build_shapes_popover_content(

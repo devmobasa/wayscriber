@@ -3,16 +3,17 @@ use crate::input::DrawingState;
 use crate::input::boards::PendingBoardConfigUpdate;
 
 use super::WaylandState;
+use crate::backend::wayland::config_writer::ConfigMutation;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn apply_board_config_update(
         &mut self,
         update: PendingBoardConfigUpdate,
     ) {
-        apply_board_config_update_to_config(&mut self.config, update);
-        if let Err(err) = self.config_store.save(&self.config) {
-            log::warn!("Failed to save board config: {}", err);
-        } else {
+        if self.queue_config_mutation(
+            ConfigMutation::BoardConfig(Box::new(update)),
+            "board config persistence",
+        ) {
             self.refresh_runtime_ui_config_seeds();
         }
     }
@@ -154,7 +155,7 @@ impl WaylandState {
     }
 }
 
-fn apply_board_config_update_to_config(
+pub(in crate::backend::wayland) fn apply_board_config_update_to_config(
     config: &mut crate::config::Config,
     update: PendingBoardConfigUpdate,
 ) {

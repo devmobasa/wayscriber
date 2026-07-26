@@ -30,6 +30,15 @@ const ROW_HIT_LENGTH: f64 = MIN_HIT_TARGET * 3.0;
 /// inflated to the minimum target size. Used by both the legacy HitRegion
 /// path and the view-engine tree so the two can never disagree.
 pub fn rect_contains_with_min_target(rect: (f64, f64, f64, f64), x: f64, y: f64) -> bool {
+    let (rx, ry, rw, rh) = rect_with_min_target(rect);
+    x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
+}
+
+/// The effective pointer target for a visual rect after minimum-size
+/// inflation. Overlay occlusion uses this same geometry so a compact target
+/// cannot remain clickable through an opaque panel merely because only its
+/// inflated margin is covered.
+pub fn rect_with_min_target(rect: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
     let (rx, ry, rw, rh) = rect;
     let pad_x = if rh < ROW_HIT_LENGTH {
         ((MIN_HIT_TARGET - rw) / 2.0).max(0.0)
@@ -41,7 +50,7 @@ pub fn rect_contains_with_min_target(rect: (f64, f64, f64, f64), x: f64, y: f64)
     } else {
         0.0
     };
-    x >= rx - pad_x && x <= rx + rw + pad_x && y >= ry - pad_y && y <= ry + rh + pad_y
+    (rx - pad_x, ry - pad_y, rw + pad_x * 2.0, rh + pad_y * 2.0)
 }
 
 impl HitRegion {

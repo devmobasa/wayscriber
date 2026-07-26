@@ -103,6 +103,7 @@ impl ToolbarSnapshot {
         let side_scroll = state.toolbar_side_scroll[state.toolbar_side_pane.index()];
         let customize_items_open = state.toolbar_customize_items_open;
         let customize_items_group = state.toolbar_customize_items_group;
+        let status_bar_contents_open = state.toolbar_status_bar_contents_open;
         let show_actions_advanced = state.show_actions_advanced;
         let show_zoom_actions = state.show_zoom_actions;
         let show_pages_section = state.show_pages_section;
@@ -179,8 +180,18 @@ impl ToolbarSnapshot {
             collapsed_side_sections: state.toolbar_collapsed_side_sections.clone(),
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,
+            status_bar_interactive: state.status_bar_interactive,
+            show_active_output_badge: state.show_active_output_badge,
+            show_status_selection_info: state.show_status_selection_info,
             show_status_board_badge: state.show_status_board_badge,
             show_status_page_badge: state.show_status_page_badge,
+            show_status_color: state.show_status_color,
+            show_status_tool: state.show_status_tool,
+            show_status_size: state.show_status_size,
+            show_status_context_indicators: state.show_status_context_indicators,
+            show_toolbar_hint: state.show_toolbar_hint,
+            show_status_help: state.show_status_help,
+            show_status_about: state.show_status_about,
             show_floating_badge_always: state.show_floating_badge_always,
             preset_slot_count: state.preset_slot_count,
             presets,
@@ -210,6 +221,7 @@ impl ToolbarSnapshot {
             top_available_height: None,
             customize_items_open,
             customize_items_group,
+            status_bar_contents_open,
             binding_hints,
             show_drawer_hint,
             is_transparent: state.board_is_transparent(),

@@ -96,6 +96,7 @@ use super::{
 
 mod activation;
 mod boards;
+pub(in crate::backend::wayland) use boards::apply_board_config_update_to_config;
 mod buffer_damage;
 mod canvas_layer;
 mod capture;
@@ -153,6 +154,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub path_resolver: crate::paths::PathResolver,
     pub runtime_paths: crate::paths::PreparedRuntimePaths,
     pub logger: crate::logger::LoggerHandle,
+    pub config_writer: super::config_writer::ConfigWriter,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
@@ -217,6 +219,8 @@ pub(super) struct WaylandState {
     pub(super) runtime_paths: crate::paths::PreparedRuntimePaths,
     pub(super) logger: crate::logger::LoggerHandle,
     pub(super) theme: crate::ui::theme::Theme,
+    /// Channel-owned writer for runtime-authored config preferences.
+    pub(super) config_writer: super::config_writer::ConfigWriter,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) session_catalog: crate::session::catalog::SessionCatalog,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,

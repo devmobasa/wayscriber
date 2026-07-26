@@ -129,6 +129,7 @@ impl ConfigStore {
     /// that fresh typed value, and saves it through the same revision guard.
     /// This prevents a long-lived runtime snapshot from overwriting newer
     /// edits made through the configurator or directly in `config.toml`.
+    #[cfg(test)]
     pub(crate) fn update_file(&self, update: impl FnOnce(&mut Config)) -> Result<()> {
         let config_path = self.config_path.clone();
         let document = ConfigDocument::load_from_path(&config_path)?;

@@ -22,6 +22,9 @@ use super::{
     planned_gap, planned_island_metrics, planned_use_icons,
 };
 
+pub(super) const OVERFLOW_ANCHOR_GAP: f64 = 6.0;
+pub(super) const OVERFLOW_BOTTOM_MARGIN: f64 = 4.0;
+
 pub(super) fn build_top_view_planned(
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
@@ -226,7 +229,7 @@ pub(super) fn build_top_view_planned(
                 + grid_h.max(0.0)
                 + option_rows.len() as f64 * (option_h + gap)
                 + if rows.is_empty() { -gap } else { 0.0 };
-            let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
+            let popover_anchor = popover_anchor_below_contextual_rows(anchor, snapshot, plan);
             let placement =
                 super::super::popover::place_popover(super::super::popover::PopoverSpec {
                     anchor: popover_anchor,
@@ -355,16 +358,17 @@ pub(super) fn build_top_view_planned(
             let pad = 8.0;
             let content_w = cols as f64 * btn_w + (cols as f64 - 1.0) * gap + pad * 2.0;
             let content_h = rows as f64 * btn_h + (rows as f64 - 1.0) * gap + pad * 2.0;
-            let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
+            let popover_anchor = overflow_family_anchor(anchor, snapshot, plan);
             let placement =
                 super::super::popover::place_popover(super::super::popover::PopoverSpec {
                     anchor: popover_anchor,
                     content: (content_w, content_h),
                     bounds: (width, height),
-                    gap: 6.0,
-                    margin: 4.0,
+                    gap: OVERFLOW_ANCHOR_GAP,
+                    margin: OVERFLOW_BOTTOM_MARGIN,
                 });
             let (px, py, _pw, _ph) = placement.rect;
+            tree.suppress_interactions_covered_by(placement.rect);
             tree.push(WidgetNode::decor(
                 "top.overflow.panel",
                 placement.rect,
@@ -398,7 +402,11 @@ pub(super) fn build_top_view_planned(
 
     // --- Canvas/Session/Settings popovers: the re-hosted side panes ----------
     if let Some(anchor) = overflow_anchor {
-        let popover_anchor = popover_anchor_below_ring(anchor, snapshot, plan, y, btn_h);
+        // Match GTK's native popovers: these large panels attach directly to
+        // the overflow button and cover the detached style pill beneath it.
+        // The highlight ring remains visible because it extends the button's
+        // own band rather than forming a detached row.
+        let popover_anchor = overflow_family_anchor(anchor, snapshot, plan);
         super::menus::push_menu_popover(&mut tree, snapshot, plan, popover_anchor, (width, height));
     }
 
@@ -908,17 +916,6 @@ fn push_style_pill(
 }
 
 /// Height the style pill adds under the island band (gap plus pill).
-/// Height of the strip's base band in full display mode (icons vs text). A
-/// menu popover is only ever open while the strip is full, so this is the
-/// offset the contextual rows and the popover stack below.
-pub(super) fn base_band_height(snapshot: &ToolbarSnapshot) -> f64 {
-    if snapshot.use_icons {
-        ToolbarLayoutSpec::TOP_SIZE_ICONS.1 as f64
-    } else {
-        ToolbarLayoutSpec::TOP_SIZE_TEXT.1 as f64
-    }
-}
-
 pub(super) fn style_pill_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> f64 {
     if !model::StylePillSpec::visible(snapshot, plan) {
         return 0.0;
@@ -935,28 +932,40 @@ pub(super) fn ring_row_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStri
     ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT + 2.0
 }
 
-/// Shift a popover anchor below the contextual rows (the highlight ring
-/// row inside the band and the detached style pill under it) so an open
-/// popover never covers them.
-fn popover_anchor_below_ring(
+/// Bottom edge used by the overflow-family popovers. They overlay the
+/// detached style pill like GTK, but stay below the highlight ring because
+/// that control extends the strip's own band.
+pub(super) fn overflow_family_anchor_bottom(
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+) -> f64 {
+    let (_, button_h) = planned_button_size(snapshot, plan);
+    let button_y = (base_bar_height(snapshot) - button_h) / 2.0;
+    let mut bottom = button_y + button_h;
+    if ring_row_height_planned(snapshot, plan) > 0.0 {
+        bottom += ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
+    }
+    bottom
+}
+
+fn overflow_family_anchor(
     anchor: (f64, f64, f64, f64),
     snapshot: &ToolbarSnapshot,
     plan: &TopStripPlan,
-    button_y: f64,
-    button_h: f64,
 ) -> (f64, f64, f64, f64) {
-    let ring = ring_row_height_planned(snapshot, plan);
+    let bottom = overflow_family_anchor_bottom(snapshot, plan);
+    (anchor.0, bottom - anchor.3, anchor.2, anchor.3)
+}
+
+/// Shift shapes/options below both contextual rows so the picker never
+/// covers controls for the active tool.
+fn popover_anchor_below_contextual_rows(
+    anchor: (f64, f64, f64, f64),
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+) -> (f64, f64, f64, f64) {
     let pill = style_pill_height_planned(snapshot, plan);
-    if ring <= 0.0 && pill <= 0.0 {
-        return anchor;
-    }
-    let mut bottom = button_y + button_h;
-    if ring > 0.0 {
-        bottom = button_y
-            + button_h
-            + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET
-            + ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
-    }
+    let mut bottom = overflow_family_anchor_bottom(snapshot, plan);
     if pill > 0.0 {
         // The pill bottom: island band plus its gap-and-height extent.
         bottom = bar_band_height(snapshot, plan) + pill;
@@ -975,7 +984,11 @@ pub(super) fn overflow_height_planned(snapshot: &ToolbarSnapshot, plan: &TopStri
     let (_, btn_h) = planned_button_size(snapshot, plan);
     let cols = dropped_count.min(5);
     let rows = dropped_count.div_ceil(cols) as f64;
-    rows * btn_h + (rows - 1.0) * planned_gap(plan) + 8.0 * 2.0 + 6.0 + 4.0
+    let panel_h = rows * btn_h + (rows - 1.0) * planned_gap(plan) + 8.0 * 2.0;
+    let base_h = base_bar_height(snapshot);
+    let panel_bottom =
+        overflow_family_anchor_bottom(snapshot, plan) + OVERFLOW_ANCHOR_GAP + panel_h;
+    (panel_bottom + OVERFLOW_BOTTOM_MARGIN - base_h).max(0.0)
 }
 
 fn tool_button_node(

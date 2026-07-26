@@ -186,6 +186,8 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     }
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
     let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
+    let config_writer =
+        crate::backend::wayland::config_writer::ConfigWriter::new(backend.config_store.clone());
 
     apply_initial_mode(backend, &config, &mut input_state);
 
@@ -219,6 +221,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         path_resolver: backend.path_resolver.clone(),
         runtime_paths: backend.runtime_paths.clone(),
         logger: backend.logger.clone(),
+        config_writer,
         input_state,
         onboarding,
         palette_recents,

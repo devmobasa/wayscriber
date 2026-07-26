@@ -228,34 +228,38 @@ impl InputState {
         self.break_focus_mode();
         if self.show_status_bar != show {
             self.show_status_bar = show;
-            self.dirty_tracker.mark_full();
+            self.refresh_status_hud_layout();
             self.needs_redraw = true;
             true
         } else {
             false
         }
+    }
+
+    pub(super) fn apply_toolbar_set_status_bar_interactive(&mut self, interactive: bool) -> bool {
+        if self.status_bar_interactive == interactive {
+            return false;
+        }
+        self.status_bar_interactive = interactive;
+        self.status_hud_hover = None;
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(super) fn apply_toolbar_set_status_bar_item_visible(
+        &mut self,
+        item: crate::config::StatusBarItem,
+        visible: bool,
+    ) -> bool {
+        self.set_status_bar_item_visible(item, visible)
     }
 
     pub(super) fn apply_toolbar_toggle_status_board_badge(&mut self, show: bool) -> bool {
-        if self.show_status_board_badge != show {
-            self.show_status_board_badge = show;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            true
-        } else {
-            false
-        }
+        self.set_status_bar_item_visible(crate::config::StatusBarItem::Board, show)
     }
 
     pub(super) fn apply_toolbar_toggle_status_page_badge(&mut self, show: bool) -> bool {
-        if self.show_status_page_badge != show {
-            self.show_status_page_badge = show;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            true
-        } else {
-            false
-        }
+        self.set_status_bar_item_visible(crate::config::StatusBarItem::Page, show)
     }
 
     pub(super) fn apply_toolbar_toggle_floating_badge_always(&mut self, show: bool) -> bool {
@@ -419,12 +423,15 @@ impl InputState {
             self.toolbar_side_pane = pane;
             changed = true;
         }
-        // Leaving the Settings pane closes the customization sub-panel.
+        // Leaving the Settings pane closes its nested sub-panels.
         if pane != crate::ui::toolbar::SidePane::Settings
-            && (self.toolbar_customize_items_open || self.toolbar_customize_items_group.is_some())
+            && (self.toolbar_customize_items_open
+                || self.toolbar_customize_items_group.is_some()
+                || self.toolbar_status_bar_contents_open)
         {
             self.toolbar_customize_items_open = false;
             self.toolbar_customize_items_group = None;
+            self.toolbar_status_bar_contents_open = false;
             changed = true;
         }
         if changed {
@@ -518,6 +525,9 @@ impl InputState {
             return false;
         }
         self.toolbar_customize_items_open = open;
+        if open {
+            self.toolbar_status_bar_contents_open = false;
+        }
         if !open {
             self.toolbar_customize_items_group = None;
         }
@@ -535,6 +545,21 @@ impl InputState {
         }
         self.toolbar_customize_items_open = true;
         self.toolbar_customize_items_group = group;
+        self.toolbar_status_bar_contents_open = false;
+        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(super) fn apply_toolbar_set_status_bar_contents_open(&mut self, open: bool) -> bool {
+        if self.toolbar_status_bar_contents_open == open {
+            return false;
+        }
+        self.toolbar_status_bar_contents_open = open;
+        if open {
+            self.toolbar_customize_items_open = false;
+            self.toolbar_customize_items_group = None;
+        }
         self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true

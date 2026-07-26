@@ -16,6 +16,7 @@ mod helpers;
 use helpers::{
     control_visible, customize_buttons, customize_group_contains, customize_groups,
     definition_order_group_for_customize, settings_buttons, sort_customize_definitions,
+    status_bar_content_buttons,
 };
 
 #[derive(Debug, Clone)]
@@ -46,59 +47,52 @@ impl ToolbarSettingsModel {
 
     fn build(snapshot: &ToolbarSnapshot) -> Option<Self> {
         let customizing = snapshot.customize_items_open;
+        let status_bar_contents = snapshot.status_bar_contents_open;
 
-        let mut toggles = vec![
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::ContextAwareUi,
-                "Adapt to tool",
-                snapshot.context_aware_ui,
-                "Show only the active tool's controls.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::IconMode,
-                "Icon buttons",
-                snapshot.use_icons,
-                "Icons instead of text labels.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::TextControls,
-                "Text controls",
-                snapshot.show_text_controls,
-                "Text: font size/family.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::StatusBar,
-                "Status bar",
-                snapshot.show_status_bar,
-                "Status bar: color/tool readout.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::StatusBoardBadge,
-                "Status board",
-                snapshot.show_status_board_badge,
-                "Status bar: board label.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::StatusPageBadge,
-                "Status page",
-                snapshot.show_status_page_badge,
-                "Status bar: page counter.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::FloatingBadgeAlways,
-                "Overlay badge",
-                snapshot.show_floating_badge_always,
-                "Board/page badge when status bar is visible.",
-            ),
-            ToolbarSettingsToggle::new(
-                ToolbarSettingsToggleKind::PresetToasts,
-                "Preset toasts",
-                snapshot.show_preset_toasts,
-                "Preset toasts: apply/save/clear.",
-            ),
-        ];
+        let mut toggles = if status_bar_contents {
+            status_bar_content_toggles(snapshot)
+        } else {
+            vec![
+                ToolbarSettingsToggle::new(
+                    ToolbarSettingsToggleKind::ContextAwareUi,
+                    "Adapt to tool",
+                    snapshot.context_aware_ui,
+                    "Show only the active tool's controls.",
+                ),
+                ToolbarSettingsToggle::new(
+                    ToolbarSettingsToggleKind::IconMode,
+                    "Icon buttons",
+                    snapshot.use_icons,
+                    "Icons instead of text labels.",
+                ),
+                ToolbarSettingsToggle::new(
+                    ToolbarSettingsToggleKind::TextControls,
+                    "Text controls",
+                    snapshot.show_text_controls,
+                    "Text: font size/family.",
+                ),
+                ToolbarSettingsToggle::new(
+                    ToolbarSettingsToggleKind::StatusBar,
+                    "Status bar",
+                    snapshot.show_status_bar,
+                    "Show the status bar and its configured contents.",
+                ),
+                ToolbarSettingsToggle::new(
+                    ToolbarSettingsToggleKind::FloatingBadgeAlways,
+                    "Overlay badge",
+                    snapshot.show_floating_badge_always,
+                    "Board/page badge when status bar is visible.",
+                ),
+                ToolbarSettingsToggle::new(
+                    ToolbarSettingsToggleKind::PresetToasts,
+                    "Preset toasts",
+                    snapshot.show_preset_toasts,
+                    "Preset toasts: apply/save/clear.",
+                ),
+            ]
+        };
 
-        if snapshot.layout_mode != ToolbarLayoutMode::Simple {
+        if !status_bar_contents && snapshot.layout_mode != ToolbarLayoutMode::Simple {
             toggles.extend([
                 ToolbarSettingsToggle::new(
                     ToolbarSettingsToggleKind::Presets,
@@ -147,18 +141,26 @@ impl ToolbarSettingsModel {
             ]);
         }
 
-        toggles.retain(|toggle| control_visible(snapshot, toggle.id));
+        // Content preferences are the recovery/customization surface for the
+        // status bar itself, so toolbar-item visibility overrides must not
+        // hide entries from this nested panel (the legacy Board/Page control
+        // IDs are also used by the main Settings grid).
+        if !status_bar_contents {
+            toggles.retain(|toggle| control_visible(snapshot, toggle.id));
+        }
         if customizing {
             toggles.clear();
         }
 
-        let notices = if customizing {
+        let notices = if customizing || status_bar_contents {
             Vec::new()
         } else {
             runtime_persistence_notices(snapshot)
         };
         let buttons = if customizing {
             customize_buttons(snapshot)
+        } else if status_bar_contents {
+            status_bar_content_buttons()
         } else {
             settings_buttons(snapshot)
         };
@@ -239,6 +241,54 @@ impl ToolbarSettingsModel {
     pub(crate) fn item_overrides(&self) -> &[ToolbarSettingsItemOverride] {
         &self.item_overrides
     }
+}
+
+fn status_bar_content_toggles(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsToggle> {
+    let mut toggles = vec![
+        ToolbarSettingsToggle::new(
+            ToolbarSettingsToggleKind::StatusBarInteractive,
+            "Clickable segments",
+            snapshot.status_bar_interactive,
+            "Allow status-bar segments to open their related controls.",
+        )
+        .wide(),
+    ];
+    toggles.extend(crate::config::StatusBarItem::ALL.map(|item| {
+        let (label, tooltip) = match item {
+            crate::config::StatusBarItem::ActiveOutput => {
+                ("Active output", "Status bar: active monitor/output.")
+            }
+            crate::config::StatusBarItem::SelectionInfo => {
+                ("Selection size", "Status bar: selected item dimensions.")
+            }
+            crate::config::StatusBarItem::Board => ("Board", "Status bar: board label."),
+            crate::config::StatusBarItem::Page => ("Page", "Status bar: page counter."),
+            crate::config::StatusBarItem::Color => {
+                ("Current color", "Status bar: active color dot.")
+            }
+            crate::config::StatusBarItem::Tool => ("Active tool", "Status bar: active tool name."),
+            crate::config::StatusBarItem::Size => ("Tool size", "Status bar: active tool size."),
+            crate::config::StatusBarItem::ContextIndicators => (
+                "Context indicators",
+                "Status bar: text and highlight state.",
+            ),
+            crate::config::StatusBarItem::ToolbarHint => (
+                "Toolbar hint",
+                "Status bar: recovery hint while toolbars are hidden.",
+            ),
+            crate::config::StatusBarItem::Help => ("Help shortcut", "Status bar: Help shortcut."),
+            crate::config::StatusBarItem::About => {
+                ("About and version", "Status bar: About/version chip.")
+            }
+        };
+        ToolbarSettingsToggle::new(
+            ToolbarSettingsToggleKind::StatusBarItem(item),
+            label,
+            snapshot.status_bar_item_visible(item),
+            tooltip,
+        )
+    }));
+    toggles
 }
 
 #[derive(Debug, Clone)]
@@ -371,8 +421,8 @@ enum ToolbarSettingsToggleKind {
     IconMode,
     TextControls,
     StatusBar,
-    StatusBoardBadge,
-    StatusPageBadge,
+    StatusBarInteractive,
+    StatusBarItem(crate::config::StatusBarItem),
     FloatingBadgeAlways,
     PresetToasts,
     Presets,
@@ -391,8 +441,28 @@ impl ToolbarSettingsToggleKind {
             Self::IconMode => ToolbarControlId::SettingsIconMode,
             Self::TextControls => ToolbarControlId::SettingsTextControls,
             Self::StatusBar => ToolbarControlId::SettingsStatusBar,
-            Self::StatusBoardBadge => ToolbarControlId::SettingsStatusBoardBadge,
-            Self::StatusPageBadge => ToolbarControlId::SettingsStatusPageBadge,
+            Self::StatusBarInteractive => ToolbarControlId::SettingsStatusBarInteractive,
+            Self::StatusBarItem(item) => match item {
+                crate::config::StatusBarItem::ActiveOutput => {
+                    ToolbarControlId::SettingsStatusActiveOutput
+                }
+                crate::config::StatusBarItem::SelectionInfo => {
+                    ToolbarControlId::SettingsStatusSelectionInfo
+                }
+                crate::config::StatusBarItem::Board => ToolbarControlId::SettingsStatusBoardBadge,
+                crate::config::StatusBarItem::Page => ToolbarControlId::SettingsStatusPageBadge,
+                crate::config::StatusBarItem::Color => ToolbarControlId::SettingsStatusColor,
+                crate::config::StatusBarItem::Tool => ToolbarControlId::SettingsStatusTool,
+                crate::config::StatusBarItem::Size => ToolbarControlId::SettingsStatusSize,
+                crate::config::StatusBarItem::ContextIndicators => {
+                    ToolbarControlId::SettingsStatusContextIndicators
+                }
+                crate::config::StatusBarItem::ToolbarHint => {
+                    ToolbarControlId::SettingsStatusToolbarHint
+                }
+                crate::config::StatusBarItem::Help => ToolbarControlId::SettingsStatusHelp,
+                crate::config::StatusBarItem::About => ToolbarControlId::SettingsStatusAbout,
+            },
             Self::FloatingBadgeAlways => ToolbarControlId::SettingsFloatingBadgeAlways,
             Self::PresetToasts => ToolbarControlId::SettingsPresetToasts,
             Self::Presets => ToolbarControlId::SettingsPresets,
@@ -411,8 +481,8 @@ impl ToolbarSettingsToggleKind {
             Self::IconMode => ToolbarEvent::ToggleIconMode(checked),
             Self::TextControls => ToolbarEvent::ToggleTextControls(checked),
             Self::StatusBar => ToolbarEvent::ToggleStatusBar(checked),
-            Self::StatusBoardBadge => ToolbarEvent::ToggleStatusBoardBadge(checked),
-            Self::StatusPageBadge => ToolbarEvent::ToggleStatusPageBadge(checked),
+            Self::StatusBarInteractive => ToolbarEvent::SetStatusBarInteractive(checked),
+            Self::StatusBarItem(item) => ToolbarEvent::SetStatusBarItemVisible(item, checked),
             Self::FloatingBadgeAlways => ToolbarEvent::ToggleFloatingBadgeAlways(checked),
             Self::PresetToasts => ToolbarEvent::TogglePresetToasts(checked),
             Self::Presets => ToolbarEvent::TogglePresets(checked),
@@ -532,6 +602,7 @@ fn push_notice(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::StatusBarItem;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarBindingHints;
 
@@ -565,5 +636,51 @@ mod tests {
         assert_eq!(button.event, ToolbarEvent::OpenAbout);
         assert_eq!(button.label, action_short_label(Action::OpenAbout));
         assert_eq!(button.icon, ToolbarIcon::Info);
+    }
+
+    #[test]
+    fn status_bar_contents_subpanel_exposes_every_authored_content_toggle() {
+        let mut state = make_test_input_state();
+        assert!(state.set_toolbar_item_hidden(
+            crate::config::toolbar_item_ids::SIDE_SETTINGS_STATUS_BOARD_BADGE,
+            true,
+        ));
+        assert!(state.set_toolbar_item_hidden(
+            crate::config::toolbar_item_ids::SIDE_SETTINGS_STATUS_PAGE_BADGE,
+            true,
+        ));
+        state.toolbar_status_bar_contents_open = true;
+        let snapshot =
+            ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
+        let model = ToolbarSettingsModel::build(&snapshot).expect("settings model");
+
+        assert_eq!(model.toggles().len(), StatusBarItem::ALL.len() + 1);
+        assert_eq!(
+            model.toggles()[0].id,
+            ToolbarControlId::SettingsStatusBarInteractive
+        );
+        let items: Vec<_> = model
+            .toggles()
+            .iter()
+            .skip(1)
+            .filter_map(|toggle| match &toggle.activation {
+                ToolbarActivation::Click(ToolbarEvent::SetStatusBarItemVisible(item, _)) => {
+                    Some(*item)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            items.len(),
+            StatusBarItem::ALL.len(),
+            "every status content row uses an item-visibility activation"
+        );
+        assert_eq!(items, StatusBarItem::ALL);
+        assert!(model.notices().is_empty());
+        assert_eq!(model.buttons().len(), 1);
+        assert_eq!(
+            model.buttons()[0].id,
+            ToolbarControlId::BackStatusBarContents
+        );
     }
 }

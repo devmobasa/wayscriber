@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::QuickColorWrite;
+use crate::backend::wayland::config_writer::ConfigMutation;
 use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersistenceTarget};
 
 pub(super) fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) -> bool {
@@ -17,50 +17,44 @@ pub(super) fn persisted_top_display_mode_value(
     presenter_restore.unwrap_or(current).persisted()
 }
 
+#[cfg(test)]
 pub(super) fn apply_toolbar_ui_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
     target: ToolbarUiPersistenceTarget,
 ) {
+    let _ = toolbar_ui_config_mutation(input_state, target).apply(config);
+}
+
+fn toolbar_ui_config_mutation(
+    input_state: &InputState,
+    target: ToolbarUiPersistenceTarget,
+) -> ConfigMutation {
     match target {
         ToolbarUiPersistenceTarget::StatusBar => {
-            config.ui.show_status_bar = input_state.show_status_bar;
+            ConfigMutation::ShowStatusBar(input_state.show_status_bar)
         }
+        ToolbarUiPersistenceTarget::StatusBarInteractive => {
+            ConfigMutation::StatusBarInteractive(input_state.status_bar_interactive)
+        }
+        ToolbarUiPersistenceTarget::StatusBarItem(item) => ConfigMutation::StatusBarItem {
+            item,
+            visible: input_state.status_bar_item_visible(item),
+        },
         ToolbarUiPersistenceTarget::StatusBoardBadge => {
-            config.ui.show_status_board_badge = input_state.show_status_board_badge;
+            ConfigMutation::StatusBoardBadge(input_state.show_status_board_badge)
         }
         ToolbarUiPersistenceTarget::StatusPageBadge => {
-            config.ui.show_status_page_badge = input_state.show_status_page_badge;
+            ConfigMutation::StatusPageBadge(input_state.show_status_page_badge)
         }
         ToolbarUiPersistenceTarget::FloatingBadgeAlways => {
-            config.ui.show_floating_badge_always = input_state.show_floating_badge_always;
+            ConfigMutation::FloatingBadgeAlways(input_state.show_floating_badge_always)
         }
         ToolbarUiPersistenceTarget::FloatingBadge => {
-            config.ui.show_floating_badge = input_state.show_floating_badge;
+            ConfigMutation::FloatingBadge(input_state.show_floating_badge)
         }
         ToolbarUiPersistenceTarget::ZoomChip => {
-            config.ui.toolbar.show_zoom_chip = input_state.show_zoom_chip;
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum MasterVisibilityTarget {
-    FloatingBadge,
-    ZoomChip,
-}
-
-fn apply_toolbar_ui_visibility_value(
-    config: &mut crate::config::Config,
-    target: MasterVisibilityTarget,
-    visible: bool,
-) {
-    match target {
-        MasterVisibilityTarget::FloatingBadge => {
-            config.ui.show_floating_badge = visible;
-        }
-        MasterVisibilityTarget::ZoomChip => {
-            config.ui.toolbar.show_zoom_chip = visible;
+            ConfigMutation::ZoomChip(input_state.show_zoom_chip)
         }
     }
 }
@@ -73,111 +67,113 @@ pub(super) struct ToolbarPositions {
     pub(super) side_y: f64,
 }
 
-fn apply_all_section_compatibility_mirrors(
-    config: &mut crate::config::Config,
-    input_state: &InputState,
-) {
-    config.ui.toolbar.show_actions_section = input_state.show_actions_section;
-    config.ui.toolbar.show_actions_advanced = input_state.show_actions_advanced;
-    config.ui.toolbar.show_zoom_actions = input_state.show_zoom_actions;
-    config.ui.toolbar.show_pages_section = input_state.show_pages_section;
-    config.ui.toolbar.show_boards_section = input_state.show_boards_section;
-    config.ui.toolbar.show_presets = input_state.show_presets;
-    config.ui.toolbar.show_step_section = input_state.show_step_section;
-    config.ui.toolbar.show_text_controls = input_state.show_text_controls;
-    config.ui.toolbar.show_settings_section = input_state.show_settings_section;
-}
-
-fn apply_section_compatibility_mirror(
-    config: &mut crate::config::Config,
-    flag: crate::config::ToolbarSectionFlag,
-    visible: bool,
-) {
-    use crate::config::ToolbarSectionFlag;
-
-    match flag {
-        ToolbarSectionFlag::Actions => config.ui.toolbar.show_actions_section = visible,
-        ToolbarSectionFlag::ActionsAdvanced => {
-            config.ui.toolbar.show_actions_advanced = visible;
-        }
-        ToolbarSectionFlag::ZoomActions => config.ui.toolbar.show_zoom_actions = visible,
-        ToolbarSectionFlag::Pages => config.ui.toolbar.show_pages_section = visible,
-        ToolbarSectionFlag::Boards => config.ui.toolbar.show_boards_section = visible,
-        ToolbarSectionFlag::Presets => config.ui.toolbar.show_presets = visible,
-        ToolbarSectionFlag::StepSection => config.ui.toolbar.show_step_section = visible,
-        ToolbarSectionFlag::TextControls => config.ui.toolbar.show_text_controls = visible,
-    }
-}
-
+#[cfg(test)]
 pub(super) fn apply_toolbar_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
     positions: ToolbarPositions,
     target: ToolbarConfigPersistenceTarget,
 ) {
+    let _ = toolbar_config_mutation(input_state, positions, target).apply(config);
+}
+
+fn toolbar_config_mutation(
+    input_state: &InputState,
+    positions: ToolbarPositions,
+    target: ToolbarConfigPersistenceTarget,
+) -> ConfigMutation {
     use ToolbarConfigPersistenceTarget::*;
 
     match target {
-        LayoutMode => {
-            config.ui.toolbar.layout_mode = input_state.toolbar_layout_mode;
-            apply_all_section_compatibility_mirrors(config, input_state);
-        }
+        LayoutMode => ConfigMutation::ToolbarLayout {
+            mode: input_state.toolbar_layout_mode,
+            sections: crate::config::ToolbarSectionVisibility {
+                show_actions_section: input_state.show_actions_section,
+                show_actions_advanced: input_state.show_actions_advanced,
+                show_zoom_actions: input_state.show_zoom_actions,
+                show_pages_section: input_state.show_pages_section,
+                show_boards_section: input_state.show_boards_section,
+                show_presets: input_state.show_presets,
+                show_step_section: input_state.show_step_section,
+                show_text_controls: input_state.show_text_controls,
+                show_settings_section: input_state.show_settings_section,
+            },
+        },
         SectionVisibility(flag) => {
             let id = flag.item_id();
             let setting =
                 crate::config::item_visibility_setting(&input_state.resolved_toolbar_items, id);
-            config.ui.toolbar.items.set_visibility_setting(id, setting);
             let visible = crate::config::resolve_section_visibility(
                 input_state.toolbar_layout_mode,
                 &input_state.toolbar_mode_overrides,
                 &input_state.resolved_toolbar_items,
             )
             .get(flag);
-            apply_section_compatibility_mirror(config, flag, visible);
+            ConfigMutation::ToolbarSectionVisibility {
+                id,
+                setting,
+                flag,
+                visible,
+            }
         }
-        TopDisplayMode => {
-            config.ui.toolbar.top_display_mode = persisted_top_display_mode_value(
-                input_state.toolbar_top_display_mode,
-                input_state
-                    .presenter_restore
-                    .as_ref()
-                    .and_then(|restore| restore.toolbar_top_display_mode),
-            );
-        }
-        Icons => config.ui.toolbar.use_icons = input_state.toolbar_use_icons,
-        MoreColors => config.ui.toolbar.show_more_colors = input_state.show_more_colors,
-        ContextAwareUi => config.ui.toolbar.context_aware_ui = input_state.context_aware_ui,
-        PresetToasts => config.ui.toolbar.show_preset_toasts = input_state.show_preset_toasts,
-        ToolPreview => {
-            config.ui.toolbar.show_tool_preview = persisted_tool_preview_value(
-                input_state.show_tool_preview,
-                input_state
-                    .presenter_restore
-                    .as_ref()
-                    .and_then(|restore| restore.show_tool_preview),
-            );
-        }
-        DelaySliders => config.ui.toolbar.show_delay_sliders = input_state.show_delay_sliders,
-        TopPosition => {
-            config.ui.toolbar.top_offset = positions.top_x;
-            config.ui.toolbar.top_offset_y = positions.top_y;
-        }
+        TopDisplayMode => ConfigMutation::ToolbarTopDisplayMode(persisted_top_display_mode_value(
+            input_state.toolbar_top_display_mode,
+            input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.toolbar_top_display_mode),
+        )),
+        Icons => ConfigMutation::ToolbarUseIcons(input_state.toolbar_use_icons),
+        MoreColors => ConfigMutation::ToolbarShowMoreColors(input_state.show_more_colors),
+        ContextAwareUi => ConfigMutation::ToolbarContextAwareUi(input_state.context_aware_ui),
+        PresetToasts => ConfigMutation::ToolbarPresetToasts(input_state.show_preset_toasts),
+        ToolPreview => ConfigMutation::ToolbarToolPreview(persisted_tool_preview_value(
+            input_state.show_tool_preview,
+            input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.show_tool_preview),
+        )),
+        DelaySliders => ConfigMutation::ToolbarDelaySliders(input_state.show_delay_sliders),
+        TopPosition => ConfigMutation::ToolbarTopPosition {
+            x: positions.top_x,
+            y: positions.top_y,
+        },
         SidePosition => {
             // A side drag can change whether the side palette overlaps the
             // top strip. Drag completion reconciles the top strip's X offset
             // against that new base before saving, so persist the derived X
             // together with the side position. The top Y value is unrelated.
-            config.ui.toolbar.top_offset = positions.top_x;
-            config.ui.toolbar.side_offset_x = positions.side_x;
-            config.ui.toolbar.side_offset = positions.side_y;
+            ConfigMutation::ToolbarSidePosition {
+                top_x: positions.top_x,
+                side_x: positions.side_x,
+                side_y: positions.side_y,
+            }
         }
     }
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn queue_config_mutation(
+        &mut self,
+        mutation: ConfigMutation,
+        description: &str,
+    ) -> bool {
+        if self.config_writer.request(&mutation) {
+            // Keep the runtime baseline aligned with accepted writes. The
+            // worker owns retrying the same mutation, so a later config edit
+            // cannot reintroduce the stale pre-request value while it waits.
+            let _ = mutation.apply(&mut self.config);
+            log::debug!("Queued {description}");
+            true
+        } else {
+            log::warn!("Failed to queue {description}; runtime value remains session-only");
+            false
+        }
+    }
+
     pub(super) fn save_toolbar_config(&mut self, target: ToolbarConfigPersistenceTarget) {
-        apply_toolbar_config_target(
-            &mut self.config,
+        let mutation = toolbar_config_mutation(
             &self.input_state,
             ToolbarPositions {
                 top_x: self.data.toolbar_top_offset,
@@ -187,12 +183,7 @@ impl WaylandState {
             },
             target,
         );
-
-        if let Err(err) = self.config_store.save(&self.config) {
-            log::warn!("Failed to save toolbar config: {}", err);
-        } else {
-            log::debug!("Saved toolbar config");
-        }
+        self.queue_config_mutation(mutation, "toolbar config persistence");
     }
 
     pub(in crate::backend::wayland) fn save_toolbar_position_config(&mut self, kind: MoveDragKind) {
@@ -211,67 +202,53 @@ impl WaylandState {
         &mut self,
         visible: bool,
     ) {
-        self.save_toolbar_ui_visibility_config(MasterVisibilityTarget::FloatingBadge, visible);
+        self.queue_config_mutation(
+            ConfigMutation::FloatingBadge(visible),
+            "floating badge visibility persistence",
+        );
     }
 
     pub(in crate::backend::wayland) fn save_zoom_chip_visibility_config(&mut self, visible: bool) {
-        self.save_toolbar_ui_visibility_config(MasterVisibilityTarget::ZoomChip, visible);
-    }
-
-    fn save_toolbar_ui_visibility_config(&mut self, target: MasterVisibilityTarget, visible: bool) {
-        let save_result = self.config_store.update_file(|config| {
-            apply_toolbar_ui_visibility_value(config, target, visible);
-        });
-        match save_result {
-            Ok(()) => {
-                apply_toolbar_ui_visibility_value(&mut self.config, target, visible);
-                log::debug!("Saved toolbar UI visibility config");
-            }
-            Err(err) => log::warn!("Failed to save toolbar UI visibility config: {}", err),
-        }
+        self.queue_config_mutation(
+            ConfigMutation::ZoomChip(visible),
+            "zoom chip visibility persistence",
+        );
     }
 
     pub(super) fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {
-        let save_result = self.config_store.update_file(|config| {
-            apply_toolbar_ui_config_target(config, &self.input_state, target);
-        });
-
-        match save_result {
-            Ok(()) => {
-                // Keep the runtime's config baseline aligned only after the
-                // durable write succeeds. On failure the live InputState value
-                // remains in effect, but cannot hitchhike on a later save.
-                apply_toolbar_ui_config_target(&mut self.config, &self.input_state, target);
-                log::debug!("Saved toolbar UI config");
-            }
-            Err(err) => log::warn!("Failed to save toolbar UI config: {}", err),
-        }
+        let mutation = toolbar_ui_config_mutation(&self.input_state, target);
+        self.queue_config_mutation(mutation, "toolbar UI config persistence");
     }
 
     pub(super) fn save_toolbar_history_config(&mut self) {
-        self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
-
-        if let Err(err) = self.config_store.save(&self.config) {
-            log::warn!("Failed to save toolbar history config: {}", err);
-        } else {
-            log::debug!("Saved toolbar history config");
-        }
+        self.queue_config_mutation(
+            ConfigMutation::HistoryCustomSection(self.input_state.custom_section_enabled),
+            "toolbar history config persistence",
+        );
     }
 
     pub(in crate::backend::wayland) fn save_click_highlight_preferences(&mut self) {
-        if !(self.input_state.presenter_mode
+        let enabled = if self.input_state.presenter_mode
             && self
                 .input_state
                 .presenter_mode_config
-                .enable_click_highlight)
+                .enable_click_highlight
         {
-            self.config.ui.click_highlight.enabled = self.input_state.click_highlight_enabled();
-        }
-        self.config.ui.click_highlight.show_on_highlight_tool =
-            self.input_state.highlight_tool_ring_enabled();
-        if let Err(err) = self.config_store.save(&self.config) {
-            log::warn!("Failed to persist click highlight preferences: {}", err);
-        }
+            None
+        } else {
+            Some(self.input_state.click_highlight_enabled())
+        };
+        self.queue_config_mutation(
+            ConfigMutation::ClickHighlight {
+                enabled,
+                show_on_highlight_tool: self.input_state.highlight_tool_ring_enabled(),
+            },
+            "click highlight preference persistence",
+        );
+    }
+
+    pub(in crate::backend::wayland) fn shutdown_config_writer(&mut self) {
+        self.config_writer.shutdown();
     }
 
     /// Flush durable edits that are queued but not yet written. Pointer-driven
@@ -294,50 +271,27 @@ impl WaylandState {
         edit: crate::input::state::QuickColorEdit,
     ) {
         let crate::input::state::QuickColorEdit { index, color } = edit;
-        let mut outcome = QuickColorWrite::SlotMissing;
-        let save_result = self.config_store.update_file(|config| {
-            outcome = config.drawing.quick_colors.set_color_at(index, color);
-        });
-        match (save_result, outcome) {
-            // The document is reloaded before the edit applies, so a palette
-            // that shrank underneath the overlay (configurator, hand edit) no
-            // longer has this slot. Nothing was written: say so instead of
-            // reporting a save, and leave the config baseline alone so it keeps
-            // matching the file the runtime swatch will be reconciled against.
-            (Ok(()), QuickColorWrite::SlotMissing) => log::warn!(
-                "Quick color slot {index} is no longer in config.toml; recolor was not saved"
-            ),
-            (Ok(()), written) => {
-                self.config.drawing.quick_colors.set_color_at(index, color);
-                match written {
-                    QuickColorWrite::Written => log::debug!("Saved quick color slot {index}"),
-                    QuickColorWrite::Unchanged => {
-                        log::debug!("Quick color slot {index} already held that color");
-                    }
-                    QuickColorWrite::SlotMissing => {}
-                }
-            }
-            (Err(err), _) => log::warn!("Failed to save quick color slot {index}: {err}"),
-        }
+        self.queue_config_mutation(
+            ConfigMutation::QuickColor { index, color },
+            "quick color persistence",
+        );
     }
 
     pub(in crate::backend::wayland) fn handle_preset_action(
         &mut self,
         action: crate::input::state::PresetAction,
     ) {
-        match action {
+        let mutation = match action {
             crate::input::state::PresetAction::Save { slot, preset } => {
-                self.config.presets.set_slot(slot, Some(*preset));
-                if let Err(err) = self.config_store.save(&self.config) {
-                    log::warn!("Failed to save preset slot {}: {}", slot, err);
+                ConfigMutation::PresetSlot {
+                    slot,
+                    preset: Some(preset),
                 }
             }
             crate::input::state::PresetAction::Clear { slot } => {
-                self.config.presets.set_slot(slot, None);
-                if let Err(err) = self.config_store.save(&self.config) {
-                    log::warn!("Failed to clear preset slot {}: {}", slot, err);
-                }
+                ConfigMutation::PresetSlot { slot, preset: None }
             }
-        }
+        };
+        self.queue_config_mutation(mutation, "preset persistence");
     }
 }

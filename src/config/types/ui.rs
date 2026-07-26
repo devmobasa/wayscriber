@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 use super::{
-    ClickHighlightConfig, ContextMenuUiConfig, HelpOverlayStyle, StatusBarStyle, ToolbarConfig,
+    ClickHighlightConfig, ContextMenuUiConfig, HelpOverlayStyle, StatusBarItem, StatusBarStyle,
+    ToolbarConfig,
 };
 
 /// UI display preferences.
@@ -27,15 +28,19 @@ pub struct UiConfig {
     #[serde(default)]
     pub reduced_motion: ReducedMotion,
 
-    /// Show the status bar displaying current color, thickness, and tool
+    /// Show the status bar and its configured content
     #[serde(default = "default_show_status")]
     pub show_status_bar: bool,
 
-    /// Allow clicking status bar segments (board, page, color, tool, help)
-    /// to open their surfaces. When false the status bar is display-only and
-    /// clicks pass through to the canvas.
+    /// Allow clicking status bar segments to open their related surfaces.
+    /// When false the status bar is display-only and clicks pass through to
+    /// the canvas.
     #[serde(default = "default_status_bar_interactive")]
     pub status_bar_interactive: bool,
+
+    /// Show selection dimensions in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_selection_info: bool,
 
     /// Show the board label in the status bar
     #[serde(default = "default_show_status_board_badge")]
@@ -45,10 +50,34 @@ pub struct UiConfig {
     #[serde(default = "default_show_status_page_badge")]
     pub show_status_page_badge: bool,
 
+    /// Show the active color dot in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_color: bool,
+
+    /// Show the active tool name in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_tool: bool,
+
+    /// Show the active tool size in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_size: bool,
+
+    /// Show transient text/highlight context indicators in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_context_indicators: bool,
+
     /// Show a clickable status-bar hint chip (e.g. "F9 Toolbar") while every
     /// toolbar surface is hidden; disable if you run toolbar-less on purpose
     #[serde(default = "default_show_toolbar_hint")]
     pub show_toolbar_hint: bool,
+
+    /// Show the help shortcut chip in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_help: bool,
+
+    /// Show the About/version chip in the status bar
+    #[serde(default = "default_status_bar_item_visible")]
+    pub show_status_about: bool,
 
     /// Master visibility for the floating board/page badge; the
     /// `toggle_floating_badge` palette/keyboard action flips and persists it
@@ -142,9 +171,16 @@ impl Default for UiConfig {
             reduced_motion: ReducedMotion::default(),
             show_status_bar: default_show_status(),
             status_bar_interactive: default_status_bar_interactive(),
+            show_status_selection_info: default_status_bar_item_visible(),
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),
+            show_status_color: default_status_bar_item_visible(),
+            show_status_tool: default_status_bar_item_visible(),
+            show_status_size: default_status_bar_item_visible(),
+            show_status_context_indicators: default_status_bar_item_visible(),
             show_toolbar_hint: default_show_toolbar_hint(),
+            show_status_help: default_status_bar_item_visible(),
+            show_status_about: default_status_bar_item_visible(),
             show_floating_badge: default_show_floating_badge(),
             show_floating_badge_always: default_show_page_badge_with_status_bar(),
             show_frozen_badge: default_show_frozen_badge(),
@@ -167,11 +203,49 @@ impl Default for UiConfig {
     }
 }
 
+impl UiConfig {
+    pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
+        match item {
+            StatusBarItem::ActiveOutput => self.active_output_badge,
+            StatusBarItem::SelectionInfo => self.show_status_selection_info,
+            StatusBarItem::Board => self.show_status_board_badge,
+            StatusBarItem::Page => self.show_status_page_badge,
+            StatusBarItem::Color => self.show_status_color,
+            StatusBarItem::Tool => self.show_status_tool,
+            StatusBarItem::Size => self.show_status_size,
+            StatusBarItem::ContextIndicators => self.show_status_context_indicators,
+            StatusBarItem::ToolbarHint => self.show_toolbar_hint,
+            StatusBarItem::Help => self.show_status_help,
+            StatusBarItem::About => self.show_status_about,
+        }
+    }
+
+    pub fn set_status_bar_item_visible(&mut self, item: StatusBarItem, visible: bool) {
+        match item {
+            StatusBarItem::ActiveOutput => self.active_output_badge = visible,
+            StatusBarItem::SelectionInfo => self.show_status_selection_info = visible,
+            StatusBarItem::Board => self.show_status_board_badge = visible,
+            StatusBarItem::Page => self.show_status_page_badge = visible,
+            StatusBarItem::Color => self.show_status_color = visible,
+            StatusBarItem::Tool => self.show_status_tool = visible,
+            StatusBarItem::Size => self.show_status_size = visible,
+            StatusBarItem::ContextIndicators => self.show_status_context_indicators = visible,
+            StatusBarItem::ToolbarHint => self.show_toolbar_hint = visible,
+            StatusBarItem::Help => self.show_status_help = visible,
+            StatusBarItem::About => self.show_status_about = visible,
+        }
+    }
+}
+
 fn default_show_status() -> bool {
     true
 }
 
 fn default_status_bar_interactive() -> bool {
+    true
+}
+
+fn default_status_bar_item_visible() -> bool {
     true
 }
 

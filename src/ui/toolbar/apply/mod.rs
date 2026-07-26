@@ -202,6 +202,12 @@ impl InputState {
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
             ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),
+            ToolbarEvent::SetStatusBarInteractive(interactive) => {
+                self.apply_toolbar_set_status_bar_interactive(interactive)
+            }
+            ToolbarEvent::SetStatusBarItemVisible(item, visible) => {
+                self.apply_toolbar_set_status_bar_item_visible(item, visible)
+            }
             ToolbarEvent::ToggleStatusBoardBadge(show) => {
                 self.apply_toolbar_toggle_status_board_badge(show)
             }
@@ -241,6 +247,9 @@ impl InputState {
             }
             ToolbarEvent::SetToolbarItemCustomizationGroup(group) => {
                 self.apply_toolbar_set_item_customization_group(group)
+            }
+            ToolbarEvent::SetStatusBarContentsOpen(open) => {
+                self.apply_toolbar_set_status_bar_contents_open(open)
             }
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
             ToolbarEvent::ApplyPreset(slot) => self.apply_toolbar_apply_preset(slot),

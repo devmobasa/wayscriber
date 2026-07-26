@@ -51,6 +51,34 @@ fn push_effect_damage(regions: &mut Vec<Rect>, prev: Option<Rect>, current: Opti
     }
 }
 
+/// Damage the status HUD and any fallback chrome whose visibility is the
+/// inverse of the HUD's effective visibility.
+///
+/// A `Some`/`None` transition can coincide with a selection or text-mode
+/// change, so the old and new fallback badge sets are not derivable from the
+/// current input state alone. Conservatively repaint the surface on that rare
+/// transition; steady visible layouts still use their targeted footprints.
+fn push_status_hud_damage(
+    regions: &mut Vec<Rect>,
+    prev: Option<Rect>,
+    current: Option<Rect>,
+    width: u32,
+    height: u32,
+) {
+    if prev.is_some() != current.is_some()
+        && let Some(surface) = Rect::new(
+            0,
+            0,
+            width.min(i32::MAX as u32) as i32,
+            height.min(i32::MAX as u32) as i32,
+        )
+    {
+        regions.push(surface);
+        return;
+    }
+    push_effect_damage(regions, prev, current);
+}
+
 impl WaylandState {
     /// Damage regions for transient UI effects (toasts, blocked-action flash,
     /// text-edit entry glow) for the current frame. Also updates the
@@ -135,10 +163,12 @@ impl WaylandState {
             self.input_state.clear_status_hud_layout();
             None
         };
-        push_effect_damage(
+        push_status_hud_damage(
             &mut regions,
             self.data.prev_status_hud_damage,
             status_hud_rect,
+            width,
+            height,
         );
         self.data.prev_status_hud_damage = status_hud_rect;
 
@@ -282,29 +312,31 @@ mod tests {
         assert_eq!(cleanup, vec![prev]);
     }
 
-    /// The status HUD follows the same appear → move → disappear union
-    /// contract as the toasts: every transition damages both the old and new
-    /// footprint so stale pixels are always cleaned up.
+    /// A visible status HUD still follows the same move/resize union contract
+    /// as the toasts, so stale pixels are cleaned without a full repaint.
     #[test]
-    fn status_hud_damage_lifecycle_unions_prev_and_current_footprints() {
+    fn visible_status_hud_relayout_unions_prev_and_current_footprints() {
         let corner = effect_rect((15.0, 900.0, 400.0, 40.0), 1920, 1080);
         let moved = effect_rect((1505.0, 900.0, 400.0, 40.0), 1920, 1080);
         assert!(corner.is_some() && moved.is_some());
 
-        // Appear: only the new footprint.
-        let mut appear = Vec::new();
-        push_effect_damage(&mut appear, None, corner);
-        assert_eq!(appear, vec![corner.unwrap()]);
-
-        // Move (e.g. status_bar_position change): old + new footprints.
         let mut relocate = Vec::new();
-        push_effect_damage(&mut relocate, corner, moved);
+        push_status_hud_damage(&mut relocate, corner, moved, 1920, 1080);
         assert_eq!(relocate, vec![corner.unwrap(), moved.unwrap()]);
+    }
 
-        // Disappear (bar hidden / UI suppressed): old footprint only.
-        let mut vanish = Vec::new();
-        push_effect_damage(&mut vanish, moved, None);
-        assert_eq!(vanish, vec![moved.unwrap()]);
+    #[test]
+    fn status_hud_effective_visibility_flip_damages_fallback_chrome() {
+        let hud = effect_rect((15.0, 900.0, 400.0, 40.0), 1920, 1080);
+        let full = Rect::new(0, 0, 1920, 1080).expect("positive full-surface damage fixture");
+
+        let mut reveal_fallback = Vec::new();
+        push_status_hud_damage(&mut reveal_fallback, hud, None, 1920, 1080);
+        assert_eq!(reveal_fallback, vec![full]);
+
+        let mut cover_fallback = Vec::new();
+        push_status_hud_damage(&mut cover_fallback, None, hud, 1920, 1080);
+        assert_eq!(cover_fallback, vec![full]);
     }
 
     /// The bottom-right zoom chip uses the same appear → move → disappear union

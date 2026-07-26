@@ -56,10 +56,11 @@ impl WaylandState {
             // Focus Mode suppresses the whole fallback family; otherwise its
             // intentional status/chip hide would make these badges reappear.
             let fallback_mode_badges_visible = self.input_state.fallback_mode_badges_visible();
+            let status_hud_visible = self.input_state.status_hud_effectively_visible();
             if self.input_state.frozen_active()
                 && !self.zoom.active
                 && self.config.ui.show_frozen_badge
-                && !self.input_state.show_status_bar
+                && !status_hud_visible
                 && fallback_mode_badges_visible
             {
                 crate::ui::render_frozen_badge(ctx, width, height);
@@ -76,7 +77,7 @@ impl WaylandState {
             // badge remains the hidden-status-bar zoom indicator.
             let mut top_badge_offset = 0.0;
             if self.input_state.zoom_active()
-                && !self.input_state.show_status_bar
+                && !status_hud_visible
                 && !self.zoom_chip_visible()
                 && fallback_mode_badges_visible
             {
@@ -91,7 +92,7 @@ impl WaylandState {
             if self.input_state.boards.pan_enabled()
                 && self.input_state.boards.show_pan_badge()
                 && !self.input_state.board_is_transparent()
-                && !self.input_state.show_status_bar
+                && !status_hud_visible
                 && fallback_mode_badges_visible
             {
                 top_badge_offset += crate::ui::render_pan_badge(
@@ -105,7 +106,7 @@ impl WaylandState {
             // Render editing badge when in text edit mode
             if matches!(self.input_state.state, DrawingState::TextInput { .. })
                 && self.input_state.text_edit_target.is_some()
-                && !self.input_state.show_status_bar
+                && !status_hud_visible
                 && fallback_mode_badges_visible
             {
                 crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);

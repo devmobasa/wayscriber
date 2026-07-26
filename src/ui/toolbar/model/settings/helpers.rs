@@ -3,6 +3,13 @@ use super::*;
 pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let mut buttons = vec![
         ToolbarSettingsButton {
+            id: ToolbarControlId::StatusBarContents,
+            label: Cow::Borrowed("Status bar contents…"),
+            event: ToolbarEvent::SetStatusBarContentsOpen(true),
+            icon: ToolbarIcon::Visibility,
+            tooltip: ToolbarTooltip::text("Choose which status-bar items are visible"),
+        },
+        ToolbarSettingsButton {
             id: ToolbarControlId::CustomizeToolbarItems,
             label: Cow::Borrowed("Customize"),
             event: ToolbarEvent::SetToolbarItemCustomizationOpen(true),
@@ -71,6 +78,16 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
         .filter(|button| reset_button_visible(snapshot, button.id))
         .filter(|button| control_visible(snapshot, button.id))
         .collect()
+}
+
+pub(super) fn status_bar_content_buttons() -> Vec<ToolbarSettingsButton> {
+    vec![ToolbarSettingsButton {
+        id: ToolbarControlId::BackStatusBarContents,
+        label: Cow::Borrowed("Back"),
+        event: ToolbarEvent::SetStatusBarContentsOpen(false),
+        icon: ToolbarIcon::Back,
+        tooltip: ToolbarTooltip::text("Back to settings"),
+    }]
 }
 
 fn runtime_persistence_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {

@@ -4,7 +4,7 @@ use super::session::{
     session_info_summary,
 };
 use super::*;
-use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
+use crate::config::{StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::state::test_support::make_test_input_state;
 use crate::input::{EraserMode, Tool};
@@ -303,6 +303,14 @@ fn ui_and_history_preference_events_save_their_own_config_targets() {
             ToolbarUiPersistenceTarget::StatusBar,
         ),
         (
+            ToolbarEvent::SetStatusBarInteractive(false),
+            ToolbarUiPersistenceTarget::StatusBarInteractive,
+        ),
+        (
+            ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Size, false),
+            ToolbarUiPersistenceTarget::StatusBarItem(StatusBarItem::Size),
+        ),
+        (
             ToolbarEvent::ToggleStatusBoardBadge(true),
             ToolbarUiPersistenceTarget::StatusBoardBadge,
         ),
@@ -360,6 +368,31 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
     assert!(!config.ui.show_floating_badge_always);
     assert!(config.ui.show_floating_badge, "sibling untouched");
     assert!(config.ui.toolbar.show_zoom_chip, "sibling untouched");
+}
+
+#[test]
+fn status_bar_item_targets_copy_each_authored_field_independently() {
+    let mut config = crate::config::Config::default();
+    let mut input_state = make_test_input_state();
+
+    for item in StatusBarItem::ALL {
+        input_state.set_status_bar_item_visible(item, false);
+        apply_toolbar_ui_config_target(
+            &mut config,
+            &input_state,
+            ToolbarUiPersistenceTarget::StatusBarItem(item),
+        );
+        assert!(!config.ui.status_bar_item_visible(item));
+
+        for sibling in StatusBarItem::ALL {
+            if sibling != item && input_state.status_bar_item_visible(sibling) {
+                assert!(
+                    config.ui.status_bar_item_visible(sibling),
+                    "saving {item:?} changed sibling {sibling:?}"
+                );
+            }
+        }
+    }
 }
 
 #[test]

@@ -160,6 +160,18 @@ impl ConfigDraft {
             }
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiStatusBarInteractive => self.ui_status_bar_interactive = value,
+            ToggleField::UiActiveOutputBadge => self.ui_active_output_badge = value,
+            ToggleField::UiShowStatusSelectionInfo => {
+                self.ui_show_status_selection_info = value;
+            }
+            ToggleField::UiShowStatusColor => self.ui_show_status_color = value,
+            ToggleField::UiShowStatusTool => self.ui_show_status_tool = value,
+            ToggleField::UiShowStatusSize => self.ui_show_status_size = value,
+            ToggleField::UiShowStatusContextIndicators => {
+                self.ui_show_status_context_indicators = value;
+            }
+            ToggleField::UiShowStatusHelp => self.ui_show_status_help = value,
+            ToggleField::UiShowStatusAbout => self.ui_show_status_about = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiShowCapabilitiesWarning => self.ui_show_capabilities_warning = value,
             ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,

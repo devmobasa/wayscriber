@@ -56,7 +56,7 @@ pub use render_profiles::{
 };
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use spotlight::SpotlightConfig;
-pub use status_bar::StatusBarStyle;
+pub use status_bar::{StatusBarItem, StatusBarStyle};
 #[cfg(feature = "tablet-input")]
 pub use tablet::{StylusButtonBinding, TabletInputConfig};
 pub use toolbar::ids as toolbar_item_ids;

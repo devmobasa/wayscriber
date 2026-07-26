@@ -311,6 +311,7 @@ pub(super) fn run_event_loop(
     // dropped. Durable edits are flushed here, alongside the final session
     // save. The app root tears down its signal source only after this returns.
     state.persist_pending_config_edits();
+    state.shutdown_config_writer();
     if let Err(err) = session_save::persist_session(state) {
         warn!("Failed to save session state: {}", err);
         session_save::notify_session_failure(state, &err);
