@@ -15,6 +15,7 @@ mod session;
 #[cfg(feature = "tablet-input")]
 mod tablet;
 mod ui;
+mod updates;
 
 impl Config {
     /// Validates and clamps all configuration values to acceptable ranges.
@@ -45,5 +46,6 @@ impl Config {
         self.validate_export();
         self.validate_keybindings();
         self.validate_session();
+        self.validate_updates();
     }
 }

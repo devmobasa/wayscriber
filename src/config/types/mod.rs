@@ -21,6 +21,7 @@ mod tablet;
 mod toolbar;
 mod tray;
 mod ui;
+mod updates;
 
 pub use arrow::ArrowConfig;
 pub use board::BoardConfig;
@@ -76,3 +77,6 @@ pub use toolbar::{
 };
 pub use tray::{TrayConfig, TrayIconStyle};
 pub use ui::UiConfig;
+pub use updates::{
+    DEFAULT_UPDATE_CHECK_INTERVAL_HOURS, MIN_UPDATE_CHECK_INTERVAL_HOURS, UpdatesConfig,
+};
