@@ -105,6 +105,78 @@ pub(crate) fn draw_rounded_rect(
     ctx.close_path();
 }
 
+/// Alpha-checkerboard tiles. Mid-grays rather than the usual white/light-gray
+/// pair because every surface that shows them is a dark panel.
+const CHECKER_LIGHT: Rgba = (0.6, 0.6, 0.6, 1.0);
+const CHECKER_DARK: Rgba = (0.4, 0.4, 0.4, 1.0);
+/// Checkerboard tile edge length.
+const CHECKER_TILE: f64 = 6.0;
+
+/// Lay the alpha checkerboard behind a translucent fill, clipped to the shape
+/// `path` builds. A no-op at full alpha, so swatch painters can call it
+/// unconditionally before their fill.
+///
+/// This owns the clip/extents/restore dance every non-rectangular swatch would
+/// otherwise repeat: rounded squares would spill tiles past their corners, and
+/// the radial ring's annular segments have no rectangle to fill at all. Plain
+/// rectangles need no clip and call [`draw_alpha_checkerboard`] directly.
+///
+/// `path` must leave a path on `ctx`; it is consumed by the clip, so callers
+/// rebuild it for their own fill.
+pub(crate) fn checkerboard_behind(
+    ctx: &cairo::Context,
+    alpha: f64,
+    path: impl Fn(&cairo::Context),
+) {
+    if alpha >= 1.0 {
+        return;
+    }
+    let _ = ctx.save();
+    path(ctx);
+    ctx.clip();
+    // The checkerboard only has to cover the clipped shape, and the clip's
+    // bounding box is exactly that without the caller measuring its own path.
+    if let Ok((x0, y0, x1, y1)) = ctx.clip_extents() {
+        draw_alpha_checkerboard(ctx, x0, y0, x1 - x0, y1 - y0);
+    }
+    let _ = ctx.restore();
+}
+
+/// Fill `(x, y, width, height)` with the alpha checkerboard; the caller paints
+/// its translucent color on top. Shared by the picker popup and both toolbar
+/// frontends so translucency reads the same everywhere. Tiles are clipped to
+/// the rectangle; for a non-rectangular swatch use [`checkerboard_behind`].
+pub(crate) fn draw_alpha_checkerboard(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) {
+    theme::set_color(ctx, CHECKER_LIGHT);
+    ctx.rectangle(x, y, width, height);
+    let _ = ctx.fill();
+
+    theme::set_color(ctx, CHECKER_DARK);
+    let mut tile_y = y;
+    let mut row = 0;
+    while tile_y < y + height {
+        let mut tile_x = x + if row % 2 == 0 { 0.0 } else { CHECKER_TILE };
+        while tile_x < x + width {
+            ctx.rectangle(
+                tile_x,
+                tile_y,
+                (x + width - tile_x).min(CHECKER_TILE),
+                (y + height - tile_y).min(CHECKER_TILE),
+            );
+            tile_x += CHECKER_TILE * 2.0;
+        }
+        tile_y += CHECKER_TILE;
+        row += 1;
+    }
+    let _ = ctx.fill();
+}
+
 // ============================================================================
 // Floating island surfaces (M1 foundation; consumed by the HUD and island
 // chrome from M2 on)
@@ -393,4 +465,69 @@ pub(crate) fn draw_badge(
     }
 
     height
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cairo::{Context, Format, ImageSurface};
+
+    /// `(r, g, b)` of one pixel, 0-255. Rgb24 packs pixels as native-endian
+    /// 32-bit words, so on little-endian the byte order is B, G, R, unused.
+    fn pixel_at(surface: &mut ImageSurface, x: i32, y: i32) -> (u8, u8, u8) {
+        let stride = surface.stride() as usize;
+        let offset = y as usize * stride + x as usize * 4;
+        let data = surface.data().expect("pixel data");
+        (data[offset + 2], data[offset + 1], data[offset])
+    }
+
+    /// Run `checkerboard_behind` at `alpha` over a white surface, clipped to a
+    /// circle centered at (32, 32) with radius 20, and sample a point inside
+    /// the circle and a corner outside it.
+    fn inside_and_outside(alpha: f64) -> ((u8, u8, u8), (u8, u8, u8)) {
+        let surface = ImageSurface::create(Format::Rgb24, 64, 64).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            let _ = ctx.paint();
+            checkerboard_behind(&ctx, alpha, |ctx| {
+                ctx.arc(32.0, 32.0, 20.0, 0.0, PI * 2.0);
+            });
+        }
+        let mut surface = surface;
+        (pixel_at(&mut surface, 32, 32), pixel_at(&mut surface, 1, 1))
+    }
+
+    #[test]
+    fn checkerboard_behind_fills_only_inside_the_path() {
+        let (inside, outside) = inside_and_outside(0.5);
+        assert_ne!(inside, (255, 255, 255), "no checkerboard inside the path");
+        assert_eq!(
+            outside,
+            (255, 255, 255),
+            "checkerboard leaked outside the path: {outside:?}"
+        );
+    }
+
+    #[test]
+    fn checkerboard_behind_is_a_no_op_at_full_alpha() {
+        let (inside, outside) = inside_and_outside(1.0);
+        assert_eq!(inside, (255, 255, 255));
+        assert_eq!(outside, (255, 255, 255));
+    }
+
+    #[test]
+    fn checkerboard_behind_paints_both_tile_shades() {
+        // A single flat gray would read as a dark color rather than as
+        // transparency, so the pattern has to alternate.
+        let surface = ImageSurface::create(Format::Rgb24, 64, 64).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            checkerboard_behind(&ctx, 0.5, |ctx| ctx.rectangle(0.0, 0.0, 64.0, 64.0));
+        }
+        let mut surface = surface;
+        let first = pixel_at(&mut surface, 2, 2);
+        let neighbor = pixel_at(&mut surface, 2 + CHECKER_TILE as i32, 2);
+        assert_ne!(first, neighbor, "tiles did not alternate: {first:?}");
+    }
 }

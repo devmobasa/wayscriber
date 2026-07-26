@@ -11,8 +11,17 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return false;
     }
 
-    // Stop dragging on release
-    state.color_picker_popup_set_dragging(false);
+    // A drag ends on the control it started on, so the release position is
+    // read by that control too. Hit-testing the release point instead would
+    // let a saturation drag released over the hue bar, the alpha bar, or a
+    // recent swatch apply there as a fresh click.
+    let fx = x as f64;
+    let fy = y as f64;
+    if let Some(target) = state.color_picker_popup_take_drag_target() {
+        state.color_picker_popup_apply_drag(target, fx, fy);
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
 
     let layout = match state.color_picker_popup_layout() {
         Some(layout) => layout,
@@ -22,9 +31,6 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
             return true;
         }
     };
-
-    let fx = x as f64;
-    let fy = y as f64;
 
     // Popup actions use a same-button press/release contract. A press that
     // starts elsewhere (including a gradient drag), or moves to another
@@ -51,12 +57,31 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return true;
     }
 
-    // Check gradient click
-    if layout.point_in_gradient(fx, fy) {
-        let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
-        let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
-        state.color_picker_popup_set_from_gradient(norm_x, norm_y);
-        // Unfocus hex input when clicking gradient
+    if layout.point_in_sv(fx, fy) {
+        let (saturation, value) = layout.sv_from_point(fx, fy);
+        state.color_picker_popup_set_from_gradient(saturation, 1.0 - value);
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
+
+    if layout.point_in_hue(fx, fy) {
+        state.color_picker_popup_set_hue(layout.hue_from_point(fx));
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
+
+    if layout.point_in_alpha(fx, fy) {
+        state.color_picker_popup_set_alpha(layout.alpha_from_point(fx));
+        state.color_picker_popup_set_hex_editing(false);
+        return true;
+    }
+
+    // Recent-color swatch: adopt it as the live color, same as a hex paste.
+    let recent_count = state.recent_colors().len();
+    if let Some(index) = layout.recent_swatch_at(fx, fy, recent_count)
+        && let Some(color) = state.recent_colors().get(index).copied()
+    {
+        state.color_picker_popup_set_color(color);
         state.color_picker_popup_set_hex_editing(false);
         return true;
     }

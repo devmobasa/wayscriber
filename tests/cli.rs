@@ -255,6 +255,7 @@ fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
         eraser_kind: wayscriber::draw::EraserKind::Circle,
         eraser_mode: wayscriber::input::EraserMode::Brush,
         blur_style: Default::default(),
+        recent_colors: Vec::new(),
         marker_opacity: Some(0.32),
         fill_enabled: Some(false),
         tool_override: None,

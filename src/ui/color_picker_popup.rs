@@ -5,8 +5,14 @@
 
 use crate::draw::Color;
 use crate::input::InputState;
-use crate::input::state::{COLOR_PICKER_PREVIEW_SIZE, ColorPickerPopupLayout};
-use crate::ui::primitives::{draw_rounded_rect, ellipsize_to_fit, text_extents_for};
+use crate::input::state::{
+    COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_RECENT_SWATCH_COUNT as RECENT_SWATCH_COUNT,
+    COLOR_PICKER_RECENT_SWATCH_SIZE as RECENT_SWATCH_SIZE, ColorPickerPopupLayout,
+};
+use crate::ui::primitives::{
+    checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, ellipsize_to_fit,
+    text_extents_for,
+};
 use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
@@ -24,9 +30,6 @@ const GRADIENT_BORDER: Rgba = (1.0, 1.0, 1.0, 0.4);
 const INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.95);
 /// Dark outline outside the indicator ring (contrast on light hues).
 const INDICATOR_OUTLINE: Rgba = (0.0, 0.0, 0.0, 0.4);
-/// Alpha-checkerboard tiles behind the preview swatch.
-const CHECKER_LIGHT: Rgba = (0.6, 0.6, 0.6, 1.0);
-const CHECKER_DARK: Rgba = (0.4, 0.4, 0.4, 1.0);
 /// Preview swatch border on dark colors (light gray) / light colors (dark).
 /// TODO(theme-consolidation): dark variant duplicates
 /// `theme::toolbar::COLOR_SWATCH_HAIRLINE_DARK`.
@@ -187,21 +190,21 @@ pub fn render_color_picker_popup(
         None,
     );
 
-    // Gradient picker
-    draw_color_gradient(
-        ctx,
-        layout.gradient_x,
-        layout.gradient_y,
-        layout.gradient_w,
-        layout.gradient_h,
-    );
+    // Saturation/value square, tinted by the hue the picker remembers rather
+    // than by the current color: grey and black carry no hue of their own.
+    let hue = input_state.color_picker_popup_hue_position().unwrap_or(0.0);
+    draw_sat_val_square(ctx, layout.sv_x, layout.sv_y, layout.sv_w, layout.sv_h, hue);
 
-    // Draw color indicator on gradient
     if let Some((norm_x, norm_y)) = input_state.color_picker_popup_gradient_position() {
-        let indicator_x = layout.gradient_x + norm_x * layout.gradient_w;
-        let indicator_y = layout.gradient_y + norm_y * layout.gradient_h;
+        let indicator_x = layout.sv_x + norm_x * layout.sv_w;
+        let indicator_y = layout.sv_y + norm_y * layout.sv_h;
         draw_color_indicator(ctx, indicator_x, indicator_y, current_color);
     }
+
+    // Hue bar
+    draw_hue_bar(ctx, layout.hue_x, layout.hue_y, layout.hue_w, layout.hue_h);
+    let hue_marker_x = layout.hue_x + hue * layout.hue_w;
+    draw_bar_marker(ctx, hue_marker_x, layout.hue_y, layout.hue_h);
 
     // Preview swatch
     draw_preview_swatch(
@@ -211,6 +214,28 @@ pub fn render_color_picker_popup(
         COLOR_PICKER_PREVIEW_SIZE,
         current_color,
     );
+
+    // Alpha bar: the current colour ramped from transparent to opaque over a
+    // checkerboard, so the swatch under the pointer previews the result.
+    let alpha = input_state.color_picker_popup_alpha().unwrap_or(1.0);
+    draw_alpha_bar(
+        ctx,
+        layout.alpha_x,
+        layout.alpha_y,
+        layout.alpha_w,
+        layout.alpha_h,
+        current_color,
+    );
+    let alpha_marker_x = layout.alpha_x + alpha * layout.alpha_w;
+    draw_bar_marker(ctx, alpha_marker_x, layout.alpha_y, layout.alpha_h);
+
+    // Recent colors, most-recent-first. Empty until something has been
+    // applied, so a fresh session shows no strip rather than dead slots.
+    let recents = input_state.recent_colors();
+    for (index, color) in recents.iter().take(RECENT_SWATCH_COUNT).enumerate() {
+        let (sx, sy) = layout.recent_swatch_origin(index);
+        draw_recent_swatch(ctx, sx, sy, *color, *color == current_color);
+    }
 
     // Check if hex value is valid (for validation feedback)
     let hex_valid = input_state.color_picker_popup_hex_valid();
@@ -380,34 +405,110 @@ fn fit_title_to_panel(
 }
 
 /// Draw the HSV color gradient.
-fn draw_color_gradient(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
-    // Horizontal hue gradient
-    let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
-    hue_grad.add_color_stop_rgba(0.0, 1.0, 0.0, 0.0, 1.0); // Red
-    hue_grad.add_color_stop_rgba(0.17, 1.0, 1.0, 0.0, 1.0); // Yellow
-    hue_grad.add_color_stop_rgba(0.33, 0.0, 1.0, 0.0, 1.0); // Green
-    hue_grad.add_color_stop_rgba(0.5, 0.0, 1.0, 1.0, 1.0); // Cyan
-    hue_grad.add_color_stop_rgba(0.66, 0.0, 0.0, 1.0, 1.0); // Blue
-    hue_grad.add_color_stop_rgba(0.83, 1.0, 0.0, 1.0, 1.0); // Magenta
-    hue_grad.add_color_stop_rgba(1.0, 1.0, 0.0, 0.0, 1.0); // Red
+/// Draw the saturation (x) by value (y) square for one hue.
+///
+/// White-to-hue horizontally, then black over the top vertically — the standard
+/// construction, and the one the toolbar's inline picker already uses. Both
+/// axes are real: unlike the previous hue-by-value gradient, every point here
+/// maps to the colour actually produced by clicking it.
+fn draw_sat_val_square(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, hue: f64) {
+    let full = crate::draw::color::hsv_to_rgb(hue, 1.0, 1.0);
 
+    let sat_grad = cairo::LinearGradient::new(x, y, x + w, y);
+    sat_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 1.0);
+    sat_grad.add_color_stop_rgba(1.0, full.r, full.g, full.b, 1.0);
     ctx.rectangle(x, y, w, h);
-    let _ = ctx.set_source(&hue_grad);
+    let _ = ctx.set_source(&sat_grad);
     let _ = ctx.fill();
 
-    // Vertical value gradient (white at top, black at bottom)
     let val_grad = cairo::LinearGradient::new(x, y, x, y + h);
-    val_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.0); // Transparent white
-    val_grad.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.65); // Black with alpha
-
+    val_grad.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
+    val_grad.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 1.0);
     ctx.rectangle(x, y, w, h);
     let _ = ctx.set_source(&val_grad);
     let _ = ctx.fill();
 
-    // Border
     constants::set_color(ctx, GRADIENT_BORDER);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw the horizontal hue bar.
+fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
+    let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
+    for step in 0..=6 {
+        let t = f64::from(step) / 6.0;
+        let color = crate::draw::color::hsv_to_rgb(t, 1.0, 1.0);
+        hue_grad.add_color_stop_rgba(t, color.r, color.g, color.b, 1.0);
+    }
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.set_source(&hue_grad);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, GRADIENT_BORDER);
+    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw one recent-color swatch, ringed when it matches the live color.
+fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, selected: bool) {
+    if color.a < 1.0 {
+        draw_alpha_checkerboard(ctx, x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
+    }
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.rectangle(x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
+    let _ = ctx.fill();
+
+    if selected {
+        constants::set_color(ctx, INDICATOR_RING);
+        ctx.set_line_width(2.0);
+        ctx.rectangle(
+            x - 1.0,
+            y - 1.0,
+            RECENT_SWATCH_SIZE + 2.0,
+            RECENT_SWATCH_SIZE + 2.0,
+        );
+    } else {
+        constants::set_color(ctx, GRADIENT_BORDER);
+        ctx.set_line_width(1.0);
+        ctx.rectangle(
+            x + 0.5,
+            y + 0.5,
+            RECENT_SWATCH_SIZE - 1.0,
+            RECENT_SWATCH_SIZE - 1.0,
+        );
+    }
+    let _ = ctx.stroke();
+}
+
+/// Draw the alpha bar for one colour: transparent on the left, opaque on the
+/// right, over a checkerboard.
+fn draw_alpha_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, color: Color) {
+    draw_alpha_checkerboard(ctx, x, y, w, h);
+
+    let ramp = cairo::LinearGradient::new(x, y, x + w, y);
+    ramp.add_color_stop_rgba(0.0, color.r, color.g, color.b, 0.0);
+    ramp.add_color_stop_rgba(1.0, color.r, color.g, color.b, 1.0);
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.set_source(&ramp);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, GRADIENT_BORDER);
+    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw the position marker for a horizontal bar.
+fn draw_bar_marker(ctx: &cairo::Context, x: f64, y: f64, h: f64) {
+    constants::set_color(ctx, INDICATOR_OUTLINE);
+    ctx.rectangle(x - 2.5, y - 1.5, 5.0, h + 3.0);
+    ctx.set_line_width(3.0);
+    let _ = ctx.stroke_preserve();
+    constants::set_color(ctx, INDICATOR_RING);
+    ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 }
 
@@ -434,27 +535,11 @@ fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: Color) {
 
 /// Draw the preview swatch.
 fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color) {
-    // Draw checkered background for transparency preview
-    let check_size = 6.0;
-    constants::set_color(ctx, CHECKER_LIGHT);
-    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, CHECKER_DARK);
-    let mut cy = y;
-    let mut row = 0;
-    while cy < y + size {
-        let mut cx = x + if row % 2 == 0 { 0.0 } else { check_size };
-        while cx < x + size {
-            let w = (x + size - cx).min(check_size);
-            let h = (y + size - cy).min(check_size);
-            ctx.rectangle(cx, cy, w, h);
-            let _ = ctx.fill();
-            cx += check_size * 2.0;
-        }
-        cy += check_size;
-        row += 1;
-    }
+    // Checkered background for transparency preview, clipped to the rounded
+    // swatch so tiles cannot spill past its corners.
+    checkerboard_behind(ctx, color.a, |ctx| {
+        draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
+    });
 
     // Draw color
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);

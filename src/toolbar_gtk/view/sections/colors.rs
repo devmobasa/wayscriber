@@ -13,7 +13,7 @@ use gtk4::prelude::*;
 use crate::config::{Action, QuickColorPalette, QuickColorPaletteEntry};
 use crate::draw::Color;
 use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
-use crate::input::state::{color_to_hex, parse_hex_color};
+use crate::input::state::{HEX_INPUT_MAX_CHARS, color_to_hex, parse_hex_color};
 use crate::label_format::format_quick_color_tooltip;
 use crate::toolbar_icons;
 use crate::ui::theme::toolbar::COLOR_TEXT_SECONDARY;
@@ -47,7 +47,7 @@ const HUE_HEIGHT: f64 = 14.0;
 const PREVIEW_SIZE: f64 = 28.0;
 const PREVIEW_GAP_TOP: f64 = 10.0;
 const PREVIEW_GAP_BOTTOM: f64 = 8.0;
-const HEX_INPUT_WIDTH: f64 = 70.0;
+const HEX_INPUT_WIDTH: f64 = 86.0;
 const HEX_INPUT_HEIGHT: f64 = 20.0;
 const EXPAND_ICON_SIZE: f64 = 8.0;
 const SWATCH: f64 = 24.0;
@@ -304,7 +304,9 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     let preview = sized_button(ctx.sz(PREVIEW_SIZE), ctx.sz(PREVIEW_SIZE));
     preview.add_css_class("swatch");
     preview.set_tooltip_text(Some("Click to pick color"));
-    let color_cell = Rc::new(Cell::new(color_key(ctx.snapshot.color)));
+    // The whole color drives the redraw, alpha included: an alpha-only change
+    // still repaints, and the swatch shows the transparency it will draw with.
+    let color_cell = Rc::new(Cell::new(ctx.snapshot.color));
     let preview_area = gtk4::DrawingArea::new();
     preview_area.set_content_width(ctx.px(PREVIEW_SIZE));
     preview_area.set_content_height(ctx.px(PREVIEW_SIZE));
@@ -313,8 +315,7 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     let draw_color = color_cell.clone();
     preview_area.set_draw_func(move |_, cr, width, height| {
         let size = f64::from(width.min(height));
-        let (r, g, b) = draw_color.get();
-        draw_preview_swatch(cr, size, r, g, b, scale);
+        draw_preview_swatch(cr, size, draw_color.get(), scale);
     });
     preview.set_child(Some(&preview_area));
     let sender = ctx.feedback.clone();
@@ -323,9 +324,8 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     });
     row.append(&preview);
     ctx.updaters.push(Box::new(move |snapshot| {
-        let key = color_key(snapshot.color);
-        if color_cell.get() != key {
-            color_cell.set(key);
+        if color_cell.get() != snapshot.color {
+            color_cell.set(snapshot.color);
             preview_area.queue_draw();
         }
     }));
@@ -336,8 +336,11 @@ fn build_preview_row(ctx: &mut SectionCtx, body: &gtk4::Box) {
     let entry = gtk4::Entry::new();
     super::super::super::widgets::keyboard_on_demand_for_entry(&entry);
     entry.set_text(&color_to_hex(ctx.snapshot.color));
-    entry.set_width_chars(7);
-    entry.set_max_length(7);
+    // Sized for `#RRGGBBAA`: a shorter limit would truncate a translucent
+    // color's readout and make its alpha digits untypable.
+    let hex_chars = i32::try_from(HEX_INPUT_MAX_CHARS).unwrap_or(i32::MAX);
+    entry.set_width_chars(hex_chars);
+    entry.set_max_length(hex_chars);
     gtk4::prelude::EditableExt::set_alignment(&entry, 0.5);
     entry.set_size_request(ctx.px(HEX_INPUT_WIDTH), ctx.px(HEX_INPUT_HEIGHT));
     entry.set_valign(gtk4::Align::Center);
@@ -492,21 +495,22 @@ fn read_hex_paste(
     });
 }
 
-fn color_key(color: Color) -> (f64, f64, f64) {
-    (color.r, color.g, color.b)
-}
-
 /// Rounded-square preview like the built-in `draw_swatch`, drawn one pixel
 /// inset so the resting outline stays inside the widget, with the popup
 /// expand-arrow badge in the bottom-right corner.
-fn draw_preview_swatch(cr: &cairo::Context, size: f64, r: f64, g: f64, b: f64, scale: f64) {
+fn draw_preview_swatch(cr: &cairo::Context, size: f64, color: Color, scale: f64) {
+    let Color { r, g, b, a } = color;
+
     set_color(cr, COLOR_PREVIEW_BORDER);
     cr.set_line_width(1.0);
     rounded_rect_path(cr, 0.5, 0.5, size - 1.0, size - 1.0, 5.0);
     let _ = cr.stroke();
 
-    cr.set_source_rgba(r, g, b, 1.0);
-    rounded_rect_path(cr, 1.5, 1.5, size - 3.0, size - 3.0, 4.0);
+    let fill_path =
+        |cr: &cairo::Context| rounded_rect_path(cr, 1.5, 1.5, size - 3.0, size - 3.0, 4.0);
+    crate::ui::checkerboard_behind(cr, a, fill_path);
+    cr.set_source_rgba(r, g, b, a);
+    fill_path(cr);
     let _ = cr.fill();
 
     let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
@@ -664,8 +668,11 @@ fn rect_swatch(
     let draw_selected = selected_cell.clone();
     area.set_draw_func(move |_, cr, width, height| {
         let size = f64::from(width.min(height));
-        cr.set_source_rgba(color.r, color.g, color.b, 1.0);
-        rounded_rect_path(cr, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+        let fill_path =
+            |cr: &cairo::Context| rounded_rect_path(cr, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
+        crate::ui::checkerboard_behind(cr, color.a, fill_path);
+        cr.set_source_rgba(color.r, color.g, color.b, color.a);
+        fill_path(cr);
         let _ = cr.fill();
 
         let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;

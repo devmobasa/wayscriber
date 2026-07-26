@@ -44,6 +44,26 @@ fn color_input_hex_preview_and_known_conversion() {
     assert_eq!(round_trip, spec);
 }
 
+/// The quick-color field advertises `#RRGGBBAA`, so the validator must accept
+/// it and the preview must carry the alpha rather than showing it opaque.
+#[test]
+fn color_input_accepts_eight_digit_hex_and_previews_its_alpha() {
+    let spec = ColorSpec::Name("#FFB3BA80".to_string());
+    let input = ColorInput::from_color(&spec);
+
+    let preview = input.preview_color().expect("hex preview should resolve");
+    assert!(
+        (preview.a - 128.0 / 255.0).abs() < 1e-6,
+        "preview flattened the alpha: {}",
+        preview.a
+    );
+
+    let round_trip = input
+        .to_known_color_spec_with_field("drawing.quick_colors[0].color")
+        .expect("eight-digit hex should convert");
+    assert_eq!(round_trip, spec);
+}
+
 #[test]
 fn color_input_known_conversion_rejects_invalid_hex_and_unknown_names() {
     let invalid_hex = ColorInput {

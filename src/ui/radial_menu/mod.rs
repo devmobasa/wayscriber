@@ -132,15 +132,23 @@ fn draw_static_base(
         let c = swatch.color;
         let is_active = colors_match(&active_color, &c);
 
-        color_swatch_path(
-            ctx,
-            cx,
-            cy,
-            layout,
-            swatch.recent,
-            start + color_gap,
-            end - color_gap,
-        );
+        // The ring segment is annular, so its checkerboard has to be clipped to
+        // the path rather than filled as a rectangle. Without it a translucent
+        // swatch would show whatever the menu floats over instead of its own
+        // transparency.
+        let segment = |ctx: &cairo::Context| {
+            color_swatch_path(
+                ctx,
+                cx,
+                cy,
+                layout,
+                swatch.recent,
+                start + color_gap,
+                end - color_gap,
+            );
+        };
+        crate::ui::checkerboard_behind(ctx, c.a, segment);
+        segment(ctx);
         ctx.set_source_rgba(c.r, c.g, c.b, c.a);
         let _ = ctx.fill_preserve();
 

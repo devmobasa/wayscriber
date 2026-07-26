@@ -889,6 +889,364 @@ fn toolbar_edit_quick_color_event_opens_the_popup_on_that_slot() {
     assert!(!state.is_color_picker_popup_open());
 }
 
+/// The square used to be hue-by-value with saturation pinned at 1.0, so no
+/// pastel or muted colour was reachable by mouse and the rendered white top row
+/// handed back a fully saturated colour.
+#[test]
+fn picker_square_reaches_desaturated_colors() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    // Left edge of the square is saturation 0: a pure grey ramp.
+    state.color_picker_popup_set_from_gradient(0.0, 0.25);
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        (color.r - color.g).abs() < 1e-6 && (color.g - color.b).abs() < 1e-6,
+        "saturation 0 should give a grey, got {color:?}"
+    );
+    assert!(color.r > 0.7, "value 0.75 should be light, got {color:?}");
+}
+
+#[test]
+fn picker_square_and_hue_bar_are_independent_axes() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    state.color_picker_popup_set_hue(0.5);
+    state.color_picker_popup_set_from_gradient(1.0, 0.0);
+    let cyan = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        cyan.g > 0.9 && cyan.b > 0.9 && cyan.r < 0.1,
+        "hue 0.5 at full saturation/value should be cyan, got {cyan:?}"
+    );
+
+    // Moving within the square must not disturb the hue.
+    state.color_picker_popup_set_from_gradient(0.5, 0.5);
+    let (hue, saturation, value) = state.color_picker_popup_hsv().expect("popup is open");
+    assert!((hue - 0.5).abs() < 1e-6, "hue drifted to {hue}");
+    assert!((saturation - 0.5).abs() < 1e-6);
+    assert!((value - 0.5).abs() < 1e-6);
+}
+
+/// Grey, black and white all convert back to a hue of zero, so without the
+/// remembered triple, dragging value to black and back would silently reset the
+/// hue to red.
+#[test]
+fn picker_keeps_its_hue_through_black() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    state.color_picker_popup_set_hue(0.75);
+    state.color_picker_popup_set_from_gradient(1.0, 1.0); // drag to black
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        color.r < 1e-6 && color.g < 1e-6 && color.b < 1e-6,
+        "expected black"
+    );
+
+    let hue = state.color_picker_popup_hue_position().expect("open");
+    assert!(
+        (hue - 0.75).abs() < 1e-6,
+        "hue was lost through black: {hue}"
+    );
+
+    // Coming back up returns the original hue, not red.
+    state.color_picker_popup_set_from_gradient(1.0, 0.0);
+    let restored = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        restored.b > 0.9 && restored.r > 0.4,
+        "expected the violet back, got {restored:?}"
+    );
+}
+
+#[test]
+fn picker_square_position_round_trips() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+
+    state.color_picker_popup_set_hue(0.33);
+    state.color_picker_popup_set_from_gradient(0.4, 0.3);
+    let (x, y) = state
+        .color_picker_popup_gradient_position()
+        .expect("popup is open");
+    assert!((x - 0.4).abs() < 1e-6, "saturation round-trip lost: {x}");
+    assert!((y - 0.3).abs() < 1e-6, "value round-trip lost: {y}");
+}
+
+/// A hand-edited session file must not be able to grow the list past its cap or
+/// smuggle duplicates in. (The live dedupe/cap path is covered in the radial
+/// menu tests; this covers the restore path, which is new.)
+#[test]
+fn restoring_recent_colors_reapplies_the_cap_and_dedupe() {
+    let mut state = create_test_input_state();
+    let red = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    let mut oversized = vec![red, red];
+    for value in 0..10u8 {
+        oversized.push(Color {
+            r: 0.0,
+            g: f64::from(value) / 16.0,
+            b: 0.0,
+            a: 1.0,
+        });
+    }
+
+    state.restore_recent_colors(oversized);
+
+    let recents = state.recent_colors();
+    assert_eq!(recents.len(), 6, "cap survives a hand-edited session");
+    assert_eq!(recents[0], red);
+    assert_eq!(
+        recents.iter().filter(|c| **c == red).count(),
+        1,
+        "duplicates from the file are collapsed"
+    );
+}
+
+#[test]
+fn recent_swatches_are_hit_testable_in_the_popup() {
+    let mut state = create_test_input_state();
+    let stashed = Color {
+        r: 0.25,
+        g: 0.5,
+        b: 0.875,
+        a: 1.0,
+    };
+    state.apply_color_from_ui(stashed);
+    state.apply_color_from_ui(Color {
+        r: 1.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    });
+
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+
+    let index = state
+        .recent_colors()
+        .iter()
+        .position(|c| *c == stashed)
+        .expect("stashed color is in recents");
+    let (sx, sy) = layout.recent_swatch_origin(index);
+
+    assert_eq!(
+        layout.recent_swatch_at(sx + 2.0, sy + 2.0, state.recent_colors().len()),
+        Some(index)
+    );
+}
+
+#[test]
+fn empty_recents_have_no_clickable_swatches() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let (sx, sy) = layout.recent_swatch_origin(0);
+
+    assert_eq!(
+        layout.recent_swatch_at(sx + 2.0, sy + 2.0, 0),
+        None,
+        "a fresh session shows no strip, so nothing is clickable"
+    );
+
+    // The cursor must agree: a hand over an invisible, inert slot promises a
+    // click that does nothing.
+    assert_eq!(
+        layout.cursor_hint_at(sx + 2.0, sy + 2.0, 0),
+        crate::input::state::ColorPickerCursorHint::Default
+    );
+    assert_eq!(
+        layout.cursor_hint_at(sx + 2.0, sy + 2.0, 1),
+        crate::input::state::ColorPickerCursorHint::Pointer,
+        "a rendered swatch still gets the pointer"
+    );
+}
+
+#[test]
+fn picker_alpha_bar_sets_translucency_without_touching_hue() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_hue(0.5);
+    state.color_picker_popup_set_from_gradient(1.0, 0.0);
+
+    state.color_picker_popup_set_alpha(0.4);
+
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!((color.a - 0.4).abs() < 1e-9, "alpha not applied: {color:?}");
+    assert!(
+        color.g > 0.9 && color.b > 0.9 && color.r < 0.1,
+        "hue changed"
+    );
+}
+
+/// `hsv_to_rgb` is always opaque, so every move on the square or the hue bar
+/// has to carry the alpha across or translucency silently vanishes.
+#[test]
+fn picker_keeps_alpha_across_square_and_hue_moves() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_alpha(0.25);
+
+    state.color_picker_popup_set_from_gradient(0.6, 0.3);
+    assert!(
+        (state.color_picker_popup_current_color().expect("open").a - 0.25).abs() < 1e-9,
+        "square drag reset the alpha"
+    );
+
+    state.color_picker_popup_set_hue(0.8);
+    assert!(
+        (state.color_picker_popup_current_color().expect("open").a - 0.25).abs() < 1e-9,
+        "hue drag reset the alpha"
+    );
+}
+
+/// A drag belongs to the control it started on, release included. Reading the
+/// release position as a fresh click let a saturation drag that happened to
+/// end over the alpha bar set alpha at its endpoint.
+#[test]
+fn a_picker_drag_ends_on_the_control_it_started_on() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_hue(0.5);
+    state.color_picker_popup_set_alpha(0.6);
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+
+    // Press near the left edge of the square, release over the far right of
+    // the alpha bar (which as a fresh click would mean fully opaque).
+    let press_x = (layout.sv_x + 4.0) as i32;
+    let press_y = (layout.sv_y + layout.sv_h / 2.0) as i32;
+    let release_x = (layout.alpha_x + layout.alpha_w - 2.0) as i32;
+    let release_y = (layout.alpha_y + layout.alpha_h / 2.0) as i32;
+
+    assert!(state.handle_color_picker_press(MouseButton::Left, press_x, press_y));
+    assert!(state.handle_color_picker_popup_release_at(release_x, release_y));
+
+    let color = state.color_picker_popup_current_color().expect("open");
+    assert!(
+        (color.a - 0.6).abs() < 1e-9,
+        "releasing over the alpha bar hijacked the saturation drag: {color:?}"
+    );
+    let (hue, saturation, _) = state.color_picker_popup_hsv().expect("open");
+    assert!((hue - 0.5).abs() < 1e-9, "hue moved: {hue}");
+    assert!(
+        saturation > 0.9,
+        "the release position should still steer the square it started on, got {saturation}"
+    );
+}
+
+#[test]
+fn a_picker_drag_released_over_a_recent_swatch_does_not_adopt_it() {
+    let mut state = create_test_input_state();
+    let stashed = Color {
+        r: 0.25,
+        g: 0.5,
+        b: 0.875,
+        a: 1.0,
+    };
+    state.apply_color_from_ui(stashed);
+
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_hue(0.1);
+    state.update_color_picker_popup_layout(1920, 1080);
+    let layout = state.color_picker_popup_layout().expect("popup layout");
+    let index = state
+        .recent_colors()
+        .iter()
+        .position(|color| *color == stashed)
+        .expect("stashed color is in recents");
+    let (swatch_x, swatch_y) = layout.recent_swatch_origin(index);
+
+    let press_x = (layout.hue_x + 4.0) as i32;
+    let press_y = (layout.hue_y + layout.hue_h / 2.0) as i32;
+    assert!(state.handle_color_picker_press(MouseButton::Left, press_x, press_y));
+    assert!(
+        state
+            .handle_color_picker_popup_release_at((swatch_x + 2.0) as i32, (swatch_y + 2.0) as i32)
+    );
+
+    assert_ne!(
+        state.color_picker_popup_current_color(),
+        Some(stashed),
+        "a hue drag released over a recent swatch adopted that swatch"
+    );
+}
+
+/// The popup commits on its own edit target rather than through
+/// `apply_color_from_ui`, so accepting has to record the color itself or a
+/// color mixed in the picker never reaches the strip that shows recents.
+#[test]
+fn accepting_the_popup_records_the_color_in_recents() {
+    let mut state = create_test_input_state();
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_from_gradient(0.45, 0.35);
+    let picked = state
+        .color_picker_popup_current_color()
+        .expect("picked color");
+
+    state.apply_color_picker_popup();
+
+    assert_eq!(state.recent_colors().first().copied(), Some(picked));
+
+    // Cancelling stages nothing, so it records nothing.
+    state.open_color_picker_popup();
+    state.color_picker_popup_set_from_gradient(0.9, 0.1);
+    state.close_color_picker_popup(true);
+
+    assert_eq!(
+        state.recent_colors().first().copied(),
+        Some(picked),
+        "a rejected color was recorded anyway"
+    );
+
+    // Recoloring a swatch the tool is not painting with edits the palette
+    // without putting that color in use, so it is not a recent color either.
+    let unused_slot = (0..state.quick_colors.len())
+        .find(|index| state.quick_colors.color_for_index(*index) != Some(picked))
+        .expect("a slot the tool is not using");
+    assert!(state.open_color_picker_popup_for_quick_color(unused_slot));
+    state.color_picker_popup_set_from_gradient(0.15, 0.65);
+    state.apply_color_picker_popup();
+
+    assert_eq!(
+        state.recent_colors().first().copied(),
+        Some(picked),
+        "a palette edit was recorded as a color in use"
+    );
+}
+
+#[test]
+fn picker_hex_round_trips_alpha_only_when_translucent() {
+    use crate::input::state::{HEX_INPUT_MAX_CHARS, color_to_hex, parse_hex_color};
+
+    let opaque = Color {
+        r: 1.0,
+        g: 0.5,
+        b: 0.0,
+        a: 1.0,
+    };
+    assert_eq!(color_to_hex(opaque), "#FF8000", "opaque stays six digits");
+
+    let translucent = Color { a: 0.5, ..opaque };
+    let hex = color_to_hex(translucent);
+    assert_eq!(hex, "#FF800080");
+    // Toolbar hex fields size and length-limit themselves by this constant, so
+    // a wider form than they allow would be truncated or untypable.
+    assert_eq!(hex.chars().count(), HEX_INPUT_MAX_CHARS);
+
+    let parsed = parse_hex_color(&hex).expect("eight-digit hex parses");
+    assert!((parsed.a - translucent.a).abs() < 0.01, "alpha round-trip");
+
+    // Six-digit input still means fully opaque.
+    assert!((parse_hex_color("#FF8000").expect("six digits").a - 1.0).abs() < 1e-9);
+}
+
 #[test]
 fn color_picker_copy_button_requests_copy_and_keeps_popup_open() {
     let mut state = create_test_input_state();

@@ -67,12 +67,9 @@ pub(super) fn draw_colors_section(
     let (preview_row_y, preview_size) =
         draw_preview_swatch_and_icon(ctx, hits, hover, snapshot, x, picker_y, picker_h);
 
-    let hex = format!(
-        "#{:02X}{:02X}{:02X}",
-        (snapshot.color.r * 255.0).round() as u8,
-        (snapshot.color.g * 255.0).round() as u8,
-        (snapshot.color.b * 255.0).round() as u8
-    );
+    // Shared with the popup and the GTK entry so all three readouts agree,
+    // including the eight-digit form a translucent color needs.
+    let hex = crate::input::state::color_to_hex(snapshot.color);
     draw_hex_input(ctx, hits, hover, x, preview_row_y, preview_size, &hex);
 
     let mut row_y = preview_row_y + preview_size + ToolbarLayoutSpec::SIDE_COLOR_PREVIEW_GAP_BOTTOM;

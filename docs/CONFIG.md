@@ -90,8 +90,8 @@ Controls the default appearance of annotations.
 # Default pen color
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
 # (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
-# Or #RRGGBB hex: "#FFB3BA"
-# Or RGB array: [255, 0, 0]
+# Or #RRGGBB hex: "#FFB3BA" (or #RRGGBBAA for alpha: "#FFB3BA80")
+# Or RGB array: [255, 0, 0] (or RGBA: [255, 0, 0, 128])
 default_color = "red"
 
 # Default pen thickness in pixels (1.0 - 50.0)
@@ -148,17 +148,19 @@ tab_drag_tool = "ellipse"
 # hand, missing shortcut positions use built-in defaults and help-overlay badges
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
-# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays. The hex values below are the tuned built-in defaults; named colors
-# ("red", "green", ...) resolve to these same tuned values, so named entries,
-# the default pen color, and board auto-adjust pens all match these swatches.
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex (or
+# #RRGGBBAA to carry alpha), or RGB/RGBA arrays. The hex values below are the
+# tuned built-in defaults; named colors ("red", "green", ...) resolve to these
+# same tuned values, so named entries, the default pen color, and board
+# auto-adjust pens all match these swatches.
 #
 # Right-clicking a swatch in the overlay opens the color picker for that slot
-# and saves the accepted color back here as an RGB array, keeping the slot's
-# label and shortcut. The first such edit writes the whole list, so a palette
-# left out of this file stops tracking future built-in defaults. That picker's
-# "Default" button loads the color shipped for the slot again (built-in slots
-# only), still requiring OK to save.
+# and saves the accepted color back here as an RGB array, or an RGBA array when
+# the color is translucent, keeping the slot's label and shortcut. The first
+# such edit writes the whole list, so a palette left out of this file stops
+# tracking future built-in defaults. That picker's "Default" button loads the
+# color shipped for the slot again (built-in slots only), still requiring OK to
+# save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"
@@ -225,8 +227,9 @@ drag_tool = "default"
 
 **Color Options:**
 - **Named colors**: `"red"` (`#F5333F`), `"green"` (`#2EC27E`), `"blue"` (`#3584E4`), `"yellow"` (`#F6D32D`), `"orange"` (`#FF7800`), `"pink"` (`#C061CB`), `"white"` (`#FFFFFF`), `"black"` (`#241F31`) — named colors resolve to the tuned quick color palette
-- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
-- **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
+- **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`, or `"#RRGGBBAA"` such as `"#FFB3BA80"` to carry alpha. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
+- **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc. A fourth component sets alpha: `[255, 0, 0, 128]`.
+- **Alpha**: colors are opaque unless an alpha component says otherwise, and opaque colors are written back in the three-component form they have always used — so adding alpha never rewrites an existing palette. The marker and highlighter multiply their own opacity on top of any color alpha rather than replacing it.
 
 **Quick Colors:**
 - `[[drawing.quick_colors]]` entries define an ordered palette.

@@ -571,6 +571,26 @@ fn palette_set_color_for_index_recolors_in_place() {
     );
 }
 
+/// The radial menu caches its static surface by this key, so an alpha-only
+/// recolor of any slot has to change it or the ring keeps painting the old
+/// swatch while clicking it applies the new value.
+#[test]
+fn palette_cache_key_changes_when_only_a_slot_alpha_changes() {
+    let mut palette = QuickColorPalette::default();
+    let opaque = crate::draw::Color {
+        r: 0.25,
+        g: 0.5,
+        b: 0.75,
+        a: 1.0,
+    };
+    assert!(palette.set_color_for_index(1, opaque));
+    let before = palette.cache_key();
+
+    assert!(palette.set_color_for_index(1, crate::draw::Color { a: 0.4, ..opaque }));
+
+    assert_ne!(palette.cache_key(), before);
+}
+
 #[test]
 fn drawing_quick_colors_default_palette_preserves_extended_toolbar_colors() {
     let palette = QuickColorPalette::default();

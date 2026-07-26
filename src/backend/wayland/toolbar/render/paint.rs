@@ -78,6 +78,9 @@ fn paint_button_body(
 /// the dark body, a white swatch on the accent body). Mirrors the built-in
 /// side-palette swatch treatment and the GTK preset slot so black and white
 /// presets both stay legible.
+///
+/// A translucent preset paints at its own alpha over the checkerboard, so the
+/// slot previews the color the preset will actually apply.
 fn paint_preset_color_swatch(
     ctx: &cairo::Context,
     x: f64,
@@ -89,8 +92,11 @@ fn paint_preset_color_swatch(
     let size = (w.min(h) * PRESET_SLOT_SWATCH_RATIO).round();
     let sx = x + w - size - PRESET_SLOT_SWATCH_INSET;
     let sy = y + h - size - PRESET_SLOT_SWATCH_INSET;
-    ctx.set_source_rgba(color.0, color.1, color.2, 1.0);
-    draw_round_rect(ctx, sx, sy, size, size, PRESET_SLOT_SWATCH_RADIUS);
+    let swatch_path =
+        |ctx: &cairo::Context| draw_round_rect(ctx, sx, sy, size, size, PRESET_SLOT_SWATCH_RADIUS);
+    crate::ui::checkerboard_behind(ctx, color.3, swatch_path);
+    ctx.set_source_rgba(color.0, color.1, color.2, color.3);
+    swatch_path(ctx);
     let _ = ctx.fill();
     let luminance = 0.299 * color.0 + 0.587 * color.1 + 0.114 * color.2;
     set_color(
@@ -294,8 +300,14 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         WidgetKind::Swatch { color, selected } => {
             // Rounded square inset one pixel so the accent selection ring
             // (2px stroke, ~2px gap) stays clear of the neighbouring swatch.
+            // Translucent colors sit on the checkerboard, so a low-alpha
+            // swatch reads as see-through rather than as the bar behind it.
+            let swatch_path = |ctx: &cairo::Context| {
+                draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0)
+            };
+            crate::ui::checkerboard_behind(ctx, color.3, swatch_path);
             ctx.set_source_rgba(color.0, color.1, color.2, color.3);
-            draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0);
+            swatch_path(ctx);
             let _ = ctx.fill();
             // Subtle inner hairline keeps dark fills defined against the bar.
             set_color(ctx, COLOR_SWATCH_HAIRLINE);
@@ -400,4 +412,99 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         }
     }
     paint_shortcut_badge(ctx, node);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cairo::{Context, Format, ImageSurface};
+
+    /// `(r, g, b)` of one pixel, 0-255. Rgb24 packs pixels as native-endian
+    /// 32-bit words, so on little-endian the byte order is B, G, R, unused.
+    fn pixel_at(surface: &mut ImageSurface, x: i32, y: i32) -> (u8, u8, u8) {
+        let stride = surface.stride() as usize;
+        let offset = y as usize * stride + x as usize * 4;
+        let data = surface.data().expect("pixel data");
+        (data[offset + 2], data[offset + 1], data[offset])
+    }
+
+    /// Paint a preset slot's corner swatch on white and sample its middle.
+    fn preset_swatch_center(color: (f64, f64, f64, f64)) -> (u8, u8, u8) {
+        let slot = 40.0;
+        let surface = ImageSurface::create(Format::Rgb24, 48, 48).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            let _ = ctx.paint();
+            paint_preset_color_swatch(&ctx, 0.0, 0.0, slot, slot, color);
+        }
+        let size = (slot * PRESET_SLOT_SWATCH_RATIO).round();
+        let center = (slot - size - PRESET_SLOT_SWATCH_INSET + size / 2.0).round() as i32;
+        let mut surface = surface;
+        pixel_at(&mut surface, center, center)
+    }
+
+    /// Paint one top-bar quick-color swatch node on white and sample its middle.
+    fn swatch_node_center(color: (f64, f64, f64, f64)) -> (u8, u8, u8) {
+        let size = 24.0;
+        let surface = ImageSurface::create(Format::Rgb24, 32, 32).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            let _ = ctx.paint();
+            let node = WidgetNode::decor(
+                "test.swatch",
+                (4.0, 4.0, size, size),
+                WidgetKind::Swatch {
+                    color,
+                    selected: false,
+                },
+            );
+            paint_node(&ctx, &node, None);
+        }
+        let mut surface = surface;
+        pixel_at(&mut surface, 4 + size as i32 / 2, 4 + size as i32 / 2)
+    }
+
+    #[test]
+    fn a_translucent_top_bar_swatch_shows_its_transparency() {
+        assert_eq!(
+            swatch_node_center((1.0, 0.0, 0.0, 1.0)),
+            (255, 0, 0),
+            "opaque swatches stay exact"
+        );
+
+        // A fully transparent swatch used to show only the bar behind it, so
+        // "no color" and "transparent" looked identical.
+        let (r, g, b) = swatch_node_center((1.0, 0.0, 0.0, 0.0));
+        assert!(
+            r < 255 && r == g && g == b,
+            "a fully transparent swatch should read as bare checkerboard: ({r}, {g}, {b})"
+        );
+
+        let (r, g, b) = swatch_node_center((1.0, 0.0, 0.0, 0.5));
+        assert!(r < 255, "translucent swatch painted at full red: {r}");
+        assert!(
+            g > 0 && b > 0,
+            "checkerboard did not show through: ({r}, {g}, {b})"
+        );
+    }
+
+    #[test]
+    fn a_translucent_preset_swatch_shows_its_transparency() {
+        assert_eq!(
+            preset_swatch_center((1.0, 0.0, 0.0, 1.0)),
+            (255, 0, 0),
+            "opaque presets stay exact"
+        );
+
+        // Half-alpha red over the checkerboard lets the gray through, so the
+        // slot cannot be mistaken for an opaque preset.
+        let (r, g, b) = preset_swatch_center((1.0, 0.0, 0.0, 0.5));
+        assert!(r < 255, "translucent preset painted at full red: {r}");
+        assert!(
+            g > 0 && b > 0,
+            "checkerboard did not show through: ({r}, {g}, {b})"
+        );
+    }
 }
