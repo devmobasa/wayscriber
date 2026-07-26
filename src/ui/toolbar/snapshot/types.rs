@@ -337,8 +337,18 @@ pub struct ToolbarSnapshot {
     pub collapsed_side_sections: BTreeSet<ToolbarSideSection>,
     pub show_tool_preview: bool,
     pub show_status_bar: bool,
+    pub status_bar_interactive: bool,
+    pub show_active_output_badge: bool,
+    pub show_status_selection_info: bool,
     pub show_status_board_badge: bool,
     pub show_status_page_badge: bool,
+    pub show_status_color: bool,
+    pub show_status_tool: bool,
+    pub show_status_size: bool,
+    pub show_status_context_indicators: bool,
+    pub show_toolbar_hint: bool,
+    pub show_status_help: bool,
+    pub show_status_about: bool,
     pub show_floating_badge_always: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
@@ -385,6 +395,8 @@ pub struct ToolbarSnapshot {
     pub customize_items_open: bool,
     /// Selected toolbar item customization group in the Settings drawer sub-panel.
     pub customize_items_group: Option<super::super::events::ToolbarItemCustomizeGroup>,
+    /// Whether the Settings drawer is showing status-bar content controls.
+    pub status_bar_contents_open: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews
@@ -419,6 +431,22 @@ pub struct ToolbarSnapshot {
 }
 
 impl ToolbarSnapshot {
+    pub fn status_bar_item_visible(&self, item: crate::config::StatusBarItem) -> bool {
+        match item {
+            crate::config::StatusBarItem::ActiveOutput => self.show_active_output_badge,
+            crate::config::StatusBarItem::SelectionInfo => self.show_status_selection_info,
+            crate::config::StatusBarItem::Board => self.show_status_board_badge,
+            crate::config::StatusBarItem::Page => self.show_status_page_badge,
+            crate::config::StatusBarItem::Color => self.show_status_color,
+            crate::config::StatusBarItem::Tool => self.show_status_tool,
+            crate::config::StatusBarItem::Size => self.show_status_size,
+            crate::config::StatusBarItem::ContextIndicators => self.show_status_context_indicators,
+            crate::config::StatusBarItem::ToolbarHint => self.show_toolbar_hint,
+            crate::config::StatusBarItem::Help => self.show_status_help,
+            crate::config::StatusBarItem::About => self.show_status_about,
+        }
+    }
+
     /// Whether the top strip renders as the micro chip. Minimized wins when
     /// both states are somehow set (e.g. a hand-edited config): the restore
     /// tab is the more explicit "bring me back" affordance.

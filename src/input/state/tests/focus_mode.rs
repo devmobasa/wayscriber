@@ -1,7 +1,10 @@
 //! Focus mode: snapshot-hide of every chrome surface and exact restore.
 
 use super::create_test_input_state;
-use crate::config::{Action, ColorSpec, ToolPresetConfig, TopDisplayMode};
+use crate::config::{
+    Action, ColorSpec, StatusBarItem, StatusBarStyle, StatusPosition, ToolPresetConfig,
+    TopDisplayMode,
+};
 use crate::input::Tool;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -221,6 +224,42 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
 }
 
 #[test]
+fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
+    let mut state = create_test_input_state();
+    state.set_toolbar_visible(false);
+    state.show_floating_badge = false;
+    state.show_zoom_chip = false;
+    for item in StatusBarItem::ALL {
+        state.set_status_bar_item_visible(item, false);
+    }
+    state.update_status_hud_layout(
+        StatusPosition::BottomLeft,
+        &StatusBarStyle::default(),
+        1280,
+        720,
+    );
+    assert!(
+        state.show_status_bar,
+        "the master preference remains enabled"
+    );
+    assert!(!state.status_hud_effectively_visible());
+
+    state.handle_action(Action::ToggleFocusMode);
+
+    assert!(
+        !state.focus_mode_active(),
+        "an empty status bar must not put Focus Mode on its hide arm"
+    );
+    assert!(
+        state.toolbar_visible(),
+        "the rescue arm restores the toolbar"
+    );
+    assert!(state.show_status_bar);
+    assert!(state.show_floating_badge);
+    assert!(state.zoom_chip_enabled());
+}
+
+#[test]
 fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
     let mut state = create_test_input_state();
     assert!(
@@ -264,6 +303,34 @@ fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
     assert!(!state.fallback_mode_badges_visible());
     assert!(!state.toolbar_visible());
     assert!(!state.show_status_bar);
+}
+
+#[test]
+fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
+    let mut state = create_test_input_state();
+    state.set_toolbar_visible(false);
+    state.show_floating_badge = false;
+    state.show_zoom_chip = false;
+    state.set_zoom_status(true, false, 2.0, (0.0, 0.0));
+    for item in StatusBarItem::ALL {
+        state.set_status_bar_item_visible(item, false);
+    }
+    state.update_status_hud_layout(
+        StatusPosition::BottomLeft,
+        &StatusBarStyle::default(),
+        1280,
+        720,
+    );
+    assert!(state.show_status_bar);
+    assert!(!state.status_hud_effectively_visible());
+
+    state.handle_action(Action::ToggleFocusMode);
+
+    assert!(
+        state.focus_mode_active(),
+        "the visible fallback zoom badge must put Focus Mode on its hide arm"
+    );
+    assert!(!state.fallback_mode_badges_visible());
 }
 
 #[test]

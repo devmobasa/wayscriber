@@ -58,9 +58,16 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.spotlight_feather = config.spotlight.feather;
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
     input_state.status_bar_interactive = config.ui.status_bar_interactive;
+    input_state.show_status_selection_info = config.ui.show_status_selection_info;
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
+    input_state.show_status_color = config.ui.show_status_color;
+    input_state.show_status_tool = config.ui.show_status_tool;
+    input_state.show_status_size = config.ui.show_status_size;
+    input_state.show_status_context_indicators = config.ui.show_status_context_indicators;
     input_state.show_toolbar_hint = config.ui.show_toolbar_hint;
+    input_state.show_status_help = config.ui.show_status_help;
+    input_state.show_status_about = config.ui.show_status_about;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
     input_state.show_floating_badge = config.ui.show_floating_badge;
     input_state.show_active_output_badge = config.ui.active_output_badge;
@@ -200,8 +207,16 @@ mod tests {
         let mut config = Config::default();
         config.ui.context_menu.enabled = false;
         config.ui.status_bar_interactive = false;
+        config.ui.show_status_selection_info = false;
         config.ui.show_status_board_badge = false;
         config.ui.show_status_page_badge = false;
+        config.ui.show_status_color = false;
+        config.ui.show_status_tool = false;
+        config.ui.show_status_size = false;
+        config.ui.show_status_context_indicators = false;
+        config.ui.show_toolbar_hint = false;
+        config.ui.show_status_help = false;
+        config.ui.show_status_about = false;
         config.ui.show_floating_badge_always = true;
         config.ui.show_floating_badge = false;
         config.ui.toolbar.show_zoom_chip = false;
@@ -215,8 +230,16 @@ mod tests {
 
         assert!(!input.context_menu_enabled());
         assert!(!input.status_bar_interactive);
+        assert!(!input.show_status_selection_info);
         assert!(!input.show_status_board_badge);
         assert!(!input.show_status_page_badge);
+        assert!(!input.show_status_color);
+        assert!(!input.show_status_tool);
+        assert!(!input.show_status_size);
+        assert!(!input.show_status_context_indicators);
+        assert!(!input.show_toolbar_hint);
+        assert!(!input.show_status_help);
+        assert!(!input.show_status_about);
         assert!(input.show_floating_badge_always);
         assert!(
             !input.show_floating_badge,

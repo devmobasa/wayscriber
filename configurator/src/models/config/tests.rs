@@ -925,6 +925,40 @@ fn config_draft_round_trips_chrome_visibility_preferences() {
 }
 
 #[test]
+fn config_draft_round_trips_every_status_bar_content_preference() {
+    use wayscriber::config::StatusBarItem;
+
+    let mut config = Config::default();
+    config.ui.status_bar_interactive = false;
+    for item in StatusBarItem::ALL {
+        config.ui.set_status_bar_item_visible(item, false);
+    }
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_status_bar_interactive);
+    assert!(!draft.ui_active_output_badge);
+    assert!(!draft.ui_show_status_selection_info);
+    assert!(!draft.ui_show_status_board_badge);
+    assert!(!draft.ui_show_status_page_badge);
+    assert!(!draft.ui_show_status_color);
+    assert!(!draft.ui_show_status_tool);
+    assert!(!draft.ui_show_status_size);
+    assert!(!draft.ui_show_status_context_indicators);
+    assert!(!draft.ui_show_toolbar_hint);
+    assert!(!draft.ui_show_status_help);
+    assert!(!draft.ui_show_status_about);
+
+    let saved = draft.to_config(&config).expect("draft should convert");
+    assert!(!saved.ui.status_bar_interactive);
+    for item in StatusBarItem::ALL {
+        assert!(
+            !saved.ui.status_bar_item_visible(item),
+            "{item:?} should survive the configurator round trip"
+        );
+    }
+}
+
+#[test]
 fn config_draft_round_trips_presets_and_history() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 500;

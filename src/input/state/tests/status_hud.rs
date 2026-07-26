@@ -5,7 +5,7 @@
 //! happens on release-inside, and releases outside are ignored.
 
 use super::*;
-use crate::config::{StatusBarStyle, StatusPosition};
+use crate::config::{StatusBarItem, StatusBarStyle, StatusPosition};
 use crate::input::state::core::board_picker::BoardPickerFocus;
 use crate::ui::StatusHudSegmentKind;
 
@@ -199,6 +199,18 @@ fn status_hud_click_tool_segment_opens_radial_menu() {
 }
 
 #[test]
+fn status_hud_click_size_segment_opens_radial_menu() {
+    let mut input = create_test_input_state();
+    update_hud_layout(&mut input, 1280, 720);
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Size);
+
+    let (hit, action) = input.check_status_hud_click(x, y);
+    assert!(hit);
+    assert_eq!(action, None);
+    assert!(input.is_radial_menu_open());
+}
+
+#[test]
 fn status_hud_click_help_segment_returns_toggle_help_action() {
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -374,6 +386,29 @@ fn status_hud_ignores_clicks_when_not_interactive() {
     assert!(!hit);
     assert_eq!(action, None);
     assert!(!input.is_radial_menu_open());
+}
+
+#[test]
+fn disabling_every_content_item_removes_the_hud_and_restores_badge_fallback() {
+    let mut input = create_test_input_state();
+    input.boards.new_page();
+    for item in StatusBarItem::ALL {
+        input.set_status_bar_item_visible(item, false);
+    }
+
+    update_hud_layout(&mut input, 1280, 720);
+
+    assert!(input.show_status_bar, "the master preference stays enabled");
+    assert!(
+        input.status_hud_layout().is_none(),
+        "no empty pill is cached"
+    );
+    assert!(!input.status_hud_effectively_visible());
+    assert!(
+        input.floating_badge_visible(),
+        "rendering falls back to the board/page badge when the pill is empty"
+    );
+    assert!(!input.status_hud_contains(20, 700));
 }
 
 #[test]

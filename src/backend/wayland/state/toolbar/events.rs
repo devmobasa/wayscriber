@@ -152,6 +152,8 @@ fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
                 | ToolbarEvent::ToggleIconMode(_)
                 | ToolbarEvent::ToggleTextControls(_)
                 | ToolbarEvent::ToggleStatusBar(_)
+                | ToolbarEvent::SetStatusBarInteractive(_)
+                | ToolbarEvent::SetStatusBarItemVisible(_, _)
                 | ToolbarEvent::ToggleStatusBoardBadge(_)
                 | ToolbarEvent::ToggleStatusPageBadge(_)
                 | ToolbarEvent::ToggleFloatingBadgeAlways(_)
@@ -165,6 +167,7 @@ fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
                 | ToolbarEvent::ToggleStepSection(_)
                 | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
                 | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
+                | ToolbarEvent::SetStatusBarContentsOpen(_)
                 | ToolbarEvent::SetToolbarItemHidden(_, _)
                 | ToolbarEvent::MoveToolbarItem { .. }
                 | ToolbarEvent::StartToolbarItemDrag { .. }

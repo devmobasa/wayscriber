@@ -9,9 +9,17 @@ impl ConfigDraft {
         config.ui.reduced_motion = self.ui_reduced_motion.to_reduced_motion();
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.status_bar_interactive = self.ui_status_bar_interactive;
+        config.ui.active_output_badge = self.ui_active_output_badge;
+        config.ui.show_status_selection_info = self.ui_show_status_selection_info;
         config.ui.show_status_board_badge = self.ui_show_status_board_badge;
         config.ui.show_status_page_badge = self.ui_show_status_page_badge;
+        config.ui.show_status_color = self.ui_show_status_color;
+        config.ui.show_status_tool = self.ui_show_status_tool;
+        config.ui.show_status_size = self.ui_show_status_size;
+        config.ui.show_status_context_indicators = self.ui_show_status_context_indicators;
         config.ui.show_toolbar_hint = self.ui_show_toolbar_hint;
+        config.ui.show_status_help = self.ui_show_status_help;
+        config.ui.show_status_about = self.ui_show_status_about;
         config.ui.show_floating_badge = self.ui_show_floating_badge;
         config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;

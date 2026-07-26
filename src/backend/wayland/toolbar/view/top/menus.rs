@@ -56,8 +56,8 @@ const MENU_ITEM_MOVE_W: f64 = 28.0;
 const MENU_ITEM_GAP: f64 = 4.0;
 /// Gap between the anchor and the popover panel plus the caret allowance
 /// under it (mirrors `overflow_height`'s trailing margins).
-const MENU_ANCHOR_GAP: f64 = 6.0;
-const MENU_BOTTOM_MARGIN: f64 = 4.0;
+pub(super) const MENU_ANCHOR_GAP: f64 = 6.0;
+pub(super) const MENU_BOTTOM_MARGIN: f64 = 4.0;
 /// Floor so a pathologically short output never collapses the popover to
 /// nothing (mirrors the side palette's `MIN_SIDE_VIEWPORT`).
 const MENU_MIN_VIEWPORT: f64 = 160.0;
@@ -94,19 +94,11 @@ fn content_height(nodes: &[WidgetNode]) -> f64 {
         .fold(0.0, f64::max)
 }
 
-/// Vertical offset from the strip surface top to the top of the menu
-/// popover: the base band plus every row stacked above it (shapes grid,
-/// contextual highlight-ring row, style pill, overflow menu). Deliberately
-/// excludes the popover's own height, so it never depends on the cap it
-/// feeds — no circularity with `menu_popover_height`. The caller-provided
-/// plan is also intentional: this helper runs while a planned tree is being
-/// built, so re-planning here would recurse through that same tree build.
-fn menu_top_offset(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> f64 {
-    super::build::base_band_height(snapshot)
-        + super::build::shape_popover_height_planned(snapshot, plan)
-        + super::build::ring_row_height_planned(snapshot, plan)
-        + super::build::style_pill_height_planned(snapshot, plan)
-        + super::build::overflow_height_planned(snapshot, plan)
+/// Vertical offset from the strip surface top to the menu panel. GTK anchors
+/// these popovers directly to the overflow button; the built-in tree mirrors
+/// that placement instead of reserving the detached style pill below it.
+fn menu_panel_top(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> f64 {
+    super::build::overflow_family_anchor_bottom(snapshot, plan) + MENU_ANCHOR_GAP
 }
 
 /// Visible content-height cap for the open menu popover. Screen-aware when
@@ -118,11 +110,8 @@ fn menu_top_offset(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> f6
 fn menu_viewport_cap(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> f64 {
     match snapshot.top_available_height {
         Some(available_h) => {
-            let available = available_h
-                - menu_top_offset(snapshot, plan)
-                - MENU_ANCHOR_GAP
-                - MENU_PAD * 2.0
-                - MENU_BOTTOM_MARGIN;
+            let available =
+                available_h - menu_panel_top(snapshot, plan) - MENU_PAD * 2.0 - MENU_BOTTOM_MARGIN;
             available.max(MENU_MIN_VIEWPORT)
         }
         None => MENU_MAX_CONTENT_H,
@@ -141,8 +130,8 @@ pub(super) fn menu_scroll_bounds_planned(
     Some((natural, natural.min(menu_viewport_cap(snapshot, plan))))
 }
 
-/// Extra surface height the open Canvas/Session/Settings popover needs below the
-/// band (mirrors `overflow_height`).
+/// Extra surface height the open Canvas/Session/Settings popover needs below
+/// the base band when anchored directly to the overflow button.
 pub(super) fn menu_popover_height_planned(
     snapshot: &ToolbarSnapshot,
     plan: &super::TopStripPlan,
@@ -151,7 +140,8 @@ pub(super) fn menu_popover_height_planned(
         return 0.0;
     };
     let viewport = content_height(&nodes).min(menu_viewport_cap(snapshot, plan));
-    MENU_ANCHOR_GAP + viewport + MENU_PAD * 2.0 + MENU_BOTTOM_MARGIN
+    let panel_bottom = menu_panel_top(snapshot, plan) + viewport + MENU_PAD * 2.0;
+    (panel_bottom + MENU_BOTTOM_MARGIN - super::base_bar_height(snapshot)).max(0.0)
 }
 
 /// Build the open popover into the tree, anchored like the overflow menu.
@@ -189,6 +179,7 @@ pub(super) fn push_menu_popover(
         margin: 4.0,
     });
     let (px, py, pw, _ph) = placement.rect;
+    tree.suppress_interactions_covered_by(placement.rect);
     tree.push(WidgetNode::decor(
         format!("top.menu.{key}.panel"),
         placement.rect,

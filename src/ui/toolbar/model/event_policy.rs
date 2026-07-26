@@ -77,6 +77,8 @@ pub(crate) enum ToolbarConfigPersistenceTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarUiPersistenceTarget {
     StatusBar,
+    StatusBarInteractive,
+    StatusBarItem(crate::config::StatusBarItem),
     StatusBoardBadge,
     StatusPageBadge,
     FloatingBadgeAlways,
@@ -299,6 +301,12 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         }
         ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Config(History),
         ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Config(Ui(StatusBar)),
+        ToolbarEvent::SetStatusBarInteractive(_) => {
+            ToolbarPersistence::Config(Ui(StatusBarInteractive))
+        }
+        ToolbarEvent::SetStatusBarItemVisible(item, _) => {
+            ToolbarPersistence::Config(Ui(StatusBarItem(*item)))
+        }
         ToolbarEvent::ToggleStatusBoardBadge(_) => ToolbarPersistence::Config(Ui(StatusBoardBadge)),
         ToolbarEvent::ToggleStatusPageBadge(_) => ToolbarPersistence::Config(Ui(StatusPageBadge)),
         ToolbarEvent::ToggleFloatingBadgeAlways(_) => {
@@ -405,6 +413,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::DragToolbarItemOver { .. }
         | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
         | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
+        | ToolbarEvent::SetStatusBarContentsOpen(_)
         | ToolbarEvent::ToggleShapePicker(_)
         | ToolbarEvent::MoveTopToolbar { .. }
         | ToolbarEvent::MoveSideToolbar { .. } => ToolbarPersistence::Ephemeral,

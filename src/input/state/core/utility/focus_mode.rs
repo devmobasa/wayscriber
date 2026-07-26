@@ -34,7 +34,7 @@ impl InputState {
     /// backend-owned, so treat an active freeze conservatively: choosing the
     /// hide arm is safer than making a possibly visible badge trigger rescue.
     fn fallback_mode_badge_may_be_active(&self) -> bool {
-        !self.show_status_bar
+        !self.status_hud_effectively_visible()
             && (self.zoom_active()
                 || self.frozen_active()
                 || (self.boards.pan_enabled()
@@ -130,7 +130,7 @@ impl InputState {
         // them already gone, "enter focus mode" would be a confusing no-op
         // snapshot of nothing — restore the full UI instead.
         let anything_to_hide = self.toolbar_visible()
-            || self.show_status_bar
+            || self.status_hud_effectively_visible()
             || self.floating_badge_visible()
             || self.zoom_chip_enabled()
             || self.fallback_mode_badge_may_be_active();
