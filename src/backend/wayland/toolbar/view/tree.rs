@@ -5,6 +5,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 #[cfg(test)]
 use crate::backend::wayland::toolbar::hit::rect_contains_with_min_target;
+use crate::backend::wayland::toolbar::hit::rect_with_min_target;
 
 use super::node::{WidgetId, WidgetNode};
 
@@ -39,6 +40,20 @@ impl WidgetTree {
 
     pub fn node_by_id(&self, id: &WidgetId) -> Option<&WidgetNode> {
         self.nodes.iter().find(|node| &node.id == id)
+    }
+
+    /// Remove interactions from nodes painted below an opaque overlay.
+    ///
+    /// Popover panels are decoration, while their controls are appended after
+    /// the panel. Suppressing the already-built nodes here prevents panel
+    /// padding and gaps from activating controls that remain visible only in
+    /// the underlying tree.
+    pub fn suppress_interactions_covered_by(&mut self, cover: (f64, f64, f64, f64)) {
+        for node in &mut self.nodes {
+            if node.interact.is_some() && rects_overlap(rect_with_min_target(node.rect), cover) {
+                node.interact = None;
+            }
+        }
     }
 
     /// Topmost interactive node at a logical point. Nodes are stored in
@@ -129,6 +144,13 @@ impl WidgetTree {
     }
 }
 
+fn rects_overlap(first: (f64, f64, f64, f64), second: (f64, f64, f64, f64)) -> bool {
+    first.0 < second.0 + second.2
+        && second.0 < first.0 + first.2
+        && first.1 < second.1 + second.3
+        && second.1 < first.1 + first.3
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
@@ -180,6 +202,17 @@ mod tests {
         assert!(tree.hit(46.0, 46.0).is_some());
         assert!(tree.hit(68.0, 68.0).is_some());
         assert!(tree.hit(44.0, 57.0).is_none());
+    }
+
+    #[test]
+    fn opaque_overlay_suppresses_inflated_target_margin() {
+        let mut tree = WidgetTree::new((100.0, 100.0));
+        tree.push(button("tiny", (50.0, 50.0, 14.0, 14.0), ToolbarEvent::Undo));
+
+        // The visual rect stops at x=64, but its 24px target reaches x=69.
+        tree.suppress_interactions_covered_by((66.0, 50.0, 20.0, 20.0));
+
+        assert!(tree.to_hit_regions().is_empty());
     }
 
     #[test]

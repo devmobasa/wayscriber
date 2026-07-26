@@ -11,6 +11,7 @@ use super::super::super::{
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
+    status_hud::StatusHudRebuildInputs,
 };
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
@@ -219,13 +220,27 @@ pub struct InputState {
     /// Whether status HUD segments consume clicks to open their surfaces
     /// (`[ui] status_bar_interactive`); false keeps the bar display-only
     pub status_bar_interactive: bool,
+    /// Whether to show selection dimensions in the status bar
+    pub show_status_selection_info: bool,
     /// Whether to show the board label in the status bar
     pub show_status_board_badge: bool,
     /// Whether to show the page counter in the status bar
     pub show_status_page_badge: bool,
+    /// Whether to show the active color dot in the status bar
+    pub show_status_color: bool,
+    /// Whether to show the active tool name in the status bar
+    pub show_status_tool: bool,
+    /// Whether to show the active tool size in the status bar
+    pub show_status_size: bool,
+    /// Whether to show transient text/highlight context indicators
+    pub show_status_context_indicators: bool,
     /// Whether to show the hidden-toolbar hint chip in the status bar
     /// (`[ui] show_toolbar_hint`)
     pub show_toolbar_hint: bool,
+    /// Whether to show the Help shortcut chip in the status bar
+    pub show_status_help: bool,
+    /// Whether to show the About/version chip in the status bar
+    pub show_status_about: bool,
     /// Whether to show the board/page badge when the status bar is visible
     pub show_floating_badge_always: bool,
     /// Whether the floating board/page badge may render at all (persisted
@@ -338,6 +353,8 @@ pub struct InputState {
     pub toolbar_customize_items_open: bool,
     /// Selected toolbar item customization group in the Settings drawer sub-panel
     pub toolbar_customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+    /// Whether the Settings drawer is showing status-bar content controls
+    pub toolbar_status_bar_contents_open: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -521,6 +538,10 @@ pub struct InputState {
     pub board_picker_layout: Option<BoardPickerLayout>,
     /// Cached layout details for the status HUD (segmented status bar)
     pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
+    /// Last screen/config inputs used to build the status HUD. Retained when
+    /// the effective layout is empty so a content toggle can synchronously
+    /// refresh `status_hud_layout` before the next rendered frame.
+    pub(in crate::input::state::core) status_hud_rebuild_inputs: Option<StatusHudRebuildInputs>,
     /// Set when the internal pointer-routing chain consumed a left press on
     /// the status HUD (tablet and other paths that bypass the backend's own
     /// press→release flag); the matching release activates the chip.

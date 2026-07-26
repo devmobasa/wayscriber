@@ -1051,6 +1051,38 @@ fn overflow_menu_always_carries_the_canvas_session_and_settings_entries() {
 }
 
 #[test]
+fn overflow_popover_anchors_directly_below_its_button_like_gtk() {
+    let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+    snapshot.show_text_controls = true;
+    snapshot.top_viewport_max = Some(850.0);
+    snapshot.top_overflow_open = true;
+
+    let tree = build(&snapshot);
+    assert!(
+        tree.node_by_id(&"top.island.style".into()).is_some(),
+        "the regression requires the contextual style pill to be present"
+    );
+    let overflow = tree
+        .node_by_id(&"top.chrome.overflow".into())
+        .expect("overflow button anchor");
+    let panel = tree
+        .node_by_id(&"top.overflow.panel".into())
+        .expect("overflow panel");
+    let expected_y = overflow.rect.1 + overflow.rect.3 + super::build::OVERFLOW_ANCHOR_GAP;
+
+    assert_eq!(
+        panel.rect.1, expected_y,
+        "overflow should use the same close button anchor as GTK"
+    );
+    assert_eq!(
+        tree.size().1 - (panel.rect.1 + panel.rect.3),
+        super::build::OVERFLOW_BOTTOM_MARGIN,
+        "surface height should end at the overflow panel's bottom margin"
+    );
+    assert_covered_style_controls_are_suppressed(&tree, panel.rect, "overflow");
+}
+
+#[test]
 fn runtime_sized_menu_popovers_do_not_reenter_strip_planning() {
     for name in ["canvas", "session", "settings"] {
         let mut snapshot = snapshot();
@@ -1071,6 +1103,86 @@ fn runtime_sized_menu_popovers_do_not_reenter_strip_planning() {
             "{name} popover should build under runtime width and height constraints"
         );
     }
+}
+
+#[test]
+fn menu_popovers_anchor_directly_below_overflow_button_like_gtk() {
+    for (name, open) in [
+        ("canvas", (true, false, false)),
+        ("session", (false, true, false)),
+        ("settings", (false, false, true)),
+    ] {
+        let mut snapshot = snapshot_for_tool(crate::input::Tool::Marker);
+        snapshot.show_text_controls = true;
+        snapshot.top_viewport_max = Some(850.0);
+        snapshot.canvas_popover_open = open.0;
+        snapshot.session_popover_open = open.1;
+        snapshot.settings_popover_open = open.2;
+
+        let tree = build(&snapshot);
+        assert!(
+            tree.node_by_id(&"top.island.style".into()).is_some(),
+            "the regression requires the contextual style pill to be present"
+        );
+        let overflow = tree
+            .node_by_id(&"top.chrome.overflow".into())
+            .expect("overflow button anchor");
+        let panel = tree
+            .node_by_id(&format!("top.menu.{name}.panel").into())
+            .expect("open menu panel");
+        let expected_y = overflow.rect.1 + overflow.rect.3 + super::menus::MENU_ANCHOR_GAP;
+
+        assert_eq!(
+            panel.rect.1, expected_y,
+            "{name} should use the same close overflow-button anchor as GTK"
+        );
+        assert_eq!(
+            tree.size().1 - (panel.rect.1 + panel.rect.3),
+            super::menus::MENU_BOTTOM_MARGIN,
+            "{name} surface height should end at the panel's bottom margin"
+        );
+        assert_covered_style_controls_are_suppressed(&tree, panel.rect, name);
+    }
+}
+
+fn assert_covered_style_controls_are_suppressed(
+    tree: &WidgetTree,
+    cover: (f64, f64, f64, f64),
+    popover: &str,
+) {
+    let overlaps = |rect: (f64, f64, f64, f64)| {
+        rect.0 < cover.0 + cover.2
+            && cover.0 < rect.0 + rect.2
+            && rect.1 < cover.1 + cover.3
+            && cover.1 < rect.1 + rect.3
+    };
+    let covered: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.style.") && overlaps(node.rect))
+        .collect();
+    assert!(
+        !covered.is_empty(),
+        "{popover} regression requires a wide style pill under panel {cover:?}; style nodes: {:?}",
+        tree.nodes()
+            .iter()
+            .filter(|node| node.id.as_str().starts_with("top.style."))
+            .map(|node| (node.id.as_str(), node.rect))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        covered.iter().all(|node| node.interact.is_none()),
+        "{popover} panel must suppress covered style controls: {covered:?}"
+    );
+    assert!(
+        tree.to_hit_regions().iter().all(|hit| {
+            !hit.focus_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("top.style."))
+                || !overlaps(hit.rect)
+        }),
+        "{popover} panel padding must not expose covered style hit regions"
+    );
 }
 
 fn canvas_tree_has_event(tree: &WidgetTree, event: &ToolbarEvent) -> bool {

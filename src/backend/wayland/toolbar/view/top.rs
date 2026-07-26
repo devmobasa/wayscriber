@@ -251,11 +251,15 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
         return 0.0;
     }
     let plan = plan_top_strip(snapshot);
-    build::shape_popover_height_planned(snapshot, &plan)
+    let contextual_stack = build::shape_popover_height_planned(snapshot, &plan)
         + build::ring_row_height_planned(snapshot, &plan)
-        + build::style_pill_height_planned(snapshot, &plan)
-        + build::overflow_height_planned(snapshot, &plan)
-        + menus::menu_popover_height_planned(snapshot, &plan)
+        + build::style_pill_height_planned(snapshot, &plan);
+    // GTK attaches the overflow family directly to its button, so those
+    // panels overlay the detached style pill instead of stacking after it.
+    // Size the shared surface to whichever path reaches farther down.
+    contextual_stack
+        .max(build::overflow_height_planned(snapshot, &plan))
+        .max(menus::menu_popover_height_planned(snapshot, &plan))
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as

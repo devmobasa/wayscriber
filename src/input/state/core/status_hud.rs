@@ -5,20 +5,88 @@
 //! rendering, damage geometry, and pointer hit-testing all read the same
 //! cache so they can never disagree.
 
-use crate::config::{Action, StatusBarStyle, StatusPosition};
+use crate::config::{Action, StatusBarItem, StatusBarStyle, StatusPosition};
 use crate::ui::{StatusHudLayout, StatusHudSegmentKind, compute_status_hud_layout};
 
 use super::base::InputState;
 use super::board_picker::BoardPickerFocus;
 
+#[derive(Debug, Clone)]
+pub(super) struct StatusHudRebuildInputs {
+    position: StatusPosition,
+    style: StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+}
+
 impl InputState {
-    /// Whether the floating board/page badge can render in the current state.
-    /// Rendering and higher-level chrome policies share this predicate so a
-    /// badge-only screen is never mistaken for a fully hidden UI.
+    /// Whether the floating board/page badge can render in the current frame.
+    /// An enabled status bar with no effective HUD geometry does not suppress
+    /// the fallback badge.
     pub fn floating_badge_visible(&self) -> bool {
         self.show_floating_badge
-            && (!self.show_status_bar || self.show_floating_badge_always)
+            && (!self.status_hud_effectively_visible() || self.show_floating_badge_always)
             && (self.boards.board_count() > 1 || self.boards.page_count() > 1)
+    }
+
+    pub fn status_hud_effectively_visible(&self) -> bool {
+        self.show_status_bar
+            && self.status_hud_rebuild_inputs.as_ref().map_or_else(
+                || self.status_hud_layout.is_some(),
+                |inputs| {
+                    compute_status_hud_layout(
+                        self,
+                        inputs.position,
+                        &inputs.style,
+                        inputs.screen_width,
+                        inputs.screen_height,
+                    )
+                    .is_some()
+                },
+            )
+    }
+
+    pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
+        match item {
+            StatusBarItem::ActiveOutput => self.show_active_output_badge,
+            StatusBarItem::SelectionInfo => self.show_status_selection_info,
+            StatusBarItem::Board => self.show_status_board_badge,
+            StatusBarItem::Page => self.show_status_page_badge,
+            StatusBarItem::Color => self.show_status_color,
+            StatusBarItem::Tool => self.show_status_tool,
+            StatusBarItem::Size => self.show_status_size,
+            StatusBarItem::ContextIndicators => self.show_status_context_indicators,
+            StatusBarItem::ToolbarHint => self.show_toolbar_hint,
+            StatusBarItem::Help => self.show_status_help,
+            StatusBarItem::About => self.show_status_about,
+        }
+    }
+
+    pub(crate) fn set_status_bar_item_visible(
+        &mut self,
+        item: StatusBarItem,
+        visible: bool,
+    ) -> bool {
+        if self.status_bar_item_visible(item) == visible {
+            return false;
+        }
+        match item {
+            StatusBarItem::ActiveOutput => self.show_active_output_badge = visible,
+            StatusBarItem::SelectionInfo => self.show_status_selection_info = visible,
+            StatusBarItem::Board => self.show_status_board_badge = visible,
+            StatusBarItem::Page => self.show_status_page_badge = visible,
+            StatusBarItem::Color => self.show_status_color = visible,
+            StatusBarItem::Tool => self.show_status_tool = visible,
+            StatusBarItem::Size => self.show_status_size = visible,
+            StatusBarItem::ContextIndicators => self.show_status_context_indicators = visible,
+            StatusBarItem::ToolbarHint => self.show_toolbar_hint = visible,
+            StatusBarItem::Help => self.show_status_help = visible,
+            StatusBarItem::About => self.show_status_about = visible,
+        }
+        self.rebuild_status_hud_layout_from_cached_inputs();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
     }
 
     pub fn status_hud_layout(&self) -> Option<&StatusHudLayout> {
@@ -51,6 +119,12 @@ impl InputState {
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
+        self.status_hud_rebuild_inputs = Some(StatusHudRebuildInputs {
+            position,
+            style: style.clone(),
+            screen_width,
+            screen_height,
+        });
         self.status_hud_layout = if self.show_status_bar {
             compute_status_hud_layout(self, position, style, screen_width, screen_height)
         } else {
@@ -70,8 +144,27 @@ impl InputState {
         }
     }
 
+    fn rebuild_status_hud_layout_from_cached_inputs(&mut self) {
+        let Some(inputs) = self.status_hud_rebuild_inputs.clone() else {
+            self.status_hud_hover = None;
+            return;
+        };
+        self.update_status_hud_layout_for_pointer(
+            inputs.position,
+            &inputs.style,
+            inputs.screen_width,
+            inputs.screen_height,
+            false,
+        );
+    }
+
     pub fn clear_status_hud_layout(&mut self) {
         self.status_hud_layout = None;
+        // This path means UI rendering itself is inactive (the master bar is
+        // hidden or overlay suppression is in force), not merely that the
+        // configured content produced an empty layout. Do not let retained
+        // screen inputs make policy treat a suppressed HUD as visible.
+        self.status_hud_rebuild_inputs = None;
         self.status_hud_hover = None;
     }
 
@@ -211,7 +304,7 @@ impl InputState {
                 self.open_color_picker_popup();
                 (true, None)
             }
-            StatusHudSegmentKind::Tool => {
+            StatusHudSegmentKind::Tool | StatusHudSegmentKind::Size => {
                 self.toggle_radial_menu(x as f64, y as f64);
                 (true, None)
             }

@@ -176,6 +176,48 @@ fn ui_reduced_motion_maps_to_motion_enabled() {
 }
 
 #[test]
+fn status_bar_content_flags_default_true_and_round_trip() {
+    let defaults: Config = toml::from_str("").expect("empty config should use defaults");
+    for item in StatusBarItem::ALL {
+        assert!(
+            defaults.ui.status_bar_item_visible(item),
+            "{item:?} should be visible by default"
+        );
+    }
+
+    let source = r#"
+[ui]
+status_bar_interactive = false
+active_output_badge = false
+show_status_selection_info = false
+show_status_board_badge = false
+show_status_page_badge = false
+show_status_color = false
+show_status_tool = false
+show_status_size = false
+show_status_context_indicators = false
+show_toolbar_hint = false
+show_status_help = false
+show_status_about = false
+"#;
+    let config: Config = toml::from_str(source).expect("status-bar content flags should parse");
+    assert!(!config.ui.status_bar_interactive);
+    for item in StatusBarItem::ALL {
+        assert!(
+            !config.ui.status_bar_item_visible(item),
+            "{item:?} should honor its explicit false value"
+        );
+    }
+
+    let serialized = toml::to_string(&config).expect("status-bar flags should serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("serialized flags should reload");
+    assert!(!reloaded.ui.status_bar_interactive);
+    for item in StatusBarItem::ALL {
+        assert!(!reloaded.ui.status_bar_item_visible(item));
+    }
+}
+
+#[test]
 fn tray_icon_style_defaults_to_auto_and_parses_explicit_values() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(default_config.tray.icon_style, TrayIconStyle::Auto);

@@ -1,5 +1,41 @@
 use serde::{Deserialize, Serialize};
 
+/// Independently configurable content in the status bar's main row.
+///
+/// This is a Rust-side identity shared by the renderer and overlay settings.
+/// TOML keeps the established boolean fields instead of serializing this enum,
+/// so adding an item does not create ordering or unknown-identifier semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StatusBarItem {
+    ActiveOutput,
+    SelectionInfo,
+    Board,
+    Page,
+    Color,
+    Tool,
+    Size,
+    ContextIndicators,
+    ToolbarHint,
+    Help,
+    About,
+}
+
+impl StatusBarItem {
+    pub const ALL: [Self; 11] = [
+        Self::ActiveOutput,
+        Self::SelectionInfo,
+        Self::Board,
+        Self::Page,
+        Self::Color,
+        Self::Tool,
+        Self::Size,
+        Self::ContextIndicators,
+        Self::ToolbarHint,
+        Self::Help,
+        Self::About,
+    ];
+}
+
 /// Status bar styling configuration.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

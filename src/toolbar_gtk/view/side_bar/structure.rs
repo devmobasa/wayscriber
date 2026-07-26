@@ -27,6 +27,7 @@ pub(super) struct StructureKey {
     show_zoom_actions: bool,
     customize_open: bool,
     customize_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+    status_bar_contents_open: bool,
     runtime_ui_persistence: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     recents: Vec<std::path::PathBuf>,
     pending_save_as: Option<std::path::PathBuf>,
@@ -69,6 +70,7 @@ impl StructureKey {
             show_zoom_actions: snapshot.show_zoom_actions,
             customize_open: snapshot.customize_items_open,
             customize_group: snapshot.customize_items_group,
+            status_bar_contents_open: snapshot.status_bar_contents_open,
             runtime_ui_persistence: snapshot.runtime_ui_persistence.clone(),
             recents: snapshot
                 .recent_sessions

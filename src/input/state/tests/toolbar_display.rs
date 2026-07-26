@@ -1,5 +1,7 @@
 use super::create_test_input_state;
-use crate::config::{Action, RadialMenuMouseBinding, TopDisplayMode};
+use crate::config::{
+    Action, RadialMenuMouseBinding, StatusBarItem, StatusBarStyle, StatusPosition, TopDisplayMode,
+};
 use crate::input::state::core::{ContextMenuKind, MenuCommand};
 use crate::input::state::{InputState, PendingBackendAction};
 use std::collections::HashMap;
@@ -16,6 +18,15 @@ fn hide_all_chrome(state: &mut InputState) {
     state.handle_action(Action::ToggleStatusBar);
     assert!(!state.toolbar_visible());
     assert!(!state.show_status_bar);
+}
+
+fn refresh_status_hud_layout(state: &mut InputState) {
+    state.update_status_hud_layout(
+        StatusPosition::BottomLeft,
+        &StatusBarStyle::default(),
+        1280,
+        720,
+    );
 }
 
 #[test]
@@ -137,6 +148,7 @@ fn micro_form_survives_a_visibility_toggle() {
 #[test]
 fn hidden_cycle_toast_offers_a_show_action() {
     let mut state = create_test_input_state();
+    refresh_status_hud_layout(&mut state);
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::CycleToolbarDisplay); // hidden
     let toast = state.ui_toast.as_ref().expect("hidden toast");
@@ -152,6 +164,7 @@ fn hidden_cycle_toast_offers_a_show_action() {
 #[test]
 fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
     let mut state = create_test_input_state();
+    refresh_status_hud_layout(&mut state);
     // Pill default: F9 alone hides every toolbar surface. The status bar is
     // still up, so its hint chip covers recovery — no warning yet.
     state.handle_action(Action::ToggleToolbar);
@@ -175,6 +188,67 @@ fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
     );
     let action = toast.action.as_ref().expect("recovery action chip");
     assert_eq!(action.action, Action::ToggleToolbar);
+}
+
+#[test]
+fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
+    let mut state = create_test_input_state();
+    refresh_status_hud_layout(&mut state);
+    assert!(state.status_hud_layout().is_some());
+    for item in StatusBarItem::ALL {
+        state.set_status_bar_item_visible(item, false);
+    }
+    assert!(
+        state.show_status_bar,
+        "the master preference remains enabled"
+    );
+    assert!(
+        state.status_hud_layout().is_none(),
+        "the final item change refreshes the cache before the next frame"
+    );
+    assert!(!state.status_hud_effectively_visible());
+
+    assert!(state.set_status_bar_item_visible(StatusBarItem::About, true));
+    assert!(
+        state.status_hud_layout().is_some(),
+        "enabling content refreshes an empty cache before the next frame"
+    );
+    assert!(state.status_hud_effectively_visible());
+    assert!(state.set_status_bar_item_visible(StatusBarItem::About, false));
+
+    state.handle_action(Action::ToggleToolbar);
+
+    let toast = state.ui_toast.as_ref().expect("all-chrome warning");
+    assert!(toast.message.starts_with("All UI hidden"));
+    assert_eq!(
+        toast.action.as_ref().map(|action| action.action),
+        Some(Action::ToggleToolbar)
+    );
+}
+
+#[test]
+fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
+    let mut state = create_test_input_state();
+    for item in StatusBarItem::ALL {
+        state.set_status_bar_item_visible(item, item == StatusBarItem::ToolbarHint);
+    }
+    refresh_status_hud_layout(&mut state);
+    assert!(
+        state.status_hud_layout().is_none(),
+        "the hint is absent while a toolbar surface is visible"
+    );
+
+    state.handle_action(Action::ToggleToolbar);
+
+    assert!(!state.toolbar_visible());
+    assert!(
+        state.status_hud_effectively_visible(),
+        "effective visibility follows the newly eligible toolbar hint before redraw"
+    );
+    assert!(
+        state.ui_toast.is_none(),
+        "the visible recovery hint makes an all-chrome warning redundant"
+    );
 }
 
 #[test]

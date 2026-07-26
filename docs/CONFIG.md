@@ -512,12 +512,22 @@ theme = "auto"
 # Options: "auto", "on", "off"
 reduced_motion = "auto"
 
-# Show status bar with current color/thickness/tool
+# Show the status bar and its configured contents
 show_status_bar = true
 
-# Allow clicking status bar segments (board, page, color dot, tool, help)
-# to open their surfaces; set false for a display-only status bar
+# Allow clicking status bar segments to open their related controls;
+# set false for a display-only status bar whose clicks pass through
 status_bar_interactive = true
+
+# Status-bar contents. Each item can be hidden independently. Visible items
+# keep this fixed order; narrow layouts may compact labels and temporarily
+# shed items without changing these choices. Mode badges such as
+# FROZEN/ZOOM/PAN are separate.
+# The active output appears only when an output label is available.
+active_output_badge = true
+
+# Selection dimensions appear only while one or more shapes are selected.
+show_status_selection_info = true
 
 # Show board label in the status bar
 show_status_board_badge = true
@@ -525,9 +535,27 @@ show_status_board_badge = true
 # Show page counter in the status bar
 show_status_page_badge = true
 
+# Show the current color dot
+show_status_color = true
+
+# Show the active tool name
+show_status_tool = true
+
+# Show the active tool size as a separate segment
+show_status_size = true
+
+# Show transient text/highlight context indicators when applicable
+show_status_context_indicators = true
+
 # Show a clickable status-bar hint chip (e.g. "F9 Toolbar") while every
 # toolbar surface is hidden; set false if you run toolbar-less on purpose
 show_toolbar_hint = true
+
+# Show the Help shortcut segment
+show_status_help = true
+
+# Show the About/version segment
+show_status_about = true
 
 # Master visibility for the floating board/page badge. The
 # toggle_floating_badge palette/keyboard action flips and persists this.
@@ -554,9 +582,6 @@ status_bar_position = "bottom-left"
 
 # Enable output-cycling shortcuts on layer-shell compositors
 multi_monitor_enabled = true
-
-# Show active output label in the status bar
-active_output_badge = true
 
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
@@ -644,6 +669,7 @@ enabled = true
 - Reduced motion: auto (full motion)
 - Show status bar: true
 - Interactive status bar segments: true
+- All status bar content items: true
 - Show frozen badge: false
 - Position: bottom-left
 - Radial menu mouse trigger: middle

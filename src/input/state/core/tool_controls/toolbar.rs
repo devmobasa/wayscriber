@@ -41,13 +41,13 @@ impl InputState {
     }
 
     /// After hiding a chrome surface: if nothing interactive remains on
-    /// screen (no toolbar surface, no status bar), teach the way back right
-    /// now — the status-bar hint chip cannot help once the status bar
+    /// screen (no toolbar surface, no effective status HUD), teach the way
+    /// back right now — the status-bar hint chip cannot help once the HUD
     /// itself is gone. Skipped only when presenter mode will restore a
     /// surface that was visible before it took ownership of that surface.
     pub(crate) fn warn_if_all_chrome_hidden(&mut self) {
         if self.toolbar_visible()
-            || self.show_status_bar
+            || self.status_hud_effectively_visible()
             || self.presenter_will_restore_visible_chrome()
         {
             return;

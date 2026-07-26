@@ -105,6 +105,81 @@ fn settings_popover_rebuilds_when_runtime_persistence_controls_change() {
 }
 
 #[test]
+fn settings_popover_rebuilds_for_status_bar_contents_subpanel() {
+    let state = make_test_input_state();
+    let closed = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let mut open = closed.clone();
+    open.status_bar_contents_open = true;
+
+    assert!(
+        SettingsMenuContentKey::of(&closed) != SettingsMenuContentKey::of(&open),
+        "opening status-bar contents must rebuild the GTK Settings popover"
+    );
+}
+
+#[test]
+fn settings_popover_rebuilds_when_status_bar_interactivity_changes() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let mut changed = base.clone();
+    changed.status_bar_interactive = !base.status_bar_interactive;
+
+    assert!(
+        SettingsMenuContentKey::of(&base) != SettingsMenuContentKey::of(&changed),
+        "changing status-bar interactivity must rebuild the GTK Settings popover"
+    );
+}
+
+#[test]
+fn settings_popover_rebuilds_when_any_status_bar_item_visibility_changes() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let mutations: [fn(&mut ToolbarSnapshot); 11] = [
+        |s| {
+            s.show_active_output_badge = !s.show_active_output_badge;
+        },
+        |s| {
+            s.show_status_selection_info = !s.show_status_selection_info;
+        },
+        |s| {
+            s.show_status_board_badge = !s.show_status_board_badge;
+        },
+        |s| {
+            s.show_status_page_badge = !s.show_status_page_badge;
+        },
+        |s| s.show_status_color = !s.show_status_color,
+        |s| s.show_status_tool = !s.show_status_tool,
+        |s| s.show_status_size = !s.show_status_size,
+        |s| {
+            s.show_status_context_indicators = !s.show_status_context_indicators;
+        },
+        |s| {
+            s.show_toolbar_hint = !s.show_toolbar_hint;
+        },
+        |s| s.show_status_help = !s.show_status_help,
+        |s| s.show_status_about = !s.show_status_about,
+    ];
+
+    for mutate in mutations {
+        let mut changed = base.clone();
+        mutate(&mut changed);
+        assert!(
+            SettingsMenuContentKey::of(&base) != SettingsMenuContentKey::of(&changed),
+            "changing any status item visibility must rebuild the GTK Settings popover"
+        );
+    }
+}
+
+#[test]
 fn canvas_popover_content_key_rebuilds_on_section_and_value_changes() {
     let state = make_test_input_state();
     let base = ToolbarSnapshot::from_input_with_bindings(

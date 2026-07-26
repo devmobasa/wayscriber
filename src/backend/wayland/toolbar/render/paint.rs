@@ -22,12 +22,17 @@ use super::widgets::{
     draw_divider_vertical, draw_drag_handle, draw_group_card, draw_label_center,
     draw_label_center_color, draw_label_left, draw_label_left_wrapped, draw_mini_checkbox,
     draw_minimize_button, draw_panel_background, draw_pin_button, draw_popover_panel,
-    draw_round_rect, draw_segmented_control, point_in_rect, set_icon_color,
+    draw_round_rect, draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
 /// selection ring).
 const SWATCH_HOVER_RING: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.4);
+
+/// Breathing room on each side of centered text-button labels. The painter
+/// ellipsizes against the remaining width so labels never spill into adjacent
+/// menu cells when a compact grid is narrower than their natural text.
+const TEXT_BUTTON_LABEL_INSET: f64 = 6.0;
 
 /// Paint every node of `tree` in order. `hover` is in the same logical space
 /// as the tree's rects.
@@ -204,19 +209,16 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         WidgetKind::TextButton { label, style } => {
             paint_button_body(ctx, node.rect, *style, is_hover);
             let text_style = label_style(label.size, label.bold);
+            let display = ellipsize_to_width(
+                ctx,
+                text_style,
+                &label.text,
+                (w - TEXT_BUTTON_LABEL_INSET * 2.0).max(0.0),
+            );
             if style.disabled {
-                draw_label_center_color(
-                    ctx,
-                    text_style,
-                    x,
-                    y,
-                    w,
-                    h,
-                    &label.text,
-                    COLOR_TEXT_DISABLED,
-                );
+                draw_label_center_color(ctx, text_style, x, y, w, h, &display, COLOR_TEXT_DISABLED);
             } else {
-                draw_label_center(ctx, text_style, x, y, w, h, &label.text);
+                draw_label_center(ctx, text_style, x, y, w, h, &display);
             }
         }
         WidgetKind::Icon { glyph } => {
@@ -417,6 +419,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::wayland::toolbar::view::node::LabelSpec;
     use cairo::{Context, Format, ImageSurface};
 
     /// `(r, g, b)` of one pixel, 0-255. Rgb24 packs pixels as native-endian
@@ -464,6 +467,46 @@ mod tests {
         }
         let mut surface = surface;
         pixel_at(&mut surface, 4 + size as i32 / 2, 4 + size as i32 / 2)
+    }
+
+    #[test]
+    fn text_button_label_does_not_paint_outside_its_rect() {
+        const WIDTH: i32 = 240;
+        const HEIGHT: i32 = 80;
+        const RECT: (f64, f64, f64, f64) = (80.0, 20.0, 80.0, 40.0);
+        let surface = ImageSurface::create(Format::Rgb24, WIDTH, HEIGHT).expect("surface");
+        {
+            let ctx = Context::new(&surface).expect("context");
+            ctx.set_source_rgb(1.0, 0.0, 0.0);
+            let _ = ctx.paint();
+            let node = WidgetNode::decor(
+                "test.long-text-button",
+                RECT,
+                WidgetKind::TextButton {
+                    label: LabelSpec::new("Status bar contents and customization", 16.0, true),
+                    style: ButtonStyle::plain(),
+                },
+            );
+            paint_node(&ctx, &node, None);
+        }
+
+        let mut surface = surface;
+        let stride = surface.stride() as usize;
+        let data = surface.data().expect("pixel data");
+        let painted_outside = (RECT.1 as i32..(RECT.1 + RECT.3) as i32).any(|y| {
+            (0..WIDTH).any(|x| {
+                let outside = x < RECT.0 as i32 - 2 || x >= (RECT.0 + RECT.2) as i32 + 2;
+                if !outside {
+                    return false;
+                }
+                let offset = y as usize * stride + x as usize * 4;
+                data[offset] > 5 || data[offset + 1] > 5 || data[offset + 2] < 250
+            })
+        });
+        assert!(
+            !painted_outside,
+            "a long built-in button label escaped its declared cell"
+        );
     }
 
     #[test]

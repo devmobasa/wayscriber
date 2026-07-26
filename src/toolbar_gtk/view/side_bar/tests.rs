@@ -60,3 +60,19 @@ fn side_structure_rebuilds_when_runtime_persistence_controls_change() {
         "the side settings pane must replace reset with confirm/cancel controls"
     );
 }
+
+#[test]
+fn side_structure_rebuilds_for_status_bar_contents_subpanel() {
+    let state = make_test_input_state();
+    let closed = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let mut open = closed.clone();
+    open.status_bar_contents_open = true;
+
+    assert!(
+        StructureKey::of(&closed) != StructureKey::of(&open),
+        "opening status-bar contents must rebuild the GTK Settings pane"
+    );
+}

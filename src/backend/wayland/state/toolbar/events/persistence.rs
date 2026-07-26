@@ -26,6 +26,14 @@ pub(super) fn apply_toolbar_ui_config_target(
         ToolbarUiPersistenceTarget::StatusBar => {
             config.ui.show_status_bar = input_state.show_status_bar;
         }
+        ToolbarUiPersistenceTarget::StatusBarInteractive => {
+            config.ui.status_bar_interactive = input_state.status_bar_interactive;
+        }
+        ToolbarUiPersistenceTarget::StatusBarItem(item) => {
+            config
+                .ui
+                .set_status_bar_item_visible(item, input_state.status_bar_item_visible(item));
+        }
         ToolbarUiPersistenceTarget::StatusBoardBadge => {
             config.ui.show_status_board_badge = input_state.show_status_board_badge;
         }
