@@ -4,8 +4,7 @@ use smithay_client_toolkit::seat::pointer::{
 use smithay_client_toolkit::shell::WaylandSurface;
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use super::super::clipboard::{copy_text_to_clipboard, open_url};
-use super::super::{AboutWindowState, LinkAction};
+use super::super::AboutWindowState;
 
 impl PointerHandler for AboutWindowState {
     fn pointer_frame(
@@ -25,22 +24,15 @@ impl PointerHandler for AboutWindowState {
                     self.update_cursor(conn);
                 }
                 PointerEventKind::Leave { .. } => {
-                    if self.hover_index.is_some() {
-                        self.hover_index = None;
-                        self.needs_redraw = true;
-                    }
+                    self.set_hover(None);
                     self.update_cursor(conn);
                 }
                 PointerEventKind::Press { button, .. } => {
                     if button == BTN_LEFT
-                        && let Some(index) = self.link_index_at(event.position)
-                        && let Some(link) = self.link_regions.get(index)
+                        && let Some(element) = self.element_at(event.position)
                     {
-                        match &link.action {
-                            LinkAction::OpenUrl(url) => open_url(url),
-                            LinkAction::CopyText(text) => copy_text_to_clipboard(text),
-                            LinkAction::Close => self.should_exit = true,
-                        }
+                        self.focus_element(element);
+                        self.activate(element);
                     }
                 }
                 _ => {}

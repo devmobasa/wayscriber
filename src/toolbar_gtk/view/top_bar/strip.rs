@@ -378,6 +378,7 @@ impl TopBar {
                     | model::TopToolbarControl::MicroChip
                     | model::TopToolbarControl::Pin
                     | model::TopToolbarControl::Minimize
+                    | model::TopToolbarControl::About
                     | model::TopToolbarControl::ClearCanvas
                     | model::TopToolbarControl::CanvasMenu
                     | model::TopToolbarControl::SessionMenu
@@ -402,6 +403,9 @@ impl TopBar {
                 }
                 model::TopToolbarControl::Minimize => {
                     island_chrome.append(&self.minimize_button(snapshot, control, sz(chrome_size)));
+                }
+                model::TopToolbarControl::About => {
+                    island_chrome.append(&self.about_button(snapshot, control, sz(chrome_size)));
                 }
                 _ => unreachable!("non-chrome control in chrome specification"),
             }

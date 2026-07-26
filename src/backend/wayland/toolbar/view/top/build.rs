@@ -175,6 +175,7 @@ pub(super) fn build_top_view_planned(
                 | model::TopToolbarControl::MicroChip
                 | model::TopToolbarControl::Pin
                 | model::TopToolbarControl::Minimize
+                | model::TopToolbarControl::About
                 | model::TopToolbarControl::ClearCanvas
                 | model::TopToolbarControl::CanvasMenu
                 | model::TopToolbarControl::SessionMenu
@@ -307,6 +308,19 @@ pub(super) fn build_top_view_planned(
     }
     for control in spec.chrome().iter().copied() {
         let rect = (chrome_x, chrome_y, chrome_size, chrome_size);
+        chrome_x += chrome_size + chrome_gap;
+        // About is an ordinary icon button in chrome styling; pin and minimize
+        // keep their bespoke glyph widgets.
+        if control == model::TopToolbarControl::About {
+            tree.push(control_button_node(
+                snapshot,
+                control,
+                control.id().render_id().into_owned(),
+                rect,
+                true,
+            ));
+            continue;
+        }
         let kind = match control {
             model::TopToolbarControl::Pin => WidgetKind::PinButton {
                 pinned: control.active(snapshot),
@@ -323,7 +337,6 @@ pub(super) fn build_top_view_planned(
                 Some(control.tooltip(snapshot)),
             )),
         ));
-        chrome_x += chrome_size + chrome_gap;
     }
 
     // --- Style pill (island D): contextual tool properties -------------------

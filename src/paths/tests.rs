@@ -1,7 +1,7 @@
 use super::*;
 use crate::env_vars::{
-    HOME_ENV, USERPROFILE_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV, XDG_PICTURES_DIR_ENV,
-    XDG_RUNTIME_DIR_ENV,
+    HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
+    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
 };
 use std::env;
 
@@ -56,6 +56,55 @@ fn config_dir_prefers_xdg_config_home_when_set() {
     match prev_xdg {
         Some(v) => unsafe { env::set_var(XDG_CONFIG_HOME_ENV, v) },
         None => unsafe { env::remove_var(XDG_CONFIG_HOME_ENV) },
+    }
+    match prev_home {
+        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
+        None => unsafe { env::remove_var(HOME_ENV) },
+    }
+    match prev_userprofile {
+        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
+        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    }
+}
+
+#[test]
+fn update_check_cache_follows_the_cache_directory() {
+    let _guard = crate::test_env::lock();
+
+    let tmp = crate::test_temp::tempdir().unwrap();
+    let prev_home = env::var_os(HOME_ENV);
+    let prev_userprofile = env::var_os(USERPROFILE_ENV);
+    let prev_xdg = env::var_os(XDG_CACHE_HOME_ENV);
+
+    unsafe {
+        env::set_var(XDG_CACHE_HOME_ENV, tmp.path());
+        env::remove_var(HOME_ENV);
+        env::remove_var(USERPROFILE_ENV);
+    }
+
+    assert_eq!(cache_dir().as_deref(), Some(tmp.path()));
+    assert_eq!(
+        update_check_cache_file(),
+        tmp.path().join("wayscriber").join("update-check.json")
+    );
+
+    // Falling back to HOME keeps the result inside ~/.cache, never in data or
+    // config directories.
+    unsafe {
+        env::remove_var(XDG_CACHE_HOME_ENV);
+        env::set_var(HOME_ENV, tmp.path());
+    }
+    assert_eq!(
+        update_check_cache_file(),
+        tmp.path()
+            .join(".cache")
+            .join("wayscriber")
+            .join("update-check.json")
+    );
+
+    match prev_xdg {
+        Some(v) => unsafe { env::set_var(XDG_CACHE_HOME_ENV, v) },
+        None => unsafe { env::remove_var(XDG_CACHE_HOME_ENV) },
     }
     match prev_home {
         Some(v) => unsafe { env::set_var(HOME_ENV, v) },

@@ -2,8 +2,8 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::env_vars::{
-    HOME_ENV, USERPROFILE_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV, XDG_PICTURES_DIR_ENV,
-    XDG_RUNTIME_DIR_ENV,
+    HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
+    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
 };
 
 /// Resolve the user's home directory.
@@ -22,6 +22,25 @@ pub fn config_dir() -> Option<PathBuf> {
         return Some(PathBuf::from(dir));
     }
     home_dir().map(|home| home.join(".config"))
+}
+
+/// Resolve the XDG cache directory, falling back to `~/.cache`.
+pub fn cache_dir() -> Option<PathBuf> {
+    if let Some(dir) = env::var_os(XDG_CACHE_HOME_ENV)
+        && !dir.is_empty()
+    {
+        return Some(PathBuf::from(dir));
+    }
+    home_dir().map(|home| home.join(".cache"))
+}
+
+/// Location for the last update-check result. Cache, not data: it is
+/// regenerable, and deleting it only costs one extra request.
+pub fn update_check_cache_file() -> PathBuf {
+    cache_dir()
+        .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
+        .join("wayscriber")
+        .join("update-check.json")
 }
 
 /// Resolve the XDG data directory, falling back to `~/.local/share`.

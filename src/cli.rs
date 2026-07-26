@@ -68,6 +68,9 @@ pub struct Cli {
     /// Show the About window
     pub about: bool,
 
+    /// Check wayscriber.com for a newer release, print the result, and exit
+    pub check_update: bool,
+
     /// Print compiled runtime capabilities for companion tools
     pub runtime_capabilities: bool,
 }
@@ -140,6 +143,7 @@ impl Cli {
                 "--resume-session" => cli.resume_session = true,
                 "--no-resume-session" => cli.no_resume_session = true,
                 "--about" => cli.about = true,
+                "--check-update" => cli.check_update = true,
                 crate::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
                     cli.runtime_capabilities = true;
                 }
@@ -190,29 +194,37 @@ impl Cli {
         Ok(action)
     }
 
+    /// Whether any flag that launches, controls, or mutates something is set.
+    ///
+    /// The three print-and-exit commands (`--runtime-capabilities`, `--about`,
+    /// `--check-update`) all conflict with every one of these, so the list lives
+    /// in one place: three hand-maintained copies drifted apart once already.
+    fn selects_a_launch_command(&self) -> bool {
+        self.daemon
+            || self.daemon_toggle
+            || self.daemon_action.is_some()
+            || self.light_toggle
+            || self.light_draw_toggle
+            || self.light_draw_on
+            || self.light_draw_off
+            || self.active
+            || self.mode.is_some()
+            || self.no_tray
+            || self.freeze_on_show
+            || self.clear_session
+            || self.clear_tool_state
+            || self.session_info
+            || self.session_file.is_some()
+            || self.freeze
+            || self.exit_after_capture
+            || self.no_exit_after_capture
+            || self.resume_session
+            || self.no_resume_session
+    }
+
     fn validate(&self) -> Result<(), String> {
         if self.runtime_capabilities
-            && (self.daemon
-                || self.daemon_toggle
-                || self.daemon_action.is_some()
-                || self.light_toggle
-                || self.light_draw_toggle
-                || self.light_draw_on
-                || self.light_draw_off
-                || self.active
-                || self.mode.is_some()
-                || self.no_tray
-                || self.freeze_on_show
-                || self.clear_session
-                || self.clear_tool_state
-                || self.session_info
-                || self.session_file.is_some()
-                || self.freeze
-                || self.exit_after_capture
-                || self.no_exit_after_capture
-                || self.resume_session
-                || self.no_resume_session
-                || self.about)
+            && (self.selects_a_launch_command() || self.about || self.check_update)
         {
             return Err("--runtime-capabilities conflicts with launch flags".to_string());
         }
@@ -353,23 +365,12 @@ impl Cli {
                     .to_string(),
             );
         }
-        if self.about
-            && (self.daemon
-                || self.daemon_toggle
-                || self.daemon_action.is_some()
-                || self.active
-                || self.mode.is_some()
-                || self.no_tray
-                || self.freeze_on_show
-                || self.clear_session
-                || self.clear_tool_state
-                || self.session_info
-                || self.session_file.is_some()
-                || self.freeze
-                || self.resume_session
-                || self.no_resume_session)
-        {
+        if self.about && (self.selects_a_launch_command() || self.check_update) {
             return Err("--about conflicts with the selected command".to_string());
+        }
+
+        if self.check_update && self.selects_a_launch_command() {
+            return Err("--check-update conflicts with the selected command".to_string());
         }
 
         Ok(())
@@ -471,6 +472,7 @@ pub(crate) fn print_help() {
     println!("  wayscriber --clear-session [--session-file PATH]");
     println!("  wayscriber --clear-tool-state [--session-file PATH]");
     println!("  wayscriber --about");
+    println!("  wayscriber --check-update");
     println!();
     println!("Options:");
     println!("  -d, --daemon                  Run as background daemon");
@@ -494,6 +496,7 @@ pub(crate) fn print_help() {
     println!("      --session-info            Show session persistence status");
     println!("      --session-file PATH       Use a named session file");
     println!("      --about                   Show the About window");
+    println!("      --check-update            Check wayscriber.com for a newer release");
     println!("  -h, --help                    Show help");
     println!("  -V, --version                 Show version");
 }

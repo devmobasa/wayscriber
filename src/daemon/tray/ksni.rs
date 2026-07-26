@@ -60,11 +60,16 @@ impl ksni::Tray for WayscriberTray {
             overlay_error,
             watcher_offline,
             watcher_reason,
+            available_update,
         } = status;
         let mut description =
             "Toggle overlay, open configurator, or quit from the tray".to_string();
         description.push_str("\nOverlay: ");
         description.push_str(if overlay_active { "active" } else { "hidden" });
+
+        if let Some(update) = available_update.as_ref() {
+            description.push_str(&format!("\nUpdate available: {}", update.version));
+        }
 
         if watcher_offline {
             description.push_str("\nTray watcher offline");
@@ -115,7 +120,27 @@ impl ksni::Tray for WayscriberTray {
         let overlay_active = self.overlay_active.load(Ordering::Acquire);
         let toggle_label = toggle_overlay_menu_label();
 
-        vec![
+        let mut items: Vec<MenuItem<Self>> = Vec::new();
+
+        // The update notice leads the menu only while there is one, and opens
+        // instructions — Wayscriber never installs anything itself.
+        if let Some(update) = self.tray_status.snapshot().available_update {
+            let update_url = update.update_url.clone();
+            items.push(
+                StandardItem {
+                    label: format!("Update available: {}", update.version),
+                    icon_name: menu_icon_name("system-software-update", use_theme_icons),
+                    activate: Box::new(move |this: &mut Self| {
+                        this.open_update_instructions(&update_url);
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+            );
+            items.push(MenuItem::Separator);
+        }
+
+        items.extend([
             StandardItem {
                 label: "About Wayscriber".to_string(),
                 icon_name: menu_icon_name("help-about", use_theme_icons),
@@ -311,7 +336,9 @@ impl ksni::Tray for WayscriberTray {
                 ..Default::default()
             }
             .into(),
-        ]
+        ]);
+
+        items
     }
 
     fn watcher_online(&self) {

@@ -102,6 +102,41 @@ fn preflight_named_overlay_session(cli: &Cli, path: Option<&Path>) -> anyhow::Re
     Ok(())
 }
 
+/// `--check-update`: an explicit, user-initiated check. It bypasses the
+/// `[updates] check` setting and the opt-out variable — asking for a check is
+/// consent to make the request — and never changes anything on disk beyond the
+/// cached result.
+fn run_update_check() -> anyhow::Result<()> {
+    use crate::update_check::{
+        COMPILED_OUT_MESSAGE, CheckOutcome, check_now, compiled_out, current_version,
+    };
+
+    println!("Installed version: {}", current_version());
+    if compiled_out() {
+        println!("{COMPILED_OUT_MESSAGE}; ask your package manager for updates.");
+        return Ok(());
+    }
+    match check_now() {
+        Ok(CheckOutcome::UpToDate { latest }) => {
+            println!("Latest release:    {latest}");
+            println!("Wayscriber is up to date.");
+            Ok(())
+        }
+        Ok(CheckOutcome::Update(update)) => {
+            println!("Latest release:    {}", update.version);
+            if let Some(released) = update.released.as_deref() {
+                println!("Released:          {released}");
+            }
+            println!();
+            println!("An update is available. Wayscriber does not install updates itself.");
+            println!("Update instructions: {}", update.update_url);
+            println!("Release notes:       {}", update.notes_url);
+            Ok(())
+        }
+        Err(err) => Err(anyhow::anyhow!("Update check failed: {err}")),
+    }
+}
+
 #[cfg(unix)]
 fn detach_from_tty() {
     // Start a new session to drop the controlling terminal (prevents stuck shells).
@@ -128,9 +163,11 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Daemon and active runs create their process broker before acquiring any
-    // daemon/overlay singleton lock. The guard spans the complete runtime.
-    let _process_broker = (cli.daemon || cli.active || cli.freeze)
+    // Runtime and update-checking modes create their process broker before
+    // acquiring locks or starting threads. The guard spans the complete run.
+    let update_mode_needs_broker =
+        !crate::update_check::compiled_out() && (cli.about || cli.check_update);
+    let _process_broker = (cli.daemon || cli.active || cli.freeze || update_mode_needs_broker)
         .then(crate::process_broker::start_for_runtime)
         .transpose()?;
     crate::daemon::protocol_v2::start_daemon_watchdog_from_environment()?;
@@ -156,6 +193,10 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     if cli.about {
         crate::about_window::run_about_window()?;
         return Ok(());
+    }
+
+    if cli.check_update {
+        return run_update_check();
     }
 
     if let Some(action) = cli

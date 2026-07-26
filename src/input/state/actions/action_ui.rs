@@ -243,6 +243,10 @@ impl InputState {
                 self.launch_configurator();
                 true
             }
+            Action::OpenAbout => {
+                self.launch_about();
+                true
+            }
             Action::ClearSavedToolState => {
                 self.set_pending_backend_action(PendingBackendAction::ClearSavedToolState);
                 true

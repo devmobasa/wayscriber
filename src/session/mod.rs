@@ -21,6 +21,7 @@ pub use artifacts::{
     rollback_named_session_non_lock_artifacts_move,
 };
 pub use lock::try_lock_exclusive;
+pub(crate) use lock::unlock;
 pub(crate) use options::append_path_suffix;
 #[allow(unused_imports)]
 pub use options::{

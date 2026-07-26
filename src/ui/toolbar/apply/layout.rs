@@ -49,6 +49,11 @@ impl InputState {
         true
     }
 
+    pub(super) fn apply_toolbar_open_about(&mut self) -> bool {
+        self.launch_about();
+        true
+    }
+
     pub(super) fn apply_toolbar_open_config_file(&mut self) -> bool {
         self.open_config_file_default();
         true

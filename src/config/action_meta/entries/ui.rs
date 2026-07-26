@@ -207,6 +207,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        OpenAbout,
+        "About Wayscriber",
+        Some("About"),
+        "Show version, links, and update status",
+        UI,
+        true,
+        true,
+        true
+    ),
+    meta!(
         ClearSavedToolState,
         "Reset Tool Defaults",
         None,

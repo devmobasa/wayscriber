@@ -106,6 +106,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::ToggleSelectionProperties
         | Action::OpenContextMenu
         | Action::OpenConfigurator
+        | Action::OpenAbout
         | Action::ClearSavedToolState
         | Action::OpenCaptureFolder
         | Action::ToggleCommandPalette

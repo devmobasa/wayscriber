@@ -91,10 +91,10 @@ fn top_size_respects_icon_mode() {
     let snapshot = snapshot_from_state(&state);
     // Width includes the island gaps/padding of the four-pill band (tools,
     // presets, history, chrome): the presets island replaced the retired
-    // colors group (M7-C1/C2). Height adds the contextual style pill under
-    // the 58px island band (6px gap + 40px pill) while a drawing tool is
-    // active.
-    assert_eq!(top_size(&snapshot), (1167, 104));
+    // colors group (M7-C1/C2), and the chrome island carries About alongside
+    // pin and minimize. Height adds the contextual style pill under the 58px
+    // island band (6px gap + 40px pill) while a drawing tool is active.
+    assert_eq!(top_size(&snapshot), (1197, 104));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);

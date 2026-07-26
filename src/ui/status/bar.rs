@@ -68,6 +68,9 @@ pub enum StatusHudSegmentKind {
     /// Hidden-toolbar hint chip (shown only while no toolbar surface is
     /// visible): restores the toolbar.
     Toolbar,
+    /// Version chip: opens the About window. Informational and actionable at
+    /// once, which is why it carries the version rather than a bare glyph.
+    About,
 }
 
 /// One laid-out run of pill content on the shared single-line baseline.
@@ -520,6 +523,16 @@ fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
         help_label,
         Some(StatusHudSegmentKind::Help),
         false,
+    ));
+
+    // Version chip, last in the row: it states which build is running and
+    // opens About when clicked. Marked optional so it is the first piece shed
+    // when the width budget binds — a version badge must never cost the board
+    // name or the help hint their space.
+    pieces.push(StatusHudPiece::text(
+        format!("About v{}", crate::build_info::version()),
+        Some(StatusHudSegmentKind::About),
+        true,
     ));
 
     pieces

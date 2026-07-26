@@ -51,6 +51,19 @@ pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
             icon: ToolbarIcon::File,
             tooltip: ToolbarTooltip::text("Config file"),
         },
+        ToolbarSettingsButton {
+            id: ToolbarControlId::OpenAbout,
+            label: Cow::Borrowed(action_short_label(Action::OpenAbout)),
+            event: ToolbarEvent::OpenAbout,
+            icon: ToolbarIcon::Info,
+            tooltip: ToolbarTooltip::Binding {
+                label: Cow::Borrowed(action_label(Action::OpenAbout)),
+                binding: snapshot
+                    .binding_hints
+                    .binding_for_action(Action::OpenAbout)
+                    .map(str::to_string),
+            },
+        },
     ];
     buttons.extend(runtime_persistence_buttons(snapshot));
     buttons
@@ -350,6 +363,7 @@ fn control_item_id(id: ToolbarControlId) -> Option<ToolbarItemId> {
         ToolbarControlId::SettingsStepControls => ids::SIDE_SETTINGS_STEP_CONTROLS,
         ToolbarControlId::OpenCommandPalette => ids::SIDE_SETTINGS_COMMAND_PALETTE,
         ToolbarControlId::OpenConfigurator => ids::SIDE_SETTINGS_CONFIGURATOR,
+        ToolbarControlId::OpenAbout => ids::SIDE_SETTINGS_ABOUT,
         ToolbarControlId::OpenConfigFile => ids::SIDE_SETTINGS_CONFIG_FILE,
         _ => return None,
     })

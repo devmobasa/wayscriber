@@ -466,6 +466,36 @@ impl TopBar {
         (popover, capture_surface)
     }
 
+    /// The chrome island's About entry. Styled like the other chrome buttons,
+    /// but it opens a window instead of changing the toolbar, so it carries no
+    /// active state.
+    pub(super) fn about_button(
+        &mut self,
+        snapshot: &ToolbarSnapshot,
+        control: model::TopToolbarControl,
+        size: f64,
+    ) -> gtk4::Button {
+        assert_eq!(control, model::TopToolbarControl::About);
+        let button = sized_button(size, size);
+        set_control_widget_id(&button, control);
+        button.add_css_class("chrome");
+        button.add_css_class("about");
+        let accessible_label = control.accessible_label(snapshot);
+        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.set_tooltip_text(Some(&control.tooltip(snapshot)));
+        let icon = IconWidget::new(
+            top_toolbar_icon_painter(control.icon(snapshot).expect("about icon")),
+            size * 0.6,
+        );
+        button.set_child(Some(&icon.area));
+        let sender = self.feedback.clone();
+        let event = control.event(snapshot);
+        button.connect_clicked(move |_| {
+            send_event(&sender, event.clone());
+        });
+        button
+    }
+
     pub(super) fn minimize_button(
         &mut self,
         snapshot: &ToolbarSnapshot,

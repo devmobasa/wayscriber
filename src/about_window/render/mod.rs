@@ -57,13 +57,17 @@ impl AboutWindowState {
             ctx.scale(self.scale as f64, self.scale as f64);
         }
 
-        self.link_regions.clear();
         draw::draw_about(
             &ctx,
-            self.width as f64,
-            self.height as f64,
-            &mut self.link_regions,
-            self.hover_index,
+            &draw::Frame {
+                plan: &self.plan,
+                content: &self.content,
+                update: &self.update,
+                icon: self.icon.as_ref(),
+                hover: self.hover,
+                focus: self.focus,
+                notice: self.notice.as_deref(),
+            },
         );
 
         surface.flush();

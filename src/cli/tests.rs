@@ -346,3 +346,87 @@ fn freeze_on_show_requires_daemon() {
         "expected --freeze-on-show without --daemon to error"
     );
 }
+
+#[test]
+fn check_update_parses_on_its_own() {
+    let cli = parse_cli(["wayscriber", "--check-update"]);
+    assert!(cli.check_update);
+    assert!(!cli.about);
+}
+
+/// Every print-and-exit command rejects every launch flag. `--about` and
+/// `--check-update` used to omit the light aliases and the capture-exit flags,
+/// so those combinations ran the print command and silently dropped the rest.
+#[test]
+fn print_and_exit_commands_reject_every_launch_flag() {
+    let launch_flags = [
+        "--daemon",
+        "--daemon-toggle",
+        "--active",
+        "--no-tray",
+        "--clear-session",
+        "--clear-tool-state",
+        "--session-info",
+        "--freeze",
+        "--light-toggle",
+        "--light-draw-toggle",
+        "--light-draw-on",
+        "--light-draw-off",
+        "--exit-after-capture",
+        "--no-exit-after-capture",
+        "--resume-session",
+        "--no-resume-session",
+    ];
+
+    for command in ["--about", "--check-update", "--runtime-capabilities"] {
+        for flag in launch_flags {
+            let result = Cli::try_parse_from(["wayscriber", command, flag]);
+            assert!(
+                result.is_err(),
+                "expected {command} with {flag} to be rejected"
+            );
+        }
+    }
+}
+
+#[test]
+fn print_and_exit_commands_reject_each_other() {
+    assert_eq!(
+        Cli::try_parse_from(["wayscriber", "--about", "--check-update"]).unwrap_err(),
+        "--about conflicts with the selected command"
+    );
+    assert_eq!(
+        Cli::try_parse_from(["wayscriber", "--runtime-capabilities", "--check-update"])
+            .unwrap_err(),
+        "--runtime-capabilities conflicts with launch flags"
+    );
+}
+
+#[test]
+fn check_update_rejects_valued_launch_flags() {
+    assert_eq!(
+        Cli::try_parse_from(["wayscriber", "--check-update", "--mode", "whiteboard"]).unwrap_err(),
+        "--check-update conflicts with the selected command"
+    );
+    // `--session-file` has its own earlier "requires a session command" check,
+    // so the rejection is the same but the wording comes from there.
+    assert!(
+        Cli::try_parse_from([
+            "wayscriber",
+            "--check-update",
+            "--session-file",
+            "/tmp/x.wayscriber-session",
+        ])
+        .is_err()
+    );
+    assert_eq!(
+        Cli::try_parse_from([
+            "wayscriber",
+            "--check-update",
+            "--daemon-action",
+            "toggle_help"
+        ])
+        .unwrap_err(),
+        "--check-update conflicts with the selected command"
+    );
+}

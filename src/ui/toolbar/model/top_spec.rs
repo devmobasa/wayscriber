@@ -224,8 +224,13 @@ impl TopToolbarSpec {
         Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).count()
     }
 
-    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 2] {
+    /// Chrome island content, in reading order: About, then pin, then
+    /// minimize. About leads because it is the only entry that leaves the
+    /// overlay, and all three are hideable through toolbar customization.
+    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 3] {
         [
+            toolbar_item_visible(snapshot, ids::TOP_CHROME_ABOUT)
+                .then_some(TopToolbarControl::About),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN).then_some(TopToolbarControl::Pin),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_CLOSE)
                 .then_some(TopToolbarControl::Minimize),
@@ -358,6 +363,10 @@ pub(crate) enum TopToolbarControl {
     Pin,
     Overflow,
     Minimize,
+    /// Chrome-island entry opening the standalone About dialog. Activating it
+    /// leaves the overlay, since About is a normal window and the overlay
+    /// renders above those.
+    About,
     HighlightRing,
     /// Overflow menu entry opening the Canvas popover (boards, pages, zoom,
     /// history/advanced actions, step undo/redo).
@@ -393,6 +402,7 @@ impl TopToolbarControl {
             Self::Pin => ids::TOP_CHROME_PIN,
             Self::Overflow => ids::TOP_CHROME_OVERFLOW,
             Self::Minimize => ids::TOP_CHROME_CLOSE,
+            Self::About => ids::TOP_CHROME_ABOUT,
             Self::HighlightRing => ids::TOP_UTILITY_HIGHLIGHT_RING,
         };
         TopToolbarControlId::Item(id)
@@ -429,6 +439,7 @@ impl TopToolbarControl {
                 ToolbarEvent::ToggleSettingsPopover(!snapshot.settings_popover_open)
             }
             Self::Minimize => ToolbarEvent::SetTopMinimized(true),
+            Self::About => ToolbarEvent::OpenAbout,
             Self::HighlightRing => {
                 ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled)
             }
@@ -488,7 +499,7 @@ impl TopToolbarControl {
             | Self::HighlightRing => TopToolbarControlRole::Toggle,
             // The chrome island (pin, minimize) renders quieter than the
             // content islands; both frontends key that styling off this role.
-            Self::Pin | Self::Minimize => TopToolbarControlRole::Chrome,
+            Self::Pin | Self::Minimize | Self::About => TopToolbarControlRole::Chrome,
             _ => TopToolbarControlRole::Button,
         }
     }
@@ -504,7 +515,7 @@ impl TopToolbarControl {
             | Self::CanvasMenu
             | Self::SessionMenu
             | Self::SettingsMenu => TopToolbarIsland::History,
-            Self::Pin | Self::Minimize | Self::Restore | Self::MicroChip => {
+            Self::Pin | Self::Minimize | Self::About | Self::Restore | Self::MicroChip => {
                 TopToolbarIsland::Chrome
             }
             Self::Preset(_) => TopToolbarIsland::Presets,
@@ -535,6 +546,7 @@ impl TopToolbarControl {
             Self::SessionMenu => TopToolbarIcon::Session,
             Self::SettingsMenu => TopToolbarIcon::Settings,
             Self::Minimize => TopToolbarIcon::Minimize,
+            Self::About => TopToolbarIcon::About,
             // Filled preset slots carry the saved tool's glyph (the renderers
             // draw it neutral and show the preset color as a corner swatch);
             // empty slots have no glyph.
@@ -567,6 +579,7 @@ impl TopToolbarControl {
             Self::SessionMenu => Cow::Borrowed("Session..."),
             Self::SettingsMenu => Cow::Borrowed("Settings..."),
             Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
+            Self::About => Cow::Borrowed(action_short_label(Action::OpenAbout)),
             Self::HighlightRing => Cow::Borrowed("Ring"),
         }
     }
@@ -582,6 +595,7 @@ impl TopToolbarControl {
             Self::CanvasMenu => Cow::Borrowed("Canvas menu"),
             Self::SessionMenu => Cow::Borrowed("Session menu"),
             Self::SettingsMenu => Cow::Borrowed("Settings menu"),
+            Self::About => Cow::Borrowed(action_label(Action::OpenAbout)),
             _ => self.label(snapshot),
         }
     }
@@ -710,6 +724,8 @@ pub(crate) enum TopToolbarIcon {
     Session,
     /// Settings popover entry (sliders glyph).
     Settings,
+    /// About entry (circled information glyph).
+    About,
 }
 
 fn utility_event(utility: TopToolbarUtility, snapshot: &ToolbarSnapshot) -> ToolbarEvent {
@@ -918,7 +934,11 @@ mod tests {
             "an unconstrained plan still anchors Clear plus the Canvas/Session/Settings entries"
         );
 
-        assert_eq!(chrome_ids(&spec), ["top.chrome.pin", "top.chrome.close"]);
+        assert_eq!(
+            chrome_ids(&spec),
+            ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
+            "the chrome island reads About, pin, minimize"
+        );
         let pen = spec
             .strip()
             .iter()
@@ -1094,7 +1114,11 @@ mod tests {
             strip_ids.contains(&ids::TOP_CHROME_OVERFLOW.as_str().to_string()),
             "the overflow toggle anchors in the history island: {strip_ids:?}"
         );
-        assert_eq!(chrome_ids(&spec), ["top.chrome.pin", "top.chrome.close"]);
+        assert_eq!(
+            chrome_ids(&spec),
+            ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
+            "the chrome island reads About, pin, minimize"
+        );
         assert_eq!(
             spec.overflow()[0].event(&snapshot),
             ToolbarEvent::ClearCanvas { instant: false }
@@ -1336,6 +1360,50 @@ mod tests {
                 spec.overflow().len()
             );
         }
+    }
+
+    /// About sits in the chrome island, opens the dialog rather than changing
+    /// the toolbar, and can be hidden like any other chrome entry.
+    #[test]
+    fn about_is_a_hideable_chrome_entry_that_opens_the_dialog() {
+        let snapshot = snapshot();
+        let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+
+        assert_eq!(
+            spec.chrome().first().copied(),
+            Some(TopToolbarControl::About),
+            "About leads the chrome island"
+        );
+        assert_eq!(TopToolbarControl::About.island(), TopToolbarIsland::Chrome);
+        assert_eq!(
+            TopToolbarControl::About.event(&snapshot),
+            ToolbarEvent::OpenAbout
+        );
+        assert_eq!(
+            TopToolbarControl::About.action(&snapshot),
+            Some(Action::OpenAbout)
+        );
+        // It opens a window, so it never reads as an active toggle.
+        assert!(!TopToolbarControl::About.active(&snapshot));
+        assert_eq!(
+            TopToolbarControl::About.role(),
+            TopToolbarControlRole::Chrome
+        );
+        // Chrome controls never appear in the strip or the overflow menu.
+        assert!(!strip_control_ids(&spec).contains(&ids::TOP_CHROME_ABOUT.as_str().to_string()));
+        assert!(!spec.overflow().contains(&TopToolbarControl::About));
+
+        let mut hidden = snapshot.clone();
+        let mut items = ToolbarItemsConfig::default();
+        items.set_hidden(ids::TOP_CHROME_ABOUT, true);
+        hidden.resolved_toolbar_items = items.resolved();
+        let spec = TopToolbarSpec::build(&hidden, &TopStripPlan::unconstrained());
+
+        assert_eq!(
+            chrome_ids(&spec),
+            ["top.chrome.pin", "top.chrome.close"],
+            "hiding the item leaves the rest of the chrome island intact"
+        );
     }
 
     #[test]

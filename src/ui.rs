@@ -34,6 +34,8 @@ pub use help_overlay::{
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
 pub(crate) use primitives::checkerboard_behind;
+/// Shared measured-text trimming, also used by the standalone about dialog.
+pub(crate) use primitives::ellipsize_to_fit;
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub use status::{

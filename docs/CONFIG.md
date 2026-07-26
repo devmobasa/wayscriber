@@ -471,6 +471,33 @@ icon_style = "auto"
 
 `WAYSCRIBER_TRAY_FORCE_PIXMAP=1` takes precedence over this setting and also disables named menu icons for compatibility with tray hosts that render them incorrectly.
 
+### `[updates]` - Update Notifications
+
+Wayscriber never installs updates. This section controls only whether it *tells you* that a newer release exists and points at the instructions for your install method.
+
+```toml
+[updates]
+check = true         # ask wayscriber.com whether a newer release exists
+notify = true        # one desktop notification per release
+interval_hours = 24  # minimum 1, maximum 720
+```
+
+- `check` (default `true`) lets the daemon fetch `https://wayscriber.com/latest.json` once per interval and compare its version to this build. The request carries no Wayscriber or user identifier, no Wayscriber version, and no query parameters; the HTTP client's version is suppressed too. It goes out through whichever of `curl` or `wget` is installed, so it uses the system CA store and proxy settings, with client config files and Wget's `.netrc` credential lookup disabled. One check is one request — an installed client that fails is not retried with the other one — and the response is cut off past 64 KiB.
+- `notify` (default `true`) shows at most one desktop notification per release, suppressed while the overlay is active. With it off, the notice still appears in the About window and the tray menu.
+- `interval_hours` (default `24`) is clamped to 1–720 hours.
+
+The result is cached in `$XDG_CACHE_HOME/wayscriber/update-check.json` (normally `~/.cache/wayscriber/update-check.json`); deleting it just makes the next check look like the first one. The cache records the last attempt and the last *success* separately: attempts drive the interval, successes drive the "checked N ago" line, and a newer failed attempt is reported with it, so a failed check neither makes a stale result look verified nor hides itself behind a true-but-older age. Failed explicit checks (`--check-update`, About's "Check now") also count toward the interval, since the request was already made. If the cache cannot be written, the interval is still enforced in memory for the life of the process.
+
+If the config file exists but cannot be parsed, the background check does not run: Wayscriber cannot confirm this section, so it assumes the stricter setting until the file is valid again.
+
+Ways to switch it off, strongest first:
+
+1. Build with `WAYSCRIBER_NO_UPDATE_CHECK=1` — the check is compiled out and nothing at runtime can re-enable it (for distributions that forbid outbound version checks).
+2. Export `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` — overrides `check` for that run. The documented falsey words (`0`, `false`, `no`, `off`, `disable`, `disabled`, empty) leave the check on; any other value opts out. `wayscriber --check-update` still works, since asking for a check is consent.
+3. Set `check = false` here.
+
+`wayscriber --check-update` prints the installed version, the newest release, and the update instructions URL without installing anything.
+
 ### `[ui]` - User Interface
 
 Controls visual indicators, overlays, and UI styling.
@@ -1445,6 +1472,12 @@ open_context_menu = ["Shift+F10", "Menu"]
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
 
+# Open the About window (version, links, update status). Unbound by default;
+# also available from the toolbar chrome, the Settings popover, the help
+# overlay footer, and the command palette. Opening it closes the overlay,
+# because About is a normal window and the overlay draws above those.
+open_about = []
+
 # Toggle command palette
 toggle_command_palette = ["Ctrl+K", "Ctrl+Shift+P"]
 
@@ -1623,6 +1656,7 @@ These override behavior at runtime. Bool-ish values treat anything except `0`, `
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
 - `WAYSCRIBER_RESUME_SESSION=1/0` forces session persistence on/off for the current run (default: unset; follows config)
 - `WAYSCRIBER_CONFIGURATOR=/path/to/wayscriber-configurator` overrides the configurator executable path
+- `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` disables the background update check for this run (overrides `[updates] check`; `--check-update` still works)
 - `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
 - `WAYSCRIBER_TOOLBAR_DRAG_PREVIEW=0` disables inline toolbar drag preview (default: on)
 - `WAYSCRIBER_TOOLBAR_POINTER_LOCK=1` enables pointer-lock drag path (experimental; default: on)

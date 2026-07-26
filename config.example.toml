@@ -216,6 +216,12 @@ open_context_menu = ["Shift+F10", "Menu"]
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
 
+# Open the About window (version, links, update status). Unbound by default;
+# also available from the toolbar chrome, the Settings popover, the help
+# overlay footer, and the command palette. Opening it closes the overlay,
+# because About is a normal window and the overlay draws above those.
+open_about = []
+
 # Toggle command palette
 toggle_command_palette = ["Ctrl+K", "Ctrl+Shift+P"]
 
@@ -311,6 +317,29 @@ clear_preset_5 = []
 # - "symbolic": always request the theme-adaptive symbolic icon
 # - "colored": always use the yellow fallback pixmaps
 icon_style = "auto"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# UPDATE NOTIFICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[updates]
+# Wayscriber never installs updates. This section only controls whether it tells
+# you that a newer release exists and points at the instructions for your
+# install method (https://wayscriber.com/docs/getting-started/updating.html).
+
+# Ask https://wayscriber.com/latest.json whether a newer release exists.
+# No Wayscriber or user identifier is sent, and the client version is suppressed.
+# Set WAYSCRIBER_DISABLE_UPDATE_CHECK=1 to override this for a single run.
+# If this file ever fails to parse, the check is skipped entirely rather than
+# falling back to "on".
+check = true
+
+# Show one desktop notification per release. With this off, the notice still
+# appears in the About window and the tray menu.
+notify = true
+
+# Hours between checks (minimum 1, maximum 720).
+interval_hours = 24
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # UI SETTINGS

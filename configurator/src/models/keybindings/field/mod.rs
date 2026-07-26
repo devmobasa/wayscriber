@@ -86,6 +86,7 @@ pub enum KeybindingField {
     ToggleSelectionProperties,
     OpenContextMenu,
     OpenConfigurator,
+    OpenAbout,
     ToggleCommandPalette,
     SetColorRed,
     SetColorGreen,

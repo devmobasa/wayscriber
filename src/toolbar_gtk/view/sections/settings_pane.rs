@@ -351,6 +351,7 @@ fn settings_icon_painter(icon: model::ToolbarIcon) -> IconPainter {
         model::ToolbarIcon::Search => toolbar_icons::draw_icon_search,
         model::ToolbarIcon::Visibility => toolbar_icons::draw_icon_visibility,
         model::ToolbarIcon::File => toolbar_icons::draw_icon_file,
+        model::ToolbarIcon::Info => toolbar_icons::draw_icon_info,
         model::ToolbarIcon::More | model::ToolbarIcon::Board => draw_no_icon,
     }
 }

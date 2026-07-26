@@ -160,12 +160,22 @@ pub(crate) struct OverlaySpawnCandidate {
     pub(crate) source: &'static str,
 }
 
+/// A newer release the update watcher found. Carries the URL it discovered it
+/// with, so the tray item opens the instructions for this install method.
+#[cfg(feature = "tray")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AvailableUpdateNotice {
+    pub(crate) version: String,
+    pub(crate) update_url: String,
+}
+
 #[cfg(feature = "tray")]
 #[derive(Debug, Default, Clone)]
 pub(crate) struct TrayStatus {
     pub(crate) overlay_error: Option<OverlaySpawnErrorInfo>,
     pub(crate) watcher_offline: bool,
     pub(crate) watcher_reason: Option<String>,
+    pub(crate) available_update: Option<AvailableUpdateNotice>,
 }
 
 #[cfg(feature = "tray")]
@@ -218,6 +228,20 @@ impl TrayStatusShared {
         };
         self.bump_revision();
         was_offline
+    }
+
+    /// Publish (or clear) the pending update notice. The revision only moves
+    /// when the notice actually changed, so the tray is not rebuilt on every
+    /// poll that finds the same version.
+    pub(crate) fn set_available_update(&self, update: Option<AvailableUpdateNotice>) {
+        {
+            let mut status = self.lock_status();
+            if status.available_update == update {
+                return;
+            }
+            status.available_update = update;
+        }
+        self.bump_revision();
     }
 
     pub(crate) fn revision(&self) -> u64 {

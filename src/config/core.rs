@@ -4,7 +4,7 @@ use super::types::TabletInputConfig;
 use super::types::{
     ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, ExportConfig,
     HistoryConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig,
-    SessionConfig, SpotlightConfig, TrayConfig, UiConfig,
+    SessionConfig, SpotlightConfig, TrayConfig, UiConfig, UpdatesConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -88,6 +88,10 @@ pub struct Config {
     #[serde(default)]
     pub tray: TrayConfig,
 
+    /// Update notification preferences (checks only; nothing is installed)
+    #[serde(default)]
+    pub updates: UpdatesConfig,
+
     /// Presenter mode behavior overrides
     #[serde(default)]
     pub presenter_mode: PresenterModeConfig,
@@ -138,6 +142,7 @@ impl Default for Config {
             performance: PerformanceConfig::default(),
             ui: UiConfig::default(),
             tray: TrayConfig::default(),
+            updates: UpdatesConfig::default(),
             presenter_mode: PresenterModeConfig::default(),
             render_profiles: RenderProfilesConfig::default(),
             boards: Some(BoardsConfig::default()),
