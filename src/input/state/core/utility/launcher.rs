@@ -37,6 +37,46 @@ fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
 }
 
 impl InputState {
+    /// Open the About dialog, closing the overlay first.
+    ///
+    /// The overlay is a layer-shell surface above normal windows, so an About
+    /// toplevel opened underneath it would be invisible and unfocusable. Exiting
+    /// is what the configurator already does for the same reason; in daemon mode
+    /// this just returns to the hidden state, so the cost is one toggle.
+    pub(crate) fn launch_about(&mut self) {
+        let executable = match std::env::current_exe() {
+            Ok(path) => path,
+            Err(err) => {
+                log::error!("Failed to resolve the Wayscriber executable for About: {err}");
+                self.push_toast(
+                    ToastPriority::Critical,
+                    "launcher",
+                    Toast::error("Could not locate Wayscriber to open About."),
+                );
+                return;
+            }
+        };
+
+        match spawn_detached(
+            crate::process_broker::HelperKind::About,
+            executable.as_os_str(),
+            &["--about".into()],
+        ) {
+            Ok(child) => {
+                log::info!("Launched About window (pid {})", child.id());
+                self.should_exit = true;
+            }
+            Err(err) => {
+                log::error!("Failed to launch the About window: {err:#}");
+                self.push_toast(
+                    ToastPriority::Critical,
+                    "launcher",
+                    Toast::error("Failed to open About (see logs)."),
+                );
+            }
+        }
+    }
+
     pub(crate) fn launch_configurator(&mut self) {
         let binary = std::env::var(CONFIGURATOR_ENV)
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());

@@ -295,3 +295,43 @@ fn render_onboarding_card_without_checklist_stays_compact() {
         "zero-item onboarding card should not reserve checklist space; compact_height={compact_height}, checklist_height={checklist_height}"
     );
 }
+
+/// The help overlay's footer pills are the clickable way to reach About without
+/// a keybinding, so a rendered frame must register both of them in the hit map.
+#[test]
+fn help_overlay_footer_offers_clickable_replay_and_about() {
+    use wayscriber::config::Action;
+    use wayscriber::ui::HelpOverlayRegion;
+
+    let style = HelpOverlayStyle::default();
+    let (_surface, ctx) = surface_with_context(1400, 1000);
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
+    wayscriber::ui::clear_help_overlay_hit_map();
+    wayscriber::ui::render_help_overlay(
+        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    );
+    drop(ctx);
+
+    let mut found = Vec::new();
+    for y in 0..1000 {
+        for x in 0..1400 {
+            if let Some(HelpOverlayRegion::Row(action)) =
+                wayscriber::ui::help_overlay_region_at(x as f64, y as f64)
+                && !found.contains(&action)
+            {
+                found.push(action);
+            }
+        }
+    }
+
+    assert!(
+        found.contains(&Action::ReplayTour),
+        "replay tour stays clickable: {found:?}"
+    );
+    assert!(
+        found.contains(&Action::OpenAbout),
+        "about is clickable from the help overlay: {found:?}"
+    );
+    wayscriber::ui::clear_help_overlay_hit_map();
+}

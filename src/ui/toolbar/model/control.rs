@@ -156,6 +156,7 @@ pub(crate) enum ToolbarIcon {
     Search,
     Visibility,
     File,
+    Info,
     More,
     Board,
 }

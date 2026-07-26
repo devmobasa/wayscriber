@@ -4,7 +4,7 @@ use crate::models::KeybindingsTabId;
 impl KeybindingField {
     pub fn tab(&self) -> KeybindingsTabId {
         match self {
-            Self::Exit | Self::OpenConfigurator => KeybindingsTabId::General,
+            Self::Exit | Self::OpenConfigurator | Self::OpenAbout => KeybindingsTabId::General,
             Self::EnterTextMode
             | Self::EnterStickyNoteMode
             | Self::ClearCanvas

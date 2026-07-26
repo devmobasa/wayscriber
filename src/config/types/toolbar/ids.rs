@@ -1,6 +1,7 @@
 use super::items::ToolbarItemId;
 
 pub const TOP_CHROME_DRAG: ToolbarItemId = ToolbarItemId::from_known("top.chrome.drag");
+pub const TOP_CHROME_ABOUT: ToolbarItemId = ToolbarItemId::from_known("top.chrome.about");
 pub const TOP_CHROME_PIN: ToolbarItemId = ToolbarItemId::from_known("top.chrome.pin");
 pub const TOP_CHROME_CLOSE: ToolbarItemId = ToolbarItemId::from_known("top.chrome.close");
 
@@ -137,6 +138,7 @@ pub const SIDE_SETTINGS_CONFIGURATOR: ToolbarItemId =
     ToolbarItemId::from_known("side.settings.configurator");
 pub const SIDE_SETTINGS_CONFIG_FILE: ToolbarItemId =
     ToolbarItemId::from_known("side.settings.config-file");
+pub const SIDE_SETTINGS_ABOUT: ToolbarItemId = ToolbarItemId::from_known("side.settings.about");
 
 pub const SIDE_SESSION_OPEN: ToolbarItemId = ToolbarItemId::from_known("side.session.open");
 pub const SIDE_SESSION_SAVE_AS: ToolbarItemId = ToolbarItemId::from_known("side.session.save-as");

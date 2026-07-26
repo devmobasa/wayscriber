@@ -36,6 +36,7 @@ impl KeybindingsConfig {
         )?;
         inserter.insert_all(&self.ui.open_context_menu, Action::OpenContextMenu)?;
         inserter.insert_all(&self.ui.open_configurator, Action::OpenConfigurator)?;
+        inserter.insert_all(&self.ui.open_about, Action::OpenAbout)?;
         inserter.insert_all(
             &self.ui.toggle_command_palette,
             Action::ToggleCommandPalette,

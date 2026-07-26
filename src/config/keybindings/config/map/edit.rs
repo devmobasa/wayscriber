@@ -142,6 +142,7 @@ define_action_binding_accessors! {
     ToggleSelectionProperties => ui.toggle_selection_properties,
     OpenContextMenu => ui.open_context_menu,
     OpenConfigurator => ui.open_configurator,
+    OpenAbout => ui.open_about,
     ToggleCommandPalette => ui.toggle_command_palette,
     SetColorRed => colors.set_color_red,
     SetColorGreen => colors.set_color_green,

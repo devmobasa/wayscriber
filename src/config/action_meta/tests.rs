@@ -77,6 +77,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::ToggleToolbar,
     Action::TogglePresenterMode,
     Action::OpenConfigurator,
+    Action::OpenAbout,
     Action::ClearSavedToolState,
     Action::ToggleStatusBar,
     Action::ToggleFrozenMode,
@@ -144,6 +145,7 @@ const TOOLBAR_ACTIONS: &[Action] = &[
     Action::ClearPreset4,
     Action::ClearPreset5,
     Action::OpenConfigurator,
+    Action::OpenAbout,
     Action::ToggleCommandPalette,
 ];
 
@@ -229,6 +231,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::ToggleSelectionProperties,
     Action::OpenContextMenu,
     Action::OpenConfigurator,
+    Action::OpenAbout,
     Action::ClearSavedToolState,
     Action::ToggleCommandPalette,
     Action::ReplayTour,

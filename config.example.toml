@@ -216,6 +216,12 @@ open_context_menu = ["Shift+F10", "Menu"]
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
 
+# Open the About window (version, links, update status). Unbound by default;
+# also available from the toolbar chrome, the Settings popover, the help
+# overlay footer, and the command palette. Opening it closes the overlay,
+# because About is a normal window and the overlay draws above those.
+open_about = []
+
 # Toggle command palette
 toggle_command_palette = ["Ctrl+K", "Ctrl+Shift+P"]
 

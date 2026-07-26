@@ -149,6 +149,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::SavePreset(slot) => action_for_save_preset(*slot),
         ToolbarEvent::ClearPreset(slot) => action_for_clear_preset(*slot),
         ToolbarEvent::OpenConfigurator => Some(Action::OpenConfigurator),
+        ToolbarEvent::OpenAbout => Some(Action::OpenAbout),
         ToolbarEvent::OpenCommandPalette => Some(Action::ToggleCommandPalette),
         ToolbarEvent::PickScreenColor => Some(Action::PickScreenColor),
         _ => None,
@@ -369,6 +370,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ClearSession
         | ToolbarEvent::OpenConfigurator
         | ToolbarEvent::OpenConfigFile
+        | ToolbarEvent::OpenAbout
         | ToolbarEvent::RequestRuntimeUiReset
         | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
         | ToolbarEvent::CancelUnsupportedRuntimeUiReset

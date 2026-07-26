@@ -39,6 +39,7 @@ pub(crate) enum ToolbarControlId {
     ResetToolbarItemOrder,
     OpenConfigurator,
     OpenConfigFile,
+    OpenAbout,
     OpenCommandPalette,
     ResetRuntimeUi,
     ConfirmRuntimeUiReset,

@@ -127,6 +127,7 @@ impl InputState {
             ToolbarEvent::ToggleDelaySliders(show) => self.apply_toolbar_toggle_delay_sliders(show),
             ToolbarEvent::OpenConfigurator => self.apply_toolbar_open_configurator(),
             ToolbarEvent::OpenConfigFile => self.apply_toolbar_open_config_file(),
+            ToolbarEvent::OpenAbout => self.apply_toolbar_open_about(),
             ToolbarEvent::RequestRuntimeUiReset
             | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
             | ToolbarEvent::CancelUnsupportedRuntimeUiReset

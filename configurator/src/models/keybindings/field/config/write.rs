@@ -107,6 +107,7 @@ impl KeybindingField {
             Self::ToggleSelectionProperties => config.ui.toggle_selection_properties = value,
             Self::OpenContextMenu => config.ui.open_context_menu = value,
             Self::OpenConfigurator => config.ui.open_configurator = value,
+            Self::OpenAbout => config.ui.open_about = value,
             Self::ToggleCommandPalette => config.ui.toggle_command_palette = value,
             Self::SetColorRed => config.colors.set_color_red = value,
             Self::SetColorGreen => config.colors.set_color_green = value,

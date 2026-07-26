@@ -81,6 +81,12 @@ pub(crate) fn default_open_configurator() -> Vec<String> {
     vec!["F11".to_string()]
 }
 
+/// Unbound by default: About is a rare, once-curious click, so it stays out of
+/// the key space unless a user asks for it.
+pub(crate) fn default_open_about() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_toggle_command_palette() -> Vec<String> {
     vec!["Ctrl+K".to_string(), "Ctrl+Shift+P".to_string()]
 }

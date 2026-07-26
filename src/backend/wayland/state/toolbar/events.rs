@@ -174,6 +174,7 @@ fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
                 | ToolbarEvent::OpenCommandPalette
                 | ToolbarEvent::OpenConfigurator
                 | ToolbarEvent::OpenConfigFile
+                | ToolbarEvent::OpenAbout
                 | ToolbarEvent::RequestRuntimeUiReset
                 | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
                 | ToolbarEvent::CancelUnsupportedRuntimeUiReset

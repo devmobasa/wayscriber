@@ -228,6 +228,7 @@ pub(super) fn build_main_sections(
         action_row(bindings, Action::ToggleLightMode, NOT_BOUND_LABEL),
         action_row(bindings, Action::ToggleLightModeDrawing, NOT_BOUND_LABEL),
         action_row(bindings, Action::OpenConfigurator, NOT_BOUND_LABEL),
+        action_row(bindings, Action::OpenAbout, NOT_BOUND_LABEL),
         action_row(bindings, Action::ToggleStatusBar, NOT_BOUND_LABEL),
     ];
     if frozen_enabled {

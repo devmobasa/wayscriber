@@ -140,6 +140,7 @@ pub enum Action {
     // Configurator
     OpenConfigurator,
     ClearSavedToolState,
+    OpenAbout,
 
     // Color selections (using char to represent the color)
     SetColorRed,

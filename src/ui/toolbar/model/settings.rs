@@ -475,3 +475,42 @@ fn push_notice(
         severity,
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarBindingHints;
+
+    fn snapshot() -> ToolbarSnapshot {
+        let state = make_test_input_state();
+        ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
+    }
+
+    /// The Settings popover is the app-level lane (palette, configurator,
+    /// config file), so About belongs there and must carry the same
+    /// action-derived label and event as every other entry.
+    #[test]
+    fn settings_buttons_offer_about_after_the_configurator_entries() {
+        let model = ToolbarSettingsModel::build(&snapshot()).expect("settings model");
+        let ids: Vec<ToolbarControlId> = model.buttons().iter().map(|button| button.id).collect();
+
+        let configurator = ids
+            .iter()
+            .position(|id| *id == ToolbarControlId::OpenConfigurator)
+            .expect("configurator entry");
+        let about = ids
+            .iter()
+            .position(|id| *id == ToolbarControlId::OpenAbout)
+            .expect("about entry");
+        assert!(
+            about > configurator,
+            "About follows the configurator entries: {ids:?}"
+        );
+
+        let button = &model.buttons()[about];
+        assert_eq!(button.event, ToolbarEvent::OpenAbout);
+        assert_eq!(button.label, action_short_label(Action::OpenAbout));
+        assert_eq!(button.icon, ToolbarIcon::Info);
+    }
+}
