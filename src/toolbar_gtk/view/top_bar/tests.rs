@@ -5,7 +5,7 @@ use std::ffi::{CStr, CString};
 use std::time::Duration;
 
 use super::*;
-use crate::config::KeyBinding;
+use crate::config::{KeyBinding, ToolbarSectionFlag, toolbar_item_ids as ids};
 use crate::input::state::test_support::make_test_input_state;
 use crate::toolbar_gtk::widgets::{emit_secondary_press, secondary_click_gesture};
 use crate::ui::toolbar::{
@@ -38,14 +38,10 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
     assert_eq!(changed.binding_hints.badge_for_tool(Tool::Pen), Some("9"));
 }
 
-/// `StructureKey.use_icons` is `use_icons || plan.compact`, so a compact
-/// plan masks an icon-mode flip from the structural rebuild. The popover
-/// content keys must therefore track `use_icons` themselves: the Settings
-/// "Icon buttons" checkbox bakes `ToggleIconMode(!use_icons)` at build
-/// time and would otherwise re-emit the stale pre-flip value, and both
-/// popovers render icon-vs-text button bodies from it.
+/// Popover content keys track `use_icons` directly because their action
+/// buttons render differently in icon and text modes.
 #[test]
-fn popover_content_keys_track_icon_mode_even_when_the_compact_plan_masks_it() {
+fn popover_content_keys_track_icon_mode() {
     let mut state = make_test_input_state();
     state.toolbar_use_icons = false;
     let text_mode = ToolbarSnapshot::from_input_with_bindings(
@@ -56,15 +52,6 @@ fn popover_content_keys_track_icon_mode_even_when_the_compact_plan_masks_it() {
     let icon_mode = ToolbarSnapshot::from_input_with_bindings(
         &state,
         ToolbarBindingHints::from_input_state(&state),
-    );
-
-    // The masking scenario is real: under a compact plan the structure key
-    // cannot tell the two snapshots apart.
-    let mut compact_plan = TopStripPlan::unconstrained();
-    compact_plan.compact = true;
-    assert!(
-        StructureKey::of(&text_mode, &compact_plan) == StructureKey::of(&icon_mode, &compact_plan),
-        "compact plan masks the icon-mode flip from the structural rebuild"
     );
 
     assert!(
@@ -121,7 +108,7 @@ fn settings_popover_rebuilds_for_status_bar_contents_subpanel() {
 }
 
 #[test]
-fn settings_popover_rebuilds_when_status_bar_interactivity_changes() {
+fn settings_popover_keeps_content_when_status_bar_interactivity_changes() {
     let state = make_test_input_state();
     let base = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -131,13 +118,13 @@ fn settings_popover_rebuilds_when_status_bar_interactivity_changes() {
     changed.status_bar_interactive = !base.status_bar_interactive;
 
     assert!(
-        SettingsMenuContentKey::of(&base) != SettingsMenuContentKey::of(&changed),
-        "changing status-bar interactivity must rebuild the GTK Settings popover"
+        SettingsMenuContentKey::of(&base) == SettingsMenuContentKey::of(&changed),
+        "changing status-bar interactivity must update the existing GTK controls"
     );
 }
 
 #[test]
-fn settings_popover_rebuilds_when_any_status_bar_item_visibility_changes() {
+fn settings_popover_keeps_content_when_any_status_bar_item_visibility_changes() {
     let state = make_test_input_state();
     let base = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -173,10 +160,112 @@ fn settings_popover_rebuilds_when_any_status_bar_item_visibility_changes() {
         let mut changed = base.clone();
         mutate(&mut changed);
         assert!(
-            SettingsMenuContentKey::of(&base) != SettingsMenuContentKey::of(&changed),
-            "changing any status item visibility must rebuild the GTK Settings popover"
+            SettingsMenuContentKey::of(&base) == SettingsMenuContentKey::of(&changed),
+            "changing any status item visibility must update the existing GTK controls"
         );
     }
+}
+
+/// The main Settings page filters its toggle grid and offers "Restore
+/// built-in visibility" from the resolved item store, and that button keeps
+/// the popover open. Item-visibility changes must therefore rebuild the
+/// popover content even while the customization sub-panel is closed, or the
+/// restored controls stay missing and the Restore button stays stale.
+#[test]
+fn settings_popover_rebuilds_when_item_visibility_changes_outside_customization() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    assert!(!base.customize_items_open);
+    let mut changed = base.clone();
+    changed
+        .resolved_toolbar_items
+        .hidden
+        .insert(ids::SIDE_SETTINGS_PRESET_TOASTS);
+    changed
+        .resolved_toolbar_items
+        .shown
+        .remove(&ids::SIDE_SETTINGS_PRESET_TOASTS);
+
+    assert!(
+        SettingsMenuContentKey::of(&base) != SettingsMenuContentKey::of(&changed),
+        "hiding or restoring a settings item must rebuild the GTK Settings popover"
+    );
+}
+
+#[test]
+fn top_structure_ignores_side_only_section_visibility_changes() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let base_key = StructureKey::of(&base, &plan_top_strip(&base));
+
+    for flag in [
+        ToolbarSectionFlag::Actions,
+        ToolbarSectionFlag::ActionsAdvanced,
+        ToolbarSectionFlag::ZoomActions,
+        ToolbarSectionFlag::Pages,
+        ToolbarSectionFlag::Boards,
+        ToolbarSectionFlag::StepSection,
+    ] {
+        let mut changed = base.clone();
+        match flag {
+            ToolbarSectionFlag::Actions => {
+                changed.show_actions_section = !changed.show_actions_section;
+            }
+            ToolbarSectionFlag::ActionsAdvanced => {
+                changed.show_actions_advanced = !changed.show_actions_advanced;
+            }
+            ToolbarSectionFlag::ZoomActions => {
+                changed.show_zoom_actions = !changed.show_zoom_actions;
+            }
+            ToolbarSectionFlag::Pages => {
+                changed.show_pages_section = !changed.show_pages_section;
+            }
+            ToolbarSectionFlag::Boards => {
+                changed.show_boards_section = !changed.show_boards_section;
+            }
+            ToolbarSectionFlag::StepSection => {
+                changed.show_step_section = !changed.show_step_section;
+            }
+            ToolbarSectionFlag::Presets | ToolbarSectionFlag::TextControls => continue,
+        }
+        changed.resolved_toolbar_items.hidden.insert(flag.item_id());
+        changed.resolved_toolbar_items.shown.remove(&flag.item_id());
+        let changed_key = StructureKey::of(&changed, &plan_top_strip(&changed));
+        assert!(
+            base_key == changed_key,
+            "side-only {flag:?} visibility must not rebuild the top bar"
+        );
+    }
+}
+
+#[test]
+fn top_structure_still_tracks_top_item_visibility() {
+    let state = make_test_input_state();
+    let base = ToolbarSnapshot::from_input_with_bindings(
+        &state,
+        ToolbarBindingHints::from_input_state(&state),
+    );
+    let mut changed = base.clone();
+    changed
+        .resolved_toolbar_items
+        .hidden
+        .insert(ids::TOP_TOOL_PEN);
+    changed
+        .resolved_toolbar_items
+        .shown
+        .remove(&ids::TOP_TOOL_PEN);
+
+    assert!(
+        StructureKey::of(&base, &plan_top_strip(&base))
+            != StructureKey::of(&changed, &plan_top_strip(&changed)),
+        "top-item visibility must still rebuild the top bar"
+    );
 }
 
 #[test]
@@ -2114,7 +2203,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     });
     let settings_model =
         model::ToolbarSettingsModel::for_popover(&settings_snapshot).expect("settings model");
-    let settings_content = menu_top.build_settings_popover_content(&settings_snapshot, 1.0);
+    let (settings_content, settings_updaters) =
+        menu_top.build_settings_popover_content(&settings_snapshot, 1.0);
     let settings_scroller = settings_content
         .clone()
         .downcast::<gtk4::ScrolledWindow>()
@@ -2145,6 +2235,25 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             .expect("GTK settings toggle event"),
         GtkToolbarFeedback::Event {
             event: toggles[0].activation.compatibility_event(),
+            rebind_requested: false,
+        }
+    );
+
+    // Backend echoes update the existing checkbox and replace its next event;
+    // the top popover must not depend on the side palette's active pane.
+    let updated_context_aware = !toggles[0].checked;
+    settings_snapshot.context_aware_ui = updated_context_aware;
+    for updater in &settings_updaters {
+        updater(&settings_snapshot);
+    }
+    assert_eq!(checks[0].is_active(), updated_context_aware);
+    checks[0].set_active(!updated_context_aware);
+    assert_eq!(
+        menu_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("updated GTK settings toggle event"),
+        GtkToolbarFeedback::Event {
+            event: ToolbarEvent::ToggleContextAwareUi(!updated_context_aware),
             rebind_requested: false,
         }
     );

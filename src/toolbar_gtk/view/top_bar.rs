@@ -98,10 +98,8 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, boo
 
 /// Snapshot inputs the Canvas popover content renders from — the Boards /
 /// Pages / Advanced / Zoom command sections plus the Step Undo/Redo config
-/// are a pure function of these (per-button hidden overrides live in
-/// `StructureKey.items`, which rebuilds the whole bar). Enabled states and
-/// glyph faces that shift without a structure rebuild are captured so the
-/// popover stays fresh.
+/// are a pure function of these. Enabled states and glyph faces that shift
+/// without a structure rebuild are captured so the popover stays fresh.
 ///
 /// The four delay-slider *values* (`custom_undo_delay_ms`,
 /// `custom_redo_delay_ms`, `undo_all_delay_ms`, `redo_all_delay_ms`) are
@@ -115,6 +113,7 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, boo
 /// harmless there.
 #[derive(PartialEq)]
 struct CanvasMenuContentKey {
+    items: crate::config::ResolvedToolbarItems,
     use_icons: bool,
     show_boards_section: bool,
     show_pages_section: bool,
@@ -140,6 +139,7 @@ struct CanvasMenuContentKey {
 impl CanvasMenuContentKey {
     fn of(snapshot: &ToolbarSnapshot) -> Self {
         Self {
+            items: snapshot.resolved_toolbar_items.clone(),
             use_icons: snapshot.use_icons,
             show_boards_section: snapshot.show_boards_section,
             show_pages_section: snapshot.show_pages_section,
@@ -164,13 +164,13 @@ impl CanvasMenuContentKey {
     }
 }
 
-/// Snapshot inputs the Session popover content renders from — the session
-/// model is a pure function of these (plus structural inputs already in
-/// `StructureKey`). `use_icons` is captured directly: the pane's action
-/// buttons render icon+label in icon mode, and `StructureKey.use_icons`
-/// (`use_icons || plan.compact`) can mask a flip while the plan is compact.
+/// Snapshot inputs the Session popover content renders from — including the
+/// resolved visibility settings for its buttons. `use_icons` is captured
+/// directly because the pane's action buttons render differently in icon and
+/// text modes.
 #[derive(PartialEq)]
 struct SessionMenuContentKey {
+    items: crate::config::ResolvedToolbarItems,
     active_session_name: Option<String>,
     active_session_path: Option<std::path::PathBuf>,
     recent_sessions: Vec<crate::ui::toolbar::SessionRecentSnapshot>,
@@ -181,6 +181,7 @@ struct SessionMenuContentKey {
 impl SessionMenuContentKey {
     fn of(snapshot: &ToolbarSnapshot) -> Self {
         Self {
+            items: snapshot.resolved_toolbar_items.clone(),
             active_session_name: snapshot.active_session_name.clone(),
             active_session_path: snapshot.active_session_path.clone(),
             recent_sessions: snapshot.recent_sessions.clone(),
@@ -190,43 +191,23 @@ impl SessionMenuContentKey {
     }
 }
 
-/// Snapshot inputs the Settings popover content renders from — the settings
-/// model reads these toggle/customization fields on top of the structural
-/// inputs already captured by `StructureKey`.
+/// Snapshot inputs that change the Settings popover's widget structure.
+/// Ordinary checkbox values deliberately stay out of this key: persistent
+/// updaters keep their checked state and next event current without replacing
+/// the popover subtree after every click.
 #[derive(PartialEq)]
 struct SettingsMenuContentKey {
-    /// Drives the "Icon buttons" checkbox state and its baked
-    /// `ToggleIconMode(!use_icons)` event (plus icon-vs-text button
-    /// rendering). Captured directly because `StructureKey.use_icons` is
-    /// `use_icons || plan.compact`, which masks a flip while the plan is
-    /// compact — without this field the stored event goes stale.
+    /// Settings action buttons render differently in icon and text mode.
     use_icons: bool,
-    context_aware_ui: bool,
-    show_text_controls: bool,
-    show_status_bar: bool,
-    status_bar_interactive: bool,
-    show_active_output_badge: bool,
-    show_status_selection_info: bool,
-    show_status_board_badge: bool,
-    show_status_page_badge: bool,
-    show_status_color: bool,
-    show_status_tool: bool,
-    show_status_size: bool,
-    show_status_context_indicators: bool,
-    show_toolbar_hint: bool,
-    show_status_help: bool,
-    show_status_about: bool,
-    show_floating_badge_always: bool,
-    show_preset_toasts: bool,
-    show_presets: bool,
-    show_actions_section: bool,
-    show_zoom_actions: bool,
-    show_actions_advanced: bool,
-    show_boards_section: bool,
-    show_pages_section: bool,
-    show_step_section: bool,
     customize_items_open: bool,
     customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+    /// The resolved item store is structural for every Settings pane: the
+    /// main page filters its toggle grid and offers "Restore built-in
+    /// visibility" from it, and the customization rows bake visibility,
+    /// ordering, and button enabled state into their widgets. Restoring
+    /// visibility keeps the popover open, so the controls it revives can
+    /// only appear through a keyed rebuild.
+    items: crate::config::ResolvedToolbarItems,
     status_bar_contents_open: bool,
     layout_mode: ToolbarLayoutMode,
     runtime_ui_persistence: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
@@ -236,32 +217,9 @@ impl SettingsMenuContentKey {
     fn of(snapshot: &ToolbarSnapshot) -> Self {
         Self {
             use_icons: snapshot.use_icons,
-            context_aware_ui: snapshot.context_aware_ui,
-            show_text_controls: snapshot.show_text_controls,
-            show_status_bar: snapshot.show_status_bar,
-            status_bar_interactive: snapshot.status_bar_interactive,
-            show_active_output_badge: snapshot.show_active_output_badge,
-            show_status_selection_info: snapshot.show_status_selection_info,
-            show_status_board_badge: snapshot.show_status_board_badge,
-            show_status_page_badge: snapshot.show_status_page_badge,
-            show_status_color: snapshot.show_status_color,
-            show_status_tool: snapshot.show_status_tool,
-            show_status_size: snapshot.show_status_size,
-            show_status_context_indicators: snapshot.show_status_context_indicators,
-            show_toolbar_hint: snapshot.show_toolbar_hint,
-            show_status_help: snapshot.show_status_help,
-            show_status_about: snapshot.show_status_about,
-            show_floating_badge_always: snapshot.show_floating_badge_always,
-            show_preset_toasts: snapshot.show_preset_toasts,
-            show_presets: snapshot.show_presets,
-            show_actions_section: snapshot.show_actions_section,
-            show_zoom_actions: snapshot.show_zoom_actions,
-            show_actions_advanced: snapshot.show_actions_advanced,
-            show_boards_section: snapshot.show_boards_section,
-            show_pages_section: snapshot.show_pages_section,
-            show_step_section: snapshot.show_step_section,
             customize_items_open: snapshot.customize_items_open,
             customize_items_group: snapshot.customize_items_group,
+            items: snapshot.resolved_toolbar_items.clone(),
             status_bar_contents_open: snapshot.status_bar_contents_open,
             layout_mode: snapshot.layout_mode,
             runtime_ui_persistence: snapshot.runtime_ui_persistence.clone(),
@@ -287,7 +245,9 @@ struct StructureKey {
     use_icons: bool,
     layout_mode: ToolbarLayoutMode,
     scale_milli: i64,
-    items: crate::config::ResolvedToolbarItems,
+    /// Exact renderer-neutral top structure. Using the full resolved item store
+    /// here made side-only section changes tear down this bar and its popovers.
+    top_spec: model::TopToolbarSpec,
     quick_colors: crate::config::QuickColorPalette,
     binding_hints: crate::ui::toolbar::ToolbarBindingHints,
     plan: TopStripPlan,
@@ -312,7 +272,7 @@ impl StructureKey {
             use_icons: snapshot.use_icons || plan.compact,
             layout_mode: snapshot.layout_mode,
             scale_milli: (effective_scale(snapshot) * 1000.0).round() as i64,
-            items: snapshot.resolved_toolbar_items.clone(),
+            top_spec: model::TopToolbarSpec::build(snapshot, plan),
             quick_colors: snapshot.quick_colors.clone(),
             binding_hints: snapshot.binding_hints.clone(),
             plan: plan.clone(),
@@ -384,13 +344,15 @@ pub(in crate::toolbar_gtk) struct TopBar {
     capture_surface: CaptureSurfaceContent,
     structure: Option<StructureKey>,
     updaters: Rc<RefCell<Vec<Updater>>>,
-    /// Persistent value-updaters for the open Canvas popover's content. Unlike
-    /// the Session/Settings popovers (whose whole subtree rebuilds on any
-    /// modelled change), the Canvas popover hosts the continuously-dragged
-    /// delay sliders: their live values ride these updaters so a drag never
+    /// Persistent value-updaters for the open Canvas popover's content. The
+    /// continuously-dragged delay sliders ride these updaters so a drag never
     /// triggers a subtree rebuild. Repopulated whenever the popover content is
     /// (re)built; run every `apply`.
     canvas_updaters: Rc<RefCell<Vec<Updater>>>,
+    /// Persistent value-updaters for the open Settings popover. Checkbox
+    /// values and their next events change in place; only structural menu
+    /// changes replace the subtree.
+    settings_updaters: Vec<Updater>,
     shapes_popover: Option<gtk4::Popover>,
     shapes_capture_surface: Option<CaptureSurfaceContent>,
     overflow_popover: Option<gtk4::Popover>,
@@ -494,6 +456,7 @@ impl TopBar {
             structure: None,
             updaters: Rc::new(RefCell::new(Vec::new())),
             canvas_updaters: Rc::new(RefCell::new(Vec::new())),
+            settings_updaters: Vec::new(),
             shapes_popover: None,
             shapes_capture_surface: None,
             overflow_popover: None,
@@ -610,6 +573,11 @@ impl TopBar {
         for updater in self.canvas_updaters.borrow().iter() {
             updater(snapshot);
         }
+        if snapshot.settings_popover_open {
+            for updater in &self.settings_updaters {
+                updater(snapshot);
+            }
+        }
         self.window.set_visible(true);
         self.capture_surface
             .set_transparent(presentation.capture_transparent);
@@ -711,6 +679,7 @@ impl TopBar {
         // value-updaters (which capture those now-dead widgets) must go too;
         // a fresh open repopulates them.
         self.canvas_updaters.borrow_mut().clear();
+        self.settings_updaters.clear();
 
         if snapshot.top_minimized {
             self.build_minimized(snapshot, plan);
