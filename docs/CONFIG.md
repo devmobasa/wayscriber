@@ -148,17 +148,19 @@ tab_drag_tool = "ellipse"
 # hand, missing shortcut positions use built-in defaults and help-overlay badges
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
-# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays. The hex values below are the tuned built-in defaults; named colors
-# ("red", "green", ...) resolve to these same tuned values, so named entries,
-# the default pen color, and board auto-adjust pens all match these swatches.
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex (or
+# #RRGGBBAA to carry alpha), or RGB/RGBA arrays. The hex values below are the
+# tuned built-in defaults; named colors ("red", "green", ...) resolve to these
+# same tuned values, so named entries, the default pen color, and board
+# auto-adjust pens all match these swatches.
 #
 # Right-clicking a swatch in the overlay opens the color picker for that slot
-# and saves the accepted color back here as an RGB array, keeping the slot's
-# label and shortcut. The first such edit writes the whole list, so a palette
-# left out of this file stops tracking future built-in defaults. That picker's
-# "Default" button loads the color shipped for the slot again (built-in slots
-# only), still requiring OK to save.
+# and saves the accepted color back here as an RGB array, or an RGBA array when
+# the color is translucent, keeping the slot's label and shortcut. The first
+# such edit writes the whole list, so a palette left out of this file stops
+# tracking future built-in defaults. That picker's "Default" button loads the
+# color shipped for the slot again (built-in slots only), still requiring OK to
+# save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"

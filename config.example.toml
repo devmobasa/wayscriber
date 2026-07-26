@@ -926,7 +926,7 @@ backup_retention = 1
 # Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
 # (named colors resolve to the tuned quick color palette, e.g. "red" = #F5333F)
 # Or #RRGGBB hex: "#FFB3BA", or #RRGGBBAA for alpha: "#FFB3BA80"
-# Or RGB array: [255, 0, 0]
+# Or RGB array: [255, 0, 0], or RGBA array: [255, 0, 0, 128]
 default_color = "red"
 
 # Default pen thickness in pixels (1.0 - 50.0)
@@ -979,7 +979,8 @@ tab_drag_tool = "ellipse"
 # Optional per-mouse-button drag mapping. These override the flat drag_tool
 # fields above when present. Right/middle default to their built-in behavior
 # unless configured here. Use "default" for a button's built-in behavior.
-# Colors are optional and can be names, #RRGGBB hex strings, or RGB arrays.
+# Colors are optional and can be names, #RRGGBB or #RRGGBBAA hex strings, or
+# RGB/RGBA arrays.
 #
 # [drawing.drag_tools.left]
 # drag_tool = "pen"
@@ -1038,17 +1039,19 @@ text_background_enabled = false
 # hand, missing shortcut positions use built-in defaults and help-overlay badges
 # follow those shortcut-backed entries. Extra entries have no shortcut action
 # binding. Explicit extra entries appear in toolbar/radial palette UIs, capped
-# to the first 24 rendered colors. Use known color names, #RRGGBB hex, or RGB
-# arrays. The hex values below are the tuned built-in defaults; named colors
-# ("red", "green", ...) resolve to these same tuned values, so named entries,
-# the default pen color, and board auto-adjust pens all match these swatches.
+# to the first 24 rendered colors. Use known color names, #RRGGBB hex (or
+# #RRGGBBAA to carry alpha), or RGB/RGBA arrays. The hex values below are the
+# tuned built-in defaults; named colors ("red", "green", ...) resolve to these
+# same tuned values, so named entries, the default pen color, and board
+# auto-adjust pens all match these swatches.
 #
 # Right-clicking a swatch in the overlay opens the color picker for that slot
-# and saves the accepted color back here as an RGB array, keeping the slot's
-# label and shortcut. The first such edit writes the whole list, so a palette
-# left out of this file stops tracking future built-in defaults. That picker's
-# "Default" button loads the color shipped for the slot again (built-in slots
-# only), still requiring OK to save.
+# and saves the accepted color back here as an RGB array, or an RGBA array when
+# the color is translucent, keeping the slot's label and shortcut. The first
+# such edit writes the whole list, so a palette left out of this file stops
+# tracking future built-in defaults. That picker's "Default" button loads the
+# color shipped for the slot again (built-in slots only), still requiring OK to
+# save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"
@@ -1116,7 +1119,7 @@ name = "Red pen"
 # "rhombus", "regular-polygon", "freeform-polygon", "arrow", "marker",
 # "highlight", "eraser", "select"
 tool = "pen"
-# Color: name or RGB array
+# Color: name, #RRGGBB or #RRGGBBAA hex string, or RGB/RGBA array
 color = "red"
 # Size: pen thickness or eraser size
 size = 3.0
