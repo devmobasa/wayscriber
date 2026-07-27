@@ -1,5 +1,7 @@
 use super::*;
-use crate::runtime_ui_state::{InteractionSeedTarget, InteractionSeedValue};
+use crate::runtime_ui_state::{
+    InteractionSeedTarget, InteractionSeedValue, PersistedTopDisplayMode, ToolbarPositionSeed,
+};
 
 #[test]
 fn unsupported_version_is_envelope_only() {
@@ -122,6 +124,18 @@ value = "hidden"
 seed = ["top.tool.pen", "top.tool.marker"]
 value = ["top.tool.marker", "top.tool.pen"]
 
+[toolbar.top_position]
+seed = { x = 0.0, y = 0.0 }
+value = { x = -12.5, y = 48.0 }
+
+[toolbar.side_position]
+seed = { x = 1.0, y = 2.0 }
+value = { x = 3.25, y = -4.5 }
+
+[toolbar.top_display_mode]
+seed = "full"
+value = "micro"
+
 [boards.pinned.board-1]
 seed = false
 value = true
@@ -129,10 +143,153 @@ value = true
     let decoded = decode_runtime_ui_file(source);
     assert_eq!(decoded.status, RuntimeUiFileStatus::Supported);
     let wire = decoded.supported_wire.unwrap();
-    assert_eq!(wire.model.iter().count(), 5);
+    assert_eq!(wire.model.iter().count(), 8);
     let encoded = encode_runtime_ui_file(&wire).unwrap();
     let reparsed = decode_runtime_ui_file(&encoded);
     assert_eq!(reparsed.supported_wire, Some(wire));
+}
+
+#[test]
+fn position_and_display_mode_overrides_decode_to_their_typed_values() {
+    let source = br#"version = 1
+
+[toolbar.top_position]
+seed = { x = 0.0, y = 0.0 }
+value = { x = -12.5, y = 48.0 }
+
+[toolbar.side_position]
+seed = { x = 1.0, y = 2.0 }
+value = { x = 3.25, y = -4.5 }
+
+[toolbar.top_display_mode]
+seed = "full"
+value = "micro"
+"#;
+    let wire = decode_runtime_ui_file(source)
+        .supported_wire
+        .expect("supported wire");
+    assert_eq!(
+        wire.model
+            .get(&InteractionSeedTarget::TopPosition)
+            .map(|entry| &entry.value),
+        Some(&InteractionSeedValue::Position(
+            ToolbarPositionSeed::new(-12.5, 48.0).unwrap()
+        ))
+    );
+    assert_eq!(
+        wire.model
+            .get(&InteractionSeedTarget::SidePosition)
+            .map(|entry| &entry.seed),
+        Some(&InteractionSeedValue::Position(
+            ToolbarPositionSeed::new(1.0, 2.0).unwrap()
+        ))
+    );
+    assert_eq!(
+        wire.model
+            .get(&InteractionSeedTarget::TopDisplayMode)
+            .map(|entry| &entry.value),
+        Some(&InteractionSeedValue::TopDisplayMode(
+            PersistedTopDisplayMode::Micro
+        ))
+    );
+}
+
+#[test]
+fn a_file_without_the_added_toolbar_keys_still_decodes() {
+    // The new keys are optional additions to V1, so a file written before
+    // they existed stays supported and writable.
+    let decoded = decode_runtime_ui_file(
+        br#"version = 1
+
+[toolbar.top_pinned]
+seed = false
+value = true
+"#,
+    );
+    assert_eq!(decoded.status, RuntimeUiFileStatus::Supported);
+    let wire = decoded.supported_wire.expect("supported wire");
+    assert_eq!(wire.model.iter().count(), 1);
+    assert!(
+        wire.model
+            .get(&InteractionSeedTarget::TopPosition)
+            .is_none()
+    );
+    assert!(
+        wire.model
+            .get(&InteractionSeedTarget::TopDisplayMode)
+            .is_none()
+    );
+}
+
+#[test]
+fn unknown_keys_inside_the_added_entries_survive_a_rewrite() {
+    let source = br#"version = 1
+
+[toolbar.top_position]
+seed = { x = 0.0, y = 0.0 }
+value = { x = 4.0, y = 5.0 }
+future_entry = { retained = true }
+
+[toolbar.top_display_mode]
+seed = "full"
+value = "micro"
+future_scalar = 7
+"#;
+    let wire = decode_runtime_ui_file(source)
+        .supported_wire
+        .expect("supported wire");
+    let encoded = encode_runtime_ui_file(&wire).expect("encode");
+    let text = String::from_utf8(encoded.clone()).unwrap();
+    assert!(text.contains("future_entry"));
+    assert!(text.contains("future_scalar"));
+    assert_eq!(decode_runtime_ui_file(&encoded).supported_wire, Some(wire));
+}
+
+#[test]
+fn malformed_position_and_display_mode_values_invalidate_the_file() {
+    for source in [
+        // Non-finite offsets cannot be compared bit-exactly against a seed.
+        br#"version = 1
+[toolbar.top_position]
+seed = { x = 0.0, y = 0.0 }
+value = { x = nan, y = 1.0 }
+"#
+        .as_slice(),
+        br#"version = 1
+[toolbar.top_position]
+seed = { x = 0.0, y = 0.0 }
+value = { x = 1.0 }
+"#
+        .as_slice(),
+        br#"version = 1
+[toolbar.side_position]
+seed = { x = 0.0, y = 0.0 }
+value = { x = 1.0, y = 2.0, z = 3.0 }
+"#
+        .as_slice(),
+        br#"version = 1
+[toolbar.top_position]
+seed = { x = 0.0, y = 0.0 }
+value = "somewhere"
+"#
+        .as_slice(),
+        // `hidden` is a runtime-only rung and is never persisted.
+        br#"version = 1
+[toolbar.top_display_mode]
+seed = "full"
+value = "hidden"
+"#
+        .as_slice(),
+    ] {
+        let decoded = decode_runtime_ui_file(source);
+        assert_eq!(
+            decoded.status,
+            RuntimeUiFileStatus::Invalid,
+            "{}",
+            String::from_utf8_lossy(source)
+        );
+        assert!(decoded.supported_wire.is_none());
+    }
 }
 
 #[test]

@@ -76,12 +76,26 @@ impl WaylandState {
                 "Using inline toolbars because the main overlay surface runs above fullscreen windows"
             );
         }
-        data.toolbar_top_offset = config.ui.toolbar.top_offset;
-        data.toolbar_top_offset_y = config.ui.toolbar.top_offset_y;
-        data.toolbar_side_offset = config.ui.toolbar.side_offset;
-        data.toolbar_side_offset_x = config.ui.toolbar.side_offset_x;
+        // Authored offsets are the seeds; a retained runtime override from a
+        // committed drag is layered on top. Clamping happens on the first
+        // apply against real output geometry, not here, so an override from a
+        // now-disconnected monitor degrades instead of being lost.
+        let mut positions = crate::backend::wayland::runtime_ui_state::ToolbarPositionSnapshot {
+            top: (config.ui.toolbar.top_offset, config.ui.toolbar.top_offset_y),
+            side: (
+                config.ui.toolbar.side_offset_x,
+                config.ui.toolbar.side_offset,
+            ),
+        };
+        if let Some(runtime_ui) = runtime_ui.as_ref() {
+            runtime_ui.apply_startup_positions(&mut positions);
+        }
+        data.toolbar_top_offset = positions.top.0;
+        data.toolbar_top_offset_y = positions.top.1;
+        data.toolbar_side_offset = positions.side.1;
+        data.toolbar_side_offset_x = positions.side.0;
         drag_log(format!(
-            "load offsets from config: top_offset=({}, {}), side_offset=({}, {})",
+            "load offsets from config seeds and runtime overrides: top_offset=({}, {}), side_offset=({}, {})",
             data.toolbar_top_offset,
             data.toolbar_top_offset_y,
             data.toolbar_side_offset,

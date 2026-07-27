@@ -230,7 +230,6 @@ fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
 
 #[test]
 fn authored_toolbar_preferences_have_exact_config_targets() {
-    use crate::config::TopDisplayMode;
     use ToolbarConfigPersistenceTarget::*;
 
     let events = [
@@ -279,10 +278,6 @@ fn authored_toolbar_preferences_have_exact_config_targets() {
         (
             ToolbarEvent::SetToolbarItemHidden(ToolbarSectionFlag::Actions.item_id(), true),
             SectionVisibility(ToolbarSectionFlag::Actions),
-        ),
-        (
-            ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Micro),
-            TopDisplayMode,
         ),
     ];
 
@@ -447,46 +442,6 @@ fn master_visibility_targets_copy_only_their_own_field() {
 }
 
 #[test]
-fn toolbar_position_target_includes_the_side_drags_reconciled_top_offset() {
-    let mut config = crate::config::Config::default();
-    config.ui.toolbar.top_offset = 1.0;
-    config.ui.toolbar.top_offset_y = 2.0;
-    config.ui.toolbar.side_offset_x = 3.0;
-    config.ui.toolbar.side_offset = 4.0;
-    let input_state = make_test_input_state();
-    let positions = ToolbarPositions {
-        top_x: 10.0,
-        top_y: 20.0,
-        side_x: 30.0,
-        side_y: 40.0,
-    };
-
-    apply_toolbar_config_target(
-        &mut config,
-        &input_state,
-        positions,
-        ToolbarConfigPersistenceTarget::TopPosition,
-    );
-    assert_eq!(config.ui.toolbar.top_offset, 10.0);
-    assert_eq!(config.ui.toolbar.top_offset_y, 20.0);
-    assert_eq!(config.ui.toolbar.side_offset_x, 3.0);
-    assert_eq!(config.ui.toolbar.side_offset, 4.0);
-
-    config.ui.toolbar.top_offset = 1.0;
-    config.ui.toolbar.top_offset_y = 2.0;
-    apply_toolbar_config_target(
-        &mut config,
-        &input_state,
-        positions,
-        ToolbarConfigPersistenceTarget::SidePosition,
-    );
-    assert_eq!(config.ui.toolbar.top_offset, 10.0);
-    assert_eq!(config.ui.toolbar.top_offset_y, 2.0);
-    assert_eq!(config.ui.toolbar.side_offset_x, 30.0);
-    assert_eq!(config.ui.toolbar.side_offset, 40.0);
-}
-
-#[test]
 fn toolbar_layout_target_updates_only_layout_and_derived_compatibility_mirrors() {
     let mut config = crate::config::Config::default();
     config.ui.toolbar.layout_mode = ToolbarLayoutMode::Simple;
@@ -502,7 +457,6 @@ fn toolbar_layout_target_updates_only_layout_and_derived_compatibility_mirrors()
     apply_toolbar_config_target(
         &mut config,
         &input_state,
-        ToolbarPositions::default(),
         ToolbarConfigPersistenceTarget::LayoutMode,
     );
 
@@ -532,7 +486,6 @@ fn section_visibility_target_updates_only_its_canonical_override_and_mirror() {
     apply_toolbar_config_target(
         &mut config,
         &input_state,
-        ToolbarPositions::default(),
         ToolbarConfigPersistenceTarget::SectionVisibility(ToolbarSectionFlag::Actions),
     );
 
@@ -878,57 +831,6 @@ fn tool_preview_config_preserves_presenter_mode_restore_value() {
     assert!(!persisted_tool_preview_value(false, Some(false)));
     assert!(persisted_tool_preview_value(true, None));
     assert!(!persisted_tool_preview_value(false, None));
-}
-
-#[test]
-fn toolbar_display_persist_during_presenter_micro_writes_the_pre_presenter_mode() {
-    use crate::config::{PresenterToolbarMode, TopDisplayMode};
-
-    let mut state = make_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
-    state.toolbar_top_minimized = true;
-    state.toolbar_top_display_mode = TopDisplayMode::Full;
-
-    state.toggle_presenter_mode();
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Micro);
-    assert!(
-        !state.toolbar_top_minimized,
-        "micro mapping clears minimized"
-    );
-
-    // A targeted top-display save during presenter mode keeps the saved
-    // pre-presenter display mode, not the presenter mapping. Minimized state
-    // is runtime-owned and is not part of this authored-config save.
-    let restore = state.presenter_restore.as_ref().expect("presenter restore");
-    assert_eq!(
-        persisted_top_display_mode_value(
-            state.toolbar_top_display_mode,
-            restore.toolbar_top_display_mode
-        ),
-        TopDisplayMode::Full
-    );
-
-    // Exit restores the live values and drops the restore slots, so a
-    // post-exit persist writes live state again.
-    state.toggle_presenter_mode();
-    assert!(state.presenter_restore.is_none());
-    assert!(state.toolbar_top_minimized);
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
-    state.set_top_display_mode(TopDisplayMode::Micro);
-    assert_eq!(
-        persisted_top_display_mode_value(state.toolbar_top_display_mode, None),
-        TopDisplayMode::Micro
-    );
-    // The hidden step stays runtime-only even through the presenter path.
-    assert_eq!(
-        persisted_top_display_mode_value(TopDisplayMode::Hidden, None),
-        TopDisplayMode::Full
-    );
-    assert_eq!(
-        persisted_top_display_mode_value(TopDisplayMode::Micro, Some(TopDisplayMode::Hidden)),
-        TopDisplayMode::Full
-    );
 }
 
 #[test]

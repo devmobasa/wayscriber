@@ -114,7 +114,7 @@ fn supported_reset_waits_for_in_flight_write_and_publishes_epoch_on_ack() {
 }
 
 #[test]
-fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persistent() {
+fn unsupported_mode_keeps_runtime_and_position_previews_live_only() {
     let mut controller = RuntimeUiStateController::new(
         test_seeds(false, false),
         present_revision("version-2"),
@@ -129,14 +129,10 @@ fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persiste
         .unwrap();
     assert!(matches!(session, RuntimeUiPreviewSession::LiveOnly(_)));
     let result = controller.finish_preview(
-        PreviewFinishRequest::RuntimeUi {
-            session,
-            intent: RuntimePreviewFinishIntent::Commit(
-                RuntimeUiMutationValues::one(target.clone(), InteractionSeedValue::Bool(true))
-                    .unwrap(),
-            ),
-        },
-        |_, _| unreachable!("runtime preview must not invoke config writer"),
+        session,
+        RuntimePreviewFinishIntent::Commit(
+            RuntimeUiMutationValues::one(target.clone(), InteractionSeedValue::Bool(true)).unwrap(),
+        ),
     );
     assert_eq!(result, PreviewFinishResult::AppliedLiveOnly);
     assert_eq!(
@@ -150,38 +146,33 @@ fn unsupported_mode_keeps_runtime_preview_live_only_but_position_config_persiste
     );
     assert!(controller.take_source_mutation().is_none());
 
+    // Positions are runtime-owned too, so an unsupported file makes a drag
+    // process-only instead of falling back to a config write.
+    let position_target = InteractionSeedTarget::TopPosition;
     let position = controller
-        .begin_config_position_preview(
-            ConfigPositionTarget::Top,
+        .begin_runtime_preview(
+            RuntimeUiMutationScope::one(position_target.clone()),
             PreviewRollbackSnapshot::default(),
         )
         .unwrap();
-    let mut applied = None;
+    assert!(matches!(position, RuntimeUiPreviewSession::LiveOnly(_)));
+    let moved = ToolbarPositionSeed::new(50.0, 60.0).unwrap();
     let result = controller.finish_preview(
-        PreviewFinishRequest::ConfigPosition {
-            session: position,
-            intent: ConfigPositionFinishIntent::Commit(
-                ToolbarPositionSeed::new(50.0, 60.0).unwrap(),
-            ),
-        },
-        |target, value| {
-            applied = Some((target, value));
-            Ok(())
-        },
+        position,
+        RuntimePreviewFinishIntent::Commit(
+            RuntimeUiMutationValues::one(
+                position_target.clone(),
+                InteractionSeedValue::Position(moved),
+            )
+            .unwrap(),
+        ),
     );
+    assert_eq!(result, PreviewFinishResult::AppliedLiveOnly);
     assert_eq!(
-        result,
-        PreviewFinishResult::AppliedConfig {
-            target: ConfigPositionTarget::Top
-        }
+        controller.live_state().get(&position_target),
+        Some(&InteractionSeedValue::Position(moved))
     );
-    assert_eq!(
-        applied,
-        Some((
-            ConfigPositionTarget::Top,
-            ToolbarPositionSeed::new(50.0, 60.0).unwrap()
-        ))
-    );
+    assert!(controller.model().is_empty());
     assert!(controller.take_source_mutation().is_none());
 }
 
@@ -340,14 +331,11 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
         .unwrap();
     assert_eq!(
         controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: live_only,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(top.clone(), InteractionSeedValue::Bool(true),)
-                        .unwrap(),
-                ),
-            },
-            |_, _| unreachable!(),
+            live_only,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(top.clone(), InteractionSeedValue::Bool(true),)
+                    .unwrap(),
+            )
         ),
         PreviewFinishResult::AppliedLiveOnly
     );
@@ -403,17 +391,14 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
     );
     assert_eq!(
         controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: untouched,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(
-                        InteractionSeedTarget::SidePinned,
-                        InteractionSeedValue::Bool(true),
-                    )
-                    .unwrap(),
-                ),
-            },
-            |_, _| unreachable!(),
+            untouched,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(
+                    InteractionSeedTarget::SidePinned,
+                    InteractionSeedValue::Bool(true),
+                )
+                .unwrap(),
+            )
         ),
         PreviewFinishResult::AppliedLiveOnly
     );
@@ -433,47 +418,38 @@ fn shutdown_rejects_seed_updates_and_preexisting_preview_commits() {
             PreviewRollbackSnapshot::default(),
         )
         .unwrap();
-    let config = controller
-        .begin_config_position_preview(
-            ConfigPositionTarget::Top,
+    let position = controller
+        .begin_runtime_preview(
+            RuntimeUiMutationScope::one(InteractionSeedTarget::TopPosition),
             PreviewRollbackSnapshot::default(),
         )
-        .unwrap();
-    let direct_config = controller
-        .begin_config_interaction(ConfigPositionTarget::Side)
         .unwrap();
 
     controller.request_shutdown().unwrap();
 
-    assert_eq!(
-        controller.validate_config_interaction(direct_config),
-        ValidateConfigInteractionResult::RejectedShuttingDown
-    );
     assert!(matches!(
         controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: runtime,
-                intent: RuntimePreviewFinishIntent::Commit(
-                    RuntimeUiMutationValues::one(
-                        InteractionSeedTarget::TopPinned,
-                        InteractionSeedValue::Bool(true),
-                    )
-                    .unwrap(),
-                ),
-            },
-            |_, _| unreachable!("runtime preview must not invoke config writer"),
+            runtime,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(
+                    InteractionSeedTarget::TopPinned,
+                    InteractionSeedValue::Bool(true),
+                )
+                .unwrap(),
+            )
         ),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
     assert!(matches!(
         controller.finish_preview(
-            PreviewFinishRequest::ConfigPosition {
-                session: config,
-                intent: ConfigPositionFinishIntent::Commit(
-                    ToolbarPositionSeed::new(50.0, 60.0).unwrap(),
-                ),
-            },
-            |_, _| unreachable!("shutdown must reject config mutation"),
+            position,
+            RuntimePreviewFinishIntent::Commit(
+                RuntimeUiMutationValues::one(
+                    InteractionSeedTarget::TopPosition,
+                    InteractionSeedValue::Position(ToolbarPositionSeed::new(50.0, 60.0).unwrap()),
+                )
+                .unwrap(),
+            ),
         ),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
@@ -490,7 +466,7 @@ fn shutdown_rejects_seed_updates_and_preexisting_preview_commits() {
 }
 
 #[test]
-fn stale_runtime_and_config_preview_cancellations_do_not_restore_rollbacks() {
+fn stale_runtime_and_position_preview_cancellations_do_not_restore_rollbacks() {
     let mut controller = controller();
     let runtime = controller
         .begin_runtime_preview(
@@ -498,9 +474,9 @@ fn stale_runtime_and_config_preview_cancellations_do_not_restore_rollbacks() {
             PreviewRollbackSnapshot::default(),
         )
         .unwrap();
-    let config = controller
-        .begin_config_position_preview(
-            ConfigPositionTarget::Top,
+    let position = controller
+        .begin_runtime_preview(
+            RuntimeUiMutationScope::one(InteractionSeedTarget::TopPosition),
             PreviewRollbackSnapshot::default(),
         )
         .unwrap();
@@ -517,23 +493,11 @@ fn stale_runtime_and_config_preview_cancellations_do_not_restore_rollbacks() {
     ));
 
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: runtime,
-                intent: RuntimePreviewFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_preview(runtime, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::ConfigPosition {
-                session: config,
-                intent: ConfigPositionFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_preview(position, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
 }
@@ -552,19 +516,13 @@ fn preview_release_during_failed_reset_is_resolved_once_without_replay() {
         result => panic!("reset failed to start: {result:?}"),
     };
     assert!(matches!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: preview,
-                intent: RuntimePreviewFinishIntent::Commit(
+        controller.finish_preview(preview, RuntimePreviewFinishIntent::Commit(
                     RuntimeUiMutationValues::one(
                         InteractionSeedTarget::TopPinned,
                         InteractionSeedValue::Bool(true),
                     )
                     .unwrap(),
-                ),
-            },
-            |_, _| unreachable!(),
-        ),
+                )),
         PreviewFinishResult::AbandonedDuringBarrier { barrier: active } if active == barrier
     ));
     let reset = controller.take_source_mutation().unwrap();
@@ -646,13 +604,7 @@ fn retained_authority_failure_resolves_previews_before_a_later_staged_reload() {
     };
     for session in [top, side] {
         assert_eq!(
-            controller.finish_preview(
-                PreviewFinishRequest::RuntimeUi {
-                    session,
-                    intent: RuntimePreviewFinishIntent::Cancel,
-                },
-                |_, _| unreachable!(),
-            ),
+            controller.finish_preview(session, RuntimePreviewFinishIntent::Cancel),
             PreviewFinishResult::AbandonedDuringBarrier { barrier }
         );
     }

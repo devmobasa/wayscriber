@@ -49,6 +49,9 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     },
     ItemOrder(ToolbarItemOrderGroup),
     ResetItemVisibility,
+    /// Top-strip form (`full`/`micro`). The runtime-only `hidden` rung of the
+    /// cycle is folded to `full` when the override is computed.
+    TopDisplayMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,15 +67,12 @@ pub(crate) enum ToolbarPersistenceTarget {
 pub(crate) enum ToolbarConfigPersistenceTarget {
     LayoutMode,
     SectionVisibility(ToolbarSectionFlag),
-    TopDisplayMode,
     Icons,
     MoreColors,
     ContextAwareUi,
     PresetToasts,
     ToolPreview,
     DelaySliders,
-    TopPosition,
-    SidePosition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -271,7 +271,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SetTopMinimized(_) | ToolbarEvent::CloseTopToolbar => {
             ToolbarPersistence::RuntimeUi(Runtime::TopMinimized)
         }
-        ToolbarEvent::SetTopDisplayMode(_) => ToolbarPersistence::Config(Toolbar(TopDisplayMode)),
+        ToolbarEvent::SetTopDisplayMode(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::TopDisplayMode)
+        }
         ToolbarEvent::SetSideMinimized(_) | ToolbarEvent::CloseSideToolbar => {
             ToolbarPersistence::RuntimeUi(Runtime::SideMinimized)
         }

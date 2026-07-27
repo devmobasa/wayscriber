@@ -54,24 +54,6 @@ pub(crate) enum UpdateSeedsResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BeginConfigInteractionError {
-    ControllerBusy(ControllerBarrierId),
-    ShuttingDown,
-    Seed(SeedRegistryError),
-    MutationIdExhausted,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ValidateConfigInteractionResult {
-    Accepted(ConfigPositionTarget),
-    RejectedWrongController,
-    RejectedShuttingDown,
-    RejectedStaleAuthority,
-    RejectedSeedChanged,
-    RejectedControllerBusy(ControllerBarrierId),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RequestResetResult {
     Started {
         barrier: ControllerBarrierId,
@@ -543,58 +525,6 @@ impl RuntimeUiStateController {
                 CommitResult::RejectedPersistence(error)
             }
         }
-    }
-
-    pub(crate) fn begin_config_interaction(
-        &self,
-        target: ConfigPositionTarget,
-    ) -> Result<ConfigInteractionPermit, BeginConfigInteractionError> {
-        if self.shutting_down {
-            return Err(BeginConfigInteractionError::ShuttingDown);
-        }
-        if let Some(barrier) = &self.active_barrier {
-            return Err(BeginConfigInteractionError::ControllerBusy(barrier.id));
-        }
-        let seed_targets = target.seed_targets().into_iter().collect();
-        let guards = self
-            .seeds
-            .guards(&seed_targets)
-            .map_err(BeginConfigInteractionError::Seed)?;
-        Ok(ConfigInteractionPermit {
-            controller_id: self.id,
-            authority_epoch: self.authority_epoch,
-            mutation_id: self
-                .allocate_mutation_id()
-                .ok_or(BeginConfigInteractionError::MutationIdExhausted)?,
-            guards,
-            target,
-        })
-    }
-
-    pub(crate) fn validate_config_interaction(
-        &self,
-        permit: ConfigInteractionPermit,
-    ) -> ValidateConfigInteractionResult {
-        if permit.controller_id != self.id {
-            return ValidateConfigInteractionResult::RejectedWrongController;
-        }
-        if self.shutting_down {
-            return ValidateConfigInteractionResult::RejectedShuttingDown;
-        }
-        if let Some(barrier) = &self.active_barrier {
-            return ValidateConfigInteractionResult::RejectedControllerBusy(barrier.id);
-        }
-        if permit.authority_epoch != self.authority_epoch {
-            return ValidateConfigInteractionResult::RejectedStaleAuthority;
-        }
-        if permit
-            .guards
-            .iter()
-            .any(|guard| !self.seeds.guard_is_current(guard))
-        {
-            return ValidateConfigInteractionResult::RejectedSeedChanged;
-        }
-        ValidateConfigInteractionResult::Accepted(permit.target)
     }
 
     pub(crate) fn update_seeds(&mut self, seeds: ValidatedInteractionSeeds) -> UpdateSeedsResult {

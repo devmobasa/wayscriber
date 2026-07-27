@@ -6,17 +6,6 @@ pub(super) fn persisted_tool_preview_value(current: bool, presenter_restore: Opt
     presenter_restore.unwrap_or(current)
 }
 
-/// While presenter mode owns the top strip, persist its saved pre-presenter
-/// display mode rather than the temporary live mapping.
-pub(super) fn persisted_top_display_mode_value(
-    current: crate::config::TopDisplayMode,
-    presenter_restore: Option<crate::config::TopDisplayMode>,
-) -> crate::config::TopDisplayMode {
-    // Hidden persists as Full: like the F9 visibility toggle, a hidden
-    // strip is runtime-only and `top_pinned` governs startup.
-    presenter_restore.unwrap_or(current).persisted()
-}
-
 #[cfg(test)]
 pub(super) fn apply_toolbar_ui_config_target(
     config: &mut crate::config::Config,
@@ -59,27 +48,17 @@ fn toolbar_ui_config_mutation(
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct ToolbarPositions {
-    pub(super) top_x: f64,
-    pub(super) top_y: f64,
-    pub(super) side_x: f64,
-    pub(super) side_y: f64,
-}
-
 #[cfg(test)]
 pub(super) fn apply_toolbar_config_target(
     config: &mut crate::config::Config,
     input_state: &InputState,
-    positions: ToolbarPositions,
     target: ToolbarConfigPersistenceTarget,
 ) {
-    let _ = toolbar_config_mutation(input_state, positions, target).apply(config);
+    let _ = toolbar_config_mutation(input_state, target).apply(config);
 }
 
 fn toolbar_config_mutation(
     input_state: &InputState,
-    positions: ToolbarPositions,
     target: ToolbarConfigPersistenceTarget,
 ) -> ConfigMutation {
     use ToolbarConfigPersistenceTarget::*;
@@ -116,13 +95,6 @@ fn toolbar_config_mutation(
                 visible,
             }
         }
-        TopDisplayMode => ConfigMutation::ToolbarTopDisplayMode(persisted_top_display_mode_value(
-            input_state.toolbar_top_display_mode,
-            input_state
-                .presenter_restore
-                .as_ref()
-                .and_then(|restore| restore.toolbar_top_display_mode),
-        )),
         Icons => ConfigMutation::ToolbarUseIcons(input_state.toolbar_use_icons),
         MoreColors => ConfigMutation::ToolbarShowMoreColors(input_state.show_more_colors),
         ContextAwareUi => ConfigMutation::ToolbarContextAwareUi(input_state.context_aware_ui),
@@ -135,21 +107,6 @@ fn toolbar_config_mutation(
                 .and_then(|restore| restore.show_tool_preview),
         )),
         DelaySliders => ConfigMutation::ToolbarDelaySliders(input_state.show_delay_sliders),
-        TopPosition => ConfigMutation::ToolbarTopPosition {
-            x: positions.top_x,
-            y: positions.top_y,
-        },
-        SidePosition => {
-            // A side drag can change whether the side palette overlaps the
-            // top strip. Drag completion reconciles the top strip's X offset
-            // against that new base before saving, so persist the derived X
-            // together with the side position. The top Y value is unrelated.
-            ConfigMutation::ToolbarSidePosition {
-                top_x: positions.top_x,
-                side_x: positions.side_x,
-                side_y: positions.side_y,
-            }
-        }
     }
 }
 
@@ -173,29 +130,8 @@ impl WaylandState {
     }
 
     pub(super) fn save_toolbar_config(&mut self, target: ToolbarConfigPersistenceTarget) {
-        let mutation = toolbar_config_mutation(
-            &self.input_state,
-            ToolbarPositions {
-                top_x: self.data.toolbar_top_offset,
-                top_y: self.data.toolbar_top_offset_y,
-                side_x: self.data.toolbar_side_offset_x,
-                side_y: self.data.toolbar_side_offset,
-            },
-            target,
-        );
+        let mutation = toolbar_config_mutation(&self.input_state, target);
         self.queue_config_mutation(mutation, "toolbar config persistence");
-    }
-
-    pub(in crate::backend::wayland) fn save_toolbar_position_config(&mut self, kind: MoveDragKind) {
-        let target = match kind {
-            MoveDragKind::Top => ToolbarConfigPersistenceTarget::TopPosition,
-            MoveDragKind::Side => ToolbarConfigPersistenceTarget::SidePosition,
-        };
-        self.save_toolbar_config(target);
-    }
-
-    pub(in crate::backend::wayland) fn save_toolbar_display_config(&mut self) {
-        self.save_toolbar_config(ToolbarConfigPersistenceTarget::TopDisplayMode);
     }
 
     pub(in crate::backend::wayland) fn save_floating_badge_visibility_config(

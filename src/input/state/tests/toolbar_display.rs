@@ -50,7 +50,9 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
     );
     assert_eq!(
         state.take_pending_backend_action(),
-        Some(PendingBackendAction::PersistToolbarConfig),
+        Some(PendingBackendAction::PersistToolbarDisplayMode(
+            TopDisplayMode::Full
+        )),
         "keyboard cycle persists like the toolbar-event paths"
     );
 

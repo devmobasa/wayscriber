@@ -103,12 +103,8 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cancel_gtk_toolbar_drag_lifecycle(&mut self) {
-        if let Some(kind) = self.data.gtk_drag_preview {
-            let kind = match kind {
-                crate::toolbar_gtk::GtkToolbarKind::Top => MoveDragKind::Top,
-                crate::toolbar_gtk::GtkToolbarKind::Side => MoveDragKind::Side,
-            };
-            self.finish_toolbar_position_preview(kind, false);
+        if self.data.gtk_drag_preview.is_some() {
+            self.finish_toolbar_position_preview(false);
         }
         let had_state = reset_gtk_drag_lifecycle(
             &mut self.data.gtk_drag_preview,

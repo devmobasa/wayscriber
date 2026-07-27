@@ -115,8 +115,8 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::EditKeybinding(request) => {
                 state.handle_keybinding_edit(request);
             }
-            PendingBackendAction::PersistToolbarConfig => {
-                state.save_toolbar_display_config();
+            PendingBackendAction::PersistToolbarDisplayMode(previous) => {
+                state.persist_toolbar_display_mode(previous);
             }
             PendingBackendAction::PersistFloatingBadgeConfig(visible) => {
                 state.save_floating_badge_visibility_config(visible);

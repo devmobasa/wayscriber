@@ -51,7 +51,7 @@ impl ConfiguratorApp {
 
         let column = column![
             text("Toolbar").size(18),
-            text("These settings are configured defaults. Toolbar pins, item visibility/order, pane state, and board pins changed in the overlay are saved separately as runtime preferences.").size(12),
+            text("These settings are configured defaults. Toolbar pins, position, display form, item visibility/order, pane state, and board pins changed in the overlay are saved separately as runtime preferences.").size(12),
             labeled_control(
                 "Layout mode",
                 toolbar_layout.width(Length::Fill).into(),
@@ -221,6 +221,7 @@ impl ConfiguratorApp {
                 overrides.show_text_controls
             ),
             text("Placement offsets").size(16),
+            text("Configured defaults. Dragging a toolbar in the overlay saves that position as a runtime preference; editing a value here takes over from the saved drag.").size(12),
             row![
                 labeled_input(
                     "Top offset X (px)",

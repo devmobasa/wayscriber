@@ -258,19 +258,33 @@ fn removed_and_reused_board_target_rejects_old_permit() {
 }
 
 #[test]
-fn config_position_permit_is_rejected_only_by_relevant_seed_reload() {
+fn position_permit_is_rejected_only_by_relevant_seed_reload() {
     let mut controller = controller();
     let top = controller
-        .begin_config_interaction(ConfigPositionTarget::Top)
+        .begin_mutation(RuntimeUiMutationScope::one(
+            InteractionSeedTarget::TopPosition,
+        ))
         .unwrap();
     controller.update_seeds(test_seeds(false, true));
-    assert_eq!(
-        controller.validate_config_interaction(top),
-        ValidateConfigInteractionResult::Accepted(ConfigPositionTarget::Top)
-    );
+    assert!(matches!(
+        controller.commit(
+            top,
+            RuntimeUiMutationValues::one(
+                InteractionSeedTarget::TopPosition,
+                InteractionSeedValue::Position(ToolbarPositionSeed::new(11.0, 21.0).unwrap()),
+            )
+            .unwrap(),
+        ),
+        CommitResult::Accepted { .. }
+    ));
 
+    // A side drag also owns the reconciled top offset, so a reload of either
+    // position seed invalidates its permit.
     let side = controller
-        .begin_config_interaction(ConfigPositionTarget::Side)
+        .begin_mutation(RuntimeUiMutationScope::batch([
+            InteractionSeedTarget::TopPosition,
+            InteractionSeedTarget::SidePosition,
+        ]))
         .unwrap();
     let mut changed = test_seeds(false, true);
     changed
@@ -280,8 +294,21 @@ fn config_position_permit_is_rejected_only_by_relevant_seed_reload() {
         )
         .unwrap();
     controller.update_seeds(changed);
-    assert_eq!(
-        controller.validate_config_interaction(side),
-        ValidateConfigInteractionResult::RejectedSeedChanged
-    );
+    assert!(matches!(
+        controller.commit(
+            side,
+            RuntimeUiMutationValues::batch([
+                (
+                    InteractionSeedTarget::TopPosition,
+                    InteractionSeedValue::Position(ToolbarPositionSeed::new(12.0, 22.0).unwrap()),
+                ),
+                (
+                    InteractionSeedTarget::SidePosition,
+                    InteractionSeedValue::Position(ToolbarPositionSeed::new(32.0, 42.0).unwrap()),
+                ),
+            ])
+            .unwrap(),
+        ),
+        CommitResult::RejectedSeedChanged { .. }
+    ));
 }

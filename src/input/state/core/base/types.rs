@@ -447,9 +447,11 @@ pub enum PendingBackendAction {
     BoardPdfExport(Action),
     ClearSavedToolState,
     EditKeybinding(KeybindingEditRequest),
-    /// Persist the top-display preference changed by its keyboard action;
-    /// toolbar-event paths persist via their exact event-policy target.
-    PersistToolbarConfig,
+    /// Persist the top-display preference changed by its keyboard action.
+    /// The cycle already applied, so the payload carries the pre-cycle mode
+    /// for the runtime-UI preview's rollback; toolbar-event paths persist via
+    /// their exact event-policy target instead.
+    PersistToolbarDisplayMode(crate::config::TopDisplayMode),
     /// Persist the floating-badge master visibility flipped by
     /// `Action::ToggleFloatingBadge` (focus mode never enqueues this — its
     /// hide/restore stays transient). The payload captures the authored value

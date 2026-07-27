@@ -7,7 +7,6 @@
 use crate::config::{
     Config, ConfigDocument, QuickColorWrite, StatusBarItem, ToolPresetConfig, ToolbarItemId,
     ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
-    TopDisplayMode,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardConfigUpdate;
@@ -34,22 +33,12 @@ pub(in crate::backend::wayland) enum ConfigMutation {
         flag: ToolbarSectionFlag,
         visible: bool,
     },
-    ToolbarTopDisplayMode(TopDisplayMode),
     ToolbarUseIcons(bool),
     ToolbarShowMoreColors(bool),
     ToolbarContextAwareUi(bool),
     ToolbarPresetToasts(bool),
     ToolbarToolPreview(bool),
     ToolbarDelaySliders(bool),
-    ToolbarTopPosition {
-        x: f64,
-        y: f64,
-    },
-    ToolbarSidePosition {
-        top_x: f64,
-        side_x: f64,
-        side_y: f64,
-    },
     ShowStatusBar(bool),
     StatusBarInteractive(bool),
     StatusBarItem {
@@ -100,26 +89,12 @@ impl ConfigMutation {
                     .set_visibility_setting(*id, *setting);
                 apply_section_compatibility_mirror(config, *flag, *visible);
             }
-            Self::ToolbarTopDisplayMode(mode) => config.ui.toolbar.top_display_mode = *mode,
             Self::ToolbarUseIcons(value) => config.ui.toolbar.use_icons = *value,
             Self::ToolbarShowMoreColors(value) => config.ui.toolbar.show_more_colors = *value,
             Self::ToolbarContextAwareUi(value) => config.ui.toolbar.context_aware_ui = *value,
             Self::ToolbarPresetToasts(value) => config.ui.toolbar.show_preset_toasts = *value,
             Self::ToolbarToolPreview(value) => config.ui.toolbar.show_tool_preview = *value,
             Self::ToolbarDelaySliders(value) => config.ui.toolbar.show_delay_sliders = *value,
-            Self::ToolbarTopPosition { x, y } => {
-                config.ui.toolbar.top_offset = *x;
-                config.ui.toolbar.top_offset_y = *y;
-            }
-            Self::ToolbarSidePosition {
-                top_x,
-                side_x,
-                side_y,
-            } => {
-                config.ui.toolbar.top_offset = *top_x;
-                config.ui.toolbar.side_offset_x = *side_x;
-                config.ui.toolbar.side_offset = *side_y;
-            }
             Self::ShowStatusBar(value) => config.ui.show_status_bar = *value,
             Self::StatusBarInteractive(value) => config.ui.status_bar_interactive = *value,
             Self::StatusBarItem { item, visible } => {
@@ -166,15 +141,12 @@ impl ConfigMutation {
             Self::ToolbarSectionVisibility { id, .. } => {
                 ConfigMutationKey::ToolbarSectionVisibility(id)
             }
-            Self::ToolbarTopDisplayMode(_) => ConfigMutationKey::ToolbarTopDisplayMode,
             Self::ToolbarUseIcons(_) => ConfigMutationKey::ToolbarUseIcons,
             Self::ToolbarShowMoreColors(_) => ConfigMutationKey::ToolbarShowMoreColors,
             Self::ToolbarContextAwareUi(_) => ConfigMutationKey::ToolbarContextAwareUi,
             Self::ToolbarPresetToasts(_) => ConfigMutationKey::ToolbarPresetToasts,
             Self::ToolbarToolPreview(_) => ConfigMutationKey::ToolbarToolPreview,
             Self::ToolbarDelaySliders(_) => ConfigMutationKey::ToolbarDelaySliders,
-            Self::ToolbarTopPosition { .. } => ConfigMutationKey::ToolbarTopPosition,
-            Self::ToolbarSidePosition { .. } => ConfigMutationKey::ToolbarSidePosition,
             Self::ShowStatusBar(_) => ConfigMutationKey::ShowStatusBar,
             Self::StatusBarInteractive(_) => ConfigMutationKey::StatusBarInteractive,
             Self::StatusBarItem { item, .. } => ConfigMutationKey::StatusBarItem(item),
@@ -201,15 +173,12 @@ impl ConfigMutation {
 enum ConfigMutationKey {
     ToolbarLayout,
     ToolbarSectionVisibility(ToolbarItemId),
-    ToolbarTopDisplayMode,
     ToolbarUseIcons,
     ToolbarShowMoreColors,
     ToolbarContextAwareUi,
     ToolbarPresetToasts,
     ToolbarToolPreview,
     ToolbarDelaySliders,
-    ToolbarTopPosition,
-    ToolbarSidePosition,
     ShowStatusBar,
     StatusBarInteractive,
     StatusBarItem(StatusBarItem),

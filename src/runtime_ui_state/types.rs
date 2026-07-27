@@ -1,5 +1,6 @@
 use crate::config::{
     ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting as ItemVisibilitySetting,
+    TopDisplayMode,
 };
 use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
@@ -60,6 +61,49 @@ impl ToolbarPositionSeed {
     }
 }
 
+/// The persistable half of [`TopDisplayMode`].
+///
+/// `Hidden` is a runtime-only rung of the cycle action, so it never reaches
+/// the override store; [`PersistedTopDisplayMode::from_display_mode`] folds it
+/// to `Full` exactly like [`TopDisplayMode::persisted`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum PersistedTopDisplayMode {
+    Full,
+    Micro,
+}
+
+impl PersistedTopDisplayMode {
+    pub(crate) fn from_display_mode(mode: TopDisplayMode) -> Self {
+        match mode.persisted() {
+            TopDisplayMode::Micro => Self::Micro,
+            // `persisted()` already folded `Hidden` into `Full`.
+            TopDisplayMode::Full | TopDisplayMode::Hidden => Self::Full,
+        }
+    }
+
+    pub(crate) fn display_mode(self) -> TopDisplayMode {
+        match self {
+            Self::Full => TopDisplayMode::Full,
+            Self::Micro => TopDisplayMode::Micro,
+        }
+    }
+
+    pub(crate) fn wire_id(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Micro => "micro",
+        }
+    }
+
+    pub(crate) fn from_wire_id(value: &str) -> Option<Self> {
+        match value {
+            "full" => Some(Self::Full),
+            "micro" => Some(Self::Micro),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum InteractionSeedTarget {
     TopPinned,
@@ -73,16 +117,7 @@ pub(crate) enum InteractionSeedTarget {
     BoardPin(String),
     TopPosition,
     SidePosition,
-}
-
-impl InteractionSeedTarget {
-    pub(crate) fn is_runtime_owned(&self) -> bool {
-        !matches!(self, Self::TopPosition | Self::SidePosition)
-    }
-
-    pub(crate) fn is_config_position(&self) -> bool {
-        matches!(self, Self::TopPosition | Self::SidePosition)
-    }
+    TopDisplayMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +127,7 @@ pub(crate) enum InteractionSeedValue {
     Visibility(ItemVisibilitySetting),
     ItemOrder(Vec<ToolbarItemId>),
     Position(ToolbarPositionSeed),
+    TopDisplayMode(PersistedTopDisplayMode),
 }
 
 impl InteractionSeedValue {
@@ -114,6 +150,7 @@ impl InteractionSeedValue {
                     Target::TopPosition | Target::SidePosition,
                     Self::Position(_)
                 )
+                | (Target::TopDisplayMode, Self::TopDisplayMode(_))
         )
     }
 }

@@ -20,8 +20,7 @@ use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersist
 use feedback::{ToolbarPinChange, pin_durability};
 #[cfg(test)]
 use persistence::{
-    ToolbarPositions, apply_toolbar_config_target, apply_toolbar_ui_config_target,
-    persisted_tool_preview_value, persisted_top_display_mode_value,
+    apply_toolbar_config_target, apply_toolbar_ui_config_target, persisted_tool_preview_value,
 };
 use session::populate_session_snapshot;
 

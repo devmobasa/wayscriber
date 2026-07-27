@@ -15,6 +15,10 @@ All settings are optional. If the configuration file doesn't exist or settings a
 saved separately so moving through the UI does not rewrite unrelated configuration:
 
 - top/side toolbar pin and minimized state;
+- the top strip's display form reached with the cycle keybinding or the micro chip;
+- the top toolbar's dragged position;
+- the side toolbar's dragged position (a side drag also records the top strip's reconciled
+  horizontal offset, because moving the palette can change where the strip rests);
 - the active side pane and collapsed side sections;
 - individual toolbar item visibility and toolbar item order; and
 - per-board pin state.
@@ -48,7 +52,8 @@ contents.
 If runtime-state inspection or its writer cannot start at all, the Settings panel reports
 persistence as unavailable instead of offering recovery actions that cannot run. Runtime-only
 toolbar and board changes remain process-only in that mode and leave the authored configuration
-unchanged.
+unchanged; a toolbar dragged or a display mode cycled in that mode applies for the current run and
+returns to its configured default on the next start.
 
 When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
 section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
@@ -902,9 +907,10 @@ side_pinned = true
 top_minimized = false
 side_minimized = false
 
-# Display form of the top strip restored at startup: "full" or "micro".
+# Authored default display form of the top strip: "full" or "micro".
 # "hidden" is accepted but treated as "full" (startup visibility is
-# governed by top_pinned)
+# governed by top_pinned). Cycling the strip at runtime saves the chosen
+# form to runtime-ui.toml instead of rewriting this value
 top_display_mode = "full"
 
 # Where the side-palette functions live: "pill" (default, supported) or
@@ -984,7 +990,8 @@ show_preset_toasts = true
 # Show cursor tool preview bubble
 show_tool_preview = false
 
-# Initial toolbar offsets (layer-shell/inline)
+# Authored default toolbar offsets (layer-shell/inline). Dragging a toolbar
+# saves its position to runtime-ui.toml instead of rewriting these
 top_offset = 0.0
 top_offset_y = 0.0
 side_offset = 0.0
@@ -1063,13 +1070,13 @@ side_sections = [
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
-- **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
+- **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` are the authored default toolbar positions. Dragging a toolbar saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag. A side drag also records the top strip's reconciled horizontal offset, because moving the palette can change where the strip rests.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 - **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F9 still toggles full visibility.
-- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists via `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
+- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists as a runtime preference in `runtime-ui.toml`, seeded by the authored `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
 - **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
 - **Side layout**: `side_layout` picks where the side-palette functions live, and the top-only re-homing is now complete. The default `"pill"` is the **supported layout**: the standalone side palette is fully retired — its surface is never created (layer-shell, inline fallback, or GTK) — and every pane has a concrete new home. Drawing properties (colors included) live in the top strip's contextual style pill; canvas management lives in the **"Canvas…" overflow popover** (opened from the top strip's `⋯` overflow — boards, pages, zoom, advanced, and step controls) plus the **bottom-right zoom chip** and the **status-bar board picker**; presets live in the **top-strip presets island**; and the Session/Settings panes live in popovers opened from the overflow menu (the "Session..." / "Settings..." entries; the popovers expose the same controls the panes did). `"panel"` is the **deprecated legacy escape hatch** restoring the classic four-pane side palette; it is deprecated and planned for removal one release after the pill default. Panel-mode users see a once-per-session notice pointing at these new homes. (The original plan document called this key `layout_mode = "panel"`, but `layout_mode` is an orthogonal complexity preset — Simple/Regular/Advanced — so the switch lives under its own `side_layout` key instead.)
 - **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves. Both keys (and `side_pinned`/`side_minimized`) only take effect under the deprecated legacy `side_layout = "panel"`; under the default pill layout they are inert.

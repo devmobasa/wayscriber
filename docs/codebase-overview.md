@@ -202,6 +202,18 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 - `src/runtime_ui_state/` owns the versioned wire model, seed/override reconciliation, guarded
   mutation pipeline, exact source revisions, pinned-directory store operations, recovery barriers,
   cancellation capabilities, and per-mutation durability outcomes.
+- Every seed target is runtime-owned: pins, minimize, side pane, collapsed sections, item
+  visibility/order, board pins, both toolbar positions, and the top strip's display form. Authored
+  `config.toml` values are the seeds; direct manipulation writes overrides. `top_position`,
+  `side_position`, and `top_display_mode` were added to wire V1 additively — an older build decodes
+  them as unknown keys and preserves them verbatim, which a version bump would not allow.
+- The persisted display form is `full`/`micro` only. The cycle action's `hidden` rung and presenter
+  mode's forced mapping stay live-only; the override is computed with `TopDisplayMode::persisted()`
+  and presenter-restore precedence so neither can be written.
+- A committed side drag stages both position overrides in one mutation scope because completing it
+  reconciles the top strip's horizontal base. Retained position overrides are applied on top of the
+  authored seeds at startup and clamped on the first apply against real output geometry, not on
+  load, so an override recorded on a disconnected monitor degrades instead of being discarded.
 - `src/backend/wayland/runtime_ui_state.rs` adapts toolbar and board interactions to that controller.
   `coordinator.rs` owns previews and writer transport, `lifecycle.rs` retains the exact active
   incident/recovery capabilities and publishes safe toolbar diagnostics, and `wayland.rs` applies

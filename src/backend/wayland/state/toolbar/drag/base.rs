@@ -69,6 +69,13 @@ impl WaylandState {
 
     /// Preserve the top strip's screen X while switching from the base frozen
     /// for a drag back to the resting overlap-derived base.
+    ///
+    /// Only the two explicit drag-commit paths call this
+    /// (`finish_toolbar_move_drag` with `commit`, and `finish_gtk_offset_change`),
+    /// each immediately before committing the drag's position override. Every
+    /// other implicit toolbar move — a layout-mode switch, an output resize, a
+    /// relayout clamp — adjusts the live offsets in `self.data` only and never
+    /// stages an override.
     pub(in crate::backend::wayland::state::toolbar) fn reconcile_top_base_after_drag(&mut self) {
         let Some(old_base_x) = self.data.drag_top_base_x else {
             return;

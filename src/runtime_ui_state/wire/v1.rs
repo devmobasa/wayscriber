@@ -7,17 +7,26 @@ use crate::config::{
     ToolbarItemId, ToolbarItemOrderGroup, toolbar_item_definitions, toolbar_item_order_group,
 };
 use crate::runtime_ui_state::{
-    InteractionSeedTarget, InteractionSeedValue, ItemVisibilitySetting, RuntimeOverride,
-    RuntimeUiModel, RuntimeUiWireState, WirePassthrough,
+    InteractionSeedTarget, InteractionSeedValue, ItemVisibilitySetting, PersistedTopDisplayMode,
+    RuntimeOverride, RuntimeUiModel, RuntimeUiWireState, ToolbarPositionSeed, WirePassthrough,
 };
 use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 5] = [
+/// Recognized `[toolbar]` overrides that carry a single scalar or table value.
+///
+/// `top_position`, `side_position`, and `top_display_mode` were added after
+/// V1 shipped. They stay in V1 because an older build decodes them as unknown
+/// keys and preserves them verbatim through `WirePassthrough`, whereas a
+/// version bump would make that build treat the whole file as read-only.
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 8] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
     ("side_minimized", InteractionSeedTarget::SideMinimized),
     ("side_pane", InteractionSeedTarget::SidePane),
+    ("top_position", InteractionSeedTarget::TopPosition),
+    ("side_position", InteractionSeedTarget::SidePosition),
+    ("top_display_mode", InteractionSeedTarget::TopDisplayMode),
 ];
 
 pub(super) fn decode(root: &mut Table) -> Result<RuntimeUiWireState, RuntimeUiWireError> {
@@ -166,10 +175,46 @@ fn decode_value(
             )),
         },
         Target::ItemOrder(group) => decode_order(*group, value),
-        Target::TopPosition | Target::SidePosition => Err(RuntimeUiWireError::new(
-            "config positions cannot appear in runtime state",
-        )),
+        Target::TopPosition | Target::SidePosition => decode_position(value),
+        Target::TopDisplayMode => value
+            .as_str()
+            .and_then(PersistedTopDisplayMode::from_wire_id)
+            .map(InteractionSeedValue::TopDisplayMode)
+            .ok_or_else(|| {
+                RuntimeUiWireError::new("top display mode override has an unknown value")
+            }),
     }
+}
+
+fn decode_position(value: Value) -> Result<InteractionSeedValue, RuntimeUiWireError> {
+    let Value::Table(mut position) = value else {
+        return Err(RuntimeUiWireError::new("position override is not a table"));
+    };
+    let mut coordinate = |axis: &str| {
+        position
+            .remove(axis)
+            .and_then(|value| match value {
+                Value::Float(value) => Some(value),
+                // A hand-written whole number parses as a TOML integer.
+                Value::Integer(value) => Some(value as f64),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                RuntimeUiWireError::new(format!("position override has no numeric {axis}"))
+            })
+    };
+    let x = coordinate("x")?;
+    let y = coordinate("y")?;
+    if !position.is_empty() {
+        return Err(RuntimeUiWireError::new(
+            "position override has unknown coordinates",
+        ));
+    }
+    // Non-finite offsets are rejected here for the same reason seeding rejects
+    // them: they cannot be compared bit-exactly against an authored seed.
+    ToolbarPositionSeed::new(x, y)
+        .map(InteractionSeedValue::Position)
+        .ok_or_else(|| RuntimeUiWireError::new("position override is not finite"))
 }
 
 fn decode_order(
@@ -235,10 +280,14 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
                 insert_unique(&mut order, order_group_wire_id(*group), entry)?
             }
             InteractionSeedTarget::BoardPin(id) => insert_unique(&mut boards_pinned, id, entry)?,
-            InteractionSeedTarget::TopPosition | InteractionSeedTarget::SidePosition => {
-                return Err(RuntimeUiWireError::new(
-                    "config position appeared in runtime-state model",
-                ));
+            InteractionSeedTarget::TopPosition => {
+                insert_unique(&mut toolbar, "top_position", entry)?
+            }
+            InteractionSeedTarget::SidePosition => {
+                insert_unique(&mut toolbar, "side_position", entry)?
+            }
+            InteractionSeedTarget::TopDisplayMode => {
+                insert_unique(&mut toolbar, "top_display_mode", entry)?
             }
         }
     }
@@ -321,6 +370,18 @@ fn encode_value(
                     .map(|item| Value::String(item.as_str().to_string()))
                     .collect(),
             ))
+        }
+        (
+            InteractionSeedTarget::TopPosition | InteractionSeedTarget::SidePosition,
+            InteractionSeedValue::Position(position),
+        ) => {
+            let mut table = Table::new();
+            table.insert("x".to_string(), Value::Float(position.x.get()));
+            table.insert("y".to_string(), Value::Float(position.y.get()));
+            Ok(Value::Table(table))
+        }
+        (InteractionSeedTarget::TopDisplayMode, InteractionSeedValue::TopDisplayMode(mode)) => {
+            Ok(Value::String(mode.wire_id().to_string()))
         }
         _ => Err(RuntimeUiWireError::new(
             "override value does not match target",

@@ -508,13 +508,7 @@ fn shutdown_during_external_cleanup_closes_after_a_late_reload() {
             result => panic!("unexpected conflict result: {result:?}"),
         };
     assert_eq!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: preview,
-                intent: RuntimePreviewFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_preview(preview, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::AbandonedDuringBarrier { barrier }
     );
     controller.update_seeds(test_seeds(true, false));
@@ -575,13 +569,7 @@ fn invalid_external_authority_discards_pre_change_preview_rollback() {
             result => panic!("unexpected conflict result: {result:?}"),
         };
     assert_eq!(
-        controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: preview,
-                intent: RuntimePreviewFinishIntent::Cancel,
-            },
-            |_, _| unreachable!(),
-        ),
+        controller.finish_preview(preview, RuntimePreviewFinishIntent::Cancel),
         PreviewFinishResult::AbandonedDuringBarrier { barrier }
     );
     assert!(matches!(
