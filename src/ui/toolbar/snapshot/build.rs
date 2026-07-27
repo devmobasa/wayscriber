@@ -146,6 +146,7 @@ impl ToolbarSnapshot {
             page_index,
             page_count,
             click_highlight_enabled: state.click_highlight_enabled(),
+            input_hud_enabled: state.input_hud_enabled(),
             highlight_tool_active: state.highlight_tool_active(),
             highlight_tool_ring_enabled: state.highlight_tool_ring_enabled(),
             any_highlight_active: state.click_highlight_enabled() || state.highlight_tool_active(),

@@ -57,6 +57,7 @@ pub(crate) enum ToolbarPersistenceTarget {
     Ui(ToolbarUiPersistenceTarget),
     History,
     ClickHighlight,
+    InputHud,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,6 +316,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SelectTool(Tool::Highlight)
         | ToolbarEvent::ToggleAllHighlight(_)
         | ToolbarEvent::ToggleHighlightToolRing(_) => ToolbarPersistence::Config(ClickHighlight),
+        ToolbarEvent::ToggleInputHud(_) => ToolbarPersistence::Config(InputHud),
         ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }

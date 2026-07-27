@@ -289,6 +289,8 @@ pub enum ToolbarEvent {
     ToggleAllHighlight(bool),
     /// Toggle highlight tool ring visibility while the highlight tool is active
     ToggleHighlightToolRing(bool),
+    /// Toggle the on-screen input HUD (keystrokes and clicks)
+    ToggleInputHud(bool),
     ToggleFreeze,
     ZoomIn,
     ZoomOut,

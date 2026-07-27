@@ -172,6 +172,7 @@ The prebuilt `.deb` packages have a minimum-release requirement — see the note
 - Click highlights with configurable colors/radius/duration
 - Persistent ring while the click highlight tool is active
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
+- Input HUD (<kbd>Ctrl+Shift+K</kbd>): on-screen keystroke and click chips for demos and screencasts (opt-in system-wide capture via the `input-monitor` build feature — see [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks))
 - Light passthrough (layer-shell): draw while input passes through to the app underneath — see [Light passthrough mode](#light-passthrough-mode)
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. On GNOME, this uses the screenshot portal when available
 - Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Dim strength and edge softness are configurable under `[spotlight]`
@@ -876,6 +877,7 @@ pick_screen_color = ["I"]
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
+| Toggle input HUD | <kbd>Ctrl+Shift+K</kbd> |
 | Toggle light passthrough (in-overlay) | <kbd>F6</kbd> (see [Light passthrough mode](#light-passthrough-mode)) |
 | Reset arrow labels | <kbd>Ctrl+Shift+R</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |

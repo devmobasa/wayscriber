@@ -95,6 +95,13 @@ impl ToolbarSettingsModel {
                     ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
                     "Preset toasts: apply/save/clear.",
                 ),
+                ToolbarSettingsToggle::new(
+                    ToolbarControlId::SettingsInputHud,
+                    "Input HUD",
+                    snapshot.input_hud_enabled,
+                    ToolbarEvent::ToggleInputHud(!snapshot.input_hud_enabled),
+                    "Show keystrokes and clicks on screen.",
+                ),
             ]
         };
 

@@ -115,6 +115,7 @@ impl InputState {
             ToolbarEvent::ToggleHighlightToolRing(enable) => {
                 self.apply_toolbar_toggle_highlight_tool_ring(enable)
             }
+            ToolbarEvent::ToggleInputHud(enable) => self.apply_toolbar_toggle_input_hud(enable),
             ToolbarEvent::ToggleFreeze => self.apply_toolbar_toggle_freeze(),
             ToolbarEvent::ZoomIn => self.apply_toolbar_zoom_in(),
             ToolbarEvent::ZoomOut => self.apply_toolbar_zoom_out(),

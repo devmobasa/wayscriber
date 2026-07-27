@@ -235,6 +235,12 @@ impl ConfigDraft {
             ToggleField::UiClickHighlightForceInLightMode => {
                 self.click_highlight_force_in_light_mode = value;
             }
+            ToggleField::UiInputHudEnabled => self.input_hud_enabled = value,
+            ToggleField::UiInputHudShowMouse => self.input_hud_show_mouse = value,
+            ToggleField::UiInputHudShowBareModifiers => {
+                self.input_hud_show_bare_modifiers = value;
+            }
+            ToggleField::UiInputHudCombineRepeats => self.input_hud_combine_repeats = value,
             ToggleField::PresenterHideStatusBar => self.presenter_hide_status_bar = value,
             ToggleField::PresenterHideToolbars => self.presenter_hide_toolbars = value,
             ToggleField::PresenterHideToolPreview => self.presenter_hide_tool_preview = value,
@@ -242,6 +248,7 @@ impl ConfigDraft {
             ToggleField::PresenterEnableClickHighlight => {
                 self.presenter_enable_click_highlight = value;
             }
+            ToggleField::PresenterEnableInputHud => self.presenter_enable_input_hud = value,
             ToggleField::PresenterShowToast => self.presenter_show_toast = value,
             ToggleField::BoardsAutoCreate => self.boards.auto_create = value,
             ToggleField::BoardsShowBadge => self.boards.show_board_badge = value,
@@ -346,6 +353,10 @@ impl ConfigDraft {
             TextField::HighlightRadius => self.click_highlight_radius = value,
             TextField::HighlightOutlineThickness => self.click_highlight_outline_thickness = value,
             TextField::HighlightDurationMs => self.click_highlight_duration_ms = value,
+            TextField::InputHudDisplayMs => self.input_hud_display_ms = value,
+            TextField::InputHudFadeMs => self.input_hud_fade_ms = value,
+            TextField::InputHudMaxEntries => self.input_hud_max_entries = value,
+            TextField::InputHudFontSize => self.input_hud_font_size = value,
             TextField::HelpFontFamily => self.help_font_family = value,
             TextField::HelpFontSize => self.help_font_size = value,
             TextField::HelpLineHeight => self.help_line_height = value,

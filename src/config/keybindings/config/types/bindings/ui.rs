@@ -26,6 +26,9 @@ pub struct UiKeybindingsConfig {
     #[serde(default = "default_toggle_click_highlight")]
     pub toggle_click_highlight: Vec<String>,
 
+    #[serde(default = "default_toggle_input_hud")]
+    pub toggle_input_hud: Vec<String>,
+
     #[serde(default = "default_toggle_toolbar")]
     pub toggle_toolbar: Vec<String>,
 
@@ -82,6 +85,7 @@ impl Default for UiKeybindingsConfig {
             toggle_zoom_chip: default_toggle_zoom_chip(),
             toggle_focus_mode: default_toggle_focus_mode(),
             toggle_click_highlight: default_toggle_click_highlight(),
+            toggle_input_hud: default_toggle_input_hud(),
             toggle_toolbar: default_toggle_toolbar(),
             cycle_toolbar_display: default_cycle_toolbar_display(),
             toggle_presenter_mode: default_toggle_presenter_mode(),

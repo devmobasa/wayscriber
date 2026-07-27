@@ -38,6 +38,7 @@ pub(crate) enum ToolbarControlId {
     SettingsStatusAbout,
     SettingsFloatingBadgeAlways,
     SettingsPresetToasts,
+    SettingsInputHud,
     SettingsPresets,
     SettingsActions,
     SettingsZoomActions,

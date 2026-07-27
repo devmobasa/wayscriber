@@ -2,7 +2,7 @@ use smithay_client_toolkit::seat::keyboard::Keysym;
 
 use crate::input::Key;
 
-pub(super) fn keysym_to_key(keysym: Keysym) -> Key {
+pub(in crate::backend::wayland) fn keysym_to_key(keysym: Keysym) -> Key {
     match keysym {
         Keysym::Escape => Key::Escape,
         Keysym::Return | Keysym::KP_Enter => Key::Return,

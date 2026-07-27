@@ -198,6 +198,7 @@ pub(super) fn build_main_sections(
         action_row(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
         action_row(bindings, Action::Undo, NOT_BOUND_LABEL),
         action_row(bindings, Action::ToggleClickHighlight, NOT_BOUND_LABEL),
+        action_row(bindings, Action::ToggleInputHud, NOT_BOUND_LABEL),
         row(
             match joined_labels(bindings, &[Action::OpenContextMenu]) {
                 Some(label) => format!("Right Click / {label}"),

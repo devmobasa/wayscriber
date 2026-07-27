@@ -7,6 +7,7 @@ mod command_palette;
 pub mod constants;
 mod context_menu;
 mod help_overlay;
+mod input_hud;
 mod onboarding_card;
 mod precision_entry;
 mod primitives;
@@ -31,6 +32,7 @@ pub use help_overlay::{
     HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at,
     invalidate_help_overlay_cache, render_help_overlay,
 };
+pub use input_hud::{input_hud_geometry, render_input_hud};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
 pub(crate) use primitives::checkerboard_behind;

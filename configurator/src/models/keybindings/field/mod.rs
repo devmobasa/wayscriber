@@ -72,6 +72,7 @@ pub enum KeybindingField {
     ToggleZoomChip,
     ToggleFocusMode,
     ToggleClickHighlight,
+    ToggleInputHud,
     ToggleToolbar,
     ToggleLightMode,
     ToggleLightModeDrawing,

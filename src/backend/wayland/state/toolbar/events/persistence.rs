@@ -247,6 +247,23 @@ impl WaylandState {
         );
     }
 
+    /// Persist the input HUD's enabled preference.
+    ///
+    /// While presenter mode forces the HUD on, the runtime value is the mode's,
+    /// not the user's, so nothing is written until the mode releases it (the
+    /// same contract `save_click_highlight_preferences` follows).
+    pub(in crate::backend::wayland) fn save_input_hud_preferences(&mut self) {
+        if self.input_state.presenter_mode
+            && self.input_state.presenter_mode_config.enable_input_hud
+        {
+            return;
+        }
+        self.queue_config_mutation(
+            ConfigMutation::InputHud(self.input_state.input_hud_enabled()),
+            "input HUD preference persistence",
+        );
+    }
+
     pub(in crate::backend::wayland) fn shutdown_config_writer(&mut self) {
         self.config_writer.shutdown();
     }

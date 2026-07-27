@@ -66,6 +66,7 @@ pub(in crate::backend::wayland) enum ConfigMutation {
         enabled: Option<bool>,
         show_on_highlight_tool: bool,
     },
+    InputHud(bool),
     BoardConfig(Box<PendingBoardConfigUpdate>),
     PresetSlot {
         slot: usize,
@@ -139,6 +140,7 @@ impl ConfigMutation {
                 }
                 config.ui.click_highlight.show_on_highlight_tool = *show_on_highlight_tool;
             }
+            Self::InputHud(enabled) => config.ui.input_hud.enabled = *enabled,
             Self::BoardConfig(update) => {
                 crate::backend::wayland::state::apply_board_config_update_to_config(
                     config,
@@ -185,6 +187,7 @@ impl ConfigMutation {
             // `enabled: None` deliberately leaves one field untouched, so
             // replacing an earlier request could discard that field's edit.
             Self::ClickHighlight { .. } => return None,
+            Self::InputHud(_) => ConfigMutationKey::InputHud,
             // Board updates carry merge metadata and must remain ordered.
             Self::BoardConfig(_) => return None,
             Self::PresetSlot { slot, .. } => ConfigMutationKey::PresetSlot(slot),
@@ -216,6 +219,7 @@ enum ConfigMutationKey {
     FloatingBadge,
     ZoomChip,
     HistoryCustomSection,
+    InputHud,
     PresetSlot(usize),
     QuickColor(usize),
 }

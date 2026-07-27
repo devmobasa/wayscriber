@@ -93,6 +93,7 @@ impl WaylandState {
         text_edit_entry_active: bool,
         status_hud_active: bool,
         zoom_chip_active: bool,
+        input_hud_active: bool,
         command_palette_active: bool,
         color_picker_active: bool,
         tool_preview_active: bool,
@@ -195,6 +196,22 @@ impl WaylandState {
             zoom_chip_rect,
         );
         self.data.prev_zoom_chip_damage = zoom_chip_rect;
+
+        // The input HUD's chip row grows, shrinks, and fades every few frames;
+        // the same appear → resize → disappear union keeps the stale chips
+        // cleaned up without escalating a keystroke to the full surface.
+        let input_hud_rect = if input_hud_active {
+            crate::ui::input_hud_geometry(&self.input_state, width, height)
+                .and_then(|bounds| effect_rect(bounds, width, height))
+        } else {
+            None
+        };
+        push_effect_damage(
+            &mut regions,
+            self.data.prev_input_hud_damage,
+            input_hud_rect,
+        );
+        self.data.prev_input_hud_damage = input_hud_rect;
 
         // Opening and closing the palette force full damage because the
         // backdrop dimmer changes. While it remains open, only the panel and
@@ -365,6 +382,48 @@ mod tests {
         let mut vanish = Vec::new();
         push_effect_damage(&mut vanish, wide, None);
         assert_eq!(vanish, vec![wide.unwrap()]);
+    }
+
+    /// The input HUD's chip row grows as chips arrive and shrinks as they
+    /// expire, then vanishes entirely; each transition must union the old and
+    /// new footprints so no stale chip is left on screen.
+    #[test]
+    fn input_hud_damage_lifecycle_unions_prev_and_current_footprints() {
+        // Bottom-center footprints: adding a chip widens the row and moves its
+        // left edge, since the row stays centered.
+        let one_chip = effect_rect((900.0, 1032.0, 120.0, 36.0), 1920, 1080);
+        let two_chips = effect_rect((840.0, 1032.0, 240.0, 36.0), 1920, 1080);
+        assert!(one_chip.is_some() && two_chips.is_some());
+
+        let mut appear = Vec::new();
+        push_effect_damage(&mut appear, None, one_chip);
+        assert_eq!(appear, vec![one_chip.unwrap()]);
+
+        let mut grow = Vec::new();
+        push_effect_damage(&mut grow, one_chip, two_chips);
+        assert_eq!(grow, vec![one_chip.unwrap(), two_chips.unwrap()]);
+
+        let mut expire = Vec::new();
+        push_effect_damage(&mut expire, two_chips, None);
+        assert_eq!(expire, vec![two_chips.unwrap()]);
+    }
+
+    /// A live HUD's damage stays a small strip rather than escalating a
+    /// keystroke to the whole surface.
+    #[test]
+    fn input_hud_damage_is_a_compact_row_not_the_full_surface() {
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.init_input_hud_from_config(crate::input::state::InputHudSettings::from(
+            &crate::config::InputHudConfig {
+                enabled: true,
+                ..crate::config::InputHudConfig::default()
+            },
+        ));
+        input.note_input_hud_key(crate::input::Key::Escape, crate::input::Modifiers::new());
+
+        let bounds = crate::ui::input_hud_geometry(&input, 1920, 1080).expect("row geometry");
+        let damage = effect_rect(bounds, 1920, 1080).expect("row damage");
+        assert!(damage.width * damage.height < 1920 * 1080 / 10);
     }
 
     /// Palette query changes can resize the panel, and hover tooltips can

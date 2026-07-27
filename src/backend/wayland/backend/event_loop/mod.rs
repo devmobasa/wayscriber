@@ -65,6 +65,10 @@ pub(super) fn run_event_loop(
             None
         }
     };
+    // Start the input HUD's system reader when the persisted toggle and the
+    // configured mode ask for it, before the first dispatch.
+    state.sync_input_monitor();
+
     // Track consecutive render failures for error recovery.
     let mut consecutive_render_failures = 0u32;
 
@@ -328,6 +332,7 @@ pub(super) fn run_event_loop(
                 session_save::notify_session_failure(state, &err);
             }
             state.shutdown_runtime_ui();
+            state.shutdown_input_monitor();
         },
         || match signals.as_mut() {
             Some(signal_state) => signal_state.stop_and_join(),

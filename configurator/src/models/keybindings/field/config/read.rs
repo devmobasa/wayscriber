@@ -92,6 +92,7 @@ impl KeybindingField {
             Self::ToggleZoomChip => &config.ui.toggle_zoom_chip,
             Self::ToggleFocusMode => &config.ui.toggle_focus_mode,
             Self::ToggleClickHighlight => &config.ui.toggle_click_highlight,
+            Self::ToggleInputHud => &config.ui.toggle_input_hud,
             Self::ToggleLightMode => &config.ui.toggle_light_mode,
             Self::ToggleLightModeDrawing => &config.ui.toggle_light_mode_drawing,
             Self::ToggleRadialMenu => &config.ui.toggle_radial_menu,

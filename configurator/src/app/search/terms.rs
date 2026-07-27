@@ -51,6 +51,7 @@ pub(super) fn ui_tab_aliases(tab: UiTabId) -> &'static [&'static str] {
         UiTabId::StatusBar => &["status", "badge", "indicator"],
         UiTabId::HelpOverlay => &["help", "quick help", "hints"],
         UiTabId::ClickHighlight => &["click", "cursor", "highlight"],
+        UiTabId::InputHud => &["keystrokes", "keycast", "screencast"],
         UiTabId::PresenterMode => &["present", "presentation", "focus"],
     }
 }
@@ -62,6 +63,7 @@ pub(super) fn ui_tab_terms(tab: UiTabId) -> &'static [&'static str] {
         UiTabId::StatusBar => UI_STATUS_BAR_TERMS,
         UiTabId::HelpOverlay => UI_HELP_OVERLAY_TERMS,
         UiTabId::ClickHighlight => UI_CLICK_HIGHLIGHT_TERMS,
+        UiTabId::InputHud => UI_INPUT_HUD_TERMS,
         UiTabId::PresenterMode => UI_PRESENTER_MODE_TERMS,
     }
 }
@@ -302,6 +304,26 @@ pub(super) const UI_CLICK_HIGHLIGHT_TERMS: &[&str] = &[
     "fill rgba",
     "outline rgba",
 ];
+pub(super) const UI_INPUT_HUD_TERMS: &[&str] = &[
+    "input hud",
+    "enable input hud",
+    "keystrokes",
+    "show keys",
+    "keycast",
+    "key overlay",
+    "screencast",
+    "input source",
+    "system-wide input capture",
+    "overlay only",
+    "screen position",
+    "show mouse buttons and scroll",
+    "show bare modifier taps",
+    "combine repeats into a counter",
+    "hold ms",
+    "fade ms",
+    "max chips",
+    "chip font size",
+];
 pub(super) const UI_PRESENTER_MODE_TERMS: &[&str] = &[
     "presenter mode",
     "hide status bar",
@@ -311,6 +333,7 @@ pub(super) const UI_PRESENTER_MODE_TERMS: &[&str] = &[
     "hide tool preview",
     "close help overlay on entry",
     "force click highlights on",
+    "force input hud on",
     "tool behavior",
     "show enter exit toast",
 ];

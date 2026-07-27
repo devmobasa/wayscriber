@@ -51,6 +51,7 @@ impl WaylandState {
             ui_toast_active,
             blocked_feedback_active,
             text_edit_entry_active,
+            input_hud_animating,
         ) = record_stage!(advance_animations, {
             (
                 self.input_state.advance_click_highlights(now),
@@ -58,13 +59,15 @@ impl WaylandState {
                 self.input_state.advance_ui_toast(now),
                 self.input_state.advance_blocked_feedback(now),
                 self.input_state.advance_text_edit_entry_feedback(now),
+                self.input_state.advance_input_hud(now),
             )
         });
         let ui_animation_active = highlight_active
             || preset_feedback_active
             || ui_toast_active
             || blocked_feedback_active
-            || text_edit_entry_active;
+            || text_edit_entry_active
+            || input_hud_animating;
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 
@@ -91,6 +94,7 @@ impl WaylandState {
             let zoom_chip_active = render_ui && self.zoom_chip_visible();
             let command_palette_active = render_ui && self.input_state.command_palette_is_engaged();
             let color_picker_active = render_ui && self.input_state.is_color_picker_popup_open();
+            let input_hud_active = render_ui && self.input_state.input_hud_visible();
             let ui_effect_damage = self.collect_ui_effect_damage(
                 ui_toast_active,
                 preset_feedback_active,
@@ -98,6 +102,7 @@ impl WaylandState {
                 text_edit_entry_active,
                 render_ui && self.input_state.show_status_bar,
                 zoom_chip_active,
+                input_hud_active,
                 command_palette_active,
                 color_picker_active,
                 tool_preview_active,

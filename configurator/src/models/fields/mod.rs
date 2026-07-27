@@ -1,6 +1,7 @@
 mod eraser;
 mod export;
 mod font;
+mod input_hud;
 mod presenter;
 #[cfg(feature = "tablet-input")]
 mod pressure;
@@ -17,6 +18,7 @@ pub use export::{
     PdfPageSizeOption, PdfTransparentBackgroundOption,
 };
 pub use font::{FontStyleOption, FontWeightOption};
+pub use input_hud::{InputHudModeOption, InputHudPositionOption};
 pub use presenter::{PresenterToolBehaviorOption, PresenterToolbarModeOption};
 #[cfg(feature = "tablet-input")]
 pub use pressure::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

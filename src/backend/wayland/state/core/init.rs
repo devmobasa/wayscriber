@@ -218,6 +218,12 @@ impl WaylandState {
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             persistence,
+            #[cfg(feature = "input-monitor")]
+            input_monitor_wake: runtime_wake.clone(),
+            #[cfg(feature = "input-monitor")]
+            input_monitor: None,
+            input_hud_system_warned: false,
+            input_hud_announce_pending: false,
             session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),
             durable_action_finish: None,
             durable_action_retry_at: None,

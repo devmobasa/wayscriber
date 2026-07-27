@@ -5,6 +5,7 @@ mod config_writer;
 mod frozen;
 mod frozen_geometry;
 mod handlers;
+pub(crate) mod input_monitor;
 mod overlay_passthrough;
 mod portal_capture;
 mod portal_task;

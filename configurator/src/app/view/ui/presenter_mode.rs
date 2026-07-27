@@ -62,6 +62,12 @@ impl ConfiguratorApp {
                 self.defaults.presenter_enable_click_highlight,
                 ToggleField::PresenterEnableClickHighlight,
             ),
+            toggle_row(
+                "Force input HUD on",
+                self.draft.presenter_enable_input_hud,
+                self.defaults.presenter_enable_input_hud,
+                ToggleField::PresenterEnableInputHud,
+            ),
             labeled_control(
                 "Tool behavior",
                 tool_behavior_pick.width(Length::Fill).into(),

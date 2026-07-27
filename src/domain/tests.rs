@@ -144,6 +144,7 @@ fn action_serialization_matches_established_contract() {
         (Action::ToggleZoomChip, "toggle_zoom_chip"),
         (Action::ToggleFocusMode, "toggle_focus_mode"),
         (Action::ToggleClickHighlight, "toggle_click_highlight"),
+        (Action::ToggleInputHud, "toggle_input_hud"),
         (Action::ToggleToolbar, "toggle_toolbar"),
         (Action::CycleToolbarDisplay, "cycle_toolbar_display"),
         (Action::TogglePresenterMode, "toggle_presenter_mode"),
