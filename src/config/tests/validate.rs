@@ -708,6 +708,76 @@ fn legacy_shortcut_migration_preserves_customized_pairs() {
     assert_eq!(custom_capture.config_revision, CURRENT_CONFIG_REVISION);
 }
 
+/// #315 shipped `toggle_input_hud = ["Ctrl+Shift+K"]` without a revision bump,
+/// so serde hands that shortcut to the input HUD in every file written before
+/// the action existed — including files that bound it to something else.
+/// Revision 3 leaves the authored side alone and unbinds the newcomer.
+#[test]
+fn input_hud_default_yields_to_a_shortcut_the_file_already_claims() {
+    let mut config = Config {
+        config_revision: 2,
+        ..Config::default()
+    };
+    // Written the way the file has it: the comparison parses both sides, so
+    // modifier order and case cannot hide the collision.
+    config.keybindings.capture.capture_clipboard_full = vec!["shift+ctrl+k".to_string()];
+
+    config.validate_and_clamp();
+
+    assert!(config.keybindings.ui.toggle_input_hud.is_empty());
+    assert_eq!(
+        config.keybindings.capture.capture_clipboard_full,
+        ["shift+ctrl+k"],
+        "the authored binding keeps both the key and its authored spelling"
+    );
+    assert_eq!(config.config_revision, CURRENT_CONFIG_REVISION);
+}
+
+#[test]
+fn input_hud_migration_preserves_a_customized_binding() {
+    let mut config = Config {
+        config_revision: 2,
+        ..Config::default()
+    };
+    config.keybindings.capture.capture_clipboard_full = vec!["Ctrl+Shift+K".to_string()];
+    config.keybindings.ui.toggle_input_hud = vec!["Ctrl+Alt+K".to_string()];
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.ui.toggle_input_hud, ["Ctrl+Alt+K"]);
+    assert_eq!(
+        config.keybindings.capture.capture_clipboard_full,
+        ["Ctrl+Shift+K"]
+    );
+    assert_eq!(config.config_revision, CURRENT_CONFIG_REVISION);
+}
+
+#[test]
+fn input_hud_migration_keeps_the_default_when_no_one_contests_it() {
+    let mut config = Config {
+        config_revision: 2,
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.ui.toggle_input_hud, ["Ctrl+Shift+K"]);
+    assert_eq!(config.config_revision, CURRENT_CONFIG_REVISION);
+}
+
+/// A file already stamped with revision 3 settled the input HUD question once;
+/// a shortcut it later points at `Ctrl+Shift+K` is the user's business, not the
+/// migration's. Session-level conflict resolution still applies on load.
+#[test]
+fn recorded_revision_three_stops_the_input_hud_migration_from_rerunning() {
+    let mut config = Config::default();
+    config.keybindings.capture.capture_clipboard_full = vec!["Ctrl+Shift+K".to_string()];
+
+    config.apply_keybinding_migrations();
+
+    assert_eq!(config.keybindings.ui.toggle_input_hud, ["Ctrl+Shift+K"]);
+}
+
 #[test]
 fn intentional_legacy_shortcut_pair_is_preserved_after_current_default_edit() {
     let mut config = Config::default();

@@ -10,7 +10,7 @@
 # Delete this config file only to reset authored settings to built-in defaults.
 
 # Internal migration provenance. Keep this value when editing the file.
-config_revision = 2
+config_revision = 3
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS

@@ -8,6 +8,15 @@ macro_rules! define_action_binding_accessors {
         unsupported: [$( $unsupported:ident ),+ $(,)?]
     ) => {
         impl KeybindingsConfig {
+            /// Every action with a persisted `[keybindings]` field, in the
+            /// order declared below (the same group order the keymap
+            /// traversal uses). Adding a configurable action extends this
+            /// list automatically, which is what lets migrations and the
+            /// defaults snapshot test see a newcomer without being told.
+            pub fn configurable_actions() -> &'static [Action] {
+                &[$(Action::$action,)+]
+            }
+
             /// Bindings stored for one configurable action. Runtime-only
             /// actions return `None` because they have no persisted field.
             pub fn bindings_for_action(&self, action: Action) -> Option<&[String]> {

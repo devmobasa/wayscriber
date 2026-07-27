@@ -702,7 +702,10 @@ A live row of keycap-style chips showing what you press, for demos and
 screencasts. Toggle it with `toggle_input_hud` (default
 <kbd>Ctrl+Shift+K</kbd>) or from the command palette; the Settings popover has
 an **Input HUD** checkbox, and the runtime toggle persists to
-`ui.input_hud.enabled`.
+`ui.input_hud.enabled`. A config file that already bound <kbd>Ctrl+Shift+K</kbd>
+to another action keeps it and starts the HUD unbound — see the
+[`[keybindings]` migration notes](#keybindings---custom-keybindings) — so pick a
+free shortcut for `toggle_input_hud` if you want a key for it.
 
 Chips appear on the right and push older chips left. Key chords use the same
 names the keybinding config and help overlay print (`Ctrl+Shift+Z`, `Space`,
@@ -1430,6 +1433,10 @@ Customize keyboard shortcuts for all actions. Each action can have multiple keyb
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
 The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) and advances to `config_revision = 1`. Customized pairs are preserved. The overlay records a pending migration once at startup: it writes the migrated shortcuts together with the new `config_revision`, after copying the previous file to a timestamped `.bak`, and changes nothing else. If that write fails (a read-only file, for example) the migration still applies to the running session and is retried on the next launch. Once the revision is recorded, explicitly restoring the old pair remains untouched.
+
+`config_revision = 3` covers the input HUD. `toggle_input_hud` ships with `Ctrl+Shift+K`, a shortcut that files written before revision 3 never had the chance to decline. If such a file already binds `Ctrl+Shift+K` to another action, the migration leaves that binding alone and writes `toggle_input_hud = []`, so the input HUD starts unbound instead of contending for a key you already use; bind it to something free whenever you want it back. Files that already set `toggle_input_hud` themselves, and files that leave `Ctrl+Shift+K` free, keep the default and only receive the new revision stamp.
+
+**Contributing:** changing or adding a default keybinding requires bumping `CURRENT_CONFIG_REVISION` (`src/config/core.rs`) *and* adding the matching step to `Config::apply_keybinding_migrations` (`src/config/validate/keybindings.rs`) in the same change. A field a config file omits is filled in by serde with the current default, so a new or moved default otherwise lands on top of a shortcut the user bound to something else — a collision their file never authored and does not show. The `default_bindings_match_the_checked_in_snapshot` test holds a snapshot of every shipped default and fails until the snapshot is updated alongside the revision bump and the migration.
 
 ```toml
 [keybindings]

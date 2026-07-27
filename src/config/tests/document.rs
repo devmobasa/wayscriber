@@ -1202,6 +1202,136 @@ future_knob = 7
     );
 }
 
+/// #315 added `toggle_input_hud = ["Ctrl+Shift+K"]` without a revision bump, so
+/// a file that already bound that shortcut inherited a collision it never
+/// wrote. Revision 3 writes the newcomer's surrender into the file instead of
+/// re-arbitrating it on every load.
+#[test]
+fn migration_unbinds_the_input_hud_when_the_file_already_claims_its_shortcut() {
+    let temp = TempConfig::new("input-hud-migration");
+    temp.write(
+        r#"config_revision = 2
+
+[keybindings]
+# Screenshot to clipboard, rebound long before the input HUD existed.
+capture_clipboard_full = ["Ctrl+Shift+K"]
+"#,
+    );
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    assert!(saved.contains("capture_clipboard_full = [\"Ctrl+Shift+K\"]"));
+    assert!(
+        saved.contains("toggle_input_hud = []"),
+        "the migration records the unbinding, got:\n{saved}"
+    );
+    assert!(saved.contains("# Screenshot to clipboard"));
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load migrated config");
+    assert!(document.config().keybindings.ui.toggle_input_hud.is_empty());
+    assert_eq!(
+        document.config().keybindings.capture.capture_clipboard_full,
+        ["Ctrl+Shift+K"]
+    );
+    assert!(
+        document.diagnostics().is_empty(),
+        "the migrated file no longer carries a conflict: {:?}",
+        diagnostic_paths(&document)
+    );
+    let map = document
+        .config()
+        .keybindings
+        .build_action_map()
+        .expect("the migrated keymap has no duplicates");
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Shift+K").expect("Ctrl+Shift+K parses")),
+        Some(&Action::CaptureClipboardFull)
+    );
+
+    Config::persist_pending_migrations_at(&temp.path).expect("second startup");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read config after the second startup"),
+        saved,
+        "the recorded revision keeps the migration from running again"
+    );
+}
+
+/// Nothing contests `Ctrl+Shift+K` here, so the input HUD keeps its default and
+/// the migration write carries the revision stamp alone.
+#[test]
+fn migration_only_stamps_the_revision_when_the_input_hud_default_is_free() {
+    let temp = TempConfig::new("input-hud-uncontested");
+    let original = "config_revision = 2\n\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n";
+    temp.write(original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read migrated config"),
+        original.replace(
+            "config_revision = 2",
+            &format!("config_revision = {CURRENT_CONFIG_REVISION}")
+        ),
+        "the revision stamp is the whole diff"
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load migrated config");
+    assert_eq!(
+        document.config().keybindings.ui.toggle_input_hud,
+        ["Ctrl+Shift+K"]
+    );
+}
+
+#[test]
+fn migration_leaves_a_customized_input_hud_binding_in_the_file() {
+    let temp = TempConfig::new("input-hud-customized");
+    let original = "config_revision = 2\n\n[keybindings]\ncapture_clipboard_full = [\"Ctrl+Shift+K\"]\ntoggle_input_hud = [\"Ctrl+Alt+K\"]\n";
+    temp.write(original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read migrated config"),
+        original.replace(
+            "config_revision = 2",
+            &format!("config_revision = {CURRENT_CONFIG_REVISION}")
+        ),
+        "a deliberate input-HUD binding is none of the migration's business"
+    );
+}
+
+/// A file stamped at the current revision has already been through the
+/// migration, so a shortcut it points at `Ctrl+Shift+K` afterwards is settled
+/// per session by conflict resolution and never rewritten on disk.
+#[test]
+fn a_current_revision_file_keeps_its_text_when_it_contests_the_input_hud_default() {
+    let temp = TempConfig::new("input-hud-current-revision");
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\ncapture_clipboard_full = [\"Ctrl+Shift+K\"]\n"
+    );
+    temp.write(&original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("no pending migration");
+    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+
+    let document =
+        ConfigDocument::load_from_path(&temp.path).expect("load current-revision config");
+    assert_eq!(
+        document.config().keybindings.capture.capture_clipboard_full,
+        ["Ctrl+Shift+K"],
+        "the authored side wins the session"
+    );
+    assert!(
+        document.config().keybindings.ui.toggle_input_hud.is_empty(),
+        "the serde-filled default loses the contested key for the session"
+    );
+    assert_eq!(
+        diagnostic_paths(&document),
+        ["keybindings.toggle_input_hud"]
+    );
+}
+
 #[test]
 fn idless_array_insertion_keeps_metadata_with_unchanged_entries() {
     let temp = TempConfig::new("idless-array-insertion");

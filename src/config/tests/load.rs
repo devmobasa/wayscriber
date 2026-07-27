@@ -380,6 +380,35 @@ fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
 }
 
 #[test]
+fn a_pre_input_hud_file_that_claims_ctrl_shift_k_keeps_it_and_unbinds_the_hud() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        // Revision 2 is the last revision written before `toggle_input_hud`
+        // existed, so the file cannot have opted out of its default.
+        fs::write(
+            primary_dir.join("config.toml"),
+            "config_revision = 2\n\n[keybindings]\ncapture_clipboard_full = ['Ctrl+Shift+K']\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds").config;
+
+        assert_eq!(
+            loaded.keybindings.capture.capture_clipboard_full,
+            ["Ctrl+Shift+K"],
+            "the authored binding keeps the shortcut"
+        );
+        assert!(
+            loaded.keybindings.ui.toggle_input_hud.is_empty(),
+            "the input HUD must not steal a shortcut the file already used"
+        );
+        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert!(loaded.keybindings.build_action_map().is_ok());
+    });
+}
+
+#[test]
 fn revision_one_config_still_gets_the_f2_split_but_not_the_palette_heuristic() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);

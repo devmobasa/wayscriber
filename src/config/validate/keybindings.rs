@@ -12,6 +12,7 @@ const CURRENT_FULL_SCREEN_CAPTURE_DEFAULT: &[&str] = &["Ctrl+Alt+F"];
 const LEGACY_TOGGLE_TOOLBAR_DEFAULT: &[&str] = &["F2", "F9"];
 const CURRENT_TOGGLE_TOOLBAR_DEFAULT: &[&str] = &["F9"];
 const CURRENT_CYCLE_TOOLBAR_DISPLAY_DEFAULT: &[&str] = &["F2"];
+const CURRENT_TOGGLE_INPUT_HUD_DEFAULT: &[&str] = &["Ctrl+Shift+K"];
 
 fn bindings_equal(bindings: &[String], expected: &[&str]) -> bool {
     bindings
@@ -25,6 +26,34 @@ fn bindings_from(expected: &[&str]) -> Vec<String> {
         .iter()
         .map(|binding| (*binding).to_string())
         .collect()
+}
+
+/// Whether an action other than `owner` already claims `binding`.
+///
+/// Candidates go through the parser and then the runtime match rule, so
+/// `shift+ctrl+k` counts as a claim on `Ctrl+Shift+K`: modifier order, spacing,
+/// and key case are all things the keymap ignores when a key is pressed. A
+/// binding string that does not parse is not a claim, because it binds nothing
+/// at runtime either; the keymap reports that typo separately.
+fn binding_claimed_by_another_action(
+    keybindings: &KeybindingsConfig,
+    owner: Action,
+    binding: &KeyBinding,
+) -> bool {
+    KeybindingsConfig::configurable_actions()
+        .iter()
+        .filter(|action| **action != owner)
+        .any(|action| {
+            keybindings
+                .bindings_for_action(*action)
+                .is_some_and(|bindings| {
+                    bindings.iter().any(|candidate| {
+                        KeyBinding::parse(candidate).is_ok_and(|parsed| {
+                            parsed.matches(&binding.key, binding.ctrl, binding.shift, binding.alt)
+                        })
+                    })
+                })
+        })
 }
 
 /// One duplicate shortcut resolved while loading a configuration.
@@ -264,6 +293,9 @@ impl Config {
         if self.config_revision < 2 {
             self.migrate_toggle_toolbar_f2_split();
         }
+        if self.config_revision < 3 {
+            self.migrate_input_hud_default_shortcut();
+        }
         self.config_revision = CURRENT_CONFIG_REVISION;
     }
 
@@ -343,5 +375,38 @@ impl Config {
                 "Preserved custom F2 toggle_toolbar binding; cycle_toolbar_display left unbound"
             );
         }
+    }
+
+    /// Revision 3: `toggle_input_hud` shipped with a `Ctrl+Shift+K` default
+    /// and no revision bump, so every file written until now inherits that
+    /// shortcut from serde — including files that bound `Ctrl+Shift+K` to
+    /// something else. The user never authored that collision and cannot see
+    /// it in their own file.
+    ///
+    /// The authored binding therefore wins and the newcomer starts unbound,
+    /// the same trade `migrate_toggle_toolbar_f2_split` makes for `F2`.
+    fn migrate_input_hud_default_shortcut(&mut self) {
+        // The action shipped before this revision existed, so a pre-revision
+        // file may already mention it. Anything other than the default means
+        // the user adopted the new field deliberately — leave both sides
+        // untouched.
+        if !bindings_equal(
+            &self.keybindings.ui.toggle_input_hud,
+            CURRENT_TOGGLE_INPUT_HUD_DEFAULT,
+        ) {
+            return;
+        }
+        let Some(contested) = CURRENT_TOGGLE_INPUT_HUD_DEFAULT
+            .first()
+            .and_then(|binding| KeyBinding::parse(binding).ok())
+        else {
+            return;
+        };
+        if !binding_claimed_by_another_action(&self.keybindings, Action::ToggleInputHud, &contested)
+        {
+            return;
+        }
+        self.keybindings.ui.toggle_input_hud = Vec::new();
+        log::info!("Preserved the existing {contested} binding; toggle_input_hud left unbound");
     }
 }
