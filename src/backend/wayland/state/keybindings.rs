@@ -899,10 +899,10 @@ mod tests {
     #[test]
     fn an_unrelated_edit_proceeds_over_an_unparseable_binding_elsewhere() {
         crate::config::test_helpers::with_temp_config_home(|config_root| {
-            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
-            fs::create_dir_all(&config_dir).unwrap();
-            let config_path = config_dir.join("config.toml");
             write_config_with_keybindings(config_root, "clear_canvas = ['Ctrl+Shift']\n");
+            let config_path = config_root
+                .join(crate::config::PRIMARY_CONFIG_DIR)
+                .join("config.toml");
 
             let merged = load_and_merge_keybinding_edit(
                 &KeybindingEditRequest {
