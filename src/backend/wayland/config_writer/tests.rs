@@ -207,6 +207,36 @@ fn partial_click_highlight_edits_remain_ordered() {
     );
 }
 
+/// The HUD toggle is a single boolean, so repeated flips coalesce onto the
+/// latest value instead of queueing one write per keypress.
+#[test]
+fn repeated_input_hud_toggles_keep_only_the_latest_value() {
+    let (batches_tx, batches_rx) = mpsc::channel();
+    let persist = Box::new(move |mutations: &[ConfigMutation]| {
+        let mut config = Config::default();
+        for mutation in mutations {
+            let _ = mutation.apply(&mut config);
+        }
+        batches_tx
+            .send((mutations.len(), config.ui.input_hud.enabled))
+            .map_err(|error| anyhow::anyhow!("batch observer disconnected: {error}"))?;
+        Ok(())
+    });
+    let mut writer = ConfigWriter::spawn(persist);
+
+    assert!(writer.request(&ConfigMutation::InputHud(true)));
+    assert!(writer.request(&ConfigMutation::InputHud(false)));
+    assert!(writer.request(&ConfigMutation::InputHud(true)));
+    writer.shutdown();
+
+    assert_eq!(
+        batches_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("shutdown should flush the coalesced edit"),
+        (1, true)
+    );
+}
+
 #[test]
 fn a_failed_write_is_retained_for_the_shutdown_retry() {
     let (attempts_tx, attempts_rx) = mpsc::channel();

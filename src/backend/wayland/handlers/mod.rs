@@ -25,7 +25,7 @@ delegate_xdg_window!(WaylandState);
 mod activation;
 mod buffer;
 mod compositor;
-mod keyboard;
+pub(in crate::backend::wayland) mod keyboard;
 mod layer;
 mod output;
 mod pointer;

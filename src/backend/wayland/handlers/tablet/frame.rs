@@ -189,6 +189,11 @@ impl WaylandState {
             return;
         }
 
+        // Report the pen tip to the input HUD alongside the mouse buttons; the
+        // pen is a pointer device, so it gets the same pill chrome.
+        self.input_state
+            .note_input_hud_mouse("Pen", self.input_state.modifiers);
+
         let hover_cursor_pos = self.stylus_hover_cursor_position();
         let (x, y) = self.current_stylus_position();
         self.set_current_mouse(x as i32, y as i32);

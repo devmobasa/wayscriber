@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::config::{Action, Config, KeyBinding, KeybindingsConfig, QuickColorPalette};
 use crate::draw::{FontDescriptor, clamp_regular_sides};
-use crate::input::{ClickHighlightSettings, DragToolBindings, InputState};
+use crate::input::{ClickHighlightSettings, DragToolBindings, InputHudSettings, InputState};
 
 pub(super) fn build_input_state(config: &Config) -> InputState {
     let font_descriptor = FontDescriptor::new(
@@ -43,6 +43,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.presenter_mode.clone(),
     );
     input_state.set_action_bindings(action_bindings);
+    input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
     input_state.set_quick_colors(QuickColorPalette::from_config(&config.drawing.quick_colors));
     input_state.set_drag_tool_bindings(build_drag_tool_bindings(config));
     input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(

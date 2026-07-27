@@ -20,6 +20,13 @@ impl WaylandState {
         } else {
             0
         };
+        // Report the physical wheel tick to the input HUD before any surface
+        // claims it. Positive axis values scroll the content down, so a
+        // negative direction is the "scroll up" the user performed.
+        if scroll_direction != 0 {
+            self.input_state
+                .note_input_hud_scroll(scroll_direction < 0, self.input_state.modifiers);
+        }
         // Handle radial menu scroll-to-thickness
         if self.input_state.is_radial_menu_open() {
             if scroll_direction != 0 {

@@ -129,6 +129,7 @@ define_action_binding_accessors! {
     ToggleZoomChip => ui.toggle_zoom_chip,
     ToggleFocusMode => ui.toggle_focus_mode,
     ToggleClickHighlight => ui.toggle_click_highlight,
+    ToggleInputHud => ui.toggle_input_hud,
     ToggleToolbar => ui.toggle_toolbar,
     CycleToolbarDisplay => ui.cycle_toolbar_display,
     TogglePresenterMode => ui.toggle_presenter_mode,

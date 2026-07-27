@@ -30,6 +30,10 @@ pub struct PresenterModeConfig {
     #[serde(default = "default_enable_click_highlight")]
     pub enable_click_highlight: bool,
 
+    /// Force the input HUD on while presenter mode is active.
+    #[serde(default = "default_enable_input_hud")]
+    pub enable_input_hud: bool,
+
     /// Tool behavior while presenter mode is active.
     #[serde(default)]
     pub tool_behavior: PresenterToolBehavior,
@@ -48,6 +52,7 @@ impl Default for PresenterModeConfig {
             hide_tool_preview: default_hide_tool_preview(),
             close_help_overlay: default_close_help_overlay(),
             enable_click_highlight: default_enable_click_highlight(),
+            enable_input_hud: default_enable_input_hud(),
             tool_behavior: PresenterToolBehavior::default(),
             show_toast: default_show_toast(),
         }
@@ -97,6 +102,10 @@ fn default_close_help_overlay() -> bool {
 
 fn default_enable_click_highlight() -> bool {
     true
+}
+
+fn default_enable_input_hud() -> bool {
+    false
 }
 
 fn default_show_toast() -> bool {

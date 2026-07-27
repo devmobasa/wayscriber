@@ -414,6 +414,77 @@ fn click_highlight_force_in_light_mode_defaults_true_and_parses_false() {
 }
 
 #[test]
+fn input_hud_defaults_are_off_with_auto_mode_at_bottom_center() {
+    let config = Config::default();
+    assert!(!config.ui.input_hud.enabled);
+    assert_eq!(config.ui.input_hud.mode, InputHudMode::Auto);
+    assert_eq!(config.ui.input_hud.position, InputHudPosition::BottomCenter);
+    assert!(config.ui.input_hud.show_mouse);
+    assert!(config.ui.input_hud.show_bare_modifiers);
+    assert_eq!(config.ui.input_hud.display_ms, 1600);
+    assert_eq!(config.ui.input_hud.fade_ms, 350);
+    assert_eq!(config.ui.input_hud.max_entries, 6);
+    assert!(config.ui.input_hud.combine_repeats);
+    assert!(!config.presenter_mode.enable_input_hud);
+}
+
+#[test]
+fn input_hud_section_round_trips_its_kebab_case_enums() {
+    let config: Config = toml::from_str(
+        r#"
+[ui.input_hud]
+enabled = true
+mode = "system"
+position = "top-right"
+show_mouse = false
+display_ms = 900
+max_entries = 3
+"#,
+    )
+    .expect("input HUD section should parse");
+
+    assert!(config.ui.input_hud.enabled);
+    assert_eq!(config.ui.input_hud.mode, InputHudMode::System);
+    assert_eq!(config.ui.input_hud.position, InputHudPosition::TopRight);
+    assert!(!config.ui.input_hud.show_mouse);
+    assert_eq!(config.ui.input_hud.display_ms, 900);
+    assert_eq!(config.ui.input_hud.max_entries, 3);
+    // Omitted keys keep their documented defaults.
+    assert!(config.ui.input_hud.show_bare_modifiers);
+    assert_eq!(config.ui.input_hud.fade_ms, 350);
+
+    let rendered = toml::to_string(&config).expect("config should serialize");
+    let reloaded: Config = toml::from_str(&rendered).expect("config should round-trip");
+    assert_eq!(reloaded.ui.input_hud.mode, InputHudMode::System);
+    assert_eq!(reloaded.ui.input_hud.position, InputHudPosition::TopRight);
+}
+
+/// The middle grid row of anchors parses like the corner rows.
+#[test]
+fn input_hud_center_anchors_parse() {
+    for (name, expected) in [
+        ("center-left", InputHudPosition::CenterLeft),
+        ("center", InputHudPosition::Center),
+        ("center-right", InputHudPosition::CenterRight),
+    ] {
+        let config: Config = toml::from_str(&format!("[ui.input_hud]\nposition = \"{name}\"\n"))
+            .expect("center anchor should parse");
+        assert_eq!(config.ui.input_hud.position, expected);
+    }
+}
+
+#[test]
+fn presenter_mode_enable_input_hud_parses() {
+    let config: Config = toml::from_str(
+        "[presenter_mode]
+enable_input_hud = true
+",
+    )
+    .expect("presenter input HUD toggle should parse");
+    assert!(config.presenter_mode.enable_input_hud);
+}
+
+#[test]
 fn drawing_quick_colors_default_when_drawing_table_omits_field() {
     let config: Config = toml::from_str("[drawing]\ndefault_color = 'blue'\n")
         .expect("drawing table without quick colors should parse");

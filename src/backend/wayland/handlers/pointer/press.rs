@@ -21,6 +21,15 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        // Report the physical button to the input HUD before any modal or
+        // toolbar routing consumes it. GTK toolbar surfaces are separate
+        // windows and never reach this handler, so their clicks only show in
+        // system mode (documented in docs/CONFIG.md).
+        if self.input_state.input_hud_enabled() {
+            self.input_state
+                .note_input_hud_mouse(&input_hud_button_label(button), self.input_state.modifiers);
+        }
+
         let help_press_source = HelpOverlayPressSource::Pointer(button);
         if !self.input_state.show_help {
             // A new press proves any older help-owned sequence for this button
@@ -276,5 +285,17 @@ impl WaylandState {
             self.toolbar.mark_dirty();
         }
         changed
+    }
+}
+
+/// Input HUD label for a raw pointer button code. The three primary buttons
+/// get their spoken names; anything else reports its evdev code so extra mouse
+/// buttons stay visible without inventing names for them.
+fn input_hud_button_label(button: u32) -> String {
+    match button {
+        BTN_LEFT => "Click".to_string(),
+        BTN_RIGHT => "Right Click".to_string(),
+        BTN_MIDDLE => "Middle Click".to_string(),
+        other => format!("Button {other}"),
     }
 }

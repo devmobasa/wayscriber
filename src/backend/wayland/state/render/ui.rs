@@ -154,6 +154,20 @@ impl WaylandState {
                 );
             }
 
+            // Render the input HUD's chip row (keystrokes and clicks). Like
+            // the status pills it uses the status-bar style tokens, and it
+            // lives behind the same `render_ui` gate so overlay suppression
+            // hides it with the rest of the chrome.
+            if self.input_state.input_hud_visible() {
+                crate::ui::render_input_hud(
+                    ctx,
+                    &self.input_state,
+                    &self.config.ui.status_bar_style,
+                    width,
+                    height,
+                );
+            }
+
             // Render help overlay if toggled
             if self.input_state.show_help {
                 let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);

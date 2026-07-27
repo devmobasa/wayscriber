@@ -166,6 +166,23 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ToggleInputHud,
+        "Input HUD",
+        None,
+        "Show keystrokes and clicks on screen",
+        UI,
+        true,
+        true,
+        false,
+        &[
+            "keystrokes",
+            "keycast",
+            "show keys",
+            "screencast",
+            "key overlay"
+        ]
+    ),
+    meta!(
         ToggleRadialMenu,
         "Radial Menu",
         None,

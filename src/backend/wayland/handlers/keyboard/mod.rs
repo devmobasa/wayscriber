@@ -12,7 +12,7 @@ use wayland_client::{
 use crate::{config::Action, input::Key, notification};
 
 use super::super::state::WaylandState;
-use translate::keysym_to_key;
+pub(in crate::backend::wayland) use translate::keysym_to_key;
 
 impl KeyboardHandler for WaylandState {
     fn enter(
@@ -108,6 +108,12 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        // Report the physical press to the input HUD before any subsystem
+        // routing consumes it, so the HUD always shows what was pressed rather
+        // than what happened to reach the canvas. Compositor-synced modifier
+        // state is already current here, so the chord label is exact.
+        self.input_state
+            .note_input_hud_key(key, self.input_state.modifiers);
         // Any fresh key press ends the previous auto-repeat; a repeatable one
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
@@ -187,7 +193,7 @@ impl KeyboardHandler for WaylandState {
         // dispatch. Some dedicated entry modals manage or intentionally block
         // repeat themselves; other routed overlays (for example Help search)
         // still use this timer even though they disable the canvas IME.
-        if !modal_blocks_repeat && Self::is_repeatable_key(key) && self.has_keyboard_focus() {
+        if !modal_blocks_repeat && is_repeatable_key(key) && self.has_keyboard_focus() {
             self.key_repeat_key = Some(key);
             self.key_repeat_next_tick = Some(Instant::now() + Self::KEY_REPEAT_INITIAL_DELAY);
         }
@@ -253,35 +259,42 @@ impl KeyboardHandler for WaylandState {
     }
 }
 
-/// Delay before a held key begins repeating.
-const KEY_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(400);
+/// Delay before a held key begins repeating. Shared with the input HUD's
+/// system monitor so held keys tick at the same cadence in both capture modes.
+pub(in crate::backend::wayland) const KEY_REPEAT_INITIAL_DELAY: Duration =
+    Duration::from_millis(400);
 /// Interval between repeats once repeating (≈25/s).
-const KEY_REPEAT_INTERVAL: Duration = Duration::from_millis(40);
+pub(in crate::backend::wayland) const KEY_REPEAT_INTERVAL: Duration = Duration::from_millis(40);
+
+/// Keys that auto-repeat while held: text entry, deletion, and
+/// navigation. Action/toggle keys (Return, Escape, Tab, F-keys) are left
+/// out so holding them never spams their one-shot effect.
+///
+/// This is an *action* policy, not a keymap fact: the input HUD's system
+/// monitor deliberately asks xkb which keys repeat instead, because there it
+/// mirrors what the focused app receives rather than gating wayscriber's own
+/// dispatch.
+fn is_repeatable_key(key: Key) -> bool {
+    matches!(
+        key,
+        Key::Char(_)
+            | Key::Backspace
+            | Key::Delete
+            | Key::Space
+            | Key::Left
+            | Key::Right
+            | Key::Up
+            | Key::Down
+            | Key::Home
+            | Key::End
+            | Key::PageUp
+            | Key::PageDown
+    )
+}
 
 impl WaylandState {
     pub(in crate::backend::wayland) const KEY_REPEAT_INITIAL_DELAY: Duration =
         KEY_REPEAT_INITIAL_DELAY;
-
-    /// Keys that auto-repeat while held: text entry, deletion, and
-    /// navigation. Action/toggle keys (Return, Escape, Tab, F-keys) are left
-    /// out so holding them never spams their one-shot effect.
-    fn is_repeatable_key(key: Key) -> bool {
-        matches!(
-            key,
-            Key::Char(_)
-                | Key::Backspace
-                | Key::Delete
-                | Key::Space
-                | Key::Left
-                | Key::Right
-                | Key::Up
-                | Key::Down
-                | Key::Home
-                | Key::End
-                | Key::PageUp
-                | Key::PageDown
-        )
-    }
 
     pub(in crate::backend::wayland) fn clear_key_repeat(&mut self) {
         self.key_repeat_key = None;
@@ -339,6 +352,10 @@ impl WaylandState {
         if !self.is_overlay_ready() {
             return;
         }
+        // A held key ticks the HUD chip's repeat counter at the repeat rate,
+        // exactly like a fresh press reports the first one.
+        self.input_state
+            .note_input_hud_key(key, self.input_state.modifiers);
         if self.input_state.eyedropper_is_engaged() {
             return;
         }
@@ -421,21 +438,21 @@ mod tests {
     fn text_and_navigation_keys_auto_repeat() {
         // The reported case (hold Backspace to delete) plus the rest of the
         // editing/navigation set.
-        assert!(WaylandState::is_repeatable_key(Key::Backspace));
-        assert!(WaylandState::is_repeatable_key(Key::Delete));
-        assert!(WaylandState::is_repeatable_key(Key::Char('a')));
-        assert!(WaylandState::is_repeatable_key(Key::Space));
+        assert!(is_repeatable_key(Key::Backspace));
+        assert!(is_repeatable_key(Key::Delete));
+        assert!(is_repeatable_key(Key::Char('a')));
+        assert!(is_repeatable_key(Key::Space));
         for key in [Key::Left, Key::Right, Key::Up, Key::Down] {
-            assert!(WaylandState::is_repeatable_key(key));
+            assert!(is_repeatable_key(key));
         }
     }
 
     #[test]
     fn one_shot_keys_do_not_auto_repeat() {
         // Holding these must never spam their effect.
-        assert!(!WaylandState::is_repeatable_key(Key::Return));
-        assert!(!WaylandState::is_repeatable_key(Key::Escape));
-        assert!(!WaylandState::is_repeatable_key(Key::Tab));
-        assert!(!WaylandState::is_repeatable_key(Key::F10));
+        assert!(!is_repeatable_key(Key::Return));
+        assert!(!is_repeatable_key(Key::Escape));
+        assert!(!is_repeatable_key(Key::Tab));
+        assert!(!is_repeatable_key(Key::F10));
     }
 }

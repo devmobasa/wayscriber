@@ -107,6 +107,7 @@ mod eyedropper;
 mod gtk_toolbar;
 mod helpers;
 mod input_actions;
+mod input_hud;
 mod keybindings;
 mod onboarding;
 mod pdf_export;
@@ -216,6 +217,24 @@ pub(super) struct WaylandState {
 
     // Input state
     pub(super) input_state: InputState,
+    /// Wake handle the input HUD's system reader pokes after sending chips.
+    /// Cloned from the shared runtime source at startup so the reader can be
+    /// started and stopped whenever the HUD toggles.
+    #[cfg(feature = "input-monitor")]
+    pub(super) input_monitor_wake: crate::backend::wayland::RuntimeWakeHandle,
+    /// Live system-wide input reader (`Some` only while the HUD runs in system
+    /// mode); dropping it stops the thread.
+    #[cfg(feature = "input-monitor")]
+    pub(super) input_monitor: Option<crate::backend::wayland::input_monitor::InputMonitor>,
+    /// Latch for the "system capture unavailable" guidance: one warning per
+    /// denied episode, whether the request came from startup config, a
+    /// toggle, or a mode change. Reset when system capture starts or stops
+    /// being requested.
+    pub(super) input_hud_system_warned: bool,
+    /// A runtime enable is waiting to announce which source it got. Held
+    /// across the reader thread's readiness handshake, so the toast names the
+    /// source the HUD actually ended up with.
+    pub(super) input_hud_announce_pending: bool,
     pub(super) clipboard_publish: ClipboardOperationController<u64, ClipboardPublishCompletion>,
     pub(super) clipboard_paste:
         ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,

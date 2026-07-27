@@ -493,6 +493,31 @@ fn validate_clamps_preset_fields() {
 }
 
 #[test]
+fn validate_and_clamp_clamps_input_hud_fields() {
+    let mut config = Config::default();
+    config.ui.input_hud.display_ms = 10;
+    config.ui.input_hud.fade_ms = 60_000;
+    config.ui.input_hud.max_entries = 0;
+    config.ui.input_hud.font_size = 500.0;
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.ui.input_hud.display_ms, 200);
+    assert_eq!(config.ui.input_hud.fade_ms, 5_000);
+    assert_eq!(config.ui.input_hud.max_entries, 1);
+    assert_eq!(config.ui.input_hud.font_size, 72.0);
+
+    let mut upper = Config::default();
+    upper.ui.input_hud.display_ms = 120_000;
+    upper.ui.input_hud.max_entries = 99;
+    upper.ui.input_hud.font_size = f64::NAN;
+    upper.validate_and_clamp();
+    assert_eq!(upper.ui.input_hud.display_ms, 30_000);
+    assert_eq!(upper.ui.input_hud.max_entries, 16);
+    assert_eq!(upper.ui.input_hud.font_size, 18.0);
+}
+
+#[test]
 fn validate_and_clamp_clamps_ui_and_session_fields() {
     let mut config = Config::default();
     config.drawing.marker_opacity = 2.0;

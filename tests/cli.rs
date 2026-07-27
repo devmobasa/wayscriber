@@ -331,9 +331,15 @@ fn wayscriber_version_prints_binary_name() {
 
 #[test]
 fn wayscriber_runtime_capabilities_reports_portal_feature() {
-    let expected = format!(
-        "portal={}\n",
-        wayscriber::shortcut_hint::portal_runtime_supported()
+    let expected = wayscriber::runtime_capabilities::render_runtime_capabilities(
+        wayscriber::runtime_capabilities::current_runtime_capabilities(),
+    );
+    assert!(
+        expected.starts_with(&format!(
+            "portal={}\n",
+            wayscriber::shortcut_hint::portal_runtime_supported()
+        )),
+        "the rendered report must lead with the portal capability"
     );
     run_command(wayscriber_cmd().arg(RUNTIME_CAPABILITIES_FLAG))
         .success()

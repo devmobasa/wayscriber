@@ -99,6 +99,27 @@ impl InputState {
                 info!("{}", message);
                 true
             }
+            Action::ToggleInputHud => {
+                // Presenter mode owns the HUD while it forces it on; a manual
+                // toggle must not fight it (same gate as ToggleClickHighlight).
+                if self.presenter_mode && self.presenter_mode_config.enable_input_hud {
+                    return true;
+                }
+                let enabled = self.toggle_input_hud();
+                if enabled {
+                    // The effective source is only known after the backend
+                    // reconciles the reader thread; the enable announcement is
+                    // pushed there (`sync_input_monitor`), so it can never
+                    // claim "overlay input only" right before system-wide
+                    // capture starts.
+                    info!("Input HUD enabled");
+                } else {
+                    let message = "Input HUD disabled";
+                    self.push_toast(ToastPriority::Info, "ui", Toast::info(message));
+                    info!("{}", message);
+                }
+                true
+            }
             Action::ToggleToolbar => {
                 if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
                     return true;

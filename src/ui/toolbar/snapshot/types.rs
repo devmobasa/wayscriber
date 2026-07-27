@@ -281,6 +281,8 @@ pub struct ToolbarSnapshot {
     pub page_index: usize,
     pub page_count: usize,
     pub click_highlight_enabled: bool,
+    /// Whether the on-screen input HUD is enabled
+    pub input_hud_enabled: bool,
     pub highlight_tool_active: bool,
     pub highlight_tool_ring_enabled: bool,
     /// Whether any highlight feature is active (tool or click)
