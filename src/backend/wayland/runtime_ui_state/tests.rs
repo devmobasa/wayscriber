@@ -5,7 +5,7 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
-use crate::backend::wayland::config_writer::ConfigMutation;
+use crate::backend::wayland::config_writer::{ConfigMutation, ConfigWriteReceipt};
 use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
 use crate::input::boards::{BoardConfigChange, PendingBoardConfigUpdate};
 use crate::input::state::test_support::make_test_input_state;
@@ -234,6 +234,7 @@ fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
         ConfigMutation::Keybinding {
             action: crate::config::Action::ClearCanvas,
             bindings: vec!["Ctrl+Alt+Shift+L".to_string()],
+            receipt: ConfigWriteReceipt::initial(),
         },
     ]
 }

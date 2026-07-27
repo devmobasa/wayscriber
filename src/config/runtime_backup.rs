@@ -12,8 +12,8 @@
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, bail};
 use log::{debug, info, warn};
-use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// How many snapshots the directory keeps. Enough to walk back a few sessions
@@ -24,6 +24,14 @@ const BACKUP_SUFFIX: &str = ".toml";
 /// Upper bound on the same-second names one process will try before giving up.
 /// Only reached if several processes snapshot within the same second.
 const MAX_NAME_ATTEMPTS: usize = 32;
+/// Mode a snapshot falls back to when the source's own bits cannot be read.
+/// Private, because guessing wide on a file whose permissions are unknown is
+/// the one mistake a backup must not make.
+const PRIVATE_BACKUP_MODE: u32 = 0o600;
+/// The directory holds verbatim copies of a file the user may have locked
+/// down, so it is owner-only regardless of what the source allows.
+#[cfg(unix)]
+const BACKUP_DIR_MODE: u32 = 0o700;
 
 /// The snapshot this process still owes, if any.
 ///
@@ -83,34 +91,110 @@ impl RuntimeConfigBackup {
 
 /// Returns the snapshot path, or `None` when there was no file to copy.
 fn snapshot(source: &Path, directory: &Path, retention: usize) -> Result<Option<PathBuf>> {
-    let contents = match fs::read(source) {
-        Ok(contents) => contents,
+    let mut source_file = match File::open(source) {
+        Ok(file) => file,
         // A config the user has not written yet has no state worth keeping.
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(error) => {
             return Err(error)
-                .with_context(|| format!("Failed to read config from {}", source.display()));
+                .with_context(|| format!("Failed to open config at {}", source.display()));
         }
     };
-    fs::create_dir_all(directory).with_context(|| {
+    let mut contents = Vec::new();
+    source_file
+        .read_to_end(&mut contents)
+        .with_context(|| format!("Failed to read config from {}", source.display()))?;
+    let mode = source_mode(&source_file, source);
+    create_backup_dir(directory).with_context(|| {
         format!(
             "Failed to create config backup directory {}",
             directory.display()
         )
     })?;
-    let backup = write_unique_snapshot(directory, &contents)?;
+    let backup = write_unique_snapshot(directory, &contents, mode)?;
     prune(directory, retention);
     Ok(Some(backup))
 }
 
-fn write_unique_snapshot(directory: &Path, contents: &[u8]) -> Result<PathBuf> {
+/// The permission bits the snapshot must carry. A `0600` config copied at the
+/// default `0666 & umask` would hand its contents to every local user, so the
+/// copy inherits the source's bits instead of the process's umask.
+#[cfg(unix)]
+fn source_mode(source_file: &File, source: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    match source_file.metadata() {
+        Ok(metadata) => metadata.permissions().mode() & 0o777,
+        Err(error) => {
+            warn!(
+                "Failed to read permissions of {}; backing it up as {PRIVATE_BACKUP_MODE:o}: {error}",
+                source.display()
+            );
+            PRIVATE_BACKUP_MODE
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn source_mode(_source_file: &File, _source: &Path) -> u32 {
+    PRIVATE_BACKUP_MODE
+}
+
+/// `mode` applies only to directories this call creates; one that already
+/// exists keeps whatever the user gave it.
+#[cfg(unix)]
+fn create_backup_dir(directory: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(BACKUP_DIR_MODE)
+        .create(directory)
+}
+
+#[cfg(not(unix))]
+fn create_backup_dir(directory: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(directory)
+}
+
+#[cfg(unix)]
+fn create_snapshot_file(path: &Path, mode: u32) -> std::io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn create_snapshot_file(path: &Path, _mode: u32) -> std::io::Result<fs::File> {
+    OpenOptions::new().write(true).create_new(true).open(path)
+}
+
+/// `OpenOptions::mode` is still filtered by the umask, which can only clear
+/// bits — never add them — so the file is never wider than intended while it is
+/// being written, and this restores whatever the umask stripped.
+#[cfg(unix)]
+fn enforce_snapshot_mode(file: &fs::File, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    file.set_permissions(fs::Permissions::from_mode(mode))
+}
+
+#[cfg(not(unix))]
+fn enforce_snapshot_mode(_file: &fs::File, _mode: u32) -> std::io::Result<()> {
+    Ok(())
+}
+
+fn write_unique_snapshot(directory: &Path, contents: &[u8], mode: u32) -> Result<PathBuf> {
     let stamp = format_with_template(now_local(), "%Y%m%d-%H%M%S");
     for name in snapshot_names(&stamp) {
         let path = directory.join(name);
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
+        match create_snapshot_file(&path, mode) {
             Ok(mut file) => {
                 file.write_all(contents).with_context(|| {
                     format!("Failed to write config backup to {}", path.display())
+                })?;
+                enforce_snapshot_mode(&file, mode).with_context(|| {
+                    format!("Failed to restrict config backup {}", path.display())
                 })?;
                 return Ok(path);
             }

@@ -69,7 +69,26 @@ pub(in crate::backend::wayland) enum ConfigMutation {
     Keybinding {
         action: Action,
         bindings: Vec<String>,
+        receipt: ConfigWriteReceipt,
     },
+}
+
+/// Identity the event-loop state assigns to one accepted shortcut edit.
+///
+/// The writer returns it only after the batch is durable, allowing the live
+/// keymap to stop replaying that edit over later on-disk changes without
+/// sharing state with the worker thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct ConfigWriteReceipt(u64);
+
+impl ConfigWriteReceipt {
+    pub(in crate::backend::wayland) const fn initial() -> Self {
+        Self(0)
+    }
+
+    pub(in crate::backend::wayland) fn successor(self) -> Option<Self> {
+        self.0.checked_add(1).map(Self)
+    }
 }
 
 impl ConfigMutation {
@@ -136,7 +155,9 @@ impl ConfigMutation {
                     QuickColorWrite::SlotMissing
                 );
             }
-            Self::Keybinding { action, bindings } => {
+            Self::Keybinding {
+                action, bindings, ..
+            } => {
                 // Runtime-only actions have no stored field. The editor
                 // refuses them before queueing, so this only keeps an
                 // impossible request from forcing a no-op write.
@@ -222,6 +243,34 @@ impl ConfigMutation {
         };
         Some(key)
     }
+
+    fn keybinding_receipt(&self) -> Option<ConfigWriteReceipt> {
+        match self {
+            Self::Keybinding { receipt, .. } => Some(*receipt),
+            Self::ToolbarLayout(_)
+            | Self::ToolbarSectionVisibility { .. }
+            | Self::ToolbarUseIcons(_)
+            | Self::ToolbarShowMoreColors(_)
+            | Self::ToolbarContextAwareUi(_)
+            | Self::ToolbarPresetToasts(_)
+            | Self::ToolbarToolPreview(_)
+            | Self::ToolbarDelaySliders(_)
+            | Self::ShowStatusBar(_)
+            | Self::StatusBarInteractive(_)
+            | Self::StatusBarItem { .. }
+            | Self::StatusBoardBadge(_)
+            | Self::StatusPageBadge(_)
+            | Self::FloatingBadgeAlways(_)
+            | Self::FloatingBadge(_)
+            | Self::ZoomChip(_)
+            | Self::HistoryCustomSection(_)
+            | Self::ClickHighlight { .. }
+            | Self::InputHud(_)
+            | Self::BoardConfig(_)
+            | Self::PresetSlot { .. }
+            | Self::QuickColor { .. } => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -306,6 +355,7 @@ type PersistMutations = Box<dyn FnMut(&[ConfigMutation]) -> Result<()> + Send>;
 /// Event-loop facade for the channel-owned config writer.
 pub(in crate::backend::wayland) struct ConfigWriter {
     sender: Option<Sender<WriterCommand>>,
+    completed_keybindings: Receiver<ConfigWriteReceipt>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -332,13 +382,15 @@ impl ConfigWriter {
 
     fn spawn(persist: PersistMutations) -> Self {
         let (sender, receiver) = channel();
+        let (completion_sender, completed_keybindings) = channel();
         let worker = thread::Builder::new()
             .name("wayscriber-config-writer".to_string())
-            .spawn(move || run_writer(receiver, persist));
+            .spawn(move || run_writer(receiver, completion_sender, persist));
 
         match worker {
             Ok(worker) => Self {
                 sender: Some(sender),
+                completed_keybindings,
                 worker: Some(worker),
             },
             Err(error) => {
@@ -349,8 +401,10 @@ impl ConfigWriter {
     }
 
     fn unavailable() -> Self {
+        let (_completion_sender, completed_keybindings) = channel();
         Self {
             sender: None,
+            completed_keybindings,
             worker: None,
         }
     }
@@ -361,6 +415,13 @@ impl ConfigWriter {
         self.sender
             .as_ref()
             .is_some_and(|sender| sender.send(WriterCommand::Apply(mutation.clone())).is_ok())
+    }
+
+    /// Drain shortcut edits whose batches have reached durable storage.
+    pub(in crate::backend::wayland) fn take_completed_keybinding_writes(
+        &self,
+    ) -> Vec<ConfigWriteReceipt> {
+        self.completed_keybindings.try_iter().collect()
     }
 
     /// Flush queued mutations and wait for the writer to finish.
@@ -405,7 +466,11 @@ fn receive_worker_event(
     }
 }
 
-fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) {
+fn run_writer(
+    receiver: Receiver<WriterCommand>,
+    completion_sender: Sender<ConfigWriteReceipt>,
+    mut persist: PersistMutations,
+) {
     let mut pending = Vec::new();
     let mut write_after = None;
     let mut retry_delay = INITIAL_RETRY_DELAY;
@@ -420,12 +485,13 @@ fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) 
                 write_after = Some(WRITE_DEBOUNCE);
             }
             WorkerEvent::Command(WriterCommand::Shutdown) | WorkerEvent::Disconnected => {
-                persist_before_shutdown(&mut persist, &pending);
+                persist_before_shutdown(&mut persist, &pending, &completion_sender);
                 return;
             }
             WorkerEvent::Timeout => match persist(&pending) {
                 Ok(()) => {
                     debug!("Processed {} runtime config edit(s)", pending.len());
+                    acknowledge_keybinding_writes(&completion_sender, &pending);
                     pending.clear();
                     write_after = None;
                     retry_delay = INITIAL_RETRY_DELAY;
@@ -443,15 +509,36 @@ fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) 
     }
 }
 
-fn persist_before_shutdown(persist: &mut PersistMutations, pending: &[ConfigMutation]) {
+fn acknowledge_keybinding_writes(
+    completion_sender: &Sender<ConfigWriteReceipt>,
+    pending: &[ConfigMutation],
+) {
+    for receipt in pending
+        .iter()
+        .filter_map(ConfigMutation::keybinding_receipt)
+    {
+        if completion_sender.send(receipt).is_err() {
+            return;
+        }
+    }
+}
+
+fn persist_before_shutdown(
+    persist: &mut PersistMutations,
+    pending: &[ConfigMutation],
+    completion_sender: &Sender<ConfigWriteReceipt>,
+) {
     if pending.is_empty() {
         return;
     }
     match persist(pending) {
-        Ok(()) => debug!(
-            "Processed {} runtime config edit(s) during shutdown",
-            pending.len()
-        ),
+        Ok(()) => {
+            debug!(
+                "Processed {} runtime config edit(s) during shutdown",
+                pending.len()
+            );
+            acknowledge_keybinding_writes(completion_sender, pending);
+        }
         Err(error) => warn!(
             "Failed to persist {} runtime config edit(s) during shutdown: {error:#}",
             pending.len()

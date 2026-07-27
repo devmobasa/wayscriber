@@ -1,4 +1,19 @@
 use super::*;
+use std::os::unix::fs::PermissionsExt;
+
+fn mode_of(path: &Path) -> u32 {
+    fs::metadata(path)
+        .expect("path should exist")
+        .permissions()
+        .mode()
+        & 0o777
+}
+
+fn only_backup(directory: &Path) -> PathBuf {
+    let names = backup_names(directory);
+    assert_eq!(names.len(), 1, "expected exactly one snapshot: {names:?}");
+    directory.join(&names[0])
+}
 
 fn backup_names(directory: &Path) -> Vec<String> {
     let mut names = fs::read_dir(directory)
@@ -104,7 +119,8 @@ fn a_name_collision_takes_the_next_name_instead_of_overwriting() {
     let taken = directory.join(format!("{BACKUP_PREFIX}{stamp}{BACKUP_SUFFIX}"));
     write_config(&taken, "another process got here first\n");
 
-    let path = write_unique_snapshot(&directory, b"ours\n").expect("snapshot should be written");
+    let path = write_unique_snapshot(&directory, b"ours\n", PRIVATE_BACKUP_MODE)
+        .expect("snapshot should be written");
 
     assert_ne!(path, taken);
     assert_eq!(
@@ -115,6 +131,104 @@ fn a_name_collision_takes_the_next_name_instead_of_overwriting() {
         fs::read_to_string(&path).expect("our snapshot should be readable"),
         "ours\n"
     );
+}
+
+/// A config the user locked down must not become readable to every local
+/// account just because it was copied aside.
+#[test]
+fn a_private_config_produces_a_private_backup() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let source = temp.path().join("config.toml");
+    let directory = temp.path().join("config-backups");
+    write_config(&source, "secret = true\n");
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o600))
+        .expect("source mode should be settable");
+    let mut backup = RuntimeConfigBackup::with_directory(&directory);
+
+    backup.ensure_snapshot(&source);
+
+    assert_eq!(mode_of(&only_backup(&directory)), 0o600);
+}
+
+/// The copy mirrors the source rather than clamping everything shut: a config
+/// the user deliberately left group/world readable keeps those bits, so the
+/// backup is as usable as the original.
+#[test]
+fn a_readable_config_keeps_its_bits_in_the_backup() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let source = temp.path().join("config.toml");
+    let directory = temp.path().join("config-backups");
+    write_config(&source, "shared = true\n");
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o644))
+        .expect("source mode should be settable");
+    let mut backup = RuntimeConfigBackup::with_directory(&directory);
+
+    backup.ensure_snapshot(&source);
+
+    assert_eq!(mode_of(&only_backup(&directory)), 0o644);
+}
+
+/// Content and permissions must describe the same inode. Looking up the mode
+/// through the path after reading would let an atomic replacement or symlink
+/// retarget pair private bytes with a newly public file's mode.
+#[test]
+fn an_opened_source_keeps_its_mode_when_the_path_is_retargeted() {
+    use std::os::unix::fs::symlink;
+
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let private = temp.path().join("private.toml");
+    let public = temp.path().join("public.toml");
+    let source = temp.path().join("config.toml");
+    write_config(&private, "secret = true\n");
+    write_config(&public, "public = true\n");
+    fs::set_permissions(&private, fs::Permissions::from_mode(0o600))
+        .expect("private mode should be settable");
+    fs::set_permissions(&public, fs::Permissions::from_mode(0o644))
+        .expect("public mode should be settable");
+    symlink(&private, &source).expect("source symlink should be creatable");
+
+    let mut opened = fs::File::open(&source).expect("source should open");
+    fs::remove_file(&source).expect("source symlink should be replaceable");
+    symlink(&public, &source).expect("source symlink should be retargetable");
+    let mut contents = String::new();
+    opened
+        .read_to_string(&mut contents)
+        .expect("opened source should remain readable");
+
+    assert_eq!(contents, "secret = true\n");
+    assert_eq!(source_mode(&opened, &source), 0o600);
+    assert_eq!(mode_of(&source), 0o644);
+}
+
+#[test]
+fn a_freshly_created_backup_directory_is_owner_only() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let source = temp.path().join("config.toml");
+    let directory = temp.path().join("nested").join("config-backups");
+    write_config(&source, "kept = true\n");
+    let mut backup = RuntimeConfigBackup::with_directory(&directory);
+
+    backup.ensure_snapshot(&source);
+
+    assert_eq!(mode_of(&directory), 0o700);
+}
+
+/// Tightening applies to directories this code creates, never to one the user
+/// already set up with permissions of their own.
+#[test]
+fn an_existing_backup_directory_keeps_its_permissions() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let source = temp.path().join("config.toml");
+    let directory = temp.path().join("config-backups");
+    write_config(&source, "kept = true\n");
+    fs::create_dir_all(&directory).expect("backup directory should be creatable");
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))
+        .expect("directory mode should be settable");
+    let mut backup = RuntimeConfigBackup::with_directory(&directory);
+
+    backup.ensure_snapshot(&source);
+
+    assert_eq!(mode_of(&directory), 0o755);
 }
 
 #[test]

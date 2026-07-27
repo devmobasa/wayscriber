@@ -214,6 +214,10 @@ pub(super) struct WaylandState {
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:
         crate::backend::wayland::runtime_ui_state::UnavailablePersistencePreviews,
+    /// Shortcut edits this session queued but the background writer may not
+    /// have flushed yet, replayed over each reload so a rapid second edit
+    /// cannot install a keymap that has forgotten the first.
+    pub(super) keybinding_session_edits: keybindings::SessionKeybindingEdits,
 
     // Input state
     pub(super) input_state: InputState,

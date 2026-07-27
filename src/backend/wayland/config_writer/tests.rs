@@ -282,16 +282,26 @@ fn a_failed_write_is_retained_for_the_shutdown_retry() {
         Ok(())
     });
     let mut writer = ConfigWriter::spawn(persist);
+    let receipt = ConfigWriteReceipt::initial();
 
-    assert!(writer.request(&ConfigMutation::ToolbarUseIcons(false)));
+    assert!(writer.request(&ConfigMutation::Keybinding {
+        action: Action::SelectPenTool,
+        bindings: vec!["Ctrl+Alt+P".to_string()],
+        receipt,
+    }));
     attempts_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("the first write should be attempted");
+    assert!(
+        writer.take_completed_keybinding_writes().is_empty(),
+        "a failed write must keep its shortcut pending"
+    );
     writer.shutdown();
 
     attempts_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("shutdown should retry the retained mutation");
+    assert_eq!(writer.take_completed_keybinding_writes(), vec![receipt]);
 }
 
 /// The section visibility a reload derives from `path`, folding the legacy
@@ -508,6 +518,7 @@ fn a_keybinding_edit_rewrites_only_the_edited_action() {
         &[ConfigMutation::Keybinding {
             action: Action::SelectPenTool,
             bindings: vec!["Ctrl+Alt+Shift+K".to_string()],
+            receipt: ConfigWriteReceipt::initial(),
         }],
     )
     .expect("the keybinding edit should persist");
@@ -547,6 +558,7 @@ fn deleting_a_keybinding_persists_an_empty_list() {
         &[ConfigMutation::Keybinding {
             action: Action::SelectPenTool,
             bindings: Vec::new(),
+            receipt: ConfigWriteReceipt::initial(),
         }],
     )
     .expect("the unbind should persist");
@@ -589,18 +601,28 @@ fn keybinding_edits_coalesce_per_action() {
         Ok(())
     });
     let mut writer = ConfigWriter::spawn(persist);
+    let first = ConfigWriteReceipt::initial();
+    let second = first
+        .successor()
+        .expect("the test receipt should have a successor");
+    let third = second
+        .successor()
+        .expect("the test receipt should have a successor");
 
     assert!(writer.request(&ConfigMutation::Keybinding {
         action: Action::SelectPenTool,
         bindings: vec!["Ctrl+P".to_string()],
+        receipt: first,
     }));
     assert!(writer.request(&ConfigMutation::Keybinding {
         action: Action::ClearCanvas,
         bindings: vec!["Ctrl+L".to_string()],
+        receipt: second,
     }));
     assert!(writer.request(&ConfigMutation::Keybinding {
         action: Action::SelectPenTool,
         bindings: vec!["Ctrl+Alt+P".to_string()],
+        receipt: third,
     }));
     writer.shutdown();
 
@@ -613,6 +635,11 @@ fn keybinding_edits_coalesce_per_action() {
             vec!["Ctrl+Alt+P".to_string()],
             vec!["Ctrl+L".to_string()]
         )
+    );
+    assert_eq!(
+        writer.take_completed_keybinding_writes(),
+        vec![second, third],
+        "only the coalesced mutations in the durable batch are acknowledged"
     );
 }
 
@@ -631,6 +658,7 @@ fn a_keybinding_edit_shares_the_batch_with_toolbar_preferences() {
             ConfigMutation::Keybinding {
                 action: Action::Undo,
                 bindings: vec!["Ctrl+Alt+U".to_string()],
+                receipt: ConfigWriteReceipt::initial(),
             },
         ],
     )
@@ -659,6 +687,7 @@ fn a_runtime_only_action_is_not_written() {
         &[ConfigMutation::Keybinding {
             action: Action::ReplayTour,
             bindings: vec!["R".to_string()],
+            receipt: ConfigWriteReceipt::initial(),
         }],
     )
     .expect("an unwritable action should not fail the batch");
@@ -750,6 +779,7 @@ fn a_batch_that_writes_nothing_leaves_the_snapshot_unspent() {
         &[ConfigMutation::Keybinding {
             action: Action::ReplayTour,
             bindings: vec!["R".to_string()],
+            receipt: ConfigWriteReceipt::initial(),
         }],
         &mut backup,
     )
