@@ -48,9 +48,14 @@ jobs:
             libx11-dev
 
       - name: Build gtk4-layer-shell
-        # Ubuntu 24.04 (the current runner) has no libgtk4-layer-shell-dev
-        # package; build the pinned release from source for the GTK toolbars.
-        run: bash tools/install-gtk4-layer-shell.sh
+        # Build both forms privately: normal CI exercises the dynamic source
+        # build used by AUR/Nix, and a dedicated step checks release linkage.
+        run: |
+          GTK4_LAYER_SHELL_PREFIX="$RUNNER_TEMP/gtk4-layer-shell" \
+          GTK4_LAYER_SHELL_LIBRARY_MODE=both \
+            bash tools/install-gtk4-layer-shell.sh
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/gtk4-layer-shell/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/gtk4-layer-shell/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.95.0
@@ -69,6 +74,14 @@ jobs:
       - name: Check package repository layout
         run: bash tools/test-package-repo-layout.sh
 
+      - name: Check release packaging contract
+        run: bash tools/test-release-packaging.sh
+
+      - name: Check dynamic gtk4-layer-shell linkage
+        run: |
+          cargo build --locked --bin wayscriber
+          readelf -d target/debug/wayscriber | grep -Eq 'Shared library: \[libgtk4-layer-shell\.so'
+
       - name: Check nixpkgs recipe dependencies
         run: ./tools/check-nixpkgs-recipe.py
 
@@ -86,6 +99,13 @@ jobs:
 
       - name: cargo test (no default features)
         run: cargo test --workspace --no-default-features
+
+      - name: Check static gtk4-layer-shell linkage
+        env:
+          SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK: static
+        run: |
+          cargo build --locked --bin wayscriber
+          bash tools/verify-static-gtk4-layer-shell.sh target/debug/wayscriber
 
       - name: Record code health
         if: always()

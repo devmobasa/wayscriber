@@ -102,32 +102,36 @@ contents:
     dst: /usr/share/licenses/wayscriber/LICENSE
     file_info:
       mode: 0644
+  - src: packaging/licenses/gtk4-layer-shell.LICENSE
+    dst: /usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell
+    file_info:
+      mode: 0644
 
 overrides:
   deb:
     depends:
-      - libc6
+      # Keep the glibc floor aligned with MAX_GLIBC_VERSION in tools/package.sh.
+      - libc6 (>= 2.39)
       - libcairo2
       - libwayland-client0
       - libpango-1.0-0
       - libpangocairo-1.0-0
       - libxkbcommon0
       - libstdc++6
-      - libgtk-4-1
-      - libgtk4-layer-shell0
+      - libgtk-4-1 (>= 4.12)
       - wl-clipboard
       - grim
       - slurp
   rpm:
     depends:
-      - glibc
+      # Keep the glibc floor aligned with MAX_GLIBC_VERSION in tools/package.sh.
+      - glibc >= 2.39
       - cairo
       - wayland-devel
       - pango
       - libxkbcommon
       - libstdc++
-      - gtk4
-      - gtk4-layer-shell
+      - gtk4 >= 4.12
       - wl-clipboard
       - grim
       - slurp

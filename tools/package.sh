@@ -15,6 +15,11 @@ NFPM_CONFIG_CONFIG="${NFPM_CONFIG_CONFIG:-${REPO_ROOT}/packaging/package.configu
 PACKAGE_CONFIGURATOR="${PACKAGE_CONFIGURATOR:-1}"
 STRIP_BINARIES="${STRIP_BINARIES:-1}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
+GTK4_LAYER_SHELL_PREFIX="${GTK4_LAYER_SHELL_PREFIX:-${REPO_ROOT}/target/release-deps/gtk4-layer-shell}"
+# Source of truth for the prebuilt release ABI. Keep package manifests and
+# release-workflow metadata assertions aligned with this value.
+MAX_GLIBC_VERSION="2.39"
+GTK4_LAYER_SHELL_LICENSE="${REPO_ROOT}/packaging/licenses/gtk4-layer-shell.LICENSE"
 
 usage() {
     cat <<'EOF'
@@ -55,6 +60,9 @@ need_cmd tar
 need_cmd sha256sum
 need_cmd awk
 need_cmd jq
+need_cmd nm
+need_cmd readelf
+need_cmd sort
 if [[ "${FORMATS}" == *deb* || "${FORMATS}" == *rpm* ]]; then
     need_cmd nfpm
     [[ -f "${NFPM_CONFIG_MAIN}" ]] || { echo "Missing nfpm config ${NFPM_CONFIG_MAIN}" >&2; exit 1; }
@@ -64,26 +72,91 @@ if [[ "${FORMATS}" == *deb* || "${FORMATS}" == *rpm* ]]; then
 fi
 
 if [[ -z "$VERSION" ]]; then
-    VERSION="$(cargo metadata --no-deps --format-version 1 \
-        | jq -r '.packages[] | select(.name=="wayscriber") | .version' \
-        | head -n1)"
+    VERSION="$(
+        cd "${REPO_ROOT}"
+        cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name=="wayscriber") | .version' \
+            | head -n1
+    )"
 fi
 
-if [[ -n "$VERSION" ]]; then
-    export WAYSCRIBER_RELEASE_VERSION="$VERSION"
-fi
+[[ -n "$VERSION" ]] || {
+    echo "Could not resolve the package version" >&2
+    exit 1
+}
+export VERSION
+export WAYSCRIBER_RELEASE_VERSION="$VERSION"
 
 mkdir -p "${ARTIFACT_ROOT}"
 
 info() { printf '\033[0;32m[INFO]\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*" >&2; }
 
+prepare_gtk4_layer_shell() {
+    [[ "$SKIP_BUILD" == 1 ]] && { warn "Skipping gtk4-layer-shell build (SKIP_BUILD=1)"; return; }
+
+    info "Preparing static gtk4-layer-shell in private prefix"
+    GTK4_LAYER_SHELL_PREFIX="${GTK4_LAYER_SHELL_PREFIX}" \
+    GTK4_LAYER_SHELL_LIBRARY_MODE=static \
+        bash "${REPO_ROOT}/tools/install-gtk4-layer-shell.sh"
+
+    if [[ -n "${PKG_CONFIG_PATH:-}" ]]; then
+        export PKG_CONFIG_PATH="${GTK4_LAYER_SHELL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+    else
+        export PKG_CONFIG_PATH="${GTK4_LAYER_SHELL_PREFIX}/lib/pkgconfig"
+    fi
+    export SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK=static
+}
+
 build_binaries() {
     [[ "$SKIP_BUILD" == 1 ]] && { warn "Skipping cargo build (SKIP_BUILD=1)"; return; }
     info "Building release binaries (locked)"
     (cd "$REPO_ROOT" && cargo build --locked --release --bins)
-    if [[ -d "${REPO_ROOT}/configurator" ]]; then
+    if [[ "${PACKAGE_CONFIGURATOR}" == 1 && -d "${REPO_ROOT}/configurator" ]]; then
         (cd "$REPO_ROOT" && cargo build --locked --release --bins --manifest-path configurator/Cargo.toml)
+    fi
+}
+
+max_required_glibc_version() {
+    local binary="$1"
+    readelf --version-info "${binary}" \
+        | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' \
+        | sed 's/^GLIBC_//' \
+        | sort -Vu \
+        | tail -n1
+}
+
+verify_glibc_floor() {
+    local binary="$1"
+    local required
+    required="$(max_required_glibc_version "${binary}")"
+    [[ -n "${required}" ]] || {
+        echo "Could not determine the glibc requirement for ${binary}" >&2
+        exit 1
+    }
+
+    if [[ "$(printf '%s\n%s\n' "${required}" "${MAX_GLIBC_VERSION}" | sort -V | tail -n1)" != "${MAX_GLIBC_VERSION}" ]]; then
+        echo "${binary} requires GLIBC_${required}; release floor is GLIBC_${MAX_GLIBC_VERSION}" >&2
+        exit 1
+    fi
+    info "Verified $(basename "${binary}") requires at most GLIBC_${MAX_GLIBC_VERSION} (found GLIBC_${required})"
+}
+
+verify_release_binaries() {
+    local binary="${REPO_ROOT}/target/release/wayscriber"
+    local configurator="${REPO_ROOT}/target/release/wayscriber-configurator"
+
+    [[ -x "${binary}" ]] || { echo "Missing release binary: ${binary}" >&2; exit 1; }
+    info "Verifying final release linkage"
+    bash "${REPO_ROOT}/tools/verify-static-gtk4-layer-shell.sh" "${binary}"
+
+    verify_glibc_floor "${binary}"
+    if [[ "${PACKAGE_CONFIGURATOR}" == 1 ]]; then
+        [[ -x "${configurator}" ]] || {
+            echo "Missing release binary: ${configurator}" >&2
+            exit 1
+        }
+        verify_glibc_floor "${configurator}"
     fi
 }
 
@@ -103,6 +176,7 @@ strip_binaries() {
 package_tar() {
     local dist_dir="${ARTIFACT_ROOT}/wayscriber-v${VERSION}-linux-x86_64"
     local tarball="${ARTIFACT_ROOT}/wayscriber-v${VERSION}-linux-x86_64.tar.gz"
+    PACKAGED_ARTIFACT=""
 
     info "Packaging tarball -> ${tarball}"
     rm -rf "${dist_dir}" "${tarball}"
@@ -110,6 +184,7 @@ package_tar() {
              "${dist_dir}/usr/lib/systemd/user" \
              "${dist_dir}/usr/share/applications" \
              "${dist_dir}/usr/share/doc/wayscriber" \
+             "${dist_dir}/usr/share/licenses/wayscriber" \
              "${dist_dir}/usr/share/pixmaps"
 
     for size in 16 19 22 24 38 64 128; do
@@ -134,20 +209,25 @@ package_tar() {
     cp "${REPO_ROOT}/packaging/icons/wayscriber-symbolic.svg" \
        "${dist_dir}/usr/share/icons/hicolor/symbolic/apps/wayscriber-symbolic.svg"
     cp "${REPO_ROOT}/README.md" "${REPO_ROOT}/config.example.toml" "${dist_dir}/usr/share/doc/wayscriber/"
-    [[ -f "${REPO_ROOT}/LICENSE" ]] && cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber/" || true
+    cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber/LICENSE"
+    cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/licenses/wayscriber/LICENSE"
+    cp "${GTK4_LAYER_SHELL_LICENSE}" "${dist_dir}/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell"
 
-    tar -C "${ARTIFACT_ROOT}" -czf "${tarball}" "$(basename "${dist_dir}")"
-    echo "${tarball}"
+    if ! tar -C "${ARTIFACT_ROOT}" -czf "${tarball}" "$(basename "${dist_dir}")"; then
+        echo "Failed to build tarball: ${tarball}" >&2
+        return 1
+    fi
+    [[ -f "${tarball}" ]] || {
+        echo "tar did not create ${tarball}" >&2
+        return 1
+    }
+    PACKAGED_ARTIFACT="${tarball}"
 }
 
 package_tar_configurator() {
     local dist_dir="${ARTIFACT_ROOT}/wayscriber-configurator-v${VERSION}-linux-x86_64"
     local tarball="${ARTIFACT_ROOT}/wayscriber-configurator-v${VERSION}-linux-x86_64.tar.gz"
-
-    if [[ ! -f "${REPO_ROOT}/target/release/wayscriber-configurator" ]]; then
-        warn "Configurator binary not found, skipping configurator tarball"
-        return
-    fi
+    PACKAGED_ARTIFACT=""
 
     info "Packaging configurator tarball -> ${tarball}"
     rm -rf "${dist_dir}" "${tarball}"
@@ -170,13 +250,21 @@ package_tar_configurator() {
     cp "${REPO_ROOT}/README.md" "${dist_dir}/usr/share/doc/wayscriber-configurator/"
     [[ -f "${REPO_ROOT}/LICENSE" ]] && cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber-configurator/" || true
 
-    tar -C "${ARTIFACT_ROOT}" -czf "${tarball}" "$(basename "${dist_dir}")"
-    echo "${tarball}"
+    if ! tar -C "${ARTIFACT_ROOT}" -czf "${tarball}" "$(basename "${dist_dir}")"; then
+        echo "Failed to build tarball: ${tarball}" >&2
+        return 1
+    fi
+    [[ -f "${tarball}" ]] || {
+        echo "tar did not create ${tarball}" >&2
+        return 1
+    }
+    PACKAGED_ARTIFACT="${tarball}"
 }
 
 package_nfpm_main() {
     local fmt="$1"
     local target=""
+    PACKAGED_ARTIFACT=""
     if [[ "${fmt}" == "deb" ]]; then
         target="${ARTIFACT_ROOT}/wayscriber-amd64.deb"
     elif [[ "${fmt}" == "rpm" ]]; then
@@ -187,13 +275,21 @@ package_nfpm_main() {
     fi
     info "Building ${fmt} (wayscriber) via nfpm -> ${target}"
     rm -f "${target}"
-    nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_MAIN}" --target "${target}" >/dev/null
-    [[ -f "${target}" ]] && echo "${target}"
+    if ! nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_MAIN}" --target "${target}" >/dev/null; then
+        echo "Failed to build ${fmt} package: ${target}" >&2
+        return 1
+    fi
+    [[ -f "${target}" ]] || {
+        echo "nfpm did not create ${target}" >&2
+        return 1
+    }
+    PACKAGED_ARTIFACT="${target}"
 }
 
 package_nfpm_configurator() {
     local fmt="$1"
     local target=""
+    PACKAGED_ARTIFACT=""
     if [[ "${fmt}" == "deb" ]]; then
         target="${ARTIFACT_ROOT}/wayscriber-configurator-amd64.deb"
     elif [[ "${fmt}" == "rpm" ]]; then
@@ -204,14 +300,25 @@ package_nfpm_configurator() {
     fi
     info "Building ${fmt} (wayscriber-configurator) via nfpm -> ${target}"
     rm -f "${target}"
-    nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_CONFIG}" --target "${target}" >/dev/null
-    [[ -f "${target}" ]] && echo "${target}"
+    if ! nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_CONFIG}" --target "${target}" >/dev/null; then
+        echo "Failed to build ${fmt} package: ${target}" >&2
+        return 1
+    fi
+    [[ -f "${target}" ]] || {
+        echo "nfpm did not create ${target}" >&2
+        return 1
+    }
+    PACKAGED_ARTIFACT="${target}"
 }
 
+PACKAGED_ARTIFACT=""
 artifacts=()
 add_artifact() {
     local path="$1"
-    [[ -f "$path" ]] || return 0
+    [[ -n "$path" && -f "$path" ]] || {
+        echo "Missing packaged artifact: ${path:-<empty path>}" >&2
+        return 1
+    }
     artifacts+=("$path")
 }
 
@@ -242,24 +349,31 @@ EOF
     info "Wrote manifest: ${manifest_txt} and ${manifest_json}"
 }
 
+prepare_gtk4_layer_shell
 build_binaries
+# Catch linkage failures before strip and then verify the exact shipped bytes.
+bash "${REPO_ROOT}/tools/verify-static-gtk4-layer-shell.sh" \
+    "${REPO_ROOT}/target/release/wayscriber"
 strip_binaries
+verify_release_binaries
 
 IFS=',' read -r -a fmt_arr <<< "${FORMATS}"
 for fmt in "${fmt_arr[@]}"; do
     case "$fmt" in
         tar)
-            add_artifact "$(package_tar)"
+            package_tar
+            add_artifact "$PACKAGED_ARTIFACT"
             if [[ "${PACKAGE_CONFIGURATOR}" == 1 ]]; then
-                cfg_tar="$(package_tar_configurator || true)"
-                [[ -n "$cfg_tar" ]] && add_artifact "$cfg_tar"
+                package_tar_configurator
+                add_artifact "$PACKAGED_ARTIFACT"
             fi
             ;;
         deb|rpm)
-            add_artifact "$(package_nfpm_main "$fmt")"
+            package_nfpm_main "$fmt"
+            add_artifact "$PACKAGED_ARTIFACT"
             if [[ "${PACKAGE_CONFIGURATOR}" == 1 ]]; then
-                cfg_pkg="$(package_nfpm_configurator "$fmt" || true)"
-                [[ -n "$cfg_pkg" ]] && add_artifact "$cfg_pkg"
+                package_nfpm_configurator "$fmt"
+                add_artifact "$PACKAGED_ARTIFACT"
             fi
             ;;
         "")

@@ -66,7 +66,8 @@ contents:
 overrides:
   deb:
     depends:
-      - libc6
+      # Keep the glibc floor aligned with MAX_GLIBC_VERSION in tools/package.sh.
+      - libc6 (>= 2.39)
       - libcairo2
       - libwayland-client0
       - libpango-1.0-0
@@ -75,7 +76,8 @@ overrides:
       - libstdc++6
   rpm:
     depends:
-      - glibc
+      # Keep the glibc floor aligned with MAX_GLIBC_VERSION in tools/package.sh.
+      - glibc >= 2.39
       - cairo
       - wayland-devel
       - pango
