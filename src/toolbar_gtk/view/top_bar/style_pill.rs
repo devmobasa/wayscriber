@@ -228,8 +228,11 @@ impl TopBar {
                     }));
                 }
                 model::StylePillControl::CounterReset(_) => {
-                    let button =
-                        pill_button(control.label(snapshot).as_ref(), -1.0, sz(STYLE_ROW_H));
+                    let button = pill_button(
+                        control.label(snapshot).as_ref(),
+                        sz(STYLE_RESET_W),
+                        sz(STYLE_ROW_H),
+                    );
                     set_semantic_widget_id(&button, control.id().as_ref());
                     if let Some(tooltip) = control.tooltip(snapshot) {
                         button.set_tooltip_text(Some(&tooltip));

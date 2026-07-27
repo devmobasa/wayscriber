@@ -75,6 +75,11 @@ const STYLE_VALUE_W: f64 = 44.0;
 const STYLE_ROW_H: f64 = 24.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W`.
 const STYLE_SEL_VALUE_W: f64 = 64.0;
+/// `ToolbarLayoutSpec::TOP_STYLE_RESET_W`. The counter-reset button carries
+/// no CSS padding (like every toolbar button), so without this width its
+/// label would hug both edges instead of sitting centered with the same
+/// breathing room the builtin gives it.
+const STYLE_RESET_W: f64 = 56.0;
 /// `ToolbarLayoutSpec::TOP_STYLE_STEP_W`.
 const STYLE_STEP_W: f64 = 20.0;
 /// Segment tab height (matches the Settings pane's segmented tabs).
