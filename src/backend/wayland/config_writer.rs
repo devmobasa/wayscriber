@@ -5,9 +5,9 @@
 //! durable atomic write so an fsync cannot delay input feedback.
 
 use crate::config::{
-    Action, Config, ConfigDocument, QuickColorWrite, StatusBarItem, ToolPresetConfig,
-    ToolbarItemId, ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag,
-    item_visibility_setting,
+    Action, Config, ConfigDocument, QuickColorWrite, RuntimeConfigBackup, StatusBarItem,
+    ToolPresetConfig, ToolbarItemId, ToolbarItemVisibilitySetting, ToolbarLayoutMode,
+    ToolbarSectionFlag, item_visibility_setting,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardConfigUpdate;
@@ -312,7 +312,11 @@ pub(in crate::backend::wayland) struct ConfigWriter {
 impl ConfigWriter {
     pub(in crate::backend::wayland) fn new() -> Self {
         match Config::get_config_path() {
-            Ok(path) => Self::for_path(path),
+            // The worker owns the overlay process's single config backup: it
+            // is the only thing here that rewrites `config.toml`, and one
+            // writer is built per overlay, so the guard's lifetime is the
+            // process's.
+            Ok(path) => Self::for_path(path, RuntimeConfigBackup::new()),
             Err(error) => {
                 warn!("Runtime config persistence is unavailable: {error:#}");
                 Self::unavailable()
@@ -320,9 +324,9 @@ impl ConfigWriter {
         }
     }
 
-    fn for_path(path: PathBuf) -> Self {
+    fn for_path(path: PathBuf, mut backup: RuntimeConfigBackup) -> Self {
         Self::spawn(Box::new(move |mutations| {
-            persist_mutations_to_path(&path, mutations)
+            persist_mutations_to_path(&path, mutations, &mut backup)
         }))
     }
 
@@ -458,6 +462,7 @@ fn persist_before_shutdown(persist: &mut PersistMutations, pending: &[ConfigMuta
 pub(in crate::backend::wayland) fn persist_mutations_to_path(
     path: &Path,
     mutations: &[ConfigMutation],
+    backup: &mut RuntimeConfigBackup,
 ) -> Result<()> {
     let document = ConfigDocument::load_from_path(path)?;
     let mut config = document.config().clone();
@@ -472,6 +477,9 @@ pub(in crate::backend::wayland) fn persist_mutations_to_path(
         }
     }
     if applied {
+        // Taken here so a batch that changes nothing does not spend the
+        // process's one snapshot on a file it is about to leave alone.
+        backup.ensure_snapshot(path);
         document.save(config)?;
     }
     Ok(())

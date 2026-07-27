@@ -27,16 +27,19 @@ pub const PDF_LABEL_PLACEHOLDERS: &[&str] = &[
     PDF_LABEL_PAGE_NAME,
 ];
 
+// The export tables tolerate unrecognized keys like every other config
+// section: a typo or a key from a newer build is reported as an unknown
+// setting and kept in the file, instead of failing the whole config load.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct ExportConfig {
     pub pdf: PdfExportConfig,
 }
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct PdfExportConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename_template: Option<String>,
@@ -161,7 +164,7 @@ pub enum PdfLabelContentMode {
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct PdfLabelConfig {
     pub enabled: bool,
     pub position: PdfLabelPosition,

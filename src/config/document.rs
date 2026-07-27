@@ -12,7 +12,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use toml_edit::{DocumentMut, TableLike};
+use toml_edit::DocumentMut;
 
 use merge::{
     conservative_repair_source_document, merge_config_document, repair_source_document,
@@ -424,12 +424,7 @@ struct ParsedConfig {
 
 fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
     let mut ignored = BTreeSet::new();
-    let mut editor_input = input
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-    strip_unknown_strict_export_fields(&mut editor_input, &mut ignored);
-    let editor_input = editor_input.to_string();
-    let deserializer = toml::Deserializer::parse(&editor_input).context("Failed to parse TOML")?;
+    let deserializer = toml::Deserializer::parse(input).context("Failed to parse TOML")?;
     let mut config: Config = serde_ignored::deserialize(deserializer, |path| {
         let path = path.to_string();
         if !is_known_feature_gated_path(&path) {
@@ -468,78 +463,6 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
         known_document,
         diagnostics,
     })
-}
-
-fn strip_unknown_strict_export_fields(document: &mut DocumentMut, ignored: &mut BTreeSet<String>) {
-    strip_unknown_fields_at_path(document, &["export"], &["pdf"], ignored);
-    strip_unknown_fields_at_path(
-        document,
-        &["export", "pdf"],
-        &[
-            "filename_template",
-            "all_boards_filename_template",
-            "page_size",
-            "orientation",
-            "fit",
-            "transparent_background",
-            "custom_width",
-            "custom_height",
-            "content_source_padding",
-            "labels",
-        ],
-        ignored,
-    );
-    strip_unknown_fields_at_path(
-        document,
-        &["export", "pdf", "labels"],
-        &[
-            "enabled",
-            "position",
-            "content",
-            "template",
-            "font_family",
-            "font_size",
-            "margin",
-            "padding_x",
-            "padding_y",
-            "text_color",
-            "background_enabled",
-            "background_color",
-        ],
-        ignored,
-    );
-}
-
-fn strip_unknown_fields_at_path(
-    document: &mut DocumentMut,
-    path: &[&str],
-    known_fields: &[&str],
-    ignored: &mut BTreeSet<String>,
-) {
-    let Some(table) = table_like_at_path_mut(document.as_table_mut(), path) else {
-        return;
-    };
-    let unknown = table
-        .iter()
-        .map(|(key, _)| key.to_string())
-        .filter(|key| !known_fields.contains(&key.as_str()))
-        .collect::<Vec<_>>();
-    let prefix = path.join(".");
-    for key in unknown {
-        table.remove(&key);
-        ignored.insert(format!("{prefix}.{key}"));
-    }
-}
-
-fn table_like_at_path_mut<'a>(
-    table: &'a mut dyn TableLike,
-    path: &[&str],
-) -> Option<&'a mut dyn TableLike> {
-    let Some((head, tail)) = path.split_first() else {
-        return Some(table);
-    };
-    let child = table.get_mut(head)?.as_table_like_mut()?;
-    table_like_at_path_mut(child, tail)
 }
 
 fn collect_flattened_unknown_paths(

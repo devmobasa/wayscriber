@@ -68,6 +68,18 @@ or reset keeps the text you authored, so an unrelated preference toggle can neve
 you did not touch.
 The first save for a missing file is sparse as well: it writes the migration revision marker and
 only values changed from the built-in defaults.
+Every section follows the same rule for unrecognized keys, including `[export]`, `[export.pdf]`,
+and `[export.pdf.labels]`: a typo there is reported and kept, never dropped from the file, and it
+does not stop the rest of the configuration from loading.
+
+Before a running wayscriber or its tray first rewrites `config.toml`, it copies the file to
+`$XDG_STATE_HOME/wayscriber/config-backups/config-<timestamp>.toml` (`~/.local/state/...` when
+`XDG_STATE_HOME` is unset). One copy is taken per process, so it holds the file as that session
+found it rather than as the previous write left it; the five newest copies are kept and older ones
+are removed. To undo a run's changes, copy the newest file back over `config.toml`. Backups from
+the graphical configurator and from a revision migration are separate: those write a timestamped
+`.bak` next to `config.toml` instead. If a copy cannot be made — no state directory, no permission
+— the save still goes ahead and the problem is logged.
 
 If the graphical configurator can read the file but cannot parse its TOML or known value types, it
 opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a

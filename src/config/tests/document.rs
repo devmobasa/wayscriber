@@ -130,7 +130,7 @@ future_output_policy = "keep"
 }
 
 #[test]
-fn document_load_and_save_tolerates_future_keys_in_strict_export_tables() {
+fn document_load_and_save_tolerates_future_keys_in_export_tables() {
     let temp = TempConfig::new("future-export-keys");
     let original = format!(
         r#"config_revision = {CURRENT_CONFIG_REVISION}
@@ -1776,4 +1776,85 @@ fn performance_validation_uses_metadata_constraints() {
 fn value_at_path<'a>(root: &'a toml::Value, path: &str) -> Option<&'a toml::Value> {
     path.split('.')
         .try_fold(root, |value, segment| value.get(segment))
+}
+
+/// The export tables were the config tree's only `deny_unknown_fields`
+/// holdouts, so one typo there used to fail the plain deserialize the overlay
+/// and the migration writer run — the whole file, not just `[export]`.
+#[test]
+fn plain_deserialize_tolerates_unknown_export_keys() {
+    let config = toml::from_str::<Config>(
+        r#"
+[export]
+future_format = "svg"
+
+[export.pdf]
+page_size = "a4"
+future_bleed = 12.5
+
+[export.pdf.labels]
+enabled = true
+future_font_weight = 600
+"#,
+    )
+    .expect("an unknown export key must not fail the whole config");
+
+    assert!(matches!(config.export.pdf.page_size, PdfPageSize::A4));
+    assert!(config.export.pdf.labels.enabled);
+}
+
+/// A save that really changes an export setting still writes only that
+/// setting: the merge never enumerates keys the config does not know, so the
+/// user's unrecognized neighbors keep their text and their comments.
+#[test]
+fn export_save_keeps_unknown_neighbors_in_the_file() {
+    let temp = TempConfig::new("changed-export-with-unknowns");
+    temp.write(
+        r#"[export]
+future_format = "svg" # keep this note
+
+[export.pdf]
+page_size = "a4"
+future_bleed = 12.5
+
+[export.pdf.labels]
+enabled = true
+future_font_weight = 600
+"#,
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load export document");
+    let mut updated = document.config().clone();
+    updated.export.pdf.custom_width = 123.0;
+    updated.export.pdf.labels.font_size = 42.0;
+    document
+        .save(updated)
+        .expect("save changed export settings");
+
+    let saved = fs::read_to_string(&temp.path).expect("read saved export document");
+    assert!(saved.contains("future_format = \"svg\" # keep this note"));
+    assert!(saved.contains("future_bleed = 12.5"));
+    assert!(saved.contains("future_font_weight = 600"));
+    assert!(saved.contains("custom_width = 123.0"));
+    assert!(saved.contains("font_size = 42.0"));
+
+    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("reload export document");
+    assert!(matches!(
+        reloaded.config().export.pdf.page_size,
+        PdfPageSize::A4
+    ));
+    assert_eq!(reloaded.config().export.pdf.custom_width, 123.0);
+    assert!(reloaded.config().export.pdf.labels.enabled);
+    assert_eq!(reloaded.config().export.pdf.labels.font_size, 42.0);
+    let paths = diagnostic_paths(&reloaded);
+    for expected in [
+        "export.future_format",
+        "export.pdf.future_bleed",
+        "export.pdf.labels.future_font_weight",
+    ] {
+        assert!(
+            paths.iter().any(|path| path.ends_with(expected)),
+            "missing diagnostic for {expected}: {paths:?}"
+        );
+    }
 }

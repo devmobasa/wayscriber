@@ -197,7 +197,7 @@ impl WaylandState {
 mod tests {
     use super::*;
     use crate::backend::wayland::config_writer::persist_mutations_to_path;
-    use crate::config::Action;
+    use crate::config::{Action, RuntimeConfigBackup};
     use std::fs;
 
     #[test]
@@ -302,6 +302,7 @@ mod tests {
             persist_mutations_to_path(
                 &config_path,
                 &[keybinding_mutation(&repaired, Action::ClearCanvas)],
+                &mut RuntimeConfigBackup::with_directory(config_root.join("config-backups")),
             )
             .expect("the repaired shortcut should persist");
             let reloaded = Config::load()

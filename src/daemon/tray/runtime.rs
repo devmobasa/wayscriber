@@ -25,7 +25,7 @@ use super::super::types::{DaemonControlEvent, OverlayActionPublisher, Visibility
 #[cfg(feature = "tray")]
 use super::{TrayControl, WayscriberTray};
 #[cfg(feature = "tray")]
-use crate::config::{Config, ConfigDocument, SessionConfig, TrayIconStyle};
+use crate::config::{Config, ConfigDocument, RuntimeConfigBackup, SessionConfig, TrayIconStyle};
 #[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
 
@@ -99,12 +99,20 @@ fn apply_session_resume(session: &mut SessionConfig, target: bool) -> bool {
 
 /// Persist the toggle once against a freshly loaded document.
 #[cfg(feature = "tray")]
-fn write_session_resume(path: &Path, target_enabled: bool) -> Result<()> {
+fn write_session_resume(
+    path: &Path,
+    target_enabled: bool,
+    backup: &mut RuntimeConfigBackup,
+) -> Result<()> {
     let document = ConfigDocument::load_from_path(path)?;
     let mut config = document.config().clone();
     if !apply_session_resume(&mut config.session, target_enabled) {
         return Ok(());
     }
+    // Taken here so a redundant toggle does not spend the daemon's one
+    // snapshot on a file it leaves untouched, and the retry loop below takes
+    // it once no matter how many attempts the write needs.
+    backup.ensure_snapshot(path);
     document.save(config)?;
     Ok(())
 }
@@ -142,8 +150,15 @@ fn persist_with_retry(
     Err(last_error.unwrap_or_else(|| anyhow!("Config write was never attempted")))
 }
 
+/// The daemon is its own process, so it carries its own backup guard: the
+/// overlay's writer cannot take a snapshot on its behalf, and the tray struct
+/// outlives every menu click, which makes it the daemon-lifetime owner.
 #[cfg(feature = "tray")]
-pub(super) fn update_session_resume_in_config(target_enabled: bool, fallback: bool) -> bool {
+pub(super) fn update_session_resume_in_config(
+    backup: &mut RuntimeConfigBackup,
+    target_enabled: bool,
+    fallback: bool,
+) -> bool {
     let path = match Config::get_config_path() {
         Ok(path) => path,
         Err(err) => {
@@ -158,7 +173,7 @@ pub(super) fn update_session_resume_in_config(target_enabled: bool, fallback: bo
     match persist_with_retry(
         SESSION_RESUME_WRITE_ATTEMPTS,
         SESSION_RESUME_RETRY_BACKOFF,
-        || write_session_resume(&path, target_enabled),
+        || write_session_resume(&path, target_enabled, backup),
     ) {
         Ok(()) => target_enabled,
         Err(err) => {
@@ -196,6 +211,7 @@ pub(crate) fn start_system_tray(
         icon_style,
         overlay_active,
         tray_status.clone(),
+        RuntimeConfigBackup::new(),
     );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
 
@@ -361,6 +377,32 @@ mod tests {
         fs::write(path, contents).expect("test config should be written");
     }
 
+    /// Keeps the safety-net copy inside the test's temp directory instead of
+    /// the developer's real XDG state directory.
+    fn test_backup(path: &Path) -> RuntimeConfigBackup {
+        RuntimeConfigBackup::with_directory(backup_dir(path))
+    }
+
+    fn backup_dir(path: &Path) -> std::path::PathBuf {
+        path.parent()
+            .expect("a test config path has a parent")
+            .join("config-backups")
+    }
+
+    fn backup_contents(path: &Path) -> Vec<String> {
+        let directory = backup_dir(path);
+        if !directory.exists() {
+            return Vec::new();
+        }
+        let mut entries = fs::read_dir(&directory)
+            .expect("backup directory should be listable")
+            .filter_map(Result::ok)
+            .map(|entry| fs::read_to_string(entry.path()).expect("snapshot should be readable"))
+            .collect::<Vec<_>>();
+        entries.sort();
+        entries
+    }
+
     #[test]
     fn enabling_raises_every_flag_the_menu_reads() {
         let mut session = Config::default().session;
@@ -393,17 +435,55 @@ mod tests {
     fn disabling_writes_only_the_flags_that_were_on() {
         let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
         let path = temp.path().join("config.toml");
-        write_config(
-            &path,
-            "# session notes\n[session]\npersist_transparent = false\npersist_whiteboard = false\npersist_blackboard = false\npersist_history = true\nrestore_tool_state = false\nautosave_idle_ms = 900\n",
-        );
+        let original = "# session notes\n[session]\npersist_transparent = false\npersist_whiteboard = false\npersist_blackboard = false\npersist_history = true\nrestore_tool_state = false\nautosave_idle_ms = 900\n";
+        write_config(&path, original);
 
-        write_session_resume(&path, false).expect("the toggle should persist");
+        write_session_resume(&path, false, &mut test_backup(&path))
+            .expect("the toggle should persist");
 
         let written = fs::read_to_string(&path).expect("config should be readable");
         assert!(written.contains("# session notes"));
         assert!(written.contains("persist_history = false"));
         assert!(written.contains("autosave_idle_ms = 900"));
+        let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
+        assert!(!session_resume_enabled(&reloaded.config().session));
+        // The daemon writes without the overlay's writer, so it has to take
+        // its own pre-write copy.
+        assert_eq!(backup_contents(&path), vec![original.to_string()]);
+    }
+
+    /// One copy per daemon process, taken from the file the user authored:
+    /// a second toggle must not overwrite it with the first toggle's output.
+    #[test]
+    fn a_second_toggle_reuses_the_daemons_single_snapshot() {
+        let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let path = temp.path().join("config.toml");
+        let original = "[session]\npersist_transparent = true\npersist_whiteboard = true\npersist_blackboard = true\npersist_history = true\nrestore_tool_state = true\n";
+        write_config(&path, original);
+        let mut backup = test_backup(&path);
+
+        write_session_resume(&path, false, &mut backup).expect("the first toggle should persist");
+        write_session_resume(&path, true, &mut backup).expect("the second toggle should persist");
+
+        assert_eq!(backup_contents(&path), vec![original.to_string()]);
+    }
+
+    /// A snapshot that cannot be taken is a logged warning, not a lost click.
+    #[test]
+    fn an_unusable_backup_directory_does_not_block_the_toggle() {
+        let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let path = temp.path().join("config.toml");
+        write_config(
+            &path,
+            "[session]\npersist_transparent = true\npersist_whiteboard = true\npersist_blackboard = true\npersist_history = true\nrestore_tool_state = true\n",
+        );
+        // A regular file where the backup directory belongs.
+        write_config(&backup_dir(&path), "not a directory\n");
+        let mut backup = RuntimeConfigBackup::with_directory(backup_dir(&path));
+
+        write_session_resume(&path, false, &mut backup)
+            .expect("a failed snapshot must not fail the toggle");
+
         let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
         assert!(!session_resume_enabled(&reloaded.config().session));
     }
@@ -417,12 +497,16 @@ mod tests {
         let original = "[session]\npersist_transparent = false\npersist_whiteboard = false\npersist_blackboard = false\npersist_history = false\nrestore_tool_state = false\n";
         write_config(&path, original);
 
-        write_session_resume(&path, false).expect("a redundant toggle should succeed");
+        write_session_resume(&path, false, &mut test_backup(&path))
+            .expect("a redundant toggle should succeed");
 
         assert_eq!(
             fs::read_to_string(&path).expect("config should be readable"),
             original
         );
+        // Nothing was written, so the daemon's one snapshot is still unspent
+        // for the toggle that does change something.
+        assert!(backup_contents(&path).is_empty());
     }
 
     #[test]

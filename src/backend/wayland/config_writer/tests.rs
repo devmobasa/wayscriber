@@ -5,6 +5,37 @@ use std::fs;
 use std::sync::mpsc;
 use std::time::Instant;
 
+/// Keeps every test's safety-net copy inside its own temp directory instead of
+/// the developer's real XDG state directory.
+fn test_backup(path: &Path) -> RuntimeConfigBackup {
+    RuntimeConfigBackup::with_directory(backup_dir(path))
+}
+
+fn backup_dir(path: &Path) -> PathBuf {
+    path.parent()
+        .expect("a test config path has a parent")
+        .join("config-backups")
+}
+
+fn backup_contents(path: &Path) -> Vec<String> {
+    let directory = backup_dir(path);
+    if !directory.exists() {
+        return Vec::new();
+    }
+    let mut entries = fs::read_dir(&directory)
+        .expect("backup directory should be listable")
+        .filter_map(Result::ok)
+        .map(|entry| fs::read_to_string(entry.path()).expect("snapshot should be readable"))
+        .collect::<Vec<_>>();
+    entries.sort();
+    entries
+}
+
+/// One-shot persistence for tests that are not about the backup guard.
+fn persist_mutations(path: &Path, mutations: &[ConfigMutation]) -> Result<()> {
+    persist_mutations_to_path(path, mutations, &mut test_backup(path))
+}
+
 #[test]
 fn request_does_not_wait_for_an_in_flight_write() {
     let (entered_tx, entered_rx) = mpsc::channel();
@@ -304,7 +335,7 @@ fn layout_switch_writes_the_mode_and_only_the_mirrors_loading_reads_back() {
     let path = temp.path().join("config.toml");
     fs::write(&path, "[ui.toolbar]\ntop_pinned = true\n").expect("test config should be written");
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[ConfigMutation::ToolbarLayout(ToolbarLayoutMode::Simple)],
     )
@@ -350,7 +381,7 @@ fn layout_switch_leaves_explicitly_overridden_sections_untouched() {
     )
     .expect("test config should be written");
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[ConfigMutation::ToolbarLayout(ToolbarLayoutMode::Simple)],
     )
@@ -373,7 +404,7 @@ fn each_batch_reloads_and_preserves_the_latest_document() {
     )
     .expect("test config should be written");
 
-    persist_mutations_to_path(&path, &[ConfigMutation::ToolbarUseIcons(false)])
+    persist_mutations(&path, &[ConfigMutation::ToolbarUseIcons(false)])
         .expect("mutation should persist");
 
     let written = fs::read_to_string(&path).expect("persisted config should be readable");
@@ -421,7 +452,7 @@ fn mixed_runtime_mutations_persist_through_one_document_revision() {
         drag_tools: None,
     };
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[
             ConfigMutation::ToolbarUseIcons(false),
@@ -472,7 +503,7 @@ fn a_keybinding_edit_rewrites_only_the_edited_action() {
     )
     .expect("test config should be written");
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[ConfigMutation::Keybinding {
             action: Action::SelectPenTool,
@@ -511,7 +542,7 @@ fn deleting_a_keybinding_persists_an_empty_list() {
     fs::write(&path, "[keybindings]\nselect_pen_tool = ['F']\n")
         .expect("test config should be written");
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[ConfigMutation::Keybinding {
             action: Action::SelectPenTool,
@@ -593,7 +624,7 @@ fn a_keybinding_edit_shares_the_batch_with_toolbar_preferences() {
     let path = temp.path().join("config.toml");
     fs::write(&path, "[ui.toolbar]\nuse_icons = true\n").expect("test config should be written");
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[
             ConfigMutation::ToolbarUseIcons(false),
@@ -623,7 +654,7 @@ fn a_runtime_only_action_is_not_written() {
     let original = "[keybindings]\nselect_pen_tool = ['F']\n";
     fs::write(&path, original).expect("test config should be written");
 
-    persist_mutations_to_path(
+    persist_mutations(
         &path,
         &[ConfigMutation::Keybinding {
             action: Action::ReplayTour,
@@ -643,11 +674,115 @@ fn shutdown_flushes_the_real_document_writer() {
     let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
     let path = temp.path().join("config.toml");
     fs::write(&path, "[ui.toolbar]\nuse_icons = true\n").expect("test config should be written");
-    let mut writer = ConfigWriter::for_path(path.clone());
+    let mut writer = ConfigWriter::for_path(path.clone(), test_backup(&path));
 
     assert!(writer.request(&ConfigMutation::ToolbarUseIcons(false)));
     writer.shutdown();
 
-    let reloaded = ConfigDocument::load_from_path(path).expect("saved config should parse");
+    let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
+    assert!(!reloaded.config().ui.toolbar.use_icons);
+}
+
+/// Every runtime save used to overwrite `config.toml` with no copy anywhere.
+/// The writer now takes one snapshot of the file as the session found it,
+/// before the first batch that actually changes something.
+#[test]
+fn the_writers_first_batch_snapshots_the_config_it_is_about_to_change() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    let original = "# authored by hand\n[ui.toolbar]\nuse_icons = true\n";
+    fs::write(&path, original).expect("test config should be written");
+    let mut backup = test_backup(&path);
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarUseIcons(false)],
+        &mut backup,
+    )
+    .expect("the first batch should persist");
+
+    assert_eq!(backup_contents(&path), vec![original.to_string()]);
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("use_icons = false")
+    );
+}
+
+/// One copy per session, not per write: the snapshot has to keep the file the
+/// user authored, not the one the previous batch left behind.
+#[test]
+fn later_batches_reuse_the_processs_single_snapshot() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    let original = "[ui.toolbar]\nuse_icons = true\n";
+    fs::write(&path, original).expect("test config should be written");
+    let mut backup = test_backup(&path);
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarUseIcons(false)],
+        &mut backup,
+    )
+    .expect("the first batch should persist");
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarShowMoreColors(true)],
+        &mut backup,
+    )
+    .expect("the second batch should persist");
+
+    assert_eq!(backup_contents(&path), vec![original.to_string()]);
+}
+
+/// A batch whose every mutation drops out changes nothing, so it must not
+/// spend the snapshot the next real save will want.
+#[test]
+fn a_batch_that_writes_nothing_leaves_the_snapshot_unspent() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    let original = "[keybindings]\nselect_pen_tool = ['F']\n";
+    fs::write(&path, original).expect("test config should be written");
+    let mut backup = test_backup(&path);
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::Keybinding {
+            action: Action::ReplayTour,
+            bindings: vec!["R".to_string()],
+        }],
+        &mut backup,
+    )
+    .expect("an unwritable action should not fail the batch");
+    assert!(backup_contents(&path).is_empty());
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarUseIcons(false)],
+        &mut backup,
+    )
+    .expect("the first real batch should persist");
+
+    assert_eq!(backup_contents(&path), vec![original.to_string()]);
+}
+
+/// The net must never be the reason a preference fails to save.
+#[test]
+fn an_unusable_backup_directory_does_not_block_the_save() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    fs::write(&path, "[ui.toolbar]\nuse_icons = true\n").expect("test config should be written");
+    // A regular file where the backup directory belongs.
+    fs::write(backup_dir(&path), "not a directory\n").expect("blocking file should be written");
+    let mut backup = RuntimeConfigBackup::with_directory(backup_dir(&path));
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarUseIcons(false)],
+        &mut backup,
+    )
+    .expect("a failed snapshot must not fail the save");
+
+    let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
     assert!(!reloaded.config().ui.toolbar.use_icons);
 }

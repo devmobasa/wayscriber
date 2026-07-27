@@ -333,12 +333,16 @@ fn pdf_filename_template_falls_back_to_capture_template() {
     );
 }
 
+/// `[export]` used to be the config tree's only table that rejected unknown
+/// keys, so one typo failed the entire file. It now follows the same contract
+/// as every other section: the key is ignored in memory, reported as an
+/// unrecognized setting by the document loader, and left in the file.
 #[test]
-fn export_pdf_unknown_fields_are_rejected() {
-    let err = toml::from_str::<Config>("[export.pdf]\nunknown = true\n")
-        .expect_err("unknown export.pdf field should fail");
+fn export_pdf_unknown_fields_do_not_fail_the_load() {
+    let config = toml::from_str::<Config>("[export.pdf]\nunknown = true\ncustom_width = 640.0\n")
+        .expect("an unknown export.pdf field must not fail the config");
 
-    assert!(err.to_string().contains("unknown"));
+    assert_eq!(config.export.pdf.custom_width, 640.0);
 }
 
 #[test]

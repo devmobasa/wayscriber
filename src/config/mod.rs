@@ -16,6 +16,7 @@ mod document;
 mod field_metadata;
 mod io;
 mod paths;
+mod runtime_backup;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
@@ -46,6 +47,7 @@ pub use field_metadata::{
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
 pub use keybindings::{Action, KeyBinding, KeybindingConflict, KeybindingsConfig};
+pub(crate) use runtime_backup::RuntimeConfigBackup;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,

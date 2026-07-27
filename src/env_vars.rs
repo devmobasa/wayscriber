@@ -53,6 +53,7 @@ pub const XDG_RUNTIME_DIR_ENV: &str = "XDG_RUNTIME_DIR";
 /// Seat this session belongs to; the input HUD's system capture follows it so
 /// a multi-seat machine reads the seat the user is actually sitting at.
 pub const XDG_SEAT_ENV: &str = "XDG_SEAT";
+pub const XDG_STATE_HOME_ENV: &str = "XDG_STATE_HOME";
 pub const DESKTOP_STARTUP_ID_ENV: &str = "DESKTOP_STARTUP_ID";
 
 pub const DESKTOP_ENV_KEYS: [&str; 3] = [
