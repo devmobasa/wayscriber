@@ -1,4 +1,5 @@
 use super::WaylandState;
+use crate::backend::wayland::config_writer::ConfigMutation;
 use crate::config::{Action, Config, KeyBinding, KeybindingsConfig, action_label};
 use crate::input::state::{KeybindingEditOperation, KeybindingEditRequest};
 use crate::input::state::{Toast, ToastPriority};
@@ -74,6 +75,23 @@ fn load_and_merge_keybinding_edit(
     Ok(config)
 }
 
+/// The writer payload for one edited action: the bindings the merged config
+/// ended up storing for it, and nothing else. The background writer reloads the
+/// document per batch and the merge records only what its caller changed, so a
+/// shortcut edit rewrites exactly its own `[keybindings]` key — the rest of the
+/// reloaded snapshot (including anything validation or a migration adjusted in
+/// memory) stays as the user authored it.
+fn keybinding_mutation(config: &Config, action: Action) -> ConfigMutation {
+    ConfigMutation::Keybinding {
+        action,
+        bindings: config
+            .keybindings
+            .bindings_for_action(action)
+            .map(<[String]>::to_vec)
+            .unwrap_or_default(),
+    }
+}
+
 fn shortcut_conflict_message(binding: &str, existing_action: Action) -> String {
     format!(
         "Shortcut not changed — {binding} is already assigned to {}.",
@@ -141,8 +159,12 @@ impl WaylandState {
                 return;
             }
         };
-        if let Err(err) = next.save() {
-            log::warn!("Failed to save keybinding edit: {err}");
+        // The write itself moves to the background writer, which debounces and
+        // retries; only a queue that cannot accept the edit at all is fatal
+        // here, and it leaves the shortcut unchanged exactly as a failed
+        // blocking save used to.
+        let mutation = keybinding_mutation(&next, request.action);
+        if !self.queue_config_mutation(mutation, "keybinding persistence") {
             self.input_state.push_toast(
                 ToastPriority::Critical,
                 "keybindings",
@@ -151,13 +173,14 @@ impl WaylandState {
             return;
         }
 
-        self.config = next;
+        // Adopt the reloaded keymap so the in-memory config keeps matching the
+        // maps installed below, including bindings another editor changed since
+        // startup. Nothing else from the reload is installed: the running app
+        // owns the rest of its config, and no runtime-UI seed reads
+        // `[keybindings]`, so this needs no seed refresh.
+        self.config.keybindings = next.keybindings;
         self.input_state
             .set_keybinding_maps(action_map, action_bindings);
-        // The edit is merged into a fresh read of the complete authored
-        // config. Reconcile runtime-state seeds with that installed snapshot
-        // so permits and active previews cannot retain the pre-reload values.
-        self.refresh_runtime_ui_config_seeds();
         self.toolbar.mark_dirty();
         self.input_state.push_toast(
             ToastPriority::Info,
@@ -173,6 +196,7 @@ impl WaylandState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::wayland::config_writer::persist_mutations_to_path;
     use crate::config::Action;
     use std::fs;
 
@@ -262,8 +286,9 @@ mod tests {
         crate::config::test_helpers::with_temp_config_home(|config_root| {
             let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).unwrap();
+            let config_path = config_dir.join("config.toml");
             fs::write(
-                config_dir.join("config.toml"),
+                &config_path,
                 "config_revision = 1\n\n[keybindings]\nclear_canvas = ['F']\nselect_pen_tool = ['F']\nundo = ['Ctrl+Alt+U']\n",
             )
             .unwrap();
@@ -274,7 +299,11 @@ mod tests {
             })
             .expect("disk-backed repair should succeed");
 
-            repaired.save().expect("repaired config should save");
+            persist_mutations_to_path(
+                &config_path,
+                &[keybinding_mutation(&repaired, Action::ClearCanvas)],
+            )
+            .expect("the repaired shortcut should persist");
             let reloaded = Config::load()
                 .expect("repaired config should reload")
                 .config;
@@ -285,11 +314,62 @@ mod tests {
                     .bindings_for_action(Action::ClearCanvas),
                 Some(&["Ctrl+L".to_string()][..])
             );
+            // The conflicting partner and an unrelated binding are not part of
+            // the edit, so the repair leaves both exactly as authored.
+            assert_eq!(
+                reloaded
+                    .keybindings
+                    .bindings_for_action(Action::SelectPenTool),
+                Some(&["F".to_string()][..])
+            );
             assert_eq!(
                 reloaded.keybindings.bindings_for_action(Action::Undo),
                 Some(&["Ctrl+Alt+U".to_string()][..])
             );
         });
+    }
+
+    /// The queued payload carries the edited action's merged bindings and
+    /// nothing else, so a shortcut edit cannot smuggle an unrelated field of
+    /// the reloaded snapshot into the file.
+    #[test]
+    fn the_queued_payload_is_scoped_to_the_edited_action() {
+        let mut config = Config::default();
+        config
+            .keybindings
+            .set_bindings_for_action(Action::ClearCanvas, vec!["Ctrl+L".to_string()])
+            .unwrap();
+
+        match keybinding_mutation(&config, Action::ClearCanvas) {
+            ConfigMutation::Keybinding { action, bindings } => {
+                assert_eq!(action, Action::ClearCanvas);
+                assert_eq!(bindings, vec!["Ctrl+L".to_string()]);
+            }
+            other => panic!("expected a keybinding mutation, got {other:?}"),
+        }
+    }
+
+    /// Deleting every binding is a real edit: the payload has to carry the
+    /// empty list so the writer clears the key instead of leaving it alone.
+    #[test]
+    fn deleting_a_shortcut_queues_an_empty_binding_list() {
+        let mut config = Config::default();
+        merge_keybinding_edit(
+            &mut config,
+            &KeybindingEditRequest {
+                action: Action::ClearCanvas,
+                operation: KeybindingEditOperation::Delete,
+            },
+        )
+        .expect("clearing a shortcut should merge");
+
+        match keybinding_mutation(&config, Action::ClearCanvas) {
+            ConfigMutation::Keybinding { action, bindings } => {
+                assert_eq!(action, Action::ClearCanvas);
+                assert!(bindings.is_empty());
+            }
+            other => panic!("expected a keybinding mutation, got {other:?}"),
+        }
     }
 
     #[test]

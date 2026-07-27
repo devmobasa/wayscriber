@@ -1806,7 +1806,11 @@ Settings are loaded in this order:
 Explicit preference actions—such as toolbar pinning, minimization, pane selection, item visibility
 and order, board customization, shortcut editing, preset management, and tray session-resume
 settings—are saved back to `config.toml` without reformatting unrelated settings or removing user
-comments.
+comments. Each of these writes only the setting it changed: editing one shortcut rewrites that
+action's `[keybindings]` entry alone, and the tray's session-resume toggle rewrites only the
+`[session]` flags it actually flips. Overlay preference writes, including shortcut edits, are
+batched by a background writer so drawing never waits on a disk flush; the tray toggle writes from
+the daemon and briefly retries if an overlay write lands first.
 
 **Note:** Changes to the config file require restarting wayscriber daemon to take effect.
 

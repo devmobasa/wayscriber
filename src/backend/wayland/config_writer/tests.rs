@@ -459,6 +459,185 @@ fn mixed_runtime_mutations_persist_through_one_document_revision() {
     );
 }
 
+/// A shortcut edit is the one runtime write that used to save the whole
+/// config. Through the writer it must touch its own `[keybindings]` key only:
+/// comments, unrelated sections, and every other binding stay byte-identical.
+#[test]
+fn a_keybinding_edit_rewrites_only_the_edited_action() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    fs::write(
+        &path,
+        "# authored by hand\n[keybindings]\n# the pen lives here\nselect_pen_tool = ['F']\nundo = ['Ctrl+Alt+U']\n\n[ui]\nshow_status_bar = false\n",
+    )
+    .expect("test config should be written");
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::Keybinding {
+            action: Action::SelectPenTool,
+            bindings: vec!["Ctrl+Alt+Shift+K".to_string()],
+        }],
+    )
+    .expect("the keybinding edit should persist");
+
+    let written = fs::read_to_string(&path).expect("persisted config should be readable");
+    assert!(written.contains("# authored by hand"));
+    assert!(written.contains("# the pen lives here"));
+    assert!(written.contains("undo = ['Ctrl+Alt+U']"));
+    assert!(written.contains("show_status_bar = false"));
+    assert!(!written.contains("['F']"));
+
+    let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
+    assert_eq!(
+        reloaded
+            .config()
+            .keybindings
+            .bindings_for_action(Action::SelectPenTool),
+        Some(&["Ctrl+Alt+Shift+K".to_string()][..])
+    );
+    // Nothing the edit did not name is materialized, so the rest of the
+    // shipped defaults stay absent from the file.
+    assert!(!written.contains("clear_canvas"));
+    assert!(!written.contains("toggle_help"));
+}
+
+/// Unbinding an action writes the empty list rather than dropping the key,
+/// which is what keeps the default from reappearing on the next load.
+#[test]
+fn deleting_a_keybinding_persists_an_empty_list() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    fs::write(&path, "[keybindings]\nselect_pen_tool = ['F']\n")
+        .expect("test config should be written");
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::Keybinding {
+            action: Action::SelectPenTool,
+            bindings: Vec::new(),
+        }],
+    )
+    .expect("the unbind should persist");
+
+    let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
+    assert_eq!(
+        reloaded
+            .config()
+            .keybindings
+            .bindings_for_action(Action::SelectPenTool),
+        Some(&[][..])
+    );
+}
+
+/// Rapid re-edits of one shortcut collapse onto the latest value, while a
+/// second action keeps its own queued entry.
+#[test]
+fn keybinding_edits_coalesce_per_action() {
+    let (batches_tx, batches_rx) = mpsc::channel();
+    let persist = Box::new(move |mutations: &[ConfigMutation]| {
+        let mut config = Config::default();
+        for mutation in mutations {
+            let _ = mutation.apply(&mut config);
+        }
+        batches_tx
+            .send((
+                mutations.len(),
+                config
+                    .keybindings
+                    .bindings_for_action(Action::SelectPenTool)
+                    .map(<[String]>::to_vec)
+                    .unwrap_or_default(),
+                config
+                    .keybindings
+                    .bindings_for_action(Action::ClearCanvas)
+                    .map(<[String]>::to_vec)
+                    .unwrap_or_default(),
+            ))
+            .map_err(|error| anyhow::anyhow!("batch observer disconnected: {error}"))?;
+        Ok(())
+    });
+    let mut writer = ConfigWriter::spawn(persist);
+
+    assert!(writer.request(&ConfigMutation::Keybinding {
+        action: Action::SelectPenTool,
+        bindings: vec!["Ctrl+P".to_string()],
+    }));
+    assert!(writer.request(&ConfigMutation::Keybinding {
+        action: Action::ClearCanvas,
+        bindings: vec!["Ctrl+L".to_string()],
+    }));
+    assert!(writer.request(&ConfigMutation::Keybinding {
+        action: Action::SelectPenTool,
+        bindings: vec!["Ctrl+Alt+P".to_string()],
+    }));
+    writer.shutdown();
+
+    assert_eq!(
+        batches_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("shutdown should flush the coalesced edits"),
+        (
+            2,
+            vec!["Ctrl+Alt+P".to_string()],
+            vec!["Ctrl+L".to_string()]
+        )
+    );
+}
+
+/// A shortcut edit shares the batch with the toolbar preferences that may be
+/// queued around it, and both land in one document revision.
+#[test]
+fn a_keybinding_edit_shares_the_batch_with_toolbar_preferences() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    fs::write(&path, "[ui.toolbar]\nuse_icons = true\n").expect("test config should be written");
+
+    persist_mutations_to_path(
+        &path,
+        &[
+            ConfigMutation::ToolbarUseIcons(false),
+            ConfigMutation::Keybinding {
+                action: Action::Undo,
+                bindings: vec!["Ctrl+Alt+U".to_string()],
+            },
+        ],
+    )
+    .expect("the mixed batch should persist");
+
+    let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
+    let config = reloaded.config();
+    assert!(!config.ui.toolbar.use_icons);
+    assert_eq!(
+        config.keybindings.bindings_for_action(Action::Undo),
+        Some(&["Ctrl+Alt+U".to_string()][..])
+    );
+}
+
+/// Runtime-only actions have no `[keybindings]` field. The editor refuses them
+/// long before the writer sees one, and the writer refuses to invent a key.
+#[test]
+fn a_runtime_only_action_is_not_written() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    let original = "[keybindings]\nselect_pen_tool = ['F']\n";
+    fs::write(&path, original).expect("test config should be written");
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::Keybinding {
+            action: Action::ReplayTour,
+            bindings: vec!["R".to_string()],
+        }],
+    )
+    .expect("an unwritable action should not fail the batch");
+
+    assert_eq!(
+        fs::read_to_string(&path).expect("config should still be readable"),
+        original
+    );
+}
+
 #[test]
 fn shutdown_flushes_the_real_document_writer() {
     let temp = crate::test_temp::tempdir().expect("tempdir should succeed");

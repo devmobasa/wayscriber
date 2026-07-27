@@ -5,8 +5,9 @@
 //! durable atomic write so an fsync cannot delay input feedback.
 
 use crate::config::{
-    Config, ConfigDocument, QuickColorWrite, StatusBarItem, ToolPresetConfig, ToolbarItemId,
-    ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag, item_visibility_setting,
+    Action, Config, ConfigDocument, QuickColorWrite, StatusBarItem, ToolPresetConfig,
+    ToolbarItemId, ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag,
+    item_visibility_setting,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardConfigUpdate;
@@ -61,6 +62,13 @@ pub(in crate::backend::wayland) enum ConfigMutation {
     QuickColor {
         index: usize,
         color: Color,
+    },
+    /// One action's complete `[keybindings]` entry, as the overlay's shortcut
+    /// editor merged it. The editor owns conflict detection and validation
+    /// before queueing; this carries only the field that survived that check.
+    Keybinding {
+        action: Action,
+        bindings: Vec<String>,
     },
 }
 
@@ -128,6 +136,15 @@ impl ConfigMutation {
                     QuickColorWrite::SlotMissing
                 );
             }
+            Self::Keybinding { action, bindings } => {
+                // Runtime-only actions have no stored field. The editor
+                // refuses them before queueing, so this only keeps an
+                // impossible request from forcing a no-op write.
+                return config
+                    .keybindings
+                    .set_bindings_for_action(*action, bindings.clone())
+                    .is_ok();
+            }
         }
         true
     }
@@ -164,7 +181,8 @@ impl ConfigMutation {
             | Self::ClickHighlight { .. }
             | Self::InputHud(_)
             | Self::PresetSlot { .. }
-            | Self::QuickColor { .. } => false,
+            | Self::QuickColor { .. }
+            | Self::Keybinding { .. } => false,
         }
     }
 
@@ -197,6 +215,10 @@ impl ConfigMutation {
             Self::BoardConfig(_) => return None,
             Self::PresetSlot { slot, .. } => ConfigMutationKey::PresetSlot(slot),
             Self::QuickColor { index, .. } => ConfigMutationKey::QuickColor(index),
+            // Per action: re-editing one shortcut replaces the pending value,
+            // while a different action's edit keeps its own entry instead of
+            // clobbering the one already queued.
+            Self::Keybinding { action, .. } => ConfigMutationKey::Keybinding(action),
         };
         Some(key)
     }
@@ -224,6 +246,7 @@ enum ConfigMutationKey {
     InputHud,
     PresetSlot(usize),
     QuickColor(usize),
+    Keybinding(Action),
 }
 
 /// Re-baseline the legacy `show_*` mirrors a layout switch leaves behind.
@@ -432,7 +455,10 @@ fn persist_before_shutdown(persist: &mut PersistMutations, pending: &[ConfigMuta
     }
 }
 
-fn persist_mutations_to_path(path: &Path, mutations: &[ConfigMutation]) -> Result<()> {
+pub(in crate::backend::wayland) fn persist_mutations_to_path(
+    path: &Path,
+    mutations: &[ConfigMutation],
+) -> Result<()> {
     let document = ConfigDocument::load_from_path(path)?;
     let mut config = document.config().clone();
     let mut applied = false;
@@ -441,6 +467,8 @@ fn persist_mutations_to_path(path: &Path, mutations: &[ConfigMutation]) -> Resul
             applied = true;
         } else if let ConfigMutation::QuickColor { index, .. } = mutation {
             warn!("Quick color slot {index} is no longer in config.toml; recolor was not saved");
+        } else if let ConfigMutation::Keybinding { action, .. } = mutation {
+            warn!("{action:?} has no configurable keybinding; the shortcut was not saved");
         }
     }
     if applied {

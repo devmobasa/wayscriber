@@ -231,6 +231,10 @@ fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
                 a: 1.0,
             },
         },
+        ConfigMutation::Keybinding {
+            action: crate::config::Action::ClearCanvas,
+            bindings: vec!["Ctrl+Alt+Shift+L".to_string()],
+        },
     ]
 }
 
