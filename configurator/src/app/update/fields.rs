@@ -4,13 +4,14 @@ use wayscriber::config::{PerformanceFieldId, ToolbarItemId, ToolbarItemOrderGrou
 use crate::messages::Message;
 use crate::models::{
     ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
-    EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField, NamedColorOption,
-    OverrideOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
-    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
-    PresenterToolBehaviorOption, PresenterToolbarModeOption, QuadField, ReducedMotionOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    ToolbarSideLayoutOption, TripletField, UiThemeOption, ZoomChipDisplayOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
+    InputHudPositionOption, KeybindingField, NamedColorOption, OverrideOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    QuadField, ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -212,6 +213,26 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.ui_status_position = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_input_hud_mode_changed(
+        &mut self,
+        option: InputHudModeOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.input_hud_mode = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_input_hud_position_changed(
+        &mut self,
+        option: InputHudPositionOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.input_hud_position = option;
         self.refresh_dirty_flag();
         Task::none()
     }

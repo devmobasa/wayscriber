@@ -307,6 +307,8 @@ fn ui_nested_visible_control_labels_match_concrete_nested_tabs() {
         ("toolbar hint", UiTabId::StatusBar),
         ("also show badge with status bar", UiTabId::StatusBar),
         ("click highlight radius", UiTabId::ClickHighlight),
+        ("keystrokes", UiTabId::InputHud),
+        ("max chips", UiTabId::InputHud),
     ];
 
     for (query, expected_tab) in cases {

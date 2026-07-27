@@ -2,11 +2,12 @@ mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
-    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
-    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
+    InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
+    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
+    PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -133,11 +134,23 @@ pub struct ConfigDraft {
     pub click_highlight_fill_color: ColorQuadInput,
     pub click_highlight_outline_color: ColorQuadInput,
 
+    pub input_hud_enabled: bool,
+    pub input_hud_mode: InputHudModeOption,
+    pub input_hud_position: InputHudPositionOption,
+    pub input_hud_show_mouse: bool,
+    pub input_hud_show_bare_modifiers: bool,
+    pub input_hud_combine_repeats: bool,
+    pub input_hud_display_ms: String,
+    pub input_hud_fade_ms: String,
+    pub input_hud_max_entries: String,
+    pub input_hud_font_size: String,
+
     pub presenter_hide_status_bar: bool,
     pub presenter_hide_toolbars: bool,
     pub presenter_hide_tool_preview: bool,
     pub presenter_close_help_overlay: bool,
     pub presenter_enable_click_highlight: bool,
+    pub presenter_enable_input_hud: bool,
     pub presenter_tool_behavior: PresenterToolBehaviorOption,
     pub presenter_toolbar_mode: PresenterToolbarModeOption,
     pub presenter_show_toast: bool,

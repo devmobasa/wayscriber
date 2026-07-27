@@ -77,16 +77,18 @@ pub enum UiTabId {
     StatusBar,
     HelpOverlay,
     ClickHighlight,
+    InputHud,
     PresenterMode,
 }
 
 impl UiTabId {
-    pub const ALL: [UiTabId; 6] = [
+    pub const ALL: [UiTabId; 7] = [
         UiTabId::Toolbar,
         UiTabId::ToolbarVisibility,
         UiTabId::StatusBar,
         UiTabId::HelpOverlay,
         UiTabId::ClickHighlight,
+        UiTabId::InputHud,
         UiTabId::PresenterMode,
     ];
 
@@ -97,6 +99,7 @@ impl UiTabId {
             UiTabId::StatusBar => "Status Bar",
             UiTabId::HelpOverlay => "Help Overlay",
             UiTabId::ClickHighlight => "Click Highlight",
+            UiTabId::InputHud => "Input HUD",
             UiTabId::PresenterMode => "Presenter Mode",
         }
     }

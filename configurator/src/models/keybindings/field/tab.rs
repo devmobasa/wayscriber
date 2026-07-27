@@ -101,6 +101,7 @@ impl KeybindingField {
             | Self::ToggleZoomChip
             | Self::ToggleFocusMode
             | Self::ToggleClickHighlight
+            | Self::ToggleInputHud
             | Self::ToggleToolbar
             | Self::ToggleLightMode
             | Self::ToggleLightModeDrawing

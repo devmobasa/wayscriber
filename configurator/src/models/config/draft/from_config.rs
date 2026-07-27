@@ -1,10 +1,11 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
-    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
-    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
+    InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
+    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
+    PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
+    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -205,11 +206,23 @@ impl ConfigDraft {
                 config.ui.click_highlight.outline_color,
             ),
 
+            input_hud_enabled: config.ui.input_hud.enabled,
+            input_hud_mode: InputHudModeOption::from_mode(config.ui.input_hud.mode),
+            input_hud_position: InputHudPositionOption::from_position(config.ui.input_hud.position),
+            input_hud_show_mouse: config.ui.input_hud.show_mouse,
+            input_hud_show_bare_modifiers: config.ui.input_hud.show_bare_modifiers,
+            input_hud_combine_repeats: config.ui.input_hud.combine_repeats,
+            input_hud_display_ms: config.ui.input_hud.display_ms.to_string(),
+            input_hud_fade_ms: config.ui.input_hud.fade_ms.to_string(),
+            input_hud_max_entries: config.ui.input_hud.max_entries.to_string(),
+            input_hud_font_size: format_float(config.ui.input_hud.font_size),
+
             presenter_hide_status_bar: config.presenter_mode.hide_status_bar,
             presenter_hide_toolbars: config.presenter_mode.hide_toolbars,
             presenter_hide_tool_preview: config.presenter_mode.hide_tool_preview,
             presenter_close_help_overlay: config.presenter_mode.close_help_overlay,
             presenter_enable_click_highlight: config.presenter_mode.enable_click_highlight,
+            presenter_enable_input_hud: config.presenter_mode.enable_input_hud,
             presenter_tool_behavior: PresenterToolBehaviorOption::from_behavior(
                 config.presenter_mode.tool_behavior,
             ),

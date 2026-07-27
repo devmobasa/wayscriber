@@ -23,14 +23,14 @@ pub use daemon::{
 };
 pub use fields::{
     DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption,
-    FontStyleOption, FontWeightOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
-    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
-    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
-    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiThemeOption,
-    ZoomChipDisplayOption,
+    FontStyleOption, FontWeightOption, InputHudModeOption, InputHudPositionOption, OverrideOption,
+    PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
+    PdfPageSizeOption, PdfTransparentBackgroundOption, PresenterToolBehaviorOption,
+    PresenterToolbarModeOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
+    PresetToggleField, QuadField, ReducedMotionOption, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField, ToolOption,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
+    ToolbarSideLayoutOption, TripletField, UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

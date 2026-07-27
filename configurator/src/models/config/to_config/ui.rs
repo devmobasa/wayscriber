@@ -1,5 +1,5 @@
 use super::super::draft::ConfigDraft;
-use super::super::parse::{parse_field, parse_u64_field};
+use super::super::parse::{parse_field, parse_u64_field, parse_usize_field};
 use crate::models::error::FormError;
 use wayscriber::config::{Config, XdgFocusLossBehavior};
 
@@ -168,6 +168,37 @@ impl ConfigDraft {
             Ok(values) => config.ui.click_highlight.outline_color = values,
             Err(err) => errors.push(err),
         }
+
+        config.ui.input_hud.enabled = self.input_hud_enabled;
+        config.ui.input_hud.mode = self.input_hud_mode.to_mode();
+        config.ui.input_hud.position = self.input_hud_position.to_position();
+        config.ui.input_hud.show_mouse = self.input_hud_show_mouse;
+        config.ui.input_hud.show_bare_modifiers = self.input_hud_show_bare_modifiers;
+        config.ui.input_hud.combine_repeats = self.input_hud_combine_repeats;
+        parse_u64_field(
+            &self.input_hud_display_ms,
+            "ui.input_hud.display_ms",
+            errors,
+            |value| config.ui.input_hud.display_ms = value,
+        );
+        parse_u64_field(
+            &self.input_hud_fade_ms,
+            "ui.input_hud.fade_ms",
+            errors,
+            |value| config.ui.input_hud.fade_ms = value,
+        );
+        parse_usize_field(
+            &self.input_hud_max_entries,
+            "ui.input_hud.max_entries",
+            errors,
+            |value| config.ui.input_hud.max_entries = value,
+        );
+        parse_field(
+            &self.input_hud_font_size,
+            "ui.input_hud.font_size",
+            errors,
+            |value| config.ui.input_hud.font_size = value,
+        );
 
         config.ui.help_overlay_style.font_family = self.help_font_family.trim().to_string();
         parse_field(
