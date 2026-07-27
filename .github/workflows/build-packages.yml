@@ -8,7 +8,8 @@ on:
 
 jobs:
   package:
-    runs-on: ubuntu-latest
+    # This runner defines the oldest supported release ABI (glibc 2.39).
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -37,13 +38,8 @@ jobs:
             libxcb-xfixes0-dev \
             libxcb-render0-dev \
             libxcb1-dev \
-            libx11-dev
-
-      - name: Build gtk4-layer-shell
-        # No libgtk4-layer-shell-dev on the Ubuntu 24.04 runner; build the
-        # pinned release from source so the release binaries link the GTK
-        # toolbar frontend.
-        run: bash tools/install-gtk4-layer-shell.sh
+            libx11-dev \
+            rpm
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.95.0
@@ -116,6 +112,42 @@ jobs:
         run: |
           ./tools/package.sh
 
+      - name: Verify packaged metadata and retained licenses
+        run: |
+          # Keep these floors aligned with MAX_GLIBC_VERSION in tools/package.sh.
+          deb_depends="$(dpkg-deb -f dist/wayscriber-amd64.deb Depends)"
+          deb_files="$(dpkg-deb -c dist/wayscriber-amd64.deb)"
+          grep -Fq 'libc6 (>= 2.39)' <<< "$deb_depends"
+          grep -Fq 'libgtk-4-1 (>= 4.12)' <<< "$deb_depends"
+          ! grep -Fq 'libgtk4-layer-shell' <<< "$deb_depends"
+          grep -Fq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$deb_files"
+          configurator_deb_depends="$(dpkg-deb -f dist/wayscriber-configurator-amd64.deb Depends)"
+          grep -Fq 'libc6 (>= 2.39)' <<< "$configurator_deb_depends"
+
+          mkdir -p "$RUNNER_TEMP/rpmdb"
+          rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-x86_64.rpm)"
+          rpm_files="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qlp dist/wayscriber-x86_64.rpm)"
+          grep -Fxq 'glibc >= 2.39' <<< "$rpm_requires"
+          grep -Fxq 'gtk4 >= 4.12' <<< "$rpm_requires"
+          ! grep -Fq 'gtk4-layer-shell' <<< "$rpm_requires"
+          grep -Fxq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$rpm_files"
+          configurator_rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-configurator-x86_64.rpm)"
+          grep -Fxq 'glibc >= 2.39' <<< "$configurator_rpm_requires"
+
+          tar_files="$(tar -tzf "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
+          grep -Eq '/usr/share/licenses/wayscriber/LICENSE\.gtk4-layer-shell$' <<< "$tar_files"
+
+      - name: Clean Ubuntu 24.04 install smoke
+        run: |
+          docker run --rm \
+            -v "$PWD/dist:/dist:ro" \
+            ubuntu:24.04 \
+            bash -euxo pipefail -c '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /dist/wayscriber-amd64.deb
+              wayscriber --version
+            '
+
       - name: Upload tarball
         uses: actions/upload-artifact@v4
         with:
@@ -164,7 +196,7 @@ jobs:
     name: Build apt/dnf repositories
     needs: package
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -246,7 +278,7 @@ jobs:
 
   release:
     needs: package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -266,7 +298,7 @@ jobs:
   aur:
     needs: package
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
       AUR_SSH_KNOWN_HOSTS: ${{ secrets.AUR_SSH_KNOWN_HOSTS }}

@@ -81,7 +81,9 @@ Packaging-only hotfix policy:
 ## Packaging
 
 - **package.sh** - Build distribution packages
-  - Builds release binaries and packages into tar/deb/rpm
+  - Builds a pinned gtk4-layer-shell static archive in a private prefix
+  - Verifies the release ABI and Wayland interposition symbols before stripping
+  - Builds release binaries and packages into tar/deb/rpm with retained license notices
   - Generates checksums.txt and manifest.json
   - Usage: `./tools/package.sh [--version <ver>] [--formats tar,deb,rpm]`
 

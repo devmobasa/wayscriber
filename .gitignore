@@ -34,6 +34,8 @@ packaging/**
 !packaging/PKGBUILD
 !packaging/package.wayscriber.yaml
 !packaging/package.configurator.yaml
+!packaging/licenses/
+!packaging/licenses/*.LICENSE
 !packaging/icons/
 !packaging/icons/*.png
 !packaging/icons/*.svg

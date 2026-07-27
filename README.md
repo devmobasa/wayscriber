@@ -207,7 +207,7 @@ Install the main `wayscriber` package first. `wayscriber-configurator` is an opt
 
 Also use this path for Linux Mint, Pop!_OS, and other Debian-based distros.
 
-> **Requires Ubuntu 25.04+ or Debian 13 (trixie) or newer.** The packages depend on `libgtk4-layer-shell0` for the toolbars, which older releases — including Ubuntu 24.04 LTS, Mint 22, and Pop!_OS 22.04 — do not ship. On those, [build from source](#from-source); Pop!_OS 22.04 requires the GTK-less build option.
+> **Wayscriber v0.9.23+ requires Ubuntu 24.04+ or Debian 13 (trixie) or newer.** This includes Linux Mint 22+ and Pop!_OS 24.04+. These release packages require glibc 2.39 and GTK 4.12, and embed the pinned GTK4 layer-shell integration, so no separate `libgtk4-layer-shell0` package is needed. Pop!_OS 22.04 remains below the GTK requirement; use the [GTK-less source build](#from-source) there.
 
 ```bash
 sudo apt update
@@ -386,7 +386,7 @@ In a browser:
 
 1. Open the [latest release](https://github.com/devmobasa/wayscriber/releases/latest).
 2. Install the main app package that matches your distro:
-   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) — Ubuntu 25.04+, Debian 13+, and other newer Debian-based distros (see the [release requirement](#debian-and-ubuntu))
+   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) — v0.9.23+ supports Ubuntu 24.04+, Linux Mint 22+, Pop!_OS 24.04+, Debian 13+, and compatible newer Debian-based distros (see the [release requirement](#debian-and-ubuntu))
    - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm) — Fedora, RHEL, Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros
 3. Optional: install the configurator package after wayscriber:
    - [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
