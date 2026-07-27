@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::ToolbarSectionVisibility;
 use crate::input::boards::{BoardConfigChange, PendingBoardConfigUpdate};
 use std::fs;
 use std::sync::mpsc;
@@ -260,6 +261,106 @@ fn a_failed_write_is_retained_for_the_shutdown_retry() {
     attempts_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("shutdown should retry the retained mutation");
+}
+
+/// The section visibility a reload derives from `path`, folding the legacy
+/// `show_*` flags into explicit overrides exactly as loading does.
+fn reloaded_section_visibility(path: &Path) -> ToolbarSectionVisibility {
+    let reloaded = ConfigDocument::load_from_path(path).expect("saved config should parse");
+    let toolbar = &reloaded.config().ui.toolbar;
+    let mut items = toolbar.items.clone();
+    let mut legacy = ToolbarSectionVisibility {
+        show_actions_section: toolbar.show_actions_section,
+        show_actions_advanced: toolbar.show_actions_advanced,
+        show_zoom_actions: toolbar.show_zoom_actions,
+        show_pages_section: toolbar.show_pages_section,
+        show_boards_section: toolbar.show_boards_section,
+        show_presets: toolbar.show_presets,
+        show_step_section: toolbar.show_step_section,
+        show_text_controls: toolbar.show_text_controls,
+        show_settings_section: toolbar.show_settings_section,
+    };
+    legacy.apply_mode_override(toolbar.mode_overrides.for_mode(toolbar.layout_mode));
+    crate::config::fold_legacy_section_flags(
+        &legacy,
+        toolbar.layout_mode,
+        &toolbar.mode_overrides,
+        &mut items,
+    );
+    crate::config::resolve_section_visibility(
+        toolbar.layout_mode,
+        &toolbar.mode_overrides,
+        &items.resolved(),
+    )
+}
+
+/// A layout switch owns `layout_mode`; it must not materialize section flags
+/// the user left out. The only mirrors it still writes are the ones loading
+/// reads back — without them the pre-switch values fold into explicit
+/// overrides and the mode change partly undoes itself on the next start.
+#[test]
+fn layout_switch_writes_the_mode_and_only_the_mirrors_loading_reads_back() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    fs::write(&path, "[ui.toolbar]\ntop_pinned = true\n").expect("test config should be written");
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarLayout(ToolbarLayoutMode::Simple)],
+    )
+    .expect("the layout switch should persist");
+
+    let written = fs::read_to_string(&path).expect("persisted config should be readable");
+    assert!(written.contains("layout_mode = \"simple\""));
+    for key in [
+        "show_actions_section",
+        "show_actions_advanced",
+        "show_zoom_actions",
+        "show_pages_section",
+        "show_boards_section",
+        "show_step_section",
+        "show_text_controls",
+        "show_settings_section",
+    ] {
+        assert!(
+            !written.contains(key),
+            "a layout switch must not materialize {key}"
+        );
+    }
+    // Presets is the one section Simple re-baselines away from the value the
+    // file already implied, so its mirror has to travel with the mode.
+    assert!(written.contains("show_presets = false"));
+
+    let sections = reloaded_section_visibility(&path);
+    assert!(!sections.show_presets, "Simple hides presets after reload");
+    assert!(sections.show_zoom_actions);
+    assert!(!sections.show_step_section);
+}
+
+/// The mirrors are scoped to sections the load fold reads: an explicit item
+/// override already wins there, so a layout switch leaves both the override
+/// and the authored flag alone.
+#[test]
+fn layout_switch_leaves_explicitly_overridden_sections_untouched() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    fs::write(
+        &path,
+        "[ui.toolbar]\nshow_settings_section = false\n\n[ui.toolbar.items]\nshown = [\"side.group.presets\"]\n",
+    )
+    .expect("test config should be written");
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarLayout(ToolbarLayoutMode::Simple)],
+    )
+    .expect("the layout switch should persist");
+
+    let written = fs::read_to_string(&path).expect("persisted config should be readable");
+    assert!(!written.contains("show_presets"));
+    assert!(written.contains("show_settings_section = false"));
+    assert!(written.contains("shown = [\"side.group.presets\"]"));
+    assert!(reloaded_section_visibility(&path).show_presets);
 }
 
 #[test]

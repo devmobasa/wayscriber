@@ -64,20 +64,7 @@ fn toolbar_config_mutation(
     use ToolbarConfigPersistenceTarget::*;
 
     match target {
-        LayoutMode => ConfigMutation::ToolbarLayout {
-            mode: input_state.toolbar_layout_mode,
-            sections: crate::config::ToolbarSectionVisibility {
-                show_actions_section: input_state.show_actions_section,
-                show_actions_advanced: input_state.show_actions_advanced,
-                show_zoom_actions: input_state.show_zoom_actions,
-                show_pages_section: input_state.show_pages_section,
-                show_boards_section: input_state.show_boards_section,
-                show_presets: input_state.show_presets,
-                show_step_section: input_state.show_step_section,
-                show_text_controls: input_state.show_text_controls,
-                show_settings_section: input_state.show_settings_section,
-            },
-        },
+        LayoutMode => ConfigMutation::ToolbarLayout(input_state.toolbar_layout_mode),
         SectionVisibility(flag) => {
             let id = flag.item_id();
             let setting =
@@ -121,6 +108,13 @@ impl WaylandState {
             // worker owns retrying the same mutation, so a later config edit
             // cannot reintroduce the stale pre-request value while it waits.
             let _ = mutation.apply(&mut self.config);
+            // Seeds are derived from the config this edit just changed, so
+            // reseed here rather than waiting for an unrelated session, board,
+            // or keybinding event: until then, override reconciliation and
+            // redundant-override deletion would key off the pre-edit baseline.
+            if mutation.affects_runtime_ui_seeds() {
+                self.refresh_runtime_ui_config_seeds();
+            }
             log::debug!("Queued {description}");
             true
         } else {

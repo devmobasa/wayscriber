@@ -6,7 +6,7 @@
 
 use crate::config::{
     Config, ConfigDocument, QuickColorWrite, StatusBarItem, ToolPresetConfig, ToolbarItemId,
-    ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
+    ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag, item_visibility_setting,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardConfigUpdate;
@@ -23,10 +23,7 @@ const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) enum ConfigMutation {
-    ToolbarLayout {
-        mode: ToolbarLayoutMode,
-        sections: ToolbarSectionVisibility,
-    },
+    ToolbarLayout(ToolbarLayoutMode),
     ToolbarSectionVisibility {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
@@ -72,9 +69,9 @@ impl ConfigMutation {
     /// mutation's externally editable target disappeared before persistence.
     pub(in crate::backend::wayland) fn apply(&self, config: &mut Config) -> bool {
         match self {
-            Self::ToolbarLayout { mode, sections } => {
+            Self::ToolbarLayout(mode) => {
                 config.ui.toolbar.layout_mode = *mode;
-                apply_section_visibility(config, *sections);
+                rebaseline_legacy_section_flags(config);
             }
             Self::ToolbarSectionVisibility {
                 id,
@@ -135,9 +132,45 @@ impl ConfigMutation {
         true
     }
 
+    /// Whether persisting this edit also moves a runtime-UI seed.
+    ///
+    /// `runtime_seeds_from_config` derives its seeds from the toolbar item
+    /// resolution — which folds `layout_mode`, the legacy section flags, and
+    /// `ui.toolbar.items` — and from the configured board pins. An edit to any
+    /// of those must refresh the seed registry, or override semantics keep
+    /// comparing against the pre-edit baseline until an unrelated event
+    /// refreshes them. Spelled out per variant on purpose: a new mutation has
+    /// to classify itself rather than inherit a wildcard.
+    pub(in crate::backend::wayland) fn affects_runtime_ui_seeds(&self) -> bool {
+        match self {
+            Self::ToolbarLayout(_)
+            | Self::ToolbarSectionVisibility { .. }
+            | Self::BoardConfig(_) => true,
+            Self::ToolbarUseIcons(_)
+            | Self::ToolbarShowMoreColors(_)
+            | Self::ToolbarContextAwareUi(_)
+            | Self::ToolbarPresetToasts(_)
+            | Self::ToolbarToolPreview(_)
+            | Self::ToolbarDelaySliders(_)
+            | Self::ShowStatusBar(_)
+            | Self::StatusBarInteractive(_)
+            | Self::StatusBarItem { .. }
+            | Self::StatusBoardBadge(_)
+            | Self::StatusPageBadge(_)
+            | Self::FloatingBadgeAlways(_)
+            | Self::FloatingBadge(_)
+            | Self::ZoomChip(_)
+            | Self::HistoryCustomSection(_)
+            | Self::ClickHighlight { .. }
+            | Self::InputHud(_)
+            | Self::PresetSlot { .. }
+            | Self::QuickColor { .. } => false,
+        }
+    }
+
     fn key(&self) -> Option<ConfigMutationKey> {
         let key = match *self {
-            Self::ToolbarLayout { .. } => ConfigMutationKey::ToolbarLayout,
+            Self::ToolbarLayout(_) => ConfigMutationKey::ToolbarLayout,
             Self::ToolbarSectionVisibility { id, .. } => {
                 ConfigMutationKey::ToolbarSectionVisibility(id)
             }
@@ -193,16 +226,32 @@ enum ConfigMutationKey {
     QuickColor(usize),
 }
 
-fn apply_section_visibility(config: &mut Config, sections: ToolbarSectionVisibility) {
-    config.ui.toolbar.show_actions_section = sections.show_actions_section;
-    config.ui.toolbar.show_actions_advanced = sections.show_actions_advanced;
-    config.ui.toolbar.show_zoom_actions = sections.show_zoom_actions;
-    config.ui.toolbar.show_pages_section = sections.show_pages_section;
-    config.ui.toolbar.show_boards_section = sections.show_boards_section;
-    config.ui.toolbar.show_presets = sections.show_presets;
-    config.ui.toolbar.show_step_section = sections.show_step_section;
-    config.ui.toolbar.show_text_controls = sections.show_text_controls;
-    config.ui.toolbar.show_settings_section = sections.show_settings_section;
+/// Re-baseline the legacy `show_*` mirrors a layout switch leaves behind.
+///
+/// Loading folds a legacy flag into an explicit item override wherever it
+/// disagrees with the active mode's baseline, so a switch that left the old
+/// mode's values in place would come back as sections pinned to the mode the
+/// user just left. Only sections without an explicit override need the mirror:
+/// the fold skips the rest, and `show_settings_section` is authored-only input
+/// the resolver ignores. Everything else the mode preset implies stays derived
+/// at load instead of being materialized into the file.
+fn rebaseline_legacy_section_flags(config: &mut Config) {
+    let toolbar = &config.ui.toolbar;
+    let mode = toolbar.layout_mode;
+    let resolved = toolbar.items.resolved();
+    let mirrors = ToolbarSectionFlag::ALL.map(|flag| {
+        let baseline = matches!(
+            item_visibility_setting(&resolved, flag.item_id()),
+            ToolbarItemVisibilitySetting::Default
+        )
+        .then(|| flag.baseline(mode, &toolbar.mode_overrides));
+        (flag, baseline)
+    });
+    for (flag, baseline) in mirrors {
+        if let Some(visible) = baseline {
+            apply_section_compatibility_mirror(config, flag, visible);
+        }
+    }
 }
 
 fn apply_section_compatibility_mirror(

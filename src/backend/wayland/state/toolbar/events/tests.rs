@@ -442,17 +442,27 @@ fn master_visibility_targets_copy_only_their_own_field() {
 }
 
 #[test]
-fn toolbar_layout_target_updates_only_layout_and_derived_compatibility_mirrors() {
+fn toolbar_layout_target_rebaselines_only_the_mirrors_the_load_fold_reads() {
     let mut config = crate::config::Config::default();
     config.ui.toolbar.layout_mode = ToolbarLayoutMode::Simple;
     config.ui.toolbar.top_pinned = true;
     config.ui.toolbar.items.hidden = vec!["future-hidden".to_string()];
+    config
+        .ui
+        .toolbar
+        .items
+        .set_hidden(ToolbarSectionFlag::Presets.item_id(), true);
+    // Presets already carry an explicit override the load fold skips, and the
+    // settings flag is authored-only input the resolver ignores; a layout
+    // switch owns neither.
+    config.ui.toolbar.show_presets = true;
+    config.ui.toolbar.show_settings_section = false;
+    config.ui.toolbar.show_step_section = false;
     let original_items = config.ui.toolbar.items.clone();
 
     let mut input_state = make_test_input_state();
     input_state.toolbar_layout_mode = ToolbarLayoutMode::Advanced;
     input_state.toolbar_top_pinned = false;
-    input_state.show_presets = false;
 
     apply_toolbar_config_target(
         &mut config,
@@ -461,7 +471,13 @@ fn toolbar_layout_target_updates_only_layout_and_derived_compatibility_mirrors()
     );
 
     assert_eq!(config.ui.toolbar.layout_mode, ToolbarLayoutMode::Advanced);
-    assert!(!config.ui.toolbar.show_presets);
+    // Sections without an override take the new mode's baseline, so reloading
+    // cannot fold the old mode's values back as pinned sections.
+    assert!(config.ui.toolbar.show_step_section);
+    assert!(config.ui.toolbar.show_actions_advanced);
+    // Everything else stays exactly as authored.
+    assert!(config.ui.toolbar.show_presets);
+    assert!(!config.ui.toolbar.show_settings_section);
     assert!(config.ui.toolbar.top_pinned);
     assert_eq!(config.ui.toolbar.items, original_items);
 }

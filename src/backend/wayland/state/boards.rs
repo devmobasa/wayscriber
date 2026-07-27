@@ -10,12 +10,12 @@ impl WaylandState {
         &mut self,
         update: PendingBoardConfigUpdate,
     ) {
-        if self.queue_config_mutation(
+        // Queueing reseeds the runtime registry for every mutation that feeds
+        // it, board pins included.
+        self.queue_config_mutation(
             ConfigMutation::BoardConfig(Box::new(update)),
             "board config persistence",
-        ) {
-            self.refresh_runtime_ui_config_seeds();
-        }
+        );
     }
 
     pub(in crate::backend::wayland) fn board_view_offset(&self) -> (f64, f64) {

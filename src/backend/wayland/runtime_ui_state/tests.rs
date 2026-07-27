@@ -5,7 +5,9 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use crate::backend::wayland::config_writer::ConfigMutation;
 use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
+use crate::input::boards::{BoardConfigChange, PendingBoardConfigUpdate};
 use crate::input::state::test_support::make_test_input_state;
 use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarEvent};
 
@@ -152,6 +154,108 @@ fn commit_board_pin_toggle(
         .expect("board pin permit");
     assert!(input.apply_board_pinned_runtime(board_id, prepared.desired));
     runtime.finish_board_pin_toggle(prepared, true)
+}
+
+/// The seed inputs assembled the way `refresh_runtime_ui_config_seeds` does:
+/// board pins are synced from the config first, then folded into the registry.
+fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
+    let mut input = input_from_config(config);
+    input
+        .boards
+        .sync_pin_seeds_from_config(&config.resolved_boards());
+    runtime_seeds_from_config(config, &board_pin_seeds_from_input(&input))
+        .expect("probe config should produce valid seeds")
+}
+
+/// One config-changing probe per `ConfigMutation` variant, valued against
+/// `baseline` so no probe is a no-op. `PresetSlot` is the exception: the
+/// shipped slots are empty, so its probe only has to prove that clearing one
+/// leaves the registry alone.
+fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
+    use crate::config::{StatusBarItem, ToolbarItemVisibilitySetting, ToolbarSectionFlag};
+
+    let ui = &baseline.ui;
+    let toolbar = &ui.toolbar;
+    let mut boards = baseline.resolved_boards();
+    let mut created = boards.items[0].clone();
+    created.id = "probe-board".to_string();
+    created.name = "Probe board".to_string();
+    created.pinned = !created.pinned;
+    boards.items.push(created);
+
+    vec![
+        ConfigMutation::ToolbarLayout(crate::config::ToolbarLayoutMode::Simple),
+        ConfigMutation::ToolbarSectionVisibility {
+            id: ToolbarSectionFlag::Presets.item_id(),
+            setting: ToolbarItemVisibilitySetting::Hidden,
+            flag: ToolbarSectionFlag::Presets,
+            visible: false,
+        },
+        ConfigMutation::BoardConfig(Box::new(PendingBoardConfigUpdate::new(
+            boards,
+            BoardConfigChange::IdentitiesCreated(vec!["probe-board".to_string()]),
+        ))),
+        ConfigMutation::ToolbarUseIcons(!toolbar.use_icons),
+        ConfigMutation::ToolbarShowMoreColors(!toolbar.show_more_colors),
+        ConfigMutation::ToolbarContextAwareUi(!toolbar.context_aware_ui),
+        ConfigMutation::ToolbarPresetToasts(!toolbar.show_preset_toasts),
+        ConfigMutation::ToolbarToolPreview(!toolbar.show_tool_preview),
+        ConfigMutation::ToolbarDelaySliders(!toolbar.show_delay_sliders),
+        ConfigMutation::ZoomChip(!toolbar.show_zoom_chip),
+        ConfigMutation::ShowStatusBar(!ui.show_status_bar),
+        ConfigMutation::StatusBarInteractive(!ui.status_bar_interactive),
+        ConfigMutation::StatusBarItem {
+            item: StatusBarItem::Tool,
+            visible: !ui.status_bar_item_visible(StatusBarItem::Tool),
+        },
+        ConfigMutation::StatusBoardBadge(!ui.show_status_board_badge),
+        ConfigMutation::StatusPageBadge(!ui.show_status_page_badge),
+        ConfigMutation::FloatingBadgeAlways(!ui.show_floating_badge_always),
+        ConfigMutation::FloatingBadge(!ui.show_floating_badge),
+        ConfigMutation::HistoryCustomSection(!baseline.history.custom_section_enabled),
+        ConfigMutation::ClickHighlight {
+            enabled: Some(!ui.click_highlight.enabled),
+            show_on_highlight_tool: !ui.click_highlight.show_on_highlight_tool,
+        },
+        ConfigMutation::InputHud(!ui.input_hud.enabled),
+        ConfigMutation::PresetSlot {
+            slot: 1,
+            preset: None,
+        },
+        ConfigMutation::QuickColor {
+            index: 0,
+            color: crate::draw::Color {
+                r: 0.13,
+                g: 0.27,
+                b: 0.41,
+                a: 1.0,
+            },
+        },
+    ]
+}
+
+/// Every config mutation that moves a runtime seed has to declare it:
+/// `queue_config_mutation` reseeds the registry only for declared mutations,
+/// and an undeclared one would leave overrides reconciling against a baseline
+/// the config no longer has.
+#[test]
+fn config_mutations_that_move_a_runtime_seed_declare_it() {
+    let baseline = Config::default();
+    let baseline_seeds = seeds_for_config(&baseline);
+
+    for mutation in seed_probe_mutations(&baseline) {
+        let mut config = baseline.clone();
+        assert!(
+            mutation.apply(&mut config),
+            "probe mutation {mutation:?} should apply"
+        );
+        if seeds_for_config(&config) != baseline_seeds {
+            assert!(
+                mutation.affects_runtime_ui_seeds(),
+                "{mutation:?} moves a runtime seed without declaring it"
+            );
+        }
+    }
 }
 
 #[test]
