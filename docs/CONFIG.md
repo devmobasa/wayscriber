@@ -53,11 +53,14 @@ unchanged.
 When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
 section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
 a configurator warning but remain in the file for forward compatibility. Known values are still
-validated and migrations are written under their canonical names. The configurator tracks the
-exact loaded contents rather than relying on modification time; if the file is created, deleted,
-retargeted through a symlink, or changed by another editor, reload it before saving. A save does not
-expand omitted, unchanged defaults; when a setting that was omitted is edited, only that changed
-setting and its required table path are added.
+validated for the running session, and aliases are written under their canonical names. The
+configurator tracks the exact loaded contents rather than relying on modification time; if the file
+is created, deleted, retargeted through a symlink, or changed by another editor, reload it before
+saving. A save does not expand omitted, unchanged defaults; when a setting that was omitted is
+edited, only that changed setting and its required table path are added.
+A save writes only what its caller changed: a value that loading clamped, normalized, deduplicated,
+or reset keeps the text you authored, so an unrelated preference toggle can never rewrite settings
+you did not touch.
 The first save for a missing file is sparse as well: it writes the migration revision marker and
 only values changed from the built-in defaults.
 
@@ -1426,7 +1429,7 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
-The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) once in memory and advances to `config_revision = 1`. Customized pairs are preserved, and the revision plus migrated values are written only on the next normal config save. Once revision 1 is saved, explicitly restoring the old pair remains untouched.
+The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) and advances to `config_revision = 1`. Customized pairs are preserved. The overlay records a pending migration once at startup: it writes the migrated shortcuts together with the new `config_revision`, after copying the previous file to a timestamped `.bak`, and changes nothing else. If that write fails (a read-only file, for example) the migration still applies to the running session and is retried on the next launch. Once the revision is recorded, explicitly restoring the old pair remains untouched.
 
 ```toml
 [keybindings]

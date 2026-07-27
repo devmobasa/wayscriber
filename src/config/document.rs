@@ -278,31 +278,61 @@ impl ConfigDocument {
         self.save_document(config, true)
     }
 
+    /// Writes a one-time migration of the file as it was authored.
+    ///
+    /// Every other save measures its diff against the document's validated
+    /// snapshot, so a migrated value no caller touched would never reach disk.
+    /// Passing the unvalidated `authored` config as the baseline keeps the diff
+    /// to the migrated fields and the revision stamp; nothing else is
+    /// normalized, and the caller gets a backup first.
+    pub(crate) fn save_migration(
+        &self,
+        authored: &Config,
+        migrated: &Config,
+    ) -> Result<ConfigDocumentSaveOutcome> {
+        self.merge_and_write(authored, migrated, true)
+    }
+
     fn save_document(
         &self,
         mut config: Config,
         create_backup: bool,
     ) -> Result<ConfigDocumentSaveOutcome> {
         config.validate_and_clamp();
+        self.merge_and_write(&self.config, &config, create_backup)
+    }
+
+    fn merge_and_write(
+        &self,
+        previous: &Config,
+        updated: &Config,
+        create_backup: bool,
+    ) -> Result<ConfigDocumentSaveOutcome> {
         let repair_source = self
             .repair_mode
-            .then(|| repair_source_document(&self.document, &self.config, &config))
+            .then(|| repair_source_document(&self.document, previous, updated))
             .transpose()?;
         let source = repair_source.as_ref().unwrap_or(&self.document);
-        let mut merged =
-            merge_config_document(source, &self.config, &config, &self.known_document)?;
+        let mut merged = merge_config_document(
+            source,
+            previous,
+            updated,
+            &self.known_document,
+            self.repair_mode,
+        )?;
         let mut output = merged.to_string();
         let parsed = parse_typed_config(&output);
         let parsed = match parsed {
             Ok(parsed) => parsed,
             Err(_) if self.repair_mode => {
                 let conservative =
-                    conservative_repair_source_document(&self.document, &self.config, &config)?;
+                    conservative_repair_source_document(&self.document, previous, updated)?;
                 merged = merge_config_document(
                     &conservative,
-                    &self.config,
-                    &config,
+                    previous,
+                    updated,
                     &self.known_document,
+                    self.repair_mode,
                 )?;
                 output = merged.to_string();
                 parse_typed_config(&output)

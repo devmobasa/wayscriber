@@ -279,6 +279,10 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
         )
         .unwrap();
 
+        // Startup records the migration; that stamp is what protects a pair
+        // the user deliberately restores afterwards.
+        Config::persist_pending_migrations().expect("startup migration write succeeds");
+
         let mut migrated = Config::load().expect("legacy load succeeds").config;
         migrated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
         migrated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];

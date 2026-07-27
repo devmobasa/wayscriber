@@ -41,8 +41,11 @@ fn diagnostic_paths(document: &ConfigDocument) -> Vec<&str> {
         .collect()
 }
 
+/// A save writes the caller's one change. Values that only differ because
+/// loading clamped them keep their authored text: persisting them would let an
+/// unrelated save rewrite settings the user never touched (#293).
 #[test]
-fn document_save_preserves_comments_order_unknowns_and_validates_known_values() {
+fn document_save_preserves_comments_order_unknowns_and_clamped_source_text() {
     let temp = TempConfig::new("golden");
     temp.write(
         r#"# user header
@@ -91,9 +94,14 @@ future_knob = 7 # preserve nested unknown
         );
     }
     assert!(saved.find("future_root").unwrap() < saved.find("[performance]").unwrap());
-    assert!(saved.contains("buffer_count = 4 # keep buffer explanation"));
+    assert!(saved.contains("buffer_count = 99 # keep buffer explanation"));
     assert!(saved.contains("max_fps_no_vsync = 144"));
-    assert!(saved.contains("ui_animation_fps = 240 # clamp this known value"));
+    assert!(saved.contains("ui_animation_fps = 999 # clamp this known value"));
+    assert_eq!(outcome.document().config().performance.buffer_count, 4);
+    assert_eq!(
+        outcome.document().config().performance.ui_animation_fps,
+        240
+    );
     assert_eq!(
         diagnostic_paths(outcome.document()),
         diagnostic_paths(&document)
@@ -161,16 +169,18 @@ future_font_weight = 600
     assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
 }
 
+/// Validation drops a known option in memory only. Removing its line here
+/// would be a deletion the caller never asked for, so the text stays and the
+/// user keeps the chance to fix the value (#293).
 #[test]
-fn no_op_save_removes_known_option_discarded_by_validation() {
+fn no_op_save_keeps_known_option_discarded_by_validation() {
     let temp = TempConfig::new("validated-away-known-option");
-    temp.write(
-        r#"config_revision = 1
+    let original = r#"config_revision = 1
 [render_profiles]
 active = "missing"
 future_profile_policy = "keep"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load render profiles");
     assert!(document.config().render_profiles.active.is_none());
 
@@ -178,7 +188,39 @@ future_profile_policy = "keep"
         .save_with_backup(document.config().clone())
         .expect("save validated render profiles");
 
-    let saved = fs::read_to_string(&temp.path).expect("read validated render profiles");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read validated render profiles"),
+        original
+    );
+}
+
+#[test]
+fn save_removes_a_known_option_the_caller_cleared() {
+    let temp = TempConfig::new("caller-cleared-known-option");
+    temp.write(
+        r#"config_revision = 1
+[render_profiles]
+active = "one"
+future_profile_policy = "keep"
+
+[[render_profiles.profiles]]
+id = "one"
+name = "One"
+"#,
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load render profiles");
+    assert_eq!(
+        document.config().render_profiles.active.as_deref(),
+        Some("one")
+    );
+    let mut updated = document.config().clone();
+    updated.render_profiles.active = None;
+
+    document
+        .save_with_backup(updated)
+        .expect("save cleared render profile");
+
+    let saved = fs::read_to_string(&temp.path).expect("read cleared render profile");
     assert!(!saved.contains("active ="));
     assert!(saved.contains("future_profile_policy = \"keep\""));
 }
@@ -323,8 +365,11 @@ future_entry_option = "cannot be separated safely"
     ConfigDocument::load_from_path(&temp.path).expect("collection repair is valid");
 }
 
+/// The migration write owns `config_revision`: it stamps the revision together
+/// with the values it migrated, so a pair the user deliberately restores
+/// afterwards survives the next load.
 #[test]
-fn save_persists_migration_revision_and_does_not_repeat_keybinding_migration() {
+fn migration_save_persists_revision_and_does_not_repeat_keybinding_migration() {
     let temp = TempConfig::new("migration-revision");
     temp.write(
         r#"[keybindings]
@@ -332,7 +377,21 @@ toggle_command_palette = ["Ctrl+K"]
 capture_full_screen = ["Ctrl+Shift+P"]
 "#,
     );
-    let document = ConfigDocument::load_from_path(&temp.path).expect("load legacy shortcuts");
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load migrated shortcuts");
+    assert_eq!(
+        document.config().keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        document.config().keybindings.capture.capture_full_screen,
+        ["Ctrl+Alt+F"]
+    );
+
     let mut updated = document.config().clone();
     updated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
     updated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
@@ -340,9 +399,7 @@ capture_full_screen = ["Ctrl+Shift+P"]
         .save_with_backup(updated)
         .expect("save intentional legacy shortcut pair");
 
-    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
-    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
-    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("reload migrated config");
+    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("reload restored config");
     assert_eq!(
         reloaded.config().keybindings.ui.toggle_command_palette,
         ["Ctrl+K"]
@@ -647,8 +704,12 @@ future_owner = "owner-second"
     let profiles = value["render_profiles"]["profiles"]
         .as_array()
         .expect("profiles array");
-    assert_eq!(profiles[0]["id"].as_str(), Some("duplicate-2"));
+    // The reorder is the caller's change; the disambiguating `-2` suffix is
+    // not: it is derived on load, so both entries keep their authored id.
+    assert_eq!(profiles[0]["name"].as_str(), Some("Second"));
+    assert_eq!(profiles[0]["id"].as_str(), Some("duplicate"));
     assert_eq!(profiles[0]["future_owner"].as_str(), Some("owner-second"));
+    assert_eq!(profiles[1]["name"].as_str(), Some("First"));
     assert_eq!(profiles[1]["id"].as_str(), Some("duplicate"));
     assert_eq!(profiles[1]["future_owner"].as_str(), Some("owner-first"));
 }
@@ -818,16 +879,17 @@ future_profile_key = "keep"
     assert!(saved.contains("future_profile_key = \"keep\""));
 }
 
+/// Id normalization happens on load, not on save: an unrelated save keeps the
+/// authored spelling and only the entry the caller edited changes (#293).
 #[test]
-fn validated_id_normalization_preserves_entry_metadata() {
+fn validated_id_normalization_keeps_authored_text_until_the_entry_changes() {
     let temp = TempConfig::new("normalized-stable-id");
-    temp.write(
-        r#"[[render_profiles.profiles]]
+    let original = r#"[[render_profiles.profiles]]
 id = " Profile One "
 name = "Profile One"
 future_owner = "keep"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load profile");
     assert_eq!(
         document.config().render_profiles.profiles[0].id,
@@ -838,24 +900,39 @@ future_owner = "keep"
         .save_with_backup(document.config().clone())
         .expect("save normalized profile id");
 
-    let saved = fs::read_to_string(&temp.path).expect("read normalized profile");
-    assert!(saved.contains("id = \"profile one\""));
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read normalized profile"),
+        original
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("reload profile");
+    let mut updated = document.config().clone();
+    updated.render_profiles.profiles[0].name = "Renamed".to_string();
+    document
+        .save_with_backup(updated)
+        .expect("save renamed profile");
+
+    let saved = fs::read_to_string(&temp.path).expect("read renamed profile");
+    assert!(saved.contains("id = \" Profile One \""));
+    assert!(saved.contains("name = \"Renamed\""));
     assert!(saved.contains("future_owner = \"keep\""));
 }
 
+/// Validation adds the transparent board in memory. Writing that entry on an
+/// unrelated save would edit a list the caller never touched, so the file keeps
+/// its single authored board until an edit actually changes the list (#293).
 #[test]
-fn validation_added_entry_does_not_take_metadata_from_a_normalized_id() {
+fn validation_added_entry_reaches_the_file_only_with_a_caller_change() {
     let temp = TempConfig::new("normalized-board-with-added-default");
-    temp.write(
-        r#"[boards]
+    let original = r#"[boards]
 
 [[boards.items]]
 id = " WhiteBoard "
 name = "White board"
 background = { rgb = [1.0, 1.0, 1.0] }
 future_owner = "keep-with-whiteboard"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load boards");
     assert_eq!(document.config().boards.as_ref().unwrap().items.len(), 2);
 
@@ -863,12 +940,25 @@ future_owner = "keep-with-whiteboard"
         .save_with_backup(document.config().clone())
         .expect("save validated boards");
 
-    let saved = fs::read_to_string(&temp.path).expect("read validated boards");
-    let value: toml::Value = toml::from_str(&saved).expect("parse validated boards");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read validated boards"),
+        original
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("reload boards");
+    let mut updated = document.config().clone();
+    updated.boards.as_mut().unwrap().items[1].name = "Renamed board".to_string();
+    document
+        .save_with_backup(updated)
+        .expect("save renamed board");
+
+    let saved = fs::read_to_string(&temp.path).expect("read renamed boards");
+    let value: toml::Value = toml::from_str(&saved).expect("parse renamed boards");
     let boards = value["boards"]["items"].as_array().expect("boards array");
     assert_eq!(boards[0]["id"].as_str(), Some("transparent"));
     assert!(boards[0].get("future_owner").is_none());
-    assert_eq!(boards[1]["id"].as_str(), Some("whiteboard"));
+    assert_eq!(boards[1]["id"].as_str(), Some(" WhiteBoard "));
+    assert_eq!(boards[1]["name"].as_str(), Some("Renamed board"));
     assert_eq!(
         boards[1]["future_owner"].as_str(),
         Some("keep-with-whiteboard")
@@ -878,8 +968,7 @@ future_owner = "keep-with-whiteboard"
 #[test]
 fn deduplicated_board_ids_keep_metadata_through_validation_reorder() {
     let temp = TempConfig::new("deduplicated-board-reorder");
-    temp.write(
-        r#"[boards]
+    let original = r#"[boards]
 max_count = 2
 default_board = "DUPLICATE"
 
@@ -900,8 +989,8 @@ id = "duplicate"
 name = "Overlay"
 background = "transparent"
 future_owner = "owner-overlay"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load boards");
     let boards = &document.config().boards.as_ref().unwrap().items;
     assert_eq!(boards[0].id, "duplicate-2");
@@ -911,13 +1000,33 @@ future_owner = "owner-overlay"
         .save_with_backup(document.config().clone())
         .expect("save validated boards");
 
-    let saved = fs::read_to_string(&temp.path).expect("read validated boards");
-    let value: toml::Value = toml::from_str(&saved).expect("parse validated boards");
+    // Deduplication, truncation and reordering are load-time repairs: an
+    // unrelated save must not press them onto the user's file (#293).
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read validated boards"),
+        original
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("reload boards");
+    let mut updated = document.config().clone();
+    updated.boards.as_mut().unwrap().items[0].name = "Renamed overlay".to_string();
+    document
+        .save_with_backup(updated)
+        .expect("save renamed board");
+
+    let saved = fs::read_to_string(&temp.path).expect("read renamed boards");
+    let value: toml::Value = toml::from_str(&saved).expect("parse renamed boards");
     let boards = value["boards"]["items"].as_array().expect("boards array");
-    assert_eq!(boards[0]["id"].as_str(), Some("duplicate-2"));
-    assert_eq!(boards[0]["future_owner"].as_str(), Some("owner-overlay"));
-    assert_eq!(boards[1]["id"].as_str(), Some("duplicate"));
-    assert_eq!(boards[1]["future_owner"].as_str(), Some("owner-color"));
+    let renamed = boards
+        .iter()
+        .find(|board| board["name"].as_str() == Some("Renamed overlay"))
+        .expect("the renamed board is still in the file");
+    assert_eq!(renamed["future_owner"].as_str(), Some("owner-overlay"));
+    let color = boards
+        .iter()
+        .find(|board| board["future_owner"].as_str() == Some("owner-color"))
+        .expect("the color board keeps its entry");
+    assert_eq!(color["name"].as_str(), Some("Color board"));
 }
 
 #[test]
@@ -952,6 +1061,94 @@ future_owner = "keep"
     let saved = fs::read_to_string(&temp.path).expect("read truncated boards");
     assert!(saved.contains("id = \"future-board\""));
     assert!(saved.contains("future_owner = \"keep\""));
+}
+
+/// The #293 report: one collision makes validation reset the whole section in
+/// memory, and every unrelated save used to write that reset over the user's
+/// shortcuts — truncating longer arrays and replacing single bindings.
+#[test]
+fn reset_keybindings_never_reach_the_file_through_an_unrelated_save() {
+    let temp = TempConfig::new("reset-keybindings");
+    let keybindings = format!(
+        r#"[keybindings]
+# Keep these authored shortcuts.
+exit = ["Escape", "Ctrl+Q", "Q"]
+capture_full_screen = ["Ctrl+Shift+P"]
+# `F2` still collides with the `cycle_toolbar_display` default at revision
+# {CURRENT_CONFIG_REVISION}, which is what resets the section in memory.
+toggle_toolbar = ["F2", "F9"]
+"#
+    );
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n[ui.toolbar]\nuse_icons = true\n\n{keybindings}"
+    );
+    temp.write(&original);
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load colliding shortcuts");
+    // How the session resolves the collision may change; that the file keeps
+    // its authored text may not.
+    assert_eq!(
+        document.config().keybindings.core.exit,
+        ["Escape", "Ctrl+Q"],
+        "the collision currently resets the whole section in memory"
+    );
+
+    let mut updated = document.config().clone();
+    updated.ui.toolbar.use_icons = false;
+    document
+        .save_with_backup(updated)
+        .expect("save the unrelated toolbar preference");
+
+    let saved = fs::read_to_string(&temp.path).expect("read saved config");
+    assert!(saved.contains("use_icons = false"));
+    assert!(
+        saved.contains(&keybindings),
+        "the keybindings section must be byte-identical, got:\n{saved}"
+    );
+}
+
+/// The startup migration is the one write that carries migrated values, and it
+/// carries nothing else: no clamping, no normalization, no reformatting.
+#[test]
+fn migration_save_writes_only_migrated_fields_and_backs_the_file_up() {
+    let temp = TempConfig::new("migration-write");
+    let original = r#"# Keep this migration comment.
+[keybindings]
+toggle_toolbar = ["F2", "F9"]
+undo = ["Ctrl+Alt+U"]
+
+[performance]
+buffer_count = 99
+future_knob = 7
+"#;
+    temp.write(original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
+    assert!(saved.contains("# Keep this migration comment."));
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    assert!(saved.contains("toggle_toolbar = [\"F9\"]"));
+    assert!(saved.contains("undo = [\"Ctrl+Alt+U\"]"));
+    assert!(!saved.contains("cycle_toolbar_display"));
+    assert!(saved.contains("buffer_count = 99"));
+    assert!(saved.contains("future_knob = 7"));
+
+    let backups = fs::read_dir(&temp.root)
+        .expect("read temp config directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "bak"))
+        .collect::<Vec<_>>();
+    assert_eq!(backups.len(), 1, "the migration write backs the file up");
+    assert_eq!(fs::read_to_string(&backups[0]).unwrap(), original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("second startup");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read config after the second startup"),
+        saved,
+        "a migrated file is not rewritten again"
+    );
 }
 
 #[test]

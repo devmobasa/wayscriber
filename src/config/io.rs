@@ -3,7 +3,7 @@ use super::{Config, ConfigDocument};
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -82,15 +82,68 @@ impl Config {
             });
         };
 
-        let config_str = fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
-
-        let config: Config = toml::from_str(&config_str)
-            .with_context(|| format!("Failed to parse config from {}", config_path.display()))?;
+        let config = Self::read_unvalidated_from(&config_path)?;
 
         info!("Loaded config from {}", config_path.display());
 
         Ok(LoadedConfig { config, source })
+    }
+
+    fn read_unvalidated_from(config_path: &Path) -> Result<Self> {
+        let config_str = fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
+
+        toml::from_str(&config_str)
+            .with_context(|| format!("Failed to parse config from {}", config_path.display()))
+    }
+
+    /// Writes pending one-time migrations to the configuration file.
+    ///
+    /// A save records only the delta its caller asked for, so a migrated value
+    /// no later edit happens to touch would stay in memory while the file kept
+    /// its pre-migration text — and the revision stamp would then suppress the
+    /// migration on every following load. This one write keeps the stamp and
+    /// the values it claims together, after backing the file up.
+    ///
+    /// Nothing is written when the file is missing, already current, or only
+    /// loadable in repair mode.
+    pub(crate) fn persist_pending_migrations() -> Result<()> {
+        Self::persist_pending_migrations_at(&Self::get_config_path()?)
+    }
+
+    pub(super) fn persist_pending_migrations_at(config_path: &Path) -> Result<()> {
+        if !config_path.exists() {
+            return Ok(());
+        }
+
+        let authored = Self::read_unvalidated_from(config_path)?;
+        let mut migrated = authored.clone();
+        migrated.apply_keybinding_migrations();
+        if migrated.config_revision == authored.config_revision {
+            return Ok(());
+        }
+
+        let (document, repair_warning) = ConfigDocument::load_for_editing_from_path(config_path)?;
+        if let Some(warning) = repair_warning {
+            warn!("Skipped the config migration write; the file needs repair first: {warning}");
+            return Ok(());
+        }
+
+        let outcome = document.save_migration(&authored, &migrated)?;
+        match outcome.backup_path() {
+            Some(backup) => info!(
+                "Migrated {} to config revision {} (backup at {})",
+                config_path.display(),
+                migrated.config_revision,
+                backup.display()
+            ),
+            None => info!(
+                "Migrated {} to config revision {}",
+                config_path.display(),
+                migrated.config_revision
+            ),
+        }
+        Ok(())
     }
 
     fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {

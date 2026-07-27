@@ -10,6 +10,8 @@ pub(super) struct LoadedConfig {
 }
 
 pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
+    persist_pending_migrations();
+
     let (config, source) = match Config::load() {
         Ok(loaded) => (loaded.config, loaded.source),
         Err(e) => {
@@ -38,6 +40,18 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
         config,
         source,
         exit_after_capture_mode,
+    }
+}
+
+/// Records one-time config migrations on disk before the overlay reads them.
+///
+/// The overlay owns this write: the daemon, tray, and configurator load the
+/// same file and must not race one another for a rewrite the user did not ask
+/// for. A failure (read-only file, a lost revision race) leaves the migration
+/// in memory only and is retried on the next launch.
+fn persist_pending_migrations() {
+    if let Err(error) = Config::persist_pending_migrations() {
+        warn!("Failed to persist config migrations: {error:#}. Continuing without them.");
     }
 }
 
@@ -92,6 +106,32 @@ mod tests {
                 loaded.exit_after_capture_mode,
                 ExitAfterCaptureMode::Always
             ));
+        });
+    }
+
+    #[test]
+    fn load_records_pending_migrations_in_the_config_file() {
+        with_temp_config_home(|_| {
+            let path = Config::get_config_path().expect("config path");
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create config dir");
+            }
+            fs::write(
+                &path,
+                "[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nundo = [\"Ctrl+Alt+U\"]\n",
+            )
+            .expect("write legacy config");
+
+            let loaded = load(ExitAfterCaptureMode::Auto);
+            assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F9"]);
+
+            let saved = fs::read_to_string(&path).expect("read migrated config");
+            assert!(saved.contains(&format!(
+                "config_revision = {}",
+                crate::config::CURRENT_CONFIG_REVISION
+            )));
+            assert!(saved.contains("toggle_toolbar = [\"F9\"]"));
+            assert!(saved.contains("undo = [\"Ctrl+Alt+U\"]"));
         });
     }
 

@@ -84,6 +84,32 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
     });
 }
 
+/// Clamping is a load-time repair of the running session, not an edit. The
+/// runtime save that follows it must leave the authored number alone so the
+/// user still sees (and can fix) what they wrote (#293).
+#[test]
+fn runtime_save_keeps_an_out_of_range_value_as_authored() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            "[performance]\nbuffer_count = 99\n\n[ui.toolbar]\nside_pinned = true\n",
+        )
+        .unwrap();
+
+        let mut config = Config::load().expect("load clamped config").config;
+        assert_eq!(config.performance.buffer_count, 4);
+        config.ui.toolbar.side_pinned = false;
+        config.save().expect("save unrelated toolbar preference");
+
+        let saved = fs::read_to_string(&config_file).unwrap();
+        assert!(saved.contains("buffer_count = 99"));
+        assert!(saved.contains("side_pinned = false"));
+    });
+}
+
 #[test]
 fn targeted_runtime_update_preserves_newer_sibling_edit() {
     with_temp_config_home(|config_root| {

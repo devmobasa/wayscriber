@@ -12,6 +12,7 @@ pub(super) fn merge_config_document(
     previous: &Config,
     updated: &Config,
     known_document: &DocumentMut,
+    repairing: bool,
 ) -> Result<DocumentMut> {
     let updated_revision = updated.config_revision;
     let previous = serialize_config_document(previous)?;
@@ -21,7 +22,14 @@ pub(super) fn merge_config_document(
     let empty_source_contents = source_was_empty.then(|| merged.trailing().clone());
 
     canonicalize_aliases(&mut merged);
-    if !merged.contains_key("config_revision") && updated_revision > 0 {
+    // Only a document this save authors from scratch records the revision.
+    // Elsewhere the stamp belongs to the migration save: a merge writes just
+    // the caller's delta, so stamping here would claim migrations whose values
+    // deliberately never reached the file.
+    if (source_was_empty || repairing)
+        && !merged.contains_key("config_revision")
+        && updated_revision > 0
+    {
         merged.insert("config_revision", toml_edit::value(updated_revision as i64));
     }
     merge_table_like(
@@ -230,7 +238,10 @@ fn merge_table_like(
                     }
                 }
             },
-            None if previous_item.is_some() || known_item.is_some() => {
+            // Only a key the caller dropped from a value it held is removed.
+            // A key that validation discarded is absent from `previous` too,
+            // and the user's text for it must survive an unrelated save.
+            None if previous_item.is_some() => {
                 raw.remove(&key);
             }
             None => {}
@@ -299,6 +310,13 @@ fn merge_item(
     known: Option<&Item>,
     path: &str,
 ) {
+    // A save writes the delta its caller asked for. When the caller held this
+    // node unchanged, whatever the file says about it stays as authored, even
+    // if loading normalized, clamped, or reset the in-memory value (#293).
+    if previous.is_some_and(|previous| items_semantically_equal(previous, updated)) {
+        return;
+    }
+
     if let (Item::Value(Value::Array(raw)), Item::ArrayOfTables(updated)) = (&mut *raw, updated) {
         let previous = previous
             .and_then(Item::as_array_of_tables)
@@ -350,6 +368,12 @@ fn merge_value(
     known: Option<&Value>,
     path: &str,
 ) {
+    // Same gate as `merge_item`, for values reached element-wise: an unchanged
+    // value keeps its authored text, its length, and its representation.
+    if previous.is_some_and(|previous| values_semantically_equal(previous, updated)) {
+        return;
+    }
+
     if merge_inline_board_rgb(raw, previous, updated, known, path) {
         return;
     }
@@ -391,12 +415,6 @@ fn merge_value(
             }
         }
         (raw, updated) => {
-            if previous.is_some_and(|previous| values_semantically_equal(previous, updated))
-                && (values_semantically_equal(raw, updated)
-                    || known_alternate_representation_is_equal(raw, updated, path))
-            {
-                return;
-            }
             let decor = raw.decor().clone();
             *raw = updated.clone();
             *raw.decor_mut() = decor;
@@ -440,37 +458,11 @@ fn board_rgb_value(value: &Value) -> Option<&Value> {
     }
 }
 
-fn known_alternate_representation_is_equal(raw: &Value, updated: &Value, path: &str) -> bool {
-    if !is_board_color_path(path) {
-        return false;
-    }
-
-    let Some(raw_rgb) = board_rgb_array(raw) else {
-        return false;
-    };
-    let Some(updated_rgb) = board_rgb_array(updated) else {
-        return false;
-    };
-    raw_rgb.len() == updated_rgb.len()
-        && raw_rgb
-            .iter()
-            .zip(updated_rgb.iter())
-            .all(|(raw, updated)| values_semantically_equal(raw, updated))
-}
-
 fn is_board_color_path(path: &str) -> bool {
     matches!(
         path,
         "boards.items.background" | "boards.items.default_pen_color"
     )
-}
-
-fn board_rgb_array(value: &Value) -> Option<&Array> {
-    match value {
-        Value::Array(rgb) => Some(rgb),
-        Value::InlineTable(map) => map.get("rgb").and_then(Value::as_array),
-        _ => None,
-    }
 }
 
 fn merge_array_of_tables(
