@@ -51,6 +51,13 @@ sed -n '/^  package:/,/^  package-repos:/p' "${RELEASE_WORKFLOW}" \
     > "${WORK_DIR}/release-package-job.yml"
 assert_contains "${WORK_DIR}/release-package-job.yml" "runs-on: ubuntu-24.04"
 assert_not_contains "${RELEASE_WORKFLOW}" "runs-on: ubuntu-latest"
+assert_contains "${WORK_DIR}/release-package-job.yml" 'dpkg-deb -f dist/wayscriber-amd64.deb Version'
+assert_contains "${WORK_DIR}/release-package-job.yml" 'dpkg-deb -f dist/wayscriber-configurator-amd64.deb Version'
+assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n' dist/wayscriber-x86_64.rpm"
+assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n' dist/wayscriber-configurator-x86_64.rpm"
+assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber$'"
+assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
+assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber-configurator$'"
 
 # Ordinary CI exercises the dynamic source-build path, while a dedicated step
 # checks the static release path.
@@ -70,6 +77,362 @@ assert_contains "${PACKAGE_SCRIPT}" 'verify-static-gtk4-layer-shell.sh'
 assert_contains "${INSTALL_SCRIPT}" 'PIN_STAMP='
 assert_contains "${INSTALL_SCRIPT}" 'commit=%s'
 assert_contains "${INSTALL_SCRIPT}" 'archive_sha256=%s'
+
+# package.sh's documented default discovers the Cargo version itself. Exercise
+# that public path with a fake nfpm and require the resolved version to cross
+# the process boundary into nfpm's environment.
+PACKAGE_VERSION_REPO="${WORK_DIR}/package-version-repo"
+PACKAGE_VERSION_FAKE_BIN="${WORK_DIR}/package-version-fake-bin"
+PACKAGE_VERSION_ARTIFACTS="${WORK_DIR}/package-version-artifacts"
+mkdir -p "${PACKAGE_VERSION_REPO}/tools" \
+    "${PACKAGE_VERSION_REPO}/packaging/icons" \
+    "${PACKAGE_VERSION_REPO}/packaging/licenses" \
+    "${PACKAGE_VERSION_REPO}/target/release" \
+    "${PACKAGE_VERSION_FAKE_BIN}"
+cp "${PACKAGE_SCRIPT}" "${PACKAGE_VERSION_REPO}/tools/package.sh"
+touch "${PACKAGE_VERSION_REPO}/Cargo.toml" \
+    "${PACKAGE_VERSION_REPO}/README.md" \
+    "${PACKAGE_VERSION_REPO}/config.example.toml" \
+    "${PACKAGE_VERSION_REPO}/LICENSE" \
+    "${PACKAGE_VERSION_REPO}/packaging/package.wayscriber.yaml" \
+    "${PACKAGE_VERSION_REPO}/packaging/package.configurator.yaml" \
+    "${PACKAGE_VERSION_REPO}/packaging/wayscriber.service" \
+    "${PACKAGE_VERSION_REPO}/packaging/wayscriber.desktop" \
+    "${PACKAGE_VERSION_REPO}/packaging/wayscriber-configurator.desktop" \
+    "${PACKAGE_VERSION_REPO}/packaging/licenses/gtk4-layer-shell.LICENSE" \
+    "${PACKAGE_VERSION_REPO}/packaging/icons/wayscriber.svg" \
+    "${PACKAGE_VERSION_REPO}/packaging/icons/wayscriber-symbolic.svg" \
+    "${PACKAGE_VERSION_REPO}/packaging/icons/wayscriber-configurator.svg"
+for size in 16 19 22 24 38 64 128; do
+    touch "${PACKAGE_VERSION_REPO}/packaging/icons/wayscriber-${size}.png"
+done
+for size in 24 64 128; do
+    touch "${PACKAGE_VERSION_REPO}/packaging/icons/wayscriber-configurator-${size}.png"
+done
+
+cat > "${PACKAGE_VERSION_REPO}/tools/verify-static-gtk4-layer-shell.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "${PACKAGE_VERSION_REPO}/target/release/wayscriber" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "${PACKAGE_VERSION_REPO}/target/release/wayscriber-configurator" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "${PACKAGE_VERSION_FAKE_BIN}/cargo" <<'EOF'
+#!/usr/bin/env bash
+[[ "${1:-}" == "metadata" ]] || {
+    echo "Unexpected cargo arguments: $*" >&2
+    exit 2
+}
+[[ "${PWD}" == "${PACKAGE_VERSION_EXPECTED_ROOT:?}" ]] || {
+    echo "package.sh ran cargo metadata from ${PWD}, expected ${PACKAGE_VERSION_EXPECTED_ROOT}" >&2
+    exit 3
+}
+if [[ "${PACKAGE_VERSION_MISSING:-0}" == 1 ]]; then
+    printf '%s\n' '{"packages":[]}'
+else
+    printf '%s\n' '{"packages":[{"name":"wayscriber","version":"0.9.22"}]}'
+fi
+EOF
+cat > "${PACKAGE_VERSION_FAKE_BIN}/readelf" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' '  0x0010:   Name: GLIBC_2.39  Flags: none  Version: 4'
+EOF
+cat > "${PACKAGE_VERSION_FAKE_BIN}/nfpm" <<'EOF'
+#!/usr/bin/env bash
+[[ -n "${VERSION:-}" ]] || {
+    echo "nfpm did not receive the resolved package version" >&2
+    exit 91
+}
+target=""
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--target" ]]; then
+        target="$2"
+        break
+    fi
+    shift
+done
+[[ -n "${target}" ]] || {
+    echo "nfpm did not receive --target" >&2
+    exit 92
+}
+mkdir -p "$(dirname "${target}")"
+package_kind="main"
+[[ "${target}" == *wayscriber-configurator* ]] && package_kind="configurator"
+if [[ "${PACKAGE_NFPM_FAIL:-}" == "${package_kind}" ]]; then
+    printf '%s\n' 'partial package' > "${target}"
+    echo "PACKAGE_TEST_NFPM_FAILURE" >&2
+    exit 91
+fi
+printf '%s\n' "${VERSION}" > "${target}"
+EOF
+cat > "${PACKAGE_VERSION_FAKE_BIN}/tar" <<'EOF'
+#!/usr/bin/env bash
+target=""
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-czf" ]]; then
+        target="$2"
+        break
+    fi
+    shift
+done
+[[ -n "${target}" ]] || {
+    echo "tar did not receive -czf" >&2
+    exit 92
+}
+mkdir -p "$(dirname "${target}")"
+package_kind="main"
+[[ "${target}" == *wayscriber-configurator* ]] && package_kind="configurator"
+if [[ "${PACKAGE_TAR_FAIL:-}" == "${package_kind}" ]]; then
+    printf '%s\n' 'partial archive' > "${target}"
+    echo "PACKAGE_TEST_TAR_FAILURE" >&2
+    exit 93
+fi
+printf '%s\n' 'complete archive' > "${target}"
+EOF
+cat > "${PACKAGE_VERSION_FAKE_BIN}/cp" <<'EOF'
+#!/usr/bin/env bash
+package_kind=""
+case "${1:-}" in
+    */target/release/wayscriber) package_kind="main" ;;
+    */target/release/wayscriber-configurator) package_kind="configurator" ;;
+esac
+if [[ -n "${package_kind}" && "${PACKAGE_COPY_FAIL:-}" == "${package_kind}" ]]; then
+    echo "PACKAGE_TEST_COPY_FAILURE" >&2
+    exit 95
+fi
+command -p cp "$@"
+EOF
+chmod +x "${PACKAGE_VERSION_REPO}/tools/verify-static-gtk4-layer-shell.sh" \
+    "${PACKAGE_VERSION_REPO}/target/release/wayscriber" \
+    "${PACKAGE_VERSION_REPO}/target/release/wayscriber-configurator" \
+    "${PACKAGE_VERSION_FAKE_BIN}/cargo" \
+    "${PACKAGE_VERSION_FAKE_BIN}/readelf" \
+    "${PACKAGE_VERSION_FAKE_BIN}/nfpm" \
+    "${PACKAGE_VERSION_FAKE_BIN}/tar" \
+    "${PACKAGE_VERSION_FAKE_BIN}/cp"
+
+expect_package_failure() {
+    local expected_message="$1"
+    local output_file="${WORK_DIR}/package-failure-output"
+    shift
+
+    set +e
+    "$@" >"${output_file}" 2>&1
+    local test_status=$?
+    set -e
+
+    if [[ ${test_status} -eq 0 ]]; then
+        echo "Expected package.sh to fail with: ${expected_message}" >&2
+        cat "${output_file}" >&2
+        exit 1
+    fi
+    if ! grep -Fq -- "${expected_message}" "${output_file}"; then
+        echo "package.sh failed for the wrong reason; expected: ${expected_message}" >&2
+        cat "${output_file}" >&2
+        exit 1
+    fi
+}
+
+(
+    cd "${WORK_DIR}"
+    env -u VERSION \
+        PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+        PACKAGE_VERSION_EXPECTED_ROOT="${PACKAGE_VERSION_REPO}" \
+        bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+            --formats deb \
+            --artifact-root "${PACKAGE_VERSION_ARTIFACTS}" \
+            --skip-build \
+            --no-strip >/dev/null
+)
+
+[[ "$(cat "${PACKAGE_VERSION_ARTIFACTS}/wayscriber-amd64.deb")" == "0.9.22" ]] || {
+    echo "package.sh did not pass its auto-detected version to nfpm" >&2
+    exit 1
+}
+[[ "$(cat "${PACKAGE_VERSION_ARTIFACTS}/wayscriber-configurator-amd64.deb")" == "0.9.22" ]] || {
+    echo "package.sh did not pass its auto-detected version to configurator nfpm" >&2
+    exit 1
+}
+
+PACKAGE_OVERRIDE_ARTIFACTS="${WORK_DIR}/package-override-artifacts"
+(
+    cd "${WORK_DIR}"
+    env -u VERSION \
+        PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+        PACKAGE_VERSION_EXPECTED_ROOT="${PACKAGE_VERSION_REPO}" \
+        bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+            --version 9.8.7 \
+            --formats deb \
+            --artifact-root "${PACKAGE_OVERRIDE_ARTIFACTS}" \
+            --skip-build \
+            --no-strip >/dev/null
+)
+
+[[ "$(cat "${PACKAGE_OVERRIDE_ARTIFACTS}/wayscriber-amd64.deb")" == "9.8.7" ]] || {
+    echo "package.sh did not pass its explicit version override to nfpm" >&2
+    exit 1
+}
+[[ "$(cat "${PACKAGE_OVERRIDE_ARTIFACTS}/wayscriber-configurator-amd64.deb")" == "9.8.7" ]] || {
+    echo "package.sh did not pass its explicit version override to configurator nfpm" >&2
+    exit 1
+}
+
+PACKAGE_MISSING_VERSION_ARTIFACTS="${WORK_DIR}/package-missing-version-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure "Could not resolve the package version" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_VERSION_EXPECTED_ROOT="${PACKAGE_VERSION_REPO}" \
+            PACKAGE_VERSION_MISSING=1 \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --formats deb \
+                --artifact-root "${PACKAGE_MISSING_VERSION_ARTIFACTS}" \
+                --skip-build \
+                --no-strip
+)
+
+PACKAGE_NFPM_FAILURE_ARTIFACTS="${WORK_DIR}/package-nfpm-failure-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure \
+        "Failed to build deb package: ${PACKAGE_NFPM_FAILURE_ARTIFACTS}/wayscriber-amd64.deb" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_NFPM_FAIL=main \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats deb \
+                --artifact-root "${PACKAGE_NFPM_FAILURE_ARTIFACTS}" \
+                --skip-build \
+                --no-strip
+)
+
+PACKAGE_CONFIGURATOR_NFPM_FAILURE_ARTIFACTS="${WORK_DIR}/package-configurator-nfpm-failure-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure \
+        "Failed to build deb package: ${PACKAGE_CONFIGURATOR_NFPM_FAILURE_ARTIFACTS}/wayscriber-configurator-amd64.deb" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_NFPM_FAIL=configurator \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats deb \
+                --artifact-root "${PACKAGE_CONFIGURATOR_NFPM_FAILURE_ARTIFACTS}" \
+                --skip-build \
+                --no-strip
+)
+
+PACKAGE_TAR_FAILURE_ARTIFACTS="${WORK_DIR}/package-tar-failure-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure \
+        "Failed to build tarball: ${PACKAGE_TAR_FAILURE_ARTIFACTS}/wayscriber-v0.9.22-linux-x86_64.tar.gz" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_TAR_FAIL=main \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats tar \
+                --artifact-root "${PACKAGE_TAR_FAILURE_ARTIFACTS}" \
+                --skip-build \
+                --no-strip \
+                --no-configurator
+)
+
+PACKAGE_CONFIGURATOR_TAR_FAILURE_ARTIFACTS="${WORK_DIR}/package-configurator-tar-failure-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure \
+        "Failed to build tarball: ${PACKAGE_CONFIGURATOR_TAR_FAILURE_ARTIFACTS}/wayscriber-configurator-v0.9.22-linux-x86_64.tar.gz" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_TAR_FAIL=configurator \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats tar \
+                --artifact-root "${PACKAGE_CONFIGURATOR_TAR_FAILURE_ARTIFACTS}" \
+                --skip-build \
+                --no-strip
+)
+
+PACKAGE_MAIN_COPY_FAILURE_ARTIFACTS="${WORK_DIR}/package-main-copy-failure-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure "PACKAGE_TEST_COPY_FAILURE" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_COPY_FAIL=main \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats tar \
+                --artifact-root "${PACKAGE_MAIN_COPY_FAILURE_ARTIFACTS}" \
+                --skip-build \
+                --no-strip \
+                --no-configurator
+)
+
+PACKAGE_CONFIGURATOR_COPY_FAILURE_ARTIFACTS="${WORK_DIR}/package-configurator-copy-failure-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure "PACKAGE_TEST_COPY_FAILURE" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            PACKAGE_COPY_FAIL=configurator \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats tar \
+                --artifact-root "${PACKAGE_CONFIGURATOR_COPY_FAILURE_ARTIFACTS}" \
+                --skip-build \
+                --no-strip
+)
+
+# PACKAGE_CONFIGURATOR=1 promises every requested configurator artifact. A
+# missing executable must fail before packaging; --no-configurator is the
+# explicit opt-out.
+rm -f "${PACKAGE_VERSION_REPO}/target/release/wayscriber-configurator"
+PACKAGE_MISSING_CONFIGURATOR_ARTIFACTS="${WORK_DIR}/package-missing-configurator-artifacts"
+(
+    cd "${WORK_DIR}"
+    expect_package_failure \
+        "Missing release binary: ${PACKAGE_VERSION_REPO}/target/release/wayscriber-configurator" \
+        env -u VERSION \
+            PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+            bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+                --version 0.9.22 \
+                --formats tar \
+                --artifact-root "${PACKAGE_MISSING_CONFIGURATOR_ARTIFACTS}" \
+                --skip-build \
+                --no-strip
+)
+
+PACKAGE_NO_CONFIGURATOR_ARTIFACTS="${WORK_DIR}/package-no-configurator-artifacts"
+(
+    cd "${WORK_DIR}"
+    env -u VERSION \
+        PATH="${PACKAGE_VERSION_FAKE_BIN}:${PATH}" \
+        bash "${PACKAGE_VERSION_REPO}/tools/package.sh" \
+            --version 0.9.22 \
+            --formats deb \
+            --artifact-root "${PACKAGE_NO_CONFIGURATOR_ARTIFACTS}" \
+            --skip-build \
+            --no-strip \
+            --no-configurator >/dev/null
+)
+[[ -f "${PACKAGE_NO_CONFIGURATOR_ARTIFACTS}/wayscriber-amd64.deb" ]] || {
+    echo "--no-configurator did not produce the requested main package" >&2
+    exit 1
+}
+[[ ! -e "${PACKAGE_NO_CONFIGURATOR_ARTIFACTS}/wayscriber-configurator-amd64.deb" ]] || {
+    echo "--no-configurator unexpectedly produced a configurator package" >&2
+    exit 1
+}
 
 # A private cache created before the stamp recorded library mode must be
 # rebuilt even when leftover shared/static artifacts satisfy the new request.

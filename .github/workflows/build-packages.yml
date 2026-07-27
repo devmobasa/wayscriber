@@ -115,6 +115,9 @@ jobs:
       - name: Verify packaged metadata and retained licenses
         run: |
           # Keep these floors aligned with MAX_GLIBC_VERSION in tools/package.sh.
+          expected_package_version="${{ steps.meta.outputs.version }}-1"
+          test "$(dpkg-deb -f dist/wayscriber-amd64.deb Version)" = "$expected_package_version"
+          test "$(dpkg-deb -f dist/wayscriber-configurator-amd64.deb Version)" = "$expected_package_version"
           deb_depends="$(dpkg-deb -f dist/wayscriber-amd64.deb Depends)"
           deb_files="$(dpkg-deb -c dist/wayscriber-amd64.deb)"
           grep -Fq 'libc6 (>= 2.39)' <<< "$deb_depends"
@@ -125,6 +128,8 @@ jobs:
           grep -Fq 'libc6 (>= 2.39)' <<< "$configurator_deb_depends"
 
           mkdir -p "$RUNNER_TEMP/rpmdb"
+          test "$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --qf '%{VERSION}-%{RELEASE}\n' dist/wayscriber-x86_64.rpm)" = "$expected_package_version"
+          test "$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --qf '%{VERSION}-%{RELEASE}\n' dist/wayscriber-configurator-x86_64.rpm)" = "$expected_package_version"
           rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-x86_64.rpm)"
           rpm_files="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qlp dist/wayscriber-x86_64.rpm)"
           grep -Fxq 'glibc >= 2.39' <<< "$rpm_requires"
@@ -135,7 +140,10 @@ jobs:
           grep -Fxq 'glibc >= 2.39' <<< "$configurator_rpm_requires"
 
           tar_files="$(tar -tzf "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
+          grep -Eq '/usr/bin/wayscriber$' <<< "$tar_files"
           grep -Eq '/usr/share/licenses/wayscriber/LICENSE\.gtk4-layer-shell$' <<< "$tar_files"
+          configurator_tar_files="$(tar -tzf "dist/wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
+          grep -Eq '/usr/bin/wayscriber-configurator$' <<< "$configurator_tar_files"
 
       - name: Clean Ubuntu 24.04 install smoke
         run: |
