@@ -1,7 +1,7 @@
 use super::paths::primary_config_dir;
 use super::validate::ConfigValidationReport;
 use super::{Config, ConfigDocument};
-use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode};
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
@@ -154,31 +154,12 @@ impl Config {
         Ok(())
     }
 
-    fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
-        let config_path = Self::get_config_path()?;
-        let document = ConfigDocument::load_from_path(&config_path)?;
-        let outcome = if create_backup {
-            document.save_with_backup(self.clone())?
-        } else {
-            document.save(self.clone())?
-        };
-        let (_, backup_path) = outcome.into_parts();
-
-        if let Some(path) = &backup_path {
-            info!(
-                "Saved config to {} (backup at {})",
-                config_path.display(),
-                path.display()
-            );
-        } else {
-            info!("Saved config to {}", config_path.display());
-        }
-
-        Ok(backup_path)
-    }
-
     /// Test-only convenience for exercising the revision-guarded document
     /// update path without constructing a runtime persistence worker.
+    ///
+    /// Not a production path: every running write goes through the overlay's
+    /// background `ConfigWriter`, the tray's retrying document save, the
+    /// startup migration save, or the configurator.
     #[cfg(test)]
     pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
         let config_path = Self::get_config_path()?;
@@ -187,63 +168,6 @@ impl Config {
         update(&mut config);
         document.save(config)?;
         info!("Updated config at {}", config_path.display());
-        Ok(())
-    }
-
-    /// Saves the current configuration to disk without creating a backup.
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<()> {
-        self.write_config(false)?;
-        Ok(())
-    }
-
-    /// Saves the current configuration and creates a timestamped `.bak` copy when overwriting
-    /// an existing file. Returns the backup path if one was created.
-    #[allow(dead_code)]
-    pub fn save_with_backup(&self) -> Result<Option<PathBuf>> {
-        self.write_config(true)
-    }
-
-    /// Creates a default configuration file with documentation comments.
-    ///
-    /// Writes the example config from `config.example.toml` to the user's config directory.
-    /// This method is kept for future use (e.g., `wayscriber --init-config`).
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - A config file already exists at the target path
-    /// - The config directory cannot be created
-    /// - The file cannot be written
-    #[allow(dead_code)]
-    pub fn create_default_file() -> Result<()> {
-        let config_path = Self::get_config_path()?;
-
-        if config_path.exists() {
-            return Err(anyhow!(
-                "Config file already exists at {}",
-                config_path.display()
-            ));
-        }
-
-        // Create directory
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let default_config = include_str!("../../config.example.toml");
-        crate::durable_io::write_text_atomic(
-            &config_path,
-            default_config,
-            AtomicWriteOptions {
-                overwrite: OverwriteMode::CreateNew,
-                permissions: PermissionPolicy::PreserveExistingOrMode(0o644),
-                symlink: SymlinkPolicy::FollowExistingTarget,
-                sync_file: true,
-                sync_parent: true,
-            },
-        )?;
-
-        info!("Created default config at {}", config_path.display());
         Ok(())
     }
 }

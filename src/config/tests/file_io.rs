@@ -1,4 +1,5 @@
 use super::super::*;
+use super::{save_through_document, save_through_document_with_backup};
 use crate::config::test_helpers::with_temp_config_home;
 use std::fs;
 
@@ -18,10 +19,8 @@ fn save_with_backup_creates_timestamped_file() {
             .expect("load config before backup save")
             .config;
         config.ui.toolbar.side_pinned = false;
-        let backup_path = config
-            .save_with_backup()
-            .expect("save_with_backup should succeed")
-            .expect("backup should be created");
+        let backup_path =
+            save_through_document_with_backup(config).expect("backup should be created");
 
         assert!(backup_path.exists());
         assert!(
@@ -73,7 +72,7 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
 
         let mut config = Config::load().expect("load sparse config").config;
         config.ui.toolbar.side_pinned = false;
-        config.save().expect("save runtime toolbar preference");
+        save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Keep this user comment."));
@@ -102,7 +101,7 @@ fn runtime_save_keeps_an_out_of_range_value_as_authored() {
         let mut config = Config::load().expect("load clamped config").config;
         assert_eq!(config.performance.buffer_count, 4);
         config.ui.toolbar.side_pinned = false;
-        config.save().expect("save unrelated toolbar preference");
+        save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("buffer_count = 99"));
@@ -237,7 +236,7 @@ background = { rgb = [0.992, 0.992, 0.992] }
 
         let mut config = Config::load().expect("load board config").config;
         config.boards.as_mut().expect("boards").items.swap(0, 1);
-        config.save().expect("save reordered boards");
+        save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         let document = saved.parse::<toml_edit::DocumentMut>().unwrap();
@@ -297,7 +296,7 @@ background = { rgb = [0.992, 0.992, 0.992], future_color_space = "display-p3" }
             .unwrap();
         whiteboard.background =
             BoardBackgroundConfig::Color(BoardColorConfig::Rgb([0.2, 0.3, 0.4]));
-        config.save().expect("save changed board color");
+        save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Preserve this comment while changing the color."));
@@ -365,7 +364,7 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0], future_color_space = "display-p3" }
             .find(|board| board.id == "whiteboard")
             .unwrap();
         whiteboard.default_pen_color = Some(BoardColorConfig::Rgb([0.8, 0.7, 0.6]));
-        config.save().expect("save changed default pen color");
+        save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         let saved_document = saved.parse::<toml_edit::DocumentMut>().unwrap();
@@ -421,9 +420,7 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
 
         let mut config = Config::load().expect("load symlinked config").config;
         config.ui.toolbar.side_pinned = false;
-        let backup_path = config
-            .save_with_backup()
-            .expect("save_with_backup should succeed for symlinked config")
+        let backup_path = save_through_document_with_backup(config)
             .expect("backup should be created for symlinked config");
 
         assert!(
@@ -454,26 +451,6 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
             fs::metadata(&target).unwrap().permissions().mode() & 0o777,
             0o600,
             "symlink target permissions should be preserved"
-        );
-    });
-}
-
-#[test]
-fn create_default_file_writes_example_when_missing() {
-    with_temp_config_home(|config_root| {
-        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
-        assert!(
-            !config_dir.join("config.toml").exists(),
-            "config.toml should not exist before create_default_file"
-        );
-
-        Config::create_default_file().expect("create_default_file should succeed");
-
-        let config_path = config_dir.join("config.toml");
-        let contents = fs::read_to_string(&config_path).expect("config file should be readable");
-        assert!(
-            contents.contains("[drawing]"),
-            "default config should include [drawing] section"
         );
     });
 }
@@ -526,22 +503,4 @@ fn config_example_parses_and_documents_current_user_facing_fields() {
             "example should document keybinding field `{field}`"
         );
     }
-}
-
-#[test]
-fn create_default_file_errors_when_config_exists() {
-    with_temp_config_home(|config_root| {
-        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
-        fs::create_dir_all(&config_dir).unwrap();
-        let config_path = config_dir.join("config.toml");
-        fs::write(&config_path, "custom = true").unwrap();
-
-        let err = Config::create_default_file()
-            .expect_err("create_default_file should fail when config exists");
-        let msg = err.to_string();
-        assert!(
-            msg.contains("already exists"),
-            "error message should mention existing config, got: {msg}"
-        );
-    });
 }

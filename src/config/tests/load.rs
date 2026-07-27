@@ -1,4 +1,5 @@
 use super::super::*;
+use super::save_through_document;
 use crate::config::test_helpers::with_temp_config_home;
 use std::fs;
 
@@ -286,7 +287,7 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
         let mut migrated = Config::load().expect("legacy load succeeds").config;
         migrated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
         migrated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
-        migrated.save().expect("saving revision succeeds");
+        save_through_document(migrated);
 
         let reloaded = Config::load().expect("current load succeeds").config;
         assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
@@ -369,7 +370,7 @@ fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
         // unbinds the cycle action; the saved revision protects it.
         migrated.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
         migrated.keybindings.ui.cycle_toolbar_display = Vec::new();
-        migrated.save().expect("saving revision succeeds");
+        save_through_document(migrated);
 
         let reloaded = Config::load().expect("current load succeeds").config;
         assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);

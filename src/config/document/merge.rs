@@ -11,7 +11,6 @@ pub(super) fn merge_config_document(
     source: &DocumentMut,
     previous: &Config,
     updated: &Config,
-    known_document: &DocumentMut,
     repairing: bool,
 ) -> Result<DocumentMut> {
     let updated_revision = updated.config_revision;
@@ -36,7 +35,6 @@ pub(super) fn merge_config_document(
         merged.as_table_mut(),
         Some(previous.as_table()),
         updated.as_table(),
-        Some(known_document.as_table()),
         "",
     );
     if let Some(contents) = empty_source_contents
@@ -80,7 +78,7 @@ pub(super) fn conservative_repair_source_document(
     let updated = serialize_config_document(updated)?;
     let mut repair_source = source.clone();
     canonicalize_aliases(&mut repair_source);
-    for key in known_keys(Some(previous.as_table()), updated.as_table(), None) {
+    for key in known_keys(Some(previous.as_table()), updated.as_table()) {
         repair_source.remove(&key);
     }
     Ok(repair_source)
@@ -91,7 +89,7 @@ fn remove_known_content(
     previous: Option<&dyn TableLike>,
     updated: &dyn TableLike,
 ) {
-    for key in known_keys(previous, updated, None) {
+    for key in known_keys(previous, updated) {
         let previous_item = previous.and_then(|table| table.get(&key));
         let updated_item = updated.get(&key);
         let known_tables = previous_item
@@ -119,23 +117,14 @@ fn remove_known_content(
     }
 }
 
-fn known_keys(
-    previous: Option<&dyn TableLike>,
-    updated: &dyn TableLike,
-    known: Option<&dyn TableLike>,
-) -> Vec<String> {
+fn known_keys(previous: Option<&dyn TableLike>, updated: &dyn TableLike) -> Vec<String> {
     let mut keys = previous
         .into_iter()
         .flat_map(TableLike::iter)
         .map(|(key, _)| key.to_string())
         .collect::<Vec<_>>();
     for (key, _) in updated.iter() {
-        if !keys.iter().any(|known| known == key) {
-            keys.push(key.to_string());
-        }
-    }
-    for (key, _) in known.into_iter().flat_map(TableLike::iter) {
-        if !keys.iter().any(|known| known == key) {
+        if !keys.iter().any(|seen| seen == key) {
             keys.push(key.to_string());
         }
     }
@@ -212,12 +201,10 @@ fn merge_table_like(
     raw: &mut dyn TableLike,
     previous: Option<&dyn TableLike>,
     updated: &dyn TableLike,
-    known: Option<&dyn TableLike>,
     path: &str,
 ) {
-    for key in known_keys(previous, updated, known) {
+    for key in known_keys(previous, updated) {
         let previous_item = previous.and_then(|table| table.get(&key));
-        let known_item = known.and_then(|table| table.get(&key));
         let item_path = if path.is_empty() {
             key.clone()
         } else {
@@ -225,13 +212,7 @@ fn merge_table_like(
         };
         match updated.get(&key) {
             Some(updated_item) => match raw.get_mut(&key) {
-                Some(raw_item) => merge_item(
-                    raw_item,
-                    previous_item,
-                    updated_item,
-                    known_item,
-                    &item_path,
-                ),
+                Some(raw_item) => merge_item(raw_item, previous_item, updated_item, &item_path),
                 None => {
                     if let Some(item) = changed_item(previous_item, updated_item, &item_path) {
                         raw.insert(&key, item);
@@ -267,13 +248,7 @@ fn changed_item(previous: Option<&Item>, updated: &Item, path: &str) -> Option<I
         .as_table_like_mut()
         .expect("a cloned table-like item remains table-like");
     changed_table.clear();
-    merge_table_like(
-        changed_table,
-        Some(previous_table),
-        updated_table,
-        None,
-        path,
-    );
+    merge_table_like(changed_table, Some(previous_table), updated_table, path);
     (!changed_table.is_empty()).then_some(changed)
 }
 
@@ -303,13 +278,7 @@ fn tables_semantically_equal(left: &dyn TableLike, right: &dyn TableLike) -> boo
         })
 }
 
-fn merge_item(
-    raw: &mut Item,
-    previous: Option<&Item>,
-    updated: &Item,
-    known: Option<&Item>,
-    path: &str,
-) {
+fn merge_item(raw: &mut Item, previous: Option<&Item>, updated: &Item, path: &str) {
     // A save writes the delta its caller asked for. When the caller held this
     // node unchanged, whatever the file says about it stays as authored, even
     // if loading normalized, clamped, or reset the in-memory value (#293).
@@ -335,7 +304,6 @@ fn merge_item(
             raw_table,
             previous.and_then(Item::as_table_like),
             updated_table,
-            known.and_then(Item::as_table_like),
             path,
         );
         return;
@@ -349,32 +317,20 @@ fn merge_item(
             path,
         ),
         (Item::Value(raw), Item::Value(updated)) => {
-            merge_value(
-                raw,
-                previous.and_then(Item::as_value),
-                updated,
-                known.and_then(Item::as_value),
-                path,
-            );
+            merge_value(raw, previous.and_then(Item::as_value), updated, path);
         }
         (raw, updated) => replace_item_preserving_decor(raw, updated),
     }
 }
 
-fn merge_value(
-    raw: &mut Value,
-    previous: Option<&Value>,
-    updated: &Value,
-    known: Option<&Value>,
-    path: &str,
-) {
+fn merge_value(raw: &mut Value, previous: Option<&Value>, updated: &Value, path: &str) {
     // Same gate as `merge_item`, for values reached element-wise: an unchanged
     // value keeps its authored text, its length, and its representation.
     if previous.is_some_and(|previous| values_semantically_equal(previous, updated)) {
         return;
     }
 
-    if merge_inline_board_rgb(raw, previous, updated, known, path) {
+    if merge_inline_board_rgb(raw, previous, updated, path) {
         return;
     }
 
@@ -385,9 +341,6 @@ fn merge_value(
                 .and_then(Value::as_inline_table)
                 .map(|table| table as _),
             updated,
-            known
-                .and_then(Value::as_inline_table)
-                .map(|table| table as _),
             path,
         ),
         (Value::Array(raw), Value::Array(updated)) => {
@@ -404,9 +357,6 @@ fn merge_value(
                         raw_value,
                         previous.and_then(|values| values.get(index)),
                         updated_value,
-                        known
-                            .and_then(Value::as_array)
-                            .and_then(|values| values.get(index)),
                         path,
                     );
                 } else {
@@ -426,7 +376,6 @@ fn merge_inline_board_rgb(
     raw: &mut Value,
     previous: Option<&Value>,
     updated: &Value,
-    known: Option<&Value>,
     path: &str,
 ) -> bool {
     if !is_board_color_path(path) || !matches!(updated, Value::Array(_)) {
@@ -440,13 +389,7 @@ fn merge_inline_board_rgb(
         return false;
     };
 
-    merge_value(
-        raw_rgb,
-        previous.and_then(board_rgb_value),
-        updated,
-        known.and_then(board_rgb_value),
-        path,
-    );
+    merge_value(raw_rgb, previous.and_then(board_rgb_value), updated, path);
     true
 }
 
@@ -519,7 +462,7 @@ fn merge_array_of_tables(
             .and_then(Option::take)
             .unwrap_or_else(|| updated_table.clone());
 
-        merge_table_like(&mut merged_table, previous_table, updated_table, None, path);
+        merge_table_like(&mut merged_table, previous_table, updated_table, path);
         let position = if preserve_entry_positions {
             retained_table_position(
                 index,
@@ -770,13 +713,7 @@ fn merge_inline_array_of_tables(
         let merged_table = merged_value
             .as_inline_table_mut()
             .expect("validated inline-table array contains inline tables");
-        merge_table_like(
-            merged_table,
-            previous_table,
-            updated_tables[index],
-            None,
-            path,
-        );
+        merge_table_like(merged_table, previous_table, updated_tables[index], path);
         rebuilt.push(merged_value);
     }
     for index in matches.preserved_raw {

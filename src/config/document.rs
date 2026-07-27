@@ -166,7 +166,6 @@ impl SourceRevision {
 pub struct ConfigDocument {
     config: Config,
     document: DocumentMut,
-    known_document: DocumentMut,
     source_path: PathBuf,
     source: ConfigSource,
     revision: SourceRevision,
@@ -205,13 +204,10 @@ impl ConfigDocument {
                     .and_then(|bytes| std::str::from_utf8(bytes).ok())
                     .and_then(|input| input.parse::<DocumentMut>().ok())
                     .unwrap_or_default();
-                let config = Config::default();
-                let known_document = serialize_config_document(&config)?;
                 Ok((
                     Self {
-                        config,
+                        config: Config::default(),
                         document,
-                        known_document,
                         source_path,
                         source: ConfigSource::Primary,
                         revision,
@@ -240,7 +236,6 @@ impl ConfigDocument {
                 Ok(Self {
                     config: parsed.config,
                     document,
-                    known_document: parsed.known_document,
                     source_path,
                     source: ConfigSource::Primary,
                     revision,
@@ -248,21 +243,15 @@ impl ConfigDocument {
                     repair_mode: false,
                 })
             }
-            None => {
-                let config = Config::default();
-                let document = DocumentMut::new();
-                let known_document = serialize_config_document(&config)?;
-                Ok(Self {
-                    config,
-                    document,
-                    known_document,
-                    source_path,
-                    source: ConfigSource::Default,
-                    revision,
-                    diagnostics: Vec::new(),
-                    repair_mode: false,
-                })
-            }
+            None => Ok(Self {
+                config: Config::default(),
+                document: DocumentMut::new(),
+                source_path,
+                source: ConfigSource::Default,
+                revision,
+                diagnostics: Vec::new(),
+                repair_mode: false,
+            }),
         }
     }
 
@@ -327,13 +316,7 @@ impl ConfigDocument {
             .then(|| repair_source_document(&self.document, previous, updated))
             .transpose()?;
         let source = repair_source.as_ref().unwrap_or(&self.document);
-        let mut merged = merge_config_document(
-            source,
-            previous,
-            updated,
-            &self.known_document,
-            self.repair_mode,
-        )?;
+        let mut merged = merge_config_document(source, previous, updated, self.repair_mode)?;
         let mut output = merged.to_string();
         let parsed = parse_typed_config(&output);
         let parsed = match parsed {
@@ -341,13 +324,7 @@ impl ConfigDocument {
             Err(_) if self.repair_mode => {
                 let conservative =
                     conservative_repair_source_document(&self.document, previous, updated)?;
-                merged = merge_config_document(
-                    &conservative,
-                    previous,
-                    updated,
-                    &self.known_document,
-                    self.repair_mode,
-                )?;
+                merged = merge_config_document(&conservative, previous, updated, self.repair_mode)?;
                 output = merged.to_string();
                 parse_typed_config(&output)
                     .context("Repaired config failed its validation parse before save")?
@@ -373,7 +350,6 @@ impl ConfigDocument {
             document: Self {
                 config: parsed.config,
                 document: merged,
-                known_document: parsed.known_document,
                 source_path: self.source_path.clone(),
                 source: ConfigSource::Primary,
                 revision,
@@ -418,7 +394,6 @@ impl ConfigDocumentSaveOutcome {
 
 struct ParsedConfig {
     config: Config,
-    known_document: DocumentMut,
     diagnostics: Vec<ConfigDiagnostic>,
 }
 
@@ -432,7 +407,6 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
         }
     })
     .map_err(|error| anyhow!(error))?;
-    let known_document = serialize_config_document(&config)?;
     let validation = config.validate_and_clamp();
     collect_flattened_unknown_paths(input, &config, &mut ignored)?;
     let mut diagnostics: Vec<ConfigDiagnostic> = ignored
@@ -460,7 +434,6 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
     );
     Ok(ParsedConfig {
         config,
-        known_document,
         diagnostics,
     })
 }

@@ -184,18 +184,69 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 ## 8. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
-- **`ConfigDocument`** is the configurator-facing edit owner. It keeps validated `Config`, the
-  lossless TOML source, unknown-path diagnostics, source path, and exact source revision behind one
-  interface. Guarded saves merge known fields while retaining comments and unsupported settings,
-  then reuse the normal backup and durable atomic-write policy. Its editor load path can expose a
-  backup-protected defaults-based repair document for readable but invalid config, while true I/O
-  failures leave the configurator's last good document untouched. Runtime callers continue using
-  the typed `Config::load()` and `Config::save*()` interfaces; both save variants delegate to the
-  same lossless merge path so persisted toolbar, board, tray, preset, and shortcut changes do not
-  rewrite unrelated TOML or discard comments.
+- **`ConfigDocument`** is the single edit owner every writer goes through — configurator, overlay,
+  tray, and the startup migration alike. It keeps validated `Config`, the lossless TOML source,
+  unknown-path diagnostics, source path, and exact source revision behind one interface. Guarded
+  saves merge known fields while retaining comments and unsupported settings, then reuse the normal
+  backup and durable atomic-write policy. Its editor load path can expose a backup-protected
+  defaults-based repair document for readable but invalid config, while true I/O failures leave the
+  configurator's last good document untouched.
+- A save records only the delta between the config the document loaded and the config its caller
+  hands back. A value that loading clamped, normalized, deduplicated, or reset keeps the text the
+  user authored, so an unrelated preference toggle can never rewrite a setting nobody touched.
+- Migration results are invisible to that delta, so they get their own write:
+  `Config::persist_pending_migrations` runs once during startup and calls
+  `ConfigDocument::save_migration`, which diffs against the *unvalidated* authored config. The
+  migrated fields and the `config_revision` stamp land together, after a timestamped `.bak`, and
+  nothing else is normalized. A file that needs repair first is skipped and retried next launch.
 - The Performance section is the first bounded scalar-metadata slice: core config owns its field
   IDs, paths, labels, help/search terms, and numeric constraints while the configurator keeps typed
   draft fields and messages.
+
+### Runtime config writes
+
+- `src/backend/wayland/config_writer.rs` keeps `config.toml` off the Wayland dispatch thread.
+  `ConfigWriter` owns a `wayscriber-config-writer` worker; the dispatch thread only sends typed
+  `ConfigMutation` values over a channel, so an fsync never delays input feedback.
+- `ConfigMutation` is the complete runtime-writable vocabulary: toolbar layout mode and per-section
+  visibility; the icon, extra-colors, context-aware, preset-toast, tool-preview, and delay-slider
+  toolbar flags; status bar visibility, interactivity, and per-item flags; board/page badges; the
+  floating badge; the zoom chip; the history Step section; click highlight; the input HUD; board
+  config updates; preset slots; quick colors; and one action's `[keybindings]` entry. Each variant
+  applies itself to a loaded `Config` and reports whether its target still exists — a removed quick
+  color slot or a runtime-only action logs instead of forcing a write.
+- `ConfigMutation::affects_runtime_ui_seeds()` classifies variants against the runtime-UI seed
+  registry: layout mode, section visibility, and board config feed the resolved toolbar items and
+  board pins, so queueing one also reseeds. Every other variant is spelled out as `false`, so a new
+  mutation has to classify itself instead of inheriting a wildcard.
+- The worker batches. Each mutation restarts a 75 ms debounce, and a mutation carrying a coalescing
+  key evicts the queued mutation with the same key — keyed per toolbar item, per status-bar item,
+  per preset slot, per quick-color index, and per action, so re-editing one shortcut replaces its
+  pending value while a different action keeps its own entry. Click highlight and board config have
+  no key on purpose: the first can leave a field deliberately untouched, the second carries ordered
+  merge metadata.
+- One write reloads the document, applies the whole batch, and saves once. A failure keeps the batch
+  and retries with exponential backoff from 250 ms to a 30 s cap, resetting on success. A revision
+  conflict (the configurator or the tray wrote first) is just another failure, so the retry reloads
+  and re-applies rather than overwriting the other writer.
+- Shutdown order in `backend/event_loop/mod.rs`: every exit path breaks out before the
+  per-iteration pending-action drain, so `persist_pending_config_edits()` runs first to queue an
+  edit accepted in the same dispatch cycle as the quit (the color picker's OK click), then
+  `shutdown_config_writer()` sends `Shutdown` and joins the worker, which writes whatever is still
+  pending without waiting out the debounce. The session save, runtime-UI shutdown, and
+  input-monitor shutdown follow.
+- `src/config/runtime_backup.rs` is the safety net for runtime writes. The first batch that actually
+  changes something copies `config.toml` to
+  `$XDG_STATE_HOME/wayscriber/config-backups/config-<timestamp>.toml` and prunes to the five newest.
+  The snapshot is taken immediately before the write, so a batch that changes nothing does not spend
+  it, and `RuntimeConfigBackup` is ordinary owned state rather than a global: the writer's persist
+  closure holds the overlay's, the tray struct holds the daemon's, one attempt per process each.
+  Names are claimed with `create_new`, so concurrent processes never overwrite each other's copy,
+  and a failed snapshot is logged without blocking the save.
+- The tray writes from the daemon process and cannot use the overlay's writer. Its session-resume
+  toggle assigns only the `session.*` flags that disagree with the target, then saves through
+  `ConfigDocument` directly, retrying four times with a 150 ms backoff so an overlay write landing
+  between load and save does not silently drop the toggle.
 
 ### Runtime UI preference persistence
 
@@ -277,7 +328,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/domain/` | Stable action, tool, color, and board values with no upward runtime dependencies. |
 | `src/daemon/` | Background daemon control queue, lifecycle, overlay child, shortcuts, and tray. |
 | `src/process_broker/` | Pre-lock, bounded runtime helper creation and broker-only child reaping. |
-| `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
+| `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), input/render handlers, and the background `config_writer.rs` persistence worker. |
 | `src/input/` | Event/state machine, tools, board/page ownership, selection, and action routing. |
 | `src/draw/` | Vector drawing primitives, frames/pages, history, fonts, and rendering helpers. |
 | `src/ui.rs` | Status/help overlays. |
