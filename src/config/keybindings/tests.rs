@@ -379,3 +379,102 @@ fn canvas_export_actions_deserialize_from_config_names() {
         Action::ExportAllBoardsPdfFile
     );
 }
+
+/// The shipped defaults must never contend with each other. Conflict
+/// resolution treats "both sides still equal their default" as a bug in this
+/// table, and it would silently unbind one of them at runtime.
+#[test]
+fn default_keybindings_have_no_conflicts() {
+    let conflicts = KeybindingsConfig::default()
+        .collect_binding_conflicts()
+        .expect("every default binding string parses");
+
+    assert!(
+        conflicts.is_empty(),
+        "shipped defaults collide; changing a default binding needs a config \
+         revision bump and a migration: {conflicts:?}"
+    );
+}
+
+#[test]
+fn collect_binding_conflicts_reports_every_collision_in_traversal_order() {
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Alt+Shift+1".to_string()];
+    config.core.undo = vec!["Ctrl+Alt+Shift+1".to_string()];
+    config.ui.toggle_help = vec!["Ctrl+Alt+Shift+2".to_string()];
+    config.capture.capture_selection = vec!["Ctrl+Alt+Shift+2".to_string()];
+
+    let conflicts = config
+        .collect_binding_conflicts()
+        .expect("valid binding strings");
+
+    assert_eq!(conflicts.len(), 2, "collection does not stop at the first");
+    assert_eq!(
+        conflicts[0].binding(),
+        &KeyBinding::parse("Ctrl+Alt+Shift+1").unwrap()
+    );
+    assert_eq!(conflicts[0].actions(), [Action::Exit, Action::Undo]);
+    assert_eq!(
+        conflicts[1].actions(),
+        [Action::ToggleHelp, Action::CaptureSelection],
+        "ui is traversed before capture"
+    );
+}
+
+#[test]
+fn collect_binding_conflicts_reports_a_key_three_actions_claim() {
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Alt+Shift+3".to_string()];
+    config.ui.toggle_help = vec!["Ctrl+Alt+Shift+3".to_string()];
+    config.zoom.zoom_in = vec!["Ctrl+Alt+Shift+3".to_string()];
+
+    let conflicts = config
+        .collect_binding_conflicts()
+        .expect("valid binding strings");
+
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(
+        conflicts[0].actions(),
+        [Action::Exit, Action::ToggleHelp, Action::ZoomIn]
+    );
+}
+
+#[test]
+fn collect_binding_conflicts_reports_one_action_listing_a_key_twice() {
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec![
+        "Ctrl+Alt+Shift+4".to_string(),
+        "Ctrl+Alt+Shift+4".to_string(),
+    ];
+
+    let conflicts = config
+        .collect_binding_conflicts()
+        .expect("valid binding strings");
+
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].actions(), [Action::Exit]);
+}
+
+#[test]
+fn collect_binding_conflicts_still_rejects_an_unparseable_binding() {
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Shift".to_string()];
+
+    assert!(config.collect_binding_conflicts().is_err());
+}
+
+#[test]
+fn config_key_for_action_matches_the_toml_field_names() {
+    assert_eq!(
+        KeybindingsConfig::config_key_for_action(Action::CycleToolbarDisplay),
+        Some("cycle_toolbar_display")
+    );
+    assert_eq!(
+        KeybindingsConfig::config_key_for_action(Action::CaptureFullScreen),
+        Some("capture_full_screen")
+    );
+    assert_eq!(
+        KeybindingsConfig::config_key_for_action(Action::ReplayTour),
+        None
+    );
+}

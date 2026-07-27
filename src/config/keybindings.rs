@@ -9,7 +9,7 @@ mod defaults;
 
 pub use crate::domain::Action;
 pub use binding::KeyBinding;
-pub use config::KeybindingsConfig;
+pub use config::{KeybindingConflict, KeybindingsConfig};
 
 #[cfg(test)]
 mod tests;

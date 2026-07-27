@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use wayscriber::config::ConfigDocument;
+use wayscriber::config::{ConfigDiagnosticKind, ConfigDocument};
 
 use crate::messages::Message;
 use crate::models::ConfigDraft;
@@ -160,27 +160,57 @@ impl ConfiguratorApp {
     }
 }
 
+const SHOWN_DIAGNOSTICS: usize = 8;
+
 fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMessage {
-    if document.diagnostics().is_empty() {
+    let diagnostics = document.diagnostics();
+    if diagnostics.is_empty() {
         return StatusMessage::success(success);
     }
 
-    let shown = document
-        .diagnostics()
+    let mut message = success.to_string();
+
+    let unknown = diagnostics
         .iter()
-        .take(8)
+        .filter(|diagnostic| diagnostic.kind() == ConfigDiagnosticKind::UnknownSetting)
         .map(|diagnostic| diagnostic.path())
+        .collect::<Vec<_>>();
+    if !unknown.is_empty() {
+        message.push_str(&format!(
+            "\nUnrecognized settings were preserved: {}.",
+            list_with_overflow(&unknown, ", ")
+        ));
+    }
+
+    // A conflict is resolved in memory only, so the file the editor is showing
+    // still contains it: name both actions instead of just the path.
+    let conflicts = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.kind() == ConfigDiagnosticKind::KeybindingConflict)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    if !conflicts.is_empty() {
+        let lines = conflicts.iter().map(String::as_str).collect::<Vec<_>>();
+        message.push_str(&format!(
+            "\nConflicting shortcuts were resolved for the running session only; the file still has them: {}.",
+            list_with_overflow(&lines, "; ")
+        ));
+    }
+
+    StatusMessage::warning(message)
+}
+
+fn list_with_overflow(entries: &[&str], separator: &str) -> String {
+    let shown = entries
+        .iter()
+        .take(SHOWN_DIAGNOSTICS)
+        .copied()
         .collect::<Vec<_>>()
-        .join(", ");
-    let remaining = document.diagnostics().len().saturating_sub(8);
-    let suffix = if remaining == 0 {
-        String::new()
-    } else {
-        format!(", and {remaining} more")
-    };
-    StatusMessage::warning(format!(
-        "{success}\nUnrecognized settings were preserved: {shown}{suffix}."
-    ))
+        .join(separator);
+    match entries.len().saturating_sub(SHOWN_DIAGNOSTICS) {
+        0 => shown,
+        remaining => format!("{shown}{separator}and {remaining} more"),
+    }
 }
 
 #[cfg(test)]
@@ -310,6 +340,33 @@ mod tests {
         assert!(matches!(app.status, StatusMessage::Warning(_)));
         assert!(status_contains(&app.status, "future_configurator_option"));
         assert!(status_contains(&app.status, "were preserved"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// A resolved shortcut conflict is never written back, so the editor is
+    /// where the user has to be able to find it (#293).
+    #[test]
+    fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document(
+            "shortcut-conflict",
+            &format!(
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+                wayscriber::config::CURRENT_CONFIG_REVISION
+            ),
+        );
+
+        let _ = app.handle_config_loaded(Ok((document, None)));
+
+        assert!(matches!(app.status, StatusMessage::Warning(_)));
+        assert!(status_contains(&app.status, "F2"));
+        assert!(status_contains(&app.status, "Toggle Toolbar"));
+        assert!(status_contains(&app.status, "Cycle Toolbar Display"));
+        assert!(status_contains(&app.status, "running session only"));
+        assert!(
+            !status_contains(&app.status, "Unrecognized settings"),
+            "a conflict is not an unknown setting"
+        );
         let _ = std::fs::remove_file(path);
     }
 

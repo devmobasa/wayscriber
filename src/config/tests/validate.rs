@@ -576,10 +576,10 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.session.autosave_failure_backoff_ms, 1000);
     assert!(matches!(config.session.storage, SessionStorageMode::Auto));
     assert!(config.session.custom_directory.is_none());
-    assert_eq!(
-        config.keybindings.core.exit,
-        KeybindingsConfig::default().core.exit
-    );
+    // A binding string we cannot parse is a typo for the user to fix. It is
+    // not grounds for discarding every other shortcut they configured (#293),
+    // so the authored text survives and only the runtime keymap ignores it.
+    assert_eq!(config.keybindings.core.exit, ["Ctrl+Shift"]);
 }
 
 #[test]
@@ -808,4 +808,186 @@ fn color_spec_round_trips_alpha_through_hex_and_arrays() {
     assert!((ColorSpec::Name("#FF8000".to_string()).to_color().a - 1.0).abs() < 1e-9);
     assert!((ColorSpec::Rgb([255, 128, 0]).to_color().a - 1.0).abs() < 1e-9);
     assert!((ColorSpec::Rgba([255, 128, 0, 64]).to_color().a - 64.0 / 255.0).abs() < 1e-9);
+}
+
+/// The reporter's case (#293): an authored `toggle_toolbar` collides with the
+/// `cycle_toolbar_display` default the file never mentions. The authored side
+/// must come through untouched.
+#[test]
+fn keybinding_conflict_costs_the_serde_filled_default_only_the_contested_key() {
+    let mut config = Config::default();
+    config.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
+    config.keybindings.core.exit = vec!["Escape".to_string(), "Q".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+    assert!(config.keybindings.ui.cycle_toolbar_display.is_empty());
+    assert_eq!(config.keybindings.core.exit, ["Escape", "Q"]);
+    assert!(config.keybindings.build_action_map().is_ok());
+
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    let resolution = &report.keybinding_conflicts[0];
+    assert_eq!(resolution.key(), "F2");
+    assert_eq!(resolution.kept(), Action::ToggleToolbar);
+    assert_eq!(resolution.dropped(), Action::CycleToolbarDisplay);
+    assert_eq!(
+        resolution.dropped_config_key(),
+        Some("cycle_toolbar_display")
+    );
+}
+
+/// A default that only overlaps part of an authored list keeps the rest of its
+/// own keys: resolution is per binding, not per action.
+#[test]
+fn keybinding_conflict_leaves_the_defaults_other_keys_alone() {
+    let mut config = Config::default();
+    assert_eq!(
+        config.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(
+        config.keybindings.capture.capture_full_screen,
+        ["Ctrl+Shift+P"]
+    );
+    assert_eq!(config.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert_eq!(
+        report.keybinding_conflicts[0].dropped(),
+        Action::ToggleCommandPalette
+    );
+}
+
+/// Two authored bindings that truly collide are settled by the keymap
+/// traversal order, and everything they do not contest survives on both sides.
+/// The returned resolution is what the toast, the desktop notification, the
+/// configurator diagnostic, and the `log::warn` all render.
+#[test]
+fn keybinding_conflict_between_two_authored_actions_keeps_the_earlier_one() {
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![
+        "Ctrl+Alt+Shift+U".to_string(),
+        "Ctrl+Alt+Shift+Z".to_string(),
+    ];
+    config.keybindings.ui.toggle_help = vec![
+        "Ctrl+Alt+Shift+Z".to_string(),
+        "Ctrl+Alt+Shift+H".to_string(),
+    ];
+
+    let report = config.validate_and_clamp();
+
+    // `core` is traversed before `ui`, so undo keeps the contested key.
+    assert_eq!(
+        config.keybindings.core.undo,
+        ["Ctrl+Alt+Shift+U", "Ctrl+Alt+Shift+Z"]
+    );
+    assert_eq!(config.keybindings.ui.toggle_help, ["Ctrl+Alt+Shift+H"]);
+    assert!(config.keybindings.build_action_map().is_ok());
+
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    let resolution = &report.keybinding_conflicts[0];
+    assert_eq!(resolution.kept(), Action::Undo);
+    assert_eq!(resolution.dropped(), Action::ToggleHelp);
+    assert!(!resolution.is_self_duplicate());
+    // The reported key is normalized, so it reads the same however the file
+    // ordered the modifiers.
+    assert_eq!(resolution.key(), "Ctrl+Shift+Alt+Z");
+    let rendered = resolution.to_string();
+    assert!(
+        rendered.contains("Ctrl+Shift+Alt+Z"),
+        "unexpected: {rendered}"
+    );
+    assert!(rendered.contains("Undo"), "unexpected: {rendered}");
+    assert!(rendered.contains("Help"), "unexpected: {rendered}");
+}
+
+/// Resolution order does not depend on which side happens to be listed first
+/// in the file: an authored list always outranks a defaulted one.
+#[test]
+fn keybinding_conflict_prefers_the_authored_side_over_traversal_order() {
+    let mut config = Config::default();
+    // `core.exit` is traversed first but still holds its shipped default, so
+    // the authored capture binding wins even though it is visited later.
+    config.keybindings.capture.capture_selection = vec!["Escape".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.capture.capture_selection, ["Escape"]);
+    assert_eq!(config.keybindings.core.exit, ["Ctrl+Q"]);
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert_eq!(
+        report.keybinding_conflicts[0].kept(),
+        Action::CaptureSelection
+    );
+    assert_eq!(report.keybinding_conflicts[0].dropped(), Action::Exit);
+}
+
+#[test]
+fn keybinding_validation_never_replaces_the_whole_section() {
+    let mut config = Config::default();
+    config.keybindings.core.exit =
+        vec!["Escape".to_string(), "Ctrl+Q".to_string(), "Q".to_string()];
+    config.keybindings.core.clear_canvas = vec!["Ctrl+Alt+Shift+C".to_string()];
+    config.keybindings.tools.select_pen_tool = vec!["Ctrl+Alt+Shift+C".to_string()];
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.exit, ["Escape", "Ctrl+Q", "Q"]);
+    assert_eq!(config.keybindings.core.clear_canvas, ["Ctrl+Alt+Shift+C"]);
+    assert!(config.keybindings.tools.select_pen_tool.is_empty());
+}
+
+#[test]
+fn keybinding_listed_twice_for_one_action_is_deduplicated() {
+    let mut config = Config::default();
+    config.keybindings.core.exit = vec!["Ctrl+Alt+Q".to_string(), "Ctrl+Alt+Q".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.exit, ["Ctrl+Alt+Q"]);
+    assert!(config.keybindings.build_action_map().is_ok());
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert!(report.keybinding_conflicts[0].is_self_duplicate());
+}
+
+#[test]
+fn validating_the_defaults_reports_nothing_to_surface() {
+    assert!(Config::default().validate_and_clamp().is_empty());
+}
+
+/// Resolving one key must not reclassify the list it just trimmed. The command
+/// palette default owns two keys; losing the first one to an authored binding
+/// cannot make it look authored when the second is arbitrated.
+#[test]
+fn resolving_one_key_does_not_promote_a_trimmed_default_over_an_authored_binding() {
+    let mut config = Config::default();
+    assert_eq!(
+        config.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"],
+        "fixture depends on the palette default owning both keys"
+    );
+    config.keybindings.core.exit = vec!["Ctrl+K".to_string()];
+    config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.exit, ["Ctrl+K"]);
+    assert_eq!(
+        config.keybindings.capture.capture_full_screen,
+        ["Ctrl+Shift+P"]
+    );
+    assert!(config.keybindings.ui.toggle_command_palette.is_empty());
+    assert_eq!(report.keybinding_conflicts.len(), 2);
+    assert!(
+        report
+            .keybinding_conflicts
+            .iter()
+            .all(|resolution| resolution.dropped() == Action::ToggleCommandPalette),
+        "both keys must come off the defaulted side: {:?}",
+        report.keybinding_conflicts
+    );
 }

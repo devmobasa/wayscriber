@@ -1,4 +1,5 @@
 use super::paths::primary_config_dir;
+use super::validate::ConfigValidationReport;
 use super::{Config, ConfigDocument};
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::time_utils::{format_with_template, now_local};
@@ -21,6 +22,8 @@ pub enum ConfigSource {
 pub struct LoadedConfig {
     pub config: Config,
     pub source: ConfigSource,
+    /// What validation had to change in memory. Empty for an unvalidated load.
+    pub validation: ConfigValidationReport,
 }
 
 impl Config {
@@ -57,7 +60,7 @@ impl Config {
         let mut loaded = Self::load_unvalidated()?;
 
         // Validate and clamp values to acceptable ranges.
-        loaded.config.validate_and_clamp();
+        loaded.validation = loaded.config.validate_and_clamp();
 
         debug!("Config: {:?}", loaded.config);
 
@@ -79,6 +82,7 @@ impl Config {
             return Ok(LoadedConfig {
                 config: Config::default(),
                 source: ConfigSource::Default,
+                validation: ConfigValidationReport::default(),
             });
         };
 
@@ -86,7 +90,11 @@ impl Config {
 
         info!("Loaded config from {}", config_path.display());
 
-        Ok(LoadedConfig { config, source })
+        Ok(LoadedConfig {
+            config,
+            source,
+            validation: ConfigValidationReport::default(),
+        })
     }
 
     fn read_unvalidated_from(config_path: &Path) -> Result<Self> {

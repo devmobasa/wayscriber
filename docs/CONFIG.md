@@ -1715,7 +1715,12 @@ Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Sh
 Each action supports multiple keybindings (e.g., both `+` and `=` for increase thickness).
 
 **Duplicate Detection:**
-The system will detect and report duplicate keybindings at startup. If two actions share the same key combination, the application will log an error and use default keybindings.
+Duplicate keybindings are detected at startup and resolved one key at a time — the rest of both actions' shortcuts always keep working, and your config file is never rewritten. When two actions claim the same combination, the contested key is removed from one of them for that session:
+
+- A binding you customized always beats one that still equals its built-in default. Most collisions are of this kind: a shortcut you never wrote gets filled in from the shipped defaults and lands on a key you assigned to something else.
+- If both sides are customized, the earlier action in the internal keymap order (core, selection, tools, board, ui, colors, capture, zoom, presets) keeps the key.
+
+Every resolution is reported: a warning toast and a desktop notification name the key and both actions at startup, the configurator shows them after loading or saving, and the details are written to the log. Because nothing is written back, edit `config.toml` to decide which action should own the shortcut permanently.
 
 **Case Insensitive:**
 Key names are case-insensitive in the config file, but will match the actual key case at runtime.
@@ -1751,8 +1756,8 @@ clear_canvas = ["X"]
 - Modifiers (<kbd>Shift</kbd>, <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Tab</kbd>) are always captured for drawing tools
 - In text input mode, configured keybindings (like <kbd>Ctrl+Q</kbd> for exit) work before keys are consumed as text
 - Color keys only work when not holding <kbd>Ctrl</kbd> (to avoid conflicts with other actions)
-- Invalid keybinding strings will be logged and fall back to defaults
-- Duplicate keybindings across actions will be detected and reported at startup
+- Invalid keybinding strings are logged and ignored; the runtime keymap falls back to defaults until the typo is fixed
+- Duplicate keybindings across actions are detected at startup, reported, and resolved per key without touching the config file
 
 **Defaults:**
 Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses

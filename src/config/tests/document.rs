@@ -1075,7 +1075,7 @@ fn reset_keybindings_never_reach_the_file_through_an_unrelated_save() {
 exit = ["Escape", "Ctrl+Q", "Q"]
 capture_full_screen = ["Ctrl+Shift+P"]
 # `F2` still collides with the `cycle_toolbar_display` default at revision
-# {CURRENT_CONFIG_REVISION}, which is what resets the section in memory.
+# {CURRENT_CONFIG_REVISION}, which is what the reporter's file carried.
 toggle_toolbar = ["F2", "F9"]
 "#
     );
@@ -1085,12 +1085,63 @@ toggle_toolbar = ["F2", "F9"]
     temp.write(&original);
 
     let document = ConfigDocument::load_from_path(&temp.path).expect("load colliding shortcuts");
-    // How the session resolves the collision may change; that the file keeps
-    // its authored text may not.
+    let loaded = document.config();
+    // The collision costs exactly the colliding key on the side that never
+    // authored it. Everything else the file assigns survives the load.
     assert_eq!(
-        document.config().keybindings.core.exit,
-        ["Escape", "Ctrl+Q"],
-        "the collision currently resets the whole section in memory"
+        loaded.keybindings.ui.toggle_toolbar,
+        ["F2", "F9"],
+        "the authored side of the collision keeps every key it listed"
+    );
+    assert!(
+        loaded.keybindings.ui.cycle_toolbar_display.is_empty(),
+        "the serde-filled default loses only the contested key"
+    );
+    assert_eq!(loaded.keybindings.core.exit, ["Escape", "Ctrl+Q", "Q"]);
+    assert_eq!(
+        loaded.keybindings.capture.capture_full_screen,
+        ["Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        loaded.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K"],
+        "the palette default keeps the key it does not have to give up"
+    );
+    let map = loaded
+        .keybindings
+        .build_action_map()
+        .expect("the resolved keymap has no duplicates left");
+    assert_eq!(
+        map.get(&KeyBinding::parse("F2").expect("F2 parses")),
+        Some(&Action::ToggleToolbar)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Shift+P").expect("Ctrl+Shift+P parses")),
+        Some(&Action::CaptureFullScreen)
+    );
+
+    // The same resolutions reach the configurator's warning surface, because
+    // the file is left holding conflicts that only the user can settle.
+    let conflicts = document
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.kind() == ConfigDiagnosticKind::KeybindingConflict)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(conflicts.len(), 2, "unexpected diagnostics: {conflicts:?}");
+    assert!(
+        conflicts.iter().any(|conflict| conflict.contains("`F2`"))
+            && conflicts
+                .iter()
+                .any(|conflict| conflict.contains("`Ctrl+Shift+P`")),
+        "both contested keys must be named: {conflicts:?}"
+    );
+    assert_eq!(
+        diagnostic_paths(&document),
+        [
+            "keybindings.cycle_toolbar_display",
+            "keybindings.toggle_command_palette"
+        ]
     );
 
     let mut updated = document.config().clone();

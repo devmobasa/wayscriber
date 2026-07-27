@@ -1,5 +1,8 @@
+use std::fmt;
+
 use super::super::CURRENT_CONFIG_REVISION;
-use super::super::keybindings::KeybindingsConfig;
+use super::super::action_meta::action_label;
+use super::super::keybindings::{Action, KeyBinding, KeybindingConflict, KeybindingsConfig};
 use super::Config;
 
 const LEGACY_COMMAND_PALETTE_DEFAULT: &[&str] = &["Ctrl+K"];
@@ -24,14 +27,228 @@ fn bindings_from(expected: &[&str]) -> Vec<String> {
         .collect()
 }
 
-impl Config {
-    pub(super) fn validate_keybindings(&mut self) {
-        self.apply_keybinding_migrations();
-        // Validate keybindings (try to build action map to catch parse errors)
-        if let Err(e) = self.keybindings.build_action_map() {
-            log::warn!("Invalid keybinding configuration: {}. Using defaults.", e);
-            self.keybindings = KeybindingsConfig::default();
+/// One duplicate shortcut resolved while loading a configuration.
+///
+/// The resolution applies to the running session only: a save writes just the
+/// delta its caller asked for, so nothing here is ever written to
+/// `config.toml`. The user has to see it to be able to fix it, which is why
+/// this is returned rather than only logged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeybindingConflictResolution {
+    key: String,
+    kept: Action,
+    dropped: Action,
+}
+
+impl KeybindingConflictResolution {
+    /// The conflicting shortcut in its normalized form (`Ctrl+Shift+P`).
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// The action that keeps the shortcut for this session.
+    pub fn kept(&self) -> Action {
+        self.kept
+    }
+
+    /// The action the shortcut was removed from for this session.
+    pub fn dropped(&self) -> Action {
+        self.dropped
+    }
+
+    /// Whether one action listed the same shortcut more than once, rather than
+    /// two actions claiming it.
+    pub fn is_self_duplicate(&self) -> bool {
+        self.kept == self.dropped
+    }
+
+    /// The `[keybindings]` key the shortcut was removed from.
+    pub fn dropped_config_key(&self) -> Option<&'static str> {
+        KeybindingsConfig::config_key_for_action(self.dropped)
+    }
+
+    /// Toast-sized wording; [`fmt::Display`] carries the long form.
+    pub fn summary(&self) -> String {
+        if self.is_self_duplicate() {
+            format!(
+                "{} is listed more than once for {}.",
+                self.key,
+                action_label(self.kept)
+            )
+        } else {
+            format!(
+                "{} kept for {}, dropped from {}.",
+                self.key,
+                action_label(self.kept),
+                action_label(self.dropped)
+            )
         }
+    }
+}
+
+impl fmt::Display for KeybindingConflictResolution {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_self_duplicate() {
+            return write!(
+                formatter,
+                "`{}` is listed more than once for {}; the repeats are ignored for this session",
+                self.key,
+                action_label(self.kept)
+            );
+        }
+        write!(
+            formatter,
+            "`{}` is bound to both {} and {}; {} keeps it for this session and {} loses it",
+            self.key,
+            action_label(self.kept),
+            action_label(self.dropped),
+            action_label(self.kept),
+            action_label(self.dropped)
+        )
+    }
+}
+
+/// Removes one shortcut from one action's binding list.
+///
+/// `keep_first` leaves the earliest occurrence in place, which is what the
+/// action that wins a conflict needs when it also listed the key twice.
+/// Returns whether anything was removed.
+fn drop_binding(
+    keybindings: &mut KeybindingsConfig,
+    action: Action,
+    binding: &KeyBinding,
+    keep_first: bool,
+) -> bool {
+    let Some(current) = keybindings.bindings_for_action(action) else {
+        return false;
+    };
+    let mut bindings = current.to_vec();
+    let before = bindings.len();
+    let mut kept_one = false;
+    bindings.retain(|candidate| {
+        if !KeyBinding::parse(candidate).is_ok_and(|parsed| parsed == *binding) {
+            return true;
+        }
+        if keep_first && !kept_one {
+            kept_one = true;
+            return true;
+        }
+        false
+    });
+    if bindings.len() == before {
+        return false;
+    }
+    // `bindings_for_action` already proved the action has a stored field, so
+    // the only failure mode of the setter cannot happen here.
+    let _ = keybindings.set_bindings_for_action(action, bindings);
+    true
+}
+
+/// Picks the action that keeps a contested shortcut.
+///
+/// A binding list that still equals its compiled-in default was almost
+/// certainly filled in by serde rather than typed by the user, so an authored
+/// list always outranks a defaulted one. Everything else is decided by the
+/// keymap traversal order, where the earlier action wins.
+///
+/// `as_written` must be the configuration before any conflict was resolved, so
+/// that the classification cannot drift while a pass runs.
+fn conflict_winner(
+    as_written: &KeybindingsConfig,
+    defaults: &KeybindingsConfig,
+    conflict: &KeybindingConflict,
+) -> Option<Action> {
+    let first = conflict.actions().first().copied()?;
+    let authored = conflict.actions().iter().copied().find(|action| {
+        as_written.bindings_for_action(*action) != defaults.bindings_for_action(*action)
+    });
+    Some(authored.unwrap_or(first))
+}
+
+impl Config {
+    pub(super) fn validate_keybindings(&mut self) -> Vec<KeybindingConflictResolution> {
+        self.apply_keybinding_migrations();
+        self.resolve_keybinding_conflicts()
+    }
+
+    /// Resolves duplicate shortcuts one key at a time.
+    ///
+    /// Collisions usually come from us, not the user: a field the file omits is
+    /// filled in by serde with the current default, so a shipped default can
+    /// land on a shortcut the file assigns to something else (`F2` for
+    /// `cycle_toolbar_display` against an authored `toggle_toolbar`, for
+    /// instance). Replacing the whole section with defaults for that — what
+    /// this used to do — cost users every customization they had (#293).
+    ///
+    /// Each conflicting key is therefore removed from exactly one action:
+    ///
+    /// 1. an authored binding list (one that differs from its compiled-in
+    ///    default) always beats a list that still equals its default, so the
+    ///    serde-filled side is the one that loses the key;
+    /// 2. ties — two authored lists, or two lists that both still equal their
+    ///    defaults, the latter being a bug in the shipped defaults that
+    ///    `default_keybindings_have_no_conflicts` guards against — are broken
+    ///    by the keymap traversal order (core, selection, tools, board, ui,
+    ///    colors, capture, zoom, presets, declared order inside each group),
+    ///    and the earlier action keeps the key.
+    ///
+    /// The rest of both actions' bindings always survive, and the resolution
+    /// stays in memory: a save records only the delta its caller asked for, so
+    /// none of this reaches `config.toml`.
+    fn resolve_keybinding_conflicts(&mut self) -> Vec<KeybindingConflictResolution> {
+        let conflicts = match self.keybindings.collect_binding_conflicts() {
+            Ok(conflicts) => conflicts,
+            Err(error) => {
+                // An unparseable binding string is the user's typo, not a
+                // collision we can arbitrate. Leave every authored value in
+                // place; the runtime keymap reports it separately.
+                log::warn!("Invalid keybinding configuration: {error}. Ignoring that binding.");
+                return Vec::new();
+            }
+        };
+        if conflicts.is_empty() {
+            return Vec::new();
+        }
+
+        let defaults = KeybindingsConfig::default();
+        // Classify against the config as written: resolving one key mutates a
+        // list, and a defaulted list that just lost a key would otherwise look
+        // authored while arbitrating the next one.
+        let authored = self.keybindings.clone();
+        let mut resolutions = Vec::new();
+        for conflict in conflicts {
+            let Some(kept) = conflict_winner(&authored, &defaults, &conflict) else {
+                continue;
+            };
+            let key = conflict.binding().to_string();
+            let mut repeated = false;
+            for &action in conflict.actions() {
+                if action == kept {
+                    repeated =
+                        drop_binding(&mut self.keybindings, action, conflict.binding(), true);
+                    continue;
+                }
+                if drop_binding(&mut self.keybindings, action, conflict.binding(), false) {
+                    resolutions.push(KeybindingConflictResolution {
+                        key: key.clone(),
+                        kept,
+                        dropped: action,
+                    });
+                }
+            }
+            if repeated && conflict.actions().len() == 1 {
+                resolutions.push(KeybindingConflictResolution {
+                    key,
+                    kept,
+                    dropped: kept,
+                });
+            }
+        }
+
+        for resolution in &resolutions {
+            log::warn!("Conflicting shortcut in the keybindings config: {resolution}");
+        }
+        resolutions
     }
 
     pub(crate) fn apply_keybinding_migrations(&mut self) {

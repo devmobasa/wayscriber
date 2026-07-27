@@ -61,8 +61,11 @@ fn load_and_merge_keybinding_edit(
         .config;
     config.apply_keybinding_migrations();
     merge_keybinding_edit(&mut config, request)?;
-    // Refuse to run normal validation while the repaired keymap is still
-    // invalid: validate_keybindings intentionally falls back to defaults.
+    // Check the authored keymap before validation, not after: validation
+    // resolves a duplicate shortcut per binding and that resolution is
+    // deliberately never written back, so running it first would let this
+    // save look clean while the file kept a conflict the user cannot see.
+    // Reporting the collision instead keeps the choice theirs.
     config
         .keybindings
         .build_action_map()

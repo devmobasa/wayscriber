@@ -17,6 +17,17 @@ macro_rules! define_action_binding_accessors {
                 }
             }
 
+            /// The `[keybindings]` key that stores one action's bindings.
+            /// Field names are the TOML keys (the sections are `#[serde(flatten)]`
+            /// and nothing is renamed), so this doubles as the config path used
+            /// in diagnostics. Runtime-only actions return `None`.
+            pub fn config_key_for_action(action: Action) -> Option<&'static str> {
+                match action {
+                    $(Action::$action => Some(stringify!($field)),)+
+                    $(Action::$unsupported)|+ => None,
+                }
+            }
+
             /// Replace every binding for one action. The caller validates the
             /// whole config before committing it, so conflicts cannot persist.
             pub fn set_bindings_for_action(

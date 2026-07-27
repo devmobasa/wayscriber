@@ -22,12 +22,16 @@ use merge::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigDiagnosticKind {
     UnknownSetting,
+    /// A shortcut two actions both claim. Loading drops it from one of them
+    /// for the session; the file is left exactly as authored.
+    KeybindingConflict,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigDiagnostic {
     kind: ConfigDiagnosticKind,
     path: String,
+    detail: Option<String>,
 }
 
 impl ConfigDiagnostic {
@@ -38,6 +42,12 @@ impl ConfigDiagnostic {
     pub fn path(&self) -> &str {
         &self.path
     }
+
+    /// The explanation kinds that need one carry; `path` alone is enough for
+    /// an unrecognized setting.
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
 }
 
 impl fmt::Display for ConfigDiagnostic {
@@ -46,6 +56,10 @@ impl fmt::Display for ConfigDiagnostic {
             ConfigDiagnosticKind::UnknownSetting => {
                 write!(formatter, "unrecognized setting `{}`", self.path)
             }
+            ConfigDiagnosticKind::KeybindingConflict => match &self.detail {
+                Some(detail) => write!(formatter, "{detail}"),
+                None => write!(formatter, "conflicting keybinding in `{}`", self.path),
+            },
         }
     }
 }
@@ -424,15 +438,31 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
     })
     .map_err(|error| anyhow!(error))?;
     let known_document = serialize_config_document(&config)?;
-    config.validate_and_clamp();
+    let validation = config.validate_and_clamp();
     collect_flattened_unknown_paths(input, &config, &mut ignored)?;
-    let diagnostics = ignored
+    let mut diagnostics: Vec<ConfigDiagnostic> = ignored
         .into_iter()
         .map(|path| ConfigDiagnostic {
             kind: ConfigDiagnosticKind::UnknownSetting,
             path,
+            detail: None,
         })
         .collect();
+    // A resolved conflict never reaches the file, so the editor is the only
+    // place the user can find out that one of their shortcuts is inert.
+    diagnostics.extend(
+        validation
+            .keybinding_conflicts
+            .iter()
+            .map(|resolution| ConfigDiagnostic {
+                kind: ConfigDiagnosticKind::KeybindingConflict,
+                path: resolution.dropped_config_key().map_or_else(
+                    || "keybindings".to_string(),
+                    |key| format!("keybindings.{key}"),
+                ),
+                detail: Some(resolution.to_string()),
+            }),
+    );
     Ok(ParsedConfig {
         config,
         known_document,

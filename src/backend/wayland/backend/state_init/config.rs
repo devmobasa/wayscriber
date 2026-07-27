@@ -1,22 +1,38 @@
 use log::{debug, info, warn};
 
 use crate::backend::ExitAfterCaptureMode;
-use crate::config::{Config, ConfigSource};
+use crate::config::{Action, Config, ConfigSource, KeybindingConflictResolution};
+use crate::input::InputState;
+use crate::input::state::{Toast, ToastPriority};
+use crate::notification;
+
+/// How long the conflict warnings stay up. Both are on the long side: they
+/// describe a config problem the user has to leave the overlay to fix.
+const KEYBINDING_CONFLICT_TOAST_MS: u64 = 20_000;
+const KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS: i32 = 20_000;
+/// Conflicts spelled out in the desktop notification before it starts counting.
+const KEYBINDING_CONFLICT_NOTIFICATION_LIMIT: usize = 5;
 
 pub(super) struct LoadedConfig {
     pub(super) config: Config,
     pub(super) source: ConfigSource,
     pub(super) exit_after_capture_mode: ExitAfterCaptureMode,
+    /// Duplicate shortcuts this load had to resolve in memory.
+    pub(super) keybinding_conflicts: Vec<KeybindingConflictResolution>,
 }
 
 pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
     persist_pending_migrations();
 
-    let (config, source) = match Config::load() {
-        Ok(loaded) => (loaded.config, loaded.source),
+    let (config, source, keybinding_conflicts) = match Config::load() {
+        Ok(loaded) => (
+            loaded.config,
+            loaded.source,
+            loaded.validation.keybinding_conflicts,
+        ),
         Err(e) => {
             warn!("Failed to load config: {}. Using defaults.", e);
-            (Config::default(), ConfigSource::Default)
+            (Config::default(), ConfigSource::Default, Vec::new())
         }
     };
 
@@ -40,7 +56,84 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
         config,
         source,
         exit_after_capture_mode,
+        keybinding_conflicts,
     }
+}
+
+/// Tells the user which shortcut collided and which action lost it.
+///
+/// Loading resolves a duplicate shortcut per binding and never writes the
+/// result back, so without this the config file keeps a conflict while a
+/// shortcut silently stops working — the shape of #293, which a `log::warn`
+/// alone hid for weeks. The toast covers the running overlay and the desktop
+/// notification covers a launch the user is not looking at.
+pub(super) fn notify_keybinding_conflicts(
+    input_state: &mut InputState,
+    tokio_handle: &tokio::runtime::Handle,
+    conflicts: &[KeybindingConflictResolution],
+) {
+    if conflicts.is_empty() {
+        return;
+    }
+
+    input_state.push_toast(
+        ToastPriority::Action,
+        "keybindings.conflict",
+        Toast::warning(keybinding_conflict_toast(conflicts))
+            .action("Settings", Action::OpenConfigurator)
+            .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
+    );
+    notification::send_notification_with_timeout_async(
+        tokio_handle,
+        "Conflicting Shortcuts".to_string(),
+        keybinding_conflict_notification_body(conflicts, &config_path_display()),
+        Some("dialog-warning".to_string()),
+        KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
+    );
+}
+
+fn keybinding_conflict_toast(conflicts: &[KeybindingConflictResolution]) -> String {
+    let Some(first) = conflicts.first() else {
+        return String::new();
+    };
+    if conflicts.len() == 1 {
+        return format!("Shortcut conflict: {}", first.summary());
+    }
+    format!(
+        "{} shortcut conflicts: {} (and {} more)",
+        conflicts.len(),
+        first.summary(),
+        conflicts.len() - 1
+    )
+}
+
+fn keybinding_conflict_notification_body(
+    conflicts: &[KeybindingConflictResolution],
+    config_path: &str,
+) -> String {
+    let mut body = conflicts
+        .iter()
+        .take(KEYBINDING_CONFLICT_NOTIFICATION_LIMIT)
+        .map(|resolution| format!("• {resolution}."))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if let Some(remaining) = conflicts
+        .len()
+        .checked_sub(KEYBINDING_CONFLICT_NOTIFICATION_LIMIT)
+        .filter(|remaining| *remaining > 0)
+    {
+        body.push_str(&format!("\n• and {remaining} more."));
+    }
+    body.push_str(&format!(
+        "\nNothing was changed in {config_path}; edit it to choose which action keeps each shortcut."
+    ));
+    body
+}
+
+fn config_path_display() -> String {
+    Config::get_config_path()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
 }
 
 /// Records one-time config migrations on disk before the overlay reads them.
@@ -133,6 +226,84 @@ mod tests {
             assert!(saved.contains("toggle_toolbar = [\"F9\"]"));
             assert!(saved.contains("undo = [\"Ctrl+Alt+U\"]"));
         });
+    }
+
+    /// The reporter's file (#293): revision-current, so no migration runs and
+    /// the authored `toggle_toolbar` meets the `cycle_toolbar_display`
+    /// default. Startup has to hand the collision to the user, because the
+    /// resolution is session-only and the file keeps the conflict.
+    #[test]
+    fn load_reports_a_resolved_shortcut_conflict_instead_of_resetting_the_section() {
+        with_temp_config_home(|_| {
+            let path = Config::get_config_path().expect("config path");
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create config dir");
+            }
+            fs::write(
+                &path,
+                format!(
+                    "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nexit = [\"Escape\", \"Ctrl+Q\", \"Q\"]\n",
+                    crate::config::CURRENT_CONFIG_REVISION
+                ),
+            )
+            .expect("write colliding config");
+
+            let loaded = load(ExitAfterCaptureMode::Auto);
+
+            assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+            assert_eq!(
+                loaded.config.keybindings.core.exit,
+                ["Escape", "Ctrl+Q", "Q"]
+            );
+            assert!(
+                loaded
+                    .config
+                    .keybindings
+                    .ui
+                    .cycle_toolbar_display
+                    .is_empty()
+            );
+            assert_eq!(loaded.keybinding_conflicts.len(), 1);
+            assert_eq!(loaded.keybinding_conflicts[0].key(), "F2");
+
+            let toast = keybinding_conflict_toast(&loaded.keybinding_conflicts);
+            assert!(toast.contains("F2"), "unexpected toast: {toast}");
+            assert!(
+                toast.contains("Toggle Toolbar") && toast.contains("Cycle Toolbar Display"),
+                "the toast must name both actions: {toast}"
+            );
+
+            let body = keybinding_conflict_notification_body(
+                &loaded.keybinding_conflicts,
+                "/tmp/config.toml",
+            );
+            assert!(body.contains("F2"), "unexpected body: {body}");
+            assert!(body.contains("/tmp/config.toml"), "unexpected body: {body}");
+        });
+    }
+
+    #[test]
+    fn keybinding_conflict_notification_body_truncates_long_lists() {
+        let mut config = Config::default();
+        config.keybindings.core.undo = vec!["Escape".to_string()];
+        config.keybindings.core.redo = vec!["Ctrl+Q".to_string()];
+        let conflicts = config.validate_and_clamp().keybinding_conflicts;
+        assert_eq!(conflicts.len(), 2, "fixture should collide twice");
+
+        let toast = keybinding_conflict_toast(&conflicts);
+        assert!(
+            toast.starts_with("2 shortcut conflicts"),
+            "unexpected toast: {toast}"
+        );
+        assert!(toast.contains("and 1 more"), "unexpected toast: {toast}");
+
+        let many = std::iter::repeat_n(conflicts[0].clone(), 7).collect::<Vec<_>>();
+        let body = keybinding_conflict_notification_body(&many, "/tmp/config.toml");
+        assert_eq!(
+            body.matches('•').count(),
+            KEYBINDING_CONFLICT_NOTIFICATION_LIMIT + 1
+        );
+        assert!(body.contains("and 2 more."), "unexpected body: {body}");
     }
 
     #[test]
