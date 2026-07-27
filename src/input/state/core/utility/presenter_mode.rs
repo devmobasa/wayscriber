@@ -42,6 +42,9 @@ impl InputState {
                 {
                     self.toggle_click_highlight();
                 }
+                if let Some(value) = restore.input_hud_enabled {
+                    self.set_input_hud_enabled(value);
+                }
             }
             if config.show_toast {
                 self.push_toast(
@@ -78,6 +81,7 @@ impl InputState {
             toolbar_top_display_mode: None,
             toolbar_top_minimized: None,
             click_highlight_enabled: None,
+            input_hud_enabled: None,
             tool_override: None,
         };
 
@@ -130,6 +134,10 @@ impl InputState {
             if !self.click_highlight_enabled() {
                 self.toggle_click_highlight();
             }
+        }
+        if config.enable_input_hud {
+            restore.input_hud_enabled = Some(self.input_hud_enabled());
+            self.set_input_hud_enabled(true);
         }
 
         self.presenter_restore = Some(restore);

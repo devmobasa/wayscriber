@@ -122,6 +122,8 @@ pub enum Action {
     /// visibility.
     ToggleFocusMode,
     ToggleClickHighlight,
+    /// Show/hide the on-screen input HUD (keystrokes and clicks).
+    ToggleInputHud,
     ToggleToolbar,
     /// Cycle the top toolbar's display: full strip → micro chip → hidden.
     CycleToolbarDisplay,

@@ -183,6 +183,9 @@ cycle_toolbar_display = ["F2"]
 # Toggle click highlight
 toggle_click_highlight = ["Ctrl+Shift+H"]
 
+# Toggle the input HUD (on-screen keystrokes and clicks)
+toggle_input_hud = ["Ctrl+Shift+K"]
+
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+M"]
 
@@ -726,6 +729,50 @@ use_pen_color = true
 # Set false to keep the current click highlight state on light mode entry.
 force_in_light_mode = true
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Input HUD (on-screen keystrokes and clicks, for demos and screencasts)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[ui.input_hud]
+# Start with the input HUD enabled when the overlay launches
+enabled = false
+
+# Input source:
+#   "auto"    - system-wide capture when available, else overlay-only (default)
+#   "overlay" - never reads /dev/input; shows only what Wayscriber receives
+#   "system"  - requires system-wide capture; falls back to overlay with a
+#               warning toast. Needs a build with the `input-monitor` feature
+#               and read access to /dev/input (usually `input` group
+#               membership). System mode sees every keystroke on the seat,
+#               including passwords typed into other apps.
+mode = "auto"
+
+# Screen anchor for the chip row: top-left | top-center | top-right |
+# center-left | center | center-right |
+# bottom-left | bottom-center | bottom-right
+position = "bottom-center"
+
+# Show mouse buttons and scroll wheel
+show_mouse = true
+
+# Show taps of bare modifiers (Ctrl, Shift, Alt) as their own chips
+show_bare_modifiers = true
+
+# How long a chip stays after its last press, before fading (200 - 30000 ms)
+display_ms = 1600
+
+# Fade-out duration (0 - 5000 ms)
+fade_ms = 350
+
+# Maximum number of simultaneous chips (1 - 16)
+max_entries = 6
+
+# Coalesce immediate repeats into a single chip with a xN counter
+combine_repeats = true
+
+# Chip label size in points (6 - 72)
+font_size = 18.0
+
 [ui.context_menu]
 # Enable right-click / keyboard context menus
 enabled = true
@@ -749,6 +796,9 @@ close_help_overlay = true
 
 # Force click highlights on while presenting
 enable_click_highlight = true
+
+# Force the input HUD on while presenting
+enable_input_hud = false
 
 # Tool behavior while presenting:
 # "keep" / "force-highlight" / "force-highlight-locked"

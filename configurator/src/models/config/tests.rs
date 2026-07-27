@@ -1,10 +1,11 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
-    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, OverrideOption,
-    PdfFitModeOption, PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, SessionStorageModeOption,
-    TextField, ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, TripletField, UiThemeOption,
+    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, InputHudModeOption,
+    InputHudPositionOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
+    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption, QuadField,
+    ReducedMotionOption, SessionStorageModeOption, TextField, ToggleField, ToolOption,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, TripletField,
+    UiThemeOption,
 };
 
 #[test]
@@ -42,11 +43,12 @@ fn config_draft_round_trips_status_bar_interactive() {
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
-    ColorSpec, Config, ConfigDocument, PdfFitMode, PdfLabelContentMode, PdfLabelPosition,
-    PdfOrientation, PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig,
-    QuickColorConfig, ReducedMotion, RenderColorMappingConfig, RenderProfileConfig,
-    RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig, ToolbarItemOrderGroup,
-    ToolbarItemsConfig, ToolbarSectionFlag, UiTheme, XdgFocusLossBehavior, toolbar_item_ids as ids,
+    ColorSpec, Config, ConfigDocument, InputHudMode, InputHudPosition, PdfFitMode,
+    PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize, PdfTransparentBackground,
+    PresetToolStatesConfig, QuickColorConfig, ReducedMotion, RenderColorMappingConfig,
+    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, ToolbarItemOrderConfig,
+    ToolbarItemOrderGroup, ToolbarItemsConfig, ToolbarSectionFlag, UiTheme, XdgFocusLossBehavior,
+    toolbar_item_ids as ids,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -387,6 +389,58 @@ fn config_draft_to_config_trims_custom_directory() {
         .to_config(&Config::default())
         .expect("to_config should succeed");
     assert!(config.session.custom_directory.is_none());
+}
+
+#[test]
+fn config_draft_round_trips_the_input_hud_section() {
+    let mut config = Config::default();
+    config.ui.input_hud.enabled = true;
+    config.ui.input_hud.mode = InputHudMode::System;
+    config.ui.input_hud.position = InputHudPosition::TopRight;
+    config.ui.input_hud.show_mouse = false;
+    config.ui.input_hud.show_bare_modifiers = false;
+    config.ui.input_hud.combine_repeats = false;
+    config.ui.input_hud.display_ms = 900;
+    config.ui.input_hud.fade_ms = 120;
+    config.ui.input_hud.max_entries = 3;
+    config.ui.input_hud.font_size = 24.0;
+    config.presenter_mode.enable_input_hud = true;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(draft.input_hud_enabled);
+    assert_eq!(draft.input_hud_mode, InputHudModeOption::System);
+    assert_eq!(draft.input_hud_position, InputHudPositionOption::TopRight);
+    assert!(draft.presenter_enable_input_hud);
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("expected config to round trip");
+    assert!(round_trip.ui.input_hud.enabled);
+    assert_eq!(round_trip.ui.input_hud.mode, InputHudMode::System);
+    assert_eq!(round_trip.ui.input_hud.position, InputHudPosition::TopRight);
+    assert!(!round_trip.ui.input_hud.show_mouse);
+    assert!(!round_trip.ui.input_hud.show_bare_modifiers);
+    assert!(!round_trip.ui.input_hud.combine_repeats);
+    assert_eq!(round_trip.ui.input_hud.display_ms, 900);
+    assert_eq!(round_trip.ui.input_hud.fade_ms, 120);
+    assert_eq!(round_trip.ui.input_hud.max_entries, 3);
+    assert_eq!(round_trip.ui.input_hud.font_size, 24.0);
+    assert!(round_trip.presenter_mode.enable_input_hud);
+}
+
+#[test]
+fn config_draft_reports_invalid_input_hud_numbers() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.input_hud_display_ms = "soon".to_string();
+    draft.input_hud_max_entries = "many".to_string();
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("expected validation errors");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"ui.input_hud.display_ms"));
+    assert!(fields.contains(&"ui.input_hud.max_entries"));
 }
 
 #[test]

@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 use super::{
-    ClickHighlightConfig, ContextMenuUiConfig, HelpOverlayStyle, StatusBarItem, StatusBarStyle,
-    ToolbarConfig,
+    ClickHighlightConfig, ContextMenuUiConfig, HelpOverlayStyle, InputHudConfig, StatusBarItem,
+    StatusBarStyle, ToolbarConfig,
 };
 
 /// UI display preferences.
@@ -155,6 +155,10 @@ pub struct UiConfig {
     #[serde(default)]
     pub click_highlight: ClickHighlightConfig,
 
+    /// Input HUD (on-screen keystrokes and clicks) settings
+    #[serde(default)]
+    pub input_hud: InputHudConfig,
+
     /// Context menu preferences
     #[serde(default)]
     pub context_menu: ContextMenuUiConfig,
@@ -197,6 +201,7 @@ impl Default for UiConfig {
             xdg_focus_loss_behavior: default_xdg_focus_loss_behavior(),
             radial_menu_mouse_binding: default_radial_menu_mouse_binding(),
             click_highlight: ClickHighlightConfig::default(),
+            input_hud: InputHudConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
             toolbar: ToolbarConfig::default(),
         }

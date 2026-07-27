@@ -1,7 +1,7 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextStyle, measure_text, text_layout};
 
 pub(crate) fn text_extents_for(
     ctx: &cairo::Context,
@@ -302,6 +302,59 @@ pub(crate) fn draw_keycap(
         y + pad_y - extents.y_bearing(),
     );
     (width, height)
+}
+
+/// Font style shared by every keycap chip, so headless measurement and
+/// rendering shape the same layout.
+pub(crate) fn keycap_text_style(font_size: f64) -> UiTextStyle<'static> {
+    UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: font_size,
+    }
+}
+
+/// [`keycap_size`] without a rendering context, for callers that lay out
+/// before a frame buffer exists (damage geometry). Goes through the shared
+/// measurement cache, so it agrees with the drawn chip exactly.
+pub(crate) fn keycap_box_size(label: &str, font_size: f64) -> Option<(f64, f64)> {
+    let extents = measure_text(keycap_text_style(font_size), label, None)?;
+    Some((
+        extents.width() + font_size * KEYCAP_PAD_X_FACTOR * 2.0,
+        extents.height() + font_size * KEYCAP_PAD_Y_FACTOR * 2.0,
+    ))
+}
+
+/// Draw a keycap chip into a caller-provided box, centering the label inside
+/// it. Rows of chips use this so a shared row height survives labels with
+/// different ascenders and descenders; [`draw_keycap`] is the natural-size
+/// shorthand over the same chrome.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_keycap_in_box(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    label: &str,
+    font_size: f64,
+    fill: Rgba,
+    text_color: Rgba,
+) {
+    let layout = text_layout(ctx, keycap_text_style(font_size), label, None);
+    let extents = layout.ink_extents();
+
+    theme::set_color(ctx, fill);
+    draw_rounded_rect(ctx, x, y, width, height, theme::overlay::RADIUS_SM);
+    let _ = ctx.fill();
+
+    theme::set_color(ctx, text_color);
+    layout.show_at_baseline(
+        ctx,
+        x + (width - extents.width()) / 2.0 - extents.x_bearing(),
+        y + (height - extents.height()) / 2.0 - extents.y_bearing(),
+    );
 }
 
 // ============================================================================

@@ -87,5 +87,48 @@ impl Config {
                     self.ui.click_highlight.outline_color[i].clamp(0.0, 1.0);
             }
         }
+
+        self.validate_input_hud();
+    }
+
+    fn validate_input_hud(&mut self) {
+        if !(200..=30_000).contains(&self.ui.input_hud.display_ms) {
+            log::warn!(
+                "Invalid input HUD display duration {}ms, clamping to 200-30000ms range",
+                self.ui.input_hud.display_ms
+            );
+            self.ui.input_hud.display_ms = self.ui.input_hud.display_ms.clamp(200, 30_000);
+        }
+
+        if self.ui.input_hud.fade_ms > 5_000 {
+            log::warn!(
+                "Invalid input HUD fade duration {}ms, clamping to 0-5000ms range",
+                self.ui.input_hud.fade_ms
+            );
+            self.ui.input_hud.fade_ms = self.ui.input_hud.fade_ms.min(5_000);
+        }
+
+        if !(1..=16).contains(&self.ui.input_hud.max_entries) {
+            log::warn!(
+                "Invalid input HUD max entries {}, clamping to 1-16 range",
+                self.ui.input_hud.max_entries
+            );
+            self.ui.input_hud.max_entries = self.ui.input_hud.max_entries.clamp(1, 16);
+        }
+
+        // Sanitize NaN/Inf before clamping (clamp doesn't fix non-finite values)
+        if !self.ui.input_hud.font_size.is_finite() {
+            log::warn!(
+                "Non-finite input HUD font size {:?}, resetting to 18.0",
+                self.ui.input_hud.font_size
+            );
+            self.ui.input_hud.font_size = 18.0;
+        } else if !(6.0..=72.0).contains(&self.ui.input_hud.font_size) {
+            log::warn!(
+                "Invalid input HUD font size {:.1}, clamping to 6.0-72.0 range",
+                self.ui.input_hud.font_size
+            );
+            self.ui.input_hud.font_size = self.ui.input_hud.font_size.clamp(6.0, 72.0);
+        }
     }
 }

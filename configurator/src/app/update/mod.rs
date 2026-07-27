@@ -122,6 +122,10 @@ impl ConfiguratorApp {
                 self.handle_drawing_mouse_drag_color_changed(button, field, option)
             }
             Message::StatusPositionChanged(option) => self.handle_status_position_changed(option),
+            Message::InputHudModeChanged(option) => self.handle_input_hud_mode_changed(option),
+            Message::InputHudPositionChanged(option) => {
+                self.handle_input_hud_position_changed(option)
+            }
             Message::UiThemeChanged(option) => self.handle_ui_theme_changed(option),
             Message::UiReducedMotionChanged(option) => {
                 self.handle_ui_reduced_motion_changed(option)

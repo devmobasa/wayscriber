@@ -36,6 +36,7 @@ use crate::input::boards::{
     BoardRestoreRequest, PageRestoreRequest, PendingBoardConfigUpdate, PendingBoardRuntimeUiAction,
 };
 use crate::input::state::highlight::ClickHighlightState;
+use crate::input::state::input_hud::InputHudState;
 use crate::input::{
     Key, MouseButton,
     modifiers::{DragToolBindings, Modifiers},
@@ -61,6 +62,7 @@ pub(crate) struct PresenterRestore {
     pub(crate) toolbar_top_display_mode: Option<crate::config::TopDisplayMode>,
     pub(crate) toolbar_top_minimized: Option<bool>,
     pub(crate) click_highlight_enabled: Option<bool>,
+    pub(crate) input_hud_enabled: Option<bool>,
     pub(crate) tool_override: Option<Option<Tool>>,
 }
 
@@ -421,6 +423,8 @@ pub struct InputState {
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
     pub(crate) click_highlight: ClickHighlightState,
+    /// On-screen input HUD (keystroke/click chips) state
+    pub(crate) input_hud: InputHudState,
     /// Optional tool override independent of modifier keys
     pub(in crate::input::state::core) tool_override: Option<Tool>,
     /// Current selection information

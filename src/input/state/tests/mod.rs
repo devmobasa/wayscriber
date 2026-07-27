@@ -19,6 +19,7 @@ mod delete_restore;
 mod drawing;
 mod erase;
 mod focus_mode;
+mod input_hud;
 mod light_mode;
 mod menus;
 mod pages;

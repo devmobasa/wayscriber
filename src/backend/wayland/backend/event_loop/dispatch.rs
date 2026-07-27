@@ -30,6 +30,7 @@ fn route_woken_sources(
 ) -> Result<(), anyhow::Error> {
     route_woken_persistence(state);
     state.drain_runtime_ui_completions();
+    state.drain_system_input_events();
 
     if signals.exit_requested() {
         state.input_state.should_exit = true;

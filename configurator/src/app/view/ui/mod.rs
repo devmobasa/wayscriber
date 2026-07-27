@@ -1,5 +1,6 @@
 mod click_highlight;
 mod help_overlay;
+mod input_hud;
 mod presenter_mode;
 mod status_bar;
 mod toolbar;
@@ -42,6 +43,7 @@ impl ConfiguratorApp {
             Some(UiTabId::StatusBar) => Some(self.ui_status_bar_tab()),
             Some(UiTabId::HelpOverlay) => Some(self.ui_help_overlay_tab()),
             Some(UiTabId::ClickHighlight) => Some(self.ui_click_highlight_tab()),
+            Some(UiTabId::InputHud) => Some(self.ui_input_hud_tab()),
             Some(UiTabId::PresenterMode) => Some(self.ui_presenter_mode_tab()),
             None => None,
         };

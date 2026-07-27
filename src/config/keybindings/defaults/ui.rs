@@ -27,6 +27,10 @@ pub(crate) fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
 }
 
+pub(crate) fn default_toggle_input_hud() -> Vec<String> {
+    vec!["Ctrl+Shift+K".to_string()]
+}
+
 // F2 moved to `cycle_toolbar_display` (which still reaches the hidden
 // state); explicit user configs keep whatever they bound.
 pub(crate) fn default_toggle_toolbar() -> Vec<String> {

@@ -594,6 +594,16 @@ fn click_highlight_toolbar_events_are_explicit_config_exceptions() {
     }
 }
 
+/// The Settings checkbox writes `ui.input_hud.enabled` through its own
+/// persistence target rather than the toolbar/UI families.
+#[test]
+fn input_hud_toolbar_events_are_explicit_config_exceptions() {
+    assert_eq!(
+        persistence_for(&ToolbarEvent::ToggleInputHud(true)),
+        ToolbarPersistence::Config(ToolbarPersistenceTarget::InputHud),
+    );
+}
+
 #[test]
 fn drawer_hint_pre_apply_effect_is_conditionally_recorded_below_max() {
     let mut state = OnboardingState {
@@ -1036,6 +1046,7 @@ fn settings_popover_survives_its_own_controls_and_dismisses_on_everything_else()
         ToolbarEvent::ToggleStatusPageBadge(true),
         ToolbarEvent::ToggleFloatingBadgeAlways(true),
         ToolbarEvent::TogglePresetToasts(true),
+        ToolbarEvent::ToggleInputHud(true),
         ToolbarEvent::TogglePresets(true),
         ToolbarEvent::ToggleActionsSection(true),
         ToolbarEvent::ToggleZoomActions(true),

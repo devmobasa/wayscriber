@@ -158,6 +158,7 @@ fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
                 | ToolbarEvent::ToggleStatusPageBadge(_)
                 | ToolbarEvent::ToggleFloatingBadgeAlways(_)
                 | ToolbarEvent::TogglePresetToasts(_)
+                | ToolbarEvent::ToggleInputHud(_)
                 | ToolbarEvent::TogglePresets(_)
                 | ToolbarEvent::ToggleActionsSection(_)
                 | ToolbarEvent::ToggleZoomActions(_)
@@ -494,6 +495,10 @@ impl WaylandState {
                 }
                 ToolbarPersistence::Config(ToolbarPersistenceTarget::ClickHighlight) => {
                     self.save_click_highlight_preferences();
+                }
+                ToolbarPersistence::Config(ToolbarPersistenceTarget::InputHud) => {
+                    self.save_input_hud_preferences();
+                    self.sync_input_monitor();
                 }
             }
         }

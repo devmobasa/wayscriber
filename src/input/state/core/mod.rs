@@ -9,6 +9,7 @@ mod highlight_controls;
 mod history;
 mod ime;
 mod index;
+mod input_hud_controls;
 mod menus;
 mod properties;
 pub(crate) mod radial_menu;

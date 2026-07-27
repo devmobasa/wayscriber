@@ -43,6 +43,11 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
     "glib": (),
     "gtk4": ("gtk4",),
     "gtk4-layer-shell": ("gtk4-layer-shell",),
+    # Behind the opt-in `input-monitor` feature (system-wide input capture for
+    # the input HUD), so these are mapped but not required by the default
+    # package. Adding `input-monitor` to the default features would make the
+    # attributes below mandatory in package.nix and flake.nix.
+    "input": ("libinput",),
     "ksni": (),
     "libc": (),
     "log": (),
@@ -57,10 +62,12 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
     "tokio": (),
     "toml": (),
     "toml_edit": (),
+    "udev": ("udev",),
     "unicode-segmentation": (),
     "wayland-client": ("wayland",),
     "wayland-protocols": (),
     "wayland-protocols-wlr": (),
+    "xkbcommon": ("libxkbcommon",),
     "zbus": (),
     "zune-jpeg": (),
 }

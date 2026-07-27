@@ -1,6 +1,7 @@
 mod actions;
 mod core;
 mod highlight;
+mod input_hud;
 pub(crate) mod interaction;
 mod mouse;
 mod render;
@@ -53,6 +54,11 @@ pub(crate) use core::{
     WayscriberClipboardSelection,
 };
 pub use highlight::ClickHighlightSettings;
+#[allow(unused_imports)]
+pub use input_hud::{
+    InputHudActiveSource, InputHudEntry, InputHudEntryKind, InputHudSettings, InputHudState,
+    input_hud_key_label, input_hud_mouse_label, input_hud_scroll_label, is_bare_modifier,
+};
 
 #[cfg(test)]
 pub(crate) mod test_support {
