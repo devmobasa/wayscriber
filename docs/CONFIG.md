@@ -625,6 +625,21 @@ outline_color = [1.0, 0.6, 0.0, 0.9]
 use_pen_color = true  # Existing highlights update immediately when you change pen color
 force_in_light_mode = true  # Force-enable click highlights when entering light mode
 
+# Input HUD (on-screen keystrokes and clicks)
+[ui.input_hud]
+enabled = false
+mode = "auto"                 # auto | overlay | system
+position = "bottom-center"    # top-left | top-center | top-right |
+                              # center-left | center | center-right |
+                              # bottom-left | bottom-center | bottom-right
+show_mouse = true
+show_bare_modifiers = true
+display_ms = 1600
+fade_ms = 350
+max_entries = 6
+combine_repeats = true
+font_size = 18.0
+
 # Context menu visibility
 [ui.context_menu]
 enabled = true
@@ -650,6 +665,7 @@ enabled = true
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
 - **Layout**: Padding, line height, dot size, border width all configurable
 - **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
+- **Input HUD**: `ui.input_hud` shows a live row of keystroke/click chips for demos and screencasts (see `[ui.input_hud]` below)
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Light mode**: `force_in_light_mode = true` preserves the default behavior of enabling click highlights on light mode entry; set it to `false` to keep the current click highlight state
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
@@ -677,6 +693,105 @@ enabled = true
 - Help overlay font: 14px
 - Semi-transparent dark backgrounds with muted borders
 
+### `[ui.input_hud]` - Input HUD (keystrokes and clicks)
+
+A live row of keycap-style chips showing what you press, for demos and
+screencasts. Toggle it with `toggle_input_hud` (default
+<kbd>Ctrl+Shift+K</kbd>) or from the command palette; the Settings popover has
+an **Input HUD** checkbox, and the runtime toggle persists to
+`ui.input_hud.enabled`.
+
+Chips appear on the right and push older chips left. Key chords use the same
+names the keybinding config and help overlay print (`Ctrl+Shift+Z`, `Space`,
+`Esc`, `F10`, `↑`); mouse and scroll events use rounded pills (`Click`,
+`Right Click`, `Scroll ↑`). Holding a key coalesces into a counter
+(`Backspace ×7`) when `combine_repeats` is on. Each chip holds for
+`display_ms` after its last press, then fades over `fade_ms`.
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `enabled` | bool | `false` | Start with the HUD on |
+| `mode` | enum | `"auto"` | `auto`, `overlay`, or `system` |
+| `position` | enum | `"bottom-center"` | Nine screen anchors (3×3 grid) |
+| `show_mouse` | bool | `true` | Show buttons and scroll |
+| `show_bare_modifiers` | bool | `true` | Show lone Ctrl/Shift/Alt taps |
+| `display_ms` | u64 | `1600` | Hold before fading (200–30000) |
+| `fade_ms` | u64 | `350` | Fade duration (0–5000) |
+| `max_entries` | usize | `6` | Simultaneous chips (1–16) |
+| `combine_repeats` | bool | `true` | Coalesce repeats into `×N` |
+| `font_size` | f64 | `18.0` | Chip label size (6–72) |
+
+**Input sources.** A Wayland client only receives input delivered to its *own*
+surfaces, so what the HUD can see depends on the mode:
+
+- `"overlay"` (works everywhere, no permissions): shows only the keys, clicks,
+  and scrolls Wayscriber itself receives. That covers the primary presenter
+  workflow — you are drawing on screen while talking. During Light Mode
+  passthrough there is nothing to report, because input goes to the app
+  underneath.
+- `"system"`: a reader thread on libinput/evdev shows *all* input on the seat,
+  including what flows to the app underneath during passthrough or while the
+  overlay is hidden. This requires a build with the `input-monitor` cargo
+  feature (opt-in, not in the default feature set) **and** read access to
+  `/dev/input`, which normally means `input` group membership:
+
+  ```bash
+  sudo usermod -aG input "$USER"   # then log out and back in
+  ```
+
+  When either requirement is missing, the HUD falls back to overlay mode and
+  shows a warning toast naming the actual cause — an unreadable `/dev/input`
+  gets the group guidance above, while an empty seat, an uncompilable keyboard
+  layout, or a read error each say so instead. The same fallback happens when
+  the seat has no readable keyboard, pointer, or tablet device, so system mode
+  never sits there silently reporting nothing. Capture follows the session's
+  own seat (`XDG_SEAT`, defaulting to `seat0`), and devices are attributed to
+  seats through udev exactly as libinput does it, so on a multi-seat machine
+  another seat's hardware never counts as yours.
+
+  Switching to system capture is a handshake: the HUD keeps reporting overlay
+  input until the reader has opened the seat and found a usable device, and
+  only then announces `Input HUD: system-wide input`. Nothing is lost or
+  double-reported in between, and a seat that turns out to be unusable simply
+  stays on overlay with the warning above.
+- `"auto"` (default): system-wide capture when it is available, overlay-only
+  otherwise, with no warning. The fallback is silent however it is reached —
+  missing permissions, an empty seat, or a reader that fails after starting —
+  and only the log records why; enabling the HUD still toasts which source you
+  ended up with.
+
+While the system source is active it reports every press once — the overlay
+hooks stay silent, so nothing is shown twice.
+
+**Privacy.** System mode sees every keystroke on the seat, including passwords
+typed into other applications. This is inherent to the feature class (KeyCastr
+and showmethekey have the same exposure). Mitigations shipped: the HUD is off
+by default, system mode is an explicit opt-in on an opt-in build, one chord
+toggles it off, and chip labels are render-only — they are never logged and
+never written to a session file. Wayscriber cannot detect password fields from
+this side of the compositor and does not pretend to.
+
+**Known limitations.**
+- System mode reads the keyboard layout from the environment
+  (`XKB_DEFAULT_LAYOUT` and friends), which can differ from the compositor's
+  live layout. Overlay mode always matches the compositor.
+- GTK toolbar surfaces are separate windows, so clicks on them do not appear
+  in overlay mode; system mode covers them.
+- The two modes count held keys slightly differently. Overlay mode ticks the
+  `×N` counter from Wayscriber's own auto-repeat, which deliberately excludes
+  one-shot action keys such as <kbd>Enter</kbd> and <kbd>Tab</kbd>; system
+  mode follows the keymap's own repeat flags, so those keys do count there.
+- System mode enumerates devices once at startup, so a keyboard plugged in
+  afterwards is picked up by libinput but a seat that was empty at startup
+  falls back to overlay; toggle the HUD off and on to re-evaluate. Unplugging
+  a keyboard while a key is held retires only that keyboard's held keys, so a
+  modifier still down on another keyboard — and session state such as Caps
+  Lock or the selected layout group — keeps working.
+- Typing into Wayscriber's own text tool *is* shown (that is the point when
+  demoing). IME-composed text and touch events are not shown in this release.
+- Focus Mode hides chrome, not presentation aids: the HUD keeps rendering,
+  the same decision click highlights use.
+
 ### `[presenter_mode]` - Presenter Mode
 
 Control which UI elements presenter mode hides and how tools behave when it is active.
@@ -689,9 +804,14 @@ toolbar_mode = "hidden"
 hide_tool_preview = true
 close_help_overlay = true
 enable_click_highlight = true
+enable_input_hud = false
 tool_behavior = "force-highlight"
 show_toast = true
 ```
+
+`enable_input_hud = true` forces the input HUD on at presenter-mode entry and
+restores the previous value on exit; while it is forced, the manual toggle is
+ignored (the same contract `enable_click_highlight` follows).
 
 **Toolbar mode options** (what `hide_toolbars` does to the top strip):
 - `"hidden"` (default): hide the top strip along with the side toolbars
@@ -1482,6 +1602,9 @@ render_profile_off = []
 
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
+
+# Toggle the input HUD (on-screen keystrokes and clicks)
+toggle_input_hud = ["Ctrl+Shift+K"]
 
 # Toggle fill for fill-capable shapes
 toggle_fill = []
