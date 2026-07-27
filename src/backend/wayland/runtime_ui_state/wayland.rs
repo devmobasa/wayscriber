@@ -116,9 +116,6 @@ impl WaylandState {
         previous: crate::config::TopDisplayMode,
     ) {
         let target = ToolbarRuntimeUiPersistenceTarget::TopDisplayMode;
-        let Some(runtime) = self.runtime_ui.as_ref() else {
-            return;
-        };
         let rollback = match top_display_mode_values(previous, &self.input_state) {
             Ok(values) => values,
             Err(error) => {
@@ -126,14 +123,16 @@ impl WaylandState {
                 return;
             }
         };
+        // One borrow for both halves of the mutation: `input_state` is a
+        // disjoint field, so nothing here has to hand the runtime back and
+        // reacquire it between beginning and finishing.
+        let Some(runtime) = self.runtime_ui.as_mut() else {
+            return;
+        };
         let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
             return;
         };
-        let finish = self
-            .runtime_ui
-            .as_mut()
-            .expect("runtime state remained available")
-            .finish_toolbar_mutation(prepared, true, &self.input_state);
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
         self.apply_toolbar_runtime_finish(finish);
     }
 

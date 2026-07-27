@@ -225,7 +225,10 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   pending value while a different action keeps its own entry. Click highlight and board config have
   no key on purpose: the first can leave a field deliberately untouched, the second carries ordered
   merge metadata.
-- One write reloads the document, applies the whole batch, and saves once. A failure keeps the batch
+- One write reloads the document, applies the whole batch, and saves once. A batch whose applied
+  result equals the config the document loaded is a completed no-op: it neither rewrites the file
+  nor spends the process's backup snapshot, and its shortcut receipts settle exactly as a written
+  batch's do. A failure keeps the batch
   and retries with exponential backoff from 250 ms to a 30 s cap, resetting on success. A revision
   conflict (the configurator or the tray wrote first) is just another failure, so the retry reloads
   and re-applies rather than overwriting the other writer.
@@ -238,7 +241,8 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 - `src/config/runtime_backup.rs` is the safety net for runtime writes. The first batch that actually
   changes something copies `config.toml` to
   `$XDG_STATE_HOME/wayscriber/config-backups/config-<timestamp>.toml` and prunes to the five newest.
-  The snapshot is taken immediately before the write, so a batch that changes nothing does not spend
+  The snapshot is taken immediately before the write and fsynced like the save it protects, so a
+  batch that changes nothing does not spend
   it, and `RuntimeConfigBackup` is ordinary owned state rather than a global: the writer's persist
   closure holds the overlay's, the tray struct holds the daemon's, one attempt per process each.
   Names are claimed with `create_new`, so concurrent processes never overwrite each other's copy,

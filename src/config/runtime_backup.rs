@@ -196,6 +196,13 @@ fn write_unique_snapshot(directory: &Path, contents: &[u8], mode: u32) -> Result
                 enforce_snapshot_mode(&file, mode).with_context(|| {
                     format!("Failed to restrict config backup {}", path.display())
                 })?;
+                // The save this copy protects is fsynced, so the copy has to
+                // be too: a crash in between must not leave the only record of
+                // the old contents in the page cache. It costs one flush per
+                // process.
+                file.sync_all().with_context(|| {
+                    format!("Failed to flush config backup to {}", path.display())
+                })?;
                 return Ok(path);
             }
             // Another process claimed this name inside the same second. Take

@@ -83,7 +83,7 @@ pub(crate) use types::{
     toolbar_item_visibility_override_allowed,
 };
 #[allow(unused_imports)]
-pub use validate::{ConfigValidationReport, KeybindingConflictResolution};
+pub use validate::{ConfigValidationReport, InvalidKeybinding, KeybindingConflictResolution};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

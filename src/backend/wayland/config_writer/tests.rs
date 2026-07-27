@@ -816,3 +816,79 @@ fn an_unusable_backup_directory_does_not_block_the_save() {
     let reloaded = ConfigDocument::load_from_path(&path).expect("saved config should parse");
     assert!(!reloaded.config().ui.toolbar.use_icons);
 }
+
+/// `apply` reports that it stored a value, not that the value differed, so a
+/// preference toggled back to where it started reaches this point looking like
+/// a real edit. It must not rewrite the file or spend the snapshot.
+#[test]
+fn a_batch_that_changes_nothing_leaves_the_file_and_the_snapshot_alone() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    let original = "# authored by hand\n[ui.toolbar]\nuse_icons = true\n";
+    fs::write(&path, original).expect("test config should be written");
+    let authored_at = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000);
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .expect("test config should be openable")
+        .set_modified(authored_at)
+        .expect("test config mtime should be settable");
+    let mut backup = test_backup(&path);
+
+    persist_mutations_to_path(&path, &[ConfigMutation::ToolbarUseIcons(true)], &mut backup)
+        .expect("a batch that changes nothing should still succeed");
+
+    assert!(backup_contents(&path).is_empty());
+    assert_eq!(
+        fs::metadata(&path)
+            .expect("config metadata should be readable")
+            .modified()
+            .expect("config mtime should be readable"),
+        authored_at,
+        "a no-op batch must not touch the file at all"
+    );
+    assert_eq!(
+        fs::read_to_string(&path).expect("config should be readable"),
+        original
+    );
+
+    persist_mutations_to_path(
+        &path,
+        &[ConfigMutation::ToolbarUseIcons(false)],
+        &mut backup,
+    )
+    .expect("the first real change should persist");
+
+    assert_eq!(backup_contents(&path), vec![original.to_string()]);
+    assert!(
+        fs::read_to_string(&path)
+            .expect("config should be readable")
+            .contains("use_icons = false")
+    );
+}
+
+/// The editor keeps replaying a shortcut edit until its receipt comes back, so
+/// a batch skipped as a no-op has to settle exactly like one that wrote.
+#[test]
+fn a_keybinding_edit_that_changes_nothing_still_settles_its_receipt() {
+    let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = temp.path().join("config.toml");
+    let original = "[keybindings]\nselect_pen_tool = ['F']\n";
+    fs::write(&path, original).expect("test config should be written");
+    let mut writer = ConfigWriter::for_path(path.clone(), test_backup(&path));
+    let receipt = ConfigWriteReceipt::initial();
+
+    assert!(writer.request(&ConfigMutation::Keybinding {
+        action: Action::SelectPenTool,
+        bindings: vec!["F".to_string()],
+        receipt,
+    }));
+    writer.shutdown();
+
+    assert_eq!(writer.take_completed_keybinding_writes(), vec![receipt]);
+    assert_eq!(
+        fs::read_to_string(&path).expect("config should be readable"),
+        original
+    );
+    assert!(backup_contents(&path).is_empty());
+}

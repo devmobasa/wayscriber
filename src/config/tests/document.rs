@@ -1158,6 +1158,63 @@ toggle_toolbar = ["F2", "F9"]
     );
 }
 
+/// A mistyped shortcut used to fail the whole keymap, and the runtime then
+/// swapped in the complete shipped defaults for the session — #293's symptom
+/// from a single character. Loading now drops the one string, keeps the rest,
+/// and leaves the typo in the file for the user to fix.
+#[test]
+fn dropped_invalid_shortcuts_never_reach_the_file_through_an_unrelated_save() {
+    let temp = TempConfig::new("invalid-keybindings");
+    let keybindings = r#"[keybindings]
+# A typo: the modifiers are there but the key itself is missing.
+clear_canvas = ["Ctrl+Shift", "Ctrl+L"]
+undo = ["Ctrl+Alt+U"]
+"#;
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n[ui.toolbar]\nuse_icons = true\n\n{keybindings}"
+    );
+    temp.write(&original);
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load a mistyped shortcut");
+    let loaded = document.config();
+    assert_eq!(
+        loaded.keybindings.core.clear_canvas,
+        ["Ctrl+L"],
+        "only the string that cannot be parsed is dropped"
+    );
+    assert_eq!(loaded.keybindings.core.undo, ["Ctrl+Alt+U"]);
+    loaded
+        .keybindings
+        .build_action_map()
+        .expect("the session keymap builds without the typo");
+
+    let invalid = document
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.kind() == ConfigDiagnosticKind::InvalidKeybinding)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(invalid.len(), 1, "unexpected diagnostics: {invalid:?}");
+    assert!(
+        invalid[0].contains("`Ctrl+Shift`") && invalid[0].contains("Clear Canvas"),
+        "the diagnostic must name the string and the action: {invalid:?}"
+    );
+    assert_eq!(diagnostic_paths(&document), ["keybindings.clear_canvas"]);
+
+    let mut updated = document.config().clone();
+    updated.ui.toolbar.use_icons = false;
+    document
+        .save_with_backup(updated)
+        .expect("save the unrelated toolbar preference");
+
+    let saved = fs::read_to_string(&temp.path).expect("read saved config");
+    assert!(saved.contains("use_icons = false"));
+    assert!(
+        saved.contains(keybindings),
+        "the keybindings section must be byte-identical, got:\n{saved}"
+    );
+}
+
 /// The startup migration is the one write that carries migrated values, and it
 /// carries nothing else: no clamping, no normalization, no reformatting.
 #[test]

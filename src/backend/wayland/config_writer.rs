@@ -553,23 +553,49 @@ pub(in crate::backend::wayland) fn persist_mutations_to_path(
 ) -> Result<()> {
     let document = ConfigDocument::load_from_path(path)?;
     let mut config = document.config().clone();
-    let mut applied = false;
     for mutation in mutations {
         if mutation.apply(&mut config) {
-            applied = true;
-        } else if let ConfigMutation::QuickColor { index, .. } = mutation {
+            continue;
+        }
+        if let ConfigMutation::QuickColor { index, .. } = mutation {
             warn!("Quick color slot {index} is no longer in config.toml; recolor was not saved");
         } else if let ConfigMutation::Keybinding { action, .. } = mutation {
             warn!("{action:?} has no configurable keybinding; the shortcut was not saved");
         }
     }
-    if applied {
-        // Taken here so a batch that changes nothing does not spend the
-        // process's one snapshot on a file it is about to leave alone.
-        backup.ensure_snapshot(path);
-        document.save(config)?;
+    // `apply` reports that it stored a value, not that the value differed, so
+    // a toolbar toggled back to where it started would otherwise rewrite the
+    // file byte-identically and spend the process's one backup snapshot on it.
+    // Returning early is still a completed batch: the caller acknowledges a
+    // shortcut edit's receipt on `Ok(())`, not on a write having happened, so
+    // the editor stops replaying it exactly as if the save had run.
+    if config_matches(document.config(), &config) {
+        debug!("Runtime config batch changed nothing; leaving config.toml untouched");
+        return Ok(());
     }
+    // Taken here, after the batch is known to change something, so the copy is
+    // of the file as this session found it rather than as an earlier no-op left
+    // it.
+    backup.ensure_snapshot(path);
+    document.save(config)?;
     Ok(())
+}
+
+/// Whether two configs would produce the same file.
+///
+/// `Config` has no `PartialEq`: the derive would have to reach every type in a
+/// tree several dozen structs wide, for one comparison. The document merge
+/// already measures its diff on the serialized form, so comparing that form
+/// asks the save's own question. A config that cannot be serialized cannot be
+/// compared either, and is reported by the save rather than skipped here.
+fn config_matches(previous: &Config, updated: &Config) -> bool {
+    match (
+        toml::to_string_pretty(previous),
+        toml::to_string_pretty(updated),
+    ) {
+        (Ok(previous), Ok(updated)) => previous == updated,
+        _ => false,
+    }
 }
 
 #[cfg(test)]

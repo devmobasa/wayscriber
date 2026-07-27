@@ -72,6 +72,10 @@ struct BindingInserter<'a> {
     map: &'a mut HashMap<KeyBinding, Action>,
     ordered: Option<&'a mut HashMap<Action, Vec<KeyBinding>>>,
     conflicts: Option<&'a mut ConflictLog>,
+    /// Whether a bad binding string or a duplicate key is data rather than a
+    /// failure. Set only for the views that answer "which keys are taken",
+    /// which have to stay usable while the config still has a problem in it.
+    tolerant: bool,
 }
 
 impl<'a> BindingInserter<'a> {
@@ -80,6 +84,7 @@ impl<'a> BindingInserter<'a> {
             map,
             ordered: None,
             conflicts: None,
+            tolerant: false,
         }
     }
 
@@ -91,6 +96,7 @@ impl<'a> BindingInserter<'a> {
             map,
             ordered: Some(ordered),
             conflicts: None,
+            tolerant: false,
         }
     }
 
@@ -102,28 +108,47 @@ impl<'a> BindingInserter<'a> {
             map,
             ordered: None,
             conflicts: Some(conflicts),
+            tolerant: false,
+        }
+    }
+
+    fn new_tolerant(map: &'a mut HashMap<KeyBinding, Action>) -> Self {
+        Self {
+            map,
+            ordered: None,
+            conflicts: None,
+            tolerant: true,
         }
     }
 
     fn insert(&mut self, binding_str: &str, action: Action) -> Result<(), String> {
-        let binding = KeyBinding::parse(binding_str)?;
-        if let Some(existing_action) = self.map.insert(binding.clone(), action) {
-            let Some(conflicts) = self.conflicts.as_mut() else {
-                return Err(format!(
-                    "Duplicate keybinding '{}' assigned to both {:?} and {:?}",
-                    binding_str, existing_action, action
-                ));
-            };
+        let binding = match KeyBinding::parse(binding_str) {
+            Ok(binding) => binding,
+            // A string the parser rejects binds nothing at runtime, so a view
+            // of the keys in effect has nothing to record and nothing to say.
+            Err(_) if self.tolerant => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        let Some(existing_action) = self.map.insert(binding.clone(), action) else {
+            if let Some(ordered) = self.ordered.as_mut() {
+                ordered.entry(action).or_default().push(binding);
+            }
+            return Ok(());
+        };
+        // Keep the earliest claimant so a third collision on the same key
+        // still reports the actions in traversal order.
+        self.map.insert(binding.clone(), existing_action);
+        if let Some(conflicts) = self.conflicts.as_mut() {
             conflicts.record(&binding, existing_action, action);
-            // Keep the earliest claimant so a third collision on the same key
-            // still reports the actions in traversal order.
-            self.map.insert(binding, existing_action);
             return Ok(());
         }
-        if let Some(ordered) = self.ordered.as_mut() {
-            ordered.entry(action).or_default().push(binding);
+        if self.tolerant {
+            return Ok(());
         }
-        Ok(())
+        Err(format!(
+            "Duplicate keybinding '{}' assigned to both {:?} and {:?}",
+            binding_str, existing_action, action
+        ))
     }
 
     fn insert_all(&mut self, bindings: &[String], action: Action) -> Result<(), String> {
@@ -184,5 +209,25 @@ impl KeybindingsConfig {
         let mut inserter = BindingInserter::new_collecting(&mut map, &mut conflicts);
         self.insert_every_binding(&mut inserter)?;
         Ok(conflicts.entries)
+    }
+
+    /// Every key some action claims, mapped to the first action claiming it in
+    /// keymap traversal order.
+    ///
+    /// Where [`Self::build_action_map`] refuses a config that has any problem
+    /// in it, this answers "is this key already taken" for whatever the config
+    /// currently says. A duplicate is not a failure — the loader arbitrates
+    /// duplicates one key at a time and can leave one standing that the user
+    /// chose to live with — and an unparseable string is skipped, because it
+    /// claims nothing at runtime either. That keeps an editor able to accept an
+    /// edit to an unrelated action while a tolerated problem sits elsewhere in
+    /// the file (#293).
+    pub fn claimed_keys(&self) -> HashMap<KeyBinding, Action> {
+        let mut map = HashMap::new();
+        let mut inserter = BindingInserter::new_tolerant(&mut map);
+        // The tolerant inserter reports nothing, so there is no error to
+        // handle: every arm above returns `Ok`.
+        let _ = self.insert_every_binding(&mut inserter);
+        map
     }
 }

@@ -103,18 +103,25 @@ fn merge_keybinding_edit(
     other_bindings
         .set_bindings_for_action(request.action, Vec::new())
         .map_err(PrepareKeybindingEditError::Edit)?;
-    let current_map = other_bindings
-        .build_action_map()
-        .map_err(PrepareKeybindingEditError::Edit)?;
+    // Claimed keys, not the strict keymap: a duplicate or a typo somewhere
+    // else in the file is a problem this edit neither created nor touches, and
+    // refusing over it would leave the user unable to change any shortcut at
+    // all until they found it (#293).
+    let claimed = other_bindings.claimed_keys();
+    let mut requested = HashMap::new();
     for binding_text in &bindings {
         let binding = KeyBinding::parse(binding_text).map_err(PrepareKeybindingEditError::Edit)?;
-        if let Some(existing_action) = current_map.get(&binding)
-            && *existing_action != request.action
-        {
+        if let Some(existing_action) = claimed.get(&binding) {
             return Err(PrepareKeybindingEditError::Conflict {
                 binding: binding_text.clone(),
                 existing_action: *existing_action,
             });
+        }
+        if let Some(first) = requested.insert(binding, binding_text.clone()) {
+            return Err(PrepareKeybindingEditError::Edit(format!(
+                "Shortcut not changed — {first} is listed twice for {}.",
+                action_label(request.action)
+            )));
         }
     }
 
@@ -141,15 +148,35 @@ fn merge_loaded_keybinding_edit(
     // session already handed to the writer rather than the state they replaced.
     session_edits.replay(&mut config.keybindings);
     merge_keybinding_edit(&mut config, request)?;
-    // Check the authored keymap before validation, not after: validation
-    // resolves a duplicate shortcut per binding and that resolution is
-    // deliberately never written back, so running it first would let this
-    // save look clean while the file kept a conflict the user cannot see.
-    // Reporting the collision instead keeps the choice theirs.
-    config
-        .keybindings
-        .build_action_map()
-        .map_err(PrepareKeybindingEditError::Edit)?;
+    // Only a collision this edit is part of can block it. A conflict purely
+    // between two other actions predates the edit: validation resolves it per
+    // key for the session, the queued payload carries the edited action alone
+    // so the save cannot launder the file into looking repaired, and startup
+    // already told the user about it. Refusing over it would instead mean one
+    // tolerated duplicate freezes every shortcut in the file (#293).
+    //
+    // The merge above already refuses the edits that would collide, so this is
+    // a second gate rather than the first one; an `Err` here means collection
+    // could not run at all, which validation's own safeguard also tolerates.
+    if let Ok(conflicts) = config.keybindings.collect_binding_conflicts() {
+        let contested = conflicts.iter().find_map(|conflict| {
+            if !conflict.actions().contains(&request.action) {
+                return None;
+            }
+            conflict
+                .actions()
+                .iter()
+                .copied()
+                .find(|action| *action != request.action)
+                .map(|existing_action| (conflict.binding().to_string(), existing_action))
+        });
+        if let Some((binding, existing_action)) = contested {
+            return Err(PrepareKeybindingEditError::Conflict {
+                binding,
+                existing_action,
+            });
+        }
+    }
     config.validate_and_clamp();
     Ok(config)
 }
@@ -711,26 +738,210 @@ mod tests {
         });
     }
 
+    /// A duplicate the user has tolerated is not this edit's business: the
+    /// save is scoped to the edited action, so the collision stays in the file
+    /// exactly as authored and startup keeps reporting it. Refusing instead
+    /// would mean one tolerated duplicate freezes every other shortcut (#293).
     #[test]
-    fn unrelated_edit_cannot_overwrite_an_invalid_disk_keymap() {
+    fn an_unrelated_edit_proceeds_over_a_duplicate_elsewhere_in_the_file() {
         crate::config::test_helpers::with_temp_config_home(|config_root| {
             let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).unwrap();
             let config_path = config_dir.join("config.toml");
-            let original = "config_revision = 1\n\n[keybindings]\nclear_canvas = ['F']\nselect_pen_tool = ['F']\nundo = ['Ctrl+Alt+U']\n";
-            fs::write(&config_path, original).unwrap();
+            fs::write(
+                &config_path,
+                "config_revision = 1\n\n[keybindings]\nclear_canvas = ['F']\nselect_pen_tool = ['F']\nundo = ['Ctrl+Alt+U']\n",
+            )
+            .unwrap();
+
+            let merged = load_and_merge_keybinding_edit(
+                &KeybindingEditRequest {
+                    action: Action::Redo,
+                    operation: KeybindingEditOperation::Replace(vec![
+                        "Ctrl+Alt+Shift+R".to_string(),
+                    ]),
+                },
+                &SessionKeybindingEdits::default(),
+            )
+            .unwrap_or_else(|error| {
+                panic!("an edit that touches no contested key should merge: {error:?}")
+            });
+
+            persist_mutations_to_path(
+                &config_path,
+                &[keybinding_mutation(
+                    &merged,
+                    Action::Redo,
+                    ConfigWriteReceipt::initial(),
+                )],
+                &mut RuntimeConfigBackup::with_directory(config_root.join("config-backups")),
+            )
+            .expect("the unrelated shortcut should persist");
+
+            let saved = fs::read_to_string(&config_path).expect("config should be readable");
+            assert!(
+                saved.contains("redo = [\"Ctrl+Alt+Shift+R\"]"),
+                "the edit should reach the file: {saved}"
+            );
+            // The contested key is not part of the payload, so both sides of
+            // the conflict are still spelled the way the user wrote them.
+            assert!(
+                saved.contains("clear_canvas = ['F']"),
+                "the conflict must survive verbatim: {saved}"
+            );
+            assert!(
+                saved.contains("select_pen_tool = ['F']"),
+                "the conflict must survive verbatim: {saved}"
+            );
+            assert!(
+                saved.contains("undo = ['Ctrl+Alt+U']"),
+                "an untouched shortcut must survive verbatim: {saved}"
+            );
+        });
+    }
+
+    /// The reporter's file (#293): revision-current, so no migration runs and
+    /// the authored `toggle_toolbar` meets the serde-filled
+    /// `cycle_toolbar_display` default on `F2`. Every shortcut edit used to
+    /// fail while that sat in the file.
+    #[test]
+    fn an_edit_proceeds_while_a_shipped_default_collides_with_an_authored_key() {
+        crate::config::test_helpers::with_temp_config_home(|config_root| {
+            write_config_with_keybindings(config_root, "toggle_toolbar = ['F2', 'F9']\n");
+
+            let merged = load_and_merge_keybinding_edit(
+                &KeybindingEditRequest {
+                    action: Action::ClearCanvas,
+                    operation: KeybindingEditOperation::Replace(vec![
+                        "Ctrl+Alt+Shift+K".to_string(),
+                    ]),
+                },
+                &SessionKeybindingEdits::default(),
+            )
+            .unwrap_or_else(|error| {
+                panic!("an unrelated edit should survive the tolerated conflict: {error:?}")
+            });
+
+            assert_eq!(
+                merged.keybindings.bindings_for_action(Action::ClearCanvas),
+                Some(&["Ctrl+Alt+Shift+K".to_string()][..])
+            );
+            // Validation resolved the collision for this session the same way
+            // startup does: the authored side keeps the key.
+            assert_eq!(merged.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+            assert!(merged.keybindings.ui.cycle_toolbar_display.is_empty());
+        });
+    }
+
+    /// Tolerating an existing conflict is not the same as allowing a new one.
+    #[test]
+    fn an_edit_onto_a_taken_key_still_reports_the_action_holding_it() {
+        crate::config::test_helpers::with_temp_config_home(|config_root| {
+            write_config_with_keybindings(
+                config_root,
+                "toggle_toolbar = ['F2', 'F9']\nundo = ['Ctrl+Alt+U']\n",
+            );
 
             let error = load_and_merge_keybinding_edit(
                 &KeybindingEditRequest {
                     action: Action::Redo,
-                    operation: KeybindingEditOperation::Replace(vec!["Ctrl+Alt+R".to_string()]),
+                    operation: KeybindingEditOperation::Replace(vec!["Ctrl+Alt+U".to_string()]),
                 },
                 &SessionKeybindingEdits::default(),
             )
-            .expect_err("an unrelated edit must not conceal the existing conflict");
+            .expect_err("a key another action holds must still be refused");
 
-            assert!(matches!(error, PrepareKeybindingEditError::Edit(_)));
-            assert_eq!(fs::read_to_string(config_path).unwrap(), original);
+            match error {
+                PrepareKeybindingEditError::Conflict {
+                    binding,
+                    existing_action,
+                } => {
+                    assert_eq!(binding, "Ctrl+Alt+U");
+                    assert_eq!(existing_action, Action::Undo);
+                }
+                other => panic!("expected a structured shortcut conflict, got {other:?}"),
+            }
+        });
+    }
+
+    /// One action cannot claim the same key twice: validation would drop the
+    /// repeat for the session while the file kept it, which is the silent
+    /// state this whole path exists to avoid.
+    #[test]
+    fn a_requested_list_that_repeats_a_key_is_refused() {
+        let mut config = Config::default();
+        let error = merge_keybinding_edit(
+            &mut config,
+            &KeybindingEditRequest {
+                action: Action::ClearCanvas,
+                operation: KeybindingEditOperation::Replace(vec![
+                    "Ctrl+Alt+Shift+K".to_string(),
+                    "Shift+Ctrl+Alt+K".to_string(),
+                ]),
+            },
+        )
+        .expect_err("a repeated key should be refused");
+
+        match error {
+            PrepareKeybindingEditError::Edit(message) => {
+                assert!(
+                    message.contains("listed twice") && message.contains("Clear Canvas"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected a plain edit refusal, got {other:?}"),
+        }
+    }
+
+    /// A typo elsewhere in the file is dropped by validation for the session
+    /// and kept by the file, so it can neither block this edit nor be repaired
+    /// behind the user's back.
+    #[test]
+    fn an_unrelated_edit_proceeds_over_an_unparseable_binding_elsewhere() {
+        crate::config::test_helpers::with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&config_dir).unwrap();
+            let config_path = config_dir.join("config.toml");
+            write_config_with_keybindings(config_root, "clear_canvas = ['Ctrl+Shift']\n");
+
+            let merged = load_and_merge_keybinding_edit(
+                &KeybindingEditRequest {
+                    action: Action::Redo,
+                    operation: KeybindingEditOperation::Replace(vec![
+                        "Ctrl+Alt+Shift+R".to_string(),
+                    ]),
+                },
+                &SessionKeybindingEdits::default(),
+            )
+            .unwrap_or_else(|error| {
+                panic!("a typo in another action should not block this edit: {error:?}")
+            });
+
+            assert!(
+                merged.keybindings.build_action_map().is_ok(),
+                "validation should have dropped the unparseable string"
+            );
+
+            persist_mutations_to_path(
+                &config_path,
+                &[keybinding_mutation(
+                    &merged,
+                    Action::Redo,
+                    ConfigWriteReceipt::initial(),
+                )],
+                &mut RuntimeConfigBackup::with_directory(config_root.join("config-backups")),
+            )
+            .expect("the unrelated shortcut should persist");
+
+            let saved = fs::read_to_string(&config_path).expect("config should be readable");
+            assert!(
+                saved.contains("redo = [\"Ctrl+Alt+Shift+R\"]"),
+                "the edit should reach the file: {saved}"
+            );
+            assert!(
+                saved.contains("clear_canvas = ['Ctrl+Shift']"),
+                "the typo is the user's to fix, so it stays authored: {saved}"
+            );
         });
     }
 }

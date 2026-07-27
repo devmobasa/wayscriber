@@ -1826,7 +1826,7 @@ clear_canvas = ["X"]
 - Modifiers (<kbd>Shift</kbd>, <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Tab</kbd>) are always captured for drawing tools
 - In text input mode, configured keybindings (like <kbd>Ctrl+Q</kbd> for exit) work before keys are consumed as text
 - Color keys only work when not holding <kbd>Ctrl</kbd> (to avoid conflicts with other actions)
-- Invalid keybinding strings are logged and ignored; the runtime keymap falls back to defaults until the typo is fixed
+- Keybinding strings that cannot be parsed are detected at startup, reported, and dropped one string at a time for the running session; every other shortcut keeps working and the config file keeps the typo for you to fix
 - Duplicate keybindings across actions are detected at startup, reported, and resolved per key without touching the config file
 
 **Defaults:**

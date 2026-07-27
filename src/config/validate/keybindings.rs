@@ -56,6 +56,52 @@ fn binding_claimed_by_another_action(
         })
 }
 
+/// One binding string the parser rejected while loading a configuration.
+///
+/// The string is dropped from the keymap this session builds, because a key
+/// that cannot be parsed cannot be pressed either and keeping it used to fail
+/// the whole map. The file keeps the typo — a save writes just the delta its
+/// caller asked for — so the user has to be told, not just the log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidKeybinding {
+    action: Action,
+    binding: String,
+    error: String,
+}
+
+impl InvalidKeybinding {
+    /// The rejected string exactly as the file spells it.
+    pub fn binding(&self) -> &str {
+        &self.binding
+    }
+
+    /// The `[keybindings]` key the string was removed from.
+    pub fn config_key(&self) -> Option<&'static str> {
+        KeybindingsConfig::config_key_for_action(self.action)
+    }
+
+    /// Toast-sized wording; [`fmt::Display`] carries the long form.
+    pub fn summary(&self) -> String {
+        format!(
+            "{} is not a valid shortcut for {}.",
+            self.binding,
+            action_label(self.action)
+        )
+    }
+}
+
+impl fmt::Display for InvalidKeybinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "`{}` for {} could not be parsed: {} — it is ignored for this session",
+            self.binding,
+            action_label(self.action),
+            self.error
+        )
+    }
+}
+
 /// One duplicate shortcut resolved while loading a configuration.
 ///
 /// The resolution applies to the running session only: a save writes just the
@@ -194,10 +240,65 @@ fn conflict_winner(
     Some(authored.unwrap_or(first))
 }
 
+/// Everything loading had to change in `[keybindings]`, in the order the
+/// passes run: a string that does not parse is removed before duplicates are
+/// arbitrated, so the arbitration only ever sees keys that can actually fire.
+pub(super) struct KeybindingValidation {
+    pub(super) invalid: Vec<InvalidKeybinding>,
+    pub(super) conflicts: Vec<KeybindingConflictResolution>,
+}
+
 impl Config {
-    pub(super) fn validate_keybindings(&mut self) -> Vec<KeybindingConflictResolution> {
+    pub(super) fn validate_keybindings(&mut self) -> KeybindingValidation {
         self.apply_keybinding_migrations();
-        self.resolve_keybinding_conflicts()
+        let invalid = self.drop_unparseable_bindings();
+        let conflicts = self.resolve_keybinding_conflicts();
+        KeybindingValidation { invalid, conflicts }
+    }
+
+    /// Removes the binding strings the parser rejects.
+    ///
+    /// A typo binds nothing at runtime, but leaving it in place used to fail
+    /// `build_action_map` for the whole config, and the caller of that swapped
+    /// in the complete shipped defaults for the session — the same total loss
+    /// of customization as #293, from a single mistyped key. Dropping only the
+    /// offending strings keeps every other authored shortcut working.
+    ///
+    /// Like a resolved conflict, the removal is session-only: a save records
+    /// just the delta its caller asked for, so `config.toml` keeps the typo
+    /// until the user fixes it.
+    fn drop_unparseable_bindings(&mut self) -> Vec<InvalidKeybinding> {
+        let mut invalid = Vec::new();
+        for action in KeybindingsConfig::configurable_actions() {
+            let Some(current) = self.keybindings.bindings_for_action(*action) else {
+                continue;
+            };
+            let mut kept = Vec::with_capacity(current.len());
+            let mut dropped = false;
+            for binding in current {
+                match KeyBinding::parse(binding) {
+                    Ok(_) => kept.push(binding.clone()),
+                    Err(error) => {
+                        dropped = true;
+                        invalid.push(InvalidKeybinding {
+                            action: *action,
+                            binding: binding.clone(),
+                            error,
+                        });
+                    }
+                }
+            }
+            if dropped {
+                // `bindings_for_action` already proved the action has a stored
+                // field, so the only failure mode of the setter cannot happen.
+                let _ = self.keybindings.set_bindings_for_action(*action, kept);
+            }
+        }
+
+        for entry in &invalid {
+            log::warn!("Invalid shortcut in the keybindings config: {entry}");
+        }
+        invalid
     }
 
     /// Resolves duplicate shortcuts one key at a time.
@@ -228,9 +329,10 @@ impl Config {
         let conflicts = match self.keybindings.collect_binding_conflicts() {
             Ok(conflicts) => conflicts,
             Err(error) => {
-                // An unparseable binding string is the user's typo, not a
-                // collision we can arbitrate. Leave every authored value in
-                // place; the runtime keymap reports it separately.
+                // Unreachable: `drop_unparseable_bindings` runs first and the
+                // parser is the only thing collection can fail on. Kept as a
+                // safeguard so a future collection failure degrades to "no
+                // conflicts arbitrated" instead of a panic.
                 log::warn!("Invalid keybinding configuration: {error}. Ignoring that binding.");
                 return Vec::new();
             }

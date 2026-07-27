@@ -25,6 +25,9 @@ pub enum ConfigDiagnosticKind {
     /// A shortcut two actions both claim. Loading drops it from one of them
     /// for the session; the file is left exactly as authored.
     KeybindingConflict,
+    /// A shortcut string the parser rejects. Loading drops it from the session
+    /// keymap; the file is left exactly as authored.
+    InvalidKeybinding,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,12 +45,6 @@ impl ConfigDiagnostic {
     pub fn path(&self) -> &str {
         &self.path
     }
-
-    /// The explanation kinds that need one carry; `path` alone is enough for
-    /// an unrecognized setting.
-    pub fn detail(&self) -> Option<&str> {
-        self.detail.as_deref()
-    }
 }
 
 impl fmt::Display for ConfigDiagnostic {
@@ -59,6 +56,10 @@ impl fmt::Display for ConfigDiagnostic {
             ConfigDiagnosticKind::KeybindingConflict => match &self.detail {
                 Some(detail) => write!(formatter, "{detail}"),
                 None => write!(formatter, "conflicting keybinding in `{}`", self.path),
+            },
+            ConfigDiagnosticKind::InvalidKeybinding => match &self.detail {
+                Some(detail) => write!(formatter, "{detail}"),
+                None => write!(formatter, "invalid keybinding in `{}`", self.path),
             },
         }
     }
@@ -417,8 +418,22 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
             detail: None,
         })
         .collect();
-    // A resolved conflict never reaches the file, so the editor is the only
-    // place the user can find out that one of their shortcuts is inert.
+    // Neither a dropped typo nor a resolved conflict ever reaches the file, so
+    // the editor is the only place the user can find out that one of their
+    // shortcuts is inert.
+    diagnostics.extend(
+        validation
+            .invalid_keybindings
+            .iter()
+            .map(|invalid| ConfigDiagnostic {
+                kind: ConfigDiagnosticKind::InvalidKeybinding,
+                path: invalid.config_key().map_or_else(
+                    || "keybindings".to_string(),
+                    |key| format!("keybindings.{key}"),
+                ),
+                detail: Some(invalid.to_string()),
+            }),
+    );
     diagnostics.extend(
         validation
             .keybinding_conflicts

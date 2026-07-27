@@ -1,38 +1,42 @@
 use log::{debug, info, warn};
 
 use crate::backend::ExitAfterCaptureMode;
-use crate::config::{Action, Config, ConfigSource, KeybindingConflictResolution};
+use crate::config::{
+    Action, Config, ConfigSource, ConfigValidationReport, InvalidKeybinding,
+    KeybindingConflictResolution,
+};
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 use crate::notification;
 
-/// How long the conflict warnings stay up. Both are on the long side: they
-/// describe a config problem the user has to leave the overlay to fix.
+/// How long the keybinding warnings stay up. All of them are on the long side:
+/// they describe a config problem the user has to leave the overlay to fix.
 const KEYBINDING_CONFLICT_TOAST_MS: u64 = 20_000;
 const KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS: i32 = 20_000;
-/// Conflicts spelled out in the desktop notification before it starts counting.
+/// Entries spelled out in a desktop notification before it starts counting.
 const KEYBINDING_CONFLICT_NOTIFICATION_LIMIT: usize = 5;
 
 pub(super) struct LoadedConfig {
     pub(super) config: Config,
     pub(super) source: ConfigSource,
     pub(super) exit_after_capture_mode: ExitAfterCaptureMode,
-    /// Duplicate shortcuts this load had to resolve in memory.
-    pub(super) keybinding_conflicts: Vec<KeybindingConflictResolution>,
+    /// Shortcut strings this load had to drop, and duplicates it had to
+    /// resolve, in memory.
+    pub(super) keybindings: ConfigValidationReport,
 }
 
 pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
     persist_pending_migrations();
 
-    let (config, source, keybinding_conflicts) = match Config::load() {
-        Ok(loaded) => (
-            loaded.config,
-            loaded.source,
-            loaded.validation.keybinding_conflicts,
-        ),
+    let (config, source, keybindings) = match Config::load() {
+        Ok(loaded) => (loaded.config, loaded.source, loaded.validation),
         Err(e) => {
             warn!("Failed to load config: {}. Using defaults.", e);
-            (Config::default(), ConfigSource::Default, Vec::new())
+            (
+                Config::default(),
+                ConfigSource::Default,
+                ConfigValidationReport::default(),
+            )
         }
     };
 
@@ -56,7 +60,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
         config,
         source,
         exit_after_capture_mode,
-        keybinding_conflicts,
+        keybindings,
     }
 }
 
@@ -92,18 +96,50 @@ pub(super) fn notify_keybinding_conflicts(
     );
 }
 
-fn keybinding_conflict_toast(conflicts: &[KeybindingConflictResolution]) -> String {
-    let Some(first) = conflicts.first() else {
-        return String::new();
-    };
-    if conflicts.len() == 1 {
-        return format!("Shortcut conflict: {}", first.summary());
+/// Tells the user which shortcut strings the parser rejected.
+///
+/// A typo used to cost the session every other shortcut too, because the whole
+/// keymap failed and the runtime fell back to the shipped defaults. Loading now
+/// drops only the bad string, which is quieter — quiet enough to hide the typo
+/// forever if this did not say so, since the file keeps it.
+pub(super) fn notify_invalid_keybindings(
+    input_state: &mut InputState,
+    tokio_handle: &tokio::runtime::Handle,
+    invalid: &[InvalidKeybinding],
+) {
+    if invalid.is_empty() {
+        return;
     }
-    format!(
-        "{} shortcut conflicts: {} (and {} more)",
-        conflicts.len(),
-        first.summary(),
-        conflicts.len() - 1
+
+    input_state.push_toast(
+        ToastPriority::Action,
+        "keybindings.invalid",
+        Toast::warning(invalid_keybinding_toast(invalid))
+            .action("Settings", Action::OpenConfigurator)
+            .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
+    );
+    notification::send_notification_with_timeout_async(
+        tokio_handle,
+        "Invalid Shortcuts".to_string(),
+        invalid_keybinding_notification_body(invalid, &config_path_display()),
+        Some("dialog-warning".to_string()),
+        KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
+    );
+}
+
+fn keybinding_conflict_toast(conflicts: &[KeybindingConflictResolution]) -> String {
+    keybinding_toast(
+        "Shortcut conflict",
+        "shortcut conflicts",
+        &summaries(conflicts, KeybindingConflictResolution::summary),
+    )
+}
+
+fn invalid_keybinding_toast(invalid: &[InvalidKeybinding]) -> String {
+    keybinding_toast(
+        "Invalid shortcut",
+        "invalid shortcuts",
+        &summaries(invalid, InvalidKeybinding::summary),
     )
 }
 
@@ -111,22 +147,59 @@ fn keybinding_conflict_notification_body(
     conflicts: &[KeybindingConflictResolution],
     config_path: &str,
 ) -> String {
-    let mut body = conflicts
+    keybinding_notification_body(
+        &summaries(conflicts, ToString::to_string),
+        &format!(
+            "Nothing was changed in {config_path}; edit it to choose which action keeps each shortcut."
+        ),
+    )
+}
+
+fn invalid_keybinding_notification_body(
+    invalid: &[InvalidKeybinding],
+    config_path: &str,
+) -> String {
+    keybinding_notification_body(
+        &summaries(invalid, ToString::to_string),
+        &format!("Nothing was changed in {config_path}; fix the spelling there to bind it again."),
+    )
+}
+
+fn summaries<T>(entries: &[T], render: impl Fn(&T) -> String) -> Vec<String> {
+    entries.iter().map(render).collect()
+}
+
+/// A toast has room for one problem, so the rest are only counted.
+fn keybinding_toast(singular: &str, plural: &str, entries: &[String]) -> String {
+    let Some(first) = entries.first() else {
+        return String::new();
+    };
+    if entries.len() == 1 {
+        return format!("{singular}: {first}");
+    }
+    format!(
+        "{} {plural}: {first} (and {} more)",
+        entries.len(),
+        entries.len() - 1
+    )
+}
+
+fn keybinding_notification_body(entries: &[String], closing: &str) -> String {
+    let mut body = entries
         .iter()
         .take(KEYBINDING_CONFLICT_NOTIFICATION_LIMIT)
-        .map(|resolution| format!("• {resolution}."))
+        .map(|entry| format!("• {entry}."))
         .collect::<Vec<_>>()
         .join("\n");
-    if let Some(remaining) = conflicts
+    if let Some(remaining) = entries
         .len()
         .checked_sub(KEYBINDING_CONFLICT_NOTIFICATION_LIMIT)
         .filter(|remaining| *remaining > 0)
     {
         body.push_str(&format!("\n• and {remaining} more."));
     }
-    body.push_str(&format!(
-        "\nNothing was changed in {config_path}; edit it to choose which action keeps each shortcut."
-    ));
+    body.push('\n');
+    body.push_str(closing);
     body
 }
 
@@ -263,10 +336,10 @@ mod tests {
                     .cycle_toolbar_display
                     .is_empty()
             );
-            assert_eq!(loaded.keybinding_conflicts.len(), 1);
-            assert_eq!(loaded.keybinding_conflicts[0].key(), "F2");
+            assert_eq!(loaded.keybindings.keybinding_conflicts.len(), 1);
+            assert_eq!(loaded.keybindings.keybinding_conflicts[0].key(), "F2");
 
-            let toast = keybinding_conflict_toast(&loaded.keybinding_conflicts);
+            let toast = keybinding_conflict_toast(&loaded.keybindings.keybinding_conflicts);
             assert!(toast.contains("F2"), "unexpected toast: {toast}");
             assert!(
                 toast.contains("Toggle Toolbar") && toast.contains("Cycle Toolbar Display"),
@@ -274,10 +347,61 @@ mod tests {
             );
 
             let body = keybinding_conflict_notification_body(
-                &loaded.keybinding_conflicts,
+                &loaded.keybindings.keybinding_conflicts,
                 "/tmp/config.toml",
             );
             assert!(body.contains("F2"), "unexpected body: {body}");
+            assert!(body.contains("/tmp/config.toml"), "unexpected body: {body}");
+        });
+    }
+
+    /// A mistyped shortcut is dropped from the session keymap and left in the
+    /// file, so startup is the only place the user learns the key they pressed
+    /// will never fire. Everything else in the section keeps working, which is
+    /// exactly what makes the typo easy to miss.
+    #[test]
+    fn load_reports_an_unparseable_shortcut_instead_of_defaulting_the_section() {
+        with_temp_config_home(|_| {
+            let path = Config::get_config_path().expect("config path");
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create config dir");
+            }
+            fs::write(
+                &path,
+                format!(
+                    "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\nundo = [\"Ctrl+Alt+U\"]\n",
+                    crate::config::CURRENT_CONFIG_REVISION
+                ),
+            )
+            .expect("write config with a typo");
+
+            let loaded = load(ExitAfterCaptureMode::Auto);
+
+            assert!(loaded.config.keybindings.core.clear_canvas.is_empty());
+            assert_eq!(loaded.config.keybindings.core.undo, ["Ctrl+Alt+U"]);
+            assert_eq!(loaded.keybindings.invalid_keybindings.len(), 1);
+            assert_eq!(
+                loaded.keybindings.invalid_keybindings[0].binding(),
+                "Ctrl+Shift"
+            );
+            assert!(loaded.keybindings.keybinding_conflicts.is_empty());
+
+            let toast = invalid_keybinding_toast(&loaded.keybindings.invalid_keybindings);
+            assert!(toast.contains("Ctrl+Shift"), "unexpected toast: {toast}");
+            assert!(
+                toast.contains("Clear Canvas"),
+                "the toast must name the action: {toast}"
+            );
+
+            let body = invalid_keybinding_notification_body(
+                &loaded.keybindings.invalid_keybindings,
+                "/tmp/config.toml",
+            );
+            assert!(body.contains("Ctrl+Shift"), "unexpected body: {body}");
+            assert!(
+                body.contains("ignored for this session"),
+                "unexpected body: {body}"
+            );
             assert!(body.contains("/tmp/config.toml"), "unexpected body: {body}");
         });
     }

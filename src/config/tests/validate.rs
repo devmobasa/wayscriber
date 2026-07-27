@@ -580,10 +580,12 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.session.autosave_failure_backoff_ms, 1000);
     assert!(matches!(config.session.storage, SessionStorageMode::Auto));
     assert!(config.session.custom_directory.is_none());
-    // A binding string we cannot parse is a typo for the user to fix. It is
-    // not grounds for discarding every other shortcut they configured (#293),
-    // so the authored text survives and only the runtime keymap ignores it.
-    assert_eq!(config.keybindings.core.exit, ["Ctrl+Shift"]);
+    // A binding string we cannot parse is a typo for the user to fix. It
+    // binds nothing at runtime, so the session drops it and keeps every other
+    // shortcut; leaving it in used to fail the whole keymap and get the
+    // shipped defaults installed over the user's section (#293). The file
+    // still holds the typo, and validation reports it.
+    assert!(config.keybindings.core.exit.is_empty());
 }
 
 #[test]
@@ -1063,5 +1065,65 @@ fn resolving_one_key_does_not_promote_a_trimmed_default_over_an_authored_binding
             .all(|resolution| resolution.dropped() == Action::ToggleCommandPalette),
         "both keys must come off the defaulted side: {:?}",
         report.keybinding_conflicts
+    );
+}
+
+/// A single mistyped string used to fail `build_action_map` for the whole
+/// config, and the runtime answered that by installing the complete shipped
+/// defaults for the session. Only the typo is dropped now.
+#[test]
+fn an_unparseable_binding_costs_only_itself() {
+    let mut config = Config::default();
+    config.keybindings.core.clear_canvas = vec!["Ctrl+Shift".to_string(), "Ctrl+L".to_string()];
+    config.keybindings.core.undo = vec!["Ctrl+Alt+U".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.clear_canvas, ["Ctrl+L"]);
+    assert_eq!(config.keybindings.core.undo, ["Ctrl+Alt+U"]);
+    assert_eq!(
+        config.keybindings.tools.select_pen_tool,
+        KeybindingsConfig::default().tools.select_pen_tool,
+        "an action the file never touched keeps its default"
+    );
+    config
+        .keybindings
+        .build_action_map()
+        .expect("the keymap builds once the typo is gone");
+
+    assert_eq!(report.invalid_keybindings.len(), 1);
+    assert_eq!(report.invalid_keybindings[0].binding(), "Ctrl+Shift");
+    assert_eq!(
+        report.invalid_keybindings[0].config_key(),
+        Some("clear_canvas")
+    );
+    let reported = report.invalid_keybindings[0].to_string();
+    assert!(
+        reported.contains("Ctrl+Shift") && reported.contains("Clear Canvas"),
+        "unexpected report: {reported}"
+    );
+    assert!(!report.is_empty());
+    assert!(report.keybinding_conflicts.is_empty());
+}
+
+/// The drop happens before duplicates are arbitrated, so a typo cannot make a
+/// key look free and it cannot be mistaken for a collision either.
+#[test]
+fn an_unparseable_binding_does_not_disturb_conflict_resolution() {
+    let mut config = Config::default();
+    config.keybindings.core.clear_canvas = vec!["Ctrl+Shift".to_string()];
+    config.keybindings.core.exit = vec!["Ctrl+Alt+Shift+E".to_string()];
+    config.keybindings.tools.select_pen_tool = vec!["Ctrl+Alt+Shift+E".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert!(config.keybindings.core.clear_canvas.is_empty());
+    assert_eq!(config.keybindings.core.exit, ["Ctrl+Alt+Shift+E"]);
+    assert!(config.keybindings.tools.select_pen_tool.is_empty());
+    assert_eq!(report.invalid_keybindings.len(), 1);
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert_eq!(
+        report.keybinding_conflicts[0].dropped(),
+        Action::SelectPenTool
     );
 }

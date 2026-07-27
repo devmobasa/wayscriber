@@ -18,7 +18,7 @@ mod tablet;
 mod ui;
 mod updates;
 
-pub use keybindings::KeybindingConflictResolution;
+pub use keybindings::{InvalidKeybinding, KeybindingConflictResolution};
 
 /// What loading had to change before a configuration could be used.
 ///
@@ -27,6 +27,8 @@ pub use keybindings::KeybindingConflictResolution;
 /// log.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConfigValidationReport {
+    /// Shortcut strings the parser rejected, dropped from the session keymap.
+    pub invalid_keybindings: Vec<InvalidKeybinding>,
     /// Duplicate shortcuts resolved per binding while loading.
     pub keybinding_conflicts: Vec<KeybindingConflictResolution>,
 }
@@ -34,7 +36,7 @@ pub struct ConfigValidationReport {
 impl ConfigValidationReport {
     /// Whether validation changed nothing the user needs to know about.
     pub fn is_empty(&self) -> bool {
-        self.keybinding_conflicts.is_empty()
+        self.invalid_keybindings.is_empty() && self.keybinding_conflicts.is_empty()
     }
 }
 
@@ -55,8 +57,8 @@ impl Config {
     /// - `buffer_count`: 2 - 4
     ///
     /// Returns what the user should be told about: a clamp is a silent
-    /// correction, but a resolved keybinding conflict changes which shortcuts
-    /// work and is never written back, so it has to be surfaced.
+    /// correction, but a dropped or resolved keybinding changes which
+    /// shortcuts work and is never written back, so it has to be surfaced.
     pub fn validate_and_clamp(&mut self) -> ConfigValidationReport {
         self.validate_drawing();
         self.validate_presets();
@@ -72,11 +74,12 @@ impl Config {
         self.validate_ui();
         self.validate_render_profiles();
         self.validate_export();
-        let keybinding_conflicts = self.validate_keybindings();
+        let keybindings = self.validate_keybindings();
         self.validate_session();
         self.validate_updates();
         ConfigValidationReport {
-            keybinding_conflicts,
+            invalid_keybindings: keybindings.invalid,
+            keybinding_conflicts: keybindings.conflicts,
         }
     }
 }
