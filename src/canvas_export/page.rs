@@ -77,10 +77,20 @@ impl CanvasExportRect {
     }
 }
 
+#[cfg(test)]
 pub fn draw_canvas_page(
     ctx: &cairo::Context,
     page: &CanvasPageExportSnapshot,
     output_scale: f64,
+) -> Result<(), CaptureError> {
+    draw_canvas_page_scaled(ctx, page, output_scale, output_scale)
+}
+
+pub(crate) fn draw_canvas_page_scaled(
+    ctx: &cairo::Context,
+    page: &CanvasPageExportSnapshot,
+    output_scale_x: f64,
+    output_scale_y: f64,
 ) -> Result<(), CaptureError> {
     let backdrop = ExportBackdrop::new(&page.backdrop)?;
     let source = CanvasExportRect {
@@ -97,8 +107,8 @@ pub fn draw_canvas_page(
     };
 
     let _ = ctx.save();
-    if (output_scale - 1.0).abs() > f64::EPSILON {
-        ctx.scale(output_scale, output_scale);
+    if (output_scale_x - 1.0).abs() > f64::EPSILON || (output_scale_y - 1.0).abs() > f64::EPSILON {
+        ctx.scale(output_scale_x, output_scale_y);
     }
     draw_canvas_page_region(ctx, page, &backdrop, source, destination, true);
     let _ = ctx.restore();

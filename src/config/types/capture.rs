@@ -35,9 +35,10 @@ pub struct CaptureConfig {
     /// While step capture is armed, a plain left click on the canvas captures
     /// the step and is then forwarded to the application underneath through
     /// the compositor's virtual-pointer protocol. Requires compositor support
-    /// (wlroots, Hyprland, KWin); without it the capture-step action still
-    /// works. Off by default because the forwarded click reaches another
-    /// application.
+    /// (wlroots, Hyprland, KWin): without it — or with `enabled = false` —
+    /// clicks are left alone and draw as usual, and the capture-step action
+    /// remains the way to record a step. Off by default because the forwarded
+    /// click reaches another application.
     #[serde(default = "default_step_click_capture")]
     pub step_click_capture: bool,
 }

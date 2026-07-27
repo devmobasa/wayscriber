@@ -1,4 +1,8 @@
-use std::{fmt, path::PathBuf, sync::Arc};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
@@ -339,8 +343,33 @@ async fn deliver_document_bundle(
             CaptureError::ImageError(format!("Bundle directory task failed: {err}"))
         })??;
 
+    // A bundle is all-or-nothing: a document that references images which were
+    // never written (a disk filling up mid-export, say) looks like a finished
+    // export but is broken, so a partial bundle is removed rather than left
+    // behind next to the complete ones.
+    match write_document_bundle(&bundle_dir, document, attachments, &dependencies).await {
+        Ok((document_bytes, saved_path)) => Ok(CaptureResult {
+            image_data: document_bytes,
+            operation,
+            fallback_format_override: None,
+            saved_path: Some(saved_path),
+            copied_to_clipboard: false,
+        }),
+        Err(err) => {
+            discard_bundle_directory(bundle_dir).await;
+            Err(err)
+        }
+    }
+}
+
+async fn write_document_bundle(
+    bundle_dir: &Path,
+    document: RenderedDocument,
+    attachments: Vec<DocumentAttachment>,
+    dependencies: &Arc<CaptureDependencies>,
+) -> Result<(Vec<u8>, PathBuf), CaptureError> {
     let main_config = FileSaveConfig {
-        save_directory: bundle_dir.clone(),
+        save_directory: bundle_dir.to_path_buf(),
         filename_template: "guide".to_string(),
         format: document.extension.clone(),
     };
@@ -353,21 +382,52 @@ async fn deliver_document_bundle(
     .await?;
 
     for attachment in attachments {
+        let (file_stem, extension, bytes) = materialize_document_attachment(attachment).await?;
         let config = FileSaveConfig {
-            save_directory: bundle_dir.clone(),
-            filename_template: attachment.file_stem,
-            format: attachment.extension,
+            save_directory: bundle_dir.to_path_buf(),
+            filename_template: file_stem,
+            format: extension,
         };
-        save_bytes(Arc::clone(&dependencies.saver), attachment.bytes, config).await?;
+        save_bytes(Arc::clone(&dependencies.saver), bytes, config).await?;
     }
 
-    Ok(CaptureResult {
-        image_data: document_bytes,
-        operation,
-        fallback_format_override: None,
-        saved_path: Some(saved_path),
-        copied_to_clipboard: false,
+    Ok((document_bytes, saved_path))
+}
+
+async fn materialize_document_attachment(
+    attachment: DocumentAttachment,
+) -> Result<(String, String, Vec<u8>), CaptureError> {
+    let (file_stem, extension, content) = attachment.into_parts();
+    let bytes = match content {
+        crate::capture::types::DocumentAttachmentContent::Bytes(bytes) => bytes,
+        crate::capture::types::DocumentAttachmentContent::CanvasPng(snapshot) => {
+            task::spawn_blocking(move || crate::canvas_export::render_canvas_png(&snapshot))
+                .await
+                .map_err(|err| {
+                    CaptureError::ImageError(format!("Guide page render task failed: {err}"))
+                })??
+                .bytes
+        }
+    };
+    Ok((file_stem, extension, bytes))
+}
+
+/// Removes a bundle directory whose contents never completed. The directory
+/// was freshly created by this export, so nothing predating it is at risk.
+async fn discard_bundle_directory(bundle_dir: PathBuf) {
+    let removed = task::spawn_blocking(move || {
+        let result = std::fs::remove_dir_all(&bundle_dir);
+        (bundle_dir, result)
     })
+    .await;
+    match removed {
+        Ok((bundle_dir, Err(err))) => log::warn!(
+            "Could not remove the incomplete bundle directory {}: {err}",
+            bundle_dir.display()
+        ),
+        Err(err) => log::warn!("Bundle cleanup task failed: {err}"),
+        Ok((_, Ok(()))) => {}
+    }
 }
 
 fn create_unique_bundle_directory(save_config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {

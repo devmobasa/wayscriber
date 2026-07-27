@@ -223,6 +223,7 @@ fn step_marker_bounding_box_is_square_and_contains_center() {
             value: 7,
             size: 18.0,
             font_descriptor: font,
+            auto_numbered: false,
         },
     };
 

@@ -254,6 +254,7 @@ impl WaylandState {
                 logical_width: self.surface.width(),
                 logical_height: self.surface.height(),
                 scale: self.surface.scale(),
+                physical_size: None,
                 origin_x: origin_x.round() as i32,
                 origin_y: origin_y.round() as i32,
             },
@@ -353,6 +354,7 @@ impl WaylandState {
         log::error!("Failed to submit {}: {error}", operation.saved_log_label());
         self.capture.clear_preflight();
         self.capture.clear_pending_pdf_export();
+        self.forward_pending_step_click();
         self.capture.clear_pending_step_capture();
         self.show_overlay();
         self.capture.clear_in_progress();

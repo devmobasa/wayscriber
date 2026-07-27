@@ -41,7 +41,7 @@ pub(crate) use base::{
     WayscriberClipboardSelection,
 };
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
-pub use board::{STEP_CAPTURE_BOARD_ID, StepCaptureFrame, StepPageReceipt};
+pub use board::{STEP_CAPTURE_BOARD_ID, StepCaptureFrame, StepPageOutcome, StepPageReceipt};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;

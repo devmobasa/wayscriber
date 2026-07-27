@@ -221,10 +221,42 @@ impl InputState {
         )
     }
 
+    /// Weighs one prospective Steps page — a full-screen capture plus its
+    /// marker — against the session save limits before it is inserted. Step
+    /// capture is the one flow that appends a screenshot per user action, so
+    /// a long guide can walk a session past its cap; refusing the step keeps
+    /// the rest of the session saveable instead of failing every autosave.
+    pub(crate) fn session_allows_step_page(&mut self, board_index: usize, page: &Frame) -> bool {
+        let Some(options) = self.session_preflight_options.as_ref() else {
+            return true;
+        };
+        if !session_persistence_enabled(options) {
+            return true;
+        }
+        let Some(board) = self.boards.board_states().get(board_index) else {
+            return true;
+        };
+        if !board_should_persist_for_session(board, options) {
+            return true;
+        }
+        let mut added = estimate_frame_page_storage(page);
+        if !board_pages_have_persistable_data(&board.pages, VISIBLE_HISTORY_LIMIT) {
+            added =
+                added.saturating_add(estimate_board_shell_storage(&board.spec.id, &board.pages));
+            added = added.saturating_add(estimate_pages_storage(&board.pages));
+        }
+        self.session_allows_clone_heavy_storage(
+            added,
+            ClonePreflightAction::AppendPage { board_index, page },
+            "Step",
+            "capture",
+        )
+    }
+
     fn session_allows_clone_heavy_storage(
         &mut self,
         added: CloneStorageEstimate,
-        action: ClonePreflightAction,
+        action: ClonePreflightAction<'_>,
         action_label: &str,
         action_name: &str,
     ) -> bool {
@@ -336,12 +368,13 @@ impl InputState {
 /// Domain key for a clone-preflight block toast: the same key the blocked
 /// operation uses for its own success/status feedback, so a block replaces that
 /// slot in place rather than queueing behind it.
-fn clone_action_toast_key(action: &ClonePreflightAction) -> &'static str {
+fn clone_action_toast_key(action: &ClonePreflightAction<'_>) -> &'static str {
     match action {
         ClonePreflightAction::BoardDuplicate => "board.switch",
         ClonePreflightAction::PageDuplicate { .. } | ClonePreflightAction::PageCopy { .. } => {
             "page.nav"
         }
+        ClonePreflightAction::AppendPage { .. } => "steps",
     }
 }
 

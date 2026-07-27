@@ -222,6 +222,7 @@ impl InputState {
     }
 
     fn finish_page_delete_surface_change(&mut self, active_target: bool) {
+        self.renumber_step_pages();
         if active_target {
             self.finish_active_page_content_change();
         } else {
@@ -283,6 +284,7 @@ impl InputState {
                     page_count,
                     ..
                 } => {
+                    self.renumber_step_pages();
                     if active_target {
                         self.finish_active_page_content_change();
                     } else {

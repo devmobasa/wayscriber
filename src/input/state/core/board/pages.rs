@@ -146,6 +146,7 @@ impl InputState {
         };
         let moved = board.pages.move_page(from, to);
         debug_assert!(moved, "preflighted page reorder failed on apply");
+        self.renumber_step_pages();
         self.finish_board_page_content_change(board_index);
         true
     }
@@ -205,6 +206,7 @@ impl InputState {
         let page_count = board.pages.page_count();
         let board_name = board.spec.name.clone();
         let board_id = board.spec.id.clone();
+        self.renumber_step_pages();
         self.finish_board_page_content_change(board_index);
         self.push_toast(
             ToastPriority::Info,
@@ -306,6 +308,7 @@ impl InputState {
             let target_count = target.pages.page_count();
             (new_index, target_name, target_id, target_count)
         };
+        self.renumber_step_pages();
         if active_involved {
             self.finish_active_page_content_change();
         } else {
@@ -385,6 +388,7 @@ impl InputState {
         }
         self.prepare_active_page_content_change();
         self.boards.duplicate_page();
+        self.renumber_step_pages();
         self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;
         let page_count = self.boards.page_count();

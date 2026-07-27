@@ -378,6 +378,7 @@ impl WaylandState {
                 self.capture.clear_in_progress();
                 self.capture.clear_exit_on_success();
                 self.capture.clear_pending_pdf_export();
+                self.forward_pending_step_click();
                 self.capture.clear_pending_step_capture();
                 self.show_overlay();
             }

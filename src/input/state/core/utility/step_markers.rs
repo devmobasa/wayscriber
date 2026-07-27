@@ -16,6 +16,7 @@ impl InputState {
             value: self.step_marker_counter.max(1),
             size: self.step_marker_size(),
             font_descriptor: self.font_descriptor.clone(),
+            auto_numbered: false,
         }
     }
 

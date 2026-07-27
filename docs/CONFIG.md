@@ -1146,11 +1146,18 @@ copy_to_clipboard = true
 # When false, clipboard-only captures still auto-exit by default.
 # Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
+
+# While step capture is armed, turn a plain left click on the canvas into the
+# next guide step and re-send that click to the application underneath.
+step_click_capture = false
 ```
 
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
+- `enabled = false` turns off step capture too, since it drives the same screen-capture source.
+- `step_click_capture` needs `zwlr_virtual_pointer_manager_v1` (wlroots, Hyprland, KWin) to replay the click it swallows. Without that protocol clicks are left alone and draw as usual; use the `capture_step` action instead.
+- A captured page uses one shape for its backdrop and a second when it has a step marker, so marker-based capture requires `session.max_shapes_per_frame >= 2`.
 - `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
 - Use `--exit-after-capture` / `--no-exit-after-capture` to override exit behavior per run.
 

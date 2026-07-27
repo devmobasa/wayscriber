@@ -18,6 +18,7 @@ fn step_marker_with_label(value: u32, font_descriptor: &FontDescriptor) -> Shape
             value,
             size: 14.0,
             font_descriptor: font_descriptor.clone(),
+            auto_numbered: false,
         },
     }
 }

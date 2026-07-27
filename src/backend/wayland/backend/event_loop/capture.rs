@@ -226,6 +226,13 @@ fn handle_capture_results(state: &mut WaylandState) {
 
     info!("Capture completed");
 
+    // Settle any click the step-capture interception swallowed before the
+    // overlay's input region comes back, so the synthetic press still reaches
+    // the application beneath instead of re-entering Wayscriber. Runs for
+    // every outcome: a failed or cancelled capture must not cost the user the
+    // click they made.
+    state.forward_pending_step_click();
+
     // Restore overlay.
     state.show_overlay();
     state.capture.clear_in_progress();
@@ -396,6 +403,7 @@ fn handle_capture_manager_failure(
 ) {
     state.capture.clear_preflight();
     state.capture.clear_pending_pdf_export();
+    state.forward_pending_step_click();
     state.capture.clear_pending_step_capture();
     state.show_overlay();
     state.capture.clear_in_progress();

@@ -249,12 +249,23 @@ impl WaylandState {
         // every chrome gate becomes the next step instead of a stroke. The
         // matching release is swallowed, and the click is re-sent beneath the
         // overlay once the frame is captured.
+        //
+        // Interception is only allowed when that replay is actually possible:
+        // without the compositor's virtual-pointer protocol, or when the
+        // capture itself is refused, swallowing the press would leave the
+        // application beneath with neither the original click nor a
+        // replacement. Those presses fall through to the canvas instead, so a
+        // click is never simply dropped.
         if button == BTN_LEFT
             && self.config.capture.step_click_capture
+            && self.virtual_pointer.is_some()
             && self.input_state.step_capture_armed()
+            && self.handle_step_capture_click(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+            )
         {
             self.set_suppress_next_release(true);
-            self.handle_step_capture_click();
             return;
         }
 

@@ -4,7 +4,7 @@ use crate::draw::{BoardPages, Frame};
 use crate::session::{self, BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot};
 
 #[derive(Debug, Clone, Copy)]
-pub(super) enum ClonePreflightAction {
+pub(super) enum ClonePreflightAction<'a> {
     PageDuplicate {
         board_index: usize,
         page_index: usize,
@@ -15,12 +15,18 @@ pub(super) enum ClonePreflightAction {
         target_board_index: usize,
     },
     BoardDuplicate,
+    /// A page that does not exist yet — a step capture's prospective guide
+    /// page — appended to `board_index`.
+    AppendPage {
+        board_index: usize,
+        page: &'a Frame,
+    },
 }
 
 pub(super) fn exact_visible_save_allows(
     input: &InputState,
     options: &SessionOptions,
-    action: ClonePreflightAction,
+    action: ClonePreflightAction<'_>,
 ) -> Option<bool> {
     let mut snapshot =
         session::snapshot_from_input(input, options).unwrap_or_else(|| SessionSnapshot {
@@ -50,7 +56,7 @@ fn apply_action_to_snapshot(
     input: &InputState,
     options: &SessionOptions,
     snapshot: &mut SessionSnapshot,
-    action: ClonePreflightAction,
+    action: ClonePreflightAction<'_>,
 ) -> bool {
     match action {
         ClonePreflightAction::PageDuplicate {
@@ -70,7 +76,52 @@ fn apply_action_to_snapshot(
             target_board_index,
         ),
         ClonePreflightAction::BoardDuplicate => duplicate_active_board_in_snapshot(input, snapshot),
+        ClonePreflightAction::AppendPage { board_index, page } => {
+            append_page_in_snapshot(input, options, snapshot, board_index, page)
+        }
     }
+}
+
+fn append_page_in_snapshot(
+    input: &InputState,
+    options: &SessionOptions,
+    snapshot: &mut SessionSnapshot,
+    board_index: usize,
+    page: &Frame,
+) -> bool {
+    let Some(target_board) = input.boards.board_states().get(board_index) else {
+        return false;
+    };
+    if !board_should_persist_for_session(target_board, options) {
+        return false;
+    }
+    let page = page.clone_without_history();
+
+    // The page is appended rather than replacing a blank leading page: the
+    // difference is a page shell's worth of bytes, and erring high keeps the
+    // check conservative.
+    if let Some(target_snapshot) = snapshot
+        .boards
+        .iter_mut()
+        .find(|board| board.id == target_board.spec.id)
+    {
+        let new_index = target_snapshot.pages.pages.len();
+        target_snapshot.pages.pages.push(page);
+        target_snapshot.pages.active = new_index;
+        return true;
+    }
+
+    let history_limit = options.effective_history_limit(input.undo_stack_limit);
+    let mut pages = pages_for_snapshot(&target_board.pages, history_limit);
+    pages.push(page);
+    snapshot.boards.push(BoardSnapshot {
+        id: target_board.spec.id.clone(),
+        pages: BoardPagesSnapshot {
+            active: pages.len().saturating_sub(1),
+            pages,
+        },
+    });
+    true
 }
 
 fn duplicate_page_in_snapshot(

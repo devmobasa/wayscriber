@@ -263,6 +263,7 @@ fn step_marker_hit_detects_center_and_rejects_outside_point() {
         value: 7,
         size: 16.0,
         font_descriptor: font,
+        auto_numbered: false,
     };
     let drawn = DrawnShape::with_metadata(
         4,

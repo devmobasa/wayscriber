@@ -52,7 +52,7 @@ pub(crate) use core::{
     TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastPress,
     WayscriberClipboardSelection,
 };
-pub use core::{STEP_CAPTURE_BOARD_ID, StepCaptureFrame, StepPageReceipt};
+pub use core::{STEP_CAPTURE_BOARD_ID, StepCaptureFrame, StepPageOutcome, StepPageReceipt};
 pub use highlight::ClickHighlightSettings;
 
 #[cfg(test)]

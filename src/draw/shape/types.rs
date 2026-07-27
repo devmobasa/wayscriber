@@ -108,6 +108,12 @@ pub struct StepMarkerLabel {
     pub size: f64,
     /// Font descriptor (family, weight, style).
     pub font_descriptor: FontDescriptor,
+    /// Placed by step capture rather than by the step-marker tool. These
+    /// markers name their page's position in the guide, so they are
+    /// renumbered whenever Steps pages are added, reordered, or removed;
+    /// hand-placed markers keep whatever number the user gave them.
+    #[serde(default)]
+    pub auto_numbered: bool,
 }
 
 /// Represents a drawable shape or annotation on screen.

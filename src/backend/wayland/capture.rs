@@ -44,14 +44,23 @@ pub(in crate::backend::wayland) struct PendingPdfExport {
 
 /// A step capture waiting for its desktop-backdrop frame: the recorded
 /// pointer position becomes the step marker on the appended page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct PendingStepClick {
+    pub x: u32,
+    pub y: u32,
+    pub x_extent: u32,
+    pub y_extent: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(in crate::backend::wayland) struct PendingStepCapture {
     pub marker: Option<(i32, i32)>,
     pub logical_width: i32,
     pub logical_height: i32,
-    /// The step came from an intercepted canvas click; re-send it beneath
-    /// the overlay once the frame is captured.
-    pub forward_click: bool,
+    /// Surface-local position of an intercepted canvas click that still owes
+    /// the application beneath a replacement press. `None` for captures that
+    /// swallowed nothing (the keybinding/toolbar route).
+    pub forward_click: Option<PendingStepClick>,
 }
 
 /// Tracks capture manager state and in-progress flag.
@@ -149,6 +158,15 @@ impl CaptureState {
         self.pending_step_capture.is_some()
     }
 
+    /// Claims the intercepted click owed to the application beneath, leaving
+    /// the rest of the pending capture in place. Taking it marks the debt as
+    /// settled so no terminal path forwards the same press twice.
+    pub fn take_pending_step_click(&mut self) -> Option<PendingStepClick> {
+        self.pending_step_capture
+            .as_mut()
+            .and_then(|pending| pending.forward_click.take())
+    }
+
     pub fn clear_pending_step_capture(&mut self) {
         self.pending_step_capture = None;
     }
@@ -229,6 +247,27 @@ mod tests {
             Some(CapturePreflightRequest::Screenshot(_))
         ));
         assert!(!state.preflight_pending());
+    }
+
+    #[test]
+    fn pending_step_click_preserves_its_resolved_absolute_target() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let click = PendingStepClick {
+            x: 2_100,
+            y: 450,
+            x_extent: 3_840,
+            y_extent: 1_080,
+        };
+        state.set_pending_step_capture(PendingStepCapture {
+            marker: Some((180, 90)),
+            logical_width: 1_920,
+            logical_height: 1_080,
+            forward_click: Some(click),
+        });
+
+        assert_eq!(state.take_pending_step_click(), Some(click));
+        assert!(state.take_pending_step_click().is_none());
     }
 
     #[test]

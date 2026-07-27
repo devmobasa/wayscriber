@@ -3,16 +3,21 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::canvas_export::{
+    BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot, CanvasExportViewport,
+    SpotlightPassSnapshot,
+};
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
     file::FileSaveConfig,
     pipeline::{CaptureRequest, deliver_document, deliver_image, perform_capture},
     types::{
-        CaptureDestination, CaptureError, CaptureType, DocumentDeliveryRequest,
+        CaptureDestination, CaptureError, CaptureType, DocumentAttachment, DocumentDeliveryRequest,
         ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument,
         RenderedImage,
     },
 };
+use crate::draw::Frame;
 
 use super::fixtures::{MockClipboard, MockSaver, MockSource};
 
@@ -321,6 +326,152 @@ async fn deliver_document_requires_save_directory() {
     assert!(
         err.to_string().contains("save directory"),
         "unexpected error: {err}"
+    );
+}
+
+/// A saver that writes real files but refuses one named stem, so a bundle can
+/// fail partway through exactly as a disk filling up mid-export would.
+#[derive(Clone)]
+struct BundleSaver {
+    failing_stem: String,
+}
+
+impl CaptureFileSaver for BundleSaver {
+    fn save(&self, bytes: &[u8], config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {
+        if config.filename_template == self.failing_stem {
+            return Err(CaptureError::SaveError(std::io::Error::other(
+                "no space left on device",
+            )));
+        }
+        let path = config
+            .save_directory
+            .join(format!("{}.{}", config.filename_template, config.format));
+        std::fs::write(&path, bytes).map_err(CaptureError::SaveError)?;
+        Ok(path)
+    }
+}
+
+fn bundle_dependencies(failing_stem: &str) -> CaptureDependencies {
+    CaptureDependencies {
+        source: Arc::new(MockSource {
+            data: Vec::new(),
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        }),
+        saver: Arc::new(BundleSaver {
+            failing_stem: failing_stem.to_string(),
+        }),
+        clipboard: Arc::new(RecordingClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+            copied: Arc::new(Mutex::new(Vec::new())),
+        }),
+    }
+}
+
+fn guide_bundle_request(save_directory: PathBuf) -> DocumentDeliveryRequest {
+    DocumentDeliveryRequest {
+        attachments: vec![
+            DocumentAttachment::bytes("step-01", "png", b"first".to_vec()),
+            DocumentAttachment::bytes("step-02", "png", b"second".to_vec()),
+        ],
+        document: RenderedDocument {
+            bytes: b"# Guide\n".to_vec(),
+            extension: "md".to_string(),
+            mime_type: "text/markdown".to_string(),
+        },
+        destination: CaptureDestination::FileOnly,
+        save_config: Some(FileSaveConfig {
+            save_directory,
+            filename_template: "steps_guide".to_string(),
+            format: "md".to_string(),
+        }),
+        operation: ImageOperationKind::StepsGuideExport,
+    }
+}
+
+#[tokio::test]
+async fn deliver_document_bundle_writes_document_and_attachments() {
+    let temp = crate::test_temp::tempdir().expect("temp dir");
+    let deps = bundle_dependencies("");
+
+    let result = deliver_document(
+        guide_bundle_request(temp.path().to_path_buf()),
+        Arc::new(deps),
+    )
+    .await
+    .expect("bundle delivery succeeds");
+
+    let bundle_dir = result
+        .saved_path
+        .as_ref()
+        .and_then(|path| path.parent())
+        .expect("the guide lands inside a bundle directory");
+    assert!(bundle_dir.join("guide.md").is_file());
+    assert!(bundle_dir.join("step-01.png").is_file());
+    assert!(bundle_dir.join("step-02.png").is_file());
+}
+
+#[tokio::test]
+async fn deliver_document_bundle_renders_canvas_attachments_during_delivery() {
+    let temp = crate::test_temp::tempdir().expect("temp dir");
+    let deps = bundle_dependencies("");
+    let mut request = guide_bundle_request(temp.path().to_path_buf());
+    request.attachments[0] = DocumentAttachment::canvas_png(
+        "step-01",
+        CanvasExportSnapshot {
+            viewport: CanvasExportViewport {
+                logical_width: 4,
+                logical_height: 3,
+                scale: 1,
+                physical_size: None,
+                origin_x: 0,
+                origin_y: 0,
+            },
+            backdrop: CanvasExportBackdropSnapshot::Transparent,
+            board: BoardExportSnapshot {
+                frame: Frame::new(),
+            },
+            render_profile: None,
+            spotlight: SpotlightPassSnapshot::default(),
+        },
+    );
+
+    let result = deliver_document(request, Arc::new(deps))
+        .await
+        .expect("bundle delivery succeeds");
+    let image = result
+        .saved_path
+        .as_ref()
+        .and_then(|path| path.parent())
+        .map(|directory| directory.join("step-01.png"))
+        .and_then(|path| std::fs::read(path).ok())
+        .expect("rendered attachment is readable");
+
+    assert!(image.starts_with(b"\x89PNG\r\n\x1a\n"));
+}
+
+#[tokio::test]
+async fn deliver_document_bundle_removes_the_directory_when_an_attachment_fails() {
+    let temp = crate::test_temp::tempdir().expect("temp dir");
+    // The guide and its first image land; the second image cannot be written.
+    let deps = bundle_dependencies("step-02");
+
+    let err = deliver_document(
+        guide_bundle_request(temp.path().to_path_buf()),
+        Arc::new(deps),
+    )
+    .await
+    .expect_err("a failed attachment fails the export");
+    assert!(err.to_string().contains("no space left"), "{err}");
+
+    let leftovers: Vec<_> = std::fs::read_dir(temp.path())
+        .expect("temp dir readable")
+        .map(|entry| entry.expect("entry").path())
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "a partial bundle that references missing images must not be left behind: {leftovers:?}"
     );
 }
 

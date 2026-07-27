@@ -958,7 +958,8 @@ per_output = true
 # When storage = "custom", set the directory here (supports ~ expansion)
 # custom_directory = "/path/to/persistent/sessions"
 
-# Clamp runaway files by limiting shapes per frame
+# Clamp runaway files by limiting shapes per frame.
+# Marker-based step capture requires at least 2 (backdrop plus marker).
 max_shapes_per_frame = 10000
 
 # Optional cap for serialized undo history (defaults to runtime undo limit)

@@ -87,6 +87,7 @@ mod tests {
                 logical_width: 20,
                 logical_height: 20,
                 scale: 1,
+                physical_size: None,
                 origin_x: 20,
                 origin_y: 10,
             },
@@ -114,6 +115,7 @@ mod tests {
                 logical_width: 10,
                 logical_height: 10,
                 scale: 2,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -124,6 +126,24 @@ mod tests {
         assert_eq!(surface.height(), 20);
         assert_ne!(pixel(&mut surface, 4, 4), 0);
         assert_eq!(pixel(&mut surface, 0, 0), 0);
+    }
+
+    #[test]
+    fn export_uses_an_exact_physical_size_for_fractional_output_geometry() {
+        let surface = render_canvas_surface(&snapshot(
+            Frame::new(),
+            CanvasExportViewport {
+                logical_width: 8,
+                logical_height: 6,
+                scale: 1,
+                physical_size: Some((10, 9)),
+                origin_x: 0,
+                origin_y: 0,
+            },
+        ))
+        .expect("surface");
+
+        assert_eq!((surface.width(), surface.height()), (10, 9));
     }
 
     #[test]
@@ -209,6 +229,7 @@ mod tests {
                 logical_width: 8,
                 logical_height: 8,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -245,6 +266,7 @@ mod tests {
                 logical_width: 14,
                 logical_height: 14,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -280,6 +302,7 @@ mod tests {
                 logical_width: 14,
                 logical_height: 14,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -317,6 +340,7 @@ mod tests {
                 logical_width: 120,
                 logical_height: 120,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -364,6 +388,7 @@ mod tests {
                 logical_width: 14,
                 logical_height: 14,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -404,6 +429,7 @@ mod tests {
                 logical_width: width as u32,
                 logical_height: height as u32,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },
@@ -430,6 +456,7 @@ mod tests {
                 logical_width: 4,
                 logical_height: 4,
                 scale: 1,
+                physical_size: None,
                 origin_x: 0,
                 origin_y: 0,
             },

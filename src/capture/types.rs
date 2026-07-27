@@ -172,9 +172,44 @@ pub struct RenderedDocument {
 /// directory (the Markdown guide's page images).
 #[derive(Debug, Clone)]
 pub struct DocumentAttachment {
-    pub file_stem: String,
-    pub extension: String,
-    pub bytes: Vec<u8>,
+    file_stem: String,
+    extension: String,
+    content: DocumentAttachmentContent,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum DocumentAttachmentContent {
+    Bytes(Vec<u8>),
+    CanvasPng(Box<crate::canvas_export::CanvasExportSnapshot>),
+}
+
+impl DocumentAttachment {
+    pub fn bytes(
+        file_stem: impl Into<String>,
+        extension: impl Into<String>,
+        bytes: Vec<u8>,
+    ) -> Self {
+        Self {
+            file_stem: file_stem.into(),
+            extension: extension.into(),
+            content: DocumentAttachmentContent::Bytes(bytes),
+        }
+    }
+
+    pub fn canvas_png(
+        file_stem: impl Into<String>,
+        snapshot: crate::canvas_export::CanvasExportSnapshot,
+    ) -> Self {
+        Self {
+            file_stem: file_stem.into(),
+            extension: "png".to_string(),
+            content: DocumentAttachmentContent::CanvasPng(Box::new(snapshot)),
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (String, String, DocumentAttachmentContent) {
+        (self.file_stem, self.extension, self.content)
+    }
 }
 
 #[derive(Debug, Clone)]
