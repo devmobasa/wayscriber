@@ -78,7 +78,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 | GNOME | ⚠️ Partial | Normal overlay and Freeze via portal when available; [light passthrough](#light-passthrough-mode) unavailable |
 | X11 | ❌ | Not supported |
 
-The prebuilt `.deb` packages have a minimum-release requirement — see the note in [Debian and Ubuntu](#debian-and-ubuntu). RPMs, the AUR packages, and Nix are unaffected.
+The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — see the notes in [Debian and Ubuntu](#debian-and-ubuntu) and [Fedora and RHEL](#fedora-and-rhel). The AUR packages and Nix are unaffected.
 
 <details>
 <summary>Tested environments</summary>
@@ -194,7 +194,7 @@ Pick the path that matches your setup:
 | You want | Use |
 |----------|-----|
 | Fast CLI install with auto-updates on Debian/Ubuntu/Mint/Pop!_OS | [Debian and Ubuntu](#debian-and-ubuntu) |
-| Fast CLI install with auto-updates on Fedora/RHEL/Rocky/Alma/Nobara | [Fedora and RHEL](#fedora-and-rhel) |
+| Fast CLI install with auto-updates on Fedora/Nobara or RHEL/Rocky/Alma 10+ | [Fedora and RHEL](#fedora-and-rhel) |
 | Arch, Manjaro, CachyOS, or another Arch-based distro | [AUR](#arch-linux-aur), preferably `wayscriber-bin` for the prebuilt package |
 | NixOS, or the Nix package manager on another distro | [NixOS and Nix](#nixos-and-nix) — `nixpkgs` for the standard install, the project flake for the newest release and the Configurator |
 | One-off package (browser or terminal) without adding a repo | [GitHub Releases](#github-releases-one-off) |
@@ -208,7 +208,7 @@ Install the main `wayscriber` package first. `wayscriber-configurator` is an opt
 
 Also use this path for Linux Mint, Pop!_OS, and other Debian-based distros.
 
-> **Requires Ubuntu 25.04+ or Debian 13 (trixie) or newer.** The packages depend on `libgtk4-layer-shell0` for the toolbars, which older releases — including Ubuntu 24.04 LTS, Mint 22, and Pop!_OS 22.04 — do not ship. On those, [build from source](#from-source); Pop!_OS 22.04 requires the GTK-less build option.
+> **Wayscriber v0.9.23+ requires Ubuntu 24.04+ or Debian 13 (trixie) or newer.** This includes Linux Mint 22+ and Pop!_OS 24.04+. These release packages require glibc 2.39 and GTK 4.12, and embed the pinned GTK4 layer-shell integration, so no separate `libgtk4-layer-shell0` package is needed. Pop!_OS 22.04 remains below the GTK requirement; use the [GTK-less source build](#from-source) there.
 
 ```bash
 sudo apt update
@@ -226,7 +226,9 @@ For a one-off `.deb` without adding the repo, see [GitHub Releases](#github-rele
 
 ### Fedora and RHEL
 
-Also use this path for Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros.
+Use this path for supported Fedora and Nobara releases, or RHEL, Rocky Linux, and AlmaLinux 10+.
+
+> **Wayscriber v0.9.23+ prebuilt RPMs require glibc 2.39 and GTK 4.12.** This means RHEL/Rocky/Alma 10+ and compatible Fedora/Nobara releases.
 
 ```bash
 cat <<'EOF' | sudo tee /etc/yum.repos.d/wayscriber.repo
@@ -387,8 +389,8 @@ In a browser:
 
 1. Open the [latest release](https://github.com/devmobasa/wayscriber/releases/latest).
 2. Install the main app package that matches your distro:
-   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) — Ubuntu 25.04+, Debian 13+, and other newer Debian-based distros (see the [release requirement](#debian-and-ubuntu))
-   - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm) — Fedora, RHEL, Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros
+   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) — v0.9.23+ supports Ubuntu 24.04+, Linux Mint 22+, Pop!_OS 24.04+, Debian 13+, and compatible newer Debian-based distros (see the [release requirement](#debian-and-ubuntu))
+   - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm) — v0.9.23+ supports compatible Fedora/Nobara releases and RHEL/Rocky/Alma 10+ (see the [release requirement](#fedora-and-rhel))
 3. Optional: install the configurator package after wayscriber:
    - [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
    - [wayscriber-configurator-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm)
@@ -405,7 +407,7 @@ wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/la
 sudo apt install ./wayscriber-amd64.deb
 ```
 
-Fedora/RHEL:
+Fedora/Nobara or RHEL/Rocky/Alma 10+:
 ```bash
 wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
 sudo dnf install ./wayscriber-x86_64.rpm

@@ -185,18 +185,46 @@ ensure_libxkbcommon_dependency() {
     fi
 }
 
-# The GTK4 toolbar frontend (default feature) needs the gtk4 runtime;
-# insert before wl-clipboard to match the repo PKGBUILD ordering.
-ensure_gtk4_dependencies() {
-    local dep
-    for dep in gtk4 gtk4-layer-shell; do
-        if ! grep -Eq "^[[:space:]]*'${dep}'[[:space:]]*\$" PKGBUILD; then
-            sed -i "/^[[:space:]]*'wl-clipboard'/i\\    '${dep}'" PKGBUILD
-        fi
-        if ! grep -Eq "^[[:space:]]*depends = ${dep}\$" .SRCINFO; then
-            sed -i "/^[[:space:]]*depends = wl-clipboard/i\\\tdepends = ${dep}" .SRCINFO
-        fi
-    done
+# Insert before wl-clipboard to match the AUR recipes' dependency ordering.
+ensure_runtime_dependency() {
+    local dep="$1"
+    if ! grep -Eq "^[[:space:]]*'${dep}'[[:space:]]*\$" PKGBUILD; then
+        sed -i "/^[[:space:]]*'wl-clipboard'/i\\    '${dep}'" PKGBUILD
+    fi
+    if ! grep -Eq "^[[:space:]]*depends = ${dep}\$" .SRCINFO; then
+        sed -i "/^[[:space:]]*depends = wl-clipboard/i\\\tdepends = ${dep}" .SRCINFO
+    fi
+}
+
+remove_runtime_dependency() {
+    local dep="$1"
+    remove_pkgbuild_array_item PKGBUILD "${dep}"
+    remove_srcinfo_field_value .SRCINFO depends "${dep}"
+}
+
+ensure_bin_layer_shell_license() {
+    local layer_license_line
+    layer_license_line='    install -Dm644 "${srcdir_tmp}/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell" "$pkgdir/usr/share/licenses/$pkgname/LICENSE.gtk4-layer-shell"'
+
+    if grep -Fq 'usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' PKGBUILD \
+        && grep -Fq 'usr/share/licenses/$pkgname/LICENSE.gtk4-layer-shell' PKGBUILD; then
+        return
+    fi
+
+    grep -Fq 'usr/share/doc/wayscriber/LICENSE' PKGBUILD || {
+        echo "wayscriber-bin PKGBUILD has no main license install line to extend" >&2
+        exit 1
+    }
+
+    LAYER_LICENSE_LINE="${layer_license_line}" perl -0pi -e '
+        s{^(.*usr/share/doc/wayscriber/LICENSE.*)$}{$1 . "\n" . $ENV{LAYER_LICENSE_LINE}}me
+    ' PKGBUILD
+
+    grep -Fq 'usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' PKGBUILD \
+        && grep -Fq 'usr/share/licenses/$pkgname/LICENSE.gtk4-layer-shell' PKGBUILD || {
+        echo "Failed to add gtk4-layer-shell license installation to wayscriber-bin" >&2
+        exit 1
+    }
 }
 
 commit_metadata_changes() {
@@ -230,7 +258,11 @@ update_bin() {
     pushd "$dir" >/dev/null
     remove_install_hook "wayscriber-bin.install"
     ensure_libxkbcommon_dependency
-    ensure_gtk4_dependencies
+    ensure_runtime_dependency gtk4
+    # The release tarball embeds gtk4-layer-shell. Keep this prebuilt recipe
+    # aligned with the binary instead of inheriting source-build dependencies.
+    remove_runtime_dependency gtk4-layer-shell
+    ensure_bin_layer_shell_license
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_pkgbuild_array PKGBUILD source_x86_64 "source_x86_64=(\"wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz\")"
@@ -263,7 +295,8 @@ update_source() {
     remove_pkgbuild_array_item PKGBUILD git
     remove_srcinfo_field_value .SRCINFO makedepends git
     ensure_libxkbcommon_dependency
-    ensure_gtk4_dependencies
+    ensure_runtime_dependency gtk4
+    ensure_runtime_dependency gtk4-layer-shell
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_pkgbuild_array PKGBUILD source 'source=("wayscriber-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")'
