@@ -1035,6 +1035,65 @@ fn validating_the_defaults_reports_nothing_to_surface() {
     assert!(Config::default().validate_and_clamp().is_empty());
 }
 
+/// The config file promises case-insensitive key names, so two spellings of
+/// one chord are one shortcut: the collision is arbitrated like any other
+/// duplicate instead of surviving as two map entries dispatch picks between.
+#[test]
+fn keybindings_differing_only_in_key_case_are_one_conflict() {
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec!["ctrl+alt+u".to_string()];
+    config.keybindings.core.redo = vec!["Ctrl+Alt+U".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert_eq!(report.keybinding_conflicts[0].kept(), Action::Undo);
+    assert_eq!(report.keybinding_conflicts[0].dropped(), Action::Redo);
+    assert_eq!(config.keybindings.core.undo, ["ctrl+alt+u"]);
+    assert!(config.keybindings.core.redo.is_empty());
+    config
+        .keybindings
+        .build_action_map()
+        .expect("one spelling of the chord remains");
+}
+
+/// The repeat in the winner's own list is removed either way, so it is
+/// reported even when other actions contest the same key — hearing only about
+/// the cross-action side would leave that edit unexplained.
+#[test]
+fn a_self_duplicate_is_still_reported_when_the_key_is_also_contested() {
+    let mut config = Config::default();
+    config.keybindings.core.clear_canvas = vec![
+        "Ctrl+Alt+Shift+5".to_string(),
+        "Ctrl+Alt+Shift+5".to_string(),
+    ];
+    config.keybindings.core.undo = vec!["Ctrl+Alt+Shift+5".to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.clear_canvas, ["Ctrl+Alt+Shift+5"]);
+    assert!(config.keybindings.core.undo.is_empty());
+    assert_eq!(
+        report.keybinding_conflicts.len(),
+        2,
+        "{:?}",
+        report.keybinding_conflicts
+    );
+    let self_duplicate = report
+        .keybinding_conflicts
+        .iter()
+        .find(|resolution| resolution.is_self_duplicate())
+        .expect("the repeat in the kept list must be reported");
+    assert_eq!(self_duplicate.kept(), Action::ClearCanvas);
+    let cross = report
+        .keybinding_conflicts
+        .iter()
+        .find(|resolution| !resolution.is_self_duplicate())
+        .expect("the cross-action collision must be reported");
+    assert_eq!(cross.kept(), Action::ClearCanvas);
+    assert_eq!(cross.dropped(), Action::Undo);
+}
+
 /// Resolving one key must not reclassify the list it just trimmed. The command
 /// palette default owns two keys; losing the first one to an authored binding
 /// cannot make it look authored when the second is arbitrated.

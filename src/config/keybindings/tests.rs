@@ -70,6 +70,25 @@ fn test_parse_control_alias() {
     assert!(!binding.shift);
 }
 
+/// Dispatch matches key names case-insensitively, so equality and hashing must
+/// share that rule — two spellings of one chord as distinct map entries would
+/// dodge every conflict check and leave dispatch to pick nondeterministically.
+#[test]
+fn bindings_differing_only_in_key_case_are_the_same_binding() {
+    let lower = KeyBinding::parse("ctrl+z").unwrap();
+    let upper = KeyBinding::parse("Ctrl+Z").unwrap();
+    assert_eq!(lower, upper);
+
+    let mut map = std::collections::HashMap::new();
+    map.insert(lower, ());
+    assert!(map.contains_key(&upper));
+    assert_eq!(
+        upper.to_string(),
+        "Ctrl+Z",
+        "equality folds case; display keeps the authored spelling"
+    );
+}
+
 #[test]
 fn test_parse_requires_non_modifier_key() {
     let err = KeyBinding::parse("Ctrl+Shift").unwrap_err();

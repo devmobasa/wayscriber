@@ -71,6 +71,10 @@ file only through the dedicated migration save described under
 with the new `config_revision` after backing the file up, and changes nothing else.
 The first save for a missing file is sparse as well: it writes the migration revision marker and
 only values changed from the built-in defaults.
+One deliberate consequence: a value the file holds out of range is clamped for the running session
+but keeps its authored text on disk, and re-entering the clamped value in a settings surface is a
+zero-delta save that writes nothing — the file keeps the out-of-range text until you set the field
+to some other value or edit it by hand.
 Every section follows the same rule for unrecognized keys, including `[export]`, `[export.pdf]`,
 and `[export.pdf.labels]`: a typo there is reported and kept, never dropped from the file, and it
 does not stop the rest of the configuration from loading.

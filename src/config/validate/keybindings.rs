@@ -30,7 +30,7 @@ fn bindings_from(expected: &[&str]) -> Vec<String> {
 
 /// Whether an action other than `owner` already claims `binding`.
 ///
-/// Candidates go through the parser and then the runtime match rule, so
+/// Candidates go through the parser and then [`KeyBinding`] equality, so
 /// `shift+ctrl+k` counts as a claim on `Ctrl+Shift+K`: modifier order, spacing,
 /// and key case are all things the keymap ignores when a key is pressed. A
 /// binding string that does not parse is not a claim, because it binds nothing
@@ -48,9 +48,7 @@ fn binding_claimed_by_another_action(
                 .bindings_for_action(*action)
                 .is_some_and(|bindings| {
                     bindings.iter().any(|candidate| {
-                        KeyBinding::parse(candidate).is_ok_and(|parsed| {
-                            parsed.matches(&binding.key, binding.ctrl, binding.shift, binding.alt)
-                        })
+                        KeyBinding::parse(candidate).is_ok_and(|parsed| parsed == *binding)
                     })
                 })
         })
@@ -367,7 +365,11 @@ impl Config {
                     });
                 }
             }
-            if repeated && conflict.actions().len() == 1 {
+            // Reported even when other actions contested the key too: the
+            // repeat in the winner's own list was still removed, and hearing
+            // only about the cross-action side would leave that edit
+            // unexplained.
+            if repeated {
                 resolutions.push(KeybindingConflictResolution {
                     key,
                     kept,

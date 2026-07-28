@@ -249,7 +249,10 @@ fn prune(directory: &Path, retention: usize) {
         .filter_map(|entry| entry.file_name().into_string().ok())
         .filter(|name| name.starts_with(BACKUP_PREFIX) && name.ends_with(BACKUP_SUFFIX))
         .collect::<Vec<_>>();
-    // The stamp is fixed width, so plain string order is oldest-first.
+    // The stamp is fixed width, so string order is oldest-first across
+    // seconds. Within one second a `-pid` suffix sorts before the bare name
+    // (`-` < `.`); those snapshots are contemporaneous, so which of them a
+    // prune takes first does not matter.
     names.sort();
     let Some(excess) = names.len().checked_sub(retention) else {
         return;

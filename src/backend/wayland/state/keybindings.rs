@@ -423,6 +423,34 @@ mod tests {
         }
     }
 
+    /// The claim check works on parsed bindings, whose equality folds key
+    /// case, so respelling a taken chord cannot sneak it past the gate.
+    #[test]
+    fn an_edit_onto_a_key_spelled_in_a_different_case_is_still_refused() {
+        let mut config = Config::default();
+        config.keybindings.core.undo = vec!["Ctrl+Alt+U".to_string()];
+
+        let error = merge_keybinding_edit(
+            &mut config,
+            &KeybindingEditRequest {
+                action: Action::ClearCanvas,
+                operation: KeybindingEditOperation::Replace(vec!["ctrl+alt+u".to_string()]),
+            },
+        )
+        .expect_err("the chord is taken regardless of spelling");
+
+        match error {
+            PrepareKeybindingEditError::Conflict {
+                binding,
+                existing_action,
+            } => {
+                assert_eq!(binding, "ctrl+alt+u");
+                assert_eq!(existing_action, Action::Undo);
+            }
+            other => panic!("expected a case-insensitive conflict, got {other:?}"),
+        }
+    }
+
     #[test]
     fn replacing_an_invalid_actions_binding_can_repair_the_keymap() {
         let mut config = Config::default();
