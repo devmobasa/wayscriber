@@ -65,7 +65,7 @@ impl WaylandState {
     }
 
     fn finish_toolbar_move_drag(&mut self, commit: bool) {
-        if let Some(drag) = self.data.toolbar_move_drag {
+        if self.data.toolbar_move_drag.is_some() {
             if commit {
                 self.reconcile_top_base_after_drag();
             }
@@ -97,7 +97,7 @@ impl WaylandState {
                     self.finish_toolbar_drag_handoff();
                 }
             }
-            self.finish_toolbar_position_preview(drag.kind, commit);
+            self.finish_toolbar_position_preview(commit);
             self.unlock_pointer();
         }
     }

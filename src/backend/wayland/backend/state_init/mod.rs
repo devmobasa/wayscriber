@@ -40,6 +40,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         config,
         source,
         exit_after_capture_mode,
+        keybindings,
     } = config::load(backend.exit_after_capture_mode);
     let config_dir = Config::config_directory_from_source(&source)?;
     let session_options =
@@ -54,6 +55,16 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    config::notify_invalid_keybindings(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        &keybindings.invalid_keybindings,
+    );
+    config::notify_keybinding_conflicts(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        &keybindings.keybinding_conflicts,
+    );
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let (runtime_ui, runtime_ui_unavailable) =
         match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(

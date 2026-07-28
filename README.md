@@ -917,9 +917,10 @@ wayscriber-configurator   # or press F11
 
 See `docs/CONFIG.md` and https://wayscriber.com/docs/ for the full reference.
 
-`config.toml` contains authored defaults. Toolbar pins, minimized/pane/collapsed state, individual
-toolbar item visibility/order, and board pins changed in the overlay are saved separately in the
-generated `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
+`config.toml` contains authored defaults. Toolbar pins, dragged positions, the top strip's display
+form, minimized/pane/collapsed state, individual toolbar item visibility/order, and board pins
+changed in the overlay are saved separately in the generated
+`$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
 preferences from the overlay Settings panel; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
 
 ### Key sections

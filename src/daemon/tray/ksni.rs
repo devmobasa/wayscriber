@@ -296,6 +296,7 @@ impl ksni::Tray for WayscriberTray {
                         activate: Box::new(|this: &mut Self| {
                             let target = !this.session_resume_enabled;
                             let persisted = update_session_resume_in_config(
+                                &mut this.config_backup,
                                 target,
                                 this.session_resume_enabled,
                             );

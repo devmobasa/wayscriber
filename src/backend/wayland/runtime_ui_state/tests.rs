@@ -5,7 +5,9 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use crate::backend::wayland::config_writer::{ConfigMutation, ConfigWriteReceipt};
 use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
+use crate::input::boards::{BoardConfigChange, PendingBoardConfigUpdate};
 use crate::input::state::test_support::make_test_input_state;
 use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarEvent};
 
@@ -154,6 +156,113 @@ fn commit_board_pin_toggle(
     runtime.finish_board_pin_toggle(prepared, true)
 }
 
+/// The seed inputs assembled the way `refresh_runtime_ui_config_seeds` does:
+/// board pins are synced from the config first, then folded into the registry.
+fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
+    let mut input = input_from_config(config);
+    input
+        .boards
+        .sync_pin_seeds_from_config(&config.resolved_boards());
+    runtime_seeds_from_config(config, &board_pin_seeds_from_input(&input))
+        .expect("probe config should produce valid seeds")
+}
+
+/// One config-changing probe per `ConfigMutation` variant, valued against
+/// `baseline` so no probe is a no-op. `PresetSlot` is the exception: the
+/// shipped slots are empty, so its probe only has to prove that clearing one
+/// leaves the registry alone.
+fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
+    use crate::config::{StatusBarItem, ToolbarItemVisibilitySetting, ToolbarSectionFlag};
+
+    let ui = &baseline.ui;
+    let toolbar = &ui.toolbar;
+    let mut boards = baseline.resolved_boards();
+    let mut created = boards.items[0].clone();
+    created.id = "probe-board".to_string();
+    created.name = "Probe board".to_string();
+    created.pinned = !created.pinned;
+    boards.items.push(created);
+
+    vec![
+        ConfigMutation::ToolbarLayout(crate::config::ToolbarLayoutMode::Simple),
+        ConfigMutation::ToolbarSectionVisibility {
+            id: ToolbarSectionFlag::Presets.item_id(),
+            setting: ToolbarItemVisibilitySetting::Hidden,
+            flag: ToolbarSectionFlag::Presets,
+            visible: false,
+        },
+        ConfigMutation::BoardConfig(Box::new(PendingBoardConfigUpdate::new(
+            boards,
+            BoardConfigChange::IdentitiesCreated(vec!["probe-board".to_string()]),
+        ))),
+        ConfigMutation::ToolbarUseIcons(!toolbar.use_icons),
+        ConfigMutation::ToolbarShowMoreColors(!toolbar.show_more_colors),
+        ConfigMutation::ToolbarContextAwareUi(!toolbar.context_aware_ui),
+        ConfigMutation::ToolbarPresetToasts(!toolbar.show_preset_toasts),
+        ConfigMutation::ToolbarToolPreview(!toolbar.show_tool_preview),
+        ConfigMutation::ToolbarDelaySliders(!toolbar.show_delay_sliders),
+        ConfigMutation::ZoomChip(!toolbar.show_zoom_chip),
+        ConfigMutation::ShowStatusBar(!ui.show_status_bar),
+        ConfigMutation::StatusBarInteractive(!ui.status_bar_interactive),
+        ConfigMutation::StatusBarItem {
+            item: StatusBarItem::Tool,
+            visible: !ui.status_bar_item_visible(StatusBarItem::Tool),
+        },
+        ConfigMutation::StatusBoardBadge(!ui.show_status_board_badge),
+        ConfigMutation::StatusPageBadge(!ui.show_status_page_badge),
+        ConfigMutation::FloatingBadgeAlways(!ui.show_floating_badge_always),
+        ConfigMutation::FloatingBadge(!ui.show_floating_badge),
+        ConfigMutation::HistoryCustomSection(!baseline.history.custom_section_enabled),
+        ConfigMutation::ClickHighlight {
+            enabled: Some(!ui.click_highlight.enabled),
+            show_on_highlight_tool: !ui.click_highlight.show_on_highlight_tool,
+        },
+        ConfigMutation::InputHud(!ui.input_hud.enabled),
+        ConfigMutation::PresetSlot {
+            slot: 1,
+            preset: None,
+        },
+        ConfigMutation::QuickColor {
+            index: 0,
+            color: crate::draw::Color {
+                r: 0.13,
+                g: 0.27,
+                b: 0.41,
+                a: 1.0,
+            },
+        },
+        ConfigMutation::Keybinding {
+            action: crate::config::Action::ClearCanvas,
+            bindings: vec!["Ctrl+Alt+Shift+L".to_string()],
+            receipt: ConfigWriteReceipt::initial(),
+        },
+    ]
+}
+
+/// Every config mutation that moves a runtime seed has to declare it:
+/// `queue_config_mutation` reseeds the registry only for declared mutations,
+/// and an undeclared one would leave overrides reconciling against a baseline
+/// the config no longer has.
+#[test]
+fn config_mutations_that_move_a_runtime_seed_declare_it() {
+    let baseline = Config::default();
+    let baseline_seeds = seeds_for_config(&baseline);
+
+    for mutation in seed_probe_mutations(&baseline) {
+        let mut config = baseline.clone();
+        assert!(
+            mutation.apply(&mut config),
+            "probe mutation {mutation:?} should apply"
+        );
+        if seeds_for_config(&config) != baseline_seeds {
+            assert!(
+                mutation.affects_runtime_ui_seeds(),
+                "{mutation:?} moves a runtime seed without declaring it"
+            );
+        }
+    }
+}
+
 #[test]
 fn toolbar_seed_registry_covers_every_runtime_routed_target() {
     let config = Config::default();
@@ -168,6 +277,7 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
         InteractionSeedTarget::SidePane,
         InteractionSeedTarget::TopPosition,
         InteractionSeedTarget::SidePosition,
+        InteractionSeedTarget::TopDisplayMode,
     ] {
         assert!(seeds.get(&target).is_some(), "missing seed for {target:?}");
     }
@@ -339,11 +449,8 @@ fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
     let desired = toolbar_values(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input).unwrap();
     assert!(matches!(
         runtime.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent: RuntimePreviewFinishIntent::Commit(desired),
-            },
-            |_, _| unreachable!(),
+            prepared.session,
+            RuntimePreviewFinishIntent::Commit(desired)
         ),
         PreviewFinishResult::AcceptedRuntime { .. }
     ));
@@ -569,6 +676,7 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
         ToolbarRuntimeUiPersistenceTarget::SideMinimized,
         ToolbarRuntimeUiPersistenceTarget::SidePane,
         ToolbarRuntimeUiPersistenceTarget::CollapsedSection(ToolbarSideSection::Colors),
+        ToolbarRuntimeUiPersistenceTarget::TopDisplayMode,
     ];
     for target in mutations {
         let prepared = runtime
@@ -588,6 +696,9 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
             }
             ToolbarRuntimeUiPersistenceTarget::CollapsedSection(section) => {
                 input.toolbar_collapsed_side_sections.insert(section);
+            }
+            ToolbarRuntimeUiPersistenceTarget::TopDisplayMode => {
+                input.set_top_display_mode(crate::config::TopDisplayMode::Micro);
             }
             _ => unreachable!(),
         }
@@ -1334,12 +1445,11 @@ fn unavailable_persistence_position_drag_cancel_restores_starting_offsets() {
     };
     let mut positions = original;
 
-    assert!(previews.begin_position_drag(ConfigPositionTarget::Side, positions));
+    assert!(previews.begin_position_drag(MoveDragKind::Side, positions));
     positions.top.0 = 42.0;
     positions.side = (43.0, 44.0);
 
-    let (finish, should_save) = previews.finish_position_drag(false);
-    assert!(!should_save);
+    let finish = previews.finish_position_drag(false);
     apply_finish(&mut input, &mut positions, finish);
 
     assert_eq!(positions, original);
@@ -1367,14 +1477,14 @@ fn persistence_barrier_blocks_updates_without_consuming_untouched_drag_sessions(
     let mut runtime = controller_only_runtime(&config, &runtime_path);
     assert!(runtime.begin_item_drag(ToolbarItemOrderGroup::TopTools, &input));
     assert!(input.start_toolbar_item_drag(ToolbarItemOrderGroup::TopTools, ids::TOP_TOOL_PEN,));
-    assert!(runtime.begin_position_drag(ConfigPositionTarget::Top, positions));
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
 
     assert!(matches!(
         runtime.controller.request_supported_reset(),
         RequestResetResult::Started { .. }
     ));
     assert!(!runtime.item_drag_update_allowed());
-    assert!(!runtime.position_drag_update_allowed(ConfigPositionTarget::Top));
+    assert!(!runtime.position_drag_update_allowed(MoveDragKind::Top));
     assert!(runtime.item_drag.is_some());
     assert!(runtime.position_drag.is_some());
 
@@ -1444,7 +1554,7 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
         accepted_before
     );
 
-    assert!(runtime.begin_position_drag(ConfigPositionTarget::Top, positions));
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
     positions.top = (42.0, 43.0);
     let mut config_c = config_b;
     config_c.ui.toolbar.top_offset = 100.0;
@@ -1454,11 +1564,8 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
     assert!(!refresh.item_drag_aborted);
     assert!(refresh.position_drag_aborted);
     assert_eq!(positions.top, (100.0, 101.0));
-    let (finish, wrote_config) = runtime.finish_position_drag(true, positions, |_, _| {
-        panic!("late position release must not write config")
-    });
+    let finish = runtime.finish_position_drag(true, positions);
     assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
-    assert!(!wrote_config);
     runtime.shutdown_blocking();
 }
 
@@ -1481,7 +1588,7 @@ fn side_drag_top_seed_reload_restores_only_the_uncommitted_side_preview() {
     let mut input = input_from_config(&config_a);
     let mut runtime = test_runtime(&config_a, &runtime_path);
 
-    assert!(runtime.begin_position_drag(ConfigPositionTarget::Side, positions));
+    assert!(runtime.begin_position_drag(MoveDragKind::Side, positions));
     positions.side = (42.0, 43.0);
 
     let mut config_b = config_a;
@@ -1518,7 +1625,7 @@ fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scop
     let mut input = input_from_config(&config_a);
     let mut runtime = test_runtime(&config_a, &runtime_path);
 
-    assert!(runtime.begin_position_drag(ConfigPositionTarget::Top, positions));
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
     positions.top = (42.0, 43.0);
     let mut config_b = config_a;
     config_b.ui.toolbar.side_offset_x = 120.0;
@@ -1534,10 +1641,7 @@ fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scop
     );
     assert_eq!(positions.side, (120.0, 121.0));
 
-    let (finish, wrote_config) = runtime.finish_position_drag(false, positions, |_, _| {
-        panic!("cancelling a position preview must not write config")
-    });
-    assert!(!wrote_config);
+    let finish = runtime.finish_position_drag(false, positions);
     apply_finish(&mut input, &mut positions, finish);
     assert_eq!(positions.top, original_top);
     assert_eq!(
@@ -1655,11 +1759,8 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     let desired = toolbar_values(target, &input).unwrap();
     assert!(matches!(
         runtime.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent: RuntimePreviewFinishIntent::Commit(desired),
-            },
-            |_, _| unreachable!(),
+            prepared.session,
+            RuntimePreviewFinishIntent::Commit(desired)
         ),
         PreviewFinishResult::AcceptedRuntime { .. }
     ));
@@ -1704,4 +1805,371 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
         "late release after authority replacement cannot restore the old preview"
     );
     assert_eq!(fs::read(&runtime_path).unwrap(), b"version = 1\n");
+}
+
+fn config_positions(config: &Config) -> ToolbarPositionSnapshot {
+    ToolbarPositionSnapshot {
+        top: (config.ui.toolbar.top_offset, config.ui.toolbar.top_offset_y),
+        side: (
+            config.ui.toolbar.side_offset_x,
+            config.ui.toolbar.side_offset,
+        ),
+    }
+}
+
+fn stored_position(
+    runtime: &ToolbarRuntimeState,
+    target: InteractionSeedTarget,
+) -> Option<(f64, f64)> {
+    match runtime
+        .controller
+        .model()
+        .get(&target)
+        .map(|entry| &entry.value)
+    {
+        Some(InteractionSeedValue::Position(position)) => {
+            Some((position.x.get(), position.y.get()))
+        }
+        _ => None,
+    }
+}
+
+fn stored_display_mode(runtime: &ToolbarRuntimeState) -> Option<PersistedTopDisplayMode> {
+    match runtime
+        .controller
+        .model()
+        .get(&InteractionSeedTarget::TopDisplayMode)
+        .map(|entry| &entry.value)
+    {
+        Some(InteractionSeedValue::TopDisplayMode(mode)) => Some(*mode),
+        _ => None,
+    }
+}
+
+fn commit_display_mode(
+    runtime: &mut ToolbarRuntimeState,
+    input: &mut InputState,
+    mode: crate::config::TopDisplayMode,
+) -> ToolbarRuntimeFinish {
+    let target = ToolbarRuntimeUiPersistenceTarget::TopDisplayMode;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, input)
+        .expect("display mode permit");
+    input.set_top_display_mode(mode);
+    runtime.finish_toolbar_mutation(prepared, true, input)
+}
+
+#[test]
+fn committed_top_drag_writes_runtime_state_and_leaves_config_untouched() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut runtime = test_runtime(&config, &runtime_path);
+    let mut positions = config_positions(&config);
+
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
+    positions.top = (42.5, -7.25);
+    assert!(matches!(
+        runtime.finish_position_drag(true, positions),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        Some((42.5, -7.25))
+    );
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::SidePosition),
+        None,
+        "a top drag never claims the side position"
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    let stored = fs::read_to_string(&runtime_path).unwrap();
+    assert!(stored.contains("top_position"), "{stored}");
+    runtime.shutdown_blocking();
+
+    // The override survives a restart on top of the unchanged config seeds.
+    let restarted = test_runtime(&config, &runtime_path);
+    let mut restored = config_positions(&config);
+    restarted.apply_startup_positions(&mut restored);
+    assert_eq!(restored.top, (42.5, -7.25));
+    assert_eq!(restored.side, config_positions(&config).side);
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+}
+
+#[test]
+fn committed_side_drag_stores_both_position_overrides_in_one_write() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config = Config::default();
+    let mut runtime = test_runtime(&config, &runtime_path);
+    let mut positions = config_positions(&config);
+    let accepted_before = runtime.controller.pipeline().latest_accepted();
+
+    assert!(runtime.begin_position_drag(MoveDragKind::Side, positions));
+    // A side drag reconciles the top strip's X base before it commits.
+    positions.top = (16.0, positions.top.1);
+    positions.side = (-30.0, 12.0);
+    assert!(matches!(
+        runtime.finish_position_drag(true, positions),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert_eq!(
+        runtime.controller.pipeline().latest_accepted().get(),
+        accepted_before.get() + 1,
+        "both overrides settle through one accepted revision"
+    );
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        Some((16.0, config.ui.toolbar.top_offset_y))
+    );
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::SidePosition),
+        Some((-30.0, 12.0))
+    );
+    runtime.shutdown_blocking();
+}
+
+#[test]
+fn a_drag_back_to_the_authored_position_deletes_its_override() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config = Config::default();
+    let mut runtime = test_runtime(&config, &runtime_path);
+    let seeded = config_positions(&config);
+    let mut positions = seeded;
+
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
+    positions.top = (10.0, 11.0);
+    runtime.finish_position_drag(true, positions);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert!(stored_position(&runtime, InteractionSeedTarget::TopPosition).is_some());
+
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
+    positions.top = seeded.top;
+    runtime.finish_position_drag(true, positions);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        None,
+        "an override equal to its seed is deleted, not stored"
+    );
+    runtime.shutdown_blocking();
+}
+
+#[test]
+fn an_authored_position_edit_drops_the_stale_drag_override() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config_a = Config::default();
+    let mut input = input_from_config(&config_a);
+    let mut runtime = test_runtime(&config_a, &runtime_path);
+    let mut positions = config_positions(&config_a);
+
+    assert!(runtime.begin_position_drag(MoveDragKind::Top, positions));
+    positions.top = (55.0, 66.0);
+    runtime.finish_position_drag(true, positions);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        Some((55.0, 66.0))
+    );
+
+    let mut config_b = config_a;
+    config_b.ui.toolbar.top_offset = 200.0;
+    config_b.ui.toolbar.top_offset_y = 201.0;
+    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    assert!(refresh.applied);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_position(&runtime, InteractionSeedTarget::TopPosition),
+        None,
+        "an explicit config edit wins over an older drag"
+    );
+    assert_eq!(positions.top, (200.0, 201.0));
+    runtime.shutdown_blocking();
+}
+
+#[test]
+fn a_drag_without_a_runtime_store_is_process_only_and_never_touches_config() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut previews = UnavailablePersistencePreviews::default();
+    let seeded = config_positions(&config);
+    let mut positions = seeded;
+
+    assert!(previews.begin_position_drag(MoveDragKind::Side, positions));
+    positions.top.0 = 42.0;
+    positions.side = (43.0, 44.0);
+    let finish = previews.finish_position_drag(true);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    apply_finish(&mut input, &mut positions, finish);
+
+    assert_eq!(positions.top.0, 42.0, "the committed drag stays on screen");
+    assert_eq!(positions.side, (43.0, 44.0));
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+}
+
+#[test]
+fn display_mode_cycle_is_runtime_owned_and_hidden_persists_as_full() {
+    use crate::config::TopDisplayMode;
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Full);
+
+    assert!(matches!(
+        commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_display_mode(&runtime),
+        Some(PersistedTopDisplayMode::Micro)
+    );
+
+    // The hidden rung of the cycle is runtime-only: it stores `full` so the
+    // strip comes back on the next start, exactly as before the move.
+    assert!(matches!(
+        commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Hidden),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Hidden);
+    assert_eq!(
+        stored_display_mode(&runtime),
+        None,
+        "folding hidden back to the authored full seed deletes the override"
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    let stored = fs::read_to_string(&runtime_path).unwrap();
+    assert!(!stored.contains("hidden"), "{stored}");
+    runtime.shutdown_blocking();
+}
+
+#[test]
+fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
+    use crate::config::TopDisplayMode;
+
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    restarted_input.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
+    assert_eq!(
+        restarted_input.toolbar_top_display_mode,
+        TopDisplayMode::Full
+    );
+    let restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+    assert_eq!(
+        restarted_input.toolbar_top_display_mode,
+        TopDisplayMode::Micro
+    );
+}
+
+#[test]
+fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() {
+    use crate::config::{PresenterToolbarMode, TopDisplayMode};
+
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    input.presenter_mode_config.hide_toolbars = true;
+    input.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    input.toolbar_top_display_mode = TopDisplayMode::Full;
+    input.toggle_presenter_mode();
+    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Micro);
+
+    // The live strip is presenter's; the persisted value stays the saved
+    // pre-presenter mode, so committing it is a no-op against the seed.
+    let values = top_display_mode_values(input.toolbar_top_display_mode, &input).unwrap();
+    assert_eq!(
+        values.values().get(&InteractionSeedTarget::TopDisplayMode),
+        Some(&InteractionSeedValue::TopDisplayMode(
+            PersistedTopDisplayMode::Full
+        ))
+    );
+
+    let mut runtime = test_runtime(&config, &runtime_path);
+    let target = ToolbarRuntimeUiPersistenceTarget::TopDisplayMode;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("display mode permit");
+    assert!(matches!(
+        runtime.finish_toolbar_mutation(prepared, true, &input),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert_eq!(stored_display_mode(&runtime), None);
+
+    // Exiting presenter mode restores the live value; a change after that
+    // persists the user's own choice again.
+    input.toggle_presenter_mode();
+    assert!(input.presenter_restore.is_none());
+    assert!(matches!(
+        commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro),
+        ToolbarRuntimeFinish::KeepPreview
+    ));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_display_mode(&runtime),
+        Some(PersistedTopDisplayMode::Micro)
+    );
+    runtime.shutdown_blocking();
+}
+
+#[test]
+fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
+    use crate::config::TopDisplayMode;
+
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("runtime-ui.toml");
+    let config_a = Config::default();
+    let mut input = input_from_config(&config_a);
+    let mut runtime = test_runtime(&config_a, &runtime_path);
+    let mut positions = config_positions(&config_a);
+
+    commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_display_mode(&runtime),
+        Some(PersistedTopDisplayMode::Micro)
+    );
+
+    let mut config_b = config_a;
+    config_b.ui.toolbar.top_display_mode = TopDisplayMode::Micro;
+    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    assert!(refresh.applied);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(
+        stored_display_mode(&runtime),
+        None,
+        "the authored default caught up with the runtime choice"
+    );
+    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Micro);
+    runtime.shutdown_blocking();
 }

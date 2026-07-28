@@ -41,8 +41,11 @@ fn diagnostic_paths(document: &ConfigDocument) -> Vec<&str> {
         .collect()
 }
 
+/// A save writes the caller's one change. Values that only differ because
+/// loading clamped them keep their authored text: persisting them would let an
+/// unrelated save rewrite settings the user never touched (#293).
 #[test]
-fn document_save_preserves_comments_order_unknowns_and_validates_known_values() {
+fn document_save_preserves_comments_order_unknowns_and_clamped_source_text() {
     let temp = TempConfig::new("golden");
     temp.write(
         r#"# user header
@@ -91,9 +94,14 @@ future_knob = 7 # preserve nested unknown
         );
     }
     assert!(saved.find("future_root").unwrap() < saved.find("[performance]").unwrap());
-    assert!(saved.contains("buffer_count = 4 # keep buffer explanation"));
+    assert!(saved.contains("buffer_count = 99 # keep buffer explanation"));
     assert!(saved.contains("max_fps_no_vsync = 144"));
-    assert!(saved.contains("ui_animation_fps = 240 # clamp this known value"));
+    assert!(saved.contains("ui_animation_fps = 999 # clamp this known value"));
+    assert_eq!(outcome.document().config().performance.buffer_count, 4);
+    assert_eq!(
+        outcome.document().config().performance.ui_animation_fps,
+        240
+    );
     assert_eq!(
         diagnostic_paths(outcome.document()),
         diagnostic_paths(&document)
@@ -122,7 +130,7 @@ future_output_policy = "keep"
 }
 
 #[test]
-fn document_load_and_save_tolerates_future_keys_in_strict_export_tables() {
+fn document_load_and_save_tolerates_future_keys_in_export_tables() {
     let temp = TempConfig::new("future-export-keys");
     let original = format!(
         r#"config_revision = {CURRENT_CONFIG_REVISION}
@@ -161,16 +169,18 @@ future_font_weight = 600
     assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
 }
 
+/// Validation drops a known option in memory only. Removing its line here
+/// would be a deletion the caller never asked for, so the text stays and the
+/// user keeps the chance to fix the value (#293).
 #[test]
-fn no_op_save_removes_known_option_discarded_by_validation() {
+fn no_op_save_keeps_known_option_discarded_by_validation() {
     let temp = TempConfig::new("validated-away-known-option");
-    temp.write(
-        r#"config_revision = 1
+    let original = r#"config_revision = 1
 [render_profiles]
 active = "missing"
 future_profile_policy = "keep"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load render profiles");
     assert!(document.config().render_profiles.active.is_none());
 
@@ -178,7 +188,39 @@ future_profile_policy = "keep"
         .save_with_backup(document.config().clone())
         .expect("save validated render profiles");
 
-    let saved = fs::read_to_string(&temp.path).expect("read validated render profiles");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read validated render profiles"),
+        original
+    );
+}
+
+#[test]
+fn save_removes_a_known_option_the_caller_cleared() {
+    let temp = TempConfig::new("caller-cleared-known-option");
+    temp.write(
+        r#"config_revision = 1
+[render_profiles]
+active = "one"
+future_profile_policy = "keep"
+
+[[render_profiles.profiles]]
+id = "one"
+name = "One"
+"#,
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load render profiles");
+    assert_eq!(
+        document.config().render_profiles.active.as_deref(),
+        Some("one")
+    );
+    let mut updated = document.config().clone();
+    updated.render_profiles.active = None;
+
+    document
+        .save_with_backup(updated)
+        .expect("save cleared render profile");
+
+    let saved = fs::read_to_string(&temp.path).expect("read cleared render profile");
     assert!(!saved.contains("active ="));
     assert!(saved.contains("future_profile_policy = \"keep\""));
 }
@@ -323,8 +365,11 @@ future_entry_option = "cannot be separated safely"
     ConfigDocument::load_from_path(&temp.path).expect("collection repair is valid");
 }
 
+/// The migration write owns `config_revision`: it stamps the revision together
+/// with the values it migrated, so a pair the user deliberately restores
+/// afterwards survives the next load.
 #[test]
-fn save_persists_migration_revision_and_does_not_repeat_keybinding_migration() {
+fn migration_save_persists_revision_and_does_not_repeat_keybinding_migration() {
     let temp = TempConfig::new("migration-revision");
     temp.write(
         r#"[keybindings]
@@ -332,7 +377,21 @@ toggle_command_palette = ["Ctrl+K"]
 capture_full_screen = ["Ctrl+Shift+P"]
 "#,
     );
-    let document = ConfigDocument::load_from_path(&temp.path).expect("load legacy shortcuts");
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load migrated shortcuts");
+    assert_eq!(
+        document.config().keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        document.config().keybindings.capture.capture_full_screen,
+        ["Ctrl+Alt+F"]
+    );
+
     let mut updated = document.config().clone();
     updated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
     updated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
@@ -340,9 +399,7 @@ capture_full_screen = ["Ctrl+Shift+P"]
         .save_with_backup(updated)
         .expect("save intentional legacy shortcut pair");
 
-    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
-    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
-    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("reload migrated config");
+    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("reload restored config");
     assert_eq!(
         reloaded.config().keybindings.ui.toggle_command_palette,
         ["Ctrl+K"]
@@ -647,8 +704,12 @@ future_owner = "owner-second"
     let profiles = value["render_profiles"]["profiles"]
         .as_array()
         .expect("profiles array");
-    assert_eq!(profiles[0]["id"].as_str(), Some("duplicate-2"));
+    // The reorder is the caller's change; the disambiguating `-2` suffix is
+    // not: it is derived on load, so both entries keep their authored id.
+    assert_eq!(profiles[0]["name"].as_str(), Some("Second"));
+    assert_eq!(profiles[0]["id"].as_str(), Some("duplicate"));
     assert_eq!(profiles[0]["future_owner"].as_str(), Some("owner-second"));
+    assert_eq!(profiles[1]["name"].as_str(), Some("First"));
     assert_eq!(profiles[1]["id"].as_str(), Some("duplicate"));
     assert_eq!(profiles[1]["future_owner"].as_str(), Some("owner-first"));
 }
@@ -818,16 +879,17 @@ future_profile_key = "keep"
     assert!(saved.contains("future_profile_key = \"keep\""));
 }
 
+/// Id normalization happens on load, not on save: an unrelated save keeps the
+/// authored spelling and only the entry the caller edited changes (#293).
 #[test]
-fn validated_id_normalization_preserves_entry_metadata() {
+fn validated_id_normalization_keeps_authored_text_until_the_entry_changes() {
     let temp = TempConfig::new("normalized-stable-id");
-    temp.write(
-        r#"[[render_profiles.profiles]]
+    let original = r#"[[render_profiles.profiles]]
 id = " Profile One "
 name = "Profile One"
 future_owner = "keep"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load profile");
     assert_eq!(
         document.config().render_profiles.profiles[0].id,
@@ -838,24 +900,39 @@ future_owner = "keep"
         .save_with_backup(document.config().clone())
         .expect("save normalized profile id");
 
-    let saved = fs::read_to_string(&temp.path).expect("read normalized profile");
-    assert!(saved.contains("id = \"profile one\""));
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read normalized profile"),
+        original
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("reload profile");
+    let mut updated = document.config().clone();
+    updated.render_profiles.profiles[0].name = "Renamed".to_string();
+    document
+        .save_with_backup(updated)
+        .expect("save renamed profile");
+
+    let saved = fs::read_to_string(&temp.path).expect("read renamed profile");
+    assert!(saved.contains("id = \" Profile One \""));
+    assert!(saved.contains("name = \"Renamed\""));
     assert!(saved.contains("future_owner = \"keep\""));
 }
 
+/// Validation adds the transparent board in memory. Writing that entry on an
+/// unrelated save would edit a list the caller never touched, so the file keeps
+/// its single authored board until an edit actually changes the list (#293).
 #[test]
-fn validation_added_entry_does_not_take_metadata_from_a_normalized_id() {
+fn validation_added_entry_reaches_the_file_only_with_a_caller_change() {
     let temp = TempConfig::new("normalized-board-with-added-default");
-    temp.write(
-        r#"[boards]
+    let original = r#"[boards]
 
 [[boards.items]]
 id = " WhiteBoard "
 name = "White board"
 background = { rgb = [1.0, 1.0, 1.0] }
 future_owner = "keep-with-whiteboard"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load boards");
     assert_eq!(document.config().boards.as_ref().unwrap().items.len(), 2);
 
@@ -863,12 +940,25 @@ future_owner = "keep-with-whiteboard"
         .save_with_backup(document.config().clone())
         .expect("save validated boards");
 
-    let saved = fs::read_to_string(&temp.path).expect("read validated boards");
-    let value: toml::Value = toml::from_str(&saved).expect("parse validated boards");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read validated boards"),
+        original
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("reload boards");
+    let mut updated = document.config().clone();
+    updated.boards.as_mut().unwrap().items[1].name = "Renamed board".to_string();
+    document
+        .save_with_backup(updated)
+        .expect("save renamed board");
+
+    let saved = fs::read_to_string(&temp.path).expect("read renamed boards");
+    let value: toml::Value = toml::from_str(&saved).expect("parse renamed boards");
     let boards = value["boards"]["items"].as_array().expect("boards array");
     assert_eq!(boards[0]["id"].as_str(), Some("transparent"));
     assert!(boards[0].get("future_owner").is_none());
-    assert_eq!(boards[1]["id"].as_str(), Some("whiteboard"));
+    assert_eq!(boards[1]["id"].as_str(), Some(" WhiteBoard "));
+    assert_eq!(boards[1]["name"].as_str(), Some("Renamed board"));
     assert_eq!(
         boards[1]["future_owner"].as_str(),
         Some("keep-with-whiteboard")
@@ -878,8 +968,7 @@ future_owner = "keep-with-whiteboard"
 #[test]
 fn deduplicated_board_ids_keep_metadata_through_validation_reorder() {
     let temp = TempConfig::new("deduplicated-board-reorder");
-    temp.write(
-        r#"[boards]
+    let original = r#"[boards]
 max_count = 2
 default_board = "DUPLICATE"
 
@@ -900,8 +989,8 @@ id = "duplicate"
 name = "Overlay"
 background = "transparent"
 future_owner = "owner-overlay"
-"#,
-    );
+"#;
+    temp.write(original);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load boards");
     let boards = &document.config().boards.as_ref().unwrap().items;
     assert_eq!(boards[0].id, "duplicate-2");
@@ -911,13 +1000,33 @@ future_owner = "owner-overlay"
         .save_with_backup(document.config().clone())
         .expect("save validated boards");
 
-    let saved = fs::read_to_string(&temp.path).expect("read validated boards");
-    let value: toml::Value = toml::from_str(&saved).expect("parse validated boards");
+    // Deduplication, truncation and reordering are load-time repairs: an
+    // unrelated save must not press them onto the user's file (#293).
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read validated boards"),
+        original
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("reload boards");
+    let mut updated = document.config().clone();
+    updated.boards.as_mut().unwrap().items[0].name = "Renamed overlay".to_string();
+    document
+        .save_with_backup(updated)
+        .expect("save renamed board");
+
+    let saved = fs::read_to_string(&temp.path).expect("read renamed boards");
+    let value: toml::Value = toml::from_str(&saved).expect("parse renamed boards");
     let boards = value["boards"]["items"].as_array().expect("boards array");
-    assert_eq!(boards[0]["id"].as_str(), Some("duplicate-2"));
-    assert_eq!(boards[0]["future_owner"].as_str(), Some("owner-overlay"));
-    assert_eq!(boards[1]["id"].as_str(), Some("duplicate"));
-    assert_eq!(boards[1]["future_owner"].as_str(), Some("owner-color"));
+    let renamed = boards
+        .iter()
+        .find(|board| board["name"].as_str() == Some("Renamed overlay"))
+        .expect("the renamed board is still in the file");
+    assert_eq!(renamed["future_owner"].as_str(), Some("owner-overlay"));
+    let color = boards
+        .iter()
+        .find(|board| board["future_owner"].as_str() == Some("owner-color"))
+        .expect("the color board keeps its entry");
+    assert_eq!(color["name"].as_str(), Some("Color board"));
 }
 
 #[test]
@@ -952,6 +1061,332 @@ future_owner = "keep"
     let saved = fs::read_to_string(&temp.path).expect("read truncated boards");
     assert!(saved.contains("id = \"future-board\""));
     assert!(saved.contains("future_owner = \"keep\""));
+}
+
+/// The #293 report: one collision makes validation reset the whole section in
+/// memory, and every unrelated save used to write that reset over the user's
+/// shortcuts — truncating longer arrays and replacing single bindings.
+#[test]
+fn reset_keybindings_never_reach_the_file_through_an_unrelated_save() {
+    let temp = TempConfig::new("reset-keybindings");
+    let keybindings = format!(
+        r#"[keybindings]
+# Keep these authored shortcuts.
+exit = ["Escape", "Ctrl+Q", "Q"]
+capture_full_screen = ["Ctrl+Shift+P"]
+# `F2` still collides with the `cycle_toolbar_display` default at revision
+# {CURRENT_CONFIG_REVISION}, which is what the reporter's file carried.
+toggle_toolbar = ["F2", "F9"]
+"#
+    );
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n[ui.toolbar]\nuse_icons = true\n\n{keybindings}"
+    );
+    temp.write(&original);
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load colliding shortcuts");
+    let loaded = document.config();
+    // The collision costs exactly the colliding key on the side that never
+    // authored it. Everything else the file assigns survives the load.
+    assert_eq!(
+        loaded.keybindings.ui.toggle_toolbar,
+        ["F2", "F9"],
+        "the authored side of the collision keeps every key it listed"
+    );
+    assert!(
+        loaded.keybindings.ui.cycle_toolbar_display.is_empty(),
+        "the serde-filled default loses only the contested key"
+    );
+    assert_eq!(loaded.keybindings.core.exit, ["Escape", "Ctrl+Q", "Q"]);
+    assert_eq!(
+        loaded.keybindings.capture.capture_full_screen,
+        ["Ctrl+Shift+P"]
+    );
+    assert_eq!(
+        loaded.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K"],
+        "the palette default keeps the key it does not have to give up"
+    );
+    let map = loaded
+        .keybindings
+        .build_action_map()
+        .expect("the resolved keymap has no duplicates left");
+    assert_eq!(
+        map.get(&KeyBinding::parse("F2").expect("F2 parses")),
+        Some(&Action::ToggleToolbar)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Shift+P").expect("Ctrl+Shift+P parses")),
+        Some(&Action::CaptureFullScreen)
+    );
+
+    // The same resolutions reach the configurator's warning surface, because
+    // the file is left holding conflicts that only the user can settle.
+    let conflicts = document
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.kind() == ConfigDiagnosticKind::KeybindingConflict)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(conflicts.len(), 2, "unexpected diagnostics: {conflicts:?}");
+    assert!(
+        conflicts.iter().any(|conflict| conflict.contains("`F2`"))
+            && conflicts
+                .iter()
+                .any(|conflict| conflict.contains("`Ctrl+Shift+P`")),
+        "both contested keys must be named: {conflicts:?}"
+    );
+    assert_eq!(
+        diagnostic_paths(&document),
+        [
+            "keybindings.cycle_toolbar_display",
+            "keybindings.toggle_command_palette"
+        ]
+    );
+
+    let mut updated = document.config().clone();
+    updated.ui.toolbar.use_icons = false;
+    document
+        .save_with_backup(updated)
+        .expect("save the unrelated toolbar preference");
+
+    let saved = fs::read_to_string(&temp.path).expect("read saved config");
+    assert!(saved.contains("use_icons = false"));
+    assert!(
+        saved.contains(&keybindings),
+        "the keybindings section must be byte-identical, got:\n{saved}"
+    );
+}
+
+/// A mistyped shortcut used to fail the whole keymap, and the runtime then
+/// swapped in the complete shipped defaults for the session — #293's symptom
+/// from a single character. Loading now drops the one string, keeps the rest,
+/// and leaves the typo in the file for the user to fix.
+#[test]
+fn dropped_invalid_shortcuts_never_reach_the_file_through_an_unrelated_save() {
+    let temp = TempConfig::new("invalid-keybindings");
+    let keybindings = r#"[keybindings]
+# A typo: the modifiers are there but the key itself is missing.
+clear_canvas = ["Ctrl+Shift", "Ctrl+L"]
+undo = ["Ctrl+Alt+U"]
+"#;
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n[ui.toolbar]\nuse_icons = true\n\n{keybindings}"
+    );
+    temp.write(&original);
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load a mistyped shortcut");
+    let loaded = document.config();
+    assert_eq!(
+        loaded.keybindings.core.clear_canvas,
+        ["Ctrl+L"],
+        "only the string that cannot be parsed is dropped"
+    );
+    assert_eq!(loaded.keybindings.core.undo, ["Ctrl+Alt+U"]);
+    loaded
+        .keybindings
+        .build_action_map()
+        .expect("the session keymap builds without the typo");
+
+    let invalid = document
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.kind() == ConfigDiagnosticKind::InvalidKeybinding)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    assert_eq!(invalid.len(), 1, "unexpected diagnostics: {invalid:?}");
+    assert!(
+        invalid[0].contains("`Ctrl+Shift`") && invalid[0].contains("Clear Canvas"),
+        "the diagnostic must name the string and the action: {invalid:?}"
+    );
+    assert_eq!(diagnostic_paths(&document), ["keybindings.clear_canvas"]);
+
+    let mut updated = document.config().clone();
+    updated.ui.toolbar.use_icons = false;
+    document
+        .save_with_backup(updated)
+        .expect("save the unrelated toolbar preference");
+
+    let saved = fs::read_to_string(&temp.path).expect("read saved config");
+    assert!(saved.contains("use_icons = false"));
+    assert!(
+        saved.contains(keybindings),
+        "the keybindings section must be byte-identical, got:\n{saved}"
+    );
+}
+
+/// The startup migration is the one write that carries migrated values, and it
+/// carries nothing else: no clamping, no normalization, no reformatting.
+#[test]
+fn migration_save_writes_only_migrated_fields_and_backs_the_file_up() {
+    let temp = TempConfig::new("migration-write");
+    let original = r#"# Keep this migration comment.
+[keybindings]
+toggle_toolbar = ["F2", "F9"]
+undo = ["Ctrl+Alt+U"]
+
+[performance]
+buffer_count = 99
+future_knob = 7
+"#;
+    temp.write(original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
+    assert!(saved.contains("# Keep this migration comment."));
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    assert!(saved.contains("toggle_toolbar = [\"F9\"]"));
+    assert!(saved.contains("undo = [\"Ctrl+Alt+U\"]"));
+    assert!(!saved.contains("cycle_toolbar_display"));
+    assert!(saved.contains("buffer_count = 99"));
+    assert!(saved.contains("future_knob = 7"));
+
+    let backups = fs::read_dir(&temp.root)
+        .expect("read temp config directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "bak"))
+        .collect::<Vec<_>>();
+    assert_eq!(backups.len(), 1, "the migration write backs the file up");
+    assert_eq!(fs::read_to_string(&backups[0]).unwrap(), original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("second startup");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read config after the second startup"),
+        saved,
+        "a migrated file is not rewritten again"
+    );
+}
+
+/// #315 added `toggle_input_hud = ["Ctrl+Shift+K"]` without a revision bump, so
+/// a file that already bound that shortcut inherited a collision it never
+/// wrote. Revision 3 writes the newcomer's surrender into the file instead of
+/// re-arbitrating it on every load.
+#[test]
+fn migration_unbinds_the_input_hud_when_the_file_already_claims_its_shortcut() {
+    let temp = TempConfig::new("input-hud-migration");
+    temp.write(
+        r#"config_revision = 2
+
+[keybindings]
+# Screenshot to clipboard, rebound long before the input HUD existed.
+capture_clipboard_full = ["Ctrl+Shift+K"]
+"#,
+    );
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    let saved = fs::read_to_string(&temp.path).expect("read migrated config");
+    assert!(saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")));
+    assert!(saved.contains("capture_clipboard_full = [\"Ctrl+Shift+K\"]"));
+    assert!(
+        saved.contains("toggle_input_hud = []"),
+        "the migration records the unbinding, got:\n{saved}"
+    );
+    assert!(saved.contains("# Screenshot to clipboard"));
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load migrated config");
+    assert!(document.config().keybindings.ui.toggle_input_hud.is_empty());
+    assert_eq!(
+        document.config().keybindings.capture.capture_clipboard_full,
+        ["Ctrl+Shift+K"]
+    );
+    assert!(
+        document.diagnostics().is_empty(),
+        "the migrated file no longer carries a conflict: {:?}",
+        diagnostic_paths(&document)
+    );
+    let map = document
+        .config()
+        .keybindings
+        .build_action_map()
+        .expect("the migrated keymap has no duplicates");
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Shift+K").expect("Ctrl+Shift+K parses")),
+        Some(&Action::CaptureClipboardFull)
+    );
+
+    Config::persist_pending_migrations_at(&temp.path).expect("second startup");
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read config after the second startup"),
+        saved,
+        "the recorded revision keeps the migration from running again"
+    );
+}
+
+/// Nothing contests `Ctrl+Shift+K` here, so the input HUD keeps its default and
+/// the migration write carries the revision stamp alone.
+#[test]
+fn migration_only_stamps_the_revision_when_the_input_hud_default_is_free() {
+    let temp = TempConfig::new("input-hud-uncontested");
+    let original = "config_revision = 2\n\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n";
+    temp.write(original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read migrated config"),
+        original.replace(
+            "config_revision = 2",
+            &format!("config_revision = {CURRENT_CONFIG_REVISION}")
+        ),
+        "the revision stamp is the whole diff"
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load migrated config");
+    assert_eq!(
+        document.config().keybindings.ui.toggle_input_hud,
+        ["Ctrl+Shift+K"]
+    );
+}
+
+#[test]
+fn migration_leaves_a_customized_input_hud_binding_in_the_file() {
+    let temp = TempConfig::new("input-hud-customized");
+    let original = "config_revision = 2\n\n[keybindings]\ncapture_clipboard_full = [\"Ctrl+Shift+K\"]\ntoggle_input_hud = [\"Ctrl+Alt+K\"]\n";
+    temp.write(original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("startup migration write");
+
+    assert_eq!(
+        fs::read_to_string(&temp.path).expect("read migrated config"),
+        original.replace(
+            "config_revision = 2",
+            &format!("config_revision = {CURRENT_CONFIG_REVISION}")
+        ),
+        "a deliberate input-HUD binding is none of the migration's business"
+    );
+}
+
+/// A file stamped at the current revision has already been through the
+/// migration, so a shortcut it points at `Ctrl+Shift+K` afterwards is settled
+/// per session by conflict resolution and never rewritten on disk.
+#[test]
+fn a_current_revision_file_keeps_its_text_when_it_contests_the_input_hud_default() {
+    let temp = TempConfig::new("input-hud-current-revision");
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\ncapture_clipboard_full = [\"Ctrl+Shift+K\"]\n"
+    );
+    temp.write(&original);
+
+    Config::persist_pending_migrations_at(&temp.path).expect("no pending migration");
+    assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
+
+    let document =
+        ConfigDocument::load_from_path(&temp.path).expect("load current-revision config");
+    assert_eq!(
+        document.config().keybindings.capture.capture_clipboard_full,
+        ["Ctrl+Shift+K"],
+        "the authored side wins the session"
+    );
+    assert!(
+        document.config().keybindings.ui.toggle_input_hud.is_empty(),
+        "the serde-filled default loses the contested key for the session"
+    );
+    assert_eq!(
+        diagnostic_paths(&document),
+        ["keybindings.toggle_input_hud"]
+    );
 }
 
 #[test]
@@ -1398,4 +1833,85 @@ fn performance_validation_uses_metadata_constraints() {
 fn value_at_path<'a>(root: &'a toml::Value, path: &str) -> Option<&'a toml::Value> {
     path.split('.')
         .try_fold(root, |value, segment| value.get(segment))
+}
+
+/// The export tables were the config tree's only `deny_unknown_fields`
+/// holdouts, so one typo there used to fail the plain deserialize the overlay
+/// and the migration writer run — the whole file, not just `[export]`.
+#[test]
+fn plain_deserialize_tolerates_unknown_export_keys() {
+    let config = toml::from_str::<Config>(
+        r#"
+[export]
+future_format = "svg"
+
+[export.pdf]
+page_size = "a4"
+future_bleed = 12.5
+
+[export.pdf.labels]
+enabled = true
+future_font_weight = 600
+"#,
+    )
+    .expect("an unknown export key must not fail the whole config");
+
+    assert!(matches!(config.export.pdf.page_size, PdfPageSize::A4));
+    assert!(config.export.pdf.labels.enabled);
+}
+
+/// A save that really changes an export setting still writes only that
+/// setting: the merge never enumerates keys the config does not know, so the
+/// user's unrecognized neighbors keep their text and their comments.
+#[test]
+fn export_save_keeps_unknown_neighbors_in_the_file() {
+    let temp = TempConfig::new("changed-export-with-unknowns");
+    temp.write(
+        r#"[export]
+future_format = "svg" # keep this note
+
+[export.pdf]
+page_size = "a4"
+future_bleed = 12.5
+
+[export.pdf.labels]
+enabled = true
+future_font_weight = 600
+"#,
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load export document");
+    let mut updated = document.config().clone();
+    updated.export.pdf.custom_width = 123.0;
+    updated.export.pdf.labels.font_size = 42.0;
+    document
+        .save(updated)
+        .expect("save changed export settings");
+
+    let saved = fs::read_to_string(&temp.path).expect("read saved export document");
+    assert!(saved.contains("future_format = \"svg\" # keep this note"));
+    assert!(saved.contains("future_bleed = 12.5"));
+    assert!(saved.contains("future_font_weight = 600"));
+    assert!(saved.contains("custom_width = 123.0"));
+    assert!(saved.contains("font_size = 42.0"));
+
+    let reloaded = ConfigDocument::load_from_path(&temp.path).expect("reload export document");
+    assert!(matches!(
+        reloaded.config().export.pdf.page_size,
+        PdfPageSize::A4
+    ));
+    assert_eq!(reloaded.config().export.pdf.custom_width, 123.0);
+    assert!(reloaded.config().export.pdf.labels.enabled);
+    assert_eq!(reloaded.config().export.pdf.labels.font_size, 42.0);
+    let paths = diagnostic_paths(&reloaded);
+    for expected in [
+        "export.future_format",
+        "export.pdf.future_bleed",
+        "export.pdf.labels.future_font_weight",
+    ] {
+        assert!(
+            paths.iter().any(|path| path.ends_with(expected)),
+            "missing diagnostic for {expected}: {paths:?}"
+        );
+    }
 }

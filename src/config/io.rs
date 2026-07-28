@@ -1,9 +1,10 @@
 use super::paths::primary_config_dir;
+use super::validate::ConfigValidationReport;
 use super::{Config, ConfigDocument};
-use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode};
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -21,6 +22,8 @@ pub enum ConfigSource {
 pub struct LoadedConfig {
     pub config: Config,
     pub source: ConfigSource,
+    /// What validation had to change in memory. Empty for an unvalidated load.
+    pub validation: ConfigValidationReport,
 }
 
 impl Config {
@@ -57,7 +60,7 @@ impl Config {
         let mut loaded = Self::load_unvalidated()?;
 
         // Validate and clamp values to acceptable ranges.
-        loaded.config.validate_and_clamp();
+        loaded.validation = loaded.config.validate_and_clamp();
 
         debug!("Config: {:?}", loaded.config);
 
@@ -79,45 +82,84 @@ impl Config {
             return Ok(LoadedConfig {
                 config: Config::default(),
                 source: ConfigSource::Default,
+                validation: ConfigValidationReport::default(),
             });
         };
 
-        let config_str = fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
-
-        let config: Config = toml::from_str(&config_str)
-            .with_context(|| format!("Failed to parse config from {}", config_path.display()))?;
+        let config = Self::read_unvalidated_from(&config_path)?;
 
         info!("Loaded config from {}", config_path.display());
 
-        Ok(LoadedConfig { config, source })
+        Ok(LoadedConfig {
+            config,
+            source,
+            validation: ConfigValidationReport::default(),
+        })
     }
 
-    fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
-        let config_path = Self::get_config_path()?;
-        let document = ConfigDocument::load_from_path(&config_path)?;
-        let outcome = if create_backup {
-            document.save_with_backup(self.clone())?
-        } else {
-            document.save(self.clone())?
-        };
-        let (_, backup_path) = outcome.into_parts();
+    fn read_unvalidated_from(config_path: &Path) -> Result<Self> {
+        let config_str = fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
 
-        if let Some(path) = &backup_path {
-            info!(
-                "Saved config to {} (backup at {})",
-                config_path.display(),
-                path.display()
-            );
-        } else {
-            info!("Saved config to {}", config_path.display());
+        toml::from_str(&config_str)
+            .with_context(|| format!("Failed to parse config from {}", config_path.display()))
+    }
+
+    /// Writes pending one-time migrations to the configuration file.
+    ///
+    /// A save records only the delta its caller asked for, so a migrated value
+    /// no later edit happens to touch would stay in memory while the file kept
+    /// its pre-migration text — and the revision stamp would then suppress the
+    /// migration on every following load. This one write keeps the stamp and
+    /// the values it claims together, after backing the file up.
+    ///
+    /// Nothing is written when the file is missing, already current, or only
+    /// loadable in repair mode.
+    pub(crate) fn persist_pending_migrations() -> Result<()> {
+        Self::persist_pending_migrations_at(&Self::get_config_path()?)
+    }
+
+    pub(super) fn persist_pending_migrations_at(config_path: &Path) -> Result<()> {
+        if !config_path.exists() {
+            return Ok(());
         }
 
-        Ok(backup_path)
+        let authored = Self::read_unvalidated_from(config_path)?;
+        let mut migrated = authored.clone();
+        migrated.apply_keybinding_migrations();
+        if migrated.config_revision == authored.config_revision {
+            return Ok(());
+        }
+
+        let (document, repair_warning) = ConfigDocument::load_for_editing_from_path(config_path)?;
+        if let Some(warning) = repair_warning {
+            warn!("Skipped the config migration write; the file needs repair first: {warning}");
+            return Ok(());
+        }
+
+        let outcome = document.save_migration(&authored, &migrated)?;
+        match outcome.backup_path() {
+            Some(backup) => info!(
+                "Migrated {} to config revision {} (backup at {})",
+                config_path.display(),
+                migrated.config_revision,
+                backup.display()
+            ),
+            None => info!(
+                "Migrated {} to config revision {}",
+                config_path.display(),
+                migrated.config_revision
+            ),
+        }
+        Ok(())
     }
 
     /// Test-only convenience for exercising the revision-guarded document
     /// update path without constructing a runtime persistence worker.
+    ///
+    /// Not a production path: every running write goes through the overlay's
+    /// background `ConfigWriter`, the tray's retrying document save, the
+    /// startup migration save, or the configurator.
     #[cfg(test)]
     pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
         let config_path = Self::get_config_path()?;
@@ -126,63 +168,6 @@ impl Config {
         update(&mut config);
         document.save(config)?;
         info!("Updated config at {}", config_path.display());
-        Ok(())
-    }
-
-    /// Saves the current configuration to disk without creating a backup.
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<()> {
-        self.write_config(false)?;
-        Ok(())
-    }
-
-    /// Saves the current configuration and creates a timestamped `.bak` copy when overwriting
-    /// an existing file. Returns the backup path if one was created.
-    #[allow(dead_code)]
-    pub fn save_with_backup(&self) -> Result<Option<PathBuf>> {
-        self.write_config(true)
-    }
-
-    /// Creates a default configuration file with documentation comments.
-    ///
-    /// Writes the example config from `config.example.toml` to the user's config directory.
-    /// This method is kept for future use (e.g., `wayscriber --init-config`).
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - A config file already exists at the target path
-    /// - The config directory cannot be created
-    /// - The file cannot be written
-    #[allow(dead_code)]
-    pub fn create_default_file() -> Result<()> {
-        let config_path = Self::get_config_path()?;
-
-        if config_path.exists() {
-            return Err(anyhow!(
-                "Config file already exists at {}",
-                config_path.display()
-            ));
-        }
-
-        // Create directory
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let default_config = include_str!("../../config.example.toml");
-        crate::durable_io::write_text_atomic(
-            &config_path,
-            default_config,
-            AtomicWriteOptions {
-                overwrite: OverwriteMode::CreateNew,
-                permissions: PermissionPolicy::PreserveExistingOrMode(0o644),
-                symlink: SymlinkPolicy::FollowExistingTarget,
-                sync_file: true,
-                sync_parent: true,
-            },
-        )?;
-
-        info!("Created default config at {}", config_path.display());
         Ok(())
     }
 }

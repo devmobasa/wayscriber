@@ -1,7 +1,7 @@
 use super::*;
 use crate::env_vars::{
     HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
-    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
+    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV, XDG_STATE_HOME_ENV,
 };
 use std::env;
 
@@ -204,6 +204,63 @@ fn data_dir_falls_back_to_home_share() {
     assert_eq!(dir, tmp.path().join(".local").join("share"));
 
     match prev_xdg {
+        Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },
+        None => unsafe { env::remove_var(XDG_DATA_HOME_ENV) },
+    }
+    match prev_home {
+        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
+        None => unsafe { env::remove_var(HOME_ENV) },
+    }
+    match prev_userprofile {
+        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
+        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    }
+}
+
+/// Config backups are state, not data: they must follow `XDG_STATE_HOME` and
+/// never land beside `runtime-ui.toml` under `XDG_DATA_HOME`.
+#[test]
+fn config_backups_follow_the_state_directory() {
+    let _guard = crate::test_env::lock();
+
+    let tmp = crate::test_temp::tempdir().unwrap();
+    let prev_home = env::var_os(HOME_ENV);
+    let prev_userprofile = env::var_os(USERPROFILE_ENV);
+    let prev_state = env::var_os(XDG_STATE_HOME_ENV);
+    let prev_data = env::var_os(XDG_DATA_HOME_ENV);
+
+    unsafe {
+        env::set_var(XDG_STATE_HOME_ENV, tmp.path());
+        env::set_var(XDG_DATA_HOME_ENV, tmp.path().join("share"));
+        env::remove_var(HOME_ENV);
+        env::remove_var(USERPROFILE_ENV);
+    }
+
+    assert_eq!(state_dir().as_deref(), Some(tmp.path()));
+    assert_eq!(
+        config_backup_dir(),
+        tmp.path().join("wayscriber").join("config-backups")
+    );
+
+    // Falling back to HOME keeps the copies inside ~/.local/state.
+    unsafe {
+        env::remove_var(XDG_STATE_HOME_ENV);
+        env::set_var(HOME_ENV, tmp.path());
+    }
+    assert_eq!(
+        config_backup_dir(),
+        tmp.path()
+            .join(".local")
+            .join("state")
+            .join("wayscriber")
+            .join("config-backups")
+    );
+
+    match prev_state {
+        Some(v) => unsafe { env::set_var(XDG_STATE_HOME_ENV, v) },
+        None => unsafe { env::remove_var(XDG_STATE_HOME_ENV) },
+    }
+    match prev_data {
         Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },
         None => unsafe { env::remove_var(XDG_DATA_HOME_ENV) },
     }

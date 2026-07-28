@@ -15,6 +15,10 @@ All settings are optional. If the configuration file doesn't exist or settings a
 saved separately so moving through the UI does not rewrite unrelated configuration:
 
 - top/side toolbar pin and minimized state;
+- the top strip's display form reached with the cycle keybinding or the micro chip;
+- the top toolbar's dragged position;
+- the side toolbar's dragged position (a side drag also records the top strip's reconciled
+  horizontal offset, because moving the palette can change where the strip rests);
 - the active side pane and collapsed side sections;
 - individual toolbar item visibility and toolbar item order; and
 - per-board pin state.
@@ -48,18 +52,82 @@ contents.
 If runtime-state inspection or its writer cannot start at all, the Settings panel reports
 persistence as unavailable instead of offering recovery actions that cannot run. Runtime-only
 toolbar and board changes remain process-only in that mode and leave the authored configuration
-unchanged.
+unchanged; a toolbar dragged or a display mode cycled in that mode applies for the current run and
+returns to its configured default on the next start.
 
 When wayscriber or the graphical configurator edits an existing file, it preserves TOML comments,
 section order, compatible value formatting, and unrecognized settings. Unrecognized paths produce
 a configurator warning but remain in the file for forward compatibility. Known values are still
-validated and migrations are written under their canonical names. The configurator tracks the
-exact loaded contents rather than relying on modification time; if the file is created, deleted,
-retargeted through a symlink, or changed by another editor, reload it before saving. A save does not
-expand omitted, unchanged defaults; when a setting that was omitted is edited, only that changed
-setting and its required table path are added.
+validated for the running session, and aliases are written under their canonical names. The
+configurator tracks the exact loaded contents rather than relying on modification time; if the file
+is created, deleted, retargeted through a symlink, or changed by another editor, reload it before
+saving. A save does not expand omitted, unchanged defaults; when a setting that was omitted is
+edited, only that changed setting and its required table path are added.
+A save writes only what its caller changed: a value that loading clamped, normalized, deduplicated,
+or reset keeps the text you authored, so an unrelated preference toggle can never rewrite settings
+you did not touch. Validation and migration results are not exempt from that rule — they reach the
+file only through the dedicated migration save described under
+[`[keybindings]`](#keybindings---custom-keybindings), which writes the migrated shortcuts together
+with the new `config_revision` after backing the file up, and changes nothing else.
 The first save for a missing file is sparse as well: it writes the migration revision marker and
 only values changed from the built-in defaults.
+One deliberate consequence: a value the file holds out of range is clamped for the running session
+but keeps its authored text on disk, and re-entering the clamped value in a settings surface is a
+zero-delta save that writes nothing — the file keeps the out-of-range text until you set the field
+to some other value or edit it by hand.
+Every section follows the same rule for unrecognized keys, including `[export]`, `[export.pdf]`,
+and `[export.pdf.labels]`: a typo there is reported and kept, never dropped from the file, and it
+does not stop the rest of the configuration from loading.
+
+Before a running wayscriber or its tray first rewrites `config.toml`, it copies the file to
+`$XDG_STATE_HOME/wayscriber/config-backups/config-<timestamp>.toml` (`~/.local/state/...` when
+`XDG_STATE_HOME` is unset). One copy is taken per process, so it holds the file as that session
+found it rather than as the previous write left it; the five newest copies are kept and older ones
+are removed. To undo a run's changes, copy the newest file back over `config.toml`. Backups from
+the graphical configurator and from a revision migration are separate: those write a timestamped
+`.bak` next to `config.toml` instead. If a copy cannot be made — no state directory, no permission
+— the save still goes ahead and the problem is logged.
+
+#### Who writes what, when
+
+Three stores and four mechanisms cover every preference Wayscriber saves for you:
+
+- **Background writer** — the overlay queues a typed edit and a worker thread writes `config.toml`
+  75 ms later, so drawing never waits on a disk flush. Nearby edits to the same setting collapse
+  into one write, and a failed write is retried with a growing delay instead of being lost.
+- **Runtime-UI writer** — a guarded, conditional write to `runtime-ui.toml`; see the list at the top
+  of this section for what lives there and why.
+- **Document save** — a direct, immediate write to `config.toml` from a process that has no
+  background writer of its own.
+- **Session autosave** — the session snapshot, not a configuration file at all.
+
+| You do this | It is saved to | By |
+| --- | --- | --- |
+| Drag the top or side toolbar | `runtime-ui.toml` | Runtime-UI writer |
+| Cycle the top strip full ⇄ micro (<kbd>F2</kbd> or the micro chip) | `runtime-ui.toml` | Runtime-UI writer |
+| Pin, unpin, or minimize a toolbar | `runtime-ui.toml` | Runtime-UI writer |
+| Switch the side pane or collapse a side section | `runtime-ui.toml` | Runtime-UI writer |
+| Hide, show, or reorder an individual toolbar item | `runtime-ui.toml` | Runtime-UI writer |
+| Pin a board | `runtime-ui.toml` | Runtime-UI writer |
+| Switch layout mode (Simple/Full) | `config.toml` — `ui.toolbar.layout_mode` plus only the `show_*` mirrors whose baseline actually moved | Background writer |
+| Toggle a toolbar section from Settings | `config.toml` — `ui.toolbar.items` plus that section's `show_*` mirror | Background writer |
+| Switch icons ⇄ text labels | `config.toml` — `ui.toolbar.use_icons` | Background writer |
+| Toggle the status bar, its interactivity, or one of its items; the board/page badges, floating badge, or zoom chip | `config.toml` — `[ui]` | Background writer |
+| Toggle click highlight or the highlight-tool ring | `config.toml` — `[ui.click_highlight]` | Background writer |
+| Toggle the input HUD | `config.toml` — `ui.input_hud.enabled` | Background writer |
+| Toggle the Step section, delay sliders, tool preview, preset toasts, extra colors, or context-aware UI | `config.toml` — `[history]` / `[ui.toolbar]` | Background writer |
+| Save or clear a preset slot | `config.toml` — `[presets]` | Background writer |
+| Recolor a quick color swatch | `config.toml` — `drawing.quick_colors` | Background writer |
+| Rename or recolor a board, or add/delete one (needs `persist_customizations`) | `config.toml` — `[boards]` | Background writer |
+| Edit, unbind, or reset a shortcut in the overlay | `config.toml` — that one action's `[keybindings]` entry | Background writer |
+| Toggle session resume from the tray menu | `config.toml` — only the `[session]` flags the toggle actually flips | Document save (daemon; retried if an overlay write lands first) |
+| Save in the graphical configurator | `config.toml` | Document save (with a timestamped `.bak`) |
+| Start Wayscriber with a keybinding migration pending | `config.toml` — the migrated bindings plus `config_revision` | Document save (once, with a timestamped `.bak`) |
+| Change pen color, thickness, tool, or font size | Session file | Session autosave (needs `restore_tool_state`) |
+
+Drawings, boards, pages, and per-page pan offsets belong to the session file (see `[session]`).
+Everything else — zoom, freeze, presenter mode, light mode — is live state for the run and is not
+saved at all.
 
 If the graphical configurator can read the file but cannot parse its TOML or known value types, it
 opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a
@@ -699,7 +767,10 @@ A live row of keycap-style chips showing what you press, for demos and
 screencasts. Toggle it with `toggle_input_hud` (default
 <kbd>Ctrl+Shift+K</kbd>) or from the command palette; the Settings popover has
 an **Input HUD** checkbox, and the runtime toggle persists to
-`ui.input_hud.enabled`.
+`ui.input_hud.enabled`. A config file that already bound <kbd>Ctrl+Shift+K</kbd>
+to another action keeps it and starts the HUD unbound — see the
+[`[keybindings]` migration notes](#keybindings---custom-keybindings) — so pick a
+free shortcut for `toggle_input_hud` if you want a key for it.
 
 Chips appear on the right and push older chips left. Key chords use the same
 names the keybinding config and help overlay print (`Ctrl+Shift+Z`, `Space`,
@@ -896,9 +967,10 @@ side_pinned = true
 top_minimized = false
 side_minimized = false
 
-# Display form of the top strip restored at startup: "full" or "micro".
+# Authored default display form of the top strip: "full" or "micro".
 # "hidden" is accepted but treated as "full" (startup visibility is
-# governed by top_pinned)
+# governed by top_pinned). Cycling the strip at runtime saves the chosen
+# form to runtime-ui.toml instead of rewriting this value
 top_display_mode = "full"
 
 # Where the side-palette functions live: "pill" (default, supported) or
@@ -978,7 +1050,8 @@ show_preset_toasts = true
 # Show cursor tool preview bubble
 show_tool_preview = false
 
-# Initial toolbar offsets (layer-shell/inline)
+# Authored default toolbar offsets (layer-shell/inline). Dragging a toolbar
+# saves its position to runtime-ui.toml instead of rewriting these
 top_offset = 0.0
 top_offset_y = 0.0
 side_offset = 0.0
@@ -1057,20 +1130,20 @@ side_sections = [
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
-- **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
+- **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` are the authored default toolbar positions. Dragging a toolbar saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag. A side drag also records the top strip's reconciled horizontal offset, because moving the palette can change where the strip rests.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
-- **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
-- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` persist that state across restarts. F9 still toggles full visibility.
-- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists via `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
+- **Pinned**: `top_pinned`/`side_pinned` are the authored defaults for whether each toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves these values alone.
+- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` are the authored defaults, and the state you leave a bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
+- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists as a runtime preference in `runtime-ui.toml`, seeded by the authored `top_display_mode`; the hidden step is runtime-only like F9. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
 - **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
 - **Side layout**: `side_layout` picks where the side-palette functions live, and the top-only re-homing is now complete. The default `"pill"` is the **supported layout**: the standalone side palette is fully retired — its surface is never created (layer-shell, inline fallback, or GTK) — and every pane has a concrete new home. Drawing properties (colors included) live in the top strip's contextual style pill; canvas management lives in the **"Canvas…" overflow popover** (opened from the top strip's `⋯` overflow — boards, pages, zoom, advanced, and step controls) plus the **bottom-right zoom chip** and the **status-bar board picker**; presets live in the **top-strip presets island**; and the Session/Settings panes live in popovers opened from the overflow menu (the "Session..." / "Settings..." entries; the popovers expose the same controls the panes did). `"panel"` is the **deprecated legacy escape hatch** restoring the classic four-pane side palette; it is deprecated and planned for removal one release after the pill default. Panel-mode users see a once-per-session notice pointing at these new homes. (The original plan document called this key `layout_mode = "panel"`, but `layout_mode` is an orthogonal complexity preset — Simple/Regular/Advanced — so the switch lives under its own `side_layout` key instead.)
-- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). The overlay updates both as you use it; unknown ids are ignored at runtime but preserved across saves. Both keys (and `side_pinned`/`side_minimized`) only take effect under the deprecated legacy `side_layout = "panel"`; under the default pill layout they are inert.
+- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). Both are authored seeds: as you use the overlay it records the current pane and collapsed set in `runtime-ui.toml` rather than rewriting these keys. Unknown ids are ignored at runtime but preserved across saves. Both keys (and `side_pinned`/`side_minimized`) only take effect under the deprecated legacy `side_layout = "panel"`; under the default pill layout they are inert.
 - **Session/Settings popovers**: under the default pill layout the top strip's overflow menu always carries "Session..." and "Settings..." entries (they also appear under the legacy panel layout — the popovers are transient quick surfaces, not a second pinned pane). Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
-- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides.
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. A mode switch writes `layout_mode` plus only the `show_*` mirrors loading reads back — sections whose new baseline differs from the value already in the file. Sections you pinned through `items.shown`/`items.hidden` keep both their override and their authored flag, and `show_settings_section` is never rewritten, so a mode switch does not materialize flags you left out.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings surface (the side palette's Settings pane under the legacy panel layout, the Settings popover under pill).
@@ -1426,7 +1499,11 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
-The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) once in memory and advances to `config_revision = 1`. Customized pairs are preserved, and the revision plus migrated values are written only on the next normal config save. Once revision 1 is saved, explicitly restoring the old pair remains untouched.
+The current defaults open the command palette with `Ctrl+K` or `Ctrl+Shift+P` and use `Ctrl+Alt+F` for full-screen capture. A legacy file without `config_revision` migrates the old untouched pair (`Ctrl+K` for the command palette and `Ctrl+Shift+P` for full-screen capture) and advances to `config_revision = 1`. Customized pairs are preserved. The overlay records a pending migration once at startup: it writes the migrated shortcuts together with the new `config_revision`, after copying the previous file to a timestamped `.bak`, and changes nothing else. If that write fails (a read-only file, for example) the migration still applies to the running session and is retried on the next launch. Once the revision is recorded, explicitly restoring the old pair remains untouched.
+
+`config_revision = 3` covers the input HUD. `toggle_input_hud` ships with `Ctrl+Shift+K`, a shortcut that files written before revision 3 never had the chance to decline. If such a file already binds `Ctrl+Shift+K` to another action, the migration leaves that binding alone and writes `toggle_input_hud = []`, so the input HUD starts unbound instead of contending for a key you already use; bind it to something free whenever you want it back. Files that already set `toggle_input_hud` themselves, and files that leave `Ctrl+Shift+K` free, keep the default and only receive the new revision stamp.
+
+**Contributing:** changing or adding a default keybinding requires bumping `CURRENT_CONFIG_REVISION` (`src/config/core.rs`) *and* adding the matching step to `Config::apply_keybinding_migrations` (`src/config/validate/keybindings.rs`) in the same change. A field a config file omits is filled in by serde with the current default, so a new or moved default otherwise lands on top of a shortcut the user bound to something else — a collision their file never authored and does not show. The `default_bindings_match_the_checked_in_snapshot` test holds a snapshot of every shipped default and fails until the snapshot is updated alongside the revision bump and the migration.
 
 ```toml
 [keybindings]
@@ -1712,7 +1789,12 @@ Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Sh
 Each action supports multiple keybindings (e.g., both `+` and `=` for increase thickness).
 
 **Duplicate Detection:**
-The system will detect and report duplicate keybindings at startup. If two actions share the same key combination, the application will log an error and use default keybindings.
+Duplicate keybindings are detected at startup and resolved one key at a time — the rest of both actions' shortcuts always keep working, and your config file is never rewritten. When two actions claim the same combination, the contested key is removed from one of them for that session:
+
+- A binding you customized always beats one that still equals its built-in default. Most collisions are of this kind: a shortcut you never wrote gets filled in from the shipped defaults and lands on a key you assigned to something else.
+- If both sides are customized, the earlier action in the internal keymap order (core, selection, tools, board, ui, colors, capture, zoom, presets) keeps the key.
+
+Every resolution is reported: a warning toast and a desktop notification name the key and both actions at startup, the configurator shows them after loading or saving, and the details are written to the log. Because nothing is written back, edit `config.toml` to decide which action should own the shortcut permanently.
 
 **Case Insensitive:**
 Key names are case-insensitive in the config file, but will match the actual key case at runtime.
@@ -1748,8 +1830,8 @@ clear_canvas = ["X"]
 - Modifiers (<kbd>Shift</kbd>, <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Tab</kbd>) are always captured for drawing tools
 - In text input mode, configured keybindings (like <kbd>Ctrl+Q</kbd> for exit) work before keys are consumed as text
 - Color keys only work when not holding <kbd>Ctrl</kbd> (to avoid conflicts with other actions)
-- Invalid keybinding strings will be logged and fall back to defaults
-- Duplicate keybindings across actions will be detected and reported at startup
+- Keybinding strings that cannot be parsed are detected at startup, reported, and dropped one string at a time for the running session; every other shortcut keeps working and the config file keeps the typo for you to fix
+- Duplicate keybindings across actions are detected at startup, reported, and resolved per key without touching the config file
 
 **Defaults:**
 Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses
@@ -1781,10 +1863,19 @@ Settings are loaded in this order:
 2. Configuration file values (override defaults)
 3. Runtime drawing/tool changes via keybindings (temporary, not saved)
 
-Explicit preference actions—such as toolbar pinning, minimization, pane selection, item visibility
-and order, board customization, shortcut editing, preset management, and tray session-resume
-settings—are saved back to `config.toml` without reformatting unrelated settings or removing user
-comments.
+Explicit preference actions—such as layout mode, section and status bar visibility, icon mode, click
+highlight, the input HUD, board customization, shortcut editing, preset management, quick color
+recoloring, and tray session-resume settings—are saved back to `config.toml` without reformatting
+unrelated settings or removing user comments. Each of these writes only the setting it changed:
+editing one shortcut rewrites that action's `[keybindings]` entry alone, and the tray's
+session-resume toggle rewrites only the `[session]` flags it actually flips. Overlay preference
+writes, including shortcut edits, are batched by a background writer so drawing never waits on a
+disk flush; the tray toggle writes from the daemon and briefly retries if an overlay write lands
+first. Direct overlay manipulation—toolbar drags, pin/minimize, the display-form cycle, pane and
+section collapse, individual item visibility and order, and board pins—goes to `runtime-ui.toml`
+instead and leaves `config.toml` alone; see
+[Configured defaults and runtime UI preferences](#configured-defaults-and-runtime-ui-preferences)
+for the full table.
 
 **Note:** Changes to the config file require restarting wayscriber daemon to take effect.
 

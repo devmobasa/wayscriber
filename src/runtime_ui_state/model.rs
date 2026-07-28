@@ -33,8 +33,7 @@ impl RuntimeUiModel {
         target: InteractionSeedTarget,
         runtime_override: RuntimeOverride,
     ) -> Result<(), InteractionSeedTarget> {
-        if !target.is_runtime_owned()
-            || !runtime_override.seed.matches_target(&target)
+        if !runtime_override.seed.matches_target(&target)
             || !runtime_override.value.matches_target(&target)
             || self.overrides.contains_key(&target)
         {
@@ -73,10 +72,9 @@ impl RuntimeUiModel {
     pub(crate) fn reconcile(&mut self, seeds: &InteractionSeedRegistry) -> bool {
         let before = self.overrides.len();
         self.overrides.retain(|target, runtime_override| {
-            target.is_runtime_owned()
-                && seeds.current_value(target).is_some_and(|seed| {
-                    seed == &runtime_override.seed && seed != &runtime_override.value
-                })
+            seeds.current_value(target).is_some_and(|seed| {
+                seed == &runtime_override.seed && seed != &runtime_override.value
+            })
         });
         self.overrides.len() != before
     }
@@ -222,11 +220,6 @@ impl RuntimeUiMutationScope {
         if targets.is_empty() {
             return Err(MutationShapeError::EmptyScope);
         }
-        if let Some(target) = targets.iter().find(|target| !target.is_runtime_owned()) {
-            return Err(MutationShapeError::ConfigTargetInRuntimeScope(
-                target.clone(),
-            ));
-        }
         Ok(targets)
     }
 }
@@ -234,7 +227,6 @@ impl RuntimeUiMutationScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MutationShapeError {
     EmptyScope,
-    ConfigTargetInRuntimeScope(InteractionSeedTarget),
     ValueDoesNotMatchTarget(InteractionSeedTarget),
     ValuesDoNotMatchPermitScope,
 }
@@ -289,36 +281,6 @@ impl RuntimeUiMutationPermit {
             .map(|guard| guard.target.clone())
             .collect()
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ConfigPositionTarget {
-    Top,
-    Side,
-}
-
-impl ConfigPositionTarget {
-    pub(crate) fn seed_targets(self) -> Vec<InteractionSeedTarget> {
-        match self {
-            Self::Top => vec![InteractionSeedTarget::TopPosition],
-            // A side drag can reconcile and persist the top X offset when the
-            // overlap-derived base changes, so it must be fenced by both
-            // authored position seeds.
-            Self::Side => vec![
-                InteractionSeedTarget::TopPosition,
-                InteractionSeedTarget::SidePosition,
-            ],
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ConfigInteractionPermit {
-    pub(crate) controller_id: ControllerId,
-    pub(crate) authority_epoch: u64,
-    pub(crate) mutation_id: u64,
-    pub(crate) guards: Vec<SeedGuard>,
-    pub(crate) target: ConfigPositionTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

@@ -1,4 +1,5 @@
 use super::super::*;
+use super::save_through_document;
 use crate::config::test_helpers::with_temp_config_home;
 use std::fs;
 
@@ -279,10 +280,14 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
         )
         .unwrap();
 
+        // Startup records the migration; that stamp is what protects a pair
+        // the user deliberately restores afterwards.
+        Config::persist_pending_migrations().expect("startup migration write succeeds");
+
         let mut migrated = Config::load().expect("legacy load succeeds").config;
         migrated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
         migrated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
-        migrated.save().expect("saving revision succeeds");
+        save_through_document(migrated);
 
         let reloaded = Config::load().expect("current load succeeds").config;
         assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
@@ -365,13 +370,42 @@ fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
         // unbinds the cycle action; the saved revision protects it.
         migrated.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
         migrated.keybindings.ui.cycle_toolbar_display = Vec::new();
-        migrated.save().expect("saving revision succeeds");
+        save_through_document(migrated);
 
         let reloaded = Config::load().expect("current load succeeds").config;
         assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
         assert_eq!(reloaded.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
         assert!(reloaded.keybindings.ui.cycle_toolbar_display.is_empty());
         assert!(reloaded.keybindings.build_action_map().is_ok());
+    });
+}
+
+#[test]
+fn a_pre_input_hud_file_that_claims_ctrl_shift_k_keeps_it_and_unbinds_the_hud() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        // Revision 2 is the last revision written before `toggle_input_hud`
+        // existed, so the file cannot have opted out of its default.
+        fs::write(
+            primary_dir.join("config.toml"),
+            "config_revision = 2\n\n[keybindings]\ncapture_clipboard_full = ['Ctrl+Shift+K']\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds").config;
+
+        assert_eq!(
+            loaded.keybindings.capture.capture_clipboard_full,
+            ["Ctrl+Shift+K"],
+            "the authored binding keeps the shortcut"
+        );
+        assert!(
+            loaded.keybindings.ui.toggle_input_hud.is_empty(),
+            "the input HUD must not steal a shortcut the file already used"
+        );
+        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert!(loaded.keybindings.build_action_map().is_ok());
     });
 }
 

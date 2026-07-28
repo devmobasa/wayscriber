@@ -9,9 +9,10 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
+use crate::backend::wayland::state::MoveDragKind;
 use crate::config::{
-    Config, ToolbarItemOrderGroup, ToolbarSectionVisibility, fold_legacy_section_flags,
-    item_visibility_setting, resettable_individual_toolbar_item_ids,
+    Config, ToolbarItemOrderGroup, ToolbarSectionVisibility, TopDisplayMode,
+    fold_legacy_section_flags, item_visibility_setting, resettable_individual_toolbar_item_ids,
 };
 use crate::input::InputState;
 use crate::runtime_ui_state::*;
@@ -88,14 +89,14 @@ struct ActiveItemDrag {
 
 #[derive(Debug)]
 struct ActivePositionDrag {
-    target: ConfigPositionTarget,
-    session: ConfigPositionPreviewSession,
+    kind: MoveDragKind,
+    session: RuntimeUiPreviewSession,
 }
 
 #[derive(Debug, Default)]
 pub(in crate::backend::wayland) struct UnavailablePersistencePreviews {
     item_drag: Option<PreviewRollbackSnapshot>,
-    position_drag: Option<(ConfigPositionTarget, PreviewRollbackSnapshot)>,
+    position_drag: Option<(MoveDragKind, PreviewRollbackSnapshot)>,
 }
 
 impl UnavailablePersistencePreviews {
@@ -136,30 +137,33 @@ impl UnavailablePersistencePreviews {
 
     fn begin_position_drag(
         &mut self,
-        target: ConfigPositionTarget,
+        kind: MoveDragKind,
         positions: ToolbarPositionSnapshot,
     ) -> bool {
-        if let Some((active_target, _)) = &self.position_drag {
-            return *active_target == target;
+        if let Some((active_kind, _)) = &self.position_drag {
+            return *active_kind == kind;
         }
-        self.position_drag = Some((target, position_rollback(target, positions)));
+        self.position_drag = Some((kind, position_rollback(kind, positions)));
         true
     }
 
-    fn position_drag_update_allowed(&self, target: ConfigPositionTarget) -> bool {
+    fn position_drag_update_allowed(&self, kind: MoveDragKind) -> bool {
         self.position_drag
             .as_ref()
-            .is_some_and(|(active_target, _)| *active_target == target)
+            .is_some_and(|(active_kind, _)| *active_kind == kind)
     }
 
-    fn finish_position_drag(&mut self, commit: bool) -> (ToolbarRuntimeFinish, bool) {
+    /// Without a runtime store there is nowhere to persist the drag, so a
+    /// committed drag stays process-only and `config.toml` is never touched —
+    /// the same contract every other runtime-owned target already has.
+    fn finish_position_drag(&mut self, commit: bool) -> ToolbarRuntimeFinish {
         let Some((_, rollback)) = self.position_drag.take() else {
-            return (ToolbarRuntimeFinish::KeepPreview, false);
+            return ToolbarRuntimeFinish::KeepPreview;
         };
         if commit {
-            (ToolbarRuntimeFinish::KeepPreview, true)
+            ToolbarRuntimeFinish::KeepPreview
         } else {
-            (ToolbarRuntimeFinish::Rollback(rollback), false)
+            ToolbarRuntimeFinish::Rollback(rollback)
         }
     }
 }
@@ -224,6 +228,9 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             }
             (InteractionSeedTarget::SidePosition, InteractionSeedValue::Position(position)) => {
                 positions.side = (position.x.get(), position.y.get());
+            }
+            (InteractionSeedTarget::TopDisplayMode, InteractionSeedValue::TopDisplayMode(mode)) => {
+                apply_persisted_top_display_mode(input, *mode);
             }
             (InteractionSeedTarget::BoardPin(board_id), InteractionSeedValue::Bool(pinned)) => {
                 input.apply_board_pinned_runtime(board_id, *pinned);
@@ -309,6 +316,12 @@ fn runtime_seeds_from_config(
             )
             .context("side toolbar position seed is not finite")?,
         ),
+    )?;
+    insert(
+        InteractionSeedTarget::TopDisplayMode,
+        InteractionSeedValue::TopDisplayMode(PersistedTopDisplayMode::from_display_mode(
+            config.ui.toolbar.top_display_mode,
+        )),
     )?;
     for (board_id, pinned) in board_pin_seeds {
         insert(
@@ -396,6 +409,7 @@ fn toolbar_values(
             InteractionSeedTarget::SidePane,
             InteractionSeedValue::SidePane(input.toolbar_side_pane),
         ),
+        Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode, input),
         Target::CollapsedSection(section) => RuntimeUiMutationValues::one(
             InteractionSeedTarget::CollapsedSection(section),
             InteractionSeedValue::Bool(input.toolbar_collapsed_side_sections.contains(&section)),
@@ -431,6 +445,50 @@ fn toolbar_values(
     }
 }
 
+/// The persisted form of a live top-display mode.
+///
+/// While presenter mode owns the top strip, the saved pre-presenter mode wins
+/// over the temporary live mapping; `Hidden` always folds to `Full` because a
+/// hidden strip is runtime-only and `top_pinned` governs startup.
+fn persisted_top_display_mode(
+    current: TopDisplayMode,
+    presenter_restore: Option<TopDisplayMode>,
+) -> PersistedTopDisplayMode {
+    PersistedTopDisplayMode::from_display_mode(presenter_restore.unwrap_or(current))
+}
+
+fn top_display_mode_values(
+    mode: TopDisplayMode,
+    input: &InputState,
+) -> std::result::Result<RuntimeUiMutationValues, MutationShapeError> {
+    let presenter_restore = input
+        .presenter_restore
+        .as_ref()
+        .and_then(|restore| restore.toolbar_top_display_mode);
+    RuntimeUiMutationValues::one(
+        InteractionSeedTarget::TopDisplayMode,
+        InteractionSeedValue::TopDisplayMode(persisted_top_display_mode(mode, presenter_restore)),
+    )
+}
+
+/// Apply a persisted display mode to the live UI.
+///
+/// While presenter mode holds the strip in its own mapping, the runtime value
+/// belongs to what presenter will restore, not to the live strip; anywhere
+/// else it is the live strip's mode.
+fn apply_persisted_top_display_mode(input: &mut InputState, mode: PersistedTopDisplayMode) {
+    let mode = mode.display_mode();
+    if let Some(restore) = input.presenter_restore.as_mut()
+        && restore.toolbar_top_display_mode.is_some()
+    {
+        restore.toolbar_top_display_mode = Some(mode);
+        return;
+    }
+    if input.toolbar_top_display_mode != mode {
+        input.set_top_display_mode(mode);
+    }
+}
+
 fn apply_live_toolbar_state(
     input: &mut InputState,
     live: &RuntimeUiLiveState,
@@ -440,6 +498,15 @@ fn apply_live_toolbar_state(
         Some(InteractionSeedValue::Bool(value)) => Some(*value),
         _ => None,
     };
+    // Applied before `TopMinimized` so that entering micro (which clears the
+    // minimized flag) cannot drop a minimized state that is also being
+    // restored in the same pass.
+    if include(&InteractionSeedTarget::TopDisplayMode)
+        && let Some(InteractionSeedValue::TopDisplayMode(mode)) =
+            live.get(&InteractionSeedTarget::TopDisplayMode)
+    {
+        apply_persisted_top_display_mode(input, *mode);
+    }
     if include(&InteractionSeedTarget::TopPinned)
         && let Some(value) = bool_value(InteractionSeedTarget::TopPinned)
     {
@@ -554,22 +621,87 @@ fn runtime_preview_authority(
     }
 }
 
+/// One of the two toolbar positions a move drag can write.
+///
+/// Position drags only ever touch these two overrides. Naming them as their own
+/// type keeps the seed target and the snapshot field that feeds it in lockstep,
+/// so neither has to be recovered from the other at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PositionDragTarget {
+    Top,
+    Side,
+}
+
+impl PositionDragTarget {
+    fn offsets(self, positions: ToolbarPositionSnapshot) -> (f64, f64) {
+        match self {
+            Self::Top => positions.top,
+            Self::Side => positions.side,
+        }
+    }
+}
+
+impl From<PositionDragTarget> for InteractionSeedTarget {
+    fn from(target: PositionDragTarget) -> Self {
+        match target {
+            PositionDragTarget::Top => Self::TopPosition,
+            PositionDragTarget::Side => Self::SidePosition,
+        }
+    }
+}
+
+/// The override targets a toolbar drag of `kind` may write.
+///
+/// A side drag can change whether the side palette overlaps the top strip, and
+/// drag completion reconciles the top strip's X offset against that new base,
+/// so it owns both position targets in one mutation scope.
+fn position_drag_targets(kind: MoveDragKind) -> &'static [PositionDragTarget] {
+    match kind {
+        MoveDragKind::Top => &[PositionDragTarget::Top],
+        MoveDragKind::Side => &[PositionDragTarget::Top, PositionDragTarget::Side],
+    }
+}
+
+fn position_seed_targets(kind: MoveDragKind) -> impl Iterator<Item = InteractionSeedTarget> {
+    position_drag_targets(kind)
+        .iter()
+        .copied()
+        .map(InteractionSeedTarget::from)
+}
+
 fn position_rollback(
-    target: ConfigPositionTarget,
+    kind: MoveDragKind,
     positions: ToolbarPositionSnapshot,
 ) -> PreviewRollbackSnapshot {
     let mut values = std::collections::BTreeMap::new();
-    for seed_target in target.seed_targets() {
-        let raw = match seed_target {
-            InteractionSeedTarget::TopPosition => positions.top,
-            InteractionSeedTarget::SidePosition => positions.side,
-            _ => unreachable!("config position target returned a runtime-owned seed"),
-        };
-        if let Some(position) = ToolbarPositionSeed::new(raw.0, raw.1) {
-            values.insert(seed_target, InteractionSeedValue::Position(position));
+    for target in position_drag_targets(kind) {
+        let (x, y) = target.offsets(positions);
+        if let Some(position) = ToolbarPositionSeed::new(x, y) {
+            values.insert(
+                InteractionSeedTarget::from(*target),
+                InteractionSeedValue::Position(position),
+            );
         }
     }
     PreviewRollbackSnapshot { values }
+}
+
+/// The committed values for a finished drag, or `None` when any guarded offset
+/// is not finite and therefore cannot be stored as an override.
+fn position_values(
+    kind: MoveDragKind,
+    positions: ToolbarPositionSnapshot,
+) -> Option<RuntimeUiMutationValues> {
+    let mut values = Vec::new();
+    for target in position_drag_targets(kind) {
+        let (x, y) = target.offsets(positions);
+        let position = ToolbarPositionSeed::new(x, y)?;
+        values.push((
+            InteractionSeedTarget::from(*target),
+            InteractionSeedValue::Position(position),
+        ));
+    }
+    RuntimeUiMutationValues::batch(values).ok()
 }
 
 fn rejected_source_mutation(

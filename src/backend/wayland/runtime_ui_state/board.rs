@@ -134,13 +134,9 @@ impl ToolbarRuntimeState {
         input.apply_board_pinned_runtime(&board_id, desired);
         let values = RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(desired))
             .expect("board pin value matches its runtime target");
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session,
-                intent: RuntimePreviewFinishIntent::Commit(values),
-            },
-            |_, _| unreachable!("runtime board mutation cannot write config"),
-        );
+        let result = self
+            .controller
+            .finish_preview(session, RuntimePreviewFinishIntent::Commit(values));
         Some(self.finish_result(result))
     }
 
@@ -247,13 +243,7 @@ impl ToolbarRuntimeState {
         } else {
             RuntimePreviewFinishIntent::Cancel
         };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent,
-            },
-            |_, _| unreachable!("runtime board mutation cannot write config"),
-        );
+        let result = self.controller.finish_preview(prepared.session, intent);
         self.finish_result(result)
     }
 }

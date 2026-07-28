@@ -10,7 +10,7 @@
 # Delete this config file only to reset authored settings to built-in defaults.
 
 # Internal migration provenance. Keep this value when editing the file.
-config_revision = 2
+config_revision = 3
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
@@ -510,8 +510,10 @@ side_minimized = false
 
 # Display form of the top strip restored at startup: "full" or "micro"
 # (one 44px round chip: active tool glyph + a ring in the current color).
-# The cycle keybinding updates this; a cycle-hidden strip is runtime-only
-# and comes back per top_pinned
+# This is the authored default. The cycle keybinding and the micro chip
+# persist their choice to runtime-ui.toml instead, and editing this value
+# again takes over from that saved choice. A cycle-hidden strip is
+# runtime-only and comes back per top_pinned
 top_display_mode = "full"
 
 # Where the side-palette functions live: "pill" (default) or "panel".
@@ -601,7 +603,9 @@ show_preset_toasts = true
 # Show cursor tool preview bubble near the pointer
 show_tool_preview = false
 
-# Initial toolbar offsets (layer-shell/inline)
+# Authored default toolbar offsets (layer-shell/inline). Dragging a toolbar
+# persists its position to runtime-ui.toml instead of rewriting these;
+# editing these values again takes over from the saved drag.
 # Horizontal offset for the top toolbar
 top_offset = 0.0
 # Vertical offset for the top toolbar (move top bar down/up)

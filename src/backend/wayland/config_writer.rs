@@ -5,9 +5,9 @@
 //! durable atomic write so an fsync cannot delay input feedback.
 
 use crate::config::{
-    Config, ConfigDocument, QuickColorWrite, StatusBarItem, ToolPresetConfig, ToolbarItemId,
-    ToolbarItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
-    TopDisplayMode,
+    Action, Config, ConfigDocument, QuickColorWrite, RuntimeConfigBackup, StatusBarItem,
+    ToolPresetConfig, ToolbarItemId, ToolbarItemVisibilitySetting, ToolbarLayoutMode,
+    ToolbarSectionFlag, item_visibility_setting,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardConfigUpdate;
@@ -24,32 +24,19 @@ const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) enum ConfigMutation {
-    ToolbarLayout {
-        mode: ToolbarLayoutMode,
-        sections: ToolbarSectionVisibility,
-    },
+    ToolbarLayout(ToolbarLayoutMode),
     ToolbarSectionVisibility {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
         flag: ToolbarSectionFlag,
         visible: bool,
     },
-    ToolbarTopDisplayMode(TopDisplayMode),
     ToolbarUseIcons(bool),
     ToolbarShowMoreColors(bool),
     ToolbarContextAwareUi(bool),
     ToolbarPresetToasts(bool),
     ToolbarToolPreview(bool),
     ToolbarDelaySliders(bool),
-    ToolbarTopPosition {
-        x: f64,
-        y: f64,
-    },
-    ToolbarSidePosition {
-        top_x: f64,
-        side_x: f64,
-        side_y: f64,
-    },
     ShowStatusBar(bool),
     StatusBarInteractive(bool),
     StatusBarItem {
@@ -76,6 +63,32 @@ pub(in crate::backend::wayland) enum ConfigMutation {
         index: usize,
         color: Color,
     },
+    /// One action's complete `[keybindings]` entry, as the overlay's shortcut
+    /// editor merged it. The editor owns conflict detection and validation
+    /// before queueing; this carries only the field that survived that check.
+    Keybinding {
+        action: Action,
+        bindings: Vec<String>,
+        receipt: ConfigWriteReceipt,
+    },
+}
+
+/// Identity the event-loop state assigns to one accepted shortcut edit.
+///
+/// The writer returns it only after the batch is durable, allowing the live
+/// keymap to stop replaying that edit over later on-disk changes without
+/// sharing state with the worker thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct ConfigWriteReceipt(u64);
+
+impl ConfigWriteReceipt {
+    pub(in crate::backend::wayland) const fn initial() -> Self {
+        Self(0)
+    }
+
+    pub(in crate::backend::wayland) fn successor(self) -> Option<Self> {
+        self.0.checked_add(1).map(Self)
+    }
 }
 
 impl ConfigMutation {
@@ -83,9 +96,9 @@ impl ConfigMutation {
     /// mutation's externally editable target disappeared before persistence.
     pub(in crate::backend::wayland) fn apply(&self, config: &mut Config) -> bool {
         match self {
-            Self::ToolbarLayout { mode, sections } => {
+            Self::ToolbarLayout(mode) => {
                 config.ui.toolbar.layout_mode = *mode;
-                apply_section_visibility(config, *sections);
+                rebaseline_legacy_section_flags(config);
             }
             Self::ToolbarSectionVisibility {
                 id,
@@ -100,26 +113,12 @@ impl ConfigMutation {
                     .set_visibility_setting(*id, *setting);
                 apply_section_compatibility_mirror(config, *flag, *visible);
             }
-            Self::ToolbarTopDisplayMode(mode) => config.ui.toolbar.top_display_mode = *mode,
             Self::ToolbarUseIcons(value) => config.ui.toolbar.use_icons = *value,
             Self::ToolbarShowMoreColors(value) => config.ui.toolbar.show_more_colors = *value,
             Self::ToolbarContextAwareUi(value) => config.ui.toolbar.context_aware_ui = *value,
             Self::ToolbarPresetToasts(value) => config.ui.toolbar.show_preset_toasts = *value,
             Self::ToolbarToolPreview(value) => config.ui.toolbar.show_tool_preview = *value,
             Self::ToolbarDelaySliders(value) => config.ui.toolbar.show_delay_sliders = *value,
-            Self::ToolbarTopPosition { x, y } => {
-                config.ui.toolbar.top_offset = *x;
-                config.ui.toolbar.top_offset_y = *y;
-            }
-            Self::ToolbarSidePosition {
-                top_x,
-                side_x,
-                side_y,
-            } => {
-                config.ui.toolbar.top_offset = *top_x;
-                config.ui.toolbar.side_offset_x = *side_x;
-                config.ui.toolbar.side_offset = *side_y;
-            }
             Self::ShowStatusBar(value) => config.ui.show_status_bar = *value,
             Self::StatusBarInteractive(value) => config.ui.status_bar_interactive = *value,
             Self::StatusBarItem { item, visible } => {
@@ -156,25 +155,70 @@ impl ConfigMutation {
                     QuickColorWrite::SlotMissing
                 );
             }
+            Self::Keybinding {
+                action, bindings, ..
+            } => {
+                // Runtime-only actions have no stored field. The editor
+                // refuses them before queueing, so this only keeps an
+                // impossible request from forcing a no-op write.
+                return config
+                    .keybindings
+                    .set_bindings_for_action(*action, bindings.clone())
+                    .is_ok();
+            }
         }
         true
     }
 
+    /// Whether persisting this edit also moves a runtime-UI seed.
+    ///
+    /// `runtime_seeds_from_config` derives its seeds from the toolbar item
+    /// resolution — which folds `layout_mode`, the legacy section flags, and
+    /// `ui.toolbar.items` — and from the configured board pins. An edit to any
+    /// of those must refresh the seed registry, or override semantics keep
+    /// comparing against the pre-edit baseline until an unrelated event
+    /// refreshes them. Spelled out per variant on purpose: a new mutation has
+    /// to classify itself rather than inherit a wildcard.
+    pub(in crate::backend::wayland) fn affects_runtime_ui_seeds(&self) -> bool {
+        match self {
+            Self::ToolbarLayout(_)
+            | Self::ToolbarSectionVisibility { .. }
+            | Self::BoardConfig(_) => true,
+            Self::ToolbarUseIcons(_)
+            | Self::ToolbarShowMoreColors(_)
+            | Self::ToolbarContextAwareUi(_)
+            | Self::ToolbarPresetToasts(_)
+            | Self::ToolbarToolPreview(_)
+            | Self::ToolbarDelaySliders(_)
+            | Self::ShowStatusBar(_)
+            | Self::StatusBarInteractive(_)
+            | Self::StatusBarItem { .. }
+            | Self::StatusBoardBadge(_)
+            | Self::StatusPageBadge(_)
+            | Self::FloatingBadgeAlways(_)
+            | Self::FloatingBadge(_)
+            | Self::ZoomChip(_)
+            | Self::HistoryCustomSection(_)
+            | Self::ClickHighlight { .. }
+            | Self::InputHud(_)
+            | Self::PresetSlot { .. }
+            | Self::QuickColor { .. }
+            | Self::Keybinding { .. } => false,
+        }
+    }
+
     fn key(&self) -> Option<ConfigMutationKey> {
         let key = match *self {
-            Self::ToolbarLayout { .. } => ConfigMutationKey::ToolbarLayout,
+            Self::ToolbarLayout(_) => ConfigMutationKey::ToolbarLayout,
             Self::ToolbarSectionVisibility { id, .. } => {
                 ConfigMutationKey::ToolbarSectionVisibility(id)
             }
-            Self::ToolbarTopDisplayMode(_) => ConfigMutationKey::ToolbarTopDisplayMode,
             Self::ToolbarUseIcons(_) => ConfigMutationKey::ToolbarUseIcons,
             Self::ToolbarShowMoreColors(_) => ConfigMutationKey::ToolbarShowMoreColors,
             Self::ToolbarContextAwareUi(_) => ConfigMutationKey::ToolbarContextAwareUi,
             Self::ToolbarPresetToasts(_) => ConfigMutationKey::ToolbarPresetToasts,
             Self::ToolbarToolPreview(_) => ConfigMutationKey::ToolbarToolPreview,
             Self::ToolbarDelaySliders(_) => ConfigMutationKey::ToolbarDelaySliders,
-            Self::ToolbarTopPosition { .. } => ConfigMutationKey::ToolbarTopPosition,
-            Self::ToolbarSidePosition { .. } => ConfigMutationKey::ToolbarSidePosition,
             Self::ShowStatusBar(_) => ConfigMutationKey::ShowStatusBar,
             Self::StatusBarInteractive(_) => ConfigMutationKey::StatusBarInteractive,
             Self::StatusBarItem { item, .. } => ConfigMutationKey::StatusBarItem(item),
@@ -192,8 +236,40 @@ impl ConfigMutation {
             Self::BoardConfig(_) => return None,
             Self::PresetSlot { slot, .. } => ConfigMutationKey::PresetSlot(slot),
             Self::QuickColor { index, .. } => ConfigMutationKey::QuickColor(index),
+            // Per action: re-editing one shortcut replaces the pending value,
+            // while a different action's edit keeps its own entry instead of
+            // clobbering the one already queued.
+            Self::Keybinding { action, .. } => ConfigMutationKey::Keybinding(action),
         };
         Some(key)
+    }
+
+    fn keybinding_receipt(&self) -> Option<ConfigWriteReceipt> {
+        match self {
+            Self::Keybinding { receipt, .. } => Some(*receipt),
+            Self::ToolbarLayout(_)
+            | Self::ToolbarSectionVisibility { .. }
+            | Self::ToolbarUseIcons(_)
+            | Self::ToolbarShowMoreColors(_)
+            | Self::ToolbarContextAwareUi(_)
+            | Self::ToolbarPresetToasts(_)
+            | Self::ToolbarToolPreview(_)
+            | Self::ToolbarDelaySliders(_)
+            | Self::ShowStatusBar(_)
+            | Self::StatusBarInteractive(_)
+            | Self::StatusBarItem { .. }
+            | Self::StatusBoardBadge(_)
+            | Self::StatusPageBadge(_)
+            | Self::FloatingBadgeAlways(_)
+            | Self::FloatingBadge(_)
+            | Self::ZoomChip(_)
+            | Self::HistoryCustomSection(_)
+            | Self::ClickHighlight { .. }
+            | Self::InputHud(_)
+            | Self::BoardConfig(_)
+            | Self::PresetSlot { .. }
+            | Self::QuickColor { .. } => None,
+        }
     }
 }
 
@@ -201,15 +277,12 @@ impl ConfigMutation {
 enum ConfigMutationKey {
     ToolbarLayout,
     ToolbarSectionVisibility(ToolbarItemId),
-    ToolbarTopDisplayMode,
     ToolbarUseIcons,
     ToolbarShowMoreColors,
     ToolbarContextAwareUi,
     ToolbarPresetToasts,
     ToolbarToolPreview,
     ToolbarDelaySliders,
-    ToolbarTopPosition,
-    ToolbarSidePosition,
     ShowStatusBar,
     StatusBarInteractive,
     StatusBarItem(StatusBarItem),
@@ -222,18 +295,35 @@ enum ConfigMutationKey {
     InputHud,
     PresetSlot(usize),
     QuickColor(usize),
+    Keybinding(Action),
 }
 
-fn apply_section_visibility(config: &mut Config, sections: ToolbarSectionVisibility) {
-    config.ui.toolbar.show_actions_section = sections.show_actions_section;
-    config.ui.toolbar.show_actions_advanced = sections.show_actions_advanced;
-    config.ui.toolbar.show_zoom_actions = sections.show_zoom_actions;
-    config.ui.toolbar.show_pages_section = sections.show_pages_section;
-    config.ui.toolbar.show_boards_section = sections.show_boards_section;
-    config.ui.toolbar.show_presets = sections.show_presets;
-    config.ui.toolbar.show_step_section = sections.show_step_section;
-    config.ui.toolbar.show_text_controls = sections.show_text_controls;
-    config.ui.toolbar.show_settings_section = sections.show_settings_section;
+/// Re-baseline the legacy `show_*` mirrors a layout switch leaves behind.
+///
+/// Loading folds a legacy flag into an explicit item override wherever it
+/// disagrees with the active mode's baseline, so a switch that left the old
+/// mode's values in place would come back as sections pinned to the mode the
+/// user just left. Only sections without an explicit override need the mirror:
+/// the fold skips the rest, and `show_settings_section` is authored-only input
+/// the resolver ignores. Everything else the mode preset implies stays derived
+/// at load instead of being materialized into the file.
+fn rebaseline_legacy_section_flags(config: &mut Config) {
+    let toolbar = &config.ui.toolbar;
+    let mode = toolbar.layout_mode;
+    let resolved = toolbar.items.resolved();
+    let mirrors = ToolbarSectionFlag::ALL.map(|flag| {
+        let baseline = matches!(
+            item_visibility_setting(&resolved, flag.item_id()),
+            ToolbarItemVisibilitySetting::Default
+        )
+        .then(|| flag.baseline(mode, &toolbar.mode_overrides));
+        (flag, baseline)
+    });
+    for (flag, baseline) in mirrors {
+        if let Some(visible) = baseline {
+            apply_section_compatibility_mirror(config, flag, visible);
+        }
+    }
 }
 
 fn apply_section_compatibility_mirror(
@@ -265,13 +355,18 @@ type PersistMutations = Box<dyn FnMut(&[ConfigMutation]) -> Result<()> + Send>;
 /// Event-loop facade for the channel-owned config writer.
 pub(in crate::backend::wayland) struct ConfigWriter {
     sender: Option<Sender<WriterCommand>>,
+    completed_keybindings: Receiver<ConfigWriteReceipt>,
     worker: Option<JoinHandle<()>>,
 }
 
 impl ConfigWriter {
     pub(in crate::backend::wayland) fn new() -> Self {
         match Config::get_config_path() {
-            Ok(path) => Self::for_path(path),
+            // The worker owns the overlay process's single config backup: it
+            // is the only thing here that rewrites `config.toml`, and one
+            // writer is built per overlay, so the guard's lifetime is the
+            // process's.
+            Ok(path) => Self::for_path(path, RuntimeConfigBackup::new()),
             Err(error) => {
                 warn!("Runtime config persistence is unavailable: {error:#}");
                 Self::unavailable()
@@ -279,21 +374,23 @@ impl ConfigWriter {
         }
     }
 
-    fn for_path(path: PathBuf) -> Self {
+    fn for_path(path: PathBuf, mut backup: RuntimeConfigBackup) -> Self {
         Self::spawn(Box::new(move |mutations| {
-            persist_mutations_to_path(&path, mutations)
+            persist_mutations_to_path(&path, mutations, &mut backup)
         }))
     }
 
     fn spawn(persist: PersistMutations) -> Self {
         let (sender, receiver) = channel();
+        let (completion_sender, completed_keybindings) = channel();
         let worker = thread::Builder::new()
             .name("wayscriber-config-writer".to_string())
-            .spawn(move || run_writer(receiver, persist));
+            .spawn(move || run_writer(receiver, completion_sender, persist));
 
         match worker {
             Ok(worker) => Self {
                 sender: Some(sender),
+                completed_keybindings,
                 worker: Some(worker),
             },
             Err(error) => {
@@ -304,8 +401,10 @@ impl ConfigWriter {
     }
 
     fn unavailable() -> Self {
+        let (_completion_sender, completed_keybindings) = channel();
         Self {
             sender: None,
+            completed_keybindings,
             worker: None,
         }
     }
@@ -316,6 +415,13 @@ impl ConfigWriter {
         self.sender
             .as_ref()
             .is_some_and(|sender| sender.send(WriterCommand::Apply(mutation.clone())).is_ok())
+    }
+
+    /// Drain shortcut edits whose batches have reached durable storage.
+    pub(in crate::backend::wayland) fn take_completed_keybinding_writes(
+        &self,
+    ) -> Vec<ConfigWriteReceipt> {
+        self.completed_keybindings.try_iter().collect()
     }
 
     /// Flush queued mutations and wait for the writer to finish.
@@ -360,7 +466,11 @@ fn receive_worker_event(
     }
 }
 
-fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) {
+fn run_writer(
+    receiver: Receiver<WriterCommand>,
+    completion_sender: Sender<ConfigWriteReceipt>,
+    mut persist: PersistMutations,
+) {
     let mut pending = Vec::new();
     let mut write_after = None;
     let mut retry_delay = INITIAL_RETRY_DELAY;
@@ -375,12 +485,13 @@ fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) 
                 write_after = Some(WRITE_DEBOUNCE);
             }
             WorkerEvent::Command(WriterCommand::Shutdown) | WorkerEvent::Disconnected => {
-                persist_before_shutdown(&mut persist, &pending);
+                persist_before_shutdown(&mut persist, &pending, &completion_sender);
                 return;
             }
             WorkerEvent::Timeout => match persist(&pending) {
                 Ok(()) => {
                     debug!("Processed {} runtime config edit(s)", pending.len());
+                    acknowledge_keybinding_writes(&completion_sender, &pending);
                     pending.clear();
                     write_after = None;
                     retry_delay = INITIAL_RETRY_DELAY;
@@ -398,15 +509,36 @@ fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) 
     }
 }
 
-fn persist_before_shutdown(persist: &mut PersistMutations, pending: &[ConfigMutation]) {
+fn acknowledge_keybinding_writes(
+    completion_sender: &Sender<ConfigWriteReceipt>,
+    pending: &[ConfigMutation],
+) {
+    for receipt in pending
+        .iter()
+        .filter_map(ConfigMutation::keybinding_receipt)
+    {
+        if completion_sender.send(receipt).is_err() {
+            return;
+        }
+    }
+}
+
+fn persist_before_shutdown(
+    persist: &mut PersistMutations,
+    pending: &[ConfigMutation],
+    completion_sender: &Sender<ConfigWriteReceipt>,
+) {
     if pending.is_empty() {
         return;
     }
     match persist(pending) {
-        Ok(()) => debug!(
-            "Processed {} runtime config edit(s) during shutdown",
-            pending.len()
-        ),
+        Ok(()) => {
+            debug!(
+                "Processed {} runtime config edit(s) during shutdown",
+                pending.len()
+            );
+            acknowledge_keybinding_writes(completion_sender, pending);
+        }
         Err(error) => warn!(
             "Failed to persist {} runtime config edit(s) during shutdown: {error:#}",
             pending.len()
@@ -414,21 +546,56 @@ fn persist_before_shutdown(persist: &mut PersistMutations, pending: &[ConfigMuta
     }
 }
 
-fn persist_mutations_to_path(path: &Path, mutations: &[ConfigMutation]) -> Result<()> {
+pub(in crate::backend::wayland) fn persist_mutations_to_path(
+    path: &Path,
+    mutations: &[ConfigMutation],
+    backup: &mut RuntimeConfigBackup,
+) -> Result<()> {
     let document = ConfigDocument::load_from_path(path)?;
     let mut config = document.config().clone();
-    let mut applied = false;
     for mutation in mutations {
         if mutation.apply(&mut config) {
-            applied = true;
-        } else if let ConfigMutation::QuickColor { index, .. } = mutation {
+            continue;
+        }
+        if let ConfigMutation::QuickColor { index, .. } = mutation {
             warn!("Quick color slot {index} is no longer in config.toml; recolor was not saved");
+        } else if let ConfigMutation::Keybinding { action, .. } = mutation {
+            warn!("{action:?} has no configurable keybinding; the shortcut was not saved");
         }
     }
-    if applied {
-        document.save(config)?;
+    // `apply` reports that it stored a value, not that the value differed, so
+    // a toolbar toggled back to where it started would otherwise rewrite the
+    // file byte-identically and spend the process's one backup snapshot on it.
+    // Returning early is still a completed batch: the caller acknowledges a
+    // shortcut edit's receipt on `Ok(())`, not on a write having happened, so
+    // the editor stops replaying it exactly as if the save had run.
+    if config_matches(document.config(), &config) {
+        debug!("Runtime config batch changed nothing; leaving config.toml untouched");
+        return Ok(());
     }
+    // Taken here, after the batch is known to change something, so the copy is
+    // of the file as this session found it rather than as an earlier no-op left
+    // it.
+    backup.ensure_snapshot(path);
+    document.save(config)?;
     Ok(())
+}
+
+/// Whether two configs would produce the same file.
+///
+/// `Config` has no `PartialEq`: the derive would have to reach every type in a
+/// tree several dozen structs wide, for one comparison. The document merge
+/// already measures its diff on the serialized form, so comparing that form
+/// asks the save's own question. A config that cannot be serialized cannot be
+/// compared either, and is reported by the save rather than skipped here.
+fn config_matches(previous: &Config, updated: &Config) -> bool {
+    match (
+        toml::to_string_pretty(previous),
+        toml::to_string_pretty(updated),
+    ) {
+        (Ok(previous), Ok(updated)) => previous == updated,
+        _ => false,
+    }
 }
 
 #[cfg(test)]

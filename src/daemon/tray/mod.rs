@@ -14,7 +14,7 @@ use super::types::{
 #[cfg(all(test, feature = "tray"))]
 use super::types::{OverlayActionIntents, VisibilityIntents};
 #[cfg(feature = "tray")]
-use crate::config::TrayIconStyle;
+use crate::config::{RuntimeConfigBackup, TrayIconStyle};
 #[cfg(feature = "tray")]
 use std::sync::Arc;
 #[cfg(feature = "tray")]
@@ -35,6 +35,10 @@ pub(crate) struct WayscriberTray {
     icon_style: TrayIconStyle,
     overlay_active: Arc<AtomicBool>,
     tray_status: Arc<TrayStatusShared>,
+    /// The daemon process's one pre-write copy of `config.toml`. It lives here
+    /// because the tray outlives every menu click and the session-resume
+    /// toggle is the only config write this process makes.
+    config_backup: RuntimeConfigBackup,
 }
 
 #[cfg(feature = "tray")]
@@ -46,6 +50,7 @@ impl WayscriberTray {
         icon_style: TrayIconStyle,
         overlay_active: Arc<AtomicBool>,
         tray_status: Arc<TrayStatusShared>,
+        config_backup: RuntimeConfigBackup,
     ) -> Self {
         Self {
             control,
@@ -54,6 +59,7 @@ impl WayscriberTray {
             icon_style,
             overlay_active,
             tray_status,
+            config_backup,
         }
     }
 
@@ -103,6 +109,7 @@ impl WayscriberTray {
             TrayIconStyle::Auto,
             Arc::new(AtomicBool::new(false)),
             Arc::new(TrayStatusShared::new()),
+            RuntimeConfigBackup::with_directory(std::env::temp_dir().join("wayscriber-tray-tests")),
         )
     }
 }

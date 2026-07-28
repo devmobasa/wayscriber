@@ -15,7 +15,15 @@ use serde::{Deserialize, Serialize};
 ///   (`Ctrl+K` + `Ctrl+Shift+P` vs `Ctrl+Alt+F`).
 /// - 2: moved `F2` from the `toggle_toolbar` default pair (`["F2", "F9"]`)
 ///   to the new `cycle_toolbar_display` action default (`["F2"]`).
-pub const CURRENT_CONFIG_REVISION: u32 = 2;
+/// - 3: gave the new `toggle_input_hud` action a `Ctrl+Shift+K` default,
+///   which collides with files that already bound that shortcut elsewhere.
+///
+/// Changing or adding a default keybinding needs a bump here plus a migration
+/// step in `Config::apply_keybinding_migrations`; omitted fields are filled in
+/// by serde, so a new default otherwise lands on top of shortcuts the user
+/// authored for something else. `default_bindings_match_the_checked_in_snapshot`
+/// fails until both are done.
+pub const CURRENT_CONFIG_REVISION: u32 = 3;
 
 /// Main configuration structure containing all user settings.
 ///

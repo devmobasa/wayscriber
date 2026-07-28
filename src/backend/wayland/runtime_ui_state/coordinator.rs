@@ -67,6 +67,18 @@ impl ToolbarRuntimeState {
         input.toolbar_visible = input.toolbar_top_visible || input.toolbar_side_visible;
     }
 
+    /// Layer retained position overrides on top of the authored seeds the
+    /// caller already loaded. Nothing is clamped here: an override recorded on
+    /// a different output geometry is clamped on the first apply instead, so a
+    /// disconnected monitor degrades to an on-screen position rather than
+    /// permanently rewriting the stored value.
+    pub(in crate::backend::wayland) fn apply_startup_positions(
+        &self,
+        positions: &mut ToolbarPositionSnapshot,
+    ) {
+        apply_live_toolbar_positions(positions, self.controller.live_state(), |_| true);
+    }
+
     pub(super) fn apply_live_state(
         &self,
         input: &mut InputState,
@@ -83,10 +95,22 @@ impl ToolbarRuntimeState {
         input: &InputState,
     ) -> Option<PreparedToolbarMutation> {
         let values = toolbar_values(target, input).ok()?;
+        self.begin_toolbar_mutation_with_rollback(target, values)
+    }
+
+    /// Begin a toolbar mutation whose pre-change values are already known.
+    ///
+    /// Keyboard-driven changes apply inside `InputState` before the backend
+    /// drains them, so their rollback cannot be read back off the live state.
+    pub(in crate::backend::wayland) fn begin_toolbar_mutation_with_rollback(
+        &self,
+        target: ToolbarRuntimeUiPersistenceTarget,
+        rollback_values: RuntimeUiMutationValues,
+    ) -> Option<PreparedToolbarMutation> {
         let rollback = PreviewRollbackSnapshot {
-            values: values.values().clone(),
+            values: rollback_values.values().clone(),
         };
-        let scope = RuntimeUiMutationScope::batch(values.targets());
+        let scope = RuntimeUiMutationScope::batch(rollback_values.targets());
         match self.controller.begin_runtime_preview(scope, rollback) {
             Ok(session) => Some(PreparedToolbarMutation { target, session }),
             Err(error) => {
@@ -113,13 +137,7 @@ impl ToolbarRuntimeState {
         } else {
             RuntimePreviewFinishIntent::Cancel
         };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: prepared.session,
-                intent,
-            },
-            |_, _| unreachable!("runtime toolbar mutation cannot write config"),
-        );
+        let result = self.controller.finish_preview(prepared.session, intent);
         self.finish_result(result)
     }
 
@@ -179,31 +197,23 @@ impl ToolbarRuntimeState {
         } else {
             RuntimePreviewFinishIntent::Cancel
         };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::RuntimeUi {
-                session: active.session,
-                intent,
-            },
-            |_, _| unreachable!("item-order preview cannot write config"),
-        );
+        let result = self.controller.finish_preview(active.session, intent);
         self.finish_result(result)
     }
 
     pub(in crate::backend::wayland) fn begin_position_drag(
         &mut self,
-        target: ConfigPositionTarget,
+        kind: MoveDragKind,
         positions: ToolbarPositionSnapshot,
     ) -> bool {
         if let Some(active) = &self.position_drag {
-            return active.target == target;
+            return active.kind == kind;
         }
-        let rollback = position_rollback(target, positions);
-        match self
-            .controller
-            .begin_config_position_preview(target, rollback)
-        {
+        let rollback = position_rollback(kind, positions);
+        let scope = RuntimeUiMutationScope::batch(position_seed_targets(kind));
+        match self.controller.begin_runtime_preview(scope, rollback) {
             Ok(session) => {
-                self.position_drag = Some(ActivePositionDrag { target, session });
+                self.position_drag = Some(ActivePositionDrag { kind, session });
                 true
             }
             Err(error) => {
@@ -215,65 +225,34 @@ impl ToolbarRuntimeState {
 
     pub(in crate::backend::wayland) fn position_drag_update_allowed(
         &self,
-        target: ConfigPositionTarget,
+        kind: MoveDragKind,
     ) -> bool {
         self.controller.active_barrier().is_none()
             && self
                 .position_drag
                 .as_ref()
-                .is_some_and(|active| active.target == target)
+                .is_some_and(|active| active.kind == kind)
     }
 
     pub(in crate::backend::wayland) fn finish_position_drag(
         &mut self,
         commit: bool,
         positions: ToolbarPositionSnapshot,
-        apply_config: impl FnOnce(
-            ConfigPositionTarget,
-            ToolbarPositionSeed,
-        ) -> std::result::Result<(), ConfigMutationError>,
-    ) -> (ToolbarRuntimeFinish, bool) {
+    ) -> ToolbarRuntimeFinish {
         let Some(active) = self.position_drag.take() else {
-            return (ToolbarRuntimeFinish::KeepPreview, false);
+            return ToolbarRuntimeFinish::KeepPreview;
         };
-        let position = match active.target {
-            ConfigPositionTarget::Top => positions.top,
-            ConfigPositionTarget::Side => positions.side,
+        // A non-finite offset cannot be stored as an override, so the drag is
+        // cancelled rather than committed.
+        let intent = match commit
+            .then(|| position_values(active.kind, positions))
+            .flatten()
+        {
+            Some(values) => RuntimePreviewFinishIntent::Commit(values),
+            None => RuntimePreviewFinishIntent::Cancel,
         };
-        let guarded_positions_are_finite = active.target.seed_targets().into_iter().all(|target| {
-            let raw = match target {
-                InteractionSeedTarget::TopPosition => positions.top,
-                InteractionSeedTarget::SidePosition => positions.side,
-                _ => unreachable!("config position target returned a runtime-owned seed"),
-            };
-            ToolbarPositionSeed::new(raw.0, raw.1).is_some()
-        });
-        let Some(position) = ToolbarPositionSeed::new(position.0, position.1)
-            .filter(|_| guarded_positions_are_finite)
-        else {
-            let result = self.controller.finish_preview(
-                PreviewFinishRequest::ConfigPosition {
-                    session: active.session,
-                    intent: ConfigPositionFinishIntent::Cancel,
-                },
-                apply_config,
-            );
-            return (self.finish_result(result), false);
-        };
-        let intent = if commit {
-            ConfigPositionFinishIntent::Commit(position)
-        } else {
-            ConfigPositionFinishIntent::Cancel
-        };
-        let result = self.controller.finish_preview(
-            PreviewFinishRequest::ConfigPosition {
-                session: active.session,
-                intent,
-            },
-            apply_config,
-        );
-        let applied_config = matches!(result, PreviewFinishResult::AppliedConfig { .. });
-        (self.finish_result(result), applied_config)
+        let result = self.controller.finish_preview(active.session, intent);
+        self.finish_result(result)
     }
 
     pub(in crate::backend::wayland) fn refresh_config_seeds(
@@ -311,20 +290,16 @@ impl ToolbarRuntimeState {
             input.clear_toolbar_item_drag();
         }
         let position_drag_aborted = self.position_drag.as_ref().is_some_and(|active| {
-            active
-                .session
-                .permit
-                .guards
-                .iter()
-                .any(|guard| changed.contains(&guard.target))
+            let (_, _, guards) = runtime_preview_authority(&active.session);
+            guards.iter().any(|guard| changed.contains(&guard.target))
         });
         let position_rollback = position_drag_aborted.then(|| {
-            let mut rollback = self
-                .position_drag
-                .take()
-                .expect("aborted position drag was just observed")
-                .session
-                .rollback;
+            let mut rollback = runtime_preview_rollback(
+                self.position_drag
+                    .take()
+                    .expect("aborted position drag was just observed")
+                    .session,
+            );
             // A side drag is guarded by both position seeds because its final
             // save can reconcile the top X offset. If only one guard changes,
             // the changed target must come from the new live authority while
@@ -428,11 +403,9 @@ impl ToolbarRuntimeState {
         let effect = match result {
             PreviewFinishResult::AcceptedRuntime { .. }
             | PreviewFinishResult::AppliedLiveOnly
-            | PreviewFinishResult::AppliedConfig { .. }
             | PreviewFinishResult::NoChange => ToolbarRuntimeFinish::KeepPreview,
             PreviewFinishResult::Cancelled { rollback }
-            | PreviewFinishResult::RejectedStaleAuthority { rollback }
-            | PreviewFinishResult::FailedConfig { rollback, .. } => {
+            | PreviewFinishResult::RejectedStaleAuthority { rollback } => {
                 ToolbarRuntimeFinish::Rollback(rollback)
             }
             PreviewFinishResult::AbandonedDuringBarrier { .. } => {
@@ -554,14 +527,11 @@ impl ToolbarRuntimeState {
             self.item_drag = None;
         }
         let position_stale = self.position_drag.as_ref().is_some_and(|active| {
-            active.session.permit.controller_id != self.controller.id()
-                || active.session.permit.authority_epoch != self.controller.authority_epoch()
-                || active
-                    .session
-                    .permit
-                    .guards
-                    .iter()
-                    .any(|guard| !seeds.guard_is_current(guard))
+            let (controller_id, authority_epoch, guards) =
+                runtime_preview_authority(&active.session);
+            controller_id != self.controller.id()
+                || authority_epoch != self.controller.authority_epoch()
+                || guards.iter().any(|guard| !seeds.guard_is_current(guard))
         });
         if position_stale {
             self.position_drag = None;

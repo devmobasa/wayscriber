@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::env_vars::{
     HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
-    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV,
+    XDG_PICTURES_DIR_ENV, XDG_RUNTIME_DIR_ENV, XDG_STATE_HOME_ENV,
 };
 
 /// Resolve the user's home directory.
@@ -60,6 +60,30 @@ pub(crate) fn runtime_ui_state_file() -> PathBuf {
         .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
         .join("wayscriber")
         .join("runtime-ui.toml")
+}
+
+/// Resolve the XDG state directory, falling back to `~/.local/state`.
+///
+/// State, not data: the XDG spec reserves this base directory for files that
+/// persist between runs but are not portable and not worth restoring from a
+/// backup — which is exactly what a rolling safety copy of `config.toml` is.
+pub fn state_dir() -> Option<PathBuf> {
+    if let Some(dir) = env::var_os(XDG_STATE_HOME_ENV)
+        && !dir.is_empty()
+    {
+        return Some(PathBuf::from(dir));
+    }
+    home_dir().map(|home| home.join(".local").join("state"))
+}
+
+/// Directory holding the pre-write snapshots of `config.toml` that runtime
+/// saves take. Kept out of the config directory so the copies never look like
+/// configuration the user is meant to edit.
+pub(crate) fn config_backup_dir() -> PathBuf {
+    state_dir()
+        .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
+        .join("wayscriber")
+        .join("config-backups")
 }
 
 /// Best-effort pictures directory (XDG), falling back to `~/Pictures`.

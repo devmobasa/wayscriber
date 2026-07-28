@@ -16,6 +16,7 @@ mod document;
 mod field_metadata;
 mod io;
 mod paths;
+mod runtime_backup;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
@@ -45,7 +46,8 @@ pub use field_metadata::{
 };
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
-pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
+pub use keybindings::{Action, KeyBinding, KeybindingConflict, KeybindingsConfig};
+pub(crate) use runtime_backup::RuntimeConfigBackup;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,
@@ -80,6 +82,8 @@ pub(crate) use types::{
     item_visibility_setting, resettable_individual_toolbar_item_ids,
     toolbar_item_visibility_override_allowed,
 };
+#[allow(unused_imports)]
+pub use validate::{ConfigValidationReport, InvalidKeybinding, KeybindingConflictResolution};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

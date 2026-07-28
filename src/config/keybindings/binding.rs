@@ -1,12 +1,37 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 /// A single keybinding: a key character with optional modifiers.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct KeyBinding {
     pub key: String,
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
+}
+
+/// Equality and hashing ignore the key name's case, exactly like [`Self::matches`]
+/// and the config-file contract ("key names are case-insensitive"). Deriving
+/// them over the authored spelling instead would let `["ctrl+z"]` and
+/// `["Ctrl+Z"]` coexist as two map entries that no conflict check sees and
+/// dispatch picks between nondeterministically. `key` still holds the authored
+/// spelling so display keeps the user's casing.
+impl PartialEq for KeyBinding {
+    fn eq(&self, other: &Self) -> bool {
+        self.key.eq_ignore_ascii_case(&other.key)
+            && self.ctrl == other.ctrl
+            && self.shift == other.shift
+            && self.alt == other.alt
+    }
+}
+
+impl Hash for KeyBinding {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.to_ascii_lowercase().hash(state);
+        self.ctrl.hash(state);
+        self.shift.hash(state);
+        self.alt.hash(state);
+    }
 }
 
 impl KeyBinding {

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use wayscriber::config::ConfigDocument;
+use wayscriber::config::{ConfigDiagnosticKind, ConfigDocument};
 
 use crate::messages::Message;
 use crate::models::ConfigDraft;
@@ -160,27 +160,69 @@ impl ConfiguratorApp {
     }
 }
 
+const SHOWN_DIAGNOSTICS: usize = 8;
+
 fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMessage {
-    if document.diagnostics().is_empty() {
+    let diagnostics = document.diagnostics();
+    if diagnostics.is_empty() {
         return StatusMessage::success(success);
     }
 
-    let shown = document
-        .diagnostics()
+    let mut message = success.to_string();
+    let mut unknown = Vec::new();
+    let mut conflicts = Vec::new();
+    let mut invalid = Vec::new();
+    // Exhaustive on purpose: a kind with no section here would leave the
+    // status warning-styled and empty of the very thing it is warning about,
+    // so a new variant has to be a compile error rather than a silent drop.
+    for diagnostic in diagnostics {
+        match diagnostic.kind() {
+            ConfigDiagnosticKind::UnknownSetting => unknown.push(diagnostic.path().to_string()),
+            // Both keybinding kinds are resolved in memory only, so the file
+            // the editor is showing still contains them: carry the diagnostic's
+            // own wording, which names the actions, instead of just the path.
+            ConfigDiagnosticKind::KeybindingConflict => conflicts.push(diagnostic.to_string()),
+            ConfigDiagnosticKind::InvalidKeybinding => invalid.push(diagnostic.to_string()),
+        }
+    }
+
+    if !unknown.is_empty() {
+        message.push_str(&format!(
+            "\nUnrecognized settings were preserved: {}.",
+            list_with_overflow(&borrowed(&unknown), ", ")
+        ));
+    }
+    if !invalid.is_empty() {
+        message.push_str(&format!(
+            "\nShortcuts that could not be parsed are ignored for the running session; the file still has them: {}.",
+            list_with_overflow(&borrowed(&invalid), "; ")
+        ));
+    }
+    if !conflicts.is_empty() {
+        message.push_str(&format!(
+            "\nConflicting shortcuts were resolved for the running session only; the file still has them: {}.",
+            list_with_overflow(&borrowed(&conflicts), "; ")
+        ));
+    }
+
+    StatusMessage::warning(message)
+}
+
+fn borrowed(entries: &[String]) -> Vec<&str> {
+    entries.iter().map(String::as_str).collect()
+}
+
+fn list_with_overflow(entries: &[&str], separator: &str) -> String {
+    let shown = entries
         .iter()
-        .take(8)
-        .map(|diagnostic| diagnostic.path())
+        .take(SHOWN_DIAGNOSTICS)
+        .copied()
         .collect::<Vec<_>>()
-        .join(", ");
-    let remaining = document.diagnostics().len().saturating_sub(8);
-    let suffix = if remaining == 0 {
-        String::new()
-    } else {
-        format!(", and {remaining} more")
-    };
-    StatusMessage::warning(format!(
-        "{success}\nUnrecognized settings were preserved: {shown}{suffix}."
-    ))
+        .join(separator);
+    match entries.len().saturating_sub(SHOWN_DIAGNOSTICS) {
+        0 => shown,
+        remaining => format!("{shown}{separator}and {remaining} more"),
+    }
 }
 
 #[cfg(test)]
@@ -310,6 +352,84 @@ mod tests {
         assert!(matches!(app.status, StatusMessage::Warning(_)));
         assert!(status_contains(&app.status, "future_configurator_option"));
         assert!(status_contains(&app.status, "were preserved"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// A resolved shortcut conflict is never written back, so the editor is
+    /// where the user has to be able to find it (#293).
+    #[test]
+    fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document(
+            "shortcut-conflict",
+            &format!(
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+                wayscriber::config::CURRENT_CONFIG_REVISION
+            ),
+        );
+
+        let _ = app.handle_config_loaded(Ok((document, None)));
+
+        assert!(matches!(app.status, StatusMessage::Warning(_)));
+        assert!(status_contains(&app.status, "F2"));
+        assert!(status_contains(&app.status, "Toggle Toolbar"));
+        assert!(status_contains(&app.status, "Cycle Toolbar Display"));
+        assert!(status_contains(&app.status, "running session only"));
+        assert!(
+            !status_contains(&app.status, "Unrecognized settings"),
+            "a conflict is not an unknown setting"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// A string the parser rejects is dropped for the session and kept by the
+    /// file, so the editor is where the user has to be able to find it. With
+    /// nothing else wrong in the file, this section is the entire warning.
+    #[test]
+    fn handle_config_loaded_surfaces_shortcuts_that_could_not_be_parsed() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document(
+            "invalid-shortcut",
+            &format!(
+                "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\n",
+                wayscriber::config::CURRENT_CONFIG_REVISION
+            ),
+        );
+
+        let _ = app.handle_config_loaded(Ok((document, None)));
+
+        assert!(matches!(app.status, StatusMessage::Warning(_)));
+        assert!(status_contains(&app.status, "Ctrl+Shift"));
+        assert!(status_contains(&app.status, "Clear Canvas"));
+        assert!(status_contains(&app.status, "could not be parsed"));
+        assert!(
+            !status_contains(&app.status, "Unrecognized settings")
+                && !status_contains(&app.status, "Conflicting shortcuts"),
+            "an unparseable shortcut is neither an unknown setting nor a conflict"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Both keybinding kinds can land in one file, and each gets its own
+    /// sentence: they need different fixes.
+    #[test]
+    fn handle_config_loaded_separates_invalid_shortcuts_from_conflicting_ones() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document(
+            "invalid-and-conflicting",
+            &format!(
+                "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+                wayscriber::config::CURRENT_CONFIG_REVISION
+            ),
+        );
+
+        let _ = app.handle_config_loaded(Ok((document, None)));
+
+        assert!(matches!(app.status, StatusMessage::Warning(_)));
+        assert!(status_contains(&app.status, "could not be parsed"));
+        assert!(status_contains(&app.status, "running session only"));
+        assert!(status_contains(&app.status, "Ctrl+Shift"));
+        assert!(status_contains(&app.status, "F2"));
         let _ = std::fs::remove_file(path);
     }
 

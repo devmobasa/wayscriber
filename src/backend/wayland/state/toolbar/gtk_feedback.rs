@@ -78,7 +78,7 @@ impl WaylandState {
             if phase.is_end() {
                 self.data.gtk_top_drag_rebase = None;
                 self.clamp_gtk_top_offset(surface_size);
-                self.finish_gtk_offset_change(MoveDragKind::Top);
+                self.finish_gtk_offset_change();
             } else {
                 self.data.gtk_top_drag_rebase = Some(gtk_drag_rebase(
                     (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
@@ -94,7 +94,7 @@ impl WaylandState {
         if phase.is_end() {
             self.data.gtk_top_drag_rebase = None;
             self.clamp_gtk_top_offset(surface_size);
-            self.finish_gtk_offset_change(crate::backend::wayland::state::MoveDragKind::Top);
+            self.finish_gtk_offset_change();
         }
     }
 
@@ -116,7 +116,7 @@ impl WaylandState {
             if phase.is_end() {
                 self.data.gtk_side_drag_rebase = None;
                 self.clamp_gtk_side_offset(surface_size);
-                self.finish_gtk_offset_change(MoveDragKind::Side);
+                self.finish_gtk_offset_change();
             } else {
                 self.data.gtk_side_drag_rebase = Some(gtk_drag_rebase(
                     (
@@ -135,7 +135,7 @@ impl WaylandState {
         if phase.is_end() {
             self.data.gtk_side_drag_rebase = None;
             self.clamp_gtk_side_offset(surface_size);
-            self.finish_gtk_offset_change(crate::backend::wayland::state::MoveDragKind::Side);
+            self.finish_gtk_offset_change();
         }
     }
 
@@ -216,10 +216,10 @@ impl WaylandState {
 
     /// On drag end, persist the offset accepted against GTK's measured
     /// surface. Intermediate positions are mirrored without disk writes.
-    fn finish_gtk_offset_change(&mut self, kind: crate::backend::wayland::state::MoveDragKind) {
+    fn finish_gtk_offset_change(&mut self) {
         self.reconcile_top_base_after_drag();
         self.data.drag_top_base_x = None;
-        self.finish_toolbar_position_preview(kind, true);
+        self.finish_toolbar_position_preview(true);
         self.begin_gtk_toolbar_drag_handoff();
     }
 }
