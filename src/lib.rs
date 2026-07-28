@@ -13,6 +13,7 @@ pub mod canvas_export;
 pub mod capture;
 mod cli;
 pub mod config;
+pub mod configurator_destination;
 mod daemon;
 pub mod domain;
 pub mod draw;

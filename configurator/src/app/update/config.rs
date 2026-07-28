@@ -46,7 +46,11 @@ impl ConfiguratorApp {
             }
         }
 
-        self.handle_startup_search_focus_config_fallback()
+        // After the status is set, so a note about a startup argument can be
+        // added to this file's diagnostics instead of replacing them. This is
+        // also the only place a destination is applied: the tabs it chooses
+        // are only meaningful once the configuration behind them has loaded.
+        self.apply_startup_request()
     }
 
     pub(super) fn handle_reload_requested(&mut self) -> Task<Message> {

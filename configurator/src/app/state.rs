@@ -7,7 +7,8 @@ use wayscriber::config::{Config, ConfigDocument, MigrationPreview, PRESET_SLOTS_
 use crate::messages::Message;
 use crate::models::{
     ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingsTabId, SearchQuery, SessionCatalogState, TabId, ToolbarLayoutModeOption, UiTabId,
+    KeybindingsTabId, SearchQuery, SessionCatalogState, StartupRequest, TabId,
+    ToolbarLayoutModeOption, UiTabId,
 };
 
 use super::daemon_setup::load_daemon_runtime_status;
@@ -53,6 +54,9 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) search_query: SearchQuery,
     pub(crate) search_input_focus_hint: bool,
     pub(crate) startup_search_focus_pending: bool,
+    /// What the launching process asked to open, taken by the first config
+    /// load and empty from then on.
+    pub(crate) startup_request: StartupRequest,
 }
 
 #[derive(Debug, Clone)]
@@ -84,10 +88,34 @@ impl StatusMessage {
     pub(crate) fn warning(message: impl Into<String>) -> Self {
         StatusMessage::Warning(message.into())
     }
+
+    /// Adds a sentence without discarding what is already there.
+    ///
+    /// The load status can be carrying this file's diagnostics, and a note
+    /// about a startup argument is not worth losing them over.
+    pub(crate) fn with_note(self, note: &str) -> Self {
+        match self {
+            StatusMessage::Idle => StatusMessage::warning(note),
+            StatusMessage::Info(text)
+            | StatusMessage::Success(text)
+            | StatusMessage::Warning(text) => StatusMessage::warning(format!("{text}\n{note}")),
+            // A failed load is the more urgent of the two; keep its styling.
+            StatusMessage::Error(text) => StatusMessage::error(format!("{text}\n{note}")),
+        }
+    }
 }
 
 impl ConfiguratorApp {
+    /// The app as a launch with no destination.
+    ///
+    /// Test-only: the binary always has a parsed launch request to pass, even
+    /// when it is the empty one.
+    #[cfg(test)]
     pub(crate) fn new_app() -> (Self, Task<Message>) {
+        Self::new_app_with_startup(StartupRequest::default())
+    }
+
+    pub(crate) fn new_app_with_startup(startup: StartupRequest) -> (Self, Task<Message>) {
         let default_config = Config::default();
         let defaults = ConfigDraft::from_config(&default_config);
         let baseline = defaults.clone();
@@ -129,6 +157,7 @@ impl ConfiguratorApp {
             search_query: SearchQuery::default(),
             search_input_focus_hint: true,
             startup_search_focus_pending: true,
+            startup_request: startup,
         };
         app.sync_all_color_picker_hex();
 

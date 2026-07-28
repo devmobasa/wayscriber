@@ -45,7 +45,7 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_open_configurator(&mut self) -> bool {
-        self.launch_configurator();
+        self.launch_configurator(None);
         true
     }
 

@@ -264,7 +264,7 @@ impl InputState {
                 true
             }
             Action::OpenConfigurator => {
-                self.launch_configurator();
+                self.launch_configurator(None);
                 true
             }
             Action::OpenAbout => {

@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use crate::config::Config;
+use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
 use crate::env_vars::CONFIGURATOR_ENV;
 use crate::input::state::{Toast, ToastPriority};
 use std::ffi::{OsStr, OsString};
@@ -77,14 +78,17 @@ impl InputState {
         }
     }
 
-    pub(crate) fn launch_configurator(&mut self) {
+    /// Open the configurator, optionally at the screen for the control the user
+    /// just used.
+    pub(crate) fn launch_configurator(&mut self, destination: Option<ConfiguratorDestination>) {
         let binary = std::env::var(CONFIGURATOR_ENV)
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());
+        let arguments = configurator_launch_arguments(destination.as_ref());
 
         match spawn_detached(
             crate::process_broker::HelperKind::Configurator,
             OsStr::new(&binary),
-            &[],
+            &arguments,
         ) {
             Ok(child) => {
                 log::info!(
@@ -96,6 +100,9 @@ impl InputState {
             Err(err) => {
                 log::error!("Failed to launch wayscriber-configurator using '{binary}': {err:#}");
                 log::error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
+                // The fallback hands the file to the desktop's default editor,
+                // which has no concept of a configurator screen: the user still
+                // reaches the settings, just not the destination.
                 if self.open_config_file_default() {
                     log::info!(
                         "Opened config file with default application because wayscriber-configurator was unavailable"

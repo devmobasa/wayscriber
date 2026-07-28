@@ -1,8 +1,10 @@
 use iced::{Settings, Size, application, window};
 
+use crate::models::StartupRequest;
+
 use super::state::ConfiguratorApp;
 
-pub fn run() -> iced::Result {
+pub(crate) fn run(startup: StartupRequest) -> iced::Result {
     let settings = Settings {
         id: Some("wayscriber-configurator".to_string()),
         ..Settings::default()
@@ -18,7 +20,10 @@ pub fn run() -> iced::Result {
         window.platform_specific.application_id = "wayscriber-configurator".to_string();
     }
     application(
-        ConfiguratorApp::new_app,
+        // The launch request is state the app starts with, so it travels into
+        // the model through the boot closure rather than through a static that
+        // the model would have to reach out for.
+        move || ConfiguratorApp::new_app_with_startup(startup.clone()),
         ConfiguratorApp::update_message,
         ConfiguratorApp::view,
     )

@@ -271,7 +271,7 @@ impl ksni::Tray for WayscriberTray {
                         label: format_binding_label(action_label(Action::OpenConfigurator), None),
                         icon_name: menu_icon_name("preferences-desktop", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
-                            this.launch_configurator();
+                            this.launch_configurator(None);
                         }),
                         ..Default::default()
                     }
