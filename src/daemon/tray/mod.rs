@@ -14,7 +14,7 @@ use super::types::{
 #[cfg(all(test, feature = "tray"))]
 use super::types::{OverlayActionIntents, VisibilityIntents};
 #[cfg(feature = "tray")]
-use crate::config::{RuntimeConfigBackup, TrayIconStyle};
+use crate::config::TrayIconStyle;
 #[cfg(feature = "tray")]
 use std::sync::Arc;
 #[cfg(feature = "tray")]
@@ -31,14 +31,9 @@ struct TrayControl {
 pub(crate) struct WayscriberTray {
     control: TrayControl,
     configurator_binary: String,
-    session_resume_enabled: bool,
     icon_style: TrayIconStyle,
     overlay_active: Arc<AtomicBool>,
     tray_status: Arc<TrayStatusShared>,
-    /// The daemon process's one pre-write copy of `config.toml`. It lives here
-    /// because the tray outlives every menu click and the session-resume
-    /// toggle is the only config write this process makes.
-    config_backup: RuntimeConfigBackup,
 }
 
 #[cfg(feature = "tray")]
@@ -46,20 +41,16 @@ impl WayscriberTray {
     fn new(
         control: TrayControl,
         configurator_binary: String,
-        session_resume_enabled: bool,
         icon_style: TrayIconStyle,
         overlay_active: Arc<AtomicBool>,
         tray_status: Arc<TrayStatusShared>,
-        config_backup: RuntimeConfigBackup,
     ) -> Self {
         Self {
             control,
             configurator_binary,
-            session_resume_enabled,
             icon_style,
             overlay_active,
             tray_status,
-            config_backup,
         }
     }
 
@@ -75,26 +66,39 @@ impl WayscriberTray {
         }
     }
     #[cfg(test)]
-    pub(crate) fn new_for_tests(
-        toggle_flag: Arc<AtomicBool>,
-        quit_flag: Arc<AtomicBool>,
-        session_resume_enabled: bool,
-    ) -> Self {
+    pub(crate) fn new_for_tests(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Self {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-        Self::new_for_tests_with_wake(
-            toggle_flag,
-            quit_flag,
-            session_resume_enabled,
-            wake.handle(),
-        )
+        Self::new_for_tests_with_wake(toggle_flag, quit_flag, wake.handle())
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_tests_with_wake(
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
-        session_resume_enabled: bool,
         control_wake: crate::backend::wayland::RuntimeWakeHandle,
+    ) -> Self {
+        Self::for_tests(toggle_flag, quit_flag, control_wake, "true".into())
+    }
+
+    /// A tray whose configurator "binary" is a program the test owns, so what a
+    /// menu item asks the configurator to open can be observed rather than
+    /// assumed.
+    #[cfg(test)]
+    pub(crate) fn new_for_tests_with_configurator(
+        toggle_flag: Arc<AtomicBool>,
+        quit_flag: Arc<AtomicBool>,
+        configurator_binary: String,
+    ) -> Self {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        Self::for_tests(toggle_flag, quit_flag, wake.handle(), configurator_binary)
+    }
+
+    #[cfg(test)]
+    fn for_tests(
+        toggle_flag: Arc<AtomicBool>,
+        quit_flag: Arc<AtomicBool>,
+        control_wake: crate::backend::wayland::RuntimeWakeHandle,
+        configurator_binary: String,
     ) -> Self {
         let visibility_intents = Arc::new(VisibilityIntents::with_ready(toggle_flag));
         let action_intents = Arc::new(OverlayActionIntents::default());
@@ -104,12 +108,10 @@ impl WayscriberTray {
                 action: action_intents.publisher(control_wake.clone()),
                 quit: DaemonControlEvent::new(quit_flag, control_wake),
             },
-            "true".into(),
-            session_resume_enabled,
+            configurator_binary,
             TrayIconStyle::Auto,
             Arc::new(AtomicBool::new(false)),
             Arc::new(TrayStatusShared::new()),
-            RuntimeConfigBackup::with_directory(std::env::temp_dir().join("wayscriber-tray-tests")),
         )
     }
 }

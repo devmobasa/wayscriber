@@ -3,11 +3,11 @@ use super::super::types::TrayStatus;
 #[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
-use super::runtime::update_session_resume_in_config;
-#[cfg(feature = "tray")]
 use super::shortcut_hint_io::configured_toggle_shortcut_hint;
 #[cfg(feature = "tray")]
 use crate::config::{Action, TrayIconStyle, action_label};
+#[cfg(feature = "tray")]
+use crate::configurator_destination::{ConfiguratorDestination, ConfiguratorScreen};
 #[cfg(feature = "tray")]
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, ICON_THEME_PATH_ENV, TRAY_FORCE_PIXMAP_ENV, XDG_CURRENT_DESKTOP_ENV,
@@ -30,6 +30,16 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "tray")]
 const TRAY_ICON_NAME: &str = "wayscriber-symbolic";
+
+/// The Settings & Data entry that used to be a session-resume checkbox.
+///
+/// It reads as navigation because that is what it is: `[session]` is authored
+/// in `config.toml`, the daemon never writes that file, and a checkbox in a
+/// process that cannot persist the answer would be a promise the tray cannot
+/// keep. The trailing ellipsis is the usual signal that the click opens a
+/// window rather than changing something in place.
+#[cfg(feature = "tray")]
+const SESSION_SETTINGS_LABEL: &str = "Session persistence settings…";
 
 #[cfg(feature = "tray")]
 impl ksni::Tray for WayscriberTray {
@@ -285,22 +295,13 @@ impl ksni::Tray for WayscriberTray {
                         ..Default::default()
                     }
                     .into(),
-                    CheckmarkItem {
-                        label: if self.session_resume_enabled {
-                            "Session resume: enabled".to_string()
-                        } else {
-                            "Session resume: disabled".to_string()
-                        },
-                        checked: self.session_resume_enabled,
+                    StandardItem {
+                        label: SESSION_SETTINGS_LABEL.to_string(),
                         icon_name: menu_icon_name("document-save", use_theme_icons),
                         activate: Box::new(|this: &mut Self| {
-                            let target = !this.session_resume_enabled;
-                            let persisted = update_session_resume_in_config(
-                                &mut this.config_backup,
-                                target,
-                                this.session_resume_enabled,
-                            );
-                            this.session_resume_enabled = persisted;
+                            this.launch_configurator(Some(ConfiguratorDestination::new(
+                                ConfiguratorScreen::Session,
+                            )));
                         }),
                         ..Default::default()
                     }
