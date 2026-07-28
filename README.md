@@ -587,7 +587,7 @@ on shorter or scaled displays:
 - Freeze/unfreeze the current overlay
 - Capture full screen / active window / region
 - Toggle the help overlay
-- Flip session resume on/off (writes to config)
+- Open session persistence settings in the configurator
 - Clear saved session data
 - Open the log folder
 - Open configurator / open config file / quit
@@ -895,7 +895,7 @@ Notes:
 
 - Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>.
 - Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`).
-- Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`.
+- Preset slots can be saved/cleared from the toolbar for the current run; keep a slot, and edit names and advanced fields, in the configurator's Presets tab.
 - The blur tool has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
 
 ---
@@ -917,9 +917,14 @@ wayscriber-configurator   # or press F11
 
 See `docs/CONFIG.md` and https://wayscriber.com/docs/ for the full reference.
 
-`config.toml` contains authored defaults. Toolbar pins, dragged positions, the top strip's display
-form, minimized/pane/collapsed state, individual toolbar item visibility/order, and board pins
-changed in the overlay are saved separately in the generated
+`config.toml` contains authored defaults, and the configurator's **Save** is the only thing that
+writes it — running, using, and quitting Wayscriber never changes the file. An overlay control that
+changes a configured default applies to the current run and offers a route to the configurator
+screen that owns it.
+
+Toolbar pins, dragged positions, the top strip's display form, minimized/pane/collapsed state,
+individual toolbar item visibility/order, and board pins changed in the overlay are direct
+interaction state and are saved separately in the generated
 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
 preferences from the overlay Settings panel; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
 
@@ -967,13 +972,13 @@ Drag modifier mappings are configurable via `[drawing]` (`drag_tool`, `shift_dra
 
 The quick color palette is configurable with ordered `[[drawing.quick_colors]]` entries. The first eight entries map to the <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd> shortcuts; if fewer are configured by hand, missing shortcut positions use the built-in defaults. The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors while the radial menu keeps its original first-eight color ring. Explicit entries beyond the first eight have no shortcut action binding and opt those extra colors into dense palette UIs, capped to the first 24 colors.
 
-You can also recolor the palette without touching the file: **right-click any swatch** to open the color picker for that slot. The swatch updates live as you drag, OK saves the color to `config.toml`, and Cancel restores it. The slot keeps its label and shortcut, so <kbd>R</kbd> still selects the red slot after you point it at a different red. Recoloring the swatch you are drawing with moves the live color along with it. Left-click still just selects a swatch, and the leftmost chip still opens the picker for the active tool's own color.
+You can also recolor the palette without touching the file: **right-click any swatch** to open the color picker for that slot. The swatch updates live as you drag, OK applies the color for the current run, and Cancel restores it; keep a recolored palette in the configurator's Drawing tab. The slot keeps its label and shortcut, so <kbd>R</kbd> still selects the red slot after you point it at a different red. Recoloring the swatch you are drawing with moves the live color along with it. Left-click still just selects a swatch, and the leftmost chip still opens the picker for the active tool's own color.
 
 Changed your mind? The recolor picker carries a **Default** button that loads the color wayscriber ships for that slot. It stages the color like any other pick, so the swatch previews it and OK/Cancel still decide. It appears only for the eleven built-in slots — extra colors you added yourself have no shipped default to restore.
 
 ### Session manager and persistence
 
-Session persistence is enabled by default. Manage it via the configurator (<kbd>F11</kbd> → Session tab), CLI flags, or the tray checkmark (writes to config).
+Session persistence is enabled by default. Manage it in the configurator (<kbd>F11</kbd> → Session tab, also reachable from the tray menu's **Session persistence settings…** entry) or override it for one run with the CLI flags below.
 
 ```bash
 wayscriber --resume-session      # force resume (persist/restore all boards + history/tool state)
@@ -1122,7 +1127,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Native Wayland layer-shell
 - [x] Daemon mode with system tray
 - [x] Multiple customizable boards/backgrounds
-- [x] Session manager and persistence (named sessions, overlay actions, configurator catalog, CLI override, tray config toggle)
+- [x] Session manager and persistence (named sessions, overlay actions, configurator catalog, CLI override, tray navigation)
 - [x] Highlighter & eraser tools
 - [x] Additional shapes (filled shapes)
 - [x] Selection tools & properties panel

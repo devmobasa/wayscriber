@@ -1,7 +1,6 @@
 mod backend;
 mod capture;
 mod clipboard;
-mod config_writer;
 mod frozen;
 mod frozen_geometry;
 mod handlers;

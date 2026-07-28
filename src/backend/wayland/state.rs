@@ -150,7 +150,6 @@ pub(in crate::backend::wayland) struct WaylandGlobals {
 pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: WaylandGlobals,
     pub config: Config,
-    pub config_writer: super::config_writer::ConfigWriter,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
@@ -206,8 +205,6 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
-    /// Channel-owned writer for runtime-authored config preferences.
-    pub(super) config_writer: super::config_writer::ConfigWriter,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:

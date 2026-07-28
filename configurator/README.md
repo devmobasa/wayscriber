@@ -1,6 +1,8 @@
 # Wayscriber Configurator (Iced)
 
-Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on [`iced`](https://github.com/iced-rs/iced) and reuses the `wayscriber::Config` types directly, so validation, defaults, and backup behavior match the CLI. It also retains the original TOML document so comments, ordering, and settings unknown to this build survive a save.
+Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on [`iced`](https://github.com/iced-rs/iced) and reuses the `wayscriber::Config` types directly, so validation and defaults match the CLI. It also retains the original TOML document so comments, ordering, and settings unknown to this build survive a save.
+
+This is the only program that writes `config.toml`, and only when you press **Save**. Nothing else in Wayscriber — overlay, daemon, tray, startup, shutdown — ever changes the file, so an overlay preference toggle applies to that run and sends you here for a durable change.
 
 ## Prerequisites
 
@@ -18,7 +20,26 @@ The configurator uses Iced's software `tiny-skia` renderer on Wayland. It does
 not compile the GPU renderer or portal D-Bus implementation into the
 configurator binary.
 
-The window loads the current config, lets you tweak values across the tabbed sections, and writes changes back through the guarded `ConfigDocument` save interface.
+The window loads the current config, lets you tweak values across the tabbed sections, and writes
+changes back through the guarded `ConfigDocument` save interface when you press Save. Loading,
+reloading, dismissing a migration offer, and closing without saving leave the file untouched.
+
+### Opening a specific screen
+
+`--open <DESTINATION>` selects the screen to show once the configuration finishes loading. The
+overlay and the tray use it to send you to the setting behind the control you just used.
+
+```bash
+wayscriber-configurator --open keybindings/tools
+wayscriber-configurator --open 'drawing?search=Quick Colors'
+```
+
+Destinations are `ui/toolbar`, `ui/toolbar-visibility`, `ui/status-bar`, `ui/click-highlight`,
+`ui/input-hud`, `drawing`, `presets`, `boards`, `history`, `session`, `keybindings`, and
+`keybindings/<section>` for `general`, `drawing`, `tools`, `selection`, `history`, `boards`,
+`ui-modes`, `capture-view`, and `presets`. Append `?search=<TERM>` to any of them to open with the
+search box filled. `--help` prints the same list. An unknown destination falls back to the normal
+initial screen and says so in the status banner.
 
 Toolbar pins, placement offsets, the top strip's display form, item visibility/order, pane state,
 and board pin controls are labeled as configured defaults because the running overlay can store
@@ -35,6 +56,7 @@ if its UI task is no longer observed.
 ### Handy actions
 
 - **Reload** – re-read `config.toml` from disk and refresh the guarded source revision. A transient load error leaves the last good document and current draft in place.
+- **Configuration update available** – shown when the file's `config_revision` predates this build's keybinding defaults. The banner lists every proposed shortcut change as before → after; **Apply Update** edits the draft only, and **Dismiss** hides the offer for this run. Nothing reaches disk until you Save, and saving an unrelated setting without applying leaves both the old bindings and the old revision on disk.
 - **Defaults** – drop in the built-in defaults without saving.
 - **Save** – validate inputs (including numeric ranges and color arrays), merge known changes into the source TOML, and write it atomically. An existing file is backed up with a timestamp. Save is refused if the file was created, deleted, retargeted through a symlink, or changed byte-for-byte after loading; reload before retrying. If a readable file cannot be parsed, the configurator offers a warning-marked defaults-based repair draft and backs up the unreadable source before saving it. Unknown settings are retained only when the TOML structure is parseable and safely separable; malformed content remains in the backup.
 - **Search** – filter tabs, sections, saved sessions, boards, render profiles, presets, and keybindings as you type. Press `Ctrl+F` to focus search and `Escape` to clear it.

@@ -1905,7 +1905,7 @@ future_font_weight = 600
     updated.export.pdf.custom_width = 123.0;
     updated.export.pdf.labels.font_size = 42.0;
     document
-        .save(updated)
+        .save_with_backup(updated)
         .expect("save changed export settings");
 
     let saved = fs::read_to_string(&temp.path).expect("read saved export document");

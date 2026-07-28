@@ -25,10 +25,6 @@ fn apply_preset_action(config: &mut Config, action: PresetAction) -> String {
 }
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn shutdown_config_writer(&mut self) {
-        self.config_writer.shutdown();
-    }
-
     pub(in crate::backend::wayland) fn handle_preset_action(&mut self, action: PresetAction) {
         let message = apply_preset_action(&mut self.config, action);
         self.input_state.push_toast(

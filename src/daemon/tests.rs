@@ -317,12 +317,10 @@ fn record_session_settings_launch(
 #[test]
 fn no_daemon_source_can_write_the_config() {
     /// The names a daemon source would have to mention to write the file: the
-    /// document that owns the save operations, its explicit-save entry point,
-    /// the two primitives underneath it, and the runtime backup that existed
-    /// only to make such a save recoverable.
-    const WRITE_CAPABILITIES: [&str; 5] = [
+    /// document that owns the save operation, its explicit-save entry point,
+    /// and the two primitives underneath it.
+    const WRITE_CAPABILITIES: [&str; 4] = [
         "ConfigDocument",
-        "RuntimeConfigBackup",
         "save_with_backup",
         "write_config_text_atomic",
         "create_config_backup",

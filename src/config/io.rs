@@ -116,18 +116,18 @@ impl Config {
     }
 
     /// Test-only convenience for exercising the revision-guarded document
-    /// update path without constructing a runtime persistence worker.
+    /// update path against the active config path.
     ///
-    /// Not a production path: every running write goes through the overlay's
-    /// background `ConfigWriter`, the tray's retrying document save, or the
-    /// configurator.
+    /// Not a production path, and there is no production equivalent: the
+    /// configurator's explicit Save is the only code that writes the file, and
+    /// it edits a draft rather than a closure over the loaded config.
     #[cfg(test)]
     pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
         let config_path = Self::get_config_path()?;
         let document = super::ConfigDocument::load_from_path(&config_path)?;
         let mut config = document.config().clone();
         update(&mut config);
-        document.save(config)?;
+        document.save_with_backup(config)?;
         info!("Updated config at {}", config_path.display());
         Ok(())
     }

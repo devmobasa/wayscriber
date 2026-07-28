@@ -320,7 +320,6 @@ pub(super) fn run_event_loop(
     finalize_event_loop(
         &mut loop_error,
         || {
-            state.shutdown_config_writer();
             if let Err(err) = session_save::persist_session(state) {
                 warn!("Failed to save session state: {}", err);
                 session_save::notify_session_failure(state, &err);

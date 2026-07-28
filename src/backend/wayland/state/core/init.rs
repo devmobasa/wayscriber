@@ -7,7 +7,6 @@ impl WaylandState {
         let WaylandStateInit {
             globals,
             config,
-            config_writer,
             input_state,
             onboarding,
             palette_recents,
@@ -144,7 +143,6 @@ impl WaylandState {
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             spotlight_dimmed_last_frame: false,
             config,
-            config_writer,
             runtime_ui,
             runtime_ui_unavailable,
             runtime_ui_unavailable_previews: Default::default(),

@@ -17,7 +17,6 @@ mod field_metadata;
 mod io;
 mod migration;
 mod paths;
-mod runtime_backup;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
@@ -51,7 +50,6 @@ pub use keybindings::{
     Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,
 };
 pub use migration::{MigrationChange, MigrationPreview};
-pub(crate) use runtime_backup::RuntimeConfigBackup;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,

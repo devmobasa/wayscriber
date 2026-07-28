@@ -41,7 +41,7 @@ fn save_with_backup_creates_timestamped_file() {
 }
 
 #[test]
-fn runtime_toolbar_preference_save_preserves_comments_and_unrelated_toml_formatting() {
+fn a_toolbar_preference_save_preserves_comments_and_unrelated_toml_formatting() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -83,11 +83,11 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
     });
 }
 
-/// Clamping is a load-time repair of the running session, not an edit. The
-/// runtime save that follows it must leave the authored number alone so the
-/// user still sees (and can fix) what they wrote (#293).
+/// Clamping is a load-time repair of the running session, not an edit. A save
+/// that follows it must leave the authored number alone so the user still sees
+/// (and can fix) what they wrote (#293).
 #[test]
-fn runtime_save_keeps_an_out_of_range_value_as_authored() {
+fn a_save_keeps_an_out_of_range_value_as_authored() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -110,7 +110,7 @@ fn runtime_save_keeps_an_out_of_range_value_as_authored() {
 }
 
 #[test]
-fn targeted_runtime_update_preserves_newer_sibling_edit() {
+fn a_targeted_update_preserves_a_newer_sibling_edit() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -122,8 +122,9 @@ fn targeted_runtime_update_preserves_newer_sibling_edit() {
         .unwrap();
 
         // Simulate the running overlay's older in-memory snapshot, followed by
-        // an edit made through the configurator while the overlay remains up.
-        let _stale_runtime_config = Config::load().expect("load startup config").config;
+        // an edit made in a second editor while the configurator holds a
+        // document loaded from the first contents.
+        let _stale_overlay_config = Config::load().expect("load startup config").config;
         fs::write(
             &config_file,
             "# Preserve this newer configurator edit.\n[ui]\nshow_floating_badge = true\n\n[performance]\nmax_fps_no_vsync = 60\n",
@@ -131,7 +132,7 @@ fn targeted_runtime_update_preserves_newer_sibling_edit() {
         .unwrap();
 
         Config::update_file(|config| config.ui.show_floating_badge = false)
-            .expect("save only the runtime-owned badge preference");
+            .expect("save only the edited badge preference");
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Preserve this newer configurator edit."));
@@ -141,10 +142,10 @@ fn targeted_runtime_update_preserves_newer_sibling_edit() {
     });
 }
 
-/// The write a toolbar swatch recolor performs: one slot's color changes and
+/// The write authoring one quick color performs: one slot's color changes and
 /// nothing else in the file moves.
 #[test]
-fn runtime_quick_color_recolor_rewrites_one_slot_and_keeps_the_rest() {
+fn a_quick_color_recolor_save_rewrites_one_slot_and_keeps_the_rest() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -211,7 +212,7 @@ color = "#00FF00"
 }
 
 #[test]
-fn runtime_board_reorder_does_not_materialize_unchanged_item_preferences() {
+fn a_board_reorder_save_does_not_materialize_unchanged_item_preferences() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -260,7 +261,7 @@ background = { rgb = [0.992, 0.992, 0.992] }
 }
 
 #[test]
-fn runtime_save_updates_inline_board_background_without_losing_unknown_fields() {
+fn a_save_updates_inline_board_background_without_losing_unknown_fields() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
@@ -335,7 +336,7 @@ background = { rgb = [0.992, 0.992, 0.992], future_color_space = "display-p3" }
 }
 
 #[test]
-fn runtime_save_updates_inline_default_pen_color_without_losing_unknown_fields() {
+fn a_save_updates_inline_default_pen_color_without_losing_unknown_fields() {
     with_temp_config_home(|config_root| {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();

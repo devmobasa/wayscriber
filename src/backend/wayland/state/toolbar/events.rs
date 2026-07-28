@@ -11,8 +11,8 @@ use crate::{
 use wayland_client::{Connection, QueueHandle};
 
 mod feedback;
-mod persistence;
 mod preferences;
+mod presets;
 mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 

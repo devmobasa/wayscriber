@@ -303,30 +303,23 @@ impl ConfigDocument {
         &self.diagnostics
     }
 
-    /// Saves an updated configuration while preserving the source document's
-    /// comments, ordering, unknown settings, and compatible TOML formatting.
-    pub(crate) fn save(&self, config: Config) -> Result<ConfigDocumentSaveOutcome> {
-        self.save_document(config, false)
-    }
-
-    pub fn save_with_backup(&self, config: Config) -> Result<ConfigDocumentSaveOutcome> {
-        self.save_document(config, true)
-    }
-
-    fn save_document(
-        &self,
-        mut config: Config,
-        create_backup: bool,
-    ) -> Result<ConfigDocumentSaveOutcome> {
+    /// Writes an updated configuration, preserving the source document's
+    /// comments, ordering, unknown settings, and compatible TOML formatting,
+    /// after copying the previous contents to a timestamped `.bak`.
+    ///
+    /// The application's only durable `config.toml` write. It exists for the
+    /// configurator's explicit Save control: nothing that merely runs — overlay
+    /// startup, a toolbar toggle, a tray action, shutdown — reaches it, so the
+    /// file stays exactly as authored for the life of every other process.
+    pub fn save_with_backup(&self, mut config: Config) -> Result<ConfigDocumentSaveOutcome> {
         config.validate_and_clamp();
-        self.merge_and_write(&self.config, &config, create_backup)
+        self.merge_and_write(&self.config, &config)
     }
 
     fn merge_and_write(
         &self,
         previous: &Config,
         updated: &Config,
-        create_backup: bool,
     ) -> Result<ConfigDocumentSaveOutcome> {
         let repair_source = self
             .repair_mode
@@ -353,12 +346,10 @@ impl ConfigDocument {
 
         self.ensure_source_unchanged()?;
         prepare_config_parent(self.revision.destination_path(&self.source_path))?;
-        let backup_path =
-            if create_backup && matches!(self.revision, SourceRevision::Present { .. }) {
-                Some(create_config_backup(&self.source_path)?)
-            } else {
-                None
-            };
+        let backup_path = match self.revision {
+            SourceRevision::Present { .. } => Some(create_config_backup(&self.source_path)?),
+            SourceRevision::Missing { .. } => None,
+        };
         self.ensure_source_unchanged()?;
         write_config_text_atomic(&self.source_path, &output, self.revision.overwrite_mode())?;
         let revision = self.revision.after_write(output.as_bytes());
