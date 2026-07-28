@@ -2,7 +2,7 @@ use std::fmt;
 
 use super::super::CURRENT_CONFIG_REVISION;
 use super::super::action_meta::action_label;
-use super::super::keybindings::{Action, KeyBinding, KeybindingConflict, KeybindingsConfig};
+use super::super::keybindings::{Action, KeyBinding, KeybindingAuthorship, KeybindingsConfig};
 use super::Config;
 
 const LEGACY_COMMAND_PALETTE_DEFAULT: &[&str] = &["Ctrl+K"];
@@ -217,41 +217,118 @@ fn drop_binding(
     true
 }
 
-/// Picks the action that keeps a contested shortcut.
+/// A compiled-in default shortcut that never took effect.
 ///
-/// A binding list that still equals its compiled-in default was almost
-/// certainly filled in by serde rather than typed by the user, so an authored
-/// list always outranks a defaulted one. Everything else is decided by the
-/// keymap traversal order, where the earlier action wins.
-///
-/// `as_written` must be the configuration before any conflict was resolved, so
-/// that the classification cannot drift while a pass runs.
-fn conflict_winner(
-    as_written: &KeybindingsConfig,
-    defaults: &KeybindingsConfig,
-    conflict: &KeybindingConflict,
-) -> Option<Action> {
-    let first = conflict.actions().first().copied()?;
-    let authored = conflict.actions().iter().copied().find(|action| {
-        as_written.bindings_for_action(*action) != defaults.bindings_for_action(*action)
-    });
-    Some(authored.unwrap_or(first))
+/// The action was omitted from `[keybindings]`, so serde handed it this build's
+/// default — and something the file does spell out already claims that key.
+/// The user never wrote the collision and cannot see it in their own file, so
+/// the default stands down rather than taking a shortcut away from a binding
+/// they chose. This is informational: nothing they authored changed, and
+/// nothing reaches `config.toml`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultShortcutSkipped {
+    action: Action,
+    binding: String,
+    claimed_by: Action,
+}
+
+impl DefaultShortcutSkipped {
+    /// The omitted action that would have received the shortcut.
+    pub fn action(&self) -> Action {
+        self.action
+    }
+
+    /// The skipped shortcut in its normalized form (`Ctrl+Shift+K`).
+    pub fn binding(&self) -> &str {
+        &self.binding
+    }
+
+    /// The action the configuration gives the shortcut to instead.
+    pub fn claimed_by(&self) -> Action {
+        self.claimed_by
+    }
+
+    /// The `[keybindings]` key that would hold the skipped default. It is
+    /// absent from the file, which is the whole reason the default was on
+    /// offer.
+    pub fn config_key(&self) -> Option<&'static str> {
+        KeybindingsConfig::config_key_for_action(self.action)
+    }
+
+    /// Toast-sized wording; [`fmt::Display`] carries the long form.
+    pub fn summary(&self) -> String {
+        format!(
+            "{} stays with {}, so the new default for {} is inactive.",
+            self.binding,
+            action_label(self.claimed_by),
+            action_label(self.action)
+        )
+    }
+}
+
+impl fmt::Display for DefaultShortcutSkipped {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "`{}` is a default shortcut for {}, but your configuration binds `{}` to {}; the default stays inactive and nothing was changed",
+            self.binding,
+            action_label(self.action),
+            self.binding,
+            action_label(self.claimed_by)
+        )
+    }
 }
 
 /// Everything loading had to change in `[keybindings]`, in the order the
 /// passes run: a string that does not parse is removed before duplicates are
-/// arbitrated, so the arbitration only ever sees keys that can actually fire.
+/// arbitrated, and the arbitration between authored lists settles before any
+/// omitted action is offered a default, so a default can never take a key from
+/// a binding the file spells out.
 pub(super) struct KeybindingValidation {
     pub(super) invalid: Vec<InvalidKeybinding>,
     pub(super) conflicts: Vec<KeybindingConflictResolution>,
+    pub(super) skipped_defaults: Vec<DefaultShortcutSkipped>,
 }
 
 impl Config {
     pub(super) fn validate_keybindings(&mut self) -> KeybindingValidation {
-        self.apply_keybinding_migrations();
         let invalid = self.drop_unparseable_bindings();
-        let conflicts = self.resolve_keybinding_conflicts();
-        KeybindingValidation { invalid, conflicts }
+        let mut conflicts = self.resolve_keybinding_conflicts();
+        let (skipped_defaults, repeats) = self.resolve_omitted_default_shortcuts();
+        conflicts.extend(repeats);
+        KeybindingValidation {
+            invalid,
+            conflicts,
+            skipped_defaults,
+        }
+    }
+
+    /// Whether the source spelled this action's `[keybindings]` key out.
+    ///
+    /// A runtime-only action has no key to spell out; it never reaches either
+    /// pass, so the answer only has to be stable.
+    fn action_is_explicit(&self, action: Action) -> bool {
+        KeybindingsConfig::config_key_for_action(action)
+            .is_some_and(|key| self.keybinding_authorship.is_explicit(key))
+    }
+
+    /// The configuration's authored half: every omitted action emptied out.
+    ///
+    /// Conflict arbitration and the claim lookup both run over this rather than
+    /// the whole config, because a list serde filled in has no opinion to
+    /// arbitrate — it is an offer the next pass makes, and only where the key
+    /// is free.
+    fn explicit_keybindings(&self) -> KeybindingsConfig {
+        let mut explicit = self.keybindings.clone();
+        for action in KeybindingsConfig::configurable_actions() {
+            if self.action_is_explicit(*action) {
+                continue;
+            }
+            // Every action in this list has a stored field, so the setter's
+            // only failure mode cannot happen here.
+            let _ = explicit.set_bindings_for_action(*action, Vec::new());
+        }
+        explicit
     }
 
     /// Removes the binding strings the parser rejects.
@@ -299,32 +376,22 @@ impl Config {
         invalid
     }
 
-    /// Resolves duplicate shortcuts one key at a time.
+    /// Resolves duplicate shortcuts between authored lists, one key at a time.
     ///
-    /// Collisions usually come from us, not the user: a field the file omits is
-    /// filled in by serde with the current default, so a shipped default can
-    /// land on a shortcut the file assigns to something else (`F2` for
-    /// `cycle_toolbar_display` against an authored `toggle_toolbar`, for
-    /// instance). Replacing the whole section with defaults for that — what
-    /// this used to do — cost users every customization they had (#293).
-    ///
-    /// Each conflicting key is therefore removed from exactly one action:
-    ///
-    /// 1. an authored binding list (one that differs from its compiled-in
-    ///    default) always beats a list that still equals its default, so the
-    ///    serde-filled side is the one that loses the key;
-    /// 2. ties — two authored lists, or two lists that both still equal their
-    ///    defaults, the latter being a bug in the shipped defaults that
-    ///    `default_keybindings_have_no_conflicts` guards against — are broken
-    ///    by the keymap traversal order (core, selection, tools, board, ui,
-    ///    colors, capture, zoom, presets, declared order inside each group),
-    ///    and the earlier action keeps the key.
+    /// Both sides here were spelled out in the source, so there is nothing to
+    /// rank them by and the keymap traversal order decides: core, selection,
+    /// tools, board, ui, colors, capture, zoom, presets, declared order inside
+    /// each group, and the earlier action keeps the key. A list serde filled in
+    /// is not part of this pass at all — `explicit_keybindings` removes it —
+    /// because a default that was never authored has no claim to arbitrate;
+    /// [`Self::resolve_omitted_default_shortcuts`] offers it the key afterwards
+    /// only if it is still free.
     ///
     /// The rest of both actions' bindings always survive, and the resolution
-    /// stays in memory: a save records only the delta its caller asked for, so
-    /// none of this reaches `config.toml`.
+    /// stays in memory: nothing outside the configurator writes `config.toml`,
+    /// so the file keeps the conflict until the user settles it (#293).
     fn resolve_keybinding_conflicts(&mut self) -> Vec<KeybindingConflictResolution> {
-        let conflicts = match self.keybindings.collect_binding_conflicts() {
+        let conflicts = match self.explicit_keybindings().collect_binding_conflicts() {
             Ok(conflicts) => conflicts,
             Err(error) => {
                 // Unreachable: `drop_unparseable_bindings` runs first and the
@@ -339,14 +406,9 @@ impl Config {
             return Vec::new();
         }
 
-        let defaults = KeybindingsConfig::default();
-        // Classify against the config as written: resolving one key mutates a
-        // list, and a defaulted list that just lost a key would otherwise look
-        // authored while arbitrating the next one.
-        let authored = self.keybindings.clone();
         let mut resolutions = Vec::new();
         for conflict in conflicts {
-            let Some(kept) = conflict_winner(&authored, &defaults, &conflict) else {
+            let Some(kept) = conflict.actions().first().copied() else {
                 continue;
             };
             let key = conflict.binding().to_string();
@@ -384,6 +446,107 @@ impl Config {
         resolutions
     }
 
+    /// Keeps a compiled-in default out of a shortcut the source already spends.
+    ///
+    /// An omitted action holds whatever serde filled in for it, which is an
+    /// offer rather than a decision. Each of its keys survives only if nothing
+    /// authored — and no earlier omitted action — already claims that runtime
+    /// identity, so a default this build introduces can never take `F2` or
+    /// `Ctrl+Shift+K` away from the binding a file spells out (#293, #315).
+    /// That is what makes adding a default safe without a migration write, and
+    /// it filters rather than reinstalls, so a value a caller put on an omitted
+    /// action is never replaced by the shipped list.
+    ///
+    /// The skipped keys are reported separately from conflicts: nothing the
+    /// user wrote lost anything, so this is news about this build, not about
+    /// their file. Repeats inside one omitted list stay ordinary duplicate
+    /// resolutions, because there is no second action to name.
+    fn resolve_omitted_default_shortcuts(
+        &mut self,
+    ) -> (
+        Vec<DefaultShortcutSkipped>,
+        Vec<KeybindingConflictResolution>,
+    ) {
+        if matches!(
+            self.keybinding_authorship,
+            KeybindingAuthorship::AllExplicit
+        ) {
+            return (Vec::new(), Vec::new());
+        }
+
+        // The authored claims as they now stand: conflicts among them are
+        // already settled, so every key here has exactly one owner.
+        let mut claimed = self.explicit_keybindings().claimed_keys();
+        let mut skipped = Vec::new();
+        let mut repeats = Vec::new();
+        for action in KeybindingsConfig::configurable_actions() {
+            if self.action_is_explicit(*action) {
+                continue;
+            }
+            let Some(current) = self.keybindings.bindings_for_action(*action) else {
+                continue;
+            };
+            let mut kept = Vec::with_capacity(current.len());
+            let mut dropped = false;
+            for text in current {
+                let Ok(binding) = KeyBinding::parse(text) else {
+                    // `drop_unparseable_bindings` already removed anything the
+                    // parser rejects, so this arm is only reachable if that
+                    // pass changes; keep the string rather than losing it here.
+                    kept.push(text.clone());
+                    continue;
+                };
+                match claimed.get(&binding) {
+                    Some(owner) if *owner == *action => {
+                        dropped = true;
+                        repeats.push(KeybindingConflictResolution {
+                            key: binding.to_string(),
+                            kept: *action,
+                            dropped: *action,
+                        });
+                    }
+                    Some(owner) => {
+                        dropped = true;
+                        skipped.push(DefaultShortcutSkipped {
+                            action: *action,
+                            binding: binding.to_string(),
+                            claimed_by: *owner,
+                        });
+                    }
+                    None => {
+                        claimed.insert(binding, *action);
+                        kept.push(text.clone());
+                    }
+                }
+            }
+            if dropped {
+                // `bindings_for_action` already proved the action has a stored
+                // field, so the only failure mode of the setter cannot happen.
+                let _ = self.keybindings.set_bindings_for_action(*action, kept);
+            }
+        }
+
+        for entry in &skipped {
+            log::info!("Default shortcut not installed: {entry}");
+        }
+        for repeat in &repeats {
+            log::warn!("Conflicting shortcut in the keybindings config: {repeat}");
+        }
+        (skipped, repeats)
+    }
+
+    /// One-time upgrades of shortcuts an older revision defaulted differently.
+    ///
+    /// No load calls this: a process start reads `config.toml` and never
+    /// rewrites it, so migrating in memory would leave the running session
+    /// disagreeing with the file about shortcuts nobody agreed to change.
+    /// Presence-aware resolution covers the safety these steps used to provide,
+    /// and what is left is a proposal — the configurator asks the user before
+    /// applying it.
+    #[allow(
+        dead_code,
+        reason = "preview material for the configurator's review flow"
+    )]
     pub(crate) fn apply_keybinding_migrations(&mut self) {
         if self.config_revision >= CURRENT_CONFIG_REVISION {
             return;

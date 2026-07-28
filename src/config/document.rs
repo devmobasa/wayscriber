@@ -3,6 +3,7 @@
 mod merge;
 
 use super::io::{create_config_backup, prepare_config_parent, write_config_text_atomic};
+use super::keybindings::KeybindingAuthorship;
 use super::{Config, ConfigSource};
 use crate::durable_io::{OverwriteMode, resolve_symlink_chain};
 use anyhow::{Context, Result, anyhow, bail};
@@ -28,6 +29,10 @@ pub enum ConfigDiagnosticKind {
     /// A shortcut string the parser rejects. Loading drops it from the session
     /// keymap; the file is left exactly as authored.
     InvalidKeybinding,
+    /// A shipped default an omitted action did not receive, because the file
+    /// already binds that key to something else. Informational: nothing the
+    /// user authored changed, and the file is left exactly as authored.
+    DefaultShortcutSkipped,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +65,10 @@ impl fmt::Display for ConfigDiagnostic {
             ConfigDiagnosticKind::InvalidKeybinding => match &self.detail {
                 Some(detail) => write!(formatter, "{detail}"),
                 None => write!(formatter, "invalid keybinding in `{}`", self.path),
+            },
+            ConfigDiagnosticKind::DefaultShortcutSkipped => match &self.detail {
+                Some(detail) => write!(formatter, "{detail}"),
+                None => write!(formatter, "default keybinding skipped for `{}`", self.path),
             },
         }
     }
@@ -166,6 +175,12 @@ impl SourceRevision {
 #[derive(Debug)]
 pub struct ConfigDocument {
     config: Config,
+    /// The same parse before validation touched it, so an editor can show what
+    /// the file says rather than what this session resolved it to. A migration
+    /// preview has to diff against the authored values: proposing a change to a
+    /// binding that only exists because loading dropped a contested key would
+    /// offer the user an edit their file never contained.
+    authored_config: Config,
     document: DocumentMut,
     source_path: PathBuf,
     source: ConfigSource,
@@ -208,6 +223,7 @@ impl ConfigDocument {
                 Ok((
                     Self {
                         config: Config::default(),
+                        authored_config: Config::default(),
                         document,
                         source_path,
                         source: ConfigSource::Primary,
@@ -236,6 +252,7 @@ impl ConfigDocument {
                 })?;
                 Ok(Self {
                     config: parsed.config,
+                    authored_config: parsed.authored,
                     document,
                     source_path,
                     source: ConfigSource::Primary,
@@ -246,6 +263,7 @@ impl ConfigDocument {
             }
             None => Ok(Self {
                 config: Config::default(),
+                authored_config: Config::default(),
                 document: DocumentMut::new(),
                 source_path,
                 source: ConfigSource::Default,
@@ -258,6 +276,19 @@ impl ConfigDocument {
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// The parsed configuration before validation, exactly as the source spells
+    /// it out. [`Self::config`] is the same values after the running session's
+    /// clamps and shortcut resolution.
+    pub fn authored_config(&self) -> &Config {
+        &self.authored_config
+    }
+
+    /// Which `[keybindings]` keys the source spells out. A migration preview
+    /// needs this to tell a shortcut the user wrote from one serde filled in.
+    pub fn keybinding_authorship(&self) -> &KeybindingAuthorship {
+        &self.authored_config.keybinding_authorship
     }
 
     pub fn source(&self) -> &ConfigSource {
@@ -280,21 +311,6 @@ impl ConfigDocument {
 
     pub fn save_with_backup(&self, config: Config) -> Result<ConfigDocumentSaveOutcome> {
         self.save_document(config, true)
-    }
-
-    /// Writes a one-time migration of the file as it was authored.
-    ///
-    /// Every other save measures its diff against the document's validated
-    /// snapshot, so a migrated value no caller touched would never reach disk.
-    /// Passing the unvalidated `authored` config as the baseline keeps the diff
-    /// to the migrated fields and the revision stamp; nothing else is
-    /// normalized, and the caller gets a backup first.
-    pub(crate) fn save_migration(
-        &self,
-        authored: &Config,
-        migrated: &Config,
-    ) -> Result<ConfigDocumentSaveOutcome> {
-        self.merge_and_write(authored, migrated, true)
     }
 
     fn save_document(
@@ -350,6 +366,7 @@ impl ConfigDocument {
         Ok(ConfigDocumentSaveOutcome {
             document: Self {
                 config: parsed.config,
+                authored_config: parsed.authored,
                 document: merged,
                 source_path: self.source_path.clone(),
                 source: ConfigSource::Primary,
@@ -395,6 +412,8 @@ impl ConfigDocumentSaveOutcome {
 
 struct ParsedConfig {
     config: Config,
+    /// The same parse before `validate_and_clamp` ran.
+    authored: Config,
     diagnostics: Vec<ConfigDiagnostic>,
 }
 
@@ -408,6 +427,11 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
         }
     })
     .map_err(|error| anyhow!(error))?;
+    // Serde reports an omitted `[keybindings]` field as this build's default,
+    // so presence has to come from the source text for resolution to tell an
+    // authored shortcut from an offer (#293).
+    config.keybinding_authorship = KeybindingAuthorship::from_toml_source(input);
+    let authored = config.clone();
     let validation = config.validate_and_clamp();
     collect_flattened_unknown_paths(input, &config, &mut ignored)?;
     let mut diagnostics: Vec<ConfigDiagnostic> = ignored
@@ -447,8 +471,22 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
                 detail: Some(resolution.to_string()),
             }),
     );
+    // The key this one names is the one the file does not have; that absence is
+    // exactly why the default was on offer, and it is where the user would add
+    // the shortcut if they wanted it.
+    diagnostics.extend(validation.skipped_default_shortcuts.iter().map(|skipped| {
+        ConfigDiagnostic {
+            kind: ConfigDiagnosticKind::DefaultShortcutSkipped,
+            path: skipped.config_key().map_or_else(
+                || "keybindings".to_string(),
+                |key| format!("keybindings.{key}"),
+            ),
+            detail: Some(skipped.to_string()),
+        }
+    }));
     Ok(ParsedConfig {
         config,
+        authored,
         diagnostics,
     })
 }

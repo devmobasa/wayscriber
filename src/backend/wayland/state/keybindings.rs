@@ -131,12 +131,17 @@ fn merge_keybinding_edit(
         .map_err(PrepareKeybindingEditError::Edit)
 }
 
+/// The snapshot an edit merges into: the file as authored, unvalidated.
+///
+/// Migrations used to run here so the merge saw the same shortcuts a migrated
+/// file would have. Nothing migrates a file on load any more, so applying them
+/// would arbitrate this edit against a keymap no running session has — and the
+/// reason they were needed is gone too: an omitted action's default can no
+/// longer take a key from a binding the file spells out.
 fn load_keybinding_config() -> Result<Config, PrepareKeybindingEditError> {
-    let mut config = Config::load_unvalidated()
+    Ok(Config::load_unvalidated()
         .map_err(PrepareKeybindingEditError::Load)?
-        .config;
-    config.apply_keybinding_migrations();
-    Ok(config)
+        .config)
 }
 
 fn merge_loaded_keybinding_edit(

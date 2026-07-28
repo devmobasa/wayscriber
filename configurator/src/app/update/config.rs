@@ -172,17 +172,21 @@ fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMes
     let mut unknown = Vec::new();
     let mut conflicts = Vec::new();
     let mut invalid = Vec::new();
+    let mut skipped_defaults = Vec::new();
     // Exhaustive on purpose: a kind with no section here would leave the
     // status warning-styled and empty of the very thing it is warning about,
     // so a new variant has to be a compile error rather than a silent drop.
     for diagnostic in diagnostics {
         match diagnostic.kind() {
             ConfigDiagnosticKind::UnknownSetting => unknown.push(diagnostic.path().to_string()),
-            // Both keybinding kinds are resolved in memory only, so the file
+            // Every keybinding kind is resolved in memory only, so the file
             // the editor is showing still contains them: carry the diagnostic's
             // own wording, which names the actions, instead of just the path.
             ConfigDiagnosticKind::KeybindingConflict => conflicts.push(diagnostic.to_string()),
             ConfigDiagnosticKind::InvalidKeybinding => invalid.push(diagnostic.to_string()),
+            ConfigDiagnosticKind::DefaultShortcutSkipped => {
+                skipped_defaults.push(diagnostic.to_string());
+            }
         }
     }
 
@@ -202,6 +206,15 @@ fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMes
         message.push_str(&format!(
             "\nConflicting shortcuts were resolved for the running session only; the file still has them: {}.",
             list_with_overflow(&borrowed(&conflicts), "; ")
+        ));
+    }
+    // Its own sentence, and the last one: nothing in the file is wrong here.
+    // An action this configuration never mentions was offered a shortcut this
+    // build added, and the configuration already spends that key.
+    if !skipped_defaults.is_empty() {
+        message.push_str(&format!(
+            "\nNew default shortcuts stayed inactive because this configuration already uses those keys: {}.",
+            list_with_overflow(&borrowed(&skipped_defaults), "; ")
         ));
     }
 
@@ -356,14 +369,15 @@ mod tests {
     }
 
     /// A resolved shortcut conflict is never written back, so the editor is
-    /// where the user has to be able to find it (#293).
+    /// where the user has to be able to find it (#293). Both sides here are
+    /// spelled out in the file, which is what makes it their conflict.
     #[test]
     fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
         let (mut app, _cmd) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document(
             "shortcut-conflict",
             &format!(
-                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\"]\ncycle_toolbar_display = [\"F2\"]\n",
                 wayscriber::config::CURRENT_CONFIG_REVISION
             ),
         );
@@ -378,6 +392,37 @@ mod tests {
         assert!(
             !status_contains(&app.status, "Unrecognized settings"),
             "a conflict is not an unknown setting"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// A default this build added and the file never mentions gets its own
+    /// sentence: the user's configuration is fine, and the shortcut they read
+    /// about in the release notes simply is not theirs (#293).
+    #[test]
+    fn handle_config_loaded_surfaces_skipped_default_shortcuts() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document(
+            "skipped-default",
+            &format!(
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+                wayscriber::config::CURRENT_CONFIG_REVISION
+            ),
+        );
+
+        let _ = app.handle_config_loaded(Ok((document, None)));
+
+        assert!(matches!(app.status, StatusMessage::Warning(_)));
+        assert!(status_contains(&app.status, "F2"));
+        assert!(status_contains(&app.status, "Cycle Toolbar Display"));
+        assert!(status_contains(
+            &app.status,
+            "New default shortcuts stayed inactive"
+        ));
+        assert!(
+            !status_contains(&app.status, "Conflicting shortcuts")
+                && !status_contains(&app.status, "Unrecognized settings"),
+            "a skipped default is neither a conflict nor an unknown setting"
         );
         let _ = std::fs::remove_file(path);
     }
@@ -410,15 +455,15 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
-    /// Both keybinding kinds can land in one file, and each gets its own
-    /// sentence: they need different fixes.
+    /// All three keybinding kinds can land in one file, and each gets its own
+    /// sentence: they need different fixes, and one of them needs no fix.
     #[test]
-    fn handle_config_loaded_separates_invalid_shortcuts_from_conflicting_ones() {
+    fn handle_config_loaded_separates_every_keybinding_diagnostic_kind() {
         let (mut app, _cmd) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document(
             "invalid-and-conflicting",
             &format!(
-                "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+                "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\ntoggle_toolbar = [\"F2\", \"F9\"]\nundo = [\"Ctrl+Alt+U\"]\nredo = [\"Ctrl+Alt+U\"]\n",
                 wayscriber::config::CURRENT_CONFIG_REVISION
             ),
         );
@@ -428,7 +473,12 @@ mod tests {
         assert!(matches!(app.status, StatusMessage::Warning(_)));
         assert!(status_contains(&app.status, "could not be parsed"));
         assert!(status_contains(&app.status, "running session only"));
+        assert!(status_contains(
+            &app.status,
+            "New default shortcuts stayed inactive"
+        ));
         assert!(status_contains(&app.status, "Ctrl+Shift"));
+        assert!(status_contains(&app.status, "Ctrl+Alt+U"));
         assert!(status_contains(&app.status, "F2"));
         let _ = std::fs::remove_file(path);
     }

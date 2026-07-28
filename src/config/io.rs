@@ -1,10 +1,11 @@
+use super::Config;
+use super::keybindings::KeybindingAuthorship;
 use super::paths::primary_config_dir;
 use super::validate::ConfigValidationReport;
-use super::{Config, ConfigDocument};
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode};
 use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
-use log::{debug, info, warn};
+use log::{debug, info};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -97,73 +98,33 @@ impl Config {
         })
     }
 
+    /// Reads a config file without validating it, recording which
+    /// `[keybindings]` keys the file actually spells out.
+    ///
+    /// Serde cannot report that: it fills an omitted list with this build's
+    /// default, and the result is indistinguishable from a list the user typed.
+    /// The presence set is taken from the same text serde sees, so resolution
+    /// can tell an authored shortcut from an offer (#293).
     fn read_unvalidated_from(config_path: &Path) -> Result<Self> {
         let config_str = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
 
-        toml::from_str(&config_str)
-            .with_context(|| format!("Failed to parse config from {}", config_path.display()))
-    }
-
-    /// Writes pending one-time migrations to the configuration file.
-    ///
-    /// A save records only the delta its caller asked for, so a migrated value
-    /// no later edit happens to touch would stay in memory while the file kept
-    /// its pre-migration text — and the revision stamp would then suppress the
-    /// migration on every following load. This one write keeps the stamp and
-    /// the values it claims together, after backing the file up.
-    ///
-    /// Nothing is written when the file is missing, already current, or only
-    /// loadable in repair mode.
-    pub(crate) fn persist_pending_migrations() -> Result<()> {
-        Self::persist_pending_migrations_at(&Self::get_config_path()?)
-    }
-
-    pub(super) fn persist_pending_migrations_at(config_path: &Path) -> Result<()> {
-        if !config_path.exists() {
-            return Ok(());
-        }
-
-        let authored = Self::read_unvalidated_from(config_path)?;
-        let mut migrated = authored.clone();
-        migrated.apply_keybinding_migrations();
-        if migrated.config_revision == authored.config_revision {
-            return Ok(());
-        }
-
-        let (document, repair_warning) = ConfigDocument::load_for_editing_from_path(config_path)?;
-        if let Some(warning) = repair_warning {
-            warn!("Skipped the config migration write; the file needs repair first: {warning}");
-            return Ok(());
-        }
-
-        let outcome = document.save_migration(&authored, &migrated)?;
-        match outcome.backup_path() {
-            Some(backup) => info!(
-                "Migrated {} to config revision {} (backup at {})",
-                config_path.display(),
-                migrated.config_revision,
-                backup.display()
-            ),
-            None => info!(
-                "Migrated {} to config revision {}",
-                config_path.display(),
-                migrated.config_revision
-            ),
-        }
-        Ok(())
+        let mut config: Self = toml::from_str(&config_str)
+            .with_context(|| format!("Failed to parse config from {}", config_path.display()))?;
+        config.keybinding_authorship = KeybindingAuthorship::from_toml_source(&config_str);
+        Ok(config)
     }
 
     /// Test-only convenience for exercising the revision-guarded document
     /// update path without constructing a runtime persistence worker.
     ///
     /// Not a production path: every running write goes through the overlay's
-    /// background `ConfigWriter`, the tray's retrying document save, the
-    /// startup migration save, or the configurator.
+    /// background `ConfigWriter`, the tray's retrying document save, or the
+    /// configurator.
     #[cfg(test)]
     pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
         let config_path = Self::get_config_path()?;
-        let document = ConfigDocument::load_from_path(&config_path)?;
+        let document = super::ConfigDocument::load_from_path(&config_path)?;
         let mut config = document.config().clone();
         update(&mut config);
         document.save(config)?;

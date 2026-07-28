@@ -65,6 +65,11 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         backend.tokio_runtime.handle(),
         &keybindings.keybinding_conflicts,
     );
+    config::notify_skipped_default_shortcuts(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        &keybindings.skipped_default_shortcuts,
+    );
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let (runtime_ui, runtime_ui_unavailable) =
         match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(

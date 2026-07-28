@@ -2,8 +2,8 @@ use log::{debug, info, warn};
 
 use crate::backend::ExitAfterCaptureMode;
 use crate::config::{
-    Action, Config, ConfigSource, ConfigValidationReport, InvalidKeybinding,
-    KeybindingConflictResolution,
+    Action, Config, ConfigSource, ConfigValidationReport, DefaultShortcutSkipped,
+    InvalidKeybinding, KeybindingConflictResolution,
 };
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
@@ -25,9 +25,11 @@ pub(super) struct LoadedConfig {
     pub(super) keybindings: ConfigValidationReport,
 }
 
+/// Reads the configuration. Nothing here writes it: `config.toml` is an
+/// authored input for the life of this process, so an old `config_revision`, a
+/// mistyped shortcut, or a contested key is reported to the user instead of
+/// being repaired behind their back.
 pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
-    persist_pending_migrations();
-
     let (config, source, keybindings) = match Config::load() {
         Ok(loaded) => (loaded.config, loaded.source, loaded.validation),
         Err(e) => {
@@ -127,6 +129,43 @@ pub(super) fn notify_invalid_keybindings(
     );
 }
 
+/// Tells the user which newly shipped default shortcut is not in effect.
+///
+/// This one is about us, not about their file: an action they never configured
+/// was given a default this build introduced, and their own configuration
+/// already spends that key. Nothing they authored changed, so it is
+/// informational — no warning styling and no offer to fix anything — but it
+/// still has to be said, or a shortcut the release notes promise would simply
+/// appear not to work.
+///
+/// It carries the same Settings chip as its neighbours — that is where the user
+/// would add the shortcut — so it shares their priority class, but it is pushed
+/// last and styled as information rather than as a warning.
+pub(super) fn notify_skipped_default_shortcuts(
+    input_state: &mut InputState,
+    tokio_handle: &tokio::runtime::Handle,
+    skipped: &[DefaultShortcutSkipped],
+) {
+    if skipped.is_empty() {
+        return;
+    }
+
+    input_state.push_toast(
+        ToastPriority::Action,
+        "keybindings.skipped-default",
+        Toast::info(skipped_default_toast(skipped))
+            .action("Settings", Action::OpenConfigurator)
+            .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
+    );
+    notification::send_notification_with_timeout_async(
+        tokio_handle,
+        "New Default Shortcuts".to_string(),
+        skipped_default_notification_body(skipped, &config_path_display()),
+        Some("dialog-information".to_string()),
+        KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
+    );
+}
+
 fn keybinding_conflict_toast(conflicts: &[KeybindingConflictResolution]) -> String {
     keybinding_toast(
         "Shortcut conflict",
@@ -162,6 +201,26 @@ fn invalid_keybinding_notification_body(
     keybinding_notification_body(
         &summaries(invalid, ToString::to_string),
         &format!("Nothing was changed in {config_path}; fix the spelling there to bind it again."),
+    )
+}
+
+fn skipped_default_toast(skipped: &[DefaultShortcutSkipped]) -> String {
+    keybinding_toast(
+        "New default shortcut inactive",
+        "new default shortcuts are inactive",
+        &summaries(skipped, DefaultShortcutSkipped::summary),
+    )
+}
+
+fn skipped_default_notification_body(
+    skipped: &[DefaultShortcutSkipped],
+    config_path: &str,
+) -> String {
+    keybinding_notification_body(
+        &summaries(skipped, ToString::to_string),
+        &format!(
+            "Nothing was changed in {config_path}; add the shortcut there if you want it instead."
+        ),
     )
 }
 
@@ -207,18 +266,6 @@ fn config_path_display() -> String {
     Config::get_config_path()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
-}
-
-/// Records one-time config migrations on disk before the overlay reads them.
-///
-/// The overlay owns this write: the daemon, tray, and configurator load the
-/// same file and must not race one another for a rewrite the user did not ask
-/// for. A failure (read-only file, a lost revision race) leaves the migration
-/// in memory only and is retried on the next launch.
-fn persist_pending_migrations() {
-    if let Err(error) = Config::persist_pending_migrations() {
-        warn!("Failed to persist config migrations: {error:#}. Continuing without them.");
-    }
 }
 
 fn log_config(config: &Config) {
@@ -275,51 +322,46 @@ mod tests {
         });
     }
 
+    /// An old revision is read and reported on, never repaired: the file that
+    /// comes out of startup is byte-identical to the one that went in.
     #[test]
-    fn load_records_pending_migrations_in_the_config_file() {
+    fn load_leaves_a_legacy_config_exactly_as_written() {
         with_temp_config_home(|_| {
             let path = Config::get_config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
-            fs::write(
-                &path,
-                "[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nundo = [\"Ctrl+Alt+U\"]\n",
-            )
-            .expect("write legacy config");
+            let original =
+                "[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nundo = [\"Ctrl+Alt+U\"]\n";
+            fs::write(&path, original).expect("write legacy config");
 
             let loaded = load(ExitAfterCaptureMode::Auto);
-            assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F9"]);
 
-            let saved = fs::read_to_string(&path).expect("read migrated config");
-            assert!(saved.contains(&format!(
-                "config_revision = {}",
-                crate::config::CURRENT_CONFIG_REVISION
-            )));
-            assert!(saved.contains("toggle_toolbar = [\"F9\"]"));
-            assert!(saved.contains("undo = [\"Ctrl+Alt+U\"]"));
+            assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+            assert_eq!(
+                loaded.config.config_revision, 0,
+                "startup does not stamp a revision"
+            );
+            assert_eq!(fs::read_to_string(&path).expect("read config"), original);
         });
     }
 
-    /// The reporter's file (#293): revision-current, so no migration runs and
-    /// the authored `toggle_toolbar` meets the `cycle_toolbar_display`
-    /// default. Startup has to hand the collision to the user, because the
-    /// resolution is session-only and the file keeps the conflict.
+    /// The reporter's file (#293): the authored `toggle_toolbar` meets the
+    /// `cycle_toolbar_display` default the file never mentions. The default is
+    /// the one that stands down, and startup says so — informationally, since
+    /// nothing the user wrote lost anything.
     #[test]
-    fn load_reports_a_resolved_shortcut_conflict_instead_of_resetting_the_section() {
+    fn load_reports_a_skipped_default_instead_of_resetting_the_section() {
         with_temp_config_home(|_| {
             let path = Config::get_config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
-            fs::write(
-                &path,
-                format!(
-                    "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nexit = [\"Escape\", \"Ctrl+Q\", \"Q\"]\n",
-                    crate::config::CURRENT_CONFIG_REVISION
-                ),
-            )
-            .expect("write colliding config");
+            let original = format!(
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nexit = [\"Escape\", \"Ctrl+Q\", \"Q\"]\n",
+                crate::config::CURRENT_CONFIG_REVISION
+            );
+            fs::write(&path, &original).expect("write colliding config");
 
             let loaded = load(ExitAfterCaptureMode::Auto);
 
@@ -336,11 +378,66 @@ mod tests {
                     .cycle_toolbar_display
                     .is_empty()
             );
+            assert!(loaded.keybindings.keybinding_conflicts.is_empty());
+            assert_eq!(loaded.keybindings.skipped_default_shortcuts.len(), 1);
+            assert_eq!(
+                loaded.keybindings.skipped_default_shortcuts[0].binding(),
+                "F2"
+            );
+
+            let toast = skipped_default_toast(&loaded.keybindings.skipped_default_shortcuts);
+            assert!(toast.contains("F2"), "unexpected toast: {toast}");
+            assert!(
+                toast.contains("Toggle Toolbar") && toast.contains("Cycle Toolbar Display"),
+                "the toast must name both actions: {toast}"
+            );
+
+            let body = skipped_default_notification_body(
+                &loaded.keybindings.skipped_default_shortcuts,
+                "/tmp/config.toml",
+            );
+            assert!(body.contains("F2"), "unexpected body: {body}");
+            assert!(
+                body.contains("Nothing was changed"),
+                "unexpected body: {body}"
+            );
+            assert!(body.contains("/tmp/config.toml"), "unexpected body: {body}");
+            assert_eq!(fs::read_to_string(&path).expect("read config"), original);
+        });
+    }
+
+    /// Two authored actions claiming one key is still the user's conflict, and
+    /// startup still has to hand it to them: the resolution is session-only and
+    /// the file keeps the collision.
+    #[test]
+    fn load_reports_a_conflict_between_two_authored_shortcuts() {
+        with_temp_config_home(|_| {
+            let path = Config::get_config_path().expect("config path");
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create config dir");
+            }
+            let original = format!(
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\"]\ncycle_toolbar_display = [\"F2\"]\n",
+                crate::config::CURRENT_CONFIG_REVISION
+            );
+            fs::write(&path, &original).expect("write colliding config");
+
+            let loaded = load(ExitAfterCaptureMode::Auto);
+
+            assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F2"]);
+            assert!(
+                loaded
+                    .config
+                    .keybindings
+                    .ui
+                    .cycle_toolbar_display
+                    .is_empty()
+            );
             assert_eq!(loaded.keybindings.keybinding_conflicts.len(), 1);
             assert_eq!(loaded.keybindings.keybinding_conflicts[0].key(), "F2");
+            assert!(loaded.keybindings.skipped_default_shortcuts.is_empty());
 
             let toast = keybinding_conflict_toast(&loaded.keybindings.keybinding_conflicts);
-            assert!(toast.contains("F2"), "unexpected toast: {toast}");
             assert!(
                 toast.contains("Toggle Toolbar") && toast.contains("Cycle Toolbar Display"),
                 "the toast must name both actions: {toast}"
@@ -352,6 +449,7 @@ mod tests {
             );
             assert!(body.contains("F2"), "unexpected body: {body}");
             assert!(body.contains("/tmp/config.toml"), "unexpected body: {body}");
+            assert_eq!(fs::read_to_string(&path).expect("read config"), original);
         });
     }
 

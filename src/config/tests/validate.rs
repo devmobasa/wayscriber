@@ -1,6 +1,17 @@
 use super::super::*;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
+/// A configuration parsed the way a file is, presence included.
+///
+/// A `Config` built in code is `AllExplicit` — everything it holds counts as
+/// authored — so a fixture that needs the authored-versus-omitted distinction
+/// has to come from source text, exactly like a load does.
+fn config_from_toml(input: &str) -> Config {
+    let mut config: Config = toml::from_str(input).expect("fixture config should parse");
+    config.keybinding_authorship = KeybindingAuthorship::from_toml_source(input);
+    config
+}
+
 #[test]
 fn validate_and_clamp_clamps_out_of_range_values() {
     let mut config = Config::default();
@@ -622,6 +633,9 @@ fn validate_and_clamp_resets_non_finite_spotlight_settings() {
     }
 }
 
+/// The migration recipes are no longer part of loading — they are the material
+/// an explicit configurator review proposes — so they are exercised directly
+/// from here on.
 #[test]
 fn legacy_command_palette_and_capture_defaults_migrate_as_a_pair() {
     let mut config = Config {
@@ -631,7 +645,7 @@ fn legacy_command_palette_and_capture_defaults_migrate_as_a_pair() {
     config.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
     config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
 
-    config.validate_and_clamp();
+    config.apply_keybinding_migrations();
 
     assert_eq!(
         config.keybindings.ui.toggle_command_palette,
@@ -651,7 +665,7 @@ fn legacy_shortcut_migration_handles_one_serde_filled_current_default() {
         ..Config::default()
     };
     legacy_command.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
-    legacy_command.validate_and_clamp();
+    legacy_command.apply_keybinding_migrations();
     assert_eq!(
         legacy_command.keybindings.ui.toggle_command_palette,
         ["Ctrl+K", "Ctrl+Shift+P"]
@@ -666,7 +680,7 @@ fn legacy_shortcut_migration_handles_one_serde_filled_current_default() {
         ..Config::default()
     };
     legacy_capture.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
-    legacy_capture.validate_and_clamp();
+    legacy_capture.apply_keybinding_migrations();
     assert_eq!(
         legacy_capture.keybindings.ui.toggle_command_palette,
         ["Ctrl+K", "Ctrl+Shift+P"]
@@ -685,7 +699,7 @@ fn legacy_shortcut_migration_preserves_customized_pairs() {
     };
     custom_command.keybindings.ui.toggle_command_palette = vec!["Ctrl+Space".to_string()];
     custom_command.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
-    custom_command.validate_and_clamp();
+    custom_command.apply_keybinding_migrations();
     assert_eq!(
         custom_command.keybindings.ui.toggle_command_palette,
         ["Ctrl+Space"]
@@ -702,7 +716,7 @@ fn legacy_shortcut_migration_preserves_customized_pairs() {
     };
     custom_capture.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
     custom_capture.keybindings.capture.capture_full_screen = vec!["Ctrl+Alt+G".to_string()];
-    custom_capture.validate_and_clamp();
+    custom_capture.apply_keybinding_migrations();
     assert_eq!(
         custom_capture.keybindings.ui.toggle_command_palette,
         ["Ctrl+K"]
@@ -728,7 +742,7 @@ fn input_hud_default_yields_to_a_shortcut_the_file_already_claims() {
     // modifier order and case cannot hide the collision.
     config.keybindings.capture.capture_clipboard_full = vec!["shift+ctrl+k".to_string()];
 
-    config.validate_and_clamp();
+    config.apply_keybinding_migrations();
 
     assert!(config.keybindings.ui.toggle_input_hud.is_empty());
     assert_eq!(
@@ -748,7 +762,7 @@ fn input_hud_migration_preserves_a_customized_binding() {
     config.keybindings.capture.capture_clipboard_full = vec!["Ctrl+Shift+K".to_string()];
     config.keybindings.ui.toggle_input_hud = vec!["Ctrl+Alt+K".to_string()];
 
-    config.validate_and_clamp();
+    config.apply_keybinding_migrations();
 
     assert_eq!(config.keybindings.ui.toggle_input_hud, ["Ctrl+Alt+K"]);
     assert_eq!(
@@ -765,10 +779,33 @@ fn input_hud_migration_keeps_the_default_when_no_one_contests_it() {
         ..Config::default()
     };
 
-    config.validate_and_clamp();
+    config.apply_keybinding_migrations();
 
     assert_eq!(config.keybindings.ui.toggle_input_hud, ["Ctrl+Shift+K"]);
     assert_eq!(config.config_revision, CURRENT_CONFIG_REVISION);
+}
+
+/// Validation is not a migration: an old revision comes out of it exactly as
+/// old as it went in, so nothing but an explicit configurator review can claim
+/// a file has been upgraded.
+#[test]
+fn validation_never_advances_the_config_revision() {
+    for revision in [0, 1, 2] {
+        let mut config = Config {
+            config_revision: revision,
+            ..Config::default()
+        };
+        config.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.config_revision, revision);
+        assert_eq!(
+            config.keybindings.ui.toggle_command_palette,
+            ["Ctrl+K"],
+            "the legacy value stays until the user accepts a migration"
+        );
+    }
 }
 
 /// A file already stamped with revision 3 settled the input HUD question once;
@@ -888,12 +925,13 @@ fn color_spec_round_trips_alpha_through_hex_and_arrays() {
 
 /// The reporter's case (#293): an authored `toggle_toolbar` collides with the
 /// `cycle_toolbar_display` default the file never mentions. The authored side
-/// must come through untouched.
+/// must come through untouched, and the loss belongs to the default — so it is
+/// reported as a skipped default, not as a conflict the user has to settle.
 #[test]
-fn keybinding_conflict_costs_the_serde_filled_default_only_the_contested_key() {
-    let mut config = Config::default();
-    config.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
-    config.keybindings.core.exit = vec!["Escape".to_string(), "Q".to_string()];
+fn an_omitted_default_loses_only_the_key_an_authored_list_claims() {
+    let mut config = config_from_toml(
+        "[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nexit = [\"Escape\", \"Q\"]\n",
+    );
 
     let report = config.validate_and_clamp();
 
@@ -902,27 +940,33 @@ fn keybinding_conflict_costs_the_serde_filled_default_only_the_contested_key() {
     assert_eq!(config.keybindings.core.exit, ["Escape", "Q"]);
     assert!(config.keybindings.build_action_map().is_ok());
 
-    assert_eq!(report.keybinding_conflicts.len(), 1);
-    let resolution = &report.keybinding_conflicts[0];
-    assert_eq!(resolution.key(), "F2");
-    assert_eq!(resolution.kept(), Action::ToggleToolbar);
-    assert_eq!(resolution.dropped(), Action::CycleToolbarDisplay);
-    assert_eq!(
-        resolution.dropped_config_key(),
-        Some("cycle_toolbar_display")
+    assert!(report.keybinding_conflicts.is_empty());
+    assert_eq!(report.skipped_default_shortcuts.len(), 1);
+    let skipped = &report.skipped_default_shortcuts[0];
+    assert_eq!(skipped.binding(), "F2");
+    assert_eq!(skipped.action(), Action::CycleToolbarDisplay);
+    assert_eq!(skipped.claimed_by(), Action::ToggleToolbar);
+    assert_eq!(skipped.config_key(), Some("cycle_toolbar_display"));
+    let rendered = skipped.to_string();
+    assert!(
+        rendered.contains("`F2`")
+            && rendered.contains("Cycle Toolbar Display")
+            && rendered.contains("Toggle Toolbar"),
+        "the report must name the key and both actions: {rendered}"
     );
+    assert!(!report.is_empty(), "the user has to be told");
 }
 
 /// A default that only overlaps part of an authored list keeps the rest of its
-/// own keys: resolution is per binding, not per action.
+/// own keys: the offer is made one key at a time, not per action.
 #[test]
-fn keybinding_conflict_leaves_the_defaults_other_keys_alone() {
-    let mut config = Config::default();
+fn an_omitted_defaults_other_keys_are_installed_normally() {
+    let mut config = config_from_toml("[keybindings]\ncapture_full_screen = [\"Ctrl+Shift+P\"]\n");
     assert_eq!(
         config.keybindings.ui.toggle_command_palette,
-        ["Ctrl+K", "Ctrl+Shift+P"]
+        ["Ctrl+K", "Ctrl+Shift+P"],
+        "fixture depends on the palette default owning both keys"
     );
-    config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
 
     let report = config.validate_and_clamp();
 
@@ -931,9 +975,10 @@ fn keybinding_conflict_leaves_the_defaults_other_keys_alone() {
         ["Ctrl+Shift+P"]
     );
     assert_eq!(config.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
-    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert!(report.keybinding_conflicts.is_empty());
+    assert_eq!(report.skipped_default_shortcuts.len(), 1);
     assert_eq!(
-        report.keybinding_conflicts[0].dropped(),
+        report.skipped_default_shortcuts[0].action(),
         Action::ToggleCommandPalette
     );
 }
@@ -981,25 +1026,45 @@ fn keybinding_conflict_between_two_authored_actions_keeps_the_earlier_one() {
     assert!(rendered.contains("Help"), "unexpected: {rendered}");
 }
 
-/// Resolution order does not depend on which side happens to be listed first
-/// in the file: an authored list always outranks a defaulted one.
+/// Authorship, not traversal position, decides whether a list is on offer:
+/// `core.exit` is traversed first, but the file never mentions it, so the
+/// authored capture binding keeps `Escape` even though it is visited later.
 #[test]
-fn keybinding_conflict_prefers_the_authored_side_over_traversal_order() {
-    let mut config = Config::default();
-    // `core.exit` is traversed first but still holds its shipped default, so
-    // the authored capture binding wins even though it is visited later.
-    config.keybindings.capture.capture_selection = vec!["Escape".to_string()];
+fn an_authored_list_outranks_an_omitted_one_traversed_before_it() {
+    let mut config = config_from_toml("[keybindings]\ncapture_selection = [\"Escape\"]\n");
 
     let report = config.validate_and_clamp();
 
     assert_eq!(config.keybindings.capture.capture_selection, ["Escape"]);
     assert_eq!(config.keybindings.core.exit, ["Ctrl+Q"]);
-    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert!(report.keybinding_conflicts.is_empty());
+    assert_eq!(report.skipped_default_shortcuts.len(), 1);
+    assert_eq!(report.skipped_default_shortcuts[0].action(), Action::Exit);
     assert_eq!(
-        report.keybinding_conflicts[0].kept(),
+        report.skipped_default_shortcuts[0].claimed_by(),
         Action::CaptureSelection
     );
-    assert_eq!(report.keybinding_conflicts[0].dropped(), Action::Exit);
+}
+
+/// The same fixture with both keys spelled out is a different question: two
+/// authored lists contest `Escape`, and the traversal order settles it.
+#[test]
+fn two_authored_lists_contesting_a_key_fall_back_to_traversal_order() {
+    let mut config = config_from_toml(
+        "[keybindings]\nexit = [\"Escape\", \"Ctrl+Q\"]\ncapture_selection = [\"Escape\"]\n",
+    );
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.exit, ["Escape", "Ctrl+Q"]);
+    assert!(config.keybindings.capture.capture_selection.is_empty());
+    assert!(report.skipped_default_shortcuts.is_empty());
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert_eq!(report.keybinding_conflicts[0].kept(), Action::Exit);
+    assert_eq!(
+        report.keybinding_conflicts[0].dropped(),
+        Action::CaptureSelection
+    );
 }
 
 #[test]
@@ -1094,19 +1159,19 @@ fn a_self_duplicate_is_still_reported_when_the_key_is_also_contested() {
     assert_eq!(cross.dropped(), Action::Undo);
 }
 
-/// Resolving one key must not reclassify the list it just trimmed. The command
-/// palette default owns two keys; losing the first one to an authored binding
-/// cannot make it look authored when the second is arbitrated.
+/// Losing one key must not change what an omitted list is. The command palette
+/// default owns two keys and two authored bindings take both; a list that has
+/// been trimmed once is still an offer, not an authored claim.
 #[test]
-fn resolving_one_key_does_not_promote_a_trimmed_default_over_an_authored_binding() {
-    let mut config = Config::default();
+fn trimming_one_key_does_not_promote_an_omitted_list_to_authored() {
+    let mut config = config_from_toml(
+        "[keybindings]\nexit = [\"Ctrl+K\"]\ncapture_full_screen = [\"Ctrl+Shift+P\"]\n",
+    );
     assert_eq!(
         config.keybindings.ui.toggle_command_palette,
         ["Ctrl+K", "Ctrl+Shift+P"],
         "fixture depends on the palette default owning both keys"
     );
-    config.keybindings.core.exit = vec!["Ctrl+K".to_string()];
-    config.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
 
     let report = config.validate_and_clamp();
 
@@ -1116,15 +1181,38 @@ fn resolving_one_key_does_not_promote_a_trimmed_default_over_an_authored_binding
         ["Ctrl+Shift+P"]
     );
     assert!(config.keybindings.ui.toggle_command_palette.is_empty());
-    assert_eq!(report.keybinding_conflicts.len(), 2);
+    assert!(report.keybinding_conflicts.is_empty());
+    assert_eq!(report.skipped_default_shortcuts.len(), 2);
     assert!(
         report
-            .keybinding_conflicts
+            .skipped_default_shortcuts
             .iter()
-            .all(|resolution| resolution.dropped() == Action::ToggleCommandPalette),
-        "both keys must come off the defaulted side: {:?}",
-        report.keybinding_conflicts
+            .all(|skipped| skipped.action() == Action::ToggleCommandPalette),
+        "both keys must come off the omitted side: {:?}",
+        report.skipped_default_shortcuts
     );
+}
+
+/// An omitted action is offered its defaults in traversal order, and a key the
+/// offer already installed for it is not offered twice.
+#[test]
+fn omitted_defaults_never_take_a_key_from_an_earlier_omitted_action() {
+    let mut config = config_from_toml("[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n");
+
+    let report = config.validate_and_clamp();
+
+    // Nothing in the shipped defaults collides, so every omitted action keeps
+    // its whole list and there is nothing to report.
+    assert_eq!(
+        config.keybindings.ui.toggle_command_palette,
+        ["Ctrl+K", "Ctrl+Shift+P"]
+    );
+    assert_eq!(config.keybindings.ui.cycle_toolbar_display, ["F2"]);
+    assert!(report.is_empty(), "unexpected report: {report:?}");
+    config
+        .keybindings
+        .build_action_map()
+        .expect("the resolved keymap has no duplicates");
 }
 
 /// A single mistyped string used to fail `build_action_map` for the whole

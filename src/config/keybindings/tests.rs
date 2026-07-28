@@ -399,9 +399,10 @@ fn canvas_export_actions_deserialize_from_config_names() {
     );
 }
 
-/// The shipped defaults must never contend with each other. Conflict
-/// resolution treats "both sides still equal their default" as a bug in this
-/// table, and it would silently unbind one of them at runtime.
+/// The shipped defaults must never contend with each other. Omitted actions
+/// are offered their defaults one key at a time, in traversal order, and a key
+/// an earlier default already took is silently dropped — so a collision in this
+/// table would unbind whichever action happens to be visited second.
 #[test]
 fn default_keybindings_have_no_conflicts() {
     let conflicts = KeybindingsConfig::default()
@@ -410,8 +411,7 @@ fn default_keybindings_have_no_conflicts() {
 
     assert!(
         conflicts.is_empty(),
-        "shipped defaults collide; changing a default binding needs a config \
-         revision bump and a migration: {conflicts:?}"
+        "shipped defaults collide; a default binding must not be claimed twice: {conflicts:?}"
     );
 }
 
@@ -501,14 +501,14 @@ fn config_key_for_action_matches_the_toml_field_names() {
 /// Every shipped default binding, action by action, in the order
 /// [`KeybindingsConfig::configurable_actions`] declares them.
 ///
-/// Changing or adding a default binding requires bumping
-/// `CURRENT_CONFIG_REVISION` and adding a matching step to
-/// `Config::apply_keybinding_migrations`, then updating this table in the same
-/// change. A field a config file omits is filled in by serde with the current
-/// default, so a new or moved default otherwise lands on a shortcut the user
-/// bound to something else — the file never authored the collision and cannot
-/// show it (#293, #315). Adding an action that starts unbound needs only the
-/// new `&[]` row.
+/// Changing or adding a default binding requires updating this table in the
+/// same change, so that the change is deliberate and reviewable. It no longer
+/// requires a `CURRENT_CONFIG_REVISION` bump: a default is only ever offered to
+/// an action a configuration omits, and only where the key is free, so a
+/// newcomer cannot land on a shortcut the file bound to something else (#293,
+/// #315). What it does still require is that the new default not collide with
+/// another shipped one — `default_keybindings_have_no_conflicts` guards that.
+/// Adding an action that starts unbound needs only the new `&[]` row.
 const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("exit", &["Escape", "Ctrl+Q"]),
     ("enter_text_mode", &["T"]),
@@ -661,9 +661,9 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
 ];
 
 /// Tripwire for [`DEFAULT_BINDING_SNAPSHOT`]: a default that moves, appears, or
-/// disappears fails here until the snapshot is updated — together with the
-/// `CURRENT_CONFIG_REVISION` bump and the migration step that keep existing
-/// files from inheriting the new shortcut over their own.
+/// disappears fails here until the snapshot records it, so that shipping a
+/// different shortcut to every user who never configured one is a decision
+/// rather than a side effect.
 ///
 /// The action list comes from the same macro the `[keybindings]` fields do, so
 /// a new configurable action shows up here without anyone remembering to add it.
@@ -705,9 +705,8 @@ fn default_bindings_match_the_checked_in_snapshot() {
 
     assert!(
         differences.is_empty(),
-        "the shipped default keybindings changed. Bump CURRENT_CONFIG_REVISION, \
-         add the matching step to Config::apply_keybinding_migrations, then update \
-         DEFAULT_BINDING_SNAPSHOT:\n{}",
+        "the shipped default keybindings changed. Confirm the new default does not \
+         collide with another one, then update DEFAULT_BINDING_SNAPSHOT:\n{}",
         differences.join("\n")
     );
     assert_eq!(

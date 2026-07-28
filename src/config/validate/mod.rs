@@ -18,7 +18,7 @@ mod tablet;
 mod ui;
 mod updates;
 
-pub use keybindings::{InvalidKeybinding, KeybindingConflictResolution};
+pub use keybindings::{DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution};
 
 /// What loading had to change before a configuration could be used.
 ///
@@ -31,12 +31,17 @@ pub struct ConfigValidationReport {
     pub invalid_keybindings: Vec<InvalidKeybinding>,
     /// Duplicate shortcuts resolved per binding while loading.
     pub keybinding_conflicts: Vec<KeybindingConflictResolution>,
+    /// Shipped defaults an omitted action did not receive, because the
+    /// configuration already spends the key elsewhere.
+    pub skipped_default_shortcuts: Vec<DefaultShortcutSkipped>,
 }
 
 impl ConfigValidationReport {
     /// Whether validation changed nothing the user needs to know about.
     pub fn is_empty(&self) -> bool {
-        self.invalid_keybindings.is_empty() && self.keybinding_conflicts.is_empty()
+        self.invalid_keybindings.is_empty()
+            && self.keybinding_conflicts.is_empty()
+            && self.skipped_default_shortcuts.is_empty()
     }
 }
 
@@ -80,6 +85,7 @@ impl Config {
         ConfigValidationReport {
             invalid_keybindings: keybindings.invalid,
             keybinding_conflicts: keybindings.conflicts,
+            skipped_default_shortcuts: keybindings.skipped_defaults,
         }
     }
 }

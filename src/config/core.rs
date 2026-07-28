@@ -1,4 +1,4 @@
-use super::keybindings::KeybindingsConfig;
+use super::keybindings::{KeybindingAuthorship, KeybindingsConfig};
 #[cfg(feature = "tablet-input")]
 use super::types::TabletInputConfig;
 use super::types::{
@@ -8,7 +8,7 @@ use super::types::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Current revision for one-time in-memory configuration migrations.
+/// Current revision for reviewed configuration migrations.
 ///
 /// Revision history:
 /// - 1: split the command-palette / full-screen-capture default shortcuts
@@ -18,11 +18,15 @@ use serde::{Deserialize, Serialize};
 /// - 3: gave the new `toggle_input_hud` action a `Ctrl+Shift+K` default,
 ///   which collides with files that already bound that shortcut elsewhere.
 ///
-/// Changing or adding a default keybinding needs a bump here plus a migration
-/// step in `Config::apply_keybinding_migrations`; omitted fields are filled in
-/// by serde, so a new default otherwise lands on top of shortcuts the user
-/// authored for something else. `default_bindings_match_the_checked_in_snapshot`
-/// fails until both are done.
+/// Loading never advances this: the value in memory is the one the file
+/// carries, and the migration recipes in `Config::apply_keybinding_migrations`
+/// are preview material for an explicit configurator flow rather than
+/// something a process start applies. A new or moved default no longer needs
+/// a migration to stay out of an authored shortcut's way either — omitted
+/// actions are resolved from source presence, so a default the file never
+/// mentioned cannot outrank a binding it did.
+/// `default_bindings_match_the_checked_in_snapshot` still fails until the
+/// snapshot records the change deliberately.
 pub const CURRENT_CONFIG_REVISION: u32 = 3;
 
 /// Main configuration structure containing all user settings.
@@ -60,9 +64,21 @@ pub const CURRENT_CONFIG_REVISION: u32 = 3;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Persisted migration provenance. Missing in legacy files, which
-    /// deserialize as revision 0 and are upgraded during validation.
+    /// deserialize as revision 0 and keep that value: only an explicit
+    /// configurator migration advances it.
     #[serde(default)]
     pub config_revision: u32,
+
+    /// Which `[keybindings]` fields the source this value came from spelled
+    /// out.
+    ///
+    /// Never read from or written to a file — it describes the document, not a
+    /// setting — so it is skipped by serde in both directions. A `Config` built
+    /// in code carries the `AllExplicit` default, which is what keeps a
+    /// fixture, a draft, or the shipped defaults from having their own lists
+    /// treated as droppable compiled defaults.
+    #[serde(skip)]
+    pub(crate) keybinding_authorship: KeybindingAuthorship,
 
     /// Drawing tool defaults (color, thickness, font size)
     #[serde(default)]
@@ -142,6 +158,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             config_revision: CURRENT_CONFIG_REVISION,
+            keybinding_authorship: KeybindingAuthorship::default(),
             drawing: DrawingConfig::default(),
             presets: PresetSlotsConfig::default(),
             history: HistoryConfig::default(),

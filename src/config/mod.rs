@@ -46,7 +46,9 @@ pub use field_metadata::{
 };
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
-pub use keybindings::{Action, KeyBinding, KeybindingConflict, KeybindingsConfig};
+pub use keybindings::{
+    Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,
+};
 pub(crate) use runtime_backup::RuntimeConfigBackup;
 #[allow(unused_imports)]
 pub use types::{
@@ -83,7 +85,9 @@ pub(crate) use types::{
     toolbar_item_visibility_override_allowed,
 };
 #[allow(unused_imports)]
-pub use validate::{ConfigValidationReport, InvalidKeybinding, KeybindingConflictResolution};
+pub use validate::{
+    ConfigValidationReport, DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution,
+};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

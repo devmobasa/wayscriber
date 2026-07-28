@@ -1,5 +1,6 @@
 mod document;
 mod file_io;
+mod immutability;
 mod load;
 #[cfg(feature = "config-schema")]
 mod schema;
