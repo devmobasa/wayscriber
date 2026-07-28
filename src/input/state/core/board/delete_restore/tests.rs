@@ -273,9 +273,6 @@ fn delete_then_create_reused_id_tracks_distinct_identity_before_drain() {
     let mut state = make_test_input_state();
     assert!(state.create_board());
     let reused_id = state.board_id().to_string();
-    let _ = state
-        .take_pending_board_config_update()
-        .expect("initial board creation update");
     let _ = state.take_pending_board_runtime_ui_actions();
 
     let requested_at = Instant::now();
@@ -284,12 +281,6 @@ fn delete_then_create_reused_id_tracks_distinct_identity_before_drain() {
     assert!(state.create_board());
     assert_eq!(state.board_id(), reused_id);
 
-    let update = state
-        .take_pending_board_config_update()
-        .expect("coalesced delete and replacement update");
-    assert!(update.structure_changed);
-    assert!(update.deleted_ids.contains(&reused_id));
-    assert!(update.created_ids.contains(&reused_id));
     let runtime_actions = state.take_pending_board_runtime_ui_actions();
     assert!(matches!(
         runtime_actions.as_slice(),
@@ -305,9 +296,6 @@ fn delete_then_restore_same_board_cancels_pending_identity_deletion() {
     let mut state = make_test_input_state();
     assert!(state.create_board());
     let restored_id = state.board_id().to_string();
-    let _ = state
-        .take_pending_board_config_update()
-        .expect("initial board creation update");
     let _ = state.take_pending_board_runtime_ui_actions();
 
     let requested_at = Instant::now();
@@ -316,12 +304,6 @@ fn delete_then_restore_same_board_cancels_pending_identity_deletion() {
     state.delete_active_board_at(confirmed_at);
     state.restore_deleted_board_at(confirmed_at + Duration::from_millis(1));
 
-    let update = state
-        .take_pending_board_config_update()
-        .expect("coalesced delete and restore update");
-    assert!(update.structure_changed);
-    assert!(!update.deleted_ids.contains(&restored_id));
-    assert!(!update.created_ids.contains(&restored_id));
     let runtime_actions = state.take_pending_board_runtime_ui_actions();
     assert!(matches!(
         runtime_actions.as_slice(),

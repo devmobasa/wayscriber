@@ -162,6 +162,16 @@ fn action_serialization_matches_established_contract() {
         ),
         (Action::OpenContextMenu, "open_context_menu"),
         (Action::OpenConfigurator, "open_configurator"),
+        (
+            Action::OpenConfiguratorKeybindings,
+            "open_configurator_keybindings",
+        ),
+        (Action::OpenConfiguratorPresets, "open_configurator_presets"),
+        (Action::OpenConfiguratorBoards, "open_configurator_boards"),
+        (
+            Action::OpenConfiguratorQuickColors,
+            "open_configurator_quick_colors",
+        ),
         (Action::OpenAbout, "open_about"),
         (Action::ClearSavedToolState, "clear_saved_tool_state"),
         (Action::SetColorRed, "set_color_red"),

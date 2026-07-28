@@ -8,9 +8,8 @@ mod search;
 pub use layout::COMMAND_PALETTE_MAX_VISIBLE;
 pub(crate) use layout::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
-    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
-    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ICON_GAP,
+    COMMAND_PALETTE_ROW_ICON_SIZE,
 };
 pub use registry::{CommandEntry, command_palette_entries};
 pub use search::CommandPaletteListRow;
@@ -103,114 +102,129 @@ mod tests {
         state
     }
 
+    /// The palette's shortcut affordance is navigation now: Ctrl+E closes the
+    /// palette and hands the row's action to the configurator instead of
+    /// starting a chord capture, and nothing is queued for the backend.
     #[test]
-    fn shortcut_capture_emits_a_replace_request() {
-        let mut state = make_state();
-        assert!(state.begin_keybinding_capture(Action::SelectPenTool));
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('p')));
-
-        assert_eq!(
-            state.take_pending_backend_action(),
-            Some(crate::input::state::PendingBackendAction::EditKeybinding(
-                crate::input::state::KeybindingEditRequest {
-                    action: Action::SelectPenTool,
-                    operation: crate::input::state::KeybindingEditOperation::Replace(vec![
-                        "Ctrl+P".to_string()
-                    ]),
-                }
-            ))
-        );
-        assert_eq!(state.keybinding_capture_action, None);
-    }
-
-    #[test]
-    fn palette_shortcut_controls_request_delete_and_reset() {
+    fn ctrl_e_sends_the_selected_row_to_the_configurator() {
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette_query = "pen tool".to_string();
         let action = state.selected_command().expect("selected command").action;
+        assert_eq!(action, Action::SelectPenTool);
 
         state.modifiers.ctrl = true;
-        assert!(state.handle_command_palette_key(crate::input::Key::Delete));
-        assert_eq!(
-            state.take_pending_backend_action(),
-            Some(crate::input::state::PendingBackendAction::EditKeybinding(
-                crate::input::state::KeybindingEditRequest {
-                    action,
-                    operation: crate::input::state::KeybindingEditOperation::Delete,
-                }
-            ))
-        );
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('r')));
-        assert_eq!(
-            state.take_pending_backend_action(),
-            Some(crate::input::state::PendingBackendAction::EditKeybinding(
-                crate::input::state::KeybindingEditRequest {
-                    action,
-                    operation: crate::input::state::KeybindingEditOperation::Reset,
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn palette_edit_icon_starts_capture_without_running_command() {
-        let mut state = make_state();
-        state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
-        let filtered = state.filtered_commands();
-        let action = filtered.first().expect("matching command").action;
-        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
-        let stride =
-            layout::COMMAND_PALETTE_ROW_ACTION_SIZE + layout::COMMAND_PALETTE_ROW_ACTION_GAP;
-        let actions_left = geometry.inner_x + geometry.inner_width
-            - stride * layout::COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
-        let x = (geometry.x + actions_left + 2.0).round() as i32;
-        let y = (geometry.y + geometry.items_top + 4.0).round() as i32;
-
-        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
-        assert_eq!(state.keybinding_capture_action, Some(action));
-        assert!(state.command_palette_open);
+        assert!(!state.command_palette_open);
         assert!(state.take_pending_backend_action().is_none());
     }
 
+    /// An action with no `[keybindings]` field has no row to open, so the
+    /// affordance says so and leaves the palette where it was.
     #[test]
-    fn palette_shortcut_controls_expose_specific_tooltips() {
+    fn ctrl_e_on_a_runtime_only_action_explains_instead_of_navigating() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
-        let filtered = state.filtered_commands();
-        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
-        let stride =
-            layout::COMMAND_PALETTE_ROW_ACTION_SIZE + layout::COMMAND_PALETTE_ROW_ACTION_GAP;
-        let actions_left = geometry.inner_x + geometry.inner_width
-            - stride * layout::COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
-        let y = (geometry.y + geometry.items_top + 4.0).round() as i32;
 
-        for (slot, expected) in [
-            "Edit shortcut",
-            "Unbind shortcut",
-            "Reset shortcut to default",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let x = (geometry.x + actions_left + stride * slot as f64 + 2.0).round() as i32;
-            state.update_pointer_position(x, y);
-            assert_eq!(
-                state
-                    .command_palette_action_tooltip(1920, 1000)
-                    .map(|(tooltip, _, _)| tooltip),
-                Some(expected)
-            );
+        assert!(!state.open_configurator_for_shortcut(Action::ReplayTour));
+
+        assert!(state.command_palette_open);
+        assert_eq!(
+            state
+                .ui_toast
+                .as_ref()
+                .map(|toast| toast.message.as_str())
+                .unwrap_or_default(),
+            "Replay Tour has no configurable keyboard shortcut."
+        );
+    }
+
+    /// Where the affordance sends the user is the whole of what it does, so the
+    /// test watches the launch itself: a stand-in configurator writes down the
+    /// arguments the palette handed it.
+    #[test]
+    fn ctrl_e_launches_the_configurator_at_the_rows_keybindings_section() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _environment = crate::test_env::lock();
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let recorded = temp.path().join("arguments");
+        let recorder = temp.path().join("recording-configurator");
+        std::fs::write(
+            &recorder,
+            // Written under a scratch name and renamed so a read either sees
+            // the whole argument list or no file at all.
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}.part'\nmv '{0}.part' '{0}'\n",
+                recorded.display()
+            ),
+        )
+        .expect("the recording configurator should be written");
+        let mut permissions = std::fs::metadata(&recorder)
+            .expect("the recording configurator should exist")
+            .permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&recorder, permissions)
+            .expect("the recording configurator should be executable");
+
+        let previous_configurator = std::env::var_os(crate::env_vars::CONFIGURATOR_ENV);
+        let previous_config_home = std::env::var_os(crate::env_vars::XDG_CONFIG_HOME_ENV);
+        // SAFETY: access to the process environment is serialized by test_env.
+        // The configurator override makes the broker accept the stand-in; the
+        // config home keeps a launch failure away from the developer's file.
+        unsafe {
+            std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, &recorder);
+            std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, temp.path());
         }
 
-        let (_, _, visual_width, _) =
-            crate::ui::command_palette_visual_geometry(&state, 1920, 1000)
-                .expect("palette plus tooltip geometry");
-        assert!(visual_width > geometry.width + 4.0);
+        let launched = record_shortcut_launch(&recorded);
+
+        // SAFETY: as above; restored before the assertion so a failure cannot
+        // leak this test's environment into the next one.
+        unsafe {
+            match previous_configurator {
+                Some(value) => std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, value),
+                None => std::env::remove_var(crate::env_vars::CONFIGURATOR_ENV),
+            }
+            match previous_config_home {
+                Some(value) => std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, value),
+                None => std::env::remove_var(crate::env_vars::XDG_CONFIG_HOME_ENV),
+            }
+        }
+
+        assert_eq!(
+            launched.as_deref(),
+            Some("--open\nkeybindings/tools?search=select pen tool\n"),
+            "Ctrl+E must open the section that holds the row's shortcut"
+        );
+    }
+
+    /// Press Ctrl+E and wait for the stand-in configurator to record its
+    /// arguments.
+    ///
+    /// The launch goes through the process broker's active-instance slot, which
+    /// a broker test running in parallel can replace and then clear.
+    /// Re-establishing the broker and pressing again keeps that race out of the
+    /// assertion.
+    fn record_shortcut_launch(recorded: &std::path::Path) -> Option<String> {
+        for _ in 0..3 {
+            let _broker = crate::process_broker::start_for_runtime().ok()?;
+            let mut state = make_state();
+            state.toggle_command_palette();
+            state.command_palette_query = "pen tool".to_string();
+            state.modifiers.ctrl = true;
+            assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while std::time::Instant::now() < deadline {
+                if let Ok(arguments) = std::fs::read_to_string(recorded) {
+                    return Some(arguments);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        None
     }
 
     fn assert_palette_finds(query: &str, action: Action) {
@@ -223,6 +237,16 @@ mod tests {
             "expected query {query:?} to find {action:?}, got {:?}",
             results.iter().map(|cmd| cmd.action).collect::<Vec<_>>()
         );
+    }
+
+    /// The routes that replaced the overlay's own editors have to be findable
+    /// where the user already looks for commands.
+    #[test]
+    fn configurator_routes_are_searchable() {
+        assert_palette_finds("edit shortcuts", Action::OpenConfiguratorKeybindings);
+        assert_palette_finds("edit presets", Action::OpenConfiguratorPresets);
+        assert_palette_finds("board defaults", Action::OpenConfiguratorBoards);
+        assert_palette_finds("quick colors", Action::OpenConfiguratorQuickColors);
     }
 
     #[test]

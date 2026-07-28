@@ -5,9 +5,7 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
-use crate::backend::wayland::config_writer::{ConfigMutation, ConfigWriteReceipt};
 use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
-use crate::input::boards::{BoardConfigChange, PendingBoardConfigUpdate};
 use crate::input::state::test_support::make_test_input_state;
 use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarEvent};
 
@@ -165,68 +163,6 @@ fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
         .sync_pin_seeds_from_config(&config.resolved_boards());
     runtime_seeds_from_config(config, &board_pin_seeds_from_input(&input))
         .expect("probe config should produce valid seeds")
-}
-
-/// One config-changing probe per `ConfigMutation` variant, valued against
-/// `baseline` so no probe is a no-op. `PresetSlot` is the exception: the
-/// shipped slots are empty, so its probe only has to prove that clearing one
-/// leaves the registry alone.
-fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
-    let mut boards = baseline.resolved_boards();
-    let mut created = boards.items[0].clone();
-    created.id = "probe-board".to_string();
-    created.name = "Probe board".to_string();
-    created.pinned = !created.pinned;
-    boards.items.push(created);
-
-    vec![
-        ConfigMutation::BoardConfig(Box::new(PendingBoardConfigUpdate::new(
-            boards,
-            BoardConfigChange::IdentitiesCreated(vec!["probe-board".to_string()]),
-        ))),
-        ConfigMutation::PresetSlot {
-            slot: 1,
-            preset: None,
-        },
-        ConfigMutation::QuickColor {
-            index: 0,
-            color: crate::draw::Color {
-                r: 0.13,
-                g: 0.27,
-                b: 0.41,
-                a: 1.0,
-            },
-        },
-        ConfigMutation::Keybinding {
-            action: crate::config::Action::ClearCanvas,
-            bindings: vec!["Ctrl+Alt+Shift+L".to_string()],
-            receipt: ConfigWriteReceipt::initial(),
-        },
-    ]
-}
-
-/// Every config mutation that moves a runtime seed has to declare it:
-/// `queue_config_mutation` reseeds the registry only for declared mutations,
-/// and an undeclared one would leave overrides reconciling against a baseline
-/// the config no longer has.
-#[test]
-fn config_mutations_that_move_a_runtime_seed_declare_it() {
-    let baseline = Config::default();
-    let baseline_seeds = seeds_for_config(&baseline);
-
-    for mutation in seed_probe_mutations(&baseline) {
-        let mut config = baseline.clone();
-        assert!(
-            mutation.apply(&mut config),
-            "probe mutation {mutation:?} should apply"
-        );
-        if seeds_for_config(&config) != baseline_seeds {
-            assert!(
-                mutation.affects_runtime_ui_seeds(),
-                "{mutation:?} moves a runtime seed without declaring it"
-            );
-        }
-    }
 }
 
 /// The same rule for the authored preferences that no longer travel through

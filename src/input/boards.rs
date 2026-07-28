@@ -23,9 +23,7 @@ pub use color::{
 pub use identity::{
     BoardIdChangeSet, BoardIdentityGeneration, BoundaryBoardId, BoundaryBoardIdSet,
 };
-pub(crate) use mapping::{
-    BoardConfigChange, PendingBoardConfigUpdate, PendingBoardRuntimeUiAction,
-};
+pub(crate) use mapping::PendingBoardRuntimeUiAction;
 pub use operations::{
     BoardDeleteConfirmation, BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest,
     BoardDeleteTarget, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,

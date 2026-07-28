@@ -326,6 +326,85 @@ mod tests {
         assert_eq!(app.active_tab, TabId::Boards);
     }
 
+    /// The overlay names a shortcut's section from the main crate, which
+    /// cannot see `KeybindingField::tab()`; this side can see both, so it is
+    /// where the two groupings are held together. The configurator splits the
+    /// config's `core` group across three tabs and merges capture with zoom, so
+    /// nothing derives one from the other — only this check keeps a new or
+    /// moved action from sending the user to the wrong subtab.
+    #[test]
+    fn every_action_section_matches_the_field_tab_that_holds_it() {
+        use crate::models::KeybindingField;
+        use wayscriber::config::keybindings::KeybindingsConfig;
+        use wayscriber::configurator_destination::keybindings_section_for_action;
+
+        let fields = KeybindingField::all();
+        let actions = KeybindingsConfig::configurable_actions();
+        assert_eq!(
+            fields.len(),
+            actions.len(),
+            "the configurator and the config disagree about how many shortcuts exist"
+        );
+
+        for action in actions {
+            let key = KeybindingsConfig::config_key_for_action(*action)
+                .unwrap_or_else(|| panic!("{action:?} is configurable, so it has a config key"));
+            let field = fields
+                .iter()
+                .find(|field| field.field_key() == key)
+                .unwrap_or_else(|| panic!("no configurator field edits {key}"));
+            let section = keybindings_section_for_action(*action)
+                .unwrap_or_else(|| panic!("{action:?} names no Keybindings section"));
+
+            assert_eq!(
+                keybindings_tab(section),
+                field.tab(),
+                "{action:?} would open the wrong Keybindings subtab"
+            );
+        }
+    }
+
+    /// The other half of a shortcut destination: its search term has to select
+    /// the action's own row. Alignment moves off a subtab with no matches, so a
+    /// term that misses would visibly land somewhere else.
+    #[test]
+    fn every_action_destination_keeps_the_subtab_it_asks_for() {
+        use wayscriber::config::keybindings::KeybindingsConfig;
+        use wayscriber::configurator_destination::{
+            ConfiguratorScreen, keybindings_destination_for_action,
+        };
+
+        let (mut app, _dir, _path) = app_launched_with(&[]);
+
+        for action in KeybindingsConfig::configurable_actions() {
+            let destination = keybindings_destination_for_action(*action)
+                .unwrap_or_else(|| panic!("{action:?} has no destination"));
+            let ConfiguratorScreen::Keybindings(Some(section)) = destination.screen() else {
+                panic!("{action:?} should name a Keybindings section");
+            };
+            let expected = keybindings_tab(section);
+
+            app.active_tab = TabId::Keybindings;
+            app.active_keybindings_tab = expected;
+            app.search_query = SearchQuery::new(
+                destination
+                    .search()
+                    .unwrap_or_else(|| panic!("{action:?} should carry a search term")),
+            );
+            app.align_active_tabs_for_search();
+
+            assert_eq!(
+                app.active_tab,
+                TabId::Keybindings,
+                "{action:?} searched itself off the Keybindings tab"
+            );
+            assert_eq!(
+                app.active_keybindings_tab, expected,
+                "{action:?} searched itself off its own subtab"
+            );
+        }
+    }
+
     /// The whole round trip: a destination a launcher builds, spelled as one
     /// argv token, lands on the screen that destination names.
     #[test]

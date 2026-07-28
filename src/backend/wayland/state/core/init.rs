@@ -148,7 +148,6 @@ impl WaylandState {
             runtime_ui,
             runtime_ui_unavailable,
             runtime_ui_unavailable_previews: Default::default(),
-            keybinding_session_edits: Default::default(),
             input_state,
             palette_recents,
             clipboard_publish,

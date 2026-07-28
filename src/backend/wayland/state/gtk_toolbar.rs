@@ -296,7 +296,6 @@ impl WaylandState {
 #[cfg(test)]
 mod modal_tests {
     use super::*;
-    use crate::config::Action;
     use crate::input::state::test_support::make_test_input_state;
     use crate::toolbar_gtk::GtkToolbarDragPhase;
 
@@ -307,7 +306,7 @@ mod modal_tests {
         };
 
     #[test]
-    fn command_palette_and_shortcut_capture_block_all_gtk_feedback() {
+    fn command_palette_blocks_all_gtk_feedback() {
         let mut input_state = make_test_input_state();
         assert!(!gtk_toolbar_feedback_blocked(&input_state));
 
@@ -315,8 +314,7 @@ mod modal_tests {
         assert!(gtk_toolbar_feedback_blocked(&input_state));
 
         input_state.toggle_command_palette();
-        assert!(input_state.begin_keybinding_capture(Action::Undo));
-        assert!(gtk_toolbar_feedback_blocked(&input_state));
+        assert!(!gtk_toolbar_feedback_blocked(&input_state));
     }
 
     #[test]

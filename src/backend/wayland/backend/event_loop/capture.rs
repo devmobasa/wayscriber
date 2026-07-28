@@ -86,18 +86,12 @@ pub(super) fn handle_pending_actions(
     state.handle_pending_eyedropper_toggle();
     // Copy/paste-hex requests from the color picker popup's pointer release are
     // drained here: unlike the toolbar/key paths, that release has no other
-    // drain site. An accepted quick-color recolor is queued from the same
-    // release (clicking OK), so its config write belongs here too — otherwise
-    // the swatch would look saved until some later key or toolbar event, and a
-    // quit in between would drop it.
+    // drain site.
     if let Some(color) = state.input_state.take_pending_copy_hex_request() {
         state.handle_copy_hex_color(color);
     }
     if let Some(target) = state.input_state.take_pending_paste_hex_request() {
         state.handle_paste_hex_color(target);
-    }
-    if let Some(edit) = state.input_state.take_pending_quick_color_edit() {
-        state.handle_quick_color_edit(edit);
     }
     handle_frozen_toggle(state);
     state.drain_pending_board_runtime_ui_actions();
@@ -112,9 +106,6 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
-            PendingBackendAction::EditKeybinding(request) => {
-                state.handle_keybinding_edit(request);
-            }
             PendingBackendAction::PersistToolbarDisplayMode(previous) => {
                 state.persist_toolbar_display_mode(previous);
             }
@@ -125,9 +116,6 @@ pub(super) fn handle_pending_actions(
     }
     if let Some(action) = state.input_state.take_pending_zoom_action() {
         state.handle_zoom_action(action);
-    }
-    if let Some(update) = state.input_state.take_pending_board_config_update() {
-        state.apply_board_config_update(update);
     }
     state.sync_zoom_board_mode();
 

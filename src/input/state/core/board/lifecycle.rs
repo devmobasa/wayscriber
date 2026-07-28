@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::input::boards::{BoardConfigChange, PendingBoardRuntimeUiAction};
+use crate::input::boards::PendingBoardRuntimeUiAction;
 
 impl InputState {
     pub(super) fn mark_board_surface_dirty(&mut self) {
@@ -15,20 +15,6 @@ impl InputState {
     pub(super) fn finish_active_board_transition(&mut self) {
         self.sync_canvas_pointer_to_current_transform();
         self.mark_board_surface_changed();
-    }
-
-    pub(crate) fn queue_board_config_save(&mut self, change: BoardConfigChange) {
-        if !self.boards.persist_customizations() {
-            return;
-        }
-        let snapshot = self.boards.to_config();
-        if let Some(update) = &mut self.pending_board_config {
-            update.merge(snapshot, change);
-        } else {
-            self.pending_board_config = Some(crate::input::boards::PendingBoardConfigUpdate::new(
-                snapshot, change,
-            ));
-        }
     }
 
     pub(super) fn queue_board_runtime_ui_action(&mut self, action: PendingBoardRuntimeUiAction) {

@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::Color;
-use crate::input::boards::{BoardConfigChange, PendingBoardRuntimeUiAction};
+use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BoardBackground, runtime_contrast_pen_color};
 
@@ -39,8 +39,6 @@ impl InputState {
             return false;
         }
         board.spec.name = trimmed.to_string();
-        let board_id = board.spec.id.clone();
-        self.queue_board_config_save(BoardConfigChange::Name(board_id));
         self.mark_board_surface_dirty();
         true
     }
@@ -72,8 +70,6 @@ impl InputState {
         if let Some(color) = active_pen_color {
             self.set_pen_color_from_board(color);
         }
-        let board_id = self.boards.board_states()[index].spec.id.clone();
-        self.queue_board_config_save(BoardConfigChange::Appearance(board_id));
         self.mark_board_surface_dirty();
         true
     }
@@ -119,7 +115,6 @@ impl InputState {
         if !self.boards.move_board(from, to) {
             return false;
         }
-        self.queue_board_config_save(BoardConfigChange::Structure);
         self.mark_board_surface_dirty();
         true
     }

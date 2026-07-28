@@ -255,15 +255,6 @@ pub enum PresetAction {
     },
 }
 
-/// An accepted quick-color recolor awaiting the backend's config write. The
-/// runtime palette is already updated; this only carries what `config.toml`
-/// still needs (`drawing.quick_colors[index].color`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct QuickColorEdit {
-    pub index: usize,
-    pub color: Color,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresetFeedbackKind {
     Apply,
@@ -446,25 +437,11 @@ pub enum PendingBackendAction {
     CanvasExport(Action),
     BoardPdfExport(Action),
     ClearSavedToolState,
-    EditKeybinding(KeybindingEditRequest),
     /// Persist the top-display preference changed by its keyboard action.
     /// The cycle already applied, so the payload carries the pre-cycle mode
     /// for the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
     PersistToolbarDisplayMode(crate::config::TopDisplayMode),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KeybindingEditOperation {
-    Replace(Vec<String>),
-    Delete,
-    Reset,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeybindingEditRequest {
-    pub action: Action,
-    pub operation: KeybindingEditOperation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

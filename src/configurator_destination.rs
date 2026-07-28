@@ -14,6 +14,8 @@
 //! configurator screens, not configuration values: nothing here is ever read
 //! from or written to `config.toml`.
 
+use crate::config::KeybindingsConfig;
+use crate::domain::Action;
 use std::ffi::OsString;
 
 /// The flag that carries a destination to the configurator process.
@@ -26,6 +28,18 @@ const QUERY_SEPARATOR: char = '?';
 
 /// The only query key a destination understands.
 const SEARCH_KEY: &str = "search=";
+
+/// The term that aims the Drawing screen at its quick-color palette.
+///
+/// Named once here so the overlay's palette route and the toast that offers it
+/// cannot drift apart; the configurator lists the same words among the Drawing
+/// tab's color search terms.
+const QUICK_COLORS_SEARCH: &str = "Quick Colors";
+
+/// The Drawing screen, focused on the quick-color palette.
+pub fn quick_colors_destination() -> ConfiguratorDestination {
+    ConfiguratorDestination::with_search(ConfiguratorScreen::Drawing, QUICK_COLORS_SEARCH)
+}
 
 /// A keybinding subtab, mirroring the configurator's own Keybindings sections.
 ///
@@ -42,6 +56,196 @@ pub enum KeybindingsSection {
     UiModes,
     CaptureView,
     Presets,
+}
+
+/// The Keybindings section that holds one action's shortcut, or `None` for an
+/// action with no `[keybindings]` field at all.
+///
+/// The overlay no longer edits shortcuts, so every shortcut affordance it still
+/// offers is navigation: this is how it names the subtab the user should land
+/// on. The grouping is the configurator's, not the config file's — it splits
+/// `[keybindings].core` across General, Drawing, and History and merges the
+/// capture and zoom groups — so the correspondence cannot be derived from the
+/// storage layout and is spelled out here instead. `keybindings_tab_matches_the_action_section`
+/// (configurator crate, which can see both sides) is what keeps the two
+/// agreeing.
+pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSection> {
+    let section = match action {
+        Action::Exit | Action::OpenConfigurator | Action::OpenAbout => KeybindingsSection::General,
+        Action::EnterTextMode
+        | Action::EnterStickyNoteMode
+        | Action::ClearCanvas
+        | Action::IncreaseThickness
+        | Action::DecreaseThickness
+        | Action::IncreaseMarkerOpacity
+        | Action::DecreaseMarkerOpacity
+        | Action::IncreaseFontSize
+        | Action::DecreaseFontSize
+        | Action::ToggleFill
+        | Action::SetColorRed
+        | Action::SetColorGreen
+        | Action::SetColorBlue
+        | Action::SetColorYellow
+        | Action::SetColorOrange
+        | Action::SetColorPink
+        | Action::SetColorWhite
+        | Action::SetColorBlack
+        | Action::PickScreenColor => KeybindingsSection::Drawing,
+        Action::SelectSelectionTool
+        | Action::SelectPenTool
+        | Action::SelectEraserTool
+        | Action::ToggleEraserMode
+        | Action::SelectMarkerTool
+        | Action::SelectStepMarkerTool
+        | Action::SelectLineTool
+        | Action::SelectRectTool
+        | Action::SelectEllipseTool
+        | Action::SelectArrowTool
+        | Action::SelectTriangleTool
+        | Action::SelectParallelogramTool
+        | Action::SelectRhombusTool
+        | Action::SelectRegularPolygonTool
+        | Action::SelectFreeformPolygonTool
+        | Action::SelectBlurTool
+        | Action::SelectSpotlightTool
+        | Action::CycleBlurStyle
+        | Action::SelectHighlightTool
+        | Action::ToggleHighlightTool
+        | Action::ResetArrowLabelCounter
+        | Action::ResetStepMarkerCounter => KeybindingsSection::Tools,
+        Action::DuplicateSelection
+        | Action::CopySelection
+        | Action::PasteSelection
+        | Action::SelectAll
+        | Action::MoveSelectionToFront
+        | Action::MoveSelectionToBack
+        | Action::MoveSelectionToStart
+        | Action::MoveSelectionToEnd
+        | Action::MoveSelectionToTop
+        | Action::MoveSelectionToBottom
+        | Action::NudgeSelectionUp
+        | Action::NudgeSelectionDown
+        | Action::NudgeSelectionLeft
+        | Action::NudgeSelectionRight
+        | Action::NudgeSelectionUpLarge
+        | Action::NudgeSelectionDownLarge
+        | Action::DeleteSelection => KeybindingsSection::Selection,
+        Action::Undo
+        | Action::Redo
+        | Action::UndoAll
+        | Action::RedoAll
+        | Action::UndoAllDelayed
+        | Action::RedoAllDelayed => KeybindingsSection::History,
+        Action::ToggleWhiteboard
+        | Action::ToggleBlackboard
+        | Action::ReturnToTransparent
+        | Action::PagePrev
+        | Action::PageNext
+        | Action::PageNew
+        | Action::PageDuplicate
+        | Action::PageDelete
+        | Action::Board1
+        | Action::Board2
+        | Action::Board3
+        | Action::Board4
+        | Action::Board5
+        | Action::Board6
+        | Action::Board7
+        | Action::Board8
+        | Action::Board9
+        | Action::BoardNext
+        | Action::BoardPrev
+        | Action::BoardNew
+        | Action::BoardDuplicate
+        | Action::BoardDelete
+        | Action::BoardPicker
+        | Action::FocusNextOutput
+        | Action::FocusPrevOutput => KeybindingsSection::Boards,
+        Action::ToggleHelp
+        | Action::ToggleQuickHelp
+        | Action::ToggleStatusBar
+        | Action::ToggleFloatingBadge
+        | Action::ToggleZoomChip
+        | Action::ToggleFocusMode
+        | Action::ToggleClickHighlight
+        | Action::ToggleInputHud
+        | Action::ToggleToolbar
+        | Action::ToggleLightMode
+        | Action::ToggleLightModeDrawing
+        | Action::ToggleRadialMenu
+        | Action::CycleToolbarDisplay
+        | Action::TogglePresenterMode
+        | Action::RenderProfileNext
+        | Action::RenderProfilePrevious
+        | Action::RenderProfileOff
+        | Action::ToggleSelectionProperties
+        | Action::OpenContextMenu
+        | Action::ToggleCommandPalette => KeybindingsSection::UiModes,
+        Action::CaptureFullScreen
+        | Action::CaptureActiveWindow
+        | Action::CaptureSelection
+        | Action::CaptureClipboardFull
+        | Action::CaptureFileFull
+        | Action::CaptureClipboardSelection
+        | Action::CaptureFileSelection
+        | Action::CaptureClipboardRegion
+        | Action::CaptureFileRegion
+        | Action::ExportCanvasFile
+        | Action::ExportCanvasClipboard
+        | Action::ExportCanvasClipboardAndFile
+        | Action::ExportBoardPdfFile
+        | Action::ExportAllBoardsPdfFile
+        | Action::OpenCaptureFolder
+        | Action::ToggleFrozenMode
+        | Action::ZoomIn
+        | Action::ZoomOut
+        | Action::ResetZoom
+        | Action::ToggleZoomLock
+        | Action::RefreshZoomCapture => KeybindingsSection::CaptureView,
+        Action::ApplyPreset1
+        | Action::ApplyPreset2
+        | Action::ApplyPreset3
+        | Action::ApplyPreset4
+        | Action::ApplyPreset5
+        | Action::SavePreset1
+        | Action::SavePreset2
+        | Action::SavePreset3
+        | Action::SavePreset4
+        | Action::SavePreset5
+        | Action::ClearPreset1
+        | Action::ClearPreset2
+        | Action::ClearPreset3
+        | Action::ClearPreset4
+        | Action::ClearPreset5 => KeybindingsSection::Presets,
+        // Runtime-only actions and the configurator routes themselves have no
+        // `[keybindings]` field, so there is no row to land on.
+        Action::BoardRestoreDeleted
+        | Action::BoardSwitchRecent
+        | Action::PageRestoreDeleted
+        | Action::ClearSavedToolState
+        | Action::ReplayTour
+        | Action::SavePendingToFile
+        | Action::OpenConfiguratorKeybindings
+        | Action::OpenConfiguratorPresets
+        | Action::OpenConfiguratorBoards
+        | Action::OpenConfiguratorQuickColors => return None,
+    };
+    Some(section)
+}
+
+/// The configurator screen that edits one action's shortcut.
+///
+/// The search term is the action's own `[keybindings]` key with its underscores
+/// opened out: the configurator searches that key verbatim alongside its row
+/// label, so this is the one spelling guaranteed to select exactly the row the
+/// user asked about while still reading as words in the search box.
+pub fn keybindings_destination_for_action(action: Action) -> Option<ConfiguratorDestination> {
+    let section = keybindings_section_for_action(action)?;
+    let key = KeybindingsConfig::config_key_for_action(action)?;
+    Some(ConfiguratorDestination::with_search(
+        ConfiguratorScreen::Keybindings(Some(section)),
+        key.replace('_', " "),
+    ))
 }
 
 /// A configurator screen a launcher can name.
@@ -372,6 +576,96 @@ mod tests {
             ConfiguratorDestination::with_search(ConfiguratorScreen::Drawing, "  Quick  Colors  ");
         assert_eq!(destination.search(), Some("Quick  Colors"));
         assert_eq!(destination.as_arg(), "drawing?search=Quick  Colors");
+    }
+
+    /// Every shortcut the overlay can show is a shortcut it can hand over, so
+    /// the mapping has to cover the whole stored keymap.
+    #[test]
+    fn every_configurable_action_names_a_keybindings_section() {
+        for action in KeybindingsConfig::configurable_actions() {
+            assert!(
+                keybindings_section_for_action(*action).is_some(),
+                "{action:?} stores a shortcut but names no Keybindings section"
+            );
+            assert!(
+                keybindings_destination_for_action(*action).is_some(),
+                "{action:?} stores a shortcut but has no destination"
+            );
+        }
+    }
+
+    /// The other half: an action with no `[keybindings]` field has no row to
+    /// land on, and the affordance must say so rather than open a screen that
+    /// cannot show it.
+    #[test]
+    fn actions_without_a_stored_shortcut_have_no_keybindings_destination() {
+        for action in [
+            Action::BoardRestoreDeleted,
+            Action::BoardSwitchRecent,
+            Action::PageRestoreDeleted,
+            Action::ClearSavedToolState,
+            Action::ReplayTour,
+            Action::SavePendingToFile,
+            Action::OpenConfiguratorKeybindings,
+            Action::OpenConfiguratorPresets,
+            Action::OpenConfiguratorBoards,
+            Action::OpenConfiguratorQuickColors,
+        ] {
+            assert_eq!(
+                keybindings_section_for_action(action),
+                None,
+                "{action:?} has no stored shortcut, so it names no section"
+            );
+            assert!(keybindings_destination_for_action(action).is_none());
+        }
+    }
+
+    /// One row per section, spelled out: the token carries the subtab and the
+    /// action's own config key as the search term.
+    #[test]
+    fn shortcut_destinations_name_the_section_and_search_the_config_key() {
+        for (action, expected) in [
+            (Action::Exit, "keybindings/general?search=exit"),
+            (
+                Action::ClearCanvas,
+                "keybindings/drawing?search=clear canvas",
+            ),
+            (
+                Action::SelectPenTool,
+                "keybindings/tools?search=select pen tool",
+            ),
+            (
+                Action::DeleteSelection,
+                "keybindings/selection?search=delete selection",
+            ),
+            (Action::UndoAll, "keybindings/history?search=undo all"),
+            (Action::BoardNext, "keybindings/boards?search=board next"),
+            (
+                Action::ToggleToolbar,
+                "keybindings/ui-modes?search=toggle toolbar",
+            ),
+            (Action::ZoomIn, "keybindings/capture-view?search=zoom in"),
+            (
+                Action::SavePreset1,
+                "keybindings/presets?search=save preset 1",
+            ),
+        ] {
+            assert_eq!(
+                keybindings_destination_for_action(action)
+                    .map(|destination| destination.as_arg())
+                    .as_deref(),
+                Some(expected),
+                "{action:?} did not land on its own row"
+            );
+        }
+    }
+
+    #[test]
+    fn the_quick_colors_route_searches_the_drawing_palette() {
+        assert_eq!(
+            quick_colors_destination().as_arg(),
+            "drawing?search=Quick Colors"
+        );
     }
 
     #[test]

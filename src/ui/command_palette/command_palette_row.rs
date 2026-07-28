@@ -1,12 +1,8 @@
-use crate::config::KeybindingsConfig;
 use crate::config::action_meta::ActionMeta;
 use crate::input::InputState;
 use crate::input::state::COMMAND_PALETTE_ITEM_HEIGHT;
 use crate::input::state::query_tokens;
-use crate::input::state::{
-    COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
-    COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP, COMMAND_PALETTE_ROW_ICON_SIZE,
-};
+use crate::input::state::{COMMAND_PALETTE_ROW_ICON_GAP, COMMAND_PALETTE_ROW_ICON_SIZE};
 use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -110,16 +106,7 @@ pub(super) fn render_command_row(
         cmd.label,
     );
     let desc_x = label_x + label_extents.width() + 12.0;
-    let configurable = KeybindingsConfig::default()
-        .bindings_for_action(cmd.action)
-        .is_some();
-    let actions_width = if configurable {
-        (COMMAND_PALETTE_ROW_ACTION_SIZE + COMMAND_PALETTE_ROW_ACTION_GAP)
-            * COMMAND_PALETTE_ROW_ACTION_COUNT as f64
-    } else {
-        0.0
-    };
-    let content_right = inner_x + inner_width - 8.0 - actions_width;
+    let content_right = inner_x + inner_width - 8.0;
 
     let shortcut_labels = input_state.action_binding_labels(cmd.action);
     let badge_left_edge = render_command_row_shortcut_badge(
@@ -142,40 +129,6 @@ pub(super) fn render_command_row(
         label_y,
         max_desc_width,
         desc_alpha,
-    );
-    if configurable {
-        render_command_row_actions(ctx, inner_x + inner_width, item_y, is_selected);
-    }
-}
-
-fn render_command_row_actions(
-    ctx: &cairo::Context,
-    content_right: f64,
-    item_y: f64,
-    selected: bool,
-) {
-    let stride = COMMAND_PALETTE_ROW_ACTION_SIZE + COMMAND_PALETTE_ROW_ACTION_GAP;
-    let left = content_right - stride * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
-    let icon_y = item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ACTION_SIZE) / 2.0;
-    let alpha = if selected { 0.95 } else { 0.62 };
-    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha));
-    crate::toolbar_icons::draw_icon_pencil(
-        ctx,
-        left + 3.0,
-        icon_y + 3.0,
-        COMMAND_PALETTE_ROW_ACTION_SIZE - 6.0,
-    );
-    crate::toolbar_icons::draw_icon_clear(
-        ctx,
-        left + stride + 3.0,
-        icon_y + 3.0,
-        COMMAND_PALETTE_ROW_ACTION_SIZE - 6.0,
-    );
-    crate::toolbar_icons::draw_icon_refresh(
-        ctx,
-        left + stride * 2.0 + 3.0,
-        icon_y + 3.0,
-        COMMAND_PALETTE_ROW_ACTION_SIZE - 6.0,
     );
 }
 

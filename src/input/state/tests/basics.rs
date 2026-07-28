@@ -51,7 +51,12 @@ fn chrome_visibility_toggles_announce_their_scope_once() {
 #[test]
 fn process_only_notice_drops_the_hint_when_the_configurator_is_unbound() {
     let mut state = create_test_input_state();
-    state.set_keybinding_maps(Default::default(), Default::default());
+    // Explicitly bound to nothing, which is not the same as absent: an absent
+    // action falls back to scanning the keymap.
+    state.set_action_bindings(std::collections::HashMap::from([(
+        crate::config::Action::OpenConfigurator,
+        Vec::new(),
+    )]));
 
     state.handle_action(crate::config::Action::ToggleZoomChip);
 

@@ -86,7 +86,7 @@ pub(super) fn notify_keybinding_conflicts(
         ToastPriority::Action,
         "keybindings.conflict",
         Toast::warning(keybinding_conflict_toast(conflicts))
-            .action("Settings", Action::OpenConfigurator)
+            .action("Shortcuts", Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     notification::send_notification_with_timeout_async(
@@ -117,7 +117,7 @@ pub(super) fn notify_invalid_keybindings(
         ToastPriority::Action,
         "keybindings.invalid",
         Toast::warning(invalid_keybinding_toast(invalid))
-            .action("Settings", Action::OpenConfigurator)
+            .action("Shortcuts", Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     notification::send_notification_with_timeout_async(
@@ -138,9 +138,9 @@ pub(super) fn notify_invalid_keybindings(
 /// still has to be said, or a shortcut the release notes promise would simply
 /// appear not to work.
 ///
-/// It carries the same Settings chip as its neighbours — that is where the user
-/// would add the shortcut — so it shares their priority class, but it is pushed
-/// last and styled as information rather than as a warning.
+/// It carries the same Shortcuts chip as its neighbours — that is where the
+/// user would add the shortcut — so it shares their priority class, but it is
+/// pushed last and styled as information rather than as a warning.
 pub(super) fn notify_skipped_default_shortcuts(
     input_state: &mut InputState,
     tokio_handle: &tokio::runtime::Handle,
@@ -154,7 +154,7 @@ pub(super) fn notify_skipped_default_shortcuts(
         ToastPriority::Action,
         "keybindings.skipped-default",
         Toast::info(skipped_default_toast(skipped))
-            .action("Settings", Action::OpenConfigurator)
+            .action("Shortcuts", Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
     notification::send_notification_with_timeout_async(

@@ -760,8 +760,39 @@ fn authored_preference_changes_leave_config_toml_untouched() {
     });
 }
 
+/// The toolbar's rebind gesture still selects a control's shortcut; what it
+/// does with it is open the configurator on the section that holds it. The
+/// dispatch arm asks these two functions in order, so this is the pair that
+/// decides where the gesture lands.
 #[test]
-fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
+fn the_toolbar_rebind_gesture_targets_the_controls_keybindings_section() {
+    use crate::configurator_destination::keybindings_destination_for_action;
+
+    for (event, expected) in [
+        (
+            ToolbarEvent::SelectTool(Tool::Pen),
+            "keybindings/tools?search=select pen tool",
+        ),
+        (ToolbarEvent::Undo, "keybindings/history?search=undo"),
+        (
+            ToolbarEvent::ClearCanvas { instant: false },
+            "keybindings/drawing?search=clear canvas",
+        ),
+    ] {
+        let action = crate::ui::toolbar::model::action_for_event(&event)
+            .unwrap_or_else(|| panic!("{event:?} should name an action"));
+        assert_eq!(
+            keybindings_destination_for_action(action)
+                .map(|destination| destination.as_arg())
+                .as_deref(),
+            Some(expected),
+            "{event:?} would open the wrong screen"
+        );
+    }
+}
+
+#[test]
+fn the_command_palette_blocks_shared_toolbar_events() {
     let mut input_state = make_test_input_state();
     assert!(!toolbar_event_blocked_by_modal(&input_state));
 
@@ -769,8 +800,7 @@ fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     assert!(toolbar_event_blocked_by_modal(&input_state));
 
     input_state.toggle_command_palette();
-    assert!(input_state.begin_keybinding_capture(crate::config::Action::Undo));
-    assert!(toolbar_event_blocked_by_modal(&input_state));
+    assert!(!toolbar_event_blocked_by_modal(&input_state));
 }
 
 #[test]

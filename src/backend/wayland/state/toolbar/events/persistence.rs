@@ -1,77 +1,186 @@
 use super::*;
-use crate::backend::wayland::config_writer::ConfigMutation;
+use crate::config::Config;
+use crate::domain::Action;
+use crate::input::state::{PresetAction, Toast, ToastPriority};
 
-impl WaylandState {
-    pub(in crate::backend::wayland) fn queue_config_mutation(
-        &mut self,
-        mutation: ConfigMutation,
-        description: &str,
-    ) -> bool {
-        if self.config_writer.request(&mutation) {
-            // Keep the runtime baseline aligned with accepted writes. The
-            // worker owns retrying the same mutation, so a later config edit
-            // cannot reintroduce the stale pre-request value while it waits.
-            let _ = mutation.apply(&mut self.config);
-            // Seeds are derived from the config this edit just changed, so
-            // reseed here rather than waiting for an unrelated session, board,
-            // or keybinding event: until then, override reconciliation and
-            // redundant-override deletion would key off the pre-edit baseline.
-            if mutation.affects_runtime_ui_seeds() {
-                self.refresh_runtime_ui_config_seeds();
-            }
-            log::debug!("Queued {description}");
-            true
-        } else {
-            log::warn!("Failed to queue {description}; runtime value remains session-only");
-            false
+/// Apply an accepted preset save/clear to the effective config, and say what
+/// the user should be told.
+///
+/// The preset library is an authored definition, so this run is as far as the
+/// overlay's Save/Clear reaches: `InputState` already holds the live slots, and
+/// this keeps the effective `Config` beside them so anything reading
+/// `config.presets` this session sees the same library. Nothing is written, and
+/// the message says so rather than letting a changed slot imply a saved one.
+fn apply_preset_action(config: &mut Config, action: PresetAction) -> String {
+    match action {
+        PresetAction::Save { slot, preset } => {
+            config.presets.set_slot(slot, Some(*preset));
+            format!("Preset {slot} saved for this run — keep it via the configurator.")
+        }
+        PresetAction::Clear { slot } => {
+            config.presets.set_slot(slot, None);
+            format!("Preset {slot} cleared for this run — remove it via the configurator.")
         }
     }
+}
 
+impl WaylandState {
     pub(in crate::backend::wayland) fn shutdown_config_writer(&mut self) {
         self.config_writer.shutdown();
     }
 
-    /// Flush durable edits that are queued but not yet written. Pointer-driven
-    /// accepts (the color picker's OK button) queue their config write from the
-    /// release handler, which is not itself a drain site, so the exit path calls
-    /// this before the process goes away.
-    pub(in crate::backend::wayland) fn persist_pending_config_edits(&mut self) {
-        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
-            self.handle_quick_color_edit(edit);
-        }
+    pub(in crate::backend::wayland) fn handle_preset_action(&mut self, action: PresetAction) {
+        let message = apply_preset_action(&mut self.config, action);
+        self.input_state.push_toast(
+            ToastPriority::Action,
+            "presets",
+            Toast::info(message).action("Edit", Action::OpenConfiguratorPresets),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::test_helpers::{ConfigFileSnapshot, with_temp_config_home};
+    use crate::config::{ColorSpec, ToolPresetConfig};
+    use crate::draw::Color;
+    use std::fs;
+
+    const AUTHORED_PRESET: &str =
+        "[presets.slot_1]\nname = 'Authored'\ntool = 'pen'\ncolor = '#112233'\nsize = 3.0\n";
+
+    fn preset(name: &str) -> Box<ToolPresetConfig> {
+        Box::new(ToolPresetConfig {
+            name: Some(name.to_string()),
+            tool: crate::input::Tool::Pen,
+            color: ColorSpec::from(Color {
+                r: 0.13,
+                g: 0.27,
+                b: 0.41,
+                a: 1.0,
+            }),
+            size: 7.0,
+            tool_settings: None,
+            eraser_kind: None,
+            eraser_mode: None,
+            marker_opacity: None,
+            fill_enabled: None,
+            font_size: None,
+            text_background_enabled: None,
+            arrow_length: None,
+            arrow_angle: None,
+            arrow_head_at_end: None,
+            polygon_sides: None,
+            show_status_bar: None,
+            drag_tools: None,
+        })
     }
 
-    /// Persist an accepted quick-color recolor. The runtime palette already
-    /// shows the color; this writes `drawing.quick_colors` through the same
-    /// reload-and-save guard the other runtime-owned config edits use, so a
-    /// long-lived snapshot cannot overwrite newer edits from the configurator
-    /// or the file itself.
-    pub(in crate::backend::wayland) fn handle_quick_color_edit(
-        &mut self,
-        edit: crate::input::state::QuickColorEdit,
-    ) {
-        let crate::input::state::QuickColorEdit { index, color } = edit;
-        self.queue_config_mutation(
-            ConfigMutation::QuickColor { index, color },
-            "quick color persistence",
+    #[test]
+    fn saving_a_preset_updates_the_effective_config_and_says_it_is_for_this_run() {
+        let mut config = Config::default();
+
+        let message = apply_preset_action(
+            &mut config,
+            PresetAction::Save {
+                slot: 2,
+                preset: preset("Run preset"),
+            },
+        );
+
+        assert_eq!(
+            config
+                .presets
+                .get_slot(2)
+                .and_then(|slot| slot.name.clone()),
+            Some("Run preset".to_string())
+        );
+        assert_eq!(
+            message,
+            "Preset 2 saved for this run — keep it via the configurator."
         );
     }
 
-    pub(in crate::backend::wayland) fn handle_preset_action(
-        &mut self,
-        action: crate::input::state::PresetAction,
-    ) {
-        let mutation = match action {
-            crate::input::state::PresetAction::Save { slot, preset } => {
-                ConfigMutation::PresetSlot {
-                    slot,
-                    preset: Some(preset),
-                }
-            }
-            crate::input::state::PresetAction::Clear { slot } => {
-                ConfigMutation::PresetSlot { slot, preset: None }
-            }
-        };
-        self.queue_config_mutation(mutation, "preset persistence");
+    #[test]
+    fn clearing_a_preset_empties_the_effective_slot_and_says_it_is_for_this_run() {
+        let mut config = Config::default();
+        let _ = apply_preset_action(
+            &mut config,
+            PresetAction::Save {
+                slot: 1,
+                preset: preset("Run preset"),
+            },
+        );
+
+        let message = apply_preset_action(&mut config, PresetAction::Clear { slot: 1 });
+
+        assert!(config.presets.get_slot(1).is_none());
+        assert_eq!(
+            message,
+            "Preset 1 cleared for this run — remove it via the configurator."
+        );
+    }
+
+    /// The whole point of the change: a preset gesture is a memory edit. The
+    /// file keeps its bytes, its metadata, and its neighbours.
+    #[test]
+    fn preset_save_and_clear_leave_the_config_file_untouched() {
+        with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&config_dir).expect("test config directory");
+            let path = config_dir.join("config.toml");
+            fs::write(&path, AUTHORED_PRESET).expect("test config should be written");
+            let snapshot = ConfigFileSnapshot::capture(&path);
+
+            let mut config = Config::load().expect("test config should load").config;
+            let _ = apply_preset_action(
+                &mut config,
+                PresetAction::Save {
+                    slot: 1,
+                    preset: preset("Run preset"),
+                },
+            );
+            let _ = apply_preset_action(&mut config, PresetAction::Clear { slot: 2 });
+
+            snapshot.assert_unchanged("saving and clearing a preset");
+        });
+    }
+
+    /// Restart semantics: the next process loads the authored library, not the
+    /// slots this run edited.
+    #[test]
+    fn a_fresh_load_returns_the_configured_preset_library() {
+        with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&config_dir).expect("test config directory");
+            fs::write(config_dir.join("config.toml"), AUTHORED_PRESET)
+                .expect("test config should be written");
+
+            let mut config = Config::load().expect("test config should load").config;
+            let _ = apply_preset_action(
+                &mut config,
+                PresetAction::Save {
+                    slot: 1,
+                    preset: preset("Run preset"),
+                },
+            );
+            assert_eq!(
+                config
+                    .presets
+                    .get_slot(1)
+                    .and_then(|slot| slot.name.clone()),
+                Some("Run preset".to_string())
+            );
+
+            let restarted = Config::load().expect("test config should reload").config;
+            assert_eq!(
+                restarted
+                    .presets
+                    .get_slot(1)
+                    .and_then(|slot| slot.name.clone()),
+                Some("Authored".to_string())
+            );
+        });
     }
 }

@@ -1787,7 +1787,6 @@ fn board_pin_runtime_request_is_not_gated_by_config_customization_persistence() 
         .expect("whiteboard");
 
     assert!(input.request_board_pin_toggle(whiteboard));
-    assert!(input.take_pending_board_config_update().is_none());
     assert!(matches!(
         input.take_pending_board_runtime_ui_actions().as_slice(),
         [PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]

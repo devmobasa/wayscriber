@@ -1,18 +1,13 @@
-//! Background persistence for the overlay's remaining durable config edits.
+//! Background persistence for durable overlay config edits.
 //!
-//! Authored UI preferences no longer come through here: an overlay toggle is
-//! a current-run change to the effective config. What is left are the
-//! editor/content flows (boards, presets, quick colors, shortcuts).
-//!
-//! The Wayland dispatch thread only queues typed mutations. A single worker
-//! batches nearby edits, reloads the latest config document, and performs the
-//! durable atomic write so an fsync cannot delay input feedback.
+//! Nothing durable is left to persist: authored preferences are current-run
+//! changes to the effective config, and the editor/content flows (boards,
+//! presets, quick colors, shortcuts) are owned by the configurator. The
+//! machinery is kept for one phase so the deletion of the writer, its wiring,
+//! and the runtime config backup lands as a single change; `ConfigMutation`
+//! has no variants, so no batch can ever form.
 
-use crate::config::{
-    Action, Config, ConfigDocument, QuickColorWrite, RuntimeConfigBackup, ToolPresetConfig,
-};
-use crate::draw::Color;
-use crate::input::boards::PendingBoardConfigUpdate;
+use crate::config::{Config, ConfigDocument, RuntimeConfigBackup};
 use anyhow::Result;
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
@@ -24,134 +19,28 @@ const WRITE_DEBOUNCE: Duration = Duration::from_millis(75);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 
-/// One durable edit the overlay still owns.
+/// A durable edit the overlay owns.
 ///
-/// Authored UI preferences are not here: an overlay toggle changes the
-/// effective config for the current run and never reaches `config.toml`.
-/// What remains are the editor/content flows (boards, presets, palette,
-/// shortcuts) that still promise a durable edit.
+/// Uninhabited: every family that used to travel through here now applies to
+/// the current run or opens the configurator instead, so no value of this type
+/// can be constructed and the worker below can never receive one.
 #[derive(Debug, Clone)]
-pub(in crate::backend::wayland) enum ConfigMutation {
-    BoardConfig(Box<PendingBoardConfigUpdate>),
-    PresetSlot {
-        slot: usize,
-        preset: Option<Box<ToolPresetConfig>>,
-    },
-    QuickColor {
-        index: usize,
-        color: Color,
-    },
-    /// One action's complete `[keybindings]` entry, as the overlay's shortcut
-    /// editor merged it. The editor owns conflict detection and validation
-    /// before queueing; this carries only the field that survived that check.
-    Keybinding {
-        action: Action,
-        bindings: Vec<String>,
-        receipt: ConfigWriteReceipt,
-    },
-}
-
-/// Identity the event-loop state assigns to one accepted shortcut edit.
-///
-/// The writer returns it only after the batch is durable, allowing the live
-/// keymap to stop replaying that edit over later on-disk changes without
-/// sharing state with the worker thread.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::backend::wayland) struct ConfigWriteReceipt(u64);
-
-impl ConfigWriteReceipt {
-    pub(in crate::backend::wayland) const fn initial() -> Self {
-        Self(0)
-    }
-
-    pub(in crate::backend::wayland) fn successor(self) -> Option<Self> {
-        self.0.checked_add(1).map(Self)
-    }
-}
+pub(in crate::backend::wayland) enum ConfigMutation {}
 
 impl ConfigMutation {
-    /// Apply one typed edit to a loaded config. A false return means the
-    /// mutation's externally editable target disappeared before persistence.
-    pub(in crate::backend::wayland) fn apply(&self, config: &mut Config) -> bool {
-        match self {
-            Self::BoardConfig(update) => {
-                crate::backend::wayland::state::apply_board_config_update_to_config(
-                    config,
-                    update.as_ref().clone(),
-                );
-            }
-            Self::PresetSlot { slot, preset } => {
-                config.presets.set_slot(*slot, preset.as_deref().cloned());
-            }
-            Self::QuickColor { index, color } => {
-                return !matches!(
-                    config.drawing.quick_colors.set_color_at(*index, *color),
-                    QuickColorWrite::SlotMissing
-                );
-            }
-            Self::Keybinding {
-                action, bindings, ..
-            } => {
-                // Runtime-only actions have no stored field. The editor
-                // refuses them before queueing, so this only keeps an
-                // impossible request from forcing a no-op write.
-                return config
-                    .keybindings
-                    .set_bindings_for_action(*action, bindings.clone())
-                    .is_ok();
-            }
-        }
-        true
-    }
-
-    /// Whether persisting this edit also moves a runtime-UI seed.
+    /// Apply one typed edit to a loaded config.
     ///
-    /// `runtime_seeds_from_config` derives its seeds from the toolbar item
-    /// resolution — which folds `layout_mode`, the legacy section flags, and
-    /// `ui.toolbar.items` — and from the configured board pins. An edit to any
-    /// of those must refresh the seed registry, or override semantics keep
-    /// comparing against the pre-edit baseline until an unrelated event
-    /// refreshes them. Spelled out per variant on purpose: a new mutation has
-    /// to classify itself rather than inherit a wildcard. (The toolbar
-    /// families that used to answer `true` here no longer travel through the
-    /// writer at all; they reseed from their apply path instead.)
-    pub(in crate::backend::wayland) fn affects_runtime_ui_seeds(&self) -> bool {
-        match self {
-            Self::BoardConfig(_) => true,
-            Self::PresetSlot { .. } | Self::QuickColor { .. } | Self::Keybinding { .. } => false,
-        }
+    /// Matching an uninhabited value takes no arms, which is how the compiler
+    /// is told this body cannot run — no panic and no placeholder behaviour.
+    fn apply(&self, _config: &mut Config) {
+        match *self {}
     }
-
-    fn key(&self) -> Option<ConfigMutationKey> {
-        let key = match *self {
-            // Board updates carry merge metadata and must remain ordered.
-            Self::BoardConfig(_) => return None,
-            Self::PresetSlot { slot, .. } => ConfigMutationKey::PresetSlot(slot),
-            Self::QuickColor { index, .. } => ConfigMutationKey::QuickColor(index),
-            // Per action: re-editing one shortcut replaces the pending value,
-            // while a different action's edit keeps its own entry instead of
-            // clobbering the one already queued.
-            Self::Keybinding { action, .. } => ConfigMutationKey::Keybinding(action),
-        };
-        Some(key)
-    }
-
-    fn keybinding_receipt(&self) -> Option<ConfigWriteReceipt> {
-        match self {
-            Self::Keybinding { receipt, .. } => Some(*receipt),
-            Self::BoardConfig(_) | Self::PresetSlot { .. } | Self::QuickColor { .. } => None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ConfigMutationKey {
-    PresetSlot(usize),
-    QuickColor(usize),
-    Keybinding(Action),
 }
 
 enum WriterCommand {
+    /// Unconstructible while `ConfigMutation` has no variants. Kept so the
+    /// queue, batching, and durable write stay one unit for Phase G to remove.
+    #[allow(dead_code)]
     Apply(ConfigMutation),
     Shutdown,
 }
@@ -161,7 +50,6 @@ type PersistMutations = Box<dyn FnMut(&[ConfigMutation]) -> Result<()> + Send>;
 /// Event-loop facade for the channel-owned config writer.
 pub(in crate::backend::wayland) struct ConfigWriter {
     sender: Option<Sender<WriterCommand>>,
-    completed_keybindings: Receiver<ConfigWriteReceipt>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -188,15 +76,13 @@ impl ConfigWriter {
 
     fn spawn(persist: PersistMutations) -> Self {
         let (sender, receiver) = channel();
-        let (completion_sender, completed_keybindings) = channel();
         let worker = thread::Builder::new()
             .name("wayscriber-config-writer".to_string())
-            .spawn(move || run_writer(receiver, completion_sender, persist));
+            .spawn(move || run_writer(receiver, persist));
 
         match worker {
             Ok(worker) => Self {
                 sender: Some(sender),
-                completed_keybindings,
                 worker: Some(worker),
             },
             Err(error) => {
@@ -207,27 +93,10 @@ impl ConfigWriter {
     }
 
     fn unavailable() -> Self {
-        let (_completion_sender, completed_keybindings) = channel();
         Self {
             sender: None,
-            completed_keybindings,
             worker: None,
         }
-    }
-
-    /// Queue a mutation without doing filesystem work on the caller.
-    #[must_use = "a false return means the preference was not queued"]
-    pub(in crate::backend::wayland) fn request(&self, mutation: &ConfigMutation) -> bool {
-        self.sender
-            .as_ref()
-            .is_some_and(|sender| sender.send(WriterCommand::Apply(mutation.clone())).is_ok())
-    }
-
-    /// Drain shortcut edits whose batches have reached durable storage.
-    pub(in crate::backend::wayland) fn take_completed_keybinding_writes(
-        &self,
-    ) -> Vec<ConfigWriteReceipt> {
-        self.completed_keybindings.try_iter().collect()
     }
 
     /// Flush queued mutations and wait for the writer to finish.
@@ -272,11 +141,7 @@ fn receive_worker_event(
     }
 }
 
-fn run_writer(
-    receiver: Receiver<WriterCommand>,
-    completion_sender: Sender<ConfigWriteReceipt>,
-    mut persist: PersistMutations,
-) {
+fn run_writer(receiver: Receiver<WriterCommand>, mut persist: PersistMutations) {
     let mut pending = Vec::new();
     let mut write_after = None;
     let mut retry_delay = INITIAL_RETRY_DELAY;
@@ -284,20 +149,16 @@ fn run_writer(
     loop {
         match receive_worker_event(&receiver, write_after) {
             WorkerEvent::Command(WriterCommand::Apply(mutation)) => {
-                if let Some(key) = mutation.key() {
-                    pending.retain(|queued: &ConfigMutation| queued.key() != Some(key));
-                }
                 pending.push(mutation);
                 write_after = Some(WRITE_DEBOUNCE);
             }
             WorkerEvent::Command(WriterCommand::Shutdown) | WorkerEvent::Disconnected => {
-                persist_before_shutdown(&mut persist, &pending, &completion_sender);
+                persist_before_shutdown(&mut persist, &pending);
                 return;
             }
             WorkerEvent::Timeout => match persist(&pending) {
                 Ok(()) => {
                     debug!("Processed {} runtime config edit(s)", pending.len());
-                    acknowledge_keybinding_writes(&completion_sender, &pending);
                     pending.clear();
                     write_after = None;
                     retry_delay = INITIAL_RETRY_DELAY;
@@ -315,36 +176,15 @@ fn run_writer(
     }
 }
 
-fn acknowledge_keybinding_writes(
-    completion_sender: &Sender<ConfigWriteReceipt>,
-    pending: &[ConfigMutation],
-) {
-    for receipt in pending
-        .iter()
-        .filter_map(ConfigMutation::keybinding_receipt)
-    {
-        if completion_sender.send(receipt).is_err() {
-            return;
-        }
-    }
-}
-
-fn persist_before_shutdown(
-    persist: &mut PersistMutations,
-    pending: &[ConfigMutation],
-    completion_sender: &Sender<ConfigWriteReceipt>,
-) {
+fn persist_before_shutdown(persist: &mut PersistMutations, pending: &[ConfigMutation]) {
     if pending.is_empty() {
         return;
     }
     match persist(pending) {
-        Ok(()) => {
-            debug!(
-                "Processed {} runtime config edit(s) during shutdown",
-                pending.len()
-            );
-            acknowledge_keybinding_writes(completion_sender, pending);
-        }
+        Ok(()) => debug!(
+            "Processed {} runtime config edit(s) during shutdown",
+            pending.len()
+        ),
         Err(error) => warn!(
             "Failed to persist {} runtime config edit(s) during shutdown: {error:#}",
             pending.len()
@@ -352,7 +192,7 @@ fn persist_before_shutdown(
     }
 }
 
-pub(in crate::backend::wayland) fn persist_mutations_to_path(
+fn persist_mutations_to_path(
     path: &Path,
     mutations: &[ConfigMutation],
     backup: &mut RuntimeConfigBackup,
@@ -360,21 +200,10 @@ pub(in crate::backend::wayland) fn persist_mutations_to_path(
     let document = ConfigDocument::load_from_path(path)?;
     let mut config = document.config().clone();
     for mutation in mutations {
-        if mutation.apply(&mut config) {
-            continue;
-        }
-        if let ConfigMutation::QuickColor { index, .. } = mutation {
-            warn!("Quick color slot {index} is no longer in config.toml; recolor was not saved");
-        } else if let ConfigMutation::Keybinding { action, .. } = mutation {
-            warn!("{action:?} has no configurable keybinding; the shortcut was not saved");
-        }
+        mutation.apply(&mut config);
     }
-    // `apply` reports that it stored a value, not that the value differed, so
-    // a toolbar toggled back to where it started would otherwise rewrite the
-    // file byte-identically and spend the process's one backup snapshot on it.
-    // Returning early is still a completed batch: the caller acknowledges a
-    // shortcut edit's receipt on `Ok(())`, not on a write having happened, so
-    // the editor stops replaying it exactly as if the save had run.
+    // A batch that changed nothing must not rewrite the file byte-identically
+    // and spend the process's one backup snapshot on it.
     if config_matches(document.config(), &config) {
         debug!("Runtime config batch changed nothing; leaving config.toml untouched");
         return Ok(());
@@ -403,6 +232,3 @@ fn config_matches(previous: &Config, updated: &Config) -> bool {
         _ => false,
     }
 }
-
-#[cfg(test)]
-mod tests;

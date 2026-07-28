@@ -547,11 +547,14 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
     assert_eq!(state.quick_colors.color_for_index(1), Some(slot_color));
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
     assert!(!state.session_dirty);
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
+/// Accepting keeps the swatch for this run and says so: the palette is an
+/// authored definition, so nothing reaches `config.toml` and the toast offers
+/// the screen that owns it.
 #[test]
-fn accepting_a_recolor_keeps_the_swatch_and_queues_the_config_write() {
+fn accepting_a_recolor_keeps_the_swatch_and_says_it_is_for_this_run() {
     let mut state = create_test_input_state();
     let tool_color = state.color_for_tool(Tool::Pen);
     state.active_preset_slot = Some(1);
@@ -566,12 +569,14 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_config_write() {
 
     assert!(!state.is_color_picker_popup_open());
     assert_eq!(state.quick_colors.color_for_index(2), Some(picked));
+    let toast = state.ui_toast.as_ref().expect("this-run notice");
     assert_eq!(
-        state.take_pending_quick_color_edit(),
-        Some(crate::input::state::QuickColorEdit {
-            index: 2,
-            color: picked,
-        })
+        toast.message,
+        "Quick color 3 changed for this run — keep it via the configurator."
+    );
+    assert_eq!(
+        toast.action.as_ref().map(|action| action.action),
+        Some(crate::config::Action::OpenConfiguratorQuickColors)
     );
     // An unselected swatch's recolor is not a drawing change.
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
@@ -629,7 +634,7 @@ fn reopening_the_picker_abandons_an_unsaved_recolor() {
     state.open_color_picker_popup();
     assert_eq!(state.quick_colors.color_for_index(1), Some(second));
     assert_eq!(state.color_picker_popup_slot(), None);
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
 #[test]
@@ -646,7 +651,7 @@ fn a_recolor_never_survives_an_implicit_close_unsaved() {
     state.close_color_picker_popup(false);
 
     assert_eq!(state.quick_colors.color_for_index(0), Some(slot_color));
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
 #[test]
@@ -743,16 +748,13 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     assert!(state.is_color_picker_popup_open());
     assert_eq!(state.color_picker_popup_current_color(), Some(shipped));
     assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 
     state.apply_color_picker_popup();
     assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
     assert_eq!(
-        state.take_pending_quick_color_edit(),
-        Some(crate::input::state::QuickColorEdit {
-            index: 1,
-            color: shipped,
-        })
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Quick color 2 changed for this run — keep it via the configurator.")
     );
 }
 
@@ -774,13 +776,13 @@ fn canceling_after_default_keeps_the_customized_color() {
     state.close_color_picker_popup(true);
 
     assert_eq!(state.quick_colors.color_for_index(2), Some(customized));
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
+/// The OK button is clicked with the pointer, so the release path must reach
+/// the same accept the keyboard path does.
 #[test]
-fn accepting_a_recolor_from_the_popup_release_queues_the_write() {
-    // The OK button is clicked with the pointer, so the release path must be
-    // the one that queues the config write (the backend drains it per loop).
+fn accepting_a_recolor_from_the_popup_release_applies_it_for_this_run() {
     let mut state = create_test_input_state();
 
     assert!(state.open_color_picker_popup_for_quick_color(0));
@@ -797,12 +799,10 @@ fn accepting_a_recolor_from_the_popup_release_queues_the_write() {
     assert!(state.handle_color_picker_popup_release_at(x, y));
 
     assert!(!state.is_color_picker_popup_open());
+    assert_eq!(state.quick_colors.color_for_index(0), Some(picked));
     assert_eq!(
-        state.take_pending_quick_color_edit(),
-        Some(crate::input::state::QuickColorEdit {
-            index: 0,
-            color: picked,
-        })
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Quick color 1 changed for this run — keep it via the configurator.")
     );
 }
 
@@ -2207,4 +2207,52 @@ fn set_marker_opacity_clamps_and_reports_noop_after_reaching_target() {
     assert!(!state.set_marker_opacity(0.9));
     assert!(!state.needs_redraw);
     assert!(!state.session_dirty);
+}
+
+/// The palette is an authored definition: recoloring a swatch changes the live
+/// palette for this run and nothing else. The file keeps its bytes and its
+/// metadata, and the next process loads the color the user authored.
+#[test]
+fn a_quick_color_recolor_leaves_the_config_file_untouched_and_does_not_survive_a_reload() {
+    crate::config::test_helpers::with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+        std::fs::create_dir_all(&config_dir).expect("test config directory");
+        let path = config_dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "[[drawing.quick_colors]]\nlabel = 'Authored'\ncolor = '#112233'\n",
+        )
+        .expect("test config should be written");
+        let snapshot = crate::config::test_helpers::ConfigFileSnapshot::capture(&path);
+
+        let configured = crate::config::Config::load()
+            .expect("test config should load")
+            .config;
+        let authored = configured.drawing.quick_colors.effective_entries()[0]
+            .color
+            .clone();
+
+        let mut state = create_test_input_state();
+        state.set_quick_colors(crate::config::QuickColorPalette::from_config(
+            &configured.drawing.quick_colors,
+        ));
+        assert!(state.open_color_picker_popup_for_quick_color(0));
+        state.color_picker_popup_set_from_gradient(0.45, 0.35);
+        let picked = state
+            .color_picker_popup_current_color()
+            .expect("picked color");
+        state.apply_color_picker_popup();
+
+        assert_eq!(state.quick_colors.color_for_index(0), Some(picked));
+        snapshot.assert_unchanged("accepting a quick-color recolor");
+
+        let restarted = crate::config::Config::load()
+            .expect("test config should reload")
+            .config;
+        assert_eq!(
+            restarted.drawing.quick_colors.effective_entries()[0].color,
+            authored,
+            "a fresh load returns the authored palette"
+        );
+    });
 }

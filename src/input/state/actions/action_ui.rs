@@ -1,3 +1,6 @@
+use crate::configurator_destination::{
+    ConfiguratorDestination, ConfiguratorScreen, quick_colors_destination,
+};
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
 use log::info;
@@ -259,6 +262,28 @@ impl InputState {
             }
             Action::OpenConfigurator => {
                 self.launch_configurator(None);
+                true
+            }
+            Action::OpenConfiguratorKeybindings => {
+                self.launch_configurator(Some(ConfiguratorDestination::new(
+                    ConfiguratorScreen::Keybindings(None),
+                )));
+                true
+            }
+            Action::OpenConfiguratorPresets => {
+                self.launch_configurator(Some(ConfiguratorDestination::new(
+                    ConfiguratorScreen::Presets,
+                )));
+                true
+            }
+            Action::OpenConfiguratorBoards => {
+                self.launch_configurator(Some(ConfiguratorDestination::new(
+                    ConfiguratorScreen::Boards,
+                )));
+                true
+            }
+            Action::OpenConfiguratorQuickColors => {
+                self.launch_configurator(Some(quick_colors_destination()));
                 true
             }
             Action::OpenAbout => {

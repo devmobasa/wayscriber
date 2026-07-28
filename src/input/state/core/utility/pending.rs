@@ -1,10 +1,9 @@
 use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputState, OutputFocusAction,
-    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, QuickColorEdit,
-    SelectionPublishState, ZoomAction,
+    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, SelectionPublishState,
+    ZoomAction,
 };
-use crate::config::BoardsConfig;
-use crate::input::boards::{PendingBoardConfigUpdate, PendingBoardRuntimeUiAction};
+use crate::input::boards::PendingBoardRuntimeUiAction;
 
 #[allow(dead_code)]
 impl InputState {
@@ -47,23 +46,6 @@ impl InputState {
     /// Takes and clears any pending preset save/clear action.
     pub fn take_pending_preset_action(&mut self) -> Option<PresetAction> {
         self.pending_preset_action.take()
-    }
-
-    /// Takes and clears any accepted quick-color recolor awaiting its config
-    /// write. The runtime palette already shows the new color.
-    pub fn take_pending_quick_color_edit(&mut self) -> Option<QuickColorEdit> {
-        self.pending_quick_color_edit.take()
-    }
-
-    /// Takes and clears any pending board config update.
-    pub fn take_pending_board_config(&mut self) -> Option<BoardsConfig> {
-        self.pending_board_config
-            .take()
-            .map(PendingBoardConfigUpdate::into_snapshot)
-    }
-
-    pub(crate) fn take_pending_board_config_update(&mut self) -> Option<PendingBoardConfigUpdate> {
-        self.pending_board_config.take()
     }
 
     pub(crate) fn take_pending_board_runtime_ui_actions(
@@ -118,7 +100,6 @@ mod tests {
     use super::*;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
-    use crate::input::boards::BoardConfigChange;
     use crate::input::{ClickHighlightSettings, EraserMode};
 
     fn make_state() -> InputState {
@@ -219,23 +200,5 @@ mod tests {
             Some(PresetAction::Clear { slot: 2 })
         ));
         assert!(state.take_pending_preset_action().is_none());
-    }
-
-    #[test]
-    fn pending_board_config_is_taken_once() {
-        let mut state = make_state();
-        let config = BoardsConfig {
-            default_board: "blackboard".to_string(),
-            ..BoardsConfig::default()
-        };
-        state.pending_board_config = Some(PendingBoardConfigUpdate::new(
-            config.clone(),
-            BoardConfigChange::Structure,
-        ));
-
-        let taken = state.take_pending_board_config().expect("board config");
-        assert_eq!(taken.default_board, "blackboard");
-        assert_eq!(taken.items.len(), config.items.len());
-        assert!(state.take_pending_board_config().is_none());
     }
 }

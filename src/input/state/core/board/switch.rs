@@ -1,5 +1,4 @@
 use super::super::base::InputState;
-use crate::input::boards::BoardConfigChange;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
@@ -131,9 +130,6 @@ impl InputState {
             self.clear_pending_deletes_after_board_generation_change(generation_before);
             self.record_board_recent(&new_id);
             self.queue_board_identity_available(&new_id);
-            self.queue_board_config_save(BoardConfigChange::IdentitiesCreated(vec![
-                new_id.clone(),
-            ]));
             let name = self.boards.active_board_name();
             self.push_toast(
                 ToastPriority::Info,
@@ -219,11 +215,8 @@ impl InputState {
             .filter(|board| !ids_before.contains(&board.spec.id))
             .map(|board| board.spec.id.clone())
             .collect::<Vec<_>>();
-        if !created_ids.is_empty() {
-            for id in &created_ids {
-                self.queue_board_identity_available(id);
-            }
-            self.queue_board_config_save(BoardConfigChange::IdentitiesCreated(created_ids));
+        for id in &created_ids {
+            self.queue_board_identity_available(id);
         }
         self.clear_pending_deletes_after_board_generation_change(generation_before);
         self.finish_board_transition_from(current_spec, current_id, true);
