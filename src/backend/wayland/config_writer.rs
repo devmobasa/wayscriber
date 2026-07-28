@@ -1,13 +1,15 @@
-//! Background persistence for small runtime-authored config preferences.
+//! Background persistence for the overlay's remaining durable config edits.
+//!
+//! Authored UI preferences no longer come through here: an overlay toggle is
+//! a current-run change to the effective config. What is left are the
+//! editor/content flows (boards, presets, quick colors, shortcuts).
 //!
 //! The Wayland dispatch thread only queues typed mutations. A single worker
 //! batches nearby edits, reloads the latest config document, and performs the
 //! durable atomic write so an fsync cannot delay input feedback.
 
 use crate::config::{
-    Action, Config, ConfigDocument, QuickColorWrite, RuntimeConfigBackup, StatusBarItem,
-    ToolPresetConfig, ToolbarItemId, ToolbarItemVisibilitySetting, ToolbarLayoutMode,
-    ToolbarSectionFlag, item_visibility_setting,
+    Action, Config, ConfigDocument, QuickColorWrite, RuntimeConfigBackup, ToolPresetConfig,
 };
 use crate::draw::Color;
 use crate::input::boards::PendingBoardConfigUpdate;
@@ -22,38 +24,14 @@ const WRITE_DEBOUNCE: Duration = Duration::from_millis(75);
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 
+/// One durable edit the overlay still owns.
+///
+/// Authored UI preferences are not here: an overlay toggle changes the
+/// effective config for the current run and never reaches `config.toml`.
+/// What remains are the editor/content flows (boards, presets, palette,
+/// shortcuts) that still promise a durable edit.
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) enum ConfigMutation {
-    ToolbarLayout(ToolbarLayoutMode),
-    ToolbarSectionVisibility {
-        id: ToolbarItemId,
-        setting: ToolbarItemVisibilitySetting,
-        flag: ToolbarSectionFlag,
-        visible: bool,
-    },
-    ToolbarUseIcons(bool),
-    ToolbarShowMoreColors(bool),
-    ToolbarContextAwareUi(bool),
-    ToolbarPresetToasts(bool),
-    ToolbarToolPreview(bool),
-    ToolbarDelaySliders(bool),
-    ShowStatusBar(bool),
-    StatusBarInteractive(bool),
-    StatusBarItem {
-        item: StatusBarItem,
-        visible: bool,
-    },
-    StatusBoardBadge(bool),
-    StatusPageBadge(bool),
-    FloatingBadgeAlways(bool),
-    FloatingBadge(bool),
-    ZoomChip(bool),
-    HistoryCustomSection(bool),
-    ClickHighlight {
-        enabled: Option<bool>,
-        show_on_highlight_tool: bool,
-    },
-    InputHud(bool),
     BoardConfig(Box<PendingBoardConfigUpdate>),
     PresetSlot {
         slot: usize,
@@ -96,50 +74,6 @@ impl ConfigMutation {
     /// mutation's externally editable target disappeared before persistence.
     pub(in crate::backend::wayland) fn apply(&self, config: &mut Config) -> bool {
         match self {
-            Self::ToolbarLayout(mode) => {
-                config.ui.toolbar.layout_mode = *mode;
-                rebaseline_legacy_section_flags(config);
-            }
-            Self::ToolbarSectionVisibility {
-                id,
-                setting,
-                flag,
-                visible,
-            } => {
-                config
-                    .ui
-                    .toolbar
-                    .items
-                    .set_visibility_setting(*id, *setting);
-                apply_section_compatibility_mirror(config, *flag, *visible);
-            }
-            Self::ToolbarUseIcons(value) => config.ui.toolbar.use_icons = *value,
-            Self::ToolbarShowMoreColors(value) => config.ui.toolbar.show_more_colors = *value,
-            Self::ToolbarContextAwareUi(value) => config.ui.toolbar.context_aware_ui = *value,
-            Self::ToolbarPresetToasts(value) => config.ui.toolbar.show_preset_toasts = *value,
-            Self::ToolbarToolPreview(value) => config.ui.toolbar.show_tool_preview = *value,
-            Self::ToolbarDelaySliders(value) => config.ui.toolbar.show_delay_sliders = *value,
-            Self::ShowStatusBar(value) => config.ui.show_status_bar = *value,
-            Self::StatusBarInteractive(value) => config.ui.status_bar_interactive = *value,
-            Self::StatusBarItem { item, visible } => {
-                config.ui.set_status_bar_item_visible(*item, *visible);
-            }
-            Self::StatusBoardBadge(value) => config.ui.show_status_board_badge = *value,
-            Self::StatusPageBadge(value) => config.ui.show_status_page_badge = *value,
-            Self::FloatingBadgeAlways(value) => config.ui.show_floating_badge_always = *value,
-            Self::FloatingBadge(value) => config.ui.show_floating_badge = *value,
-            Self::ZoomChip(value) => config.ui.toolbar.show_zoom_chip = *value,
-            Self::HistoryCustomSection(value) => config.history.custom_section_enabled = *value,
-            Self::ClickHighlight {
-                enabled,
-                show_on_highlight_tool,
-            } => {
-                if let Some(enabled) = enabled {
-                    config.ui.click_highlight.enabled = *enabled;
-                }
-                config.ui.click_highlight.show_on_highlight_tool = *show_on_highlight_tool;
-            }
-            Self::InputHud(enabled) => config.ui.input_hud.enabled = *enabled,
             Self::BoardConfig(update) => {
                 crate::backend::wayland::state::apply_board_config_update_to_config(
                     config,
@@ -178,60 +112,18 @@ impl ConfigMutation {
     /// of those must refresh the seed registry, or override semantics keep
     /// comparing against the pre-edit baseline until an unrelated event
     /// refreshes them. Spelled out per variant on purpose: a new mutation has
-    /// to classify itself rather than inherit a wildcard.
+    /// to classify itself rather than inherit a wildcard. (The toolbar
+    /// families that used to answer `true` here no longer travel through the
+    /// writer at all; they reseed from their apply path instead.)
     pub(in crate::backend::wayland) fn affects_runtime_ui_seeds(&self) -> bool {
         match self {
-            Self::ToolbarLayout(_)
-            | Self::ToolbarSectionVisibility { .. }
-            | Self::BoardConfig(_) => true,
-            Self::ToolbarUseIcons(_)
-            | Self::ToolbarShowMoreColors(_)
-            | Self::ToolbarContextAwareUi(_)
-            | Self::ToolbarPresetToasts(_)
-            | Self::ToolbarToolPreview(_)
-            | Self::ToolbarDelaySliders(_)
-            | Self::ShowStatusBar(_)
-            | Self::StatusBarInteractive(_)
-            | Self::StatusBarItem { .. }
-            | Self::StatusBoardBadge(_)
-            | Self::StatusPageBadge(_)
-            | Self::FloatingBadgeAlways(_)
-            | Self::FloatingBadge(_)
-            | Self::ZoomChip(_)
-            | Self::HistoryCustomSection(_)
-            | Self::ClickHighlight { .. }
-            | Self::InputHud(_)
-            | Self::PresetSlot { .. }
-            | Self::QuickColor { .. }
-            | Self::Keybinding { .. } => false,
+            Self::BoardConfig(_) => true,
+            Self::PresetSlot { .. } | Self::QuickColor { .. } | Self::Keybinding { .. } => false,
         }
     }
 
     fn key(&self) -> Option<ConfigMutationKey> {
         let key = match *self {
-            Self::ToolbarLayout(_) => ConfigMutationKey::ToolbarLayout,
-            Self::ToolbarSectionVisibility { id, .. } => {
-                ConfigMutationKey::ToolbarSectionVisibility(id)
-            }
-            Self::ToolbarUseIcons(_) => ConfigMutationKey::ToolbarUseIcons,
-            Self::ToolbarShowMoreColors(_) => ConfigMutationKey::ToolbarShowMoreColors,
-            Self::ToolbarContextAwareUi(_) => ConfigMutationKey::ToolbarContextAwareUi,
-            Self::ToolbarPresetToasts(_) => ConfigMutationKey::ToolbarPresetToasts,
-            Self::ToolbarToolPreview(_) => ConfigMutationKey::ToolbarToolPreview,
-            Self::ToolbarDelaySliders(_) => ConfigMutationKey::ToolbarDelaySliders,
-            Self::ShowStatusBar(_) => ConfigMutationKey::ShowStatusBar,
-            Self::StatusBarInteractive(_) => ConfigMutationKey::StatusBarInteractive,
-            Self::StatusBarItem { item, .. } => ConfigMutationKey::StatusBarItem(item),
-            Self::StatusBoardBadge(_) => ConfigMutationKey::StatusBoardBadge,
-            Self::StatusPageBadge(_) => ConfigMutationKey::StatusPageBadge,
-            Self::FloatingBadgeAlways(_) => ConfigMutationKey::FloatingBadgeAlways,
-            Self::FloatingBadge(_) => ConfigMutationKey::FloatingBadge,
-            Self::ZoomChip(_) => ConfigMutationKey::ZoomChip,
-            Self::HistoryCustomSection(_) => ConfigMutationKey::HistoryCustomSection,
-            // `enabled: None` deliberately leaves one field untouched, so
-            // replacing an earlier request could discard that field's edit.
-            Self::ClickHighlight { .. } => return None,
-            Self::InputHud(_) => ConfigMutationKey::InputHud,
             // Board updates carry merge metadata and must remain ordered.
             Self::BoardConfig(_) => return None,
             Self::PresetSlot { slot, .. } => ConfigMutationKey::PresetSlot(slot),
@@ -247,102 +139,16 @@ impl ConfigMutation {
     fn keybinding_receipt(&self) -> Option<ConfigWriteReceipt> {
         match self {
             Self::Keybinding { receipt, .. } => Some(*receipt),
-            Self::ToolbarLayout(_)
-            | Self::ToolbarSectionVisibility { .. }
-            | Self::ToolbarUseIcons(_)
-            | Self::ToolbarShowMoreColors(_)
-            | Self::ToolbarContextAwareUi(_)
-            | Self::ToolbarPresetToasts(_)
-            | Self::ToolbarToolPreview(_)
-            | Self::ToolbarDelaySliders(_)
-            | Self::ShowStatusBar(_)
-            | Self::StatusBarInteractive(_)
-            | Self::StatusBarItem { .. }
-            | Self::StatusBoardBadge(_)
-            | Self::StatusPageBadge(_)
-            | Self::FloatingBadgeAlways(_)
-            | Self::FloatingBadge(_)
-            | Self::ZoomChip(_)
-            | Self::HistoryCustomSection(_)
-            | Self::ClickHighlight { .. }
-            | Self::InputHud(_)
-            | Self::BoardConfig(_)
-            | Self::PresetSlot { .. }
-            | Self::QuickColor { .. } => None,
+            Self::BoardConfig(_) | Self::PresetSlot { .. } | Self::QuickColor { .. } => None,
         }
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ConfigMutationKey {
-    ToolbarLayout,
-    ToolbarSectionVisibility(ToolbarItemId),
-    ToolbarUseIcons,
-    ToolbarShowMoreColors,
-    ToolbarContextAwareUi,
-    ToolbarPresetToasts,
-    ToolbarToolPreview,
-    ToolbarDelaySliders,
-    ShowStatusBar,
-    StatusBarInteractive,
-    StatusBarItem(StatusBarItem),
-    StatusBoardBadge,
-    StatusPageBadge,
-    FloatingBadgeAlways,
-    FloatingBadge,
-    ZoomChip,
-    HistoryCustomSection,
-    InputHud,
     PresetSlot(usize),
     QuickColor(usize),
     Keybinding(Action),
-}
-
-/// Re-baseline the legacy `show_*` mirrors a layout switch leaves behind.
-///
-/// Loading folds a legacy flag into an explicit item override wherever it
-/// disagrees with the active mode's baseline, so a switch that left the old
-/// mode's values in place would come back as sections pinned to the mode the
-/// user just left. Only sections without an explicit override need the mirror:
-/// the fold skips the rest, and `show_settings_section` is authored-only input
-/// the resolver ignores. Everything else the mode preset implies stays derived
-/// at load instead of being materialized into the file.
-fn rebaseline_legacy_section_flags(config: &mut Config) {
-    let toolbar = &config.ui.toolbar;
-    let mode = toolbar.layout_mode;
-    let resolved = toolbar.items.resolved();
-    let mirrors = ToolbarSectionFlag::ALL.map(|flag| {
-        let baseline = matches!(
-            item_visibility_setting(&resolved, flag.item_id()),
-            ToolbarItemVisibilitySetting::Default
-        )
-        .then(|| flag.baseline(mode, &toolbar.mode_overrides));
-        (flag, baseline)
-    });
-    for (flag, baseline) in mirrors {
-        if let Some(visible) = baseline {
-            apply_section_compatibility_mirror(config, flag, visible);
-        }
-    }
-}
-
-fn apply_section_compatibility_mirror(
-    config: &mut Config,
-    flag: ToolbarSectionFlag,
-    visible: bool,
-) {
-    match flag {
-        ToolbarSectionFlag::Actions => config.ui.toolbar.show_actions_section = visible,
-        ToolbarSectionFlag::ActionsAdvanced => {
-            config.ui.toolbar.show_actions_advanced = visible;
-        }
-        ToolbarSectionFlag::ZoomActions => config.ui.toolbar.show_zoom_actions = visible,
-        ToolbarSectionFlag::Pages => config.ui.toolbar.show_pages_section = visible,
-        ToolbarSectionFlag::Boards => config.ui.toolbar.show_boards_section = visible,
-        ToolbarSectionFlag::Presets => config.ui.toolbar.show_presets = visible,
-        ToolbarSectionFlag::StepSection => config.ui.toolbar.show_step_section = visible,
-        ToolbarSectionFlag::TextControls => config.ui.toolbar.show_text_controls = visible,
-    }
 }
 
 enum WriterCommand {

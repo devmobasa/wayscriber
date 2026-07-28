@@ -10,41 +10,18 @@ use crate::input::boards::{PendingBoardConfigUpdate, PendingBoardRuntimeUiAction
 impl InputState {
     /// Takes and clears any pending backend output action.
     pub fn take_pending_backend_action(&mut self) -> Option<PendingBackendAction> {
-        self.pending_backend_action
-            .take()
-            .or_else(|| {
-                self.pending_floating_badge_config
-                    .take()
-                    .map(PendingBackendAction::PersistFloatingBadgeConfig)
-            })
-            .or_else(|| {
-                self.pending_zoom_chip_config
-                    .take()
-                    .map(PendingBackendAction::PersistZoomChipConfig)
-            })
+        self.pending_backend_action.take()
     }
 
     /// Whether another backend output action is waiting to be drained.
     pub(crate) fn has_pending_backend_actions(&self) -> bool {
         self.pending_backend_action.is_some()
-            || self.pending_floating_badge_config.is_some()
-            || self.pending_zoom_chip_config.is_some()
     }
 
-    /// Stores backend output work for retrieval by the backend. The two
-    /// preference saves use independent, coalescing slots so they cannot
-    /// overwrite one another or grow an unbounded queue; other actions retain
-    /// their existing last-action semantics.
+    /// Stores backend output work for retrieval by the backend, with
+    /// last-action semantics.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
-        match action {
-            PendingBackendAction::PersistFloatingBadgeConfig(visible) => {
-                self.pending_floating_badge_config = Some(visible);
-            }
-            PendingBackendAction::PersistZoomChipConfig(visible) => {
-                self.pending_zoom_chip_config = Some(visible);
-            }
-            action => self.pending_backend_action = Some(action),
-        }
+        self.pending_backend_action = Some(action);
     }
 
     /// Stores an output focus action for retrieval by the backend.

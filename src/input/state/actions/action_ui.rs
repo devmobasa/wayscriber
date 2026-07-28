@@ -57,11 +57,9 @@ impl InputState {
                         "hidden"
                     }
                 );
-                // Explicit toggles persist (survive restarts); focus mode's
-                // transient hide/restore deliberately does not.
-                self.set_pending_backend_action(PendingBackendAction::PersistFloatingBadgeConfig(
-                    self.show_floating_badge,
-                ));
+                // An explicit toggle owns the badge for this run; the
+                // configured default is the configurator's to change.
+                self.notify_process_only_preference();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
@@ -77,11 +75,7 @@ impl InputState {
                         "hidden"
                     }
                 );
-                // Explicit toggles persist (survive restarts); focus mode's
-                // transient hide/restore deliberately does not.
-                self.set_pending_backend_action(PendingBackendAction::PersistZoomChipConfig(
-                    self.show_zoom_chip,
-                ));
+                self.notify_process_only_preference();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true

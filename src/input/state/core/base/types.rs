@@ -452,15 +452,6 @@ pub enum PendingBackendAction {
     /// for the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
     PersistToolbarDisplayMode(crate::config::TopDisplayMode),
-    /// Persist the floating-badge master visibility flipped by
-    /// `Action::ToggleFloatingBadge` (focus mode never enqueues this — its
-    /// hide/restore stays transient). The payload captures the authored value
-    /// so a later transient suppression cannot be mistaken for the preference.
-    PersistFloatingBadgeConfig(bool),
-    /// Persist the zoom-chip master visibility flipped by
-    /// `Action::ToggleZoomChip` (same authored-value and transient-focus-mode
-    /// contract).
-    PersistZoomChipConfig(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

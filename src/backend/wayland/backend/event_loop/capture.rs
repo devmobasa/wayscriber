@@ -118,12 +118,6 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::PersistToolbarDisplayMode(previous) => {
                 state.persist_toolbar_display_mode(previous);
             }
-            PendingBackendAction::PersistFloatingBadgeConfig(visible) => {
-                state.save_floating_badge_visibility_config(visible);
-            }
-            PendingBackendAction::PersistZoomChipConfig(visible) => {
-                state.save_zoom_chip_visibility_config(visible);
-            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {

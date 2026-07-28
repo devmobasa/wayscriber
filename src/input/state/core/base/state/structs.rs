@@ -400,10 +400,9 @@ pub struct InputState {
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
-    /// Coalesced authored floating-badge preference waiting for persistence.
-    pub(in crate::input::state::core) pending_floating_badge_config: Option<bool>,
-    /// Coalesced authored zoom-chip preference waiting for persistence.
-    pub(in crate::input::state::core) pending_zoom_chip_config: Option<bool>,
+    /// Whether this run already said that an overlay preference toggle is a
+    /// current-run change. Said once: every later toggle has the same scope.
+    pub(in crate::input::state::core) process_only_preference_notice_shown: bool,
     /// Pending output focus action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
     /// Pending zoom action (to be handled by WaylandState)

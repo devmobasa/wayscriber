@@ -172,10 +172,6 @@ fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
 /// shipped slots are empty, so its probe only has to prove that clearing one
 /// leaves the registry alone.
 fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
-    use crate::config::{StatusBarItem, ToolbarItemVisibilitySetting, ToolbarSectionFlag};
-
-    let ui = &baseline.ui;
-    let toolbar = &ui.toolbar;
     let mut boards = baseline.resolved_boards();
     let mut created = boards.items[0].clone();
     created.id = "probe-board".to_string();
@@ -184,40 +180,10 @@ fn seed_probe_mutations(baseline: &Config) -> Vec<ConfigMutation> {
     boards.items.push(created);
 
     vec![
-        ConfigMutation::ToolbarLayout(crate::config::ToolbarLayoutMode::Simple),
-        ConfigMutation::ToolbarSectionVisibility {
-            id: ToolbarSectionFlag::Presets.item_id(),
-            setting: ToolbarItemVisibilitySetting::Hidden,
-            flag: ToolbarSectionFlag::Presets,
-            visible: false,
-        },
         ConfigMutation::BoardConfig(Box::new(PendingBoardConfigUpdate::new(
             boards,
             BoardConfigChange::IdentitiesCreated(vec!["probe-board".to_string()]),
         ))),
-        ConfigMutation::ToolbarUseIcons(!toolbar.use_icons),
-        ConfigMutation::ToolbarShowMoreColors(!toolbar.show_more_colors),
-        ConfigMutation::ToolbarContextAwareUi(!toolbar.context_aware_ui),
-        ConfigMutation::ToolbarPresetToasts(!toolbar.show_preset_toasts),
-        ConfigMutation::ToolbarToolPreview(!toolbar.show_tool_preview),
-        ConfigMutation::ToolbarDelaySliders(!toolbar.show_delay_sliders),
-        ConfigMutation::ZoomChip(!toolbar.show_zoom_chip),
-        ConfigMutation::ShowStatusBar(!ui.show_status_bar),
-        ConfigMutation::StatusBarInteractive(!ui.status_bar_interactive),
-        ConfigMutation::StatusBarItem {
-            item: StatusBarItem::Tool,
-            visible: !ui.status_bar_item_visible(StatusBarItem::Tool),
-        },
-        ConfigMutation::StatusBoardBadge(!ui.show_status_board_badge),
-        ConfigMutation::StatusPageBadge(!ui.show_status_page_badge),
-        ConfigMutation::FloatingBadgeAlways(!ui.show_floating_badge_always),
-        ConfigMutation::FloatingBadge(!ui.show_floating_badge),
-        ConfigMutation::HistoryCustomSection(!baseline.history.custom_section_enabled),
-        ConfigMutation::ClickHighlight {
-            enabled: Some(!ui.click_highlight.enabled),
-            show_on_highlight_tool: !ui.click_highlight.show_on_highlight_tool,
-        },
-        ConfigMutation::InputHud(!ui.input_hud.enabled),
         ConfigMutation::PresetSlot {
             slot: 1,
             preset: None,
@@ -260,6 +226,93 @@ fn config_mutations_that_move_a_runtime_seed_declare_it() {
                 "{mutation:?} moves a runtime seed without declaring it"
             );
         }
+    }
+}
+
+/// The same rule for the authored preferences that no longer travel through
+/// the writer. `ToolbarPreference::affects_runtime_ui_seeds` declares the
+/// layout mode and the section fields, because those are exactly the fields
+/// `resolved_toolbar_item_seeds` reads through the legacy fold; every other
+/// authored preference is declared seed-neutral and has to stay that way. The
+/// declared pair is a deliberate superset — a redundant reseed is idempotent,
+/// a missing one leaves overrides reconciling against a stale baseline — so
+/// only the neutral half is asserted here.
+#[test]
+fn no_undeclared_authored_preference_moves_a_runtime_seed() {
+    use crate::config::StatusBarItem;
+
+    /// One authored preference field, changed away from the shipped default.
+    type PreferenceProbe = (&'static str, fn(&mut Config));
+
+    let baseline = Config::default();
+    let baseline_seeds = seeds_for_config(&baseline);
+
+    let seed_neutral: Vec<PreferenceProbe> = vec![
+        ("icons", |config| {
+            config.ui.toolbar.use_icons = !config.ui.toolbar.use_icons;
+        }),
+        ("more colors", |config| {
+            config.ui.toolbar.show_more_colors = !config.ui.toolbar.show_more_colors;
+        }),
+        ("context-aware UI", |config| {
+            config.ui.toolbar.context_aware_ui = !config.ui.toolbar.context_aware_ui;
+        }),
+        ("preset toasts", |config| {
+            config.ui.toolbar.show_preset_toasts = !config.ui.toolbar.show_preset_toasts;
+        }),
+        ("tool preview", |config| {
+            config.ui.toolbar.show_tool_preview = !config.ui.toolbar.show_tool_preview;
+        }),
+        ("delay sliders", |config| {
+            config.ui.toolbar.show_delay_sliders = !config.ui.toolbar.show_delay_sliders;
+        }),
+        ("zoom chip", |config| {
+            config.ui.toolbar.show_zoom_chip = !config.ui.toolbar.show_zoom_chip;
+        }),
+        ("status bar", |config| {
+            config.ui.show_status_bar = !config.ui.show_status_bar;
+        }),
+        ("status bar interactivity", |config| {
+            config.ui.status_bar_interactive = !config.ui.status_bar_interactive;
+        }),
+        ("status bar item", |config| {
+            let visible = config.ui.status_bar_item_visible(StatusBarItem::Tool);
+            config
+                .ui
+                .set_status_bar_item_visible(StatusBarItem::Tool, !visible);
+        }),
+        ("status board badge", |config| {
+            config.ui.show_status_board_badge = !config.ui.show_status_board_badge;
+        }),
+        ("status page badge", |config| {
+            config.ui.show_status_page_badge = !config.ui.show_status_page_badge;
+        }),
+        ("floating badge always", |config| {
+            config.ui.show_floating_badge_always = !config.ui.show_floating_badge_always;
+        }),
+        ("floating badge", |config| {
+            config.ui.show_floating_badge = !config.ui.show_floating_badge;
+        }),
+        ("history custom section", |config| {
+            config.history.custom_section_enabled = !config.history.custom_section_enabled;
+        }),
+        ("click highlight", |config| {
+            config.ui.click_highlight.enabled = !config.ui.click_highlight.enabled;
+            config.ui.click_highlight.show_on_highlight_tool =
+                !config.ui.click_highlight.show_on_highlight_tool;
+        }),
+        ("input HUD", |config| {
+            config.ui.input_hud.enabled = !config.ui.input_hud.enabled;
+        }),
+    ];
+    for (label, change) in seed_neutral {
+        let mut config = baseline.clone();
+        change(&mut config);
+        assert_eq!(
+            seeds_for_config(&config),
+            baseline_seeds,
+            "{label} moves a runtime seed without being declared seed-moving"
+        );
     }
 }
 
