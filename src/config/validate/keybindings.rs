@@ -543,10 +543,9 @@ impl Config {
     /// Presence-aware resolution covers the safety these steps used to provide,
     /// and what is left is a proposal — the configurator asks the user before
     /// applying it.
-    #[allow(
-        dead_code,
-        reason = "preview material for the configurator's review flow"
-    )]
+    ///
+    /// The only caller is [`super::super::MigrationPreview`], which runs this
+    /// against a throwaway clone to describe the proposal.
     pub(crate) fn apply_keybinding_migrations(&mut self) {
         if self.config_revision >= CURRENT_CONFIG_REVISION {
             return;

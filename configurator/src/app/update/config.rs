@@ -2,10 +2,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use wayscriber::config::{ConfigDiagnosticKind, ConfigDocument};
+use wayscriber::config::{ConfigDiagnosticKind, ConfigDocument, MigrationPreview};
 
 use crate::messages::Message;
-use crate::models::ConfigDraft;
+use crate::models::{ConfigDraft, KeybindingField};
 
 use super::super::io::{load_config_from_disk, save_config_to_disk};
 use super::super::state::{ConfiguratorApp, StatusMessage};
@@ -30,6 +30,7 @@ impl ConfiguratorApp {
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
                 self.defaults_reset_pending = false;
+                self.refresh_migration_preview(&document);
                 self.status = repair_warning.map_or_else(
                     || config_document_status(&document, "Configuration loaded from disk."),
                     |warning| {
@@ -145,6 +146,10 @@ impl ConfiguratorApp {
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
                 self.defaults_reset_pending = false;
+                // The file just changed, so the offer has to be recomputed
+                // against it: an applied migration leaves nothing to propose,
+                // and an unrelated save leaves the same proposal standing.
+                self.refresh_migration_preview(&saved_document);
                 let mut msg = "Configuration saved successfully.".to_string();
                 if let Some(path) = backup {
                     msg.push_str(&format!("\nBackup created at {}", path.display()));
@@ -155,6 +160,61 @@ impl ConfiguratorApp {
                 self.status = StatusMessage::error(format!("Failed to save configuration: {err}"));
             }
         }
+
+        Task::none()
+    }
+
+    /// Recomputes what a migration would propose for the document now in hand.
+    ///
+    /// The authored values are the ones to diff: proposing a change to a
+    /// binding that only exists because loading dropped a contested key would
+    /// offer the user an edit their file never contained.
+    fn refresh_migration_preview(&mut self, document: &ConfigDocument) {
+        self.migration_preview = MigrationPreview::for_authored_config(document.authored_config());
+    }
+
+    pub(super) fn handle_migration_apply_requested(&mut self) -> Task<Message> {
+        if self.is_loading || self.is_saving {
+            return Task::none();
+        }
+        let Some(preview) = self.pending_migration().cloned() else {
+            return Task::none();
+        };
+
+        let mut applied = 0usize;
+        for change in preview.changes() {
+            // A key this build has no field for cannot be shown or edited, so
+            // it is left alone rather than written blind.
+            let Some(field) = KeybindingField::from_field_key(change.config_key()) else {
+                continue;
+            };
+            self.draft.keybindings.set(field, change.after().join(", "));
+            applied += 1;
+        }
+        // Recording the revision is what stops the same proposal from coming
+        // back, and it is a draft change in its own right: a proposal whose
+        // shortcut text already matches what the draft shows still has to be
+        // savable.
+        self.draft.config_revision = Some(preview.proposed_revision());
+        self.migration_preview = None;
+        let label = if applied == 1 {
+            "shortcut update"
+        } else {
+            "shortcut updates"
+        };
+        self.status = StatusMessage::info(format!(
+            "Applied {applied} {label} to the draft. Nothing is written until you press Save."
+        ));
+        self.refresh_dirty_flag();
+
+        Task::none()
+    }
+
+    pub(super) fn handle_migration_dismissed(&mut self) -> Task<Message> {
+        // Left silent on purpose: the status banner may be carrying the load
+        // diagnostics for this file, and hiding the offer is not worth losing
+        // them over.
+        self.migration_dismissed = true;
 
         Task::none()
     }
@@ -240,12 +300,15 @@ fn list_with_overflow(entries: &[&str], separator: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    use wayscriber::config::CURRENT_CONFIG_REVISION;
+
     use super::*;
     use crate::models::{ColorPickerId, ToggleField};
+    use crate::test_temp::TempDir;
 
     fn status_contains(status: &StatusMessage, needle: &str) -> bool {
         match status {
@@ -568,5 +631,257 @@ mod tests {
             "Configuration saved successfully."
         ));
         let _ = std::fs::remove_file(path);
+    }
+
+    const LEGACY_REVISION_ZERO_CONFIG: &str = "config_revision = 0\n\n[drawing]\ndefault_thickness = 3.0\n\n[keybindings]\ntoggle_command_palette = [\"Ctrl+K\"]\ncapture_full_screen = [\"Ctrl+Shift+P\"]\n";
+
+    /// A config file of its own, in a directory the test owns: an applied
+    /// migration saves, and a save drops its `.bak` next to the file.
+    fn app_with_config_file(contents: &str) -> (ConfiguratorApp, TempDir, PathBuf) {
+        let dir = crate::test_temp::tempdir().expect("temporary test directory");
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, contents).expect("write test config");
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        load_config_file(&mut app, &path);
+        (app, dir, path)
+    }
+
+    fn load_config_file(app: &mut ConfiguratorApp, path: &Path) {
+        let document = ConfigDocument::load_from_path(path).expect("load test config document");
+        let _ = app.handle_config_loaded(Ok((Arc::new(document), None)));
+    }
+
+    /// The Save path with the executor left out: `handle_save_requested`
+    /// builds exactly this config, and `save_config_to_disk` performs exactly
+    /// this write before handing the outcome back to `handle_config_saved`.
+    fn save_draft(app: &mut ConfiguratorApp) -> Option<PathBuf> {
+        let document = app.base_document.clone().expect("a loaded document");
+        let mut config = app
+            .draft
+            .to_config(document.config())
+            .expect("the draft converts to a config");
+        config.validate_and_clamp();
+        let (saved, backup) = document
+            .save_with_backup(config)
+            .expect("the document saves")
+            .into_parts();
+        let _ = app.handle_config_saved(Ok((backup.clone(), Arc::new(saved))));
+        backup
+    }
+
+    /// One setting exactly as the saved file spells it, with the line wrapping
+    /// the merge may choose for an array folded into single spaces.
+    fn config_setting(contents: &str, key: &str) -> Option<String> {
+        let mut lines = contents.lines().map(str::trim).skip_while(|line| {
+            !(line.starts_with(key) && line[key.len()..].trim_start().starts_with('='))
+        });
+        let mut setting = lines.next()?.to_string();
+        while setting.matches('[').count() > setting.matches(']').count() {
+            let Some(continuation) = lines.next() else {
+                break;
+            };
+            setting.push(' ');
+            setting.push_str(continuation);
+        }
+        Some(setting.split_whitespace().collect::<Vec<_>>().join(" "))
+    }
+
+    fn read_config(path: &Path) -> String {
+        std::fs::read_to_string(path).expect("read the saved config")
+    }
+
+    /// The whole point of the review flow: an old file that the user never
+    /// migrated keeps both its shortcuts and its revision, however much else
+    /// they save.
+    #[test]
+    fn saving_an_unrelated_field_leaves_old_bindings_and_revision_alone() {
+        let (mut app, _dir, path) = app_with_config_file(LEGACY_REVISION_ZERO_CONFIG);
+        assert!(app.pending_migration().is_some());
+
+        app.draft.drawing_default_thickness = "6".to_string();
+        let _ = save_draft(&mut app);
+
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "toggle_command_palette").as_deref(),
+            Some("toggle_command_palette = [\"Ctrl+K\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "capture_full_screen").as_deref(),
+            Some("capture_full_screen = [\"Ctrl+Shift+P\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "config_revision").as_deref(),
+            Some("config_revision = 0")
+        );
+        assert_eq!(
+            config_setting(&contents, "default_thickness").as_deref(),
+            Some("default_thickness = 6.0"),
+            "the field the user did edit still saves"
+        );
+        assert!(
+            app.pending_migration().is_some(),
+            "an unrelated save does not answer the migration question"
+        );
+    }
+
+    #[test]
+    fn applying_and_saving_writes_the_reviewed_fields_the_revision_and_a_backup() {
+        let (mut app, _dir, path) = app_with_config_file(LEGACY_REVISION_ZERO_CONFIG);
+
+        let _ = app.handle_migration_apply_requested();
+
+        assert!(app.is_dirty);
+        assert!(
+            app.pending_migration().is_none(),
+            "the offer is answered once it is applied"
+        );
+        assert_eq!(
+            app.draft
+                .keybindings
+                .value_for(KeybindingField::ToggleCommandPalette),
+            Some("Ctrl+K, Ctrl+Shift+P")
+        );
+        assert_eq!(app.draft.config_revision, Some(CURRENT_CONFIG_REVISION));
+
+        let backup = save_draft(&mut app).expect("the save creates a backup");
+        assert_eq!(
+            std::fs::read_to_string(&backup).expect("read the backup"),
+            LEGACY_REVISION_ZERO_CONFIG,
+            "the backup holds the file as it was before the migration"
+        );
+
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "toggle_command_palette").as_deref(),
+            Some("toggle_command_palette = [\"Ctrl+K\", \"Ctrl+Shift+P\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "capture_full_screen").as_deref(),
+            Some("capture_full_screen = [\"Ctrl+Alt+F\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "config_revision"),
+            Some(format!("config_revision = {CURRENT_CONFIG_REVISION}"))
+        );
+        assert_eq!(
+            config_setting(&contents, "default_thickness").as_deref(),
+            Some("default_thickness = 3.0"),
+            "an applied migration is a keybinding delta, not a rewrite"
+        );
+
+        load_config_file(&mut app, &path);
+        assert!(
+            app.pending_migration().is_none(),
+            "the reloaded file is current, so there is nothing left to offer"
+        );
+    }
+
+    /// Dismissing answers the question for this app run. A reload recomputes
+    /// the preview, but the user already said no to this file.
+    #[test]
+    fn dismissing_hides_the_offer_and_keeps_it_out_of_an_unrelated_save() {
+        let (mut app, _dir, path) = app_with_config_file(
+            "[keybindings]\ntoggle_command_palette = [\"Ctrl+K\"]\ncapture_full_screen = [\"Ctrl+Shift+P\"]\n",
+        );
+        assert!(app.pending_migration().is_some());
+
+        let _ = app.handle_migration_dismissed();
+
+        assert!(app.pending_migration().is_none());
+        assert!(!app.is_dirty, "dismissing changes nothing in the draft");
+
+        app.draft.drawing_default_thickness = "6".to_string();
+        let _ = save_draft(&mut app);
+
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "toggle_command_palette").as_deref(),
+            Some("toggle_command_palette = [\"Ctrl+K\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "capture_full_screen").as_deref(),
+            Some("capture_full_screen = [\"Ctrl+Shift+P\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "config_revision"),
+            None,
+            "a file that never recorded a revision is not stamped by an unrelated save"
+        );
+        assert!(app.pending_migration().is_none());
+
+        load_config_file(&mut app, &path);
+        assert!(
+            app.pending_migration().is_none(),
+            "pressing Reload is not the user asking again"
+        );
+    }
+
+    #[test]
+    fn a_current_revision_file_never_offers_a_migration() {
+        let (app, _dir, _path) = app_with_config_file(&format!(
+            "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\ntoggle_command_palette = [\"Ctrl+K\"]\n"
+        ));
+
+        assert!(app.pending_migration().is_none());
+    }
+
+    /// An empty file spells no shortcut out, so every recipe declines and
+    /// there is nothing to review. A missing file is the same answer from the
+    /// other direction: the document is this build's defaults.
+    #[test]
+    fn an_empty_or_missing_file_never_offers_a_migration() {
+        let (app, _dir, _path) = app_with_config_file("");
+        assert!(app.pending_migration().is_none());
+
+        let dir = crate::test_temp::tempdir().expect("temporary test directory");
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        load_config_file(&mut app, &dir.path().join("missing.toml"));
+
+        assert!(app.pending_migration().is_none());
+    }
+
+    /// The input-HUD step proposes unbinding a default the file never spelled
+    /// out, and loading already dropped that default from the effective
+    /// keymap — so the draft text does not change at all. The revision is
+    /// what makes the applied migration savable.
+    #[test]
+    fn applying_marks_the_draft_dirty_when_only_the_revision_changes() {
+        let (mut app, _dir, path) = app_with_config_file(
+            "config_revision = 2\n\n[keybindings]\ncapture_clipboard_full = [\"Ctrl+Shift+K\"]\n",
+        );
+        let text_before = app
+            .draft
+            .keybindings
+            .value_for(KeybindingField::ToggleInputHud)
+            .map(str::to_string);
+
+        let _ = app.handle_migration_apply_requested();
+
+        assert_eq!(
+            app.draft
+                .keybindings
+                .value_for(KeybindingField::ToggleInputHud)
+                .map(str::to_string),
+            text_before,
+            "loading already resolved this binding away, so the text is unchanged"
+        );
+        assert!(app.is_dirty, "the proposed revision is a draft change");
+
+        let _ = save_draft(&mut app);
+
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "config_revision"),
+            Some(format!("config_revision = {CURRENT_CONFIG_REVISION}"))
+        );
+        assert_eq!(
+            config_setting(&contents, "capture_clipboard_full").as_deref(),
+            Some("capture_clipboard_full = [\"Ctrl+Shift+K\"]"),
+            "the authored binding the migration protects is left alone"
+        );
+
+        load_config_file(&mut app, &path);
+        assert!(app.pending_migration().is_none());
     }
 }

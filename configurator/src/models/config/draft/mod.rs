@@ -22,6 +22,16 @@ use wayscriber::config::{MouseDragToolsConfig, ToolbarItemsConfig};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigDraft {
+    /// The `config_revision` an accepted migration would stamp, or `None` to
+    /// keep whatever the document carries.
+    ///
+    /// Loading and saving both reset this to `None`: the revision is
+    /// provenance for a review the user went through, so a draft only claims
+    /// one after it applied a migration preview. It also makes such a draft
+    /// dirty on its own, which matters when a proposal's shortcut strings
+    /// happen to match what the draft already shows.
+    pub config_revision: Option<u32>,
+
     pub drawing_color: ColorInput,
     pub drawing_quick_colors: QuickColorsDraft,
     pub drawing_default_thickness: String,

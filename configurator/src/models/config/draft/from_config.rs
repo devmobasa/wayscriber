@@ -59,6 +59,10 @@ impl ConfigDraft {
             &toolbar_items.resolved(),
         );
         Self {
+            // A draft loaded from a document never claims a revision of its
+            // own; only an applied migration does.
+            config_revision: None,
+
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
             drawing_quick_colors: QuickColorsDraft::from_config(&config.drawing.quick_colors),
             drawing_default_thickness: format_float(config.drawing.default_thickness),

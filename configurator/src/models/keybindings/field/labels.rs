@@ -306,4 +306,16 @@ impl KeybindingField {
             Self::ClearPreset5 => "clear_preset_5",
         }
     }
+
+    /// The field holding one `[keybindings]` key, if this build has it.
+    ///
+    /// The migration preview names its changes by the main crate's config key,
+    /// which is where a draft edit has to land. A key with no field here is a
+    /// binding the configurator cannot show, so it is skipped rather than
+    /// written blind.
+    pub fn from_field_key(key: &str) -> Option<Self> {
+        Self::all()
+            .into_iter()
+            .find(|field| field.field_key() == key)
+    }
 }

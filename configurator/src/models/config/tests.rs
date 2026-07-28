@@ -1303,6 +1303,31 @@ fn config_draft_round_trips_ui_reduced_motion() {
     assert_eq!(round_trip.ui.reduced_motion, ReducedMotion::On);
 }
 
+/// The revision is provenance for a review the user went through, so a draft
+/// that never applied a migration must not stamp one on an old file.
+#[test]
+fn config_draft_keeps_the_documents_revision_until_a_migration_is_applied() {
+    let mut base = Config::default();
+    base.config_revision = 0;
+
+    let mut draft = ConfigDraft::from_config(&base);
+    assert_eq!(draft.config_revision, None);
+
+    let untouched = draft
+        .to_config(&base)
+        .expect("expected config to round trip");
+    assert_eq!(untouched.config_revision, 0);
+
+    draft.config_revision = Some(wayscriber::config::CURRENT_CONFIG_REVISION);
+    let migrated = draft
+        .to_config(&base)
+        .expect("expected config to round trip");
+    assert_eq!(
+        migrated.config_revision,
+        wayscriber::config::CURRENT_CONFIG_REVISION
+    );
+}
+
 #[test]
 fn config_draft_preserves_tray_icon_style() {
     let mut config = Config::default();

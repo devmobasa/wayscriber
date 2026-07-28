@@ -31,6 +31,8 @@ pub enum Message {
     ResetToDefaultsCanceled,
     SaveRequested,
     ConfigSaved(Result<(Option<PathBuf>, Arc<ConfigDocument>), String>),
+    MigrationApplyRequested,
+    MigrationDismissed,
     DaemonStatusLoaded(u64, Result<DaemonRuntimeStatus, String>),
     DaemonShortcutInputChanged(String),
     DaemonActionRequested(DaemonAction),

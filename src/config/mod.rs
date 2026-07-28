@@ -15,6 +15,7 @@ mod core;
 mod document;
 mod field_metadata;
 mod io;
+mod migration;
 mod paths;
 mod runtime_backup;
 #[cfg(feature = "config-schema")]
@@ -49,6 +50,7 @@ pub use io::{ConfigSource, LoadedConfig};
 pub use keybindings::{
     Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,
 };
+pub use migration::{MigrationChange, MigrationPreview};
 pub(crate) use runtime_backup::RuntimeConfigBackup;
 #[allow(unused_imports)]
 pub use types::{

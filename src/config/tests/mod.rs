@@ -2,6 +2,7 @@ mod document;
 mod file_io;
 mod immutability;
 mod load;
+mod migration;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;

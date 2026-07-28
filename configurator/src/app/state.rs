@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::{path::PathBuf, sync::Arc};
 
 use iced::Task;
-use wayscriber::config::{Config, ConfigDocument, PRESET_SLOTS_MAX};
+use wayscriber::config::{Config, ConfigDocument, MigrationPreview, PRESET_SLOTS_MAX};
 
 use crate::messages::Message;
 use crate::models::{
@@ -36,6 +36,11 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) is_saving: bool,
     pub(crate) is_dirty: bool,
     pub(crate) defaults_reset_pending: bool,
+    /// What an accepted migration would change in the loaded configuration.
+    /// Held here rather than in `status` so an expired or replaced status
+    /// message cannot take the offer away with it.
+    pub(crate) migration_preview: Option<MigrationPreview>,
+    pub(crate) migration_dismissed: bool,
     pub(crate) last_backup_path: Option<PathBuf>,
     pub(crate) daemon_status: Option<DaemonRuntimeStatus>,
     pub(crate) daemon_shortcut_input: String,
@@ -110,6 +115,8 @@ impl ConfiguratorApp {
             is_saving: false,
             is_dirty: false,
             defaults_reset_pending: false,
+            migration_preview: None,
+            migration_dismissed: false,
             last_backup_path: None,
             daemon_status: None,
             daemon_shortcut_input: desktop.default_shortcut_input().to_string(),
@@ -140,6 +147,19 @@ impl ConfiguratorApp {
     pub(super) fn refresh_dirty_flag(&mut self) {
         self.defaults_reset_pending = false;
         self.is_dirty = self.draft != self.baseline;
+    }
+
+    /// The migration offer to show, if there is one to show.
+    ///
+    /// Dismissing hides the offer for the rest of this app run, including
+    /// across reloads: the user answered the question about this file, and
+    /// pressing Reload is not them asking it again. The next launch offers it
+    /// afresh, because the file still has the old revision.
+    pub(crate) fn pending_migration(&self) -> Option<&MigrationPreview> {
+        if self.migration_dismissed {
+            return None;
+        }
+        self.migration_preview.as_ref()
     }
 }
 

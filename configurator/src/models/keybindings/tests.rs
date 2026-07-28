@@ -180,6 +180,28 @@ fn every_configurable_action_survives_a_configurator_save() {
     );
 }
 
+/// The migration preview names its changes by the main crate's config key, so
+/// a key with no field here is a proposal the user would accept and never
+/// receive.
+#[test]
+fn every_configurable_config_key_resolves_to_a_field() {
+    let mut unmapped = Vec::new();
+    for action in KeybindingsConfig::configurable_actions() {
+        let Some(key) = KeybindingsConfig::config_key_for_action(*action) else {
+            continue; // runtime-only action with no persisted field
+        };
+        if KeybindingField::from_field_key(key).is_none() {
+            unmapped.push(key);
+        }
+    }
+
+    assert!(
+        unmapped.is_empty(),
+        "these `[keybindings]` keys have no KeybindingField, so an applied \
+         migration would silently skip them: {unmapped:?}"
+    );
+}
+
 #[test]
 fn blur_style_and_spotlight_bindings_read_and_write_config() {
     let mut config = KeybindingsConfig::default();

@@ -20,6 +20,12 @@ impl ConfigDraft {
         let mut errors = Vec::new();
         let mut config = base.clone();
 
+        // Only an applied migration proposes a revision; otherwise the base
+        // document's own value is what a save writes back, so an unrelated
+        // edit to an old file leaves its revision exactly where it was.
+        if let Some(revision) = self.config_revision {
+            config.config_revision = revision;
+        }
         self.apply_drawing(&mut config, &mut errors);
         self.apply_history(&mut config, &mut errors);
         self.apply_performance(&mut config, &mut errors);

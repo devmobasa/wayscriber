@@ -24,6 +24,8 @@ impl ConfiguratorApp {
             Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::ConfigSaved(result) => self.handle_config_saved(result),
+            Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
+            Message::MigrationDismissed => self.handle_migration_dismissed(),
             Message::DaemonStatusLoaded(request_id, result) => {
                 self.handle_daemon_status_loaded(request_id, result)
             }
