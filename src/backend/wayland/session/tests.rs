@@ -231,7 +231,6 @@ fn sample_tool_state() -> stored_session::ToolStateSnapshot {
         arrow_label_enabled: Some(false),
         polygon_sides: REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
-        show_status_bar: true,
         tool_settings: None,
     }
 }
@@ -696,7 +695,10 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     );
     assert_eq!(input.thickness_for_active_tool(), 7.0);
     assert!(input.arrow_head_at_end);
-    assert!(input.show_status_bar);
+    assert!(
+        !input.show_status_bar,
+        "chrome is a process preference, not saved tool state: resetting tools leaves the run's own status-bar choice alone"
+    );
     assert!(input.is_session_dirty());
     assert!(session_state.is_dirty());
 

@@ -42,16 +42,6 @@ impl InputState {
             .unwrap_or_else(|| self.active_tool())
     }
 
-    pub(crate) fn session_show_status_bar(&self) -> bool {
-        self.focus_mode_restore
-            .map(|restore| restore.show_status_bar)
-            .or_else(|| {
-                self.light_mode_restore
-                    .map(|restore| restore.show_status_bar)
-            })
-            .unwrap_or(self.show_status_bar)
-    }
-
     pub(crate) fn toggle_light_mode(&mut self) -> bool {
         if self.light_mode {
             self.exit_light_mode();

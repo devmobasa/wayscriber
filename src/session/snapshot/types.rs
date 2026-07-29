@@ -50,6 +50,15 @@ impl SessionSnapshot {
 }
 
 /// Subset of [`InputState`] we persist to disk to restore tool context.
+///
+/// Tool state only: what the user draws with (tool, colors, thicknesses,
+/// fonts, arrow and polygon geometry, eraser and blur settings, the recent
+/// palette, and the per-tool profile). Chrome preferences such as status-bar
+/// visibility are not here on purpose — they are configured in `config.toml`
+/// and toggled for the running process only, so persisting one would make an
+/// explicitly this-run-only toggle outlive the run and outrank the configured
+/// value on the next start. Sessions written before that split still carry a
+/// `show_status_bar` key; it deserializes as an unknown field and is ignored.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolStateSnapshot {
     pub current_color: Color,
@@ -85,7 +94,6 @@ pub struct ToolStateSnapshot {
     #[serde(default = "default_polygon_sides_for_snapshot")]
     pub polygon_sides: u8,
     pub board_previous_color: Option<Color>,
-    pub show_status_bar: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_settings: Option<PerToolDrawingSettings>,
 }
@@ -113,7 +121,6 @@ impl ToolStateSnapshot {
             arrow_label_enabled: Some(input.arrow_label_enabled),
             polygon_sides: input.polygon_sides,
             board_previous_color: input.board_previous_color,
-            show_status_bar: input.session_show_status_bar(),
             tool_settings: Some(input.tool_settings.clone()),
         }
     }
@@ -151,7 +158,6 @@ impl ToolStateSnapshot {
             arrow_label_enabled: Some(false),
             polygon_sides: clamp_regular_sides(config.drawing.polygon_sides),
             board_previous_color: None,
-            show_status_bar: config.ui.show_status_bar,
             tool_settings: Some(tool_settings),
         }
     }

@@ -1,6 +1,6 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
-use crate::config::Action;
+use crate::config::{Action, KeybindingsConfig};
 use crate::draw::{Color, FontDescriptor, Frame, PageDeleteOutcome, Shape};
 use crate::input::BOARD_ID_BLACKBOARD;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
@@ -80,31 +80,93 @@ fn snapshot_uses_pre_light_mode_tool_state() {
     assert_eq!(tool_state.tool_override, Some(Tool::Marker));
     assert_eq!(tool_state.current_color, desired_color);
     assert_eq!(tool_state.current_thickness, 14.0);
-    assert!(tool_state.show_status_bar);
 }
 
+/// Toggling the status bar from the toolbar promises "applies to this run",
+/// and nothing writes it to `config.toml`. A session saved afterwards — which
+/// happens as soon as the user draws — must not bring the toggle back on the
+/// next start, or the session would be a side channel that makes it durable
+/// and outranks `[ui] show_status_bar`.
 #[test]
-fn snapshot_uses_pre_focus_mode_status_bar_visibility() {
-    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-focus");
+fn restoring_a_session_keeps_the_configured_status_bar_visibility() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-status-bar");
     options.restore_tool_state = true;
 
+    let mut source = dummy_input_state();
+    source.show_status_bar = false;
+    let snapshot = snapshot_from_input(&source, &options).expect("snapshot present");
+
+    // The next start: chrome seeded from a configuration that shows the bar.
     let mut input = dummy_input_state();
     input.show_status_bar = true;
-    input.handle_action(Action::ToggleFocusMode);
-    assert!(input.focus_mode_active());
-    assert!(!input.show_status_bar);
 
-    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
-    let tool_state = snapshot.tool_state.expect("tool state present");
+    apply_snapshot(&mut input, snapshot, &options);
 
     assert!(
-        tool_state.show_status_bar,
-        "focus mode's transient hide must not become saved session state"
+        input.show_status_bar,
+        "the configured value owns chrome; a session must not override it"
     );
 }
 
+/// A shortcut rebound in the overlay is keymap state for this run, not session
+/// state: `ToolStateSnapshot` has no bindings field at all. This pins the
+/// consequence — a session saved after a rebind carries nothing that could
+/// reinstate it, and applying such a snapshot leaves the next run's configured
+/// keymap exactly as it was seeded.
 #[test]
-fn applying_session_tool_state_updates_focus_modes_restore_value() {
+fn restoring_a_session_never_carries_a_rebound_shortcut() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-keymap");
+    options.restore_tool_state = true;
+
+    // The run that rebinds, installing the maps the same way the backend's
+    // shortcut handler does.
+    let mut source = dummy_input_state();
+    let mut rebound = KeybindingsConfig::default();
+    rebound
+        .set_bindings_for_action(Action::SelectPenTool, vec!["Ctrl+Alt+Shift+K".to_string()])
+        .expect("the pen tool stores a shortcut");
+    source.set_keybinding_maps(
+        rebound.build_action_map().expect("action map"),
+        rebound.build_action_bindings().expect("action bindings"),
+    );
+    // Label spelling is the formatter's business (it fixes modifier order); all
+    // this needs is that the rebind actually moved the binding.
+    let rebound_labels = source.action_binding_labels(Action::SelectPenTool);
+    assert_eq!(rebound_labels.len(), 1);
+    assert!(
+        rebound_labels[0].to_ascii_lowercase().ends_with("+k"),
+        "the rebind should have landed: {rebound_labels:?}"
+    );
+    let snapshot = snapshot_from_input(&source, &options).expect("snapshot present");
+
+    // The next start, seeded from the unchanged configuration.
+    let mut input = dummy_input_state();
+    let configured = KeybindingsConfig::default();
+    input.set_keybinding_maps(
+        configured.build_action_map().expect("action map"),
+        configured.build_action_bindings().expect("action bindings"),
+    );
+    let before = input.action_binding_labels(Action::SelectPenTool);
+    assert!(!before.is_empty(), "the fixture must bind the pen tool");
+    assert_ne!(
+        before, rebound_labels,
+        "the two runs must disagree, or the test proves nothing"
+    );
+
+    apply_snapshot(&mut input, snapshot, &options);
+
+    assert_eq!(
+        input.action_binding_labels(Action::SelectPenTool),
+        before,
+        "a session restore must not change any shortcut"
+    );
+}
+
+/// Focus Mode holds the value chrome returns to when it releases it. A restore
+/// that carries no chrome has to leave that pending value alone as well, not
+/// just the live one.
+#[test]
+fn restoring_a_session_leaves_focus_modes_pending_status_bar_value_alone() {
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-focus-apply");
     options.restore_tool_state = true;
 
@@ -127,8 +189,8 @@ fn applying_session_tool_state_updates_focus_modes_restore_value() {
 
     input.handle_action(Action::ToggleFocusMode);
     assert!(
-        !input.show_status_bar,
-        "Focus restore must honor the session-authored status-bar value"
+        input.show_status_bar,
+        "leaving Focus Mode returns this run's own value, not one from a session file"
     );
 }
 
@@ -182,6 +244,7 @@ fn apply_snapshot_restores_tool_state() {
     );
 
     let mut restored = dummy_input_state();
+    restored.show_status_bar = true;
     apply_snapshot(&mut restored, snapshot, &options);
 
     assert_eq!(restored.current_color, desired_color);
@@ -208,7 +271,10 @@ fn apply_snapshot_restores_tool_state() {
             a: 1.0,
         })
     );
-    assert!(!restored.show_status_bar);
+    assert!(
+        restored.show_status_bar,
+        "the source hid the status bar, but chrome is not tool state and does not travel"
+    );
 }
 
 #[test]
@@ -264,7 +330,6 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             arrow_label_enabled: Some(false),
             polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
-            show_status_bar: true,
             tool_settings: None,
         }),
     };
@@ -316,7 +381,6 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             arrow_label_enabled: Some(false),
             polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
-            show_status_bar: true,
             tool_settings: Some(tool_settings),
         }),
     };
@@ -365,7 +429,6 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             arrow_label_enabled: Some(false),
             polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
-            show_status_bar: true,
             tool_settings: None,
         }),
     };

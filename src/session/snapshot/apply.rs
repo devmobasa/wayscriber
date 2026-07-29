@@ -65,11 +65,17 @@ fn apply_snapshot_inner(
 }
 
 /// Apply persisted or config-derived tool state to the live [`InputState`].
+///
+/// Drawing state only. Chrome the user toggles for the running process — the
+/// status bar and the badges around it — is configured in `config.toml` and
+/// deliberately absent from the snapshot, so restoring a session leaves the
+/// configured value in place instead of reinstating a toggle that promised to
+/// last one run.
 pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: ToolStateSnapshot) {
     let marker_opacity = tool_state.marker_opacity.unwrap_or(input.marker_opacity);
     let fill_enabled = tool_state.fill_enabled.unwrap_or(input.fill_enabled);
     log::info!(
-        "Applying tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], marker_opacity={:.2}, fill_enabled={}, tool_override={:?}, font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}, arrow_labels={:?}",
+        "Applying tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], marker_opacity={:.2}, fill_enabled={}, tool_override={:?}, font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], prev_color={:?}, arrow_labels={:?}",
         tool_state.current_color,
         tool_state.current_thickness,
         tool_state.eraser_size,
@@ -82,7 +88,6 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
         tool_state.text_background_enabled,
         tool_state.arrow_length,
         tool_state.arrow_angle,
-        tool_state.show_status_bar,
         tool_state.board_previous_color,
         tool_state.arrow_label_enabled
     );
@@ -128,7 +133,6 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     }
     input.polygon_sides = clamp_regular_sides(tool_state.polygon_sides);
     input.board_previous_color = tool_state.board_previous_color;
-    input.set_status_bar_visibility_preserving_focus(tool_state.show_status_bar);
     input.sync_step_marker_counter();
     input.needs_redraw = true;
 }
