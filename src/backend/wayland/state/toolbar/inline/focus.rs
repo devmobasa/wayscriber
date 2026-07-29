@@ -43,7 +43,7 @@ impl WaylandState {
             let id = next.and_then(|index| hits[index].focus_id.clone());
             *self.inline_focus_index_mut(target) = next;
             self.set_inline_focus_id(target, id);
-            self.input_state.needs_redraw = true;
+            self.mark_inline_toolbar_full_damage();
             return true;
         }
         false
@@ -94,10 +94,12 @@ impl WaylandState {
         self.data.toolbar_focus_target = None;
         self.toolbar.clear_focus();
         let had_inline_focus = self.data.inline_top_focus_index.is_some()
-            || self.data.inline_side_focus_index.is_some();
+            || self.data.inline_side_focus_index.is_some()
+            || self.data.inline_top_focus_id.is_some()
+            || self.data.inline_side_focus_id.is_some();
         self.clear_inline_toolbar_focus();
         if self.inline_toolbars_active() && had_inline_focus {
-            self.input_state.needs_redraw = true;
+            self.mark_inline_toolbar_full_damage();
         }
     }
 
@@ -125,7 +127,11 @@ impl WaylandState {
                 .apply_toolbar_event(ToolbarEvent::ToggleShapePicker(false));
             self.input_state
                 .apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(false));
-            self.toolbar.mark_dirty();
+            if self.inline_toolbars_active() {
+                self.mark_inline_toolbar_full_damage();
+            } else {
+                self.toolbar.mark_dirty();
+            }
             return true;
         }
         if !should_route_toolbar_key(

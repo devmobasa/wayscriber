@@ -36,6 +36,7 @@ pub const XDG_OUTPUT_ENV: &str = "WAYSCRIBER_XDG_OUTPUT";
 
 pub const HOME_ENV: &str = "HOME";
 pub const HYPRLAND_INSTANCE_SIGNATURE_ENV: &str = "HYPRLAND_INSTANCE_SIGNATURE";
+pub const NIRI_SOCKET_ENV: &str = "NIRI_SOCKET";
 pub const USERPROFILE_ENV: &str = "USERPROFILE";
 pub const PATH_ENV: &str = "PATH";
 pub const RUST_LOG_ENV: &str = "RUST_LOG";

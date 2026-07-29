@@ -282,7 +282,11 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn dismiss_top_toolbar_menus(&mut self) -> bool {
         let changed = self.input_state.close_top_toolbar_menus();
         if changed {
-            self.toolbar.mark_dirty();
+            if self.inline_toolbars_active() {
+                self.mark_inline_toolbar_full_damage();
+            } else {
+                self.toolbar.mark_dirty();
+            }
         }
         changed
     }

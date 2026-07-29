@@ -9,6 +9,7 @@ use crate::util::Rect;
 pub enum DirtyFullReason {
     CanvasClear,
     FirstRunOnboarding,
+    InlineToolbar,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
