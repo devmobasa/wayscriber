@@ -2,9 +2,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use wayscriber::config::{ConfigDiagnosticKind, ConfigDocument, MigrationPreview};
+use wayscriber::config::{
+    Config, ConfigDiagnosticKind, ConfigDocument, ConfigValidationReport, InvalidKeybinding,
+    KeybindingConflictResolution, MigrationPreview,
+};
 
 use crate::messages::Message;
+use crate::models::error::FormError;
 use crate::models::{ConfigDraft, KeybindingField};
 
 use super::super::io::{load_config_from_disk, save_config_to_disk};
@@ -110,9 +114,8 @@ impl ConfiguratorApp {
             return Task::none();
         };
 
-        match self.draft.to_config(document.config()) {
-            Ok(mut config) => {
-                config.validate_and_clamp();
+        match self.prepare_config_to_save(&document) {
+            Ok(config) => {
                 self.is_saving = true;
                 self.status = StatusMessage::info("Saving configuration...");
                 Task::perform(save_config_to_disk(document, config), Message::ConfigSaved)
@@ -131,11 +134,32 @@ impl ConfiguratorApp {
         }
     }
 
+    /// The configuration a Save writes, with what validating it had to change
+    /// in `[keybindings]` kept for the status the completed write reports.
+    ///
+    /// The draft rebuilds that section from the editor's own fields, so every
+    /// list in it is authored and a duplicate the user typed is arbitrated by
+    /// traversal order rather than filtered as an unauthored default. The
+    /// arbitration edits the configuration on its way to disk, and the saved
+    /// file then spells both lists out — leaving nothing for the reloaded
+    /// document to rediscover — so this is the only place the loss can be seen.
+    fn prepare_config_to_save(
+        &mut self,
+        document: &ConfigDocument,
+    ) -> Result<Config, Vec<FormError>> {
+        let mut config = self.draft.to_config(document.config())?;
+        self.pending_save_validation = config.validate_and_clamp();
+        Ok(config)
+    }
+
     pub(super) fn handle_config_saved(
         &mut self,
         result: Result<(Option<PathBuf>, Arc<ConfigDocument>), String>,
     ) -> Task<Message> {
         self.is_saving = false;
+        // Either outcome answers this write; a failed one wrote nothing, so
+        // there is no resolution to report for it.
+        let validation = std::mem::take(&mut self.pending_save_validation);
         match result {
             Ok((backup, saved_document)) => {
                 let draft = ConfigDraft::from_config(saved_document.config());
@@ -158,7 +182,11 @@ impl ConfiguratorApp {
                 if let Some(path) = backup {
                     msg.push_str(&format!("\nBackup created at {}", path.display()));
                 }
-                self.status = config_document_status(&saved_document, &msg);
+                let mut status = config_document_status(&saved_document, &msg);
+                if let Some(note) = save_validation_note(&validation) {
+                    status = status.with_note(&note);
+                }
+                self.status = status;
             }
             Err(err) => {
                 self.status = StatusMessage::error(format!("Failed to save configuration: {err}"));
@@ -285,6 +313,65 @@ fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMes
     StatusMessage::warning(message)
 }
 
+/// What validating the saved configuration changed in the shortcuts the user
+/// typed, or `None` when it changed nothing.
+///
+/// The load-time sentences in [`config_document_status`] all end in "the file
+/// still has them", because loading resolves in memory only. These are the
+/// other case: the draft is the authored text, the resolution is what reached
+/// `config.toml`, and the reloaded document no longer contains the collision
+/// to report. Naming which action kept the key and which lost it is therefore
+/// the only account the user gets of an edit their Save made for them.
+///
+/// A skipped default cannot appear here: the draft spells every action out
+/// (`ConfigDraft::to_config` marks the section explicit), so the omitted-default
+/// pass has nothing to offer and reports nothing.
+fn save_validation_note(validation: &ConfigValidationReport) -> Option<String> {
+    // The summaries, not the full `Display` forms: those say the file keeps
+    // the shortcut and the session does without it, which is the load story.
+    let invalid = clauses(
+        validation
+            .invalid_keybindings
+            .iter()
+            .map(InvalidKeybinding::summary),
+    );
+    let conflicts = clauses(
+        validation
+            .keybinding_conflicts
+            .iter()
+            .map(KeybindingConflictResolution::summary),
+    );
+    if invalid.is_empty() && conflicts.is_empty() {
+        return None;
+    }
+
+    let mut note = String::new();
+    if !invalid.is_empty() {
+        note.push_str(&format!(
+            "Shortcuts that could not be parsed were left out of the saved configuration: {}.",
+            list_with_overflow(&borrowed(&invalid), "; ")
+        ));
+    }
+    if !conflicts.is_empty() {
+        if !note.is_empty() {
+            note.push('\n');
+        }
+        note.push_str(&format!(
+            "Shortcuts two actions claimed were settled before saving, and the saved configuration keeps that outcome: {}.",
+            list_with_overflow(&borrowed(&conflicts), "; ")
+        ));
+    }
+    Some(note)
+}
+
+/// Toast-sized summaries as list items: each is a finished sentence, and the
+/// sentence they are listed inside supplies the final stop.
+fn clauses(summaries: impl Iterator<Item = String>) -> Vec<String> {
+    summaries
+        .map(|summary| summary.trim_end_matches('.').to_string())
+        .collect()
+}
+
 fn borrowed(entries: &[String]) -> Vec<&str> {
     entries.iter().map(String::as_str).collect()
 }
@@ -308,7 +395,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use wayscriber::config::CURRENT_CONFIG_REVISION;
+    use wayscriber::config::{Action, CURRENT_CONFIG_REVISION};
 
     use super::*;
     use crate::models::{ColorPickerId, ToggleField};
@@ -615,6 +702,117 @@ mod tests {
         assert_ne!(app.draft, app.defaults);
     }
 
+    /// The reviewer's case: the file spells `undo` out and never mentions
+    /// `clear_canvas`, and the user then types `undo`'s shortcut into the
+    /// Clear canvas field. The draft is the authored text now, so both lists
+    /// are explicit and the traversal order settles the collision (core visits
+    /// `clear_canvas` before `undo`). Classifying the typed binding as an
+    /// omitted default instead would filter it away, save an empty list, and
+    /// report success.
+    #[test]
+    fn a_shortcut_typed_for_an_omitted_action_is_arbitrated_not_filtered() {
+        let (mut app, _dir, path) = app_with_config_file(&format!(
+            "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n"
+        ));
+        app.draft
+            .keybindings
+            .set(KeybindingField::ClearCanvas, "Ctrl+Alt+U".to_string());
+
+        let document = app.base_document.clone().expect("a loaded document");
+        let mut config = app
+            .draft
+            .to_config(document.config())
+            .expect("the draft converts to a config");
+        let report = config.validate_and_clamp();
+
+        assert!(
+            report.skipped_default_shortcuts.is_empty(),
+            "the user typed this binding; it is not an offer to filter: {:?}",
+            report.skipped_default_shortcuts
+        );
+        assert_eq!(
+            config.keybindings.core.clear_canvas,
+            ["Ctrl+Alt+U"],
+            "the earlier action in traversal order keeps the key"
+        );
+        assert!(config.keybindings.core.undo.is_empty());
+        assert_eq!(report.keybinding_conflicts.len(), 1);
+        assert_eq!(report.keybinding_conflicts[0].kept(), Action::ClearCanvas);
+        assert_eq!(report.keybinding_conflicts[0].dropped(), Action::Undo);
+
+        let _ = save_draft(&mut app);
+
+        assert!(
+            matches!(app.status, StatusMessage::Warning(_)),
+            "a binding the save took away is not a plain success: {:?}",
+            app.status
+        );
+        assert!(status_contains(&app.status, "settled before saving"));
+        assert!(
+            status_contains(
+                &app.status,
+                "Ctrl+Alt+U kept for Clear Canvas, dropped from Undo."
+            ),
+            "the status has to name the key, the winner, and the loser: {:?}",
+            app.status
+        );
+
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "clear_canvas").as_deref(),
+            Some("clear_canvas = [\"Ctrl+Alt+U\"]"),
+            "the typed binding reaches the file"
+        );
+        assert_eq!(
+            config_setting(&contents, "undo").as_deref(),
+            Some("undo = []"),
+            "the loser is written out too, so the file and the report agree"
+        );
+    }
+
+    /// The same collision the other way around: nothing about the draft is
+    /// wrong, so a save that resolves nothing says nothing extra.
+    #[test]
+    fn a_save_without_shortcut_trouble_stays_a_plain_success() {
+        let (mut app, _dir, _path) = app_with_config_file(&format!(
+            "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n"
+        ));
+        app.draft.drawing_default_thickness = "6".to_string();
+
+        let _ = save_draft(&mut app);
+
+        assert!(
+            matches!(app.status, StatusMessage::Success(_)),
+            "unexpected status: {:?}",
+            app.status
+        );
+        assert!(!status_contains(&app.status, "settled before saving"));
+    }
+
+    /// A shortcut the editor accepts as text but the parser rejects never
+    /// reaches the file either, so the save status is the only place it can be
+    /// reported.
+    #[test]
+    fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
+        let (mut app, _dir, _path) = app_with_config_file(&format!(
+            "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n"
+        ));
+        app.draft
+            .keybindings
+            .set(KeybindingField::ClearCanvas, "Ctrl+Shift".to_string());
+
+        let _ = save_draft(&mut app);
+
+        assert!(
+            matches!(app.status, StatusMessage::Warning(_)),
+            "unexpected status: {:?}",
+            app.status
+        );
+        assert!(status_contains(&app.status, "Ctrl+Shift"));
+        assert!(status_contains(&app.status, "Clear Canvas"));
+        assert!(status_contains(&app.status, "could not be parsed"));
+    }
+
     #[test]
     fn handle_config_saved_success_clears_dirty_and_records_backup() {
         let (mut app, _cmd) = ConfiguratorApp::new_app();
@@ -660,11 +858,9 @@ mod tests {
     /// this write before handing the outcome back to `handle_config_saved`.
     fn save_draft(app: &mut ConfiguratorApp) -> Option<PathBuf> {
         let document = app.base_document.clone().expect("a loaded document");
-        let mut config = app
-            .draft
-            .to_config(document.config())
+        let config = app
+            .prepare_config_to_save(&document)
             .expect("the draft converts to a config");
-        config.validate_and_clamp();
         let (saved, backup) = document
             .save_with_backup(config)
             .expect("the document saves")

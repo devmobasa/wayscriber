@@ -47,6 +47,22 @@ impl KeybindingAuthorship {
         Self::FromFile(keys)
     }
 
+    /// Records one `[keybindings]` key as authored.
+    ///
+    /// For an editor that rewrites a single key: that list has stopped being
+    /// described by the source's presence set, while every other list still is.
+    /// [`Config::mark_keybindings_explicit`](crate::config::Config::mark_keybindings_explicit)
+    /// is the whole-section form, for an editor that rebuilds all of them.
+    pub(crate) fn mark_explicit(&mut self, config_key: &str) {
+        match self {
+            // Nothing was omitted, so there is nothing to record.
+            Self::AllExplicit => {}
+            Self::FromFile(keys) => {
+                keys.insert(config_key.to_string());
+            }
+        }
+    }
+
     /// Whether the source spelled out one `[keybindings]` key.
     pub fn is_explicit(&self, config_key: &str) -> bool {
         match self {

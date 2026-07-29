@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::{path::PathBuf, sync::Arc};
 
 use iced::Task;
-use wayscriber::config::{Config, ConfigDocument, MigrationPreview, PRESET_SLOTS_MAX};
+use wayscriber::config::{
+    Config, ConfigDocument, ConfigValidationReport, MigrationPreview, PRESET_SLOTS_MAX,
+};
 
 use crate::messages::Message;
 use crate::models::{
@@ -42,6 +44,13 @@ pub(crate) struct ConfiguratorApp {
     /// message cannot take the offer away with it.
     pub(crate) migration_preview: Option<MigrationPreview>,
     pub(crate) migration_dismissed: bool,
+    /// What validating the configuration the running Save is writing had to
+    /// change in `[keybindings]`, held until that write reports back.
+    ///
+    /// The resolution reaches the file, so the reloaded document cannot show
+    /// it: this is the only carrier from the moment the config is built to the
+    /// status the finished save renders.
+    pub(crate) pending_save_validation: ConfigValidationReport,
     pub(crate) last_backup_path: Option<PathBuf>,
     pub(crate) daemon_status: Option<DaemonRuntimeStatus>,
     pub(crate) daemon_shortcut_input: String,
@@ -145,6 +154,7 @@ impl ConfiguratorApp {
             defaults_reset_pending: false,
             migration_preview: None,
             migration_dismissed: false,
+            pending_save_validation: ConfigValidationReport::default(),
             last_backup_path: None,
             daemon_status: None,
             daemon_shortcut_input: desktop.default_shortcut_input().to_string(),

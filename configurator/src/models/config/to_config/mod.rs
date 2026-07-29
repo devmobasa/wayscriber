@@ -40,6 +40,12 @@ impl ConfigDraft {
         self.apply_tablet(&mut config, &mut errors);
         self.apply_presets(&mut config, &mut errors);
         self.apply_keybindings(&mut config, &mut errors);
+        // `apply_keybindings` rebuilt the whole section from the editor's text
+        // fields, so the base document's record of which keys its file spells
+        // out no longer describes these lists. Saying so is what keeps a
+        // shortcut the user typed for an action their file omits from being
+        // treated as a compiled-in default and dropped by validation.
+        config.mark_keybindings_explicit();
 
         if errors.is_empty() {
             Ok(config)

@@ -1,4 +1,4 @@
-use super::keybindings::{KeybindingAuthorship, KeybindingsConfig};
+use super::keybindings::{Action, KeybindingAuthorship, KeybindingsConfig};
 #[cfg(feature = "tablet-input")]
 use super::types::TabletInputConfig;
 use super::types::{
@@ -183,6 +183,32 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Declares every `[keybindings]` list in this configuration authored.
+    ///
+    /// Any editor that rebuilds the section from its own UI must call this
+    /// before validation: the lists no longer come from the document the
+    /// authorship was recorded from, so file presence has stopped describing
+    /// them. Without it, a shortcut the user just typed for an action their
+    /// file omits is still classified as a compiled-in offer, and the
+    /// omitted-default pass filters it out instead of arbitrating the
+    /// collision it causes — silently, and with the emptied list on its way to
+    /// disk.
+    pub fn mark_keybindings_explicit(&mut self) {
+        self.keybinding_authorship = KeybindingAuthorship::AllExplicit;
+    }
+
+    /// Declares one action's `[keybindings]` list authored.
+    ///
+    /// The narrow shortcut editor's form of the above: it rewrites exactly one
+    /// key, so exactly one list has stopped coming from the file, and the
+    /// omitted-default pass must keep judging every other one by what the file
+    /// actually spells out.
+    pub(crate) fn mark_keybinding_explicit(&mut self, action: Action) {
+        if let Some(key) = KeybindingsConfig::config_key_for_action(action) {
+            self.keybinding_authorship.mark_explicit(key);
+        }
+    }
+
     pub fn resolved_boards(&self) -> BoardsConfig {
         match &self.boards {
             Some(boards) if !boards.items.is_empty() => boards.clone(),

@@ -1215,6 +1215,46 @@ fn omitted_defaults_never_take_a_key_from_an_earlier_omitted_action() {
         .expect("the resolved keymap has no duplicates");
 }
 
+/// An editor that rebuilds `[keybindings]` from its own fields says so, and
+/// the omitted-default pass then has nothing to run on: the same fixture that
+/// loses the typed binding as an unauthored offer keeps it as an authored
+/// claim, with the traversal order settling the collision it causes.
+#[test]
+fn marking_the_section_explicit_retires_the_omitted_default_pass() {
+    let source = "[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n";
+
+    // How the file reads on its own: `clear_canvas` is absent, so the value it
+    // carries is an offer this build made and the authored `undo` outranks it.
+    let mut from_file = config_from_toml(source);
+    from_file.keybindings.core.clear_canvas = vec!["Ctrl+Alt+U".to_string()];
+    let filtered = from_file.validate_and_clamp();
+    assert!(from_file.keybindings.core.clear_canvas.is_empty());
+    assert_eq!(filtered.skipped_default_shortcuts.len(), 1);
+
+    // The same values from an editor that typed them: both lists are authored.
+    let mut edited = config_from_toml(source);
+    edited.keybindings.core.clear_canvas = vec!["Ctrl+Alt+U".to_string()];
+    edited.mark_keybindings_explicit();
+    let report = edited.validate_and_clamp();
+
+    assert!(
+        report.skipped_default_shortcuts.is_empty(),
+        "nothing was omitted: {:?}",
+        report.skipped_default_shortcuts
+    );
+    // `core` visits `clear_canvas` before `undo`, so the typed list keeps the
+    // key and the older one loses it.
+    assert_eq!(edited.keybindings.core.clear_canvas, ["Ctrl+Alt+U"]);
+    assert!(edited.keybindings.core.undo.is_empty());
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    assert_eq!(report.keybinding_conflicts[0].kept(), Action::ClearCanvas);
+    assert_eq!(report.keybinding_conflicts[0].dropped(), Action::Undo);
+    edited
+        .keybindings
+        .build_action_map()
+        .expect("the resolved keymap has no duplicates");
+}
+
 /// A single mistyped string used to fail `build_action_map` for the whole
 /// config, and the runtime answered that by installing the complete shipped
 /// defaults for the session. Only the typo is dropped now.
