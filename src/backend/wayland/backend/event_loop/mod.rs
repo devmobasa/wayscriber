@@ -325,6 +325,9 @@ pub(super) fn run_event_loop(
                 session_save::notify_session_failure(state, &err);
             }
             state.shutdown_runtime_ui();
+            // An edit made a moment before quitting still has to reach the file,
+            // so teardown waits — briefly — for the worker's queue to drain.
+            state.shutdown_config_edits();
             state.shutdown_input_monitor();
         },
         || match signals.as_mut() {

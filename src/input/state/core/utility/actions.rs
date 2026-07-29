@@ -24,6 +24,21 @@ impl InputState {
         self.action_bindings = action_bindings;
     }
 
+    /// Install a keymap rebuilt after a shortcut edit.
+    ///
+    /// Both halves move together because they are two views of one binding
+    /// table: `action_map` dispatches a chord, `action_bindings` is what every
+    /// badge and help row reads back.
+    pub(crate) fn set_keybinding_maps(
+        &mut self,
+        action_map: HashMap<KeyBinding, Action>,
+        action_bindings: HashMap<Action, Vec<KeyBinding>>,
+    ) {
+        self.action_map = action_map;
+        self.action_bindings = action_bindings;
+        self.needs_redraw = true;
+    }
+
     pub fn action_binding_labels(&self, action: Action) -> Vec<String> {
         if let Some(bindings) = self.action_bindings.get(&action) {
             let mut labels = Vec::new();

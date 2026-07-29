@@ -1,20 +1,25 @@
 //! Lossless configuration document ownership for editing clients.
 
+mod lock;
 mod merge;
+
+pub use lock::ConfigWriteLockTimeout;
 
 use super::io::{create_config_backup, prepare_config_parent, write_config_text_atomic};
 use super::keybindings::KeybindingAuthorship;
 use super::{Config, ConfigSource};
-use crate::durable_io::{OverwriteMode, resolve_symlink_chain};
+use crate::durable_io::{
+    DestinationExpectation, FileIdentity, OverwriteMode, resolve_symlink_chain,
+};
 use anyhow::{Context, Result, anyhow, bail};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use toml_edit::DocumentMut;
 
+use lock::{CONFIG_WRITE_LOCK_TIMEOUT, acquire_config_write_lock};
 use merge::{
     conservative_repair_source_document, merge_config_document, repair_source_document,
     serialize_config_document,
@@ -77,28 +82,54 @@ impl fmt::Display for ConfigDiagnostic {
 #[derive(Clone, PartialEq, Eq)]
 enum SourceRevision {
     Missing {
-        followed_links: Arc<[(PathBuf, PathBuf)]>,
+        followed_links: Vec<(PathBuf, PathBuf)>,
+        destination: PathBuf,
     },
     Present {
-        bytes: Arc<[u8]>,
-        followed_links: Arc<[(PathBuf, PathBuf)]>,
+        bytes: Vec<u8>,
+        /// Which file those bytes came out of.
+        ///
+        /// Part of the revision for the same reason the symlink chain is: a
+        /// file renamed away and replaced under the same name is a different
+        /// file, and a replacement that happens to hold identical text is the
+        /// case bytes alone cannot tell apart. It is also what the write is
+        /// made conditional on, so the rename lands on the file every check in
+        /// between was about.
+        ///
+        /// Taken from the same `stat` that decided the path names a regular
+        /// file, one syscall before the read. A file swapped in between the two
+        /// leaves the pair describing two files, and the consequence is always
+        /// the safe one: the identity no longer matches the destination, so
+        /// every later comparison — and the rename itself — refuses the save
+        /// rather than writing anywhere unexpected.
+        identity: FileIdentity,
+        followed_links: Vec<(PathBuf, PathBuf)>,
+        destination: PathBuf,
     },
 }
 
 impl fmt::Debug for SourceRevision {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Missing { followed_links } => formatter
+            Self::Missing {
+                followed_links,
+                destination,
+            } => formatter
                 .debug_struct("Missing")
                 .field("followed_links", followed_links)
+                .field("destination", destination)
                 .finish(),
             Self::Present {
                 bytes,
+                identity,
                 followed_links,
+                destination,
             } => formatter
                 .debug_struct("Present")
                 .field("byte_len", &bytes.len())
+                .field("identity", identity)
                 .field("followed_links", followed_links)
+                .field("destination", destination)
                 .finish(),
         }
     }
@@ -108,15 +139,18 @@ impl SourceRevision {
     fn read(path: &Path) -> Result<Self> {
         let (final_path, followed_links) = resolve_symlink_chain(path)
             .with_context(|| format!("Failed to resolve config source {}", path.display()))?;
-        let followed_links: Arc<[(PathBuf, PathBuf)]> = followed_links.into();
-        let metadata = match fs::symlink_metadata(&final_path) {
+        let destination = pin_destination(&final_path)?;
+        let metadata = match fs::symlink_metadata(&destination) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == ErrorKind::NotFound => {
-                return Ok(Self::Missing { followed_links });
+                return Ok(Self::Missing {
+                    followed_links,
+                    destination,
+                });
             }
             Err(error) => {
                 return Err(error).with_context(|| {
-                    format!("Failed to inspect config source {}", final_path.display())
+                    format!("Failed to inspect config source {}", destination.display())
                 });
             }
         };
@@ -124,14 +158,16 @@ impl SourceRevision {
         if !metadata.is_file() {
             bail!(
                 "Config source {} is not a regular file",
-                final_path.display()
+                destination.display()
             );
         }
-        let bytes = fs::read(&final_path)
-            .with_context(|| format!("Failed to read config from {}", final_path.display()))?;
+        let bytes = fs::read(&destination)
+            .with_context(|| format!("Failed to read config from {}", destination.display()))?;
         Ok(Self::Present {
-            bytes: Arc::from(bytes.into_boxed_slice()),
+            bytes,
+            identity: FileIdentity::of(&metadata),
             followed_links,
+            destination,
         })
     }
 
@@ -149,27 +185,162 @@ impl SourceRevision {
         }
     }
 
-    fn destination_path<'a>(&'a self, source_path: &'a Path) -> &'a Path {
+    /// What the rename must still find at the destination.
+    ///
+    /// The comparisons this document makes are syscalls of their own, and the
+    /// rename is another; between them anything that is not one of the writers
+    /// the lock binds can replace the file or rewrite it in place. Carrying the
+    /// checked file's identity and exact bytes down to the write makes the
+    /// rename conditional on the complete revision — and a load that found
+    /// nothing expects to find nothing, because a file that appeared in the
+    /// meantime is somebody's creation and overwriting it would discard it
+    /// unread.
+    fn expectation(&self) -> DestinationExpectation<'_> {
         match self {
-            Self::Missing { followed_links } | Self::Present { followed_links, .. } => {
+            Self::Missing { .. } => DestinationExpectation::Absent,
+            Self::Present {
+                bytes, identity, ..
+            } => DestinationExpectation::Present {
+                identity: *identity,
+                contents: bytes,
+            },
+        }
+    }
+
+    /// The symlink chain the load walked, link by link.
+    ///
+    /// Part of the revision, not a detail of it: a config path that resolves
+    /// somewhere else than it did is a different file, whatever bytes happen to
+    /// be in it.
+    fn followed_links(&self) -> &[(PathBuf, PathBuf)] {
+        match self {
+            Self::Missing { followed_links, .. } | Self::Present { followed_links, .. } => {
                 followed_links
-                    .last()
-                    .map_or(source_path, |(_, target)| target.as_path())
             }
         }
     }
 
-    fn after_write(&self, bytes: &[u8]) -> Self {
-        let followed_links = match self {
-            Self::Missing { followed_links } | Self::Present { followed_links, .. } => {
-                Arc::clone(followed_links)
-            }
-        };
-        Self::Present {
-            bytes: Arc::from(bytes),
-            followed_links,
+    /// The file that chain ends at, with every symlink on its path resolved —
+    /// where the bytes were read from, and the only path a save may write.
+    fn destination(&self) -> &Path {
+        match self {
+            Self::Missing { destination, .. } | Self::Present { destination, .. } => destination,
         }
     }
+
+    /// The revision a save leaves behind: the text it wrote, in the file it
+    /// created.
+    ///
+    /// `identity` comes from the write rather than from a fresh look at the
+    /// path, because the two are not the same claim — a look afterwards would
+    /// name whoever wrote last, and this revision is about what *this* save
+    /// put there. Naming it exactly is what lets the next save through: it
+    /// compares the destination against this identity, and a guess would refuse
+    /// an ordinary second save as a change on disk.
+    fn after_write(&self, bytes: &[u8], identity: FileIdentity) -> Self {
+        let (followed_links, destination) = match self {
+            Self::Missing {
+                followed_links,
+                destination,
+            }
+            | Self::Present {
+                followed_links,
+                destination,
+                ..
+            } => (followed_links.clone(), destination.clone()),
+        };
+        Self::Present {
+            bytes: bytes.to_vec(),
+            identity,
+            followed_links,
+            destination,
+        }
+    }
+}
+
+/// The destination with every symlink on its path resolved, not only the ones
+/// on its last component.
+///
+/// [`resolve_symlink_chain`] answers what the final component points at, which
+/// is a smaller question than which file the path names. A config path whose
+/// *parent* is a link — `~/.config/wayscriber/active/config.toml`, with `active`
+/// pointing at one profile directory — starts naming a different file the moment
+/// that link is retargeted, and nothing about its final component moves when it
+/// happens. Canonicalizing the directory is what turns the loaded path into a
+/// file the save can hold on to: the lock, the comparisons, and the rename all
+/// address the profile the document was read from, so a retarget between load
+/// and save is a stale source rather than an edit written into somebody else's
+/// profile.
+///
+/// The last component is deliberately left as the chain resolved it. Resolving
+/// it again would undo that work, and it may name nothing at all — a dangling
+/// link's target is created by the first save. The walk falls back to the
+/// deepest ancestor that does exist for the same reason: a config directory the
+/// save is about to create has to pin the same way before and after
+/// `prepare_config_parent` makes it, or the first save into a fresh
+/// `~/.config/wayscriber/` would report its own directory as a change on disk.
+///
+/// A relative path is anchored to the current directory before any of that.
+/// Only a relative path can run the walk out — an absolute one always ends at
+/// `/`, which exists — and what it would leave behind is a pin that still says
+/// what the caller typed. That is not a stable answer: the save creates the
+/// directories, the next derivation finds them and canonicalizes through them,
+/// and the two disagree about which file the window was about, so the save
+/// reports its own `mkdir` as somebody else's retarget. Resolving the anchor
+/// first makes both derivations name the same absolute file, before and after
+/// the directories exist.
+fn pin_destination(final_path: &Path) -> Result<PathBuf> {
+    let Some(file_name) = final_path.file_name() else {
+        bail!(
+            "Config source {} does not name a file",
+            final_path.display()
+        );
+    };
+    let anchored = (!final_path.is_absolute())
+        .then(|| -> Result<PathBuf> {
+            let current_directory = fs::canonicalize(".").with_context(|| {
+                format!(
+                    "Failed to resolve the current directory for the config source {}",
+                    final_path.display()
+                )
+            })?;
+            Ok(current_directory.join(final_path))
+        })
+        .transpose()?;
+    let final_path = anchored.as_deref().unwrap_or(final_path);
+    let mut trailing = vec![file_name.to_os_string()];
+    let mut current = final_path.parent();
+    while let Some(directory) = current {
+        if directory.as_os_str().is_empty() {
+            break;
+        }
+        match fs::canonicalize(directory) {
+            Ok(mut pinned) => {
+                pinned.extend(trailing.iter().rev());
+                return Ok(pinned);
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                let Some(name) = directory.file_name() else {
+                    break;
+                };
+                trailing.push(name.to_os_string());
+                current = directory.parent();
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "Failed to resolve the config directory {}",
+                        directory.display()
+                    )
+                });
+            }
+        }
+    }
+    // Nothing on the path exists to resolve against, which a `..` sitting above
+    // a directory that is not there can still reach. The path is absolute by
+    // now, so it stands as the chain left it and pins the same way at the next
+    // comparison whatever the save creates in between.
+    Ok(final_path.to_path_buf())
 }
 
 #[derive(Debug)]
@@ -307,19 +478,62 @@ impl ConfigDocument {
     /// comments, ordering, unknown settings, and compatible TOML formatting,
     /// after copying the previous contents to a timestamped `.bak`.
     ///
-    /// The application's only durable `config.toml` write. It exists for the
-    /// configurator's explicit Save control: nothing that merely runs — overlay
-    /// startup, a toolbar toggle, a tray action, shutdown — reaches it, so the
-    /// file stays exactly as authored for the life of every other process.
+    /// The application's only durable `config.toml` write. Every writer goes
+    /// through it: the configurator's explicit Save, which hands back a whole
+    /// edited draft, and the overlay's narrow editors in `io.rs`, which each
+    /// hand back the loaded config with one value changed. Nothing that merely
+    /// runs — overlay startup, a toolbar toggle, a tray action, shutdown —
+    /// reaches it, so the file stays exactly as authored unless the user
+    /// deliberately edits it.
+    ///
+    /// The write window is held under an advisory lock on a sibling lock file
+    /// (see `lock.rs`), so two of those writers in two processes cannot both
+    /// pass the revision check and have the second rename discard the first.
+    ///
+    /// The lock binds the writers that take it, which is every writer this
+    /// application has and no one else's. So the window does not rest on it
+    /// alone: the identity and exact contents that were checked are carried down
+    /// to the rename. An editor outside this application that replaces the file
+    /// or rewrites it in place gets a stale-source error here rather than having
+    /// its work quietly overwritten, and the editors reload and reapply onto
+    /// what the path holds now.
+    ///
+    /// The window is about one file, named once. The lock, the byte
+    /// comparisons, and the rename all address the destination this document
+    /// loaded from — the end of the symlink chain it recorded, resolved through
+    /// its directories as well as its final component — so a link retargeted
+    /// while the window is open cannot move the write to a file nobody locked
+    /// and nobody compared.
     pub fn save_with_backup(&self, mut config: Config) -> Result<ConfigDocumentSaveOutcome> {
         config.validate_and_clamp();
-        self.merge_and_write(&self.config, &config)
+        self.merge_and_write(&self.config, &config, &mut || {})
+    }
+
+    /// [`Self::save_with_backup`], with the write window opened for the suite.
+    ///
+    /// `before_write` runs after the source bytes, the identity, and the symlink
+    /// chain were last compared and before the merged text is renamed into
+    /// place — the one stretch another writer can still arrive in unseen by any
+    /// of those checks. Staging that arrival any other way would be a race
+    /// rather than a test, and it is what the two properties above are stated
+    /// against: a retarget of the path leaves the rename on the file the window
+    /// was about, and a replacement of that file itself is refused by the
+    /// expectation the rename carries.
+    #[cfg(test)]
+    pub(crate) fn save_with_backup_racing_the_write(
+        &self,
+        mut config: Config,
+        before_write: &mut dyn FnMut(),
+    ) -> Result<ConfigDocumentSaveOutcome> {
+        config.validate_and_clamp();
+        self.merge_and_write(&self.config, &config, before_write)
     }
 
     fn merge_and_write(
         &self,
         previous: &Config,
         updated: &Config,
+        before_write: &mut dyn FnMut(),
     ) -> Result<ConfigDocumentSaveOutcome> {
         let repair_source = self
             .repair_mode
@@ -344,15 +558,54 @@ impl ConfigDocument {
             }
         };
 
+        // The file this window is about, resolved once — through its parent
+        // directories as much as through its own final component. Everything
+        // below addresses it by this path: the lock, the two comparisons, and
+        // the rename. Naming the config path again at any of those steps would
+        // resolve it a second time, and a link retargeted since the last
+        // comparison — the leaf, or a directory above it — would take that step
+        // somewhere else: a lock on one file and a rename onto another, whose
+        // bytes nothing checked.
+        let destination = self.revision.destination();
+        prepare_config_parent(destination)?;
+        // Everything from here to the rename is one window. The comparison
+        // below only means anything while no other writer can rename between it
+        // and this write, and the two are separate syscalls in separate
+        // processes; the lock is what makes them one step. The loser of the race
+        // finds the file changed and reports it, which the editors' reload-and-
+        // reapply retry recovers from — where without the lock both writers
+        // would pass the comparison and the second rename would drop the first
+        // edit with both reporting success.
+        let _write_lock = acquire_config_write_lock(destination, CONFIG_WRITE_LOCK_TIMEOUT)?;
         self.ensure_source_unchanged()?;
-        prepare_config_parent(self.revision.destination_path(&self.source_path))?;
         let backup_path = match self.revision {
+            // Through the config path on purpose, unlike the rename below: the
+            // copy belongs beside the path the user knows, not beside the file a
+            // link happens to point at (pinned by
+            // `save_with_backup_preserves_symlinked_config_target_and_backup_contents`).
+            // It sits between the two comparisons, so a retarget arriving around
+            // it is caught by the second one and nothing is written.
             SourceRevision::Present { .. } => Some(create_config_backup(&self.source_path)?),
             SourceRevision::Missing { .. } => None,
         };
         self.ensure_source_unchanged()?;
-        write_config_text_atomic(&self.source_path, &output, self.revision.overwrite_mode())?;
-        let revision = self.revision.after_write(output.as_bytes());
+        before_write();
+        // The comparison above and the rename below are still separate syscalls,
+        // and the lock only binds the writers that take it. What closes the rest
+        // of the distance is the expectation: the rename is conditional on the
+        // destination still having the identity and exact bytes this document
+        // read, so both replacement and in-place edits are refused rather than
+        // silently overwritten. What that leaves is documented at
+        // `finalize_temp_file`, where the check sits: one look at the
+        // destination and one rename, adjacent, with no syscall able to close
+        // the gap between them.
+        let identity = write_config_text_atomic(
+            destination,
+            &output,
+            self.revision.overwrite_mode(),
+            self.revision.expectation(),
+        )?;
+        let revision = self.revision.after_write(output.as_bytes(), identity);
 
         Ok(ConfigDocumentSaveOutcome {
             document: Self {
@@ -369,8 +622,46 @@ impl ConfigDocument {
         })
     }
 
+    /// Whether the file this document loaded is still the file it would write.
+    ///
+    /// Three things can end that. The bytes can change, which is the ordinary
+    /// second writer. The file can be replaced, which the bytes need not show:
+    /// a rename-away and a fresh file under the same name can hold identical
+    /// text and still be a file this document never read, so the identity is
+    /// compared as well as the contents. Or the config path can start resolving
+    /// somewhere else, which is not a smaller version of either: a retargeted
+    /// link means the bytes being compared are a different file's, and the
+    /// document's edit was merged into text that path no longer holds. Each is
+    /// reported on its own terms, with the same "changed on disk" wording the
+    /// editors' reload-and-reapply retry recognises, because the recovery is the
+    /// same — load what the path names now and reapply the edit onto it.
+    ///
+    /// The destination is re-derived here rather than re-read from the loaded
+    /// revision, and it is derived the same way the load derived it: whole path,
+    /// directories included. A link one level up — a profile directory swapped
+    /// under a stable `config.toml` — moves the file the path names without
+    /// touching the final component or the bytes at the end of it, so nothing
+    /// else here would notice, and the save would land in the profile the user
+    /// switched *to* while reporting that it wrote the one they switched from.
     fn ensure_source_unchanged(&self) -> Result<()> {
         let current = SourceRevision::read(&self.source_path)?;
+        if current.destination() != self.revision.destination() {
+            bail!(
+                "Configuration changed on disk at {}: it now resolves to {} rather than {}. \
+                 Reload before saving.",
+                self.source_path.display(),
+                current.destination().display(),
+                self.revision.destination().display(),
+            );
+        }
+        if current.followed_links() != self.revision.followed_links() {
+            bail!(
+                "Configuration changed on disk at {}: it reaches {} through different links \
+                 than it did. Reload before saving.",
+                self.source_path.display(),
+                self.revision.destination().display(),
+            );
+        }
         if current != self.revision {
             bail!(
                 "Configuration changed on disk at {}. Reload before saving.",

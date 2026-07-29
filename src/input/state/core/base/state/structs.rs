@@ -16,12 +16,13 @@ use super::super::super::{
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
-    DelayedHistory, DrawingState, OutputFocusAction, PendingBackendAction, PendingBoardDelete,
-    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
+    DelayedHistory, DrawingState, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
+    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PolygonClickState, PresetAction, PresetFeedbackState,
-    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionPublishState,
-    StatusChangeHighlight, TextBlockDrag, TextClickState, TextClipboardRequest,
-    TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState, ZoomAction,
+    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
+    SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
+    TextClipboardRequest, TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState,
+    ZoomAction,
 };
 use crate::config::{
     Action, KeyBinding, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding,
@@ -210,6 +211,8 @@ pub struct InputState {
     pub command_palette_recent: Vec<Action>,
     /// Whether the recents changed since the backend last persisted them.
     pub(crate) command_palette_recents_dirty: bool,
+    /// Action whose next keyboard chord is being captured for rebinding.
+    pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
     /// Whether the status bar is currently visible (toggled via keybinding)
@@ -395,6 +398,14 @@ pub struct InputState {
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
+    /// Shortcut edits waiting for the backend, oldest first.
+    ///
+    /// A queue, not a slot: the palette can record several edits between two
+    /// drains — a capture and then a correction land in the same input batch —
+    /// and each one is a separate write to `config.toml` with its own answer
+    /// and its own toast. Last-action-wins would drop the earlier edit with
+    /// nothing said about it.
+    pub(in crate::input::state::core) pending_keybinding_edits: Vec<KeybindingEditRequest>,
     /// Whether this run already said that an overlay preference toggle is a
     /// current-run change. Said once: every later toggle has the same scope.
     pub(in crate::input::state::core) process_only_preference_notice_shown: bool,
@@ -626,6 +637,8 @@ pub struct InputState {
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence
     pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
+    /// Accepted quick-color recolor awaiting the backend's `config.toml` write
+    pub(in crate::input::state::core) pending_quick_color_edit: Option<QuickColorEdit>,
     /// Ordered runtime UI actions for board pins and board identity changes.
     pub(in crate::input::state::core) pending_board_runtime_ui: Vec<PendingBoardRuntimeUiAction>,
     /// Whether the guided tour is currently active

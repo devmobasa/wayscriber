@@ -107,6 +107,8 @@ mod gtk_toolbar;
 mod helpers;
 mod input_actions;
 mod input_hud;
+mod keybindings;
+pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
 mod onboarding;
 mod pdf_export;
 mod perf;
@@ -115,6 +117,7 @@ mod text_clipboard;
 mod toolbar;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::clamp_floating_axis_offset;
+pub(in crate::backend::wayland) use toolbar::{queue_preset_action, queue_quick_color_edit};
 mod zoom;
 
 #[cfg(test)]
@@ -251,6 +254,8 @@ pub(super) struct WaylandState {
     pub(super) onboarding: crate::onboarding::OnboardingStore,
     /// Background persistence worker for command-palette recents.
     pub(super) palette_recents: crate::palette_recents::PaletteRecentsWriter,
+    /// Off-dispatch writer for the three explicit `config.toml` edit gestures.
+    pub(super) config_edits: crate::backend::wayland::config_edits::ConfigEditWorker,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,
     // Animation interval; None means uncapped (render every frame while active).

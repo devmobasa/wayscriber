@@ -6,6 +6,8 @@ mod migration;
 #[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
+mod write_lock;
+mod write_target;
 
 use super::{Config, ConfigDocument};
 use std::path::PathBuf;

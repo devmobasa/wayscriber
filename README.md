@@ -155,7 +155,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Status bar with independently configurable output, selection, board, page, color, tool, size, context, toolbar-hint, Help, and About/version items
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
 - Command palette (<kbd>Ctrl+K</kbd> or <kbd>Ctrl+Shift+P</kbd>)
-- Search, run, edit, unbind, or reset action shortcuts from the command palette; hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> while clicking a bindable toolbar control for direct shortcut capture (the modifier chord is configurable)
+- Search, run, edit, unbind, or reset action shortcuts from the command palette; hold <kbd>Ctrl</kbd>+<kbd>Shift</kbd> while clicking a bindable toolbar control for direct shortcut capture (the modifier chord is configurable). An accepted shortcut is written straight back to `config.toml` — only that action's entry, with a timestamped `.bak` — and <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator
 
 ### Multi-monitor
 - Move overlay focus between monitors: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
@@ -895,7 +895,7 @@ Notes:
 
 - Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>.
 - Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`).
-- Preset slots can be saved/cleared from the toolbar for the current run; keep a slot, and edit names and advanced fields, in the configurator's Presets tab.
+- Preset slots can be saved/cleared from the toolbar; the slot changes right away and is written back to `config.toml` on a background worker, with the toast confirming it once the file has it. Edit names and advanced fields in the configurator's Presets tab.
 - The blur tool has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
 
 ---
@@ -917,10 +917,12 @@ wayscriber-configurator   # or press F11
 
 See `docs/CONFIG.md` and https://wayscriber.com/docs/ for the full reference.
 
-`config.toml` contains authored defaults, and the configurator's **Save** is the only thing that
-writes it — running, using, and quitting Wayscriber never changes the file. An overlay control that
-changes a configured default applies to the current run and offers a route to the configurator
-screen that owns it.
+`config.toml` contains authored defaults, and it changes only through an explicit user edit action —
+never automatically. Two things write it: the configurator's **Save**, and the overlay's three
+narrow editors (shortcut editing, preset slots, and the quick-color palette), each of which rewrites
+only its own key and copies the previous file to a timestamped `.bak` first. Running, using, and
+quitting Wayscriber never changes the file on its own. An incidental preference toggle applies to
+the current run and offers a route to the configurator screen that owns its default.
 
 Toolbar pins, dragged positions, the top strip's display form, minimized/pane/collapsed state,
 individual toolbar item visibility/order, and board pins changed in the overlay are direct
@@ -972,7 +974,7 @@ Drag modifier mappings are configurable via `[drawing]` (`drag_tool`, `shift_dra
 
 The quick color palette is configurable with ordered `[[drawing.quick_colors]]` entries. The first eight entries map to the <kbd>R</kbd>/<kbd>G</kbd>/<kbd>B</kbd>/<kbd>Y</kbd>/<kbd>O</kbd>/<kbd>P</kbd>/<kbd>W</kbd>/<kbd>K</kbd> shortcuts; if fewer are configured by hand, missing shortcut positions use the built-in defaults. The implicit default toolbar palette also preserves Cyan, Purple, and Gray as expanded toolbar colors while the radial menu keeps its original first-eight color ring. Explicit entries beyond the first eight have no shortcut action binding and opt those extra colors into dense palette UIs, capped to the first 24 colors.
 
-You can also recolor the palette without touching the file: **right-click any swatch** to open the color picker for that slot. The swatch updates live as you drag, OK applies the color for the current run, and Cancel restores it; keep a recolored palette in the configurator's Drawing tab. The slot keeps its label and shortcut, so <kbd>R</kbd> still selects the red slot after you point it at a different red. Recoloring the swatch you are drawing with moves the live color along with it. Left-click still just selects a swatch, and the leftmost chip still opens the picker for the active tool's own color.
+You can also recolor the palette without opening an editor: **right-click any swatch** to open the color picker for that slot. The swatch updates live as you drag, OK saves that one entry's color back to `config.toml` (leaving your other settings and comments alone, with a timestamped `.bak`), and Cancel restores it. The slot keeps its label and shortcut, so <kbd>R</kbd> still selects the red slot after you point it at a different red. Recoloring the swatch you are drawing with moves the live color along with it. Left-click still just selects a swatch, and the leftmost chip still opens the picker for the active tool's own color.
 
 Changed your mind? The recolor picker carries a **Default** button that loads the color wayscriber ships for that slot. It stages the color like any other pick, so the swatch previews it and OK/Cancel still decide. It appears only for the eleven built-in slots — extra colors you added yourself have no shipped default to restore.
 

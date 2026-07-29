@@ -5,9 +5,13 @@
 #
 # Every value here is a configured default: the value Wayscriber starts from.
 # Edit them in the graphical configurator (`wayscriber-configurator`, or F11
-# from the overlay) or by hand. The configurator's Save is the only thing that
-# writes this file — running, using, and quitting Wayscriber never changes it,
-# and a preference you flip from the overlay applies to that run only.
+# from the overlay) or by hand. Two things write this file: the configurator's
+# Save, and the overlay's three narrow editors — shortcut edit/unbind/reset,
+# preset save/clear, and quick-color recoloring — each of which rewrites only
+# its own key at the moment you confirm the edit and copies the previous file
+# to a timestamped .bak. Running, using, and quitting Wayscriber never changes
+# it on its own, and a preference you flip from the overlay applies to that run
+# only.
 #
 # Overlay changes to toolbar pins, minimized/pane/collapsed state, toolbar item
 # visibility/order, and board pins are direct interaction state, stored
@@ -631,7 +635,10 @@ side_offset_x = 0.0
 force_inline = false
 
 # Hold this modifier chord while clicking a bindable toolbar control to edit
-# its shortcut. Values: "ctrl_shift", "ctrl_alt", "shift_alt",
+# its shortcut. The captured chord applies immediately and is written back to
+# that action's [keybindings] entry here, with the previous file copied to a
+# timestamped .bak. A chord another action already owns is refused and nothing
+# is written. Values: "ctrl_shift", "ctrl_alt", "shift_alt",
 # "ctrl_shift_alt", or "disabled".
 rebind_modifier = "ctrl_shift"
 
@@ -1170,11 +1177,11 @@ text_background_enabled = false
 #
 # Right-clicking a swatch in the overlay opens the color picker for that slot
 # and saves the accepted color back here as an RGB array, or an RGBA array when
-# the color is translucent, keeping the slot's label and shortcut. The first
-# such edit writes the whole list, so a palette left out of this file stops
-# tracking future built-in defaults. That picker's "Default" button loads the
-# color shipped for the slot again (built-in slots only), still requiring OK to
-# save.
+# the color is translucent, keeping the slot's label and shortcut. Recoloring a
+# slot this file only implies writes the palette out up to that slot, so a
+# palette left out of this file stops tracking future built-in defaults from
+# there on. That picker's "Default" button loads the color shipped for the slot
+# again (built-in slots only), still requiring OK to save.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"

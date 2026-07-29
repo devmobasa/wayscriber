@@ -2,7 +2,7 @@
 
 Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on [`iced`](https://github.com/iced-rs/iced) and reuses the `wayscriber::Config` types directly, so validation and defaults match the CLI. It also retains the original TOML document so comments, ordering, and settings unknown to this build survive a save.
 
-This is the only program that writes `config.toml`, and only when you press **Save**. Nothing else in Wayscriber — overlay, daemon, tray, startup, shutdown — ever changes the file, so an overlay preference toggle applies to that run and sends you here for a durable change.
+`config.toml` changes only through an explicit user edit action, never automatically. This program writes it when you press **Save**; the overlay writes it from three narrow editors — shortcut editing, preset slots, and the quick-color palette — each of which rewrites only its own key and backs the file up first. Nothing else in Wayscriber — daemon, tray, startup, shutdown, validation — ever changes it, so an incidental preference toggle applies to that run and sends you here for a durable change.
 
 ## Prerequisites
 

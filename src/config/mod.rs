@@ -14,7 +14,7 @@ pub mod types;
 mod core;
 mod document;
 mod field_metadata;
-mod io;
+pub(crate) mod io;
 mod migration;
 mod paths;
 #[cfg(feature = "config-schema")]
@@ -35,6 +35,7 @@ pub use action_meta::{
 pub use core::{CURRENT_CONFIG_REVISION, Config};
 pub use document::{
     ConfigDiagnostic, ConfigDiagnosticKind, ConfigDocument, ConfigDocumentSaveOutcome,
+    ConfigWriteLockTimeout,
 };
 pub use enums::{
     RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
@@ -45,7 +46,11 @@ pub use field_metadata::{
     PerformanceFieldId, PerformanceFieldMetadata, ScalarConstraint, performance_field_metadata,
 };
 #[allow(unused_imports)]
-pub use io::{ConfigSource, LoadedConfig};
+pub use io::{
+    ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, ConfigSource, LoadedConfig,
+    QuickColorSlotMissing, ShortcutClaimedOnDisk, persist_keybinding_edit, persist_preset_slot,
+    persist_quick_color,
+};
 pub use keybindings::{
     Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,
 };

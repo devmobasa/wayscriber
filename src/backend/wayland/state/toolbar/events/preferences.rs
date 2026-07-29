@@ -1,9 +1,12 @@
 //! Authored preferences an overlay control changes for the current run.
 //!
-//! `config.toml` is an authored input the configurator alone writes, so these
-//! toggles never reach disk. They update the effective config the running
-//! overlay reads — the toolbar seed derivation is the live consumer — and the
-//! next start reads the configured value back.
+//! `config.toml` is an authored input, changed only by an explicit user edit
+//! action: the configurator's Save, or one of the overlay's three scoped edits
+//! — a shortcut rebind, a preset slot, a quick-color swatch. Flipping a
+//! preference is not one of them, so these toggles never reach disk. They
+//! update the effective config the running overlay reads — the toolbar seed
+//! derivation is the live consumer — and the next start reads the configured
+//! value back.
 
 use super::*;
 use crate::config::{

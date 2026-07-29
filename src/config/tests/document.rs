@@ -474,11 +474,8 @@ fn no_op_save_preserves_integer_spelling_for_float_fields() {
     assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
 }
 
-#[test]
-fn document_save_canonicalizes_key_aliases_and_preserves_their_comments() {
-    let temp = TempConfig::new("aliases");
-    temp.write(
-        r#"[ui]
+/// A file that still spells three settings the old way.
+const ALIASED_SOURCE: &str = r#"[ui]
 # floating badge alias comment
 show_page_badge_with_status_bar = true
 show_status_bar = false
@@ -493,16 +490,33 @@ show_presets = true
 id = "one"
 name = "One"
 future_profile_key = "keep"
-"#,
-    );
+"#;
+
+/// An alias the save writes over has to be renamed first: serde takes either
+/// spelling but not both, so the old key left beside the canonical one the
+/// merge inserts would make the file unloadable.
+#[test]
+fn document_save_canonicalizes_the_key_aliases_it_writes_and_preserves_their_comments() {
+    let temp = TempConfig::new("aliases");
+    temp.write(ALIASED_SOURCE);
     let document = ConfigDocument::load_from_path(&temp.path).expect("load aliases");
+
+    let mut updated = document.config().clone();
+    updated.ui.show_floating_badge_always = false;
+    updated.ui.toolbar.mode_overrides.regular.show_presets = Some(false);
+    updated
+        .render_profiles
+        .profiles
+        .first_mut()
+        .expect("the fixture authors one profile")
+        .name = "Renamed".to_string();
     document
-        .save_with_backup(document.config().clone())
+        .save_with_backup(updated)
         .expect("save canonical aliases");
     let saved = fs::read_to_string(&temp.path).expect("read canonical aliases");
 
     assert!(!saved.contains("show_page_badge_with_status_bar"));
-    assert!(saved.contains("show_floating_badge_always = true"));
+    assert!(saved.contains("show_floating_badge_always = false"));
     assert!(
         saved.find("show_floating_badge_always").unwrap() < saved.find("show_status_bar").unwrap()
     );
@@ -520,6 +534,35 @@ future_profile_key = "keep"
     }
     assert!(saved.contains("future_profile_key = \"keep\""));
     toml::from_str::<Config>(&saved).expect("canonical output parses exactly once");
+}
+
+/// The other half of the same rule: a save that does not write the aliased
+/// setting leaves its spelling alone.
+///
+/// Renaming it anyway would put settings the caller never touched into the
+/// diff — a recolored swatch respelling an unrelated `[ui]` key — which is
+/// exactly what the narrow editors promise cannot happen. The old spelling
+/// still loads; the save that does change the value renames it then.
+#[test]
+fn document_save_leaves_the_key_aliases_it_does_not_write_alone() {
+    let temp = TempConfig::new("aliases-untouched");
+    temp.write(ALIASED_SOURCE);
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load aliases");
+
+    // A delta somewhere else entirely, the shape every narrow editor produces.
+    let mut updated = document.config().clone();
+    updated.drawing.default_thickness = 7.0;
+    document
+        .save_with_backup(updated)
+        .expect("save an unrelated key");
+    let saved = fs::read_to_string(&temp.path).expect("read the saved config");
+
+    assert!(saved.contains("default_thickness = 7.0"));
+    assert!(saved.contains("show_page_badge_with_status_bar = true"));
+    assert!(!saved.contains("show_floating_badge_always"));
+    assert!(saved.contains("[ui.toolbar.mode_overrides.full]"));
+    assert!(saved.contains("[[render_profiles.items]]"));
+    toml::from_str::<Config>(&saved).expect("the untouched aliases still parse");
 }
 
 #[test]

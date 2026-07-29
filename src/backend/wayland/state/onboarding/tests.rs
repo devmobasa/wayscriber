@@ -262,7 +262,7 @@ fn shortcut_rebind_footer_uses_configured_modifier() {
     ] {
         let footer = shortcut_rebind_footer(modifier);
         assert!(footer.contains(expected_chord), "footer={footer:?}");
-        assert!(footer.contains("bindable toolbar control to edit its shortcut"));
+        assert!(footer.contains("bindable toolbar control to rebind"));
     }
 
     assert!(shortcut_rebind_footer(ToolbarRebindModifier::Disabled).contains("editing disabled"));

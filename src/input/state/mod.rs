@@ -29,7 +29,7 @@ pub use core::{
     HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState, MAX_STROKE_THICKNESS,
     MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
     PickerDrag, PrecisionEntryState, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
-    PressureThicknessEntryMode, RADIAL_COMPASS_SLICES, RADIAL_PAINT_DELAY,
+    PressureThicknessEntryMode, QuickColorEdit, RADIAL_COMPASS_SLICES, RADIAL_PAINT_DELAY,
     RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent, RadialRingSwatch,
     RadialSegmentId, RadialSlice, RadialSliceKind, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
     SelectionAxis, SelectionHandle, SelectionPropertyEntry, SelectionPropertyKind, SelectionState,
@@ -40,16 +40,18 @@ pub use core::{
 };
 pub(crate) use core::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ICON_GAP,
-    COMMAND_PALETTE_ROW_ICON_SIZE, action_meta_token_score, default_step_marker_size, fuzzy_score,
-    query_tokens,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
+    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score,
+    default_step_marker_size, fuzzy_score, query_tokens,
 };
 #[allow(unused_imports)]
 pub(crate) use core::{
     ClipboardFingerprint, ClipboardPasteRequest, HelpOverlayPressSource, HexPasteTarget,
-    PasteAnchor, PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
-    SelectionPublishState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
-    ToastPress, WayscriberClipboardSelection,
+    KeybindingEditOperation, KeybindingEditRequest, PasteAnchor, PendingBackendAction,
+    PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
+    TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastPress,
+    WayscriberClipboardSelection,
 };
 pub use highlight::ClickHighlightSettings;
 #[allow(unused_imports)]

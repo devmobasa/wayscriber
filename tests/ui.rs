@@ -1,6 +1,7 @@
 use cairo::{Context, ImageSurface};
 use wayscriber::config::{
-    HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle, StatusPosition,
+    Action, HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle,
+    StatusPosition,
 };
 use wayscriber::draw::{Color, Shape};
 use wayscriber::input::{
@@ -174,6 +175,18 @@ fn render_command_palette_with_query_draws_content() {
     input.command_palette_query = "tool".to_string();
 
     wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
+
+    drop(ctx);
+    assert!(surface_has_pixels(&mut surface));
+}
+
+#[test]
+fn render_keybinding_capture_draws_content() {
+    let (mut surface, ctx) = surface_with_context(800, 600);
+    let mut input = make_input_state();
+    input.keybinding_capture_action = Some(Action::SelectPenTool);
+
+    wayscriber::ui::render_command_palette(&ctx, &input, 800, 600);
 
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));

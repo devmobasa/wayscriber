@@ -141,7 +141,7 @@ fn followed_symlink_change_is_rejected_before_finalization() {
     fs::remove_file(&link).unwrap();
     symlink(&second, &link).unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
     assert_eq!(fs::read_to_string(first).unwrap(), "first");
@@ -162,7 +162,7 @@ fn followed_symlink_target_replacement_is_rejected_before_finalization() {
     fs::remove_file(&target).unwrap();
     fs::write(&target, "replacement").unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
 }
@@ -179,9 +179,80 @@ fn follow_policy_detects_replaced_regular_file() {
     fs::remove_file(&path).unwrap();
     fs::write(&path, "replacement").unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
+}
+
+#[test]
+fn caller_expectation_detects_an_in_place_content_change() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let path = temp.path().join("config.toml");
+    fs::write(&path, "old").unwrap();
+    let identity = FileIdentity::of(&fs::metadata(&path).unwrap());
+    fs::write(&path, "changed in place").unwrap();
+
+    let error = verify_expectation(
+        &path,
+        Some(DestinationExpectation::Present {
+            identity,
+            contents: b"old",
+        }),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, DurableIoError::DestinationChanged { .. }));
+    assert_eq!(fs::read_to_string(path).unwrap(), "changed in place");
+}
+
+/// The last stretch, for a write that was creating the file.
+///
+/// `RENAME_NOREPLACE` refuses a name that filled up after the check above, so
+/// nothing is overwritten either way — but the two callers asked different
+/// questions. A plain write found a file it was never told about, and
+/// `AlreadyExists` answers that. A write carrying an expectation was told the
+/// name was free, so what it is finding out is that its expectation broke, which
+/// is the wording that sends a config editor round to reload and reapply rather
+/// than reporting a failed save. The classification is exercised directly
+/// because staging the situation would mean winning a race against the rename
+/// itself.
+#[test]
+fn a_conditional_create_that_loses_the_final_race_reports_a_changed_destination() {
+    let path = Path::new("config.toml");
+
+    assert!(matches!(
+        finalize_rename_error(
+            OverwriteMode::CreateNew,
+            Some(DestinationExpectation::Absent),
+            path,
+            io::Error::from(ErrorKind::AlreadyExists),
+        ),
+        DurableIoError::DestinationChanged {
+            operation: DurableIoOperation::FinalizeRename,
+            ..
+        }
+    ));
+    assert!(matches!(
+        finalize_rename_error(
+            OverwriteMode::CreateNew,
+            None,
+            path,
+            io::Error::from(ErrorKind::AlreadyExists),
+        ),
+        DurableIoError::AlreadyExists { .. }
+    ));
+    assert!(matches!(
+        finalize_rename_error(
+            OverwriteMode::CreateNew,
+            Some(DestinationExpectation::Absent),
+            path,
+            io::Error::from(ErrorKind::PermissionDenied),
+        ),
+        DurableIoError::Io {
+            operation: DurableIoOperation::FinalizeRename,
+            ..
+        }
+    ));
 }
 
 #[cfg(unix)]
@@ -212,7 +283,7 @@ fn reject_policy_rejects_final_path_changed_to_symlink() {
     fs::remove_file(&path).unwrap();
     symlink(&target, &path).unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::SymlinkRejected { path: actual } if actual == path));
 }
@@ -229,7 +300,7 @@ fn reject_policy_detects_replaced_regular_file() {
     fs::remove_file(&path).unwrap();
     fs::write(&path, "replacement").unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
 }
@@ -242,7 +313,7 @@ fn reject_policy_detects_created_regular_file_after_missing_inspect() {
     let destination = inspect_destination(&path, options).unwrap();
     fs::write(&path, "created-by-other-writer").unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::DestinationChanged {
             operation: DurableIoOperation::InspectDestination,
@@ -318,7 +389,7 @@ fn changed_intermediate_symlink_is_rejected_before_finalization() {
     fs::remove_file(&middle).unwrap();
     symlink("second.toml", &middle).unwrap();
 
-    let err = revalidate_destination(&destination, options).unwrap_err();
+    let err = revalidate_destination(&destination, options, None).unwrap_err();
 
     assert!(matches!(err, DurableIoError::DestinationChanged { .. }));
     assert_eq!(fs::read_to_string(first).unwrap(), "first");

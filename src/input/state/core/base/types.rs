@@ -255,6 +255,15 @@ pub enum PresetAction {
     },
 }
 
+/// An accepted quick-color recolor awaiting the backend's config write. The
+/// runtime palette is already updated; this carries what `config.toml` still
+/// needs (`drawing.quick_colors[index].color`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QuickColorEdit {
+    pub index: usize,
+    pub color: Color,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresetFeedbackKind {
     Apply,
@@ -442,6 +451,37 @@ pub enum PendingBackendAction {
     /// for the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
     PersistToolbarDisplayMode(crate::config::TopDisplayMode),
+}
+
+/// What a shortcut edit should do to one action's binding list.
+///
+/// `Replace` carries the chord the capture modal read; `Reset` resolves against
+/// the compiled defaults at apply time rather than storing them here, so the
+/// request stays a description of intent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeybindingEditOperation {
+    Replace(Vec<String>),
+    Delete,
+    Reset,
+}
+
+/// One action's shortcut edit, for the running keymap and for `config.toml`.
+///
+/// The backend writes just this action's `[keybindings]` entry through the
+/// narrow editor in `src/config/io.rs` before installing the new keymap, so a
+/// chord the file has since given to another action is refused outright. Any
+/// other save failure degrades to a this-run edit whose toast says the file did
+/// not get it.
+///
+/// These queue rather than replace one another. Each is a separate write with
+/// its own answer and its own toast, so a request the user made cannot be
+/// dropped by the next one arriving before the backend drains — which is why
+/// they ride `InputState::pending_keybinding_edits` and not the single-slot
+/// [`PendingBackendAction`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeybindingEditRequest {
+    pub action: Action,
+    pub operation: KeybindingEditOperation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -620,9 +620,9 @@ pub(super) fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
 pub(super) fn shortcut_rebind_footer(modifier: ToolbarRebindModifier) -> String {
     match modifier.click_label() {
         None => "Toolbar shortcut-click editing disabled • Shift+Escape to skip".to_string(),
-        Some(click) => format!(
-            "{click} a bindable toolbar control to edit its shortcut • Shift+Escape to skip"
-        ),
+        Some(click) => {
+            format!("{click} a bindable toolbar control to rebind • Shift+Escape to skip")
+        }
     }
 }
 

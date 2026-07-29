@@ -29,8 +29,12 @@ where
 
 /// Everything about a config path that reading it must leave alone.
 ///
-/// `config.toml` is an authored input: outside the configurator, no process may
-/// create, replace, truncate, rewrite, touch, chmod, or back it up. Contents
+/// `config.toml` is an authored input: outside an explicit user edit action —
+/// the configurator's Save, or one of the overlay's three scoped edits — no
+/// process may create, replace, truncate, rewrite, touch, chmod, or back it up.
+/// The callers of this snapshot are all the other paths, the ones that only
+/// read: loading, validating, running, and every gesture that is not one of
+/// those edits. Contents
 /// alone would not prove that — a rewrite with identical bytes still moves the
 /// mtime, a chmod changes nothing visible, and a `.bak` appears next to the
 /// file rather than in it — so the whole observable footprint is captured and

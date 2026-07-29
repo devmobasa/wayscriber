@@ -158,6 +158,9 @@ impl WaylandState {
             pending_text_paste: Default::default(),
             gtk_toolbar: None,
             onboarding,
+            config_edits: super::super::super::config_edits::ConfigEditWorker::new(
+                runtime_wake.clone(),
+            ),
             ui_animation_next_tick: None,
             ui_animation_interval,
             capture: CaptureState::new(capture_manager),

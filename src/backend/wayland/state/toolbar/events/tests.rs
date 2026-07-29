@@ -5,7 +5,7 @@ use super::session::{
 };
 use super::*;
 use crate::config::{
-    StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
+    Action, StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
 };
 use crate::draw::{Color, FontDescriptor};
 use crate::env_vars::XDG_DATA_HOME_ENV;
@@ -760,12 +760,43 @@ fn authored_preference_changes_leave_config_toml_untouched() {
     });
 }
 
-/// The toolbar's rebind gesture still selects a control's shortcut; what it
-/// does with it is open the configurator on the section that holds it. The
-/// dispatch arm asks these two functions in order, so this is the pair that
-/// decides where the gesture lands.
+/// The rebind gesture arms the capture modal for the control's own action, so
+/// the next chord the user presses rebinds that control and not the last row
+/// the palette happened to select.
 #[test]
-fn the_toolbar_rebind_gesture_targets_the_controls_keybindings_section() {
+fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
+    let mut input_state = make_test_input_state();
+
+    for (event, expected) in [
+        (ToolbarEvent::SelectTool(Tool::Pen), Action::SelectPenTool),
+        (ToolbarEvent::Undo, Action::Undo),
+        (
+            ToolbarEvent::ClearCanvas { instant: false },
+            Action::ClearCanvas,
+        ),
+    ] {
+        let action = crate::ui::toolbar::model::action_for_event(&event)
+            .unwrap_or_else(|| panic!("{event:?} should name an action"));
+        assert_eq!(action, expected, "{event:?} names the wrong action");
+
+        assert!(input_state.begin_keybinding_capture(action));
+        assert_eq!(
+            input_state.keybinding_capture_action,
+            Some(expected),
+            "{event:?} should arm capture for its own action"
+        );
+        assert!(
+            input_state.take_pending_keybinding_edits().is_empty(),
+            "arming capture must not queue an edit on its own"
+        );
+        input_state.keybinding_capture_action = None;
+    }
+}
+
+/// The configurator route the palette's Ctrl+Shift+E uses: the same actions
+/// resolve to the configurator section that holds their shortcut.
+#[test]
+fn the_toolbar_controls_actions_resolve_to_their_keybindings_section() {
     use crate::configurator_destination::keybindings_destination_for_action;
 
     for (event, expected) in [
@@ -792,7 +823,7 @@ fn the_toolbar_rebind_gesture_targets_the_controls_keybindings_section() {
 }
 
 #[test]
-fn the_command_palette_blocks_shared_toolbar_events() {
+fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     let mut input_state = make_test_input_state();
     assert!(!toolbar_event_blocked_by_modal(&input_state));
 
@@ -800,7 +831,8 @@ fn the_command_palette_blocks_shared_toolbar_events() {
     assert!(toolbar_event_blocked_by_modal(&input_state));
 
     input_state.toggle_command_palette();
-    assert!(!toolbar_event_blocked_by_modal(&input_state));
+    assert!(input_state.begin_keybinding_capture(Action::Undo));
+    assert!(toolbar_event_blocked_by_modal(&input_state));
 }
 
 #[test]

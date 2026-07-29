@@ -471,9 +471,10 @@ fn create_board_adds_board_and_emits_toast() {
 
 /// The live board set is session state now: creating, renaming, recoloring, and
 /// reordering boards touch the running app and nothing else. `config.toml`
-/// holds the templates a new session is seeded from, and only the configurator
-/// writes it — so the file keeps its bytes, its metadata, and its neighbours
-/// through every one of those gestures.
+/// holds the templates a new session is seeded from, and a board gesture is not
+/// one of the explicit user edit actions that may write it — the configurator's
+/// Save, and the overlay's shortcut, preset, and quick-color edits — so the file
+/// keeps its bytes, its metadata, and its neighbours through every one of them.
 #[test]
 fn live_board_edits_leave_the_config_file_untouched() {
     crate::config::test_helpers::with_temp_config_home(|config_root| {

@@ -61,9 +61,13 @@ pub enum KeybindingsSection {
 /// The Keybindings section that holds one action's shortcut, or `None` for an
 /// action with no `[keybindings]` field at all.
 ///
-/// The overlay no longer edits shortcuts, so every shortcut affordance it still
-/// offers is navigation: this is how it names the subtab the user should land
-/// on. The grouping is the configurator's, not the config file's — it splits
+/// The overlay's own shortcut edits are durable — the palette's Edit/Unbind/
+/// Reset write that one action's `[keybindings]` entry — so this is not a
+/// substitute for them. It names the subtab a toast's Edit chip should land on:
+/// after a refusal, where the file gave the chord to another action and the run
+/// kept its old shortcut, and after a save that landed, where the user may want
+/// to see the entry the overlay just wrote. The grouping is the
+/// configurator's, not the config file's — it splits
 /// `[keybindings].core` across General, Drawing, and History and merges the
 /// capture and zoom groups — so the correspondence cannot be derived from the
 /// storage layout and is spelled out here instead. `keybindings_tab_matches_the_action_section`

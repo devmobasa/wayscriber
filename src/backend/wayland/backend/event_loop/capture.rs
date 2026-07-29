@@ -86,13 +86,31 @@ pub(super) fn handle_pending_actions(
     state.handle_pending_eyedropper_toggle();
     // Copy/paste-hex requests from the color picker popup's pointer release are
     // drained here: unlike the toolbar/key paths, that release has no other
-    // drain site.
+    // drain site. An accepted quick-color recolor is queued from the same
+    // release (clicking OK), so its config write belongs here too — otherwise
+    // the swatch would look saved until some later key or toolbar event.
     if let Some(color) = state.input_state.take_pending_copy_hex_request() {
         state.handle_copy_hex_color(color);
     }
     if let Some(target) = state.input_state.take_pending_paste_hex_request() {
         state.handle_paste_hex_color(target);
     }
+    if let Some(edit) = state.input_state.take_pending_quick_color_edit() {
+        state.handle_quick_color_edit(edit);
+    }
+    // Every shortcut edit recorded since the last pass, not just the newest.
+    // One batch of input events can produce two of them — a captured chord and
+    // then a correction — and each is its own write with its own answer, so
+    // keeping only the last would lose an edit with no save and no toast.
+    for request in state.input_state.take_pending_keybinding_edits() {
+        state.handle_keybinding_edit(request);
+    }
+    // Config writes that finished on the worker since the last pass. A finished
+    // write is what installs a shortcut edit and what decides every one of the
+    // three gestures' toasts, so it is drained on the same cadence as the
+    // requests that produced it; the worker also wakes the loop when it
+    // completes, so the answer is not left waiting for unrelated input.
+    state.drain_config_edit_completions();
     handle_frozen_toggle(state);
     state.drain_pending_board_runtime_ui_actions();
 

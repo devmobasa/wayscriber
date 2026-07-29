@@ -388,8 +388,12 @@ impl Config {
     /// only if it is still free.
     ///
     /// The rest of both actions' bindings always survive, and the resolution
-    /// stays in memory: nothing outside the configurator writes `config.toml`,
-    /// so the file keeps the conflict until the user settles it (#293).
+    /// stays in memory. Loading is not one of the four explicit user edit
+    /// actions that may write `config.toml` — the configurator's Save, and the
+    /// overlay's shortcut, preset, and quick-color edits, each writing its own
+    /// scoped key — so the file keeps the conflict until the user settles it
+    /// (#293). A shortcut edit made here would rewrite that one action's key
+    /// and no other, so it cannot repair a conflict on its way past either.
     fn resolve_keybinding_conflicts(&mut self) -> Vec<KeybindingConflictResolution> {
         let conflicts = match self.explicit_keybindings().collect_binding_conflicts() {
             Ok(conflicts) => conflicts,

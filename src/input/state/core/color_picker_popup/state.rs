@@ -2,10 +2,9 @@
 
 use std::borrow::Cow;
 
-use crate::domain::Action;
 use crate::draw::Color;
 use crate::input::state::InputState;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::QuickColorEdit;
 
 use super::{
     ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
@@ -141,23 +140,15 @@ impl InputState {
         }
     }
 
-    /// Say that an accepted recolor belongs to this run, and offer the screen
-    /// that keeps it.
+    /// Hand an accepted recolor to the backend, which owns the config and the
+    /// file.
     ///
-    /// The palette is an authored definition: `config.toml` holds it and only
-    /// the configurator writes that file. The overlay still recolors the live
-    /// swatch, so the accept has to name its own scope rather than let the
-    /// changed color imply a saved one.
-    fn notify_quick_color_is_this_run(&mut self, index: usize) {
-        self.push_toast(
-            ToastPriority::Action,
-            "drawing.quick-color",
-            Toast::info(format!(
-                "Quick color {} changed for this run — keep it via the configurator.",
-                index + 1
-            ))
-            .action("Edit", Action::OpenConfiguratorQuickColors),
-        );
+    /// Accepting is an explicit user edit action, so the slot is written to
+    /// `config.toml`. `InputState` has neither the configuration nor the
+    /// filesystem, so the accept records what it decided and the backend drains
+    /// it — and raises the toast, which depends on whether the write landed.
+    fn request_quick_color_edit(&mut self, index: usize, color: Color) {
+        self.pending_quick_color_edit = Some(QuickColorEdit { index, color });
     }
 
     /// Show a candidate color on the popup's edit target: the swatch it
@@ -247,7 +238,7 @@ impl InputState {
             self.color_picker_popup_preview(color);
             match slot {
                 Some(index) => {
-                    self.notify_quick_color_is_this_run(index);
+                    self.request_quick_color_edit(index, color);
                     // The swatch the tool was already painting with follows its
                     // own recolor, so the palette's selection ring and the live
                     // color cannot disagree. Recoloring any other slot leaves

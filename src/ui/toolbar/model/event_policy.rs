@@ -30,11 +30,15 @@ impl ToolbarEventPolicy {
 
 /// Where an applied toolbar event's value survives to.
 ///
-/// `config.toml` is not a destination: it is an authored input the
-/// configurator alone writes. An event that changes an authored preference —
-/// icons, section visibility, layout mode, status bar, badges, click
-/// highlight, the input HUD — is `Ephemeral`: it changes the effective value
-/// for this run and the next start reads the configured one back.
+/// `config.toml` is not a destination for a preference toggle. The file is an
+/// authored input, changed only by an explicit user edit action: the
+/// configurator's Save, or one of the overlay's three scoped edits — a shortcut
+/// rebind, a preset slot, a quick-color swatch — each of which writes its own
+/// key through the audited worker path. Flipping a toolbar preference is not
+/// one of them. An event that changes an authored preference — icons, section
+/// visibility, layout mode, status bar, badges, click highlight, the input HUD
+/// — is `Ephemeral`: it changes the effective value for this run and the next
+/// start reads the configured one back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarPersistence {
     Ephemeral,

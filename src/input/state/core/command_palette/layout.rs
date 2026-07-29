@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use super::{CommandEntry, CommandPaletteListRow};
+use crate::config::KeybindingsConfig;
 
 /// Visible rows (commands + group headers) before the list scrolls. Dropped
 /// from 10 when rows grew to the 44px comfort height so the clamped panel
@@ -15,6 +16,9 @@ pub(crate) const COMMAND_PALETTE_PADDING: f64 = 12.0;
 pub(crate) const COMMAND_PALETTE_PADDING_BOTTOM: f64 = 48.0;
 pub(crate) const COMMAND_PALETTE_INPUT_HEIGHT: f64 = 36.0;
 pub(crate) const COMMAND_PALETTE_LIST_GAP: f64 = 8.0;
+pub(crate) const COMMAND_PALETTE_ROW_ACTION_SIZE: f64 = 22.0;
+pub(crate) const COMMAND_PALETTE_ROW_ACTION_GAP: f64 = 4.0;
+pub(crate) const COMMAND_PALETTE_ROW_ACTION_COUNT: usize = 3;
 /// Leading action-icon gutter: every command row reserves this slot so
 /// labels stay aligned whether or not the action has a glyph.
 pub(crate) const COMMAND_PALETTE_ROW_ICON_SIZE: f64 = 18.0;
@@ -56,6 +60,28 @@ pub(crate) struct CommandPaletteGeometry {
     pub visible_count: usize,
 }
 
+/// The three per-row shortcut controls, left to right.
+///
+/// Each one edits this action's `[keybindings]` entry in `config.toml` as well
+/// as the running keymap; the tooltips name the edit, and the toast the backend
+/// raises afterwards says whether the file took it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommandPaletteRowAction {
+    Edit,
+    Delete,
+    Reset,
+}
+
+impl CommandPaletteRowAction {
+    pub(crate) fn tooltip(self) -> &'static str {
+        match self {
+            Self::Edit => "Edit shortcut",
+            Self::Delete => "Unbind shortcut",
+            Self::Reset => "Reset shortcut to default",
+        }
+    }
+}
+
 impl CommandPaletteGeometry {
     pub(crate) fn local_point(self, x: i32, y: i32) -> (f64, f64) {
         (x as f64 - self.x, y as f64 - self.y)
@@ -93,6 +119,32 @@ impl CommandPaletteGeometry {
 
         Some(row)
     }
+
+    pub(crate) fn row_action_at(
+        self,
+        local_x: f64,
+        local_y: f64,
+    ) -> Option<(usize, CommandPaletteRowAction)> {
+        let row = self.visible_item_at(local_x, local_y)?;
+        let right = self.inner_x + self.inner_width;
+        let stride = COMMAND_PALETTE_ROW_ACTION_SIZE + COMMAND_PALETTE_ROW_ACTION_GAP;
+        let actions_left = right - stride * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+        if local_x < actions_left || local_x > right {
+            return None;
+        }
+        let slot = ((local_x - actions_left) / stride).floor() as usize;
+        let within = (local_x - actions_left) % stride;
+        if slot >= COMMAND_PALETTE_ROW_ACTION_COUNT || within > COMMAND_PALETTE_ROW_ACTION_SIZE {
+            return None;
+        }
+        let action = match slot {
+            0 => CommandPaletteRowAction::Edit,
+            1 => CommandPaletteRowAction::Delete,
+            2 => CommandPaletteRowAction::Reset,
+            _ => return None,
+        };
+        Some((row, action))
+    }
 }
 
 pub(crate) fn command_palette_visible_count(total_items: usize) -> usize {
@@ -118,6 +170,7 @@ impl InputState {
         commands: impl IntoIterator<Item = &'a CommandEntry>,
     ) -> f64 {
         let mut required_inner_width: f64 = 0.0;
+        let default_bindings = KeybindingsConfig::default();
 
         for command in commands {
             let label_chars = command.label.chars().count() as f64;
@@ -142,6 +195,13 @@ impl InputState {
                 row_inner += DESC_BADGE_GAP + badge_width;
             }
             row_inner += BADGE_RIGHT_PAD;
+            if default_bindings
+                .bindings_for_action(command.action)
+                .is_some()
+            {
+                row_inner += (COMMAND_PALETTE_ROW_ACTION_SIZE + COMMAND_PALETTE_ROW_ACTION_GAP)
+                    * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+            }
             required_inner_width = required_inner_width.max(row_inner);
         }
 
@@ -312,6 +372,28 @@ mod tests {
                     + 1.0,
             ),
             None
+        );
+    }
+
+    #[test]
+    fn row_action_at_maps_edit_delete_and_reset_slots() {
+        let geometry = sample_geometry();
+        let stride = COMMAND_PALETTE_ROW_ACTION_SIZE + COMMAND_PALETTE_ROW_ACTION_GAP;
+        let left = geometry.inner_x + geometry.inner_width
+            - stride * COMMAND_PALETTE_ROW_ACTION_COUNT as f64;
+        let y = geometry.items_top + 5.0;
+
+        assert_eq!(
+            geometry.row_action_at(left + 2.0, y),
+            Some((0, CommandPaletteRowAction::Edit))
+        );
+        assert_eq!(
+            geometry.row_action_at(left + stride + 2.0, y),
+            Some((0, CommandPaletteRowAction::Delete))
+        );
+        assert_eq!(
+            geometry.row_action_at(left + stride * 2.0 + 2.0, y),
+            Some((0, CommandPaletteRowAction::Reset))
         );
     }
 }

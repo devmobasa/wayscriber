@@ -1,7 +1,7 @@
 use super::super::base::{
-    ClipboardFingerprint, ClipboardPasteRequest, InputState, OutputFocusAction,
-    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, SelectionPublishState,
-    ZoomAction,
+    ClipboardFingerprint, ClipboardPasteRequest, InputState, KeybindingEditRequest,
+    OutputFocusAction, PendingBackendAction, PendingSelectionClipboardPublish, PresetAction,
+    QuickColorEdit, SelectionPublishState, ZoomAction,
 };
 use crate::input::boards::PendingBoardRuntimeUiAction;
 
@@ -21,6 +21,16 @@ impl InputState {
     /// last-action semantics.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
         self.pending_backend_action = Some(action);
+    }
+
+    /// Takes every shortcut edit recorded since the last drain, oldest first.
+    ///
+    /// The backend hands each one to the config-edit worker, which answers them
+    /// in the same order. They are drained together rather than one per pass
+    /// because two edits can be recorded from a single batch of input events,
+    /// and the second must not cost the first its write or its toast.
+    pub(crate) fn take_pending_keybinding_edits(&mut self) -> Vec<KeybindingEditRequest> {
+        std::mem::take(&mut self.pending_keybinding_edits)
     }
 
     /// Stores an output focus action for retrieval by the backend.
@@ -46,6 +56,12 @@ impl InputState {
     /// Takes and clears any pending preset save/clear action.
     pub fn take_pending_preset_action(&mut self) -> Option<PresetAction> {
         self.pending_preset_action.take()
+    }
+
+    /// Takes and clears any accepted quick-color recolor awaiting its config
+    /// write. The runtime palette already shows the new color.
+    pub fn take_pending_quick_color_edit(&mut self) -> Option<QuickColorEdit> {
+        self.pending_quick_color_edit.take()
     }
 
     pub(crate) fn take_pending_board_runtime_ui_actions(

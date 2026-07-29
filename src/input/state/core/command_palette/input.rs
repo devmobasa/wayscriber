@@ -1,11 +1,17 @@
-use super::super::base::{InputState, Toast, ToastPriority};
+use super::super::base::{
+    InputState, KeybindingEditOperation, KeybindingEditRequest, Toast, ToastPriority,
+};
 use super::layout;
 use super::search::{CommandPaletteListRow, command_palette_display_index};
-use super::{CommandPaletteCursorHint, layout::CommandPaletteGeometry};
-use crate::config::action_label;
+use super::{
+    CommandPaletteCursorHint,
+    layout::{CommandPaletteGeometry, CommandPaletteRowAction},
+};
+use crate::config::{KeyBinding, KeybindingsConfig, action_label};
 use crate::configurator_destination::keybindings_destination_for_action;
 use crate::domain::Action;
 use crate::input::events::Key;
+use crate::input::state::actions::key_press::bindings::key_to_action_label;
 use std::time::{Duration, Instant};
 
 const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280);
@@ -15,19 +21,77 @@ impl InputState {
     /// Whether the palette owns keyboard and pointer input.
     ///
     /// This is what the toolbar and GTK modal gates ask, which is why it keeps
-    /// its own name rather than reading the visibility flag directly. The
-    /// shortcut-capture modal used to be its second half; the palette no longer
-    /// captures chords, so the open flag is all that is left of it.
+    /// its own name rather than reading the visibility flag directly: the
+    /// shortcut-capture modal is its second half, and it must swallow the same
+    /// keys and pointer events the list does.
     pub(crate) fn command_palette_is_engaged(&self) -> bool {
-        self.command_palette_open
+        self.command_palette_open || self.keybinding_capture_action.is_some()
+    }
+
+    /// Arm the capture modal for one action's next keyboard chord.
+    ///
+    /// The chord it reads is durable: the backend writes that one action's
+    /// `[keybindings]` entry to `config.toml` before installing the new keymap,
+    /// and a save that fails degrades to a this-run edit whose toast says so.
+    /// An action with no `[keybindings]` field has nothing to rebind, so the
+    /// affordance explains instead of opening a modal that cannot succeed.
+    pub(crate) fn begin_keybinding_capture(&mut self, action: Action) -> bool {
+        if KeybindingsConfig::default()
+            .bindings_for_action(action)
+            .is_none()
+        {
+            self.push_toast(
+                ToastPriority::Info,
+                "palette.shortcut",
+                Toast::warning(format!(
+                    "{} has no configurable keyboard shortcut.",
+                    action_label(action)
+                )),
+            );
+            return false;
+        }
+        self.keybinding_capture_action = Some(action);
+        self.clear_command_palette_repeat();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Queue a shortcut edit for the backend, which owns the keymap.
+    ///
+    /// Queued behind whatever is already waiting: the backend drains the whole
+    /// list on its next pass, so recording a second edit before it gets there
+    /// costs the first neither its write nor its toast.
+    pub(crate) fn request_keybinding_edit(
+        &mut self,
+        action: Action,
+        operation: KeybindingEditOperation,
+    ) -> bool {
+        if KeybindingsConfig::default()
+            .bindings_for_action(action)
+            .is_none()
+        {
+            self.push_toast(
+                ToastPriority::Info,
+                "palette.shortcut",
+                Toast::warning(format!(
+                    "{} has no configurable keyboard shortcut.",
+                    action_label(action)
+                )),
+            );
+            return false;
+        }
+        self.pending_keybinding_edits
+            .push(KeybindingEditRequest { action, operation });
+        true
     }
 
     /// Hand one action's shortcut to the configurator.
     ///
-    /// The overlay stopped editing `[keybindings]`, so the palette's shortcut
-    /// affordance is navigation: it opens the Keybindings screen on the
-    /// section that holds this action, with the action's own key searched.
-    /// Launching closes the overlay, so the palette closes with it.
+    /// The palette's own controls rebind one chord in place; this is the route
+    /// to the full editor, opening the Keybindings screen on the section that
+    /// holds this action with the action's own key searched. Launching closes
+    /// the overlay, so the palette closes with it.
     pub(crate) fn open_configurator_for_shortcut(&mut self, action: Action) -> bool {
         let Some(destination) = keybindings_destination_for_action(action) else {
             self.push_toast(
@@ -92,8 +156,20 @@ impl InputState {
             return false;
         }
 
+        if let Some(action) = self.keybinding_capture_action {
+            return self.handle_keybinding_capture_key(action, key);
+        }
+
         match key {
-            Key::Ctrl => {
+            // Every modifier a `KeyBinding` can carry is tracked here, because
+            // the shortcut controls and the capture modal read all three:
+            // without this arm the palette would swallow the press, Ctrl+Shift+E
+            // could never be told apart from Ctrl+E, and an Alt already held
+            // when capture began would be missing from the chord that gets
+            // saved. `on_key_release` clears them again on the way out,
+            // whatever is open at the time. `Key::Tab` stays with the catch-all
+            // below: it is the pointer-drag modifier, not part of a chord.
+            Key::Ctrl | Key::Shift | Key::Alt => {
                 self.handle_modifier_key_press(key);
                 true
             }
@@ -165,9 +241,30 @@ impl InputState {
                 self.clear_command_palette_query();
                 true
             }
-            Key::Char('e' | 'E') if self.modifiers.ctrl => {
+            // Shift is checked first: the configurator route and the in-place
+            // capture share the letter, and the plain-Ctrl arm below matches
+            // both cases.
+            Key::Char('e' | 'E') if self.modifiers.ctrl && self.modifiers.shift => {
                 if let Some(command) = self.selected_command() {
                     self.open_configurator_for_shortcut(command.action);
+                }
+                true
+            }
+            Key::Char('e' | 'E') if self.modifiers.ctrl => {
+                if let Some(command) = self.selected_command() {
+                    self.begin_keybinding_capture(command.action);
+                }
+                true
+            }
+            Key::Delete if self.modifiers.ctrl => {
+                if let Some(command) = self.selected_command() {
+                    self.request_keybinding_edit(command.action, KeybindingEditOperation::Delete);
+                }
+                true
+            }
+            Key::Char('r' | 'R') if self.modifiers.ctrl => {
+                if let Some(command) = self.selected_command() {
+                    self.request_keybinding_edit(command.action, KeybindingEditOperation::Reset);
                 }
                 true
             }
@@ -183,6 +280,37 @@ impl InputState {
             }
             _ => true, // Consume all other keys while palette is open
         }
+    }
+
+    fn handle_keybinding_capture_key(&mut self, action: Action, key: Key) -> bool {
+        if self.handle_modifier_key_press(key) {
+            self.needs_redraw = true;
+            return true;
+        }
+        if matches!(key, Key::Escape) {
+            self.keybinding_capture_action = None;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return true;
+        }
+        let Some(mut key_label) = key_to_action_label(key) else {
+            return true;
+        };
+        if key_label.len() == 1 && key_label.as_bytes()[0].is_ascii_alphabetic() {
+            key_label.make_ascii_uppercase();
+        }
+        let binding = KeyBinding {
+            key: key_label,
+            ctrl: self.modifiers.ctrl,
+            shift: self.modifiers.shift,
+            alt: self.modifiers.alt,
+        }
+        .to_string();
+        self.keybinding_capture_action = None;
+        self.request_keybinding_edit(action, KeybindingEditOperation::Replace(vec![binding]));
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
     }
 
     fn start_command_palette_repeat(&mut self, key: Key) {
@@ -371,6 +499,11 @@ impl InputState {
         if !self.command_palette_is_engaged() {
             return false;
         }
+        if self.keybinding_capture_action.take().is_some() {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return true;
+        }
 
         let rows = self.command_palette_rows();
         let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
@@ -400,6 +533,32 @@ impl InputState {
             };
             let (command, actual_index) = command_entry;
             self.command_palette_selected = actual_index;
+
+            if let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
+                && KeybindingsConfig::default()
+                    .bindings_for_action(command.action)
+                    .is_some()
+            {
+                match row_action {
+                    CommandPaletteRowAction::Edit => {
+                        self.begin_keybinding_capture(command.action);
+                    }
+                    CommandPaletteRowAction::Delete => {
+                        self.request_keybinding_edit(
+                            command.action,
+                            KeybindingEditOperation::Delete,
+                        );
+                    }
+                    CommandPaletteRowAction::Reset => {
+                        self.request_keybinding_edit(
+                            command.action,
+                            KeybindingEditOperation::Reset,
+                        );
+                    }
+                }
+                self.needs_redraw = true;
+                return true;
+            }
 
             // Execute the command.
             self.command_palette_open = false;
@@ -438,6 +597,40 @@ impl InputState {
         let rows = self.command_palette_rows();
         let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
         command_palette_cursor_hint_from_local(geometry, &rows, self.command_palette_scroll, x, y)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn command_palette_action_tooltip(
+        &self,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> Option<(&'static str, i32, i32)> {
+        if !self.command_palette_open {
+            return None;
+        }
+        let rows = self.command_palette_rows();
+        let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
+        self.command_palette_action_tooltip_for_layout(&rows, geometry)
+    }
+
+    pub(crate) fn command_palette_action_tooltip_for_layout(
+        &self,
+        rows: &[CommandPaletteListRow],
+        geometry: CommandPaletteGeometry,
+    ) -> Option<(&'static str, i32, i32)> {
+        if !self.command_palette_open {
+            return None;
+        }
+        let (x, y) = self.pointer_position();
+        let (local_x, local_y) = geometry.local_point(x, y);
+        let (visible_index, action) = geometry.row_action_at(local_x, local_y)?;
+        let display_index = self.command_palette_scroll + visible_index;
+        let command = match rows.get(display_index)? {
+            CommandPaletteListRow::Header(_) => return None,
+            CommandPaletteListRow::Command { command, .. } => command,
+        };
+        KeybindingsConfig::default().bindings_for_action(command.action)?;
+        Some((action.tooltip(), x, y))
     }
 }
 

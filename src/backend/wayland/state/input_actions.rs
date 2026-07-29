@@ -89,6 +89,9 @@ impl WaylandState {
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
+        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
+            self.handle_quick_color_edit(edit);
+        }
         if let Some(color) = self.input_state.take_pending_copy_hex_request() {
             self.handle_copy_hex_color(color);
         }

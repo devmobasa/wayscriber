@@ -10,9 +10,9 @@ pub use types::{
     CompositorCapabilities, DesktopEnvironment, DrawingState, MAX_STROKE_THICKNESS,
     MIN_STROKE_THICKNESS, OutputFocusAction, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
-    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionHandle,
-    ShellMode, TEXT_EDIT_ENTRY_DURATION_MS, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind,
-    ZoomAction,
+    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
+    SelectionHandle, ShellMode, TEXT_EDIT_ENTRY_DURATION_MS, TextInputMode, UI_TOAST_DURATION_MS,
+    UiToastKind, ZoomAction,
 };
 pub(crate) use types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
@@ -23,3 +23,4 @@ pub(crate) use types::{
     TextEditEntryFeedback, TextPasteEdit, TextPasteTarget, ToastPress,
     WayscriberClipboardSelection,
 };
+pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};

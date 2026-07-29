@@ -55,28 +55,55 @@ toolbar and board changes remain process-only in that mode and leave the authore
 unchanged; a toolbar dragged or a display mode cycled in that mode applies for the current run and
 returns to its configured default on the next start.
 
-#### The configurator is the only writer
+#### Only your explicit edits write the file
 
-`config.toml` is an authored input. Pressing **Save** in the graphical configurator is the only
-thing in Wayscriber that writes it. The overlay, the daemon, the tray, startup, validation, and
-shutdown read and interpret the file and never create, replace, rewrite, touch, chmod, or back it
-up — not when a shortcut is invalid, not when two shortcuts collide, not when `config_revision` is
+`config.toml` is an authored input. It changes only when you deliberately edit something, never as
+a side effect of running Wayscriber. Exactly two kinds of action write it:
+
+- **The configurator's Save**, which writes the whole draft you edited.
+- **Three narrow overlay editors** — the shortcut editor, the preset slots, and the quick-color
+  palette. Each writes only its own key: editing a shortcut rewrites that one action's
+  `[keybindings]` entry, saving a preset rewrites that one `[presets.slot_N]` table, recoloring a
+  swatch rewrites that one `[[drawing.quick_colors]]` entry. Everything else in the file — your
+  comments, your section order, your other settings — is left byte-for-byte alone, and the previous
+  contents are copied to a timestamped `.bak` first.
+
+Those four actions — a Save and the three editors — are the only ones. Startup, shutdown, the
+daemon, the tray, validation, and the migration preview read and interpret the file and never
+create, replace, rewrite, touch, chmod, or back it up — not when a shortcut is invalid, not when two shortcuts collide, not when `config_revision` is
 old, not when a value is out of range, and not when the file is missing or read-only. Starting,
-using, and quitting Wayscriber leaves the file's bytes, size, mode, owner, and modification time
-exactly as you left them.
+using, and quitting Wayscriber without touching one of the editors above leaves the file's bytes,
+size, mode, owner, and modification time exactly as you left them.
 
-The practical consequence: an overlay control that changes a configured default applies to the
-current run only, and says so. Restart and the configured value comes back. Where a durable change
-is wanted, the control offers a route into the configurator at the matching screen — press
-<kbd>F11</kbd>, or use the toast's action button — and the change becomes durable when you Save
-there.
+Incidental preference toggles are not editors. Flipping the status bar, the layout mode, the input
+HUD, or any other chrome preference from the overlay applies to the current run and says so;
+restart and the configured value comes back. Where a durable change is wanted, the control offers a
+route into the configurator at the matching screen — press <kbd>F11</kbd>, or use the toast's
+action button — and the change becomes durable when you Save there.
+
+The three overlay editors do their writing on a background worker, so parsing, copying, and
+syncing the file never stalls drawing or input. A preset slot or a swatch changes on screen as you
+release the control and its toast follows a moment later, once the file has actually taken it — the
+wording waits so it cannot claim a save that has not happened. A shortcut is the other way round:
+nothing is rebound until the write succeeds, which is what lets a chord the file has meanwhile
+given to another action be refused outright rather than un-done. Edits are written one at a time in
+the order you make them, and one made just before you quit is finished before Wayscriber exits.
+
+If one of the three editors cannot write the file — it is read-only, it cannot be parsed, or
+another program is editing it — the change still applies to the running session and the toast says
+the file did not get it. Your edit is never thrown away because the save failed. Two other outcomes
+are reported as themselves rather than as a failed save: an edit the file already agrees with
+writes nothing and says so, and a shortcut whose chord another action has claimed in the file since
+this run started is refused outright, naming the owner, with the file left untouched.
 
 When the configurator edits an existing file, it preserves TOML comments, section order, compatible
 value formatting, and unrecognized settings. Unrecognized paths produce a configurator warning but
 remain in the file for forward compatibility. Known values are still validated for the running
-session, and aliases are written under their canonical names. The configurator tracks the exact
-loaded contents rather than relying on modification time; if the file is created, deleted,
-retargeted through a symlink, or changed by another editor, reload it before saving. A save does
+session, and a setting you change that the file spells with an old alias is renamed to its
+canonical name as it is written — an alias you do not change keeps the spelling you gave it, in the
+configurator and in the overlay editors alike. The configurator tracks the exact loaded contents
+rather than relying on modification time; if the file is created, deleted, retargeted through a
+symlink, or changed by another editor, reload it before saving. A save does
 not expand omitted, unchanged defaults; when a setting that was omitted is edited, only that
 changed setting and its required table path are added.
 A save writes only what you changed: a value that loading clamped, normalized, deduplicated, or
@@ -96,25 +123,29 @@ does not stop the rest of the configuration from loading.
 
 #### Backups
 
-A configurator Save copies the previous contents to a timestamped `config.toml.<timestamp>.bak`
-next to `config.toml` before writing. That copy is the recovery path: to undo a save, copy the
-newest `.bak` back over `config.toml`. Nothing prunes them, so delete the ones you no longer want.
+Every write copies the previous contents to a timestamped `config.toml.<timestamp>.bak` next to
+`config.toml` first — a configurator Save and each of the three overlay editors alike. That copy is
+the recovery path: to undo a change, copy the newest `.bak` back over `config.toml`. Nothing prunes
+them, so delete the ones you no longer want.
 
 There is no longer any other backup. Earlier releases kept a rolling copy under
-`$XDG_STATE_HOME/wayscriber/config-backups/` to protect writes made by the running overlay and the
-tray; those writers are gone, so nothing creates, reads, or prunes that directory any more. If you
-have one from an older release it is left untouched as your own recovery data — the files are
-ordinary TOML copies, and you can keep or delete the directory as you like.
+`$XDG_STATE_HOME/wayscriber/config-backups/` to protect background writes made by the running
+overlay and the tray; those background writers are gone, so nothing creates, reads, or prunes that
+directory any more. If you have one from an older release it is left untouched as your own recovery
+data — the files are ordinary TOML copies, and you can keep or delete the directory as you like.
 
 #### Who writes what, when
 
-Three stores and three mechanisms cover every preference Wayscriber saves for you:
+Three stores and four mechanisms cover every preference Wayscriber saves for you:
 
-- **Configurator Save** — the only write to `config.toml`, and only when you press Save. It leaves a
-  timestamped `.bak` beside the file.
+- **Configurator Save** — writes the whole draft you edited, when you press Save.
+- **Overlay editors** — the shortcut editor, preset slots, and quick-color palette, each writing
+  only its own key at the moment you confirm the edit.
 - **Runtime-UI writer** — a guarded, conditional write to `runtime-ui.toml`; see the list at the top
   of this section for what lives there and why.
 - **Session autosave** — the session snapshot, not a configuration file at all.
+
+Both `config.toml` mechanisms leave a timestamped `.bak` beside the file.
 
 | You do this | It is saved to | By |
 | --- | --- | --- |
@@ -131,17 +162,17 @@ Three stores and three mechanisms cover every preference Wayscriber saves for yo
 | Toggle click highlight or the highlight-tool ring | Nothing — this run only | Configurator → UI → Click Highlight for the default |
 | Toggle the input HUD | Nothing — this run only | Configurator → UI → Input HUD for the default |
 | Toggle the Step section, delay sliders, tool preview, preset toasts, extra colors, or context-aware UI | Nothing — this run only | Configurator → History or UI → Toolbar for the default |
-| Save or clear a preset slot in the overlay | Nothing — this run only | Configurator → Presets to keep it |
-| Recolor a quick color swatch in the overlay | Nothing — this run only | Configurator → Drawing to keep it |
+| Save or clear a preset slot in the overlay | `config.toml` — that one `[presets.slot_N]` table | Overlay editor (with a timestamped `.bak`) |
+| Recolor a quick color swatch in the overlay | `config.toml` — that one `[[drawing.quick_colors]]` entry | Overlay editor (with a timestamped `.bak`) |
 | Rename, recolor, add, or delete a board | The session file, for boards marked `persist` | Configurator → Boards for the templates a new session starts from |
-| Change a shortcut | Not editable in the overlay | Configurator → Keybindings |
+| Edit, unbind, or reset a shortcut in the overlay | `config.toml` — that one action's `[keybindings]` entry | Overlay editor (with a timestamped `.bak`) |
 | Toggle session resume from the tray menu | Not editable from the tray | Tray → "Session persistence settings…" opens Configurator → Session |
-| Press Save in the graphical configurator | `config.toml` | Configurator Save (with a timestamped `.bak`) |
+| Press Save in the graphical configurator | `config.toml` — everything you edited | Configurator Save (with a timestamped `.bak`) |
 | Change pen color, thickness, tool, or font size | Session file | Session autosave (needs `restore_tool_state`) |
 
 Drawings, boards, pages, and per-page pan offsets belong to the session file (see `[session]`).
-Everything else — zoom, freeze, presenter mode, light mode, and any configured default you changed
-from the overlay — is live state for the run and is not saved at all.
+Everything else — zoom, freeze, presenter mode, light mode, and any configured default an
+incidental toggle changed — is live state for the run and is not saved at all.
 
 If the graphical configurator can read the file but cannot parse its TOML or known value types, it
 opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a
@@ -236,11 +267,11 @@ tab_drag_tool = "ellipse"
 # same tuned values, so named entries, the default pen color, and board
 # auto-adjust pens all match these swatches.
 #
-# Right-clicking a swatch in the overlay opens the color picker for that slot
-# and applies the accepted color to the current run, keeping the slot's label
-# and shortcut; this list is unchanged. Edit the durable palette in the
-# configurator's Drawing screen. That picker's "Default" button loads the color
-# shipped for the slot again (built-in slots only), still requiring OK.
+# Right-clicking a swatch in the overlay opens the color picker for that slot.
+# Accepting writes that one entry's color back here, keeping the slot's label
+# and shortcut and leaving every other entry as authored; the previous file is
+# copied to a timestamped .bak first. That picker's "Default" button loads the
+# color shipped for the slot again (built-in slots only), still requiring OK.
 [[drawing.quick_colors]]
 label = "Red"
 color = "#F5333F"
@@ -370,9 +401,11 @@ head_at_end = false
 
 Configure 3-5 tool presets that you can apply via hotkeys or the toolbar strip.
 
-Saving or clearing a slot from the overlay changes it for the current run only — the toast says so
-and offers an **Edit** action that opens the configurator's Presets screen, where a slot can be
-changed durably.
+Saving or clearing a slot from the overlay writes that one `[presets.slot_N]` table back to
+`config.toml`, leaving every other setting and your comments alone and copying the previous file to
+a timestamped `.bak` first. Names and the advanced fields are still edited in the configurator's
+Presets screen. If the file cannot be written the slot still changes for the run, and the toast
+says the save failed.
 
 ```toml
 # Spotlight tool: dims the whole overlay except the regions you draw, so
@@ -1155,7 +1188,7 @@ side_sections = [
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` are the authored default toolbar positions. Dragging a toolbar saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag. A side drag also records the top strip's reconciled horizontal offset, because moving the palette can change where the strip rests.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
-- **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action. Conflicting shortcuts are rejected without changing the saved configuration.
+- **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action (<kbd>Ctrl+E</kbd>, <kbd>Ctrl+Delete</kbd>, <kbd>Ctrl+R</kbd>). An accepted edit is written back to `config.toml` — only that action's `[keybindings]` entry, with the previous file copied to a timestamped `.bak` — so it survives a restart. The write runs on a background worker and the rebind takes effect as soon as it answers, so editing a shortcut never stalls drawing, and a chord the file has meanwhile given to another action is refused rather than applied and then taken back. Reset writes the shipped default out explicitly rather than removing the key, and when the action already resolves to that default — usually because the file omits it — there is nothing to write, so nothing is written and the toast says the action already uses the default shortcut. Conflicting shortcuts are rejected, naming the action that already owns the chord, and nothing is written; that includes a chord another action has been given in the file since this run started, which is refused rather than applied. If the file cannot be written the shortcut still changes for the run and the toast says the save failed. <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator's Keybindings screen.
 - **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
 - **Pinned**: `top_pinned`/`side_pinned` are the authored defaults for whether each toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves these values alone.
 - **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` are the authored defaults, and the state you leave a bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
@@ -1171,8 +1204,8 @@ side_sections = [
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings surface (the side palette's Settings pane under the legacy panel layout, the Settings popover under pill).
 - **Clear canvas**: Clear lives in the top strip's overflow (⋯) menu. A plain click clears and shows a short "Cleared — Undo?" toast; Shift+click clears instantly without the toast. The `clear_canvas` keyboard action is always instant and shows no toast.
-- **Recoloring a swatch**: right-clicking any quick-color swatch (style pill or side palette) opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK applies the color to that slot for the current run, and Cancel/Escape restores it. To keep a recolored palette, set it in the configurator's Drawing screen — the popup's action button opens it there. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
-- **Restoring a swatch's shipped color**: while recoloring a slot, the picker adds a **Default** button next to OK/Cancel that loads the color wayscriber ships for that slot. It stages the color like any other pick — the swatch previews it, OK applies it for the run, Cancel backs out — so it is not a separate destructive action. The button only appears for the eleven built-in slots; extra slots you added past them have no shipped default, and the tool-color picker never shows it. Restoring sets the built-in value in your palette rather than deleting the entry, so the slot keeps its identity.
+- **Recoloring a swatch**: right-clicking any quick-color swatch (style pill or side palette) opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK applies the color to that slot and writes it back to `config.toml` — only that one `[[drawing.quick_colors]]` entry, with the previous file copied to a timestamped `.bak` — and Cancel/Escape restores it. Recoloring a slot the file only implies writes the palette out as far as that slot and no further, so the slots after it keep tracking the shipped defaults. If the file cannot be written the color still applies for the run and the toast says the save failed; picking the color the slot already paints writes nothing and says so. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
+- **Restoring a swatch's shipped color**: while recoloring a slot, the picker adds a **Default** button next to OK/Cancel that loads the color wayscriber ships for that slot. It stages the color like any other pick — the swatch previews it, OK applies and saves it, Cancel backs out — so it is not a separate destructive action. The button only appears for the eleven built-in slots; extra slots you added past them have no shipped default, and the tool-color picker never shows it. Restoring sets the built-in value in your palette rather than deleting the entry, so the slot keeps its identity.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
 
@@ -1472,7 +1505,7 @@ backup_retention = 1
 
 - `persist_*` — choose which boards survive restarts (`persist_transparent` for overlay, `persist_whiteboard`/`persist_blackboard` gate non-transparent boards for legacy compatibility)
 - `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
-- `restore_tool_state` — save pen colour, thickness, font size, arrow settings (including head placement), and status bar visibility; when `true`, the last-used tool state overrides config defaults at startup
+- `restore_tool_state` — save pen colour, thickness, font size, and arrow settings (including head placement); when `true`, the last-used tool state overrides config defaults at startup. Chrome is not tool state: status bar and badge visibility come from `[ui]` on every start, and an overlay toggle of them applies to that run only. Sessions written by older releases still carry a `show_status_bar` value; it is ignored on load and no longer written
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
 - `per_output` — when `true` (default) keep a separate session file for each monitor; set to `false` to share one file per Wayland display as in earlier releases
@@ -1937,13 +1970,21 @@ Settings are loaded in this order:
 2. Configuration file values (override defaults)
 3. Runtime changes made while Wayscriber is running (temporary, not saved)
 
-Nothing in step 3 reaches `config.toml`. Preference actions in the overlay—layout mode, section and
-status bar visibility, icon mode, click highlight, the input HUD, preset save/clear, quick color
-recoloring, board edits—change the current run and reset on the next start; each one points at the
-configurator screen that owns its configured default. The tray's session entry opens the
-configurator rather than editing the file, and shortcuts are edited in the configurator only. A
-configurator Save is the single write, and it rewrites only the settings you changed, without
-reformatting unrelated settings or removing user comments.
+Most of step 3 never reaches `config.toml`. Incidental preference toggles in the overlay—layout
+mode, section and status bar visibility, icon mode, click highlight, the input HUD—change the
+current run and reset on the next start; each one points at the configurator screen that owns its
+configured default. Board work is not one of those. Renaming, recoloring, adding, or deleting a
+board changes the session: it marks the session dirty, rides the session autosave, and comes back
+on the next start for boards marked `persist`. Pinning a board goes to `runtime-ui.toml`. What
+`[boards]` in `config.toml` holds is the set of boards a *new* session starts from, and only the
+configurator edits that. The tray's session entry opens the configurator rather than editing the
+file. Three deliberate editors are the exception: shortcut edit/unbind/reset,
+preset save/clear, and quick-color recoloring each write their own key, on a background worker and
+in the order you make them. Every write — theirs and a configurator Save — rewrites only the
+settings you changed, without reformatting unrelated settings or removing user comments, and leaves
+a timestamped `.bak`. Writers take an advisory lock on a `config.toml.lock` file beside the config
+while they work, so the configurator and the overlay editing at the same moment cannot overwrite
+one another's change.
 
 Direct overlay manipulation—toolbar drags, pin/minimize, the display-form cycle, pane and section
 collapse, individual item visibility and order, and board pins—goes to `runtime-ui.toml` and

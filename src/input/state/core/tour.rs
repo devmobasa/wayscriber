@@ -124,7 +124,7 @@ impl InputState {
                 );
                 if let Some(click) = self.toolbar_rebind_modifier.click_label() {
                     lines.push(format!(
-                        "By default, {click} a bindable control opens its shortcut in the configurator."
+                        "By default, {click} a bindable control to change its shortcut."
                     ));
                 }
                 lines.join("\n")
@@ -136,8 +136,10 @@ impl InputState {
                     None => lines.push("Open the command palette to run any action.".to_string()),
                 }
                 lines.push("Quickly search and run any action by typing.".to_string());
+                lines.push("Use the row controls to edit, unbind, or reset shortcuts.".to_string());
                 lines.push(
-                    "Press Ctrl+E on a row to edit its shortcut in the configurator.".to_string(),
+                    "Press Ctrl+Shift+E on a row to change its shortcut in the configurator."
+                        .to_string(),
                 );
                 lines.join("\n")
             }
@@ -353,7 +355,7 @@ mod tests {
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
-    fn tour_introduces_both_shortcut_routes_to_the_configurator() {
+    fn tour_introduces_both_shortcut_editing_paths() {
         let mut state = make_test_input_state();
 
         // The ToolbarIntro step routes the shortcut-rebind chord through the
@@ -390,10 +392,16 @@ mod tests {
         assert!(toolbar.contains(&toggle), "toolbar copy: {toolbar:?}");
         assert!(toolbar.contains(&cycle), "toolbar copy: {toolbar:?}");
 
-        // The command palette step teaches the one shortcut affordance left:
-        // Ctrl+E hands the row to the configurator.
+        // The command palette step teaches the row shortcut controls and names
+        // the configurator route beside them.
         let palette = state.tour_step_description(TourStep::CommandPalette);
-        assert!(palette.contains("Ctrl+E"), "palette copy: {palette:?}");
+        assert!(palette.contains("edit"), "palette copy: {palette:?}");
+        assert!(palette.contains("unbind"), "palette copy: {palette:?}");
+        assert!(palette.contains("reset"), "palette copy: {palette:?}");
+        assert!(
+            palette.contains("Ctrl+Shift+E"),
+            "palette copy: {palette:?}"
+        );
         assert!(
             palette.contains("configurator"),
             "palette copy: {palette:?}"

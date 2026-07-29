@@ -1,12 +1,13 @@
 //! Command palette UI rendering.
 
+use crate::config::action_label;
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
-    CommandPaletteListRow,
+    COMMAND_PALETTE_TOP_RATIO, CommandPaletteListRow,
 };
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
     self, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG,
@@ -33,8 +34,12 @@ const COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT: f64 = 18.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_GAP: f64 = 12.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_RADIUS: f64 = 3.0;
 const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
+/// Kept to the width the narrowest panel can show: the hint is centred in the
+/// frame and is not part of the width calculation, so a longer line would be
+/// clipped whenever a query matches nothing. Ctrl+Shift+E — the route into the
+/// configurator's own editor — is taught by the tour and the docs instead.
 const COMMAND_PALETTE_INPUT_HINT: &str =
-    "Enter run • Ctrl+E edit shortcut in configurator • Esc close";
+    "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
 /// Maximum extent of the frame drop shadow below/right of the palette. Also
 /// the damage-region padding, so the softest (furthest) shadow layer is
 /// always covered — keep the layer offsets in `draw_command_palette_frame`
@@ -43,6 +48,12 @@ const FRAME_SHADOW_OFFSET: f64 = 12.0;
 /// Outer, softer layer of the two-layer drop shadow (lighter than the inner
 /// `SHADOW` layer; mirrors the help overlay frame).
 const FRAME_SHADOW_SOFT: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.22);
+const TOOLTIP_PADDING_X: f64 = 8.0;
+const TOOLTIP_PADDING_Y: f64 = 5.0;
+const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
+/// Action tooltip surface: darker than PANEL_BG_COMMAND_PALETTE so the
+/// tooltip reads above the palette (no matching theme token; kept).
+const TOOLTIP_BG: Rgba = (0.04, 0.05, 0.07, 0.98);
 /// Scrollbar track/thumb white-alpha ladder.
 /// TODO(theme-consolidation): thumb duplicates
 /// `theme::toolbar::COLOR_SCROLLBAR_SLIDER`; track has no token.
@@ -57,6 +68,11 @@ pub fn render_command_palette(
     screen_height: u32,
 ) {
     if !input_state.command_palette_is_engaged() {
+        return;
+    }
+
+    if let Some(action) = input_state.keybinding_capture_action {
+        render_keybinding_capture(ctx, input_state, action, screen_width, screen_height);
         return;
     }
 
@@ -112,6 +128,19 @@ pub fn render_command_palette(
         input_state.command_palette_scroll,
     );
 
+    if let Some((tooltip, pointer_x, pointer_y)) =
+        input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
+    {
+        draw_command_palette_action_tooltip(
+            ctx,
+            tooltip,
+            pointer_x as f64,
+            pointer_y as f64,
+            screen_width as f64,
+            screen_height as f64,
+        );
+    }
+
     draw_command_palette_escape_hint(ctx, x, y, palette_width, height);
 }
 
@@ -128,17 +157,191 @@ pub fn command_palette_visual_geometry(
         return None;
     }
 
+    if input_state.keybinding_capture_action.is_some() {
+        let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
+        return Some((
+            x,
+            y,
+            width + FRAME_SHADOW_OFFSET,
+            height + FRAME_SHADOW_OFFSET,
+        ));
+    }
+
     let rows = input_state.command_palette_rows();
     let geometry =
         input_state.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
-
-    Some((
+    let mut bounds = (
         geometry.x,
         geometry.y,
         geometry.width + FRAME_SHADOW_OFFSET,
         geometry.height + FRAME_SHADOW_OFFSET,
-    ))
+    );
+
+    if let Some((tooltip, pointer_x, pointer_y)) =
+        input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
+        && let Some(tooltip_bounds) = command_palette_action_tooltip_geometry(
+            tooltip,
+            pointer_x as f64,
+            pointer_y as f64,
+            screen_width as f64,
+            screen_height as f64,
+        )
+    {
+        bounds = union_bounds(bounds, tooltip_bounds);
+    }
+
+    Some(bounds)
 }
+
+fn union_bounds(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    let min_x = a.0.min(b.0);
+    let min_y = a.1.min(b.1);
+    let max_x = (a.0 + a.2).max(b.0 + b.2);
+    let max_y = (a.1 + a.3).max(b.1 + b.3);
+    (min_x, min_y, max_x - min_x, max_y - min_y)
+}
+
+fn command_palette_action_tooltip_geometry(
+    text: &str,
+    pointer_x: f64,
+    pointer_y: f64,
+    screen_width: f64,
+    screen_height: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let style = command_palette_text_style(
+        COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Normal,
+    );
+    let extents = measure_text(style, text, None)?;
+    let width = extents.width() + TOOLTIP_PADDING_X * 2.0;
+    let height = style.size + TOOLTIP_PADDING_Y * 2.0;
+    let x = (pointer_x + TOOLTIP_POINTER_OFFSET)
+        .min((screen_width - width - FRAME_SHADOW_OFFSET).max(FRAME_SHADOW_OFFSET));
+    let y = (pointer_y + TOOLTIP_POINTER_OFFSET)
+        .min((screen_height - height - FRAME_SHADOW_OFFSET).max(FRAME_SHADOW_OFFSET));
+    Some((x, y, width, height))
+}
+
+fn draw_command_palette_action_tooltip(
+    ctx: &cairo::Context,
+    text: &str,
+    pointer_x: f64,
+    pointer_y: f64,
+    screen_width: f64,
+    screen_height: f64,
+) {
+    let style = command_palette_text_style(
+        COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Normal,
+    );
+    let Some((x, y, width, height)) = command_palette_action_tooltip_geometry(
+        text,
+        pointer_x,
+        pointer_y,
+        screen_width,
+        screen_height,
+    ) else {
+        return;
+    };
+
+    constants::set_color(ctx, TOOLTIP_BG);
+    draw_rounded_rect(ctx, x, y, width, height, 5.0);
+    let _ = ctx.fill();
+    constants::set_color(ctx, TEXT_WHITE);
+    draw_text_baseline(
+        ctx,
+        style,
+        text,
+        x + TOOLTIP_PADDING_X,
+        y + TOOLTIP_PADDING_Y + style.size,
+        None,
+    );
+}
+
+/// Frame of the shortcut-capture modal, shared by rendering and damage.
+fn keybinding_capture_geometry(screen_width: u32, screen_height: u32) -> (f64, f64, f64, f64) {
+    let width = 520.0_f64.min(screen_width as f64 - 24.0);
+    let height = 170.0;
+    let x = (screen_width as f64 - width) / 2.0;
+    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+    (x, y, width, height)
+}
+
+fn render_keybinding_capture(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    action: crate::config::Action,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
+    draw_command_palette_frame(
+        ctx,
+        screen_width as f64,
+        screen_height as f64,
+        x,
+        y,
+        width,
+        height,
+    );
+
+    let title_style =
+        command_palette_text_style(18.0, cairo::FontWeight::Bold, cairo::FontSlant::Normal);
+    let body_style =
+        command_palette_text_style(13.0, cairo::FontWeight::Normal, cairo::FontSlant::Normal);
+    constants::set_color(ctx, TEXT_WHITE);
+    draw_text_baseline(
+        ctx,
+        title_style,
+        &format!("Rebind {}", action_label(action)),
+        x + 22.0,
+        y + 38.0,
+        None,
+    );
+    let current = input_state.action_binding_labels(action);
+    constants::set_color(ctx, TEXT_DESCRIPTION);
+    draw_text_baseline(
+        ctx,
+        body_style,
+        &format!(
+            "Current: {}",
+            if current.is_empty() {
+                "Not bound".to_string()
+            } else {
+                current.join(", ")
+            }
+        ),
+        x + 22.0,
+        y + 70.0,
+        None,
+    );
+    constants::set_color(ctx, TEXT_WHITE);
+    draw_text_baseline(
+        ctx,
+        body_style,
+        "Press the new shortcut now",
+        x + 22.0,
+        y + 108.0,
+        None,
+    );
+    constants::set_color(ctx, TEXT_DESCRIPTION);
+    draw_text_baseline(
+        ctx,
+        body_style,
+        KEYBINDING_CAPTURE_SCOPE_NOTE,
+        x + 22.0,
+        y + 140.0,
+        None,
+    );
+}
+
+/// Says what a captured chord costs and what refuses it, at the interaction
+/// point. The edit is durable, so the line names the two things that are not
+/// obvious: backing out, and what happens to a chord that is already taken.
+const KEYBINDING_CAPTURE_SCOPE_NOTE: &str =
+    "Escape cancels • a shortcut already in use is rejected";
 
 fn command_palette_text_style(
     size: f64,

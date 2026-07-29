@@ -28,8 +28,8 @@ pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
-    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionHandle,
-    ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
+    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
+    SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use base::{
@@ -41,6 +41,7 @@ pub(crate) use base::{
     PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
     WayscriberClipboardSelection,
 };
+pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;
@@ -53,8 +54,10 @@ pub use color_picker_popup::{
 };
 pub(crate) use command_palette::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ICON_GAP,
-    COMMAND_PALETTE_ROW_ICON_SIZE, action_meta_token_score, fuzzy_score, query_tokens,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
+    COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score, fuzzy_score,
+    query_tokens,
 };
 pub use command_palette::{
     COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint, CommandPaletteListRow,

@@ -13,6 +13,9 @@ use wayland_client::{Connection, QueueHandle};
 mod feedback;
 mod preferences;
 mod presets;
+pub(in crate::backend::wayland) use presets::queue_preset_action;
+mod quick_colors;
+pub(in crate::backend::wayland) use quick_colors::queue_quick_color_edit;
 mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
@@ -300,16 +303,13 @@ impl WaylandState {
         if toolbar_event_blocked_by_modal(&self.input_state) {
             return;
         }
-        // A toolbar interaction replaces the modal sampler. Do this before the
-        // rebind gesture so a launch cannot leave a sampler armed behind it.
+        // A toolbar interaction replaces the modal sampler. Do this before
+        // shortcut capture so the capture modal owns subsequent keys.
         self.cancel_eyedropper();
-        // The gesture still selects a control's shortcut; it now hands that
-        // shortcut to the configurator instead of capturing a chord, because
-        // `[keybindings]` is the configurator's to write.
         if rebind_requested
             && let Some(action) = crate::ui::toolbar::model::action_for_event(&event)
         {
-            self.input_state.open_configurator_for_shortcut(action);
+            self.input_state.begin_keybinding_capture(action);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             return;
@@ -512,6 +512,9 @@ impl WaylandState {
         }
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
+        }
+        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
+            self.handle_quick_color_edit(edit);
         }
         if let Some(color) = self.input_state.take_pending_copy_hex_request() {
             self.handle_copy_hex_color(color);
