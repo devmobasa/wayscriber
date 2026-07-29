@@ -313,6 +313,14 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   are logged rather than shown: there is no overlay left to toast on, and the write is the half the
   user cannot redo from memory. Any pending slot added later whose drain queues a `ConfigEdit`
   belongs in that function too.
+- A bound that runs out is reported as what it is. The worker is never stopped by an answer nobody
+  can hear — it keeps writing every edit it has already accepted, for as long as the process lives
+  — and teardown names each edit it did not hear back about (by slot, swatch, or action) at warn
+  level as possibly unsaved, rather than claiming they were left to finish. `shutdown` returns that
+  same enumeration as a `ConfigEditShutdownReport`, which separates edits the worker took and never
+  answered for from edits no worker ever took. Process exit can still discard every unconfirmed edit
+  that has not finished; the one in flight lands whole or not at all because the write is a rename,
+  while edits queued behind it have not started yet.
 - The gestures are decided in `src/backend/wayland/state/keybindings.rs` (palette row controls and
   the toolbar rebind gesture, which queue onto `InputState::pending_keybinding_edits` — a FIFO,
   not the single-slot `PendingBackendAction`, so two edits recorded from one batch of input events

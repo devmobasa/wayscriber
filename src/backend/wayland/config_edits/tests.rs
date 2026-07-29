@@ -119,6 +119,24 @@ fn hold_config_write_lock(config_path: &Path) -> File {
     file
 }
 
+/// Wait for a write the worker is finishing with nothing left to report it
+/// through.
+///
+/// The file is the only witness once the completion channel is gone, so this
+/// polls it rather than a completion — with a deadline, because a worker that
+/// stopped early is exactly what these tests are about and it must fail rather
+/// than hang.
+fn wait_for_slot(path: &Path, slot: usize, name: &str) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while slot_name(path, slot).as_deref() != Some(name) {
+        assert!(
+            Instant::now() < deadline,
+            "the worker must write {name} into slot {slot} even with nobody listening"
+        );
+        thread::sleep(Duration::from_millis(5));
+    }
+}
+
 fn slot_name(path: &Path, slot: usize) -> Option<String> {
     crate::config::ConfigDocument::load_from_path(path)
         .expect("the written config reloads")
@@ -386,6 +404,114 @@ fn shutdown_drains_edits_the_channel_had_no_room_for() {
                 "an edit still waiting for room must not be lost to teardown"
             );
         }
+    });
+}
+
+/// The event loop can go away with edits already accepted, and they are still
+/// written.
+///
+/// Teardown's bound can run out while a write is stalled; shutdown returns, and
+/// the completion channel's receiver goes with it. Every answer after that is
+/// undeliverable — but the edits queued behind the stalled one are gestures the
+/// user made, and a worker that stopped at the first answer nobody could hear
+/// would drop them while the warning said they had been left to finish. The
+/// wording is the disposable half. The write is not, so it continues.
+///
+/// The lock is held across the handover, which is what makes this exact rather
+/// than timed: the first write provably cannot finish — so its completion
+/// provably cannot be sent — until after the receiver is gone.
+#[test]
+fn the_worker_writes_the_edits_behind_a_stalled_one_after_the_receiver_is_gone() {
+    with_temp_config_home(|config_root| {
+        let path = config_in(config_root);
+        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let mut worker = ConfigEditWorker::new(wake.handle());
+
+        let held = hold_config_write_lock(&path);
+        worker.submit(save(1, "Stalled"));
+        worker.submit(save(2, "Behind it"));
+        assert!(
+            worker.staged.is_empty(),
+            "both edits must be inside the worker, or this test is about the staging queue"
+        );
+
+        // The event loop's end of the worker going away, which is what teardown
+        // leaves behind when it gives up waiting.
+        drop(
+            worker
+                .running
+                .take()
+                .expect("the first edit started a worker"),
+        );
+        assert_eq!(
+            slot_name(&path, 1),
+            None,
+            "the stalled write cannot have finished while this test held the lock"
+        );
+        drop(held);
+
+        wait_for_slot(&path, 2, "Behind it");
+        assert_eq!(
+            slot_name(&path, 1).as_deref(),
+            Some("Stalled"),
+            "and the edit that was in flight when the receiver went is written too"
+        );
+    });
+}
+
+/// Teardown that runs out of time names the edits it could not confirm.
+///
+/// A bounded wait is the right trade — a filesystem that has stopped answering
+/// must not hold the overlay on screen — but reporting "leaving them to finish"
+/// tells the user something teardown does not know. What it knows is which
+/// gestures it never heard back about, and that is what it says, by slot and by
+/// swatch, so the user has something to check.
+///
+/// The other half of the honesty is in the file: nothing was stopped, so the
+/// edits teardown gave up on still land once the filesystem answers.
+#[test]
+fn shutdown_that_gives_up_waiting_names_the_edits_it_could_not_confirm() {
+    with_temp_config_home(|config_root| {
+        let path = config_in(config_root);
+        let wake = RuntimeWakeSource::new().expect("an eventfd");
+        let mut worker = ConfigEditWorker::with_drain(wake.handle(), Duration::from_millis(50));
+
+        let held = hold_config_write_lock(&path);
+        worker.submit(save(4, "Unconfirmed"));
+        worker.submit(ConfigEdit::QuickColor(QuickColorEdit {
+            index: 2,
+            color: crate::draw::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+        }));
+
+        let report = worker.shutdown();
+
+        assert_eq!(
+            report.unconfirmed,
+            vec![
+                ConfigEditIdentity::PresetSlot(4),
+                ConfigEditIdentity::QuickColorIndex(2),
+            ],
+            "teardown must name what it could not confirm, in the order the gestures were made"
+        );
+        assert!(
+            report.unwritten.is_empty(),
+            "both edits reached the worker, so neither is one nothing ever took"
+        );
+        assert_eq!(
+            join_identities(&report.unconfirmed),
+            "preset slot 4, quick color slot 3",
+            "and the words the warning carries must name the gestures the user made"
+        );
+
+        // Nothing was stopped: the write teardown gave up waiting for still
+        // reaches the file.
+        drop(held);
+        wait_for_slot(&path, 4, "Unconfirmed");
     });
 }
 

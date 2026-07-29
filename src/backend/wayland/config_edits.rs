@@ -46,19 +46,33 @@
 //! drains the pending gestures one last time, hands the staging queue over, and
 //! waits a bounded five seconds for the writes. Only the wording is given up:
 //! there is no overlay left to toast on.
+//!
+//! A bound is a bound, though, and a filesystem that has stopped answering
+//! reaches it. Two things happen there, and neither of them is a claim that the
+//! edits landed. The worker is not stopped: it goes on writing everything
+//! already accepted for as long as the process lives, whether or not anything is
+//! still listening for the answers — the wording was always the disposable half,
+//! and an answer nobody can hear is no reason to drop a write nobody can
+//! reconstruct. And teardown says what it does not know, naming each edit it
+//! never heard back about as possibly unsaved rather than reporting it as left
+//! to finish. Process exit can still stop the in-flight write and discard every
+//! queued edit behind it. The in-flight write is lost whole — writes rename a
+//! finished temp file into place — so the file is either that edit or what it
+//! said before, never half of either.
 
 use super::RuntimeWakeHandle;
 use super::state::{
     WaylandState, queue_keybinding_edit, queue_preset_action, queue_quick_color_edit,
 };
 use crate::config::{
-    Action, Config, ConfigEditOutcome, persist_keybinding_edit, persist_preset_slot,
+    Action, Config, ConfigEditOutcome, action_label, persist_keybinding_edit, persist_preset_slot,
     persist_quick_color,
 };
 use crate::input::state::{InputState, KeybindingEditRequest, PresetAction, QuickColorEdit};
 use anyhow::{Result, anyhow};
 use log::{error, info, warn};
 use std::collections::VecDeque;
+use std::fmt;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::mpsc::{
     Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError, sync_channel,
@@ -123,6 +137,69 @@ pub(in crate::backend::wayland) enum ConfigEdit {
     QuickColor(QuickColorEdit),
 }
 
+impl ConfigEdit {
+    /// Which gesture this edit is, in the words a log line can name it by.
+    ///
+    /// The edit itself goes into the worker's channel and stops being this
+    /// side's to describe; this is what stays behind. Teardown that runs out of
+    /// time has to tell the user which gestures to check, and "some config
+    /// edits" is not something anybody can act on — a slot, a swatch, or an
+    /// action is.
+    fn identity(&self) -> ConfigEditIdentity {
+        match self {
+            Self::Keybinding(write) => ConfigEditIdentity::Shortcut(write.request.action),
+            Self::Preset(PresetAction::Save { slot, .. } | PresetAction::Clear { slot }) => {
+                ConfigEditIdentity::PresetSlot(*slot)
+            }
+            Self::QuickColor(edit) => ConfigEditIdentity::QuickColorIndex(edit.index),
+        }
+    }
+}
+
+/// What one edit is about, without the edit.
+///
+/// `Copy` and three words wide, so keeping one per outstanding edit costs
+/// nothing per gesture and nothing is borrowed from the edit the worker owns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum ConfigEditIdentity {
+    Shortcut(Action),
+    PresetSlot(usize),
+    /// Zero-based in the model; formatted as the one-based slot the UI names.
+    QuickColorIndex(usize),
+}
+
+impl fmt::Display for ConfigEditIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Shortcut(action) => {
+                write!(formatter, "the shortcut for {}", action_label(*action))
+            }
+            Self::PresetSlot(slot) => write!(formatter, "preset slot {slot}"),
+            Self::QuickColorIndex(index) => {
+                write!(formatter, "quick color slot {}", index.saturating_add(1))
+            }
+        }
+    }
+}
+
+/// The edits teardown could not account for, in the order they were made.
+///
+/// Returned as well as logged. The warning is what the user reads, and this is
+/// the same enumeration as a value, so the suite can assert on what teardown
+/// knows rather than on how it prints it.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct ConfigEditShutdownReport {
+    /// Edits the worker took and did not answer for inside teardown's bound.
+    ///
+    /// Each of these may or may not be in the file: the worker goes on writing
+    /// them while the process lives, and process exit can prevent every one
+    /// still outstanding from landing.
+    pub(in crate::backend::wayland) unconfirmed: Vec<ConfigEditIdentity>,
+    /// Edits no worker ever took, which is the one thing teardown can say
+    /// plainly: these are not in the file.
+    pub(in crate::backend::wayland) unwritten: Vec<ConfigEditIdentity>,
+}
+
 /// An edit and what the file did with it.
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct ConfigEditCompletion {
@@ -157,9 +234,21 @@ pub(in crate::backend::wayland) struct ConfigEditWorker {
     /// from the front is what keeps each entry with its own completion, and the
     /// list is as deep as one burst of deliberate gestures — a handful.
     projected_shortcuts: Vec<ProjectedShortcut>,
+    /// Every edit the worker has taken and not answered for, oldest first.
+    ///
+    /// The staging queue can still name what it holds; an edit handed over
+    /// belongs to the worker, and teardown that gives up waiting for it would
+    /// otherwise have nothing to say beyond "some writes". Answers arrive in
+    /// the order the edits went in, so the front is always the next completion's
+    /// and this stays in step by popping one per completion.
+    handed_over: VecDeque<ConfigEditIdentity>,
     /// How many edits the worker's channel holds. A field rather than the
     /// constant so the suite can fill one on purpose.
     capacity: usize,
+    /// How long teardown waits. A field rather than the constant for the same
+    /// reason: the branch that gives up is one the suite has to reach without
+    /// stalling a real filesystem for five seconds.
+    drain: Duration,
     /// Why there is no worker, when starting one failed. The edits it was meant
     /// to take say this when their turn comes.
     start_failure: Option<String>,
@@ -184,9 +273,19 @@ impl ConfigEditWorker {
             running: None,
             staged: VecDeque::new(),
             projected_shortcuts: Vec::new(),
+            handed_over: VecDeque::new(),
             capacity,
+            drain: SHUTDOWN_DRAIN,
             start_failure: None,
         }
+    }
+
+    /// [`Self::new`], with teardown's bound shortened for the suite.
+    #[cfg(test)]
+    fn with_drain(wake: RuntimeWakeHandle, drain: Duration) -> Self {
+        let mut worker = Self::new(wake);
+        worker.drain = drain;
+        worker
     }
 
     /// The shortcut deltas an edit made now has to take account of, oldest
@@ -256,8 +355,11 @@ impl ConfigEditWorker {
                 return;
             };
             while let Some(edit) = self.staged.pop_front() {
+                let identity = edit.identity();
                 match commands.try_send(edit) {
-                    Ok(()) => {}
+                    // Named here rather than at submission, because this is
+                    // where the edit stops being this side's to describe.
+                    Ok(()) => self.handed_over.push_back(identity),
                     // The channel is full: this edit and everything behind it
                     // wait, in order, for the worker to make room.
                     Err(TrySendError::Full(edit)) => {
@@ -312,6 +414,9 @@ impl ConfigEditWorker {
                 }
             }
         }
+        if finished.is_some() {
+            self.handed_over.pop_front();
+        }
         let completion = match finished {
             Some(completion) => completion,
             // No worker, or none left: nothing older can still arrive, so the
@@ -365,30 +470,39 @@ impl ConfigEditWorker {
     /// first, inside the same bound. What is given up here is the *wording*:
     /// there is no overlay left to show a toast on, so the completions are
     /// logged instead of routed.
-    pub(in crate::backend::wayland) fn shutdown(&mut self) {
-        let deadline = Instant::now() + SHUTDOWN_DRAIN;
+    ///
+    /// The bound can run out, and what teardown owes the user then is an honest
+    /// account rather than a reassuring one. It does not stop the worker — the
+    /// edits it has taken go on being written for as long as the process lives,
+    /// with their answers falling on the floor — and it reports every edit it
+    /// did not hear back about by name, as possibly unsaved. A drain that *did*
+    /// complete is stronger than that and is treated as such: the worker is
+    /// joined, so those writes are on disk before this returns.
+    pub(in crate::backend::wayland) fn shutdown(&mut self) -> ConfigEditShutdownReport {
+        let deadline = Instant::now() + self.drain;
         self.hand_over_staged(deadline);
 
         let Some(mut running) = self.running.take() else {
-            self.report_unwritten();
-            return;
+            return self.account_for_the_rest(false);
         };
         // The worker stops once its queue is empty and the sender is gone.
         running.commands.take();
 
         let mut drained = false;
+        let mut timed_out = false;
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
-                warn!("Config edits were still being written at shutdown; leaving them to finish");
+                timed_out = true;
                 break;
             }
             match running.completions.recv_timeout(remaining) {
-                Ok(completion) => log_completion(&completion),
+                Ok(completion) => {
+                    self.handed_over.pop_front();
+                    log_completion(&completion);
+                }
                 Err(RecvTimeoutError::Timeout) => {
-                    warn!(
-                        "Config edits were still being written at shutdown; leaving them to finish"
-                    );
+                    timed_out = true;
                     break;
                 }
                 Err(RecvTimeoutError::Disconnected) => {
@@ -406,7 +520,39 @@ impl ConfigEditWorker {
         {
             error!("The config-edit worker panicked");
         }
-        self.report_unwritten();
+        self.account_for_the_rest(timed_out)
+    }
+
+    /// Say, by name, what teardown is leaving behind.
+    ///
+    /// Two different claims, kept apart because they are not equally certain.
+    /// An edit the worker took and never answered for may well be in the file
+    /// by now — the worker is still writing — so it is named as one to check,
+    /// not as one that was lost. An edit no worker ever took is simply not
+    /// there.
+    fn account_for_the_rest(&mut self, timed_out: bool) -> ConfigEditShutdownReport {
+        let unconfirmed: Vec<ConfigEditIdentity> = self.handed_over.drain(..).collect();
+        if !unconfirmed.is_empty() {
+            let names = join_identities(&unconfirmed);
+            if timed_out {
+                warn!(
+                    "Config edits were still being written {:?} after the overlay was told to \
+                     quit, and these were not confirmed saved: {names}. The worker continues \
+                     while the process lives, but process exit can discard every edit still \
+                     outstanding; an in-flight write lands whole or not at all.",
+                    self.drain
+                );
+            } else {
+                warn!(
+                    "The config-edit worker stopped before answering for these edits, which were \
+                     not confirmed saved: {names}"
+                );
+            }
+        }
+        ConfigEditShutdownReport {
+            unconfirmed,
+            unwritten: self.report_unwritten(),
+        }
     }
 
     /// Push the staging queue into the worker before teardown drops the sender.
@@ -430,8 +576,12 @@ impl ConfigEditWorker {
             if remaining.is_zero() {
                 return;
             }
-            match running.completions.recv_timeout(remaining) {
-                Ok(completion) => log_completion(&completion),
+            let received = running.completions.recv_timeout(remaining);
+            match received {
+                Ok(completion) => {
+                    self.handed_over.pop_front();
+                    log_completion(&completion);
+                }
                 Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => return,
             }
         }
@@ -445,11 +595,18 @@ impl ConfigEditWorker {
     /// what is drained here was never written at all — so the projections go
     /// with them. A worker restarted after this (the suite does it) must not
     /// begin with edits nobody is waiting on still masking the keymap.
-    fn report_unwritten(&mut self) {
-        for _ in self.staged.drain(..) {
-            warn!("A config edit was still waiting to be written at shutdown and was not saved");
+    fn report_unwritten(&mut self) -> Vec<ConfigEditIdentity> {
+        let unwritten: Vec<ConfigEditIdentity> =
+            self.staged.drain(..).map(|edit| edit.identity()).collect();
+        if !unwritten.is_empty() {
+            warn!(
+                "These config edits were still waiting for the worker at shutdown and were not \
+                 saved: {}",
+                join_identities(&unwritten)
+            );
         }
         self.projected_shortcuts.clear();
+        unwritten
     }
 
     fn start(&mut self) -> std::io::Result<()> {
@@ -474,11 +631,36 @@ impl Drop for ConfigEditWorker {
     }
 }
 
+/// One line naming several edits, for a report that has to be readable.
+fn join_identities(identities: &[ConfigEditIdentity]) -> String {
+    identities
+        .iter()
+        .map(ConfigEditIdentity::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Write every accepted edit, and keep writing them whether or not anybody is
+/// still listening.
+///
+/// The answers can stop being deliverable at any point: teardown's bound runs
+/// out, the event loop's end of the worker goes, and the completion channel's
+/// receiver goes with it. That is the moment this thread used to stop — with
+/// edits already accepted still in its queue, which is the user's gesture
+/// discarded on the grounds that there was nobody left to tell about it. The
+/// wording was always the disposable half. The write is the half nobody can
+/// reconstruct, so an undeliverable answer is logged once and the queue is
+/// written to the end.
+///
+/// Nothing here can block on the failure: a dropped receiver makes `send`
+/// return rather than wait, and the wake is skipped with it, because there is no
+/// completion for the loop to pick up.
 fn run_worker(
     commands: &Receiver<ConfigEdit>,
     completions: &SyncSender<ConfigEditCompletion>,
     wake: &RuntimeWakeHandle,
 ) {
+    let mut answers_land = true;
     while let Ok(edit) = commands.recv() {
         // A panic in a write is still an answer the caller is owed: without
         // this the completion never arrives and a shortcut edit is neither
@@ -489,7 +671,14 @@ fn run_worker(
             .send(ConfigEditCompletion { edit, result })
             .is_err()
         {
-            break;
+            if answers_land {
+                warn!(
+                    "The overlay stopped listening for config-edit results; the edits it already \
+                     accepted are still being written, without wording"
+                );
+                answers_land = false;
+            }
+            continue;
         }
         if let Err(error) = wake.wake() {
             error!("Failed to wake the overlay for a finished config edit: {error}");

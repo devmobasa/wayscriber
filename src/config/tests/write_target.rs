@@ -659,6 +659,88 @@ fn a_first_save_into_a_directory_that_does_not_exist_yet_is_not_a_change_on_disk
     );
 }
 
+/// A `..` sitting below the deepest directory that exists.
+///
+/// The walk cannot canonicalize `missing/`, so `..` reaches the pin as itself —
+/// and then the save creates the directories, `create_dir_all` follows the `..`
+/// as the kernel does, and the check that follows canonicalizes through it. Left
+/// unresolved, the two derivations name one file two ways and the first Save is
+/// refused as somebody else's change to a file this save has just made. The
+/// configurator holds exactly the document that refusal lands in, and has no
+/// reload-and-reapply retry to recover with.
+///
+/// Nothing in the suffix exists, so resolving the `..` lexically is what the
+/// kernel is going to do anyway. Both saves have to go through: the first makes
+/// the directories, and the second runs through the document the first handed
+/// back — the editor that never reloads.
+#[test]
+fn a_dot_dot_below_a_missing_directory_saves_twice_without_reporting_itself() {
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let path = temp.path().join("missing/../target/config.toml");
+
+    let document = ConfigDocument::load_from_path(&path).expect("a missing config loads defaults");
+    let mut created = document.config().clone();
+    created.presets.set_slot(1, Some(preset("First")));
+    let (saved, _) = document
+        .save_with_backup(created)
+        .expect("the save creates the directories it was told to write in")
+        .into_parts();
+
+    let mut second = saved.config().clone();
+    second.presets.set_slot(2, Some(preset("Second")));
+    saved
+        .save_with_backup(second)
+        .expect("nothing but this save's own directory creation happened in between");
+
+    let written = fs::read_to_string(temp.path().join("target/config.toml"))
+        .expect("the file the `..` names, once it is resolved");
+    assert!(
+        written.contains("[presets.slot_1]") && written.contains("[presets.slot_2]"),
+        "both edits must be in the file the two saves shared: {written}"
+    );
+}
+
+/// The same `..`, climbing past the deepest directory that exists.
+///
+/// The ancestor the walk pins is canonical, so a parent step out of it is exact
+/// rather than a guess — it holds no links of its own for the step to mean
+/// something else through — and the file is pinned where `create_dir_all` is
+/// going to put it, one level above the directory the path was named through.
+/// A climb that runs past the root has nowhere further to go and stays there,
+/// which is what the kernel does with it too.
+#[test]
+fn a_dot_dot_climbing_past_the_existing_ancestor_pins_where_the_save_creates_it() {
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let inner = temp.path().join("inner");
+    fs::create_dir_all(&inner).expect("the deepest directory this test lets exist");
+    let path = inner.join("missing/../../outside/config.toml");
+
+    let document = ConfigDocument::load_from_path(&path).expect("a missing config loads defaults");
+    let mut created = document.config().clone();
+    created.presets.set_slot(1, Some(preset("First")));
+    let (saved, _) = document
+        .save_with_backup(created)
+        .expect("the save creates the directories it was told to write in")
+        .into_parts();
+
+    let mut second = saved.config().clone();
+    second.presets.set_slot(2, Some(preset("Second")));
+    saved
+        .save_with_backup(second)
+        .expect("nothing but this save's own directory creation happened in between");
+
+    let written = fs::read_to_string(temp.path().join("outside/config.toml"))
+        .expect("the file the climb names, once it is resolved");
+    assert!(
+        written.contains("[presets.slot_1]") && written.contains("[presets.slot_2]"),
+        "both edits must be in the file the two saves shared: {written}"
+    );
+    assert!(
+        !inner.join("outside").exists(),
+        "the climb must not be dropped: the file belongs above the directory the path named"
+    );
+}
+
 /// The same first save, through a path that has no ancestor to fall back to.
 ///
 /// A relative config path whose first component is missing gives the walk

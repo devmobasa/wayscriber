@@ -13,10 +13,11 @@ use crate::durable_io::{
 };
 use anyhow::{Context, Result, anyhow, bail};
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fmt;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use toml_edit::DocumentMut;
 
 use lock::{CONFIG_WRITE_LOCK_TIMEOUT, acquire_config_write_lock};
@@ -289,6 +290,13 @@ impl SourceRevision {
 /// reports its own `mkdir` as somebody else's retarget. Resolving the anchor
 /// first makes both derivations name the same absolute file, before and after
 /// the directories exist.
+///
+/// The `..` and `.` the walk collects on its way past directories that are not
+/// there are resolved rather than carried, for that same reason and by
+/// [`place_unresolved`]: a pin holding `missing/../wayscriber` would be made
+/// into `wayscriber` by the save's own `mkdir` and canonicalized away at the
+/// very next comparison, which is the false stale again with nothing on disk
+/// having changed.
 fn pin_destination(final_path: &Path) -> Result<PathBuf> {
     let Some(file_name) = final_path.file_name() else {
         bail!(
@@ -308,39 +316,94 @@ fn pin_destination(final_path: &Path) -> Result<PathBuf> {
         })
         .transpose()?;
     let final_path = anchored.as_deref().unwrap_or(final_path);
-    let mut trailing = vec![file_name.to_os_string()];
-    let mut current = final_path.parent();
-    while let Some(directory) = current {
-        if directory.as_os_str().is_empty() {
-            break;
+    let mut unresolved = vec![UnresolvedComponent::Name(file_name.to_os_string())];
+    let ancestor = 'walk: {
+        let mut current = final_path.parent();
+        while let Some(directory) = current {
+            if directory.as_os_str().is_empty() {
+                break 'walk directory.to_path_buf();
+            }
+            match fs::canonicalize(directory) {
+                Ok(pinned) => break 'walk pinned,
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    let Some(component) = directory.components().next_back() else {
+                        break 'walk directory.to_path_buf();
+                    };
+                    match component {
+                        Component::Normal(name) => {
+                            unresolved.push(UnresolvedComponent::Name(name.to_os_string()));
+                        }
+                        Component::ParentDir => unresolved.push(UnresolvedComponent::Parent),
+                        // A root or a prefix is what the walk canonicalizes
+                        // against, never what it walks past, and a `.` is not a
+                        // component an anchored path still has. Reaching one is
+                        // a path with nothing left to resolve against, and it
+                        // stands as the walk found it.
+                        Component::CurDir | Component::RootDir | Component::Prefix(_) => {
+                            break 'walk directory.to_path_buf();
+                        }
+                    }
+                    current = directory.parent();
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "Failed to resolve the config directory {}",
+                            directory.display()
+                        )
+                    });
+                }
+            }
         }
-        match fs::canonicalize(directory) {
-            Ok(mut pinned) => {
-                pinned.extend(trailing.iter().rev());
-                return Ok(pinned);
-            }
-            Err(error) if error.kind() == ErrorKind::NotFound => {
-                let Some(name) = directory.file_name() else {
-                    break;
-                };
-                trailing.push(name.to_os_string());
-                current = directory.parent();
-            }
-            Err(error) => {
-                return Err(error).with_context(|| {
-                    format!(
-                        "Failed to resolve the config directory {}",
-                        directory.display()
-                    )
-                });
+        // Only a path the walk runs off the top of reaches this, which an
+        // absolute one cannot — it ends at `/`, and `/` canonicalizes — and a
+        // relative one stops at the empty parent above. Nothing on it resolved,
+        // so the components it collected stand as they were named.
+        PathBuf::new()
+    };
+    Ok(place_unresolved(ancestor, &unresolved))
+}
+
+/// One component of the destination the walk could not resolve on disk.
+///
+/// Deeper than the deepest ancestor that exists, so a name here is a directory
+/// the save is about to create and a `..` here is a step nothing physical can
+/// answer.
+enum UnresolvedComponent {
+    Name(OsString),
+    Parent,
+}
+
+/// Lay the components the walk could not resolve onto the ancestor it did,
+/// deepest last.
+///
+/// `..` is applied rather than kept. Keeping it is what made the pin disagree
+/// with itself: `prepare_config_parent` creates the directories, the next
+/// derivation canonicalizes through them, and the save that pinned the
+/// unresolved spelling reports its own `mkdir` as somebody else's retarget —
+/// which for the configurator, whose Save has no reload-and-reapply retry, is a
+/// refusal that stands until the user reloads with nothing on disk having
+/// changed.
+///
+/// Lexical is the faithful reading here, not an approximation of one. Nothing
+/// in this suffix exists, so nothing in it can be a symlink, and the answer the
+/// kernel will give once the directories are made is the same one: a parent
+/// step out of a directory that is about to be created lands on the directory
+/// it is about to be created in. Past the ancestor it keeps climbing through
+/// it, which is exact for the same reason the ancestor was canonicalized — it
+/// holds no links of its own for a parent step to mean something else through.
+/// Past the root it stays at the root, as it does everywhere else.
+fn place_unresolved(ancestor: PathBuf, unresolved: &[UnresolvedComponent]) -> PathBuf {
+    let mut pinned = ancestor;
+    for component in unresolved.iter().rev() {
+        match component {
+            UnresolvedComponent::Name(name) => pinned.push(name),
+            UnresolvedComponent::Parent => {
+                pinned.pop();
             }
         }
     }
-    // Nothing on the path exists to resolve against, which a `..` sitting above
-    // a directory that is not there can still reach. The path is absolute by
-    // now, so it stands as the chain left it and pins the same way at the next
-    // comparison whatever the save creates in between.
-    Ok(final_path.to_path_buf())
+    pinned
 }
 
 #[derive(Debug)]
@@ -568,6 +631,16 @@ impl ConfigDocument {
         // bytes nothing checked.
         let destination = self.revision.destination();
         prepare_config_parent(destination)?;
+        // And the directories the *source path* names, which the destination's
+        // are not always a superset of: the pin resolves `..` away, so a config
+        // path reaching its file through a directory that does not exist yet
+        // names a file the write can create and a `.bak` the copy below cannot,
+        // because that copy is taken beside the path the user knows and nothing
+        // can walk a path through a directory that is not there. Making them is
+        // what `create_dir_all` on the path they typed would do anyway, and the
+        // pin does not move when they appear — it already reads them the way the
+        // kernel will.
+        prepare_config_parent(&self.source_path)?;
         // Everything from here to the rename is one window. The comparison
         // below only means anything while no other writer can rename between it
         // and this write, and the two are separate syscalls in separate
