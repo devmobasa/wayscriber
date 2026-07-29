@@ -17,11 +17,13 @@ impl WaylandState {
 
         if !top_visible {
             self.data.inline_top_hover = None;
+            self.data.inline_top_tooltip_pending = false;
             self.data.inline_top_focus_index = None;
             self.data.inline_top_focus_id = None;
         }
         if !side_visible {
             self.data.inline_side_hover = None;
+            self.data.inline_side_tooltip_pending = false;
             self.data.inline_side_focus_index = None;
             self.data.inline_side_focus_id = None;
         }

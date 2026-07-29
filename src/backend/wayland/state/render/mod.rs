@@ -455,5 +455,6 @@ fn input_full_damage_reason(
     reason.map(|reason| match reason {
         crate::draw::DirtyFullReason::CanvasClear => FullDamageReason::CanvasClear,
         crate::draw::DirtyFullReason::FirstRunOnboarding => FullDamageReason::FirstRunOnboarding,
+        crate::draw::DirtyFullReason::InlineToolbar => FullDamageReason::InlineToolbar,
     })
 }

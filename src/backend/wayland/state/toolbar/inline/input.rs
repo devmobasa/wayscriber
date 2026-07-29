@@ -70,8 +70,6 @@ impl WaylandState {
             return false;
         };
         self.handle_toolbar_event(ToolbarEvent::EditQuickColor { index }, conn, qh);
-        self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
         self.set_pointer_over_toolbar(true);
         true
     }
@@ -123,6 +121,18 @@ impl WaylandState {
 
         let was_top_hover = self.data.inline_top_hover;
         let was_side_hover = self.data.inline_side_hover;
+        let was_top_hit = was_top_hover.and_then(|(x, y)| {
+            self.data
+                .inline_top_hits
+                .iter()
+                .position(|hit| hit.contains(x, y))
+        });
+        let was_side_hit = was_side_hover.and_then(|(x, y)| {
+            self.data
+                .inline_side_hits
+                .iter()
+                .position(|hit| hit.contains(x, y))
+        });
 
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
@@ -162,8 +172,6 @@ impl WaylandState {
         {
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
             self.handle_toolbar_event(evt, None, None);
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
             over_toolbar = true;
         } else if self.toolbar_dragging() {
             if let Some(kind) = self.active_move_drag_kind() {
@@ -172,9 +180,53 @@ impl WaylandState {
             over_toolbar = true;
         }
 
-        if was_top_hover != self.data.inline_top_hover
+        let top_hit = self.data.inline_top_hover.and_then(|(x, y)| {
+            self.data
+                .inline_top_hits
+                .iter()
+                .position(|hit| hit.contains(x, y))
+        });
+        let side_hit = self.data.inline_side_hover.and_then(|(x, y)| {
+            self.data
+                .inline_side_hits
+                .iter()
+                .position(|hit| hit.contains(x, y))
+        });
+        let top_target_changed = inline_hover_target_changed(
+            was_top_hover,
+            was_top_hit,
+            self.data.inline_top_hover,
+            top_hit,
+        );
+        let side_target_changed = inline_hover_target_changed(
+            was_side_hover,
+            was_side_hit,
+            self.data.inline_side_hover,
+            side_hit,
+        );
+        if top_target_changed {
+            self.data.inline_top_tooltip_pending = inline_tooltip_pending(
+                self.data.inline_top_hover_start,
+                hit_has_tooltip(&self.data.inline_top_hits, top_hit),
+            );
+        }
+        if side_target_changed {
+            self.data.inline_side_tooltip_pending = inline_tooltip_pending(
+                self.data.inline_side_hover_start,
+                hit_has_tooltip(&self.data.inline_side_hits, side_hit),
+            );
+        }
+        if top_target_changed || side_target_changed {
+            // The inline toolbar and annotations share the main surface's SHM
+            // swapchain. Refresh every slot when hover visuals change so a
+            // compositor cannot resurface a buffer containing older toolbar or
+            // annotation pixels during rapid pointer motion.
+            self.mark_inline_toolbar_full_damage();
+        } else if was_top_hover != self.data.inline_top_hover
             || was_side_hover != self.data.inline_side_hover
         {
+            // Preserve motion-driven tooltip timing without paying for a full
+            // swapchain refresh while the pointer stays on the same control.
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
@@ -186,8 +238,7 @@ impl WaylandState {
             if self.data.toolbar_focus_target.is_some() {
                 self.data.toolbar_focus_target = None;
                 self.clear_inline_toolbar_focus();
-                self.toolbar.mark_dirty();
-                self.input_state.needs_redraw = true;
+                self.mark_inline_toolbar_full_damage();
             }
         }
 
@@ -213,8 +264,6 @@ impl WaylandState {
             self.set_toolbar_dragging(drag);
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
             self.handle_toolbar_event(evt, conn, qh);
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
             self.set_pointer_over_toolbar(true);
             return true;
         }
@@ -235,6 +284,8 @@ impl WaylandState {
         self.data.inline_side_hover = None;
         self.data.inline_top_hover_start = None;
         self.data.inline_side_hover_start = None;
+        self.data.inline_top_tooltip_pending = false;
+        self.data.inline_side_tooltip_pending = false;
         self.data.toolbar_focus_target = None;
         self.clear_inline_toolbar_focus();
         self.set_pointer_over_toolbar(false);
@@ -245,8 +296,7 @@ impl WaylandState {
             self.cancel_toolbar_move_drag();
         }
         if had_hover || had_focus {
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
+            self.mark_inline_toolbar_full_damage();
         }
     }
 
@@ -264,8 +314,6 @@ impl WaylandState {
             {
                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                 self.handle_toolbar_event(evt, None, None);
-                self.toolbar.mark_dirty();
-                self.input_state.needs_redraw = true;
             }
             drag_log(format!(
                 "inline release: pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
@@ -288,9 +336,70 @@ fn point_in_surface(rect: Option<(f64, f64, f64, f64)>, position: (f64, f64)) ->
     rect.is_some_and(|(x, y, w, h)| geometry::point_in_rect(position.0, position.1, x, y, w, h))
 }
 
+fn inline_hover_target_changed(
+    previous_hover: Option<(f64, f64)>,
+    previous_hit: Option<usize>,
+    hover: Option<(f64, f64)>,
+    hit: Option<usize>,
+) -> bool {
+    previous_hover.is_some() != hover.is_some() || previous_hit != hit
+}
+
+fn hit_has_tooltip(
+    hits: &[crate::backend::wayland::toolbar::hit::HitRegion],
+    hit: Option<usize>,
+) -> bool {
+    hit.and_then(|index| hits.get(index))
+        .is_some_and(|hit| hit.tooltip.is_some())
+}
+
+fn inline_tooltip_pending(hover_start: Option<Instant>, hit_has_tooltip: bool) -> bool {
+    hit_has_tooltip
+        && hover_start.is_some_and(|start| {
+            start.elapsed() < crate::backend::wayland::toolbar::render::TOOLTIP_DELAY
+        })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::point_in_surface;
+    use super::{inline_hover_target_changed, inline_tooltip_pending, point_in_surface};
+    use std::time::Instant;
+
+    #[test]
+    fn inline_hover_damage_tracks_control_transitions_not_pointer_pixels() {
+        assert!(!inline_hover_target_changed(
+            Some((10.0, 10.0)),
+            Some(2),
+            Some((11.0, 10.0)),
+            Some(2),
+        ));
+        assert!(inline_hover_target_changed(
+            Some((10.0, 10.0)),
+            Some(2),
+            Some((20.0, 10.0)),
+            Some(3),
+        ));
+        assert!(inline_hover_target_changed(
+            None,
+            None,
+            Some((10.0, 10.0)),
+            None,
+        ));
+        assert!(inline_hover_target_changed(
+            Some((10.0, 10.0)),
+            None,
+            None,
+            None,
+        ));
+    }
+
+    #[test]
+    fn inline_tooltip_is_pending_only_during_the_delay() {
+        let recent = Instant::now();
+        assert!(inline_tooltip_pending(Some(recent), true));
+        assert!(!inline_tooltip_pending(Some(recent), false));
+        assert!(!inline_tooltip_pending(None, true));
+    }
 
     #[test]
     fn inline_surface_gate_rejects_clicks_beyond_all_edges() {

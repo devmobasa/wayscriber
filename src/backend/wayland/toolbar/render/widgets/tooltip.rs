@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use super::constants::{
     COLOR_TEXT_PRIMARY, COLOR_TOOLTIP_BACKGROUND, COLOR_TOOLTIP_BORDER, COLOR_TOOLTIP_SHADOW,
@@ -7,10 +7,8 @@ use super::constants::{
 };
 use super::draw_round_rect;
 use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::backend::wayland::toolbar::render::TOOLTIP_DELAY;
 use crate::ui_text::{UiTextStyle, text_layout};
-
-/// Delay before showing tooltips.
-const TOOLTIP_DELAY: Duration = Duration::from_millis(250);
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip_with_delay(
     ctx: &cairo::Context,

@@ -3,8 +3,8 @@ use std::env;
 
 use crate::config::Config;
 use crate::env_vars::{
-    DESKTOP_SESSION_ENV, SWAYSOCK_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_FULLSCREEN_ENV,
-    XDG_FULLSCREEN_FORCE_ENV, XDG_OUTPUT_ENV, XDG_SESSION_DESKTOP_ENV,
+    DESKTOP_SESSION_ENV, NIRI_SOCKET_ENV, SWAYSOCK_ENV, XDG_CURRENT_DESKTOP_ENV,
+    XDG_FULLSCREEN_ENV, XDG_FULLSCREEN_FORCE_ENV, XDG_OUTPUT_ENV, XDG_SESSION_DESKTOP_ENV,
 };
 
 pub(super) struct OutputPreferences {
@@ -32,6 +32,7 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
     let session_env = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
     let desktop_session = env::var(DESKTOP_SESSION_ENV).unwrap_or_default();
     let sway_sock = env::var(SWAYSOCK_ENV).unwrap_or_default();
+    let niri_socket = env::var(NIRI_SOCKET_ENV).unwrap_or_default();
     let force_fullscreen = env::var(XDG_FULLSCREEN_FORCE_ENV)
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -46,6 +47,7 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
         &session_env,
         &desktop_session,
         &sway_sock,
+        &niri_socket,
     );
     if main_surface_uses_overlay_layer {
         info!(
@@ -65,11 +67,13 @@ fn main_surface_uses_overlay_layer_with_env(
     session_env: &str,
     desktop_session: &str,
     sway_sock: &str,
+    niri_socket: &str,
 ) -> bool {
     desktop_matches_any(desktop_env)
         || desktop_matches_any(session_env)
         || desktop_matches_any(desktop_session)
         || !sway_sock.trim().is_empty()
+        || !niri_socket.trim().is_empty()
 }
 
 fn desktop_matches_any(value: &str) -> bool {
@@ -91,9 +95,12 @@ mod tests {
 
     #[test]
     fn main_surface_uses_overlay_layer_for_niri_desktop() {
-        assert!(main_surface_uses_overlay_layer_with_env("niri", "", "", ""));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "niri", "", "", "", ""
+        ));
         assert!(main_surface_uses_overlay_layer_with_env(
             "Hyprland:Niri",
+            "",
             "",
             "",
             ""
@@ -102,19 +109,37 @@ mod tests {
 
     #[test]
     fn main_surface_uses_overlay_layer_for_niri_session() {
-        assert!(main_surface_uses_overlay_layer_with_env("", "NIRI", "", ""));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "", "NIRI", "", "", ""
+        ));
     }
 
     #[test]
     fn main_surface_uses_overlay_layer_for_niri_desktop_session() {
-        assert!(main_surface_uses_overlay_layer_with_env("", "", "niri", ""));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "", "", "niri", "", ""
+        ));
+    }
+
+    #[test]
+    fn main_surface_uses_overlay_layer_for_niri_socket() {
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "",
+            "",
+            "",
+            "",
+            "/run/user/1000/niri.wayland-1.1234.sock"
+        ));
     }
 
     #[test]
     fn main_surface_uses_overlay_layer_for_sway_desktop() {
-        assert!(main_surface_uses_overlay_layer_with_env("sway", "", "", ""));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "sway", "", "", "", ""
+        ));
         assert!(main_surface_uses_overlay_layer_with_env(
             "wlroots:Sway",
+            "",
             "",
             "",
             ""
@@ -123,8 +148,12 @@ mod tests {
 
     #[test]
     fn main_surface_uses_overlay_layer_for_sway_session() {
-        assert!(main_surface_uses_overlay_layer_with_env("", "SWAY", "", ""));
-        assert!(main_surface_uses_overlay_layer_with_env("", "", "sway", ""));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "", "SWAY", "", "", ""
+        ));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "", "", "sway", "", ""
+        ));
     }
 
     #[test]
@@ -133,17 +162,18 @@ mod tests {
             "",
             "",
             "",
-            "/run/user/1000/sway-ipc.sock"
+            "/run/user/1000/sway-ipc.sock",
+            ""
         ));
     }
 
     #[test]
     fn main_surface_stays_on_top_layer_for_other_desktops() {
         assert!(!main_surface_uses_overlay_layer_with_env(
-            "Hyprland", "", "", ""
+            "Hyprland", "", "", "", ""
         ));
         assert!(!main_surface_uses_overlay_layer_with_env(
-            "KDE", "plasma", "", ""
+            "KDE", "plasma", "", "", ""
         ));
     }
 }
