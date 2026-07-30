@@ -124,17 +124,9 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
-            PendingBackendAction::PersistToolbarDisplayMode(previous) => {
-                state.persist_toolbar_display_mode(previous);
-            }
-            PendingBackendAction::PersistToolbarVisibility {
-                previous_top_pinned,
-                previous_side_pinned,
-            } => {
-                state.persist_toolbar_visibility(previous_top_pinned, previous_side_pinned);
-            }
         }
     }
+    state.drain_pending_toolbar_persistence();
     if let Some(action) = state.input_state.take_pending_output_focus_action() {
         state.handle_output_focus_action(qh, action);
     }

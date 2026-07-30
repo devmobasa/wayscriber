@@ -336,15 +336,18 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
 #[test]
 fn focus_mode_never_enqueues_persistence() {
     // Focus mode's hide/restore is transient by contract, and so is every
-    // explicit ToggleFloatingBadge/ToggleZoomChip: neither reaches the disk.
+    // explicit ToggleFloatingBadge/ToggleZoomChip: neither reaches the disk
+    // through either pending channel.
     let mut state = create_test_input_state();
     let _ = state.take_pending_backend_action();
 
     state.handle_action(Action::ToggleFocusMode); // hide all
     assert!(state.take_pending_backend_action().is_none());
+    assert!(!state.has_pending_toolbar_persistence());
 
     state.handle_action(Action::ToggleFocusMode); // restore all
     assert!(state.take_pending_backend_action().is_none());
+    assert!(!state.has_pending_toolbar_persistence());
 }
 
 /// The explicit toggles own the live flags; focus mode's later suppression is

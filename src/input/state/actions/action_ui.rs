@@ -5,7 +5,7 @@ use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
-use super::super::{DrawingState, InputState, PendingBackendAction};
+use super::super::{DrawingState, InputState, PendingBackendAction, PendingToolbarPersistence};
 
 impl InputState {
     pub(in crate::input::state) fn handle_ui_action(&mut self, action: Action) -> bool {
@@ -148,12 +148,10 @@ impl InputState {
                     // hidden before the press. The unfold itself stays
                     // runtime-only, exactly like F2's hidden rung.
                     if previous_top_pinned != now_visible || previous_side_pinned != now_visible {
-                        self.set_pending_backend_action(
-                            PendingBackendAction::PersistToolbarVisibility {
-                                previous_top_pinned,
-                                previous_side_pinned,
-                            },
-                        );
+                        self.queue_toolbar_persistence(PendingToolbarPersistence::Visibility {
+                            previous_top_pinned,
+                            previous_side_pinned,
+                        });
                     }
                     self.pending_onboarding_usage.used_toolbar_toggle = true;
                     info!(
@@ -196,9 +194,9 @@ impl InputState {
                 if mode == crate::config::TopDisplayMode::Hidden {
                     self.warn_if_all_chrome_hidden();
                 }
-                self.set_pending_backend_action(PendingBackendAction::PersistToolbarDisplayMode(
-                    previous_mode,
-                ));
+                self.queue_toolbar_persistence(PendingToolbarPersistence::DisplayMode {
+                    previous: previous_mode,
+                });
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 info!("Toolbar display mode cycled to {mode:?}");

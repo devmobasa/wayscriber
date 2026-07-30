@@ -18,9 +18,9 @@ use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
     DelayedHistory, DrawingState, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
     PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
-    PendingSelectionClipboardPublish, PolygonClickState, PresetAction, PresetFeedbackState,
-    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
-    SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
+    PendingSelectionClipboardPublish, PendingToolbarPersistence, PolygonClickState, PresetAction,
+    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit,
+    SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
     TextClipboardRequest, TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState,
     ZoomAction,
 };
@@ -398,6 +398,13 @@ pub struct InputState {
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
+    /// Durable toolbar chrome changes awaiting their runtime-ui.toml write,
+    /// oldest first.
+    ///
+    /// A queue, not part of the single backend-action slot: its last-action
+    /// semantics would let a capture (or a second toolbar change) silently
+    /// cost an earlier change its persistence — or vice versa.
+    pub(in crate::input::state::core) pending_toolbar_persistence: Vec<PendingToolbarPersistence>,
     /// Shortcut edits waiting for the backend, oldest first.
     ///
     /// A queue, not a slot: the palette can record several edits between two

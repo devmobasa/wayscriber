@@ -49,9 +49,9 @@ pub(crate) use core::{
 pub(crate) use core::{
     ClipboardFingerprint, ClipboardPasteRequest, HelpOverlayPressSource, HexPasteTarget,
     KeybindingEditOperation, KeybindingEditRequest, PasteAnchor, PendingBackendAction,
-    PendingOnboardingUsage, PendingSelectionClipboardPublish, SelectionPublishState,
-    TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastPress,
-    WayscriberClipboardSelection,
+    PendingOnboardingUsage, PendingSelectionClipboardPublish, PendingToolbarPersistence,
+    SelectionPublishState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
+    ToastPress, WayscriberClipboardSelection,
 };
 pub use highlight::ClickHighlightSettings;
 #[allow(unused_imports)]

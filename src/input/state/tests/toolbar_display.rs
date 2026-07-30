@@ -3,7 +3,7 @@ use crate::config::{
     Action, RadialMenuMouseBinding, StatusBarItem, StatusBarStyle, StatusPosition, TopDisplayMode,
 };
 use crate::input::state::core::{ContextMenuKind, MenuCommand};
-use crate::input::state::{InputState, PendingBackendAction};
+use crate::input::state::{InputState, PendingBackendAction, PendingToolbarPersistence};
 use std::collections::HashMap;
 
 fn unbind_chrome_visibility_actions(state: &mut InputState) {
@@ -49,10 +49,10 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
         Some("Toolbar: micro")
     );
     assert_eq!(
-        state.take_pending_backend_action(),
-        Some(PendingBackendAction::PersistToolbarDisplayMode(
-            TopDisplayMode::Full
-        )),
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::DisplayMode {
+            previous: TopDisplayMode::Full,
+        }],
         "keyboard cycle persists like the toolbar-event paths"
     );
 
@@ -147,11 +147,11 @@ fn toggle_toolbar_drives_both_pins_and_queues_their_persistence() {
     assert!(!state.toolbar_top_pinned);
     assert!(!state.toolbar_side_pinned);
     assert_eq!(
-        state.take_pending_backend_action(),
-        Some(PendingBackendAction::PersistToolbarVisibility {
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
             previous_side_pinned: true,
-        }),
+        }],
         "the keyboard toggle persists like the toolbar-event paths"
     );
 
@@ -161,11 +161,11 @@ fn toggle_toolbar_drives_both_pins_and_queues_their_persistence() {
     assert!(state.toolbar_top_pinned);
     assert!(state.toolbar_side_pinned);
     assert_eq!(
-        state.take_pending_backend_action(),
-        Some(PendingBackendAction::PersistToolbarVisibility {
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: false,
             previous_side_pinned: false,
-        })
+        }]
     );
 }
 
@@ -181,11 +181,11 @@ fn toggle_toolbar_resolves_asymmetric_pins_to_what_is_on_screen() {
     state.handle_action(Action::ToggleToolbar); // off
     assert!(!state.toolbar_top_pinned && !state.toolbar_side_pinned);
     assert_eq!(
-        state.take_pending_backend_action(),
-        Some(PendingBackendAction::PersistToolbarVisibility {
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
             previous_side_pinned: false,
-        })
+        }]
     );
 
     state.handle_action(Action::ToggleToolbar); // on
@@ -210,16 +210,16 @@ fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
     state.handle_action(Action::CycleToolbarDisplay); // hidden
     assert!(!state.toolbar_visible());
     assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
-    state.take_pending_backend_action(); // drain the cycle's display-mode write
+    state.take_pending_toolbar_persistence(); // drain the cycle's display-mode write
 
     state.handle_action(Action::ToggleToolbar); // show: unfolds Hidden → Full
     assert!(state.toolbar_visible());
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
     assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
-    assert_eq!(
-        state.take_pending_backend_action(),
-        None,
-        "a toggle that moves no pin has nothing to persist"
+    assert!(
+        !state.has_pending_toolbar_persistence(),
+        "a toggle that moves no pin queues nothing (the raw queue, not the \
+         drain-time filter, is the contract here)"
     );
 }
 
@@ -237,10 +237,10 @@ fn hide_with_already_unpinned_surfaces_queues_no_persistence() {
     state.handle_action(Action::ToggleToolbar); // hide
     assert!(!state.toolbar_visible());
     assert!(!state.toolbar_top_pinned && !state.toolbar_side_pinned);
-    assert_eq!(
-        state.take_pending_backend_action(),
-        None,
-        "a toggle that moves no pin has nothing to persist"
+    assert!(
+        !state.has_pending_toolbar_persistence(),
+        "a toggle that moves no pin queues nothing (the raw queue, not the \
+         drain-time filter, is the contract here)"
     );
 }
 
@@ -253,10 +253,10 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
 
     state.handle_action(Action::ToggleToolbar);
     assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
-    assert_eq!(
-        state.take_pending_backend_action(),
-        None,
-        "a swallowed toggle must not persist anything"
+    assert!(
+        !state.has_pending_toolbar_persistence(),
+        "a swallowed toggle must queue nothing (the raw queue, not the \
+         drain-time filter, is the contract here)"
     );
 }
 
@@ -279,12 +279,130 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
             state.toolbar_top_pinned && state.toolbar_side_pinned,
             "{action:?} must not touch the pin overrides"
         );
-        assert_eq!(
-            state.take_pending_backend_action(),
-            None,
-            "{action:?} must not queue visibility persistence"
+        assert!(
+            !state.has_pending_toolbar_persistence(),
+            "{action:?} must not queue visibility persistence (the raw \
+             queue, not the drain-time filter, is the contract here)"
         );
     }
+}
+
+/// F9 and F2 in one input batch, drained together: the queue keeps both,
+/// oldest first. The old single backend-action slot would have kept only the
+/// F2 write, silently costing the F9 press its persistence.
+///
+/// The strip sits on Micro first so the in-batch F2 moves the raw persisted
+/// mode: pressed over the F9-hidden strip, the cycle's Hidden rung unfolds to
+/// Full, and from a Full start that write would be a no-op the drain filter
+/// (correctly) drops.
+#[test]
+fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
+    let mut state = create_test_input_state();
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    state.handle_action(Action::CycleToolbarDisplay); // micro
+    state.take_pending_toolbar_persistence(); // drain the setup cycle's write
+
+    state.handle_action(Action::ToggleToolbar); // F9 hide
+    state.handle_action(Action::CycleToolbarDisplay); // F2: unfolds to full
+
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![
+            PendingToolbarPersistence::Visibility {
+                previous_top_pinned: true,
+                previous_side_pinned: true,
+            },
+            PendingToolbarPersistence::DisplayMode {
+                previous: TopDisplayMode::Micro,
+            },
+        ],
+        "both changes must survive the batch, oldest first"
+    );
+}
+
+/// A capture and a visibility toggle in the same batch, in either order:
+/// the capture rides the single backend-action slot, the toggle rides the
+/// persistence queue, and neither may cost the other its delivery.
+#[test]
+fn visibility_persistence_survives_a_capture_request() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(Action::ToggleToolbar); // F9 hide
+    state.handle_action(Action::CaptureFileFull);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
+        "the capture must survive the toggle"
+    );
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::Visibility {
+            previous_top_pinned: true,
+            previous_side_pinned: true,
+        }],
+        "the toggle must survive the capture"
+    );
+
+    // The reverse order: capture first, then the toggle (a show this time).
+    state.handle_action(Action::CaptureFileFull);
+    state.handle_action(Action::ToggleToolbar); // F9 show
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
+        "the capture must survive the toggle"
+    );
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::Visibility {
+            previous_top_pinned: false,
+            previous_side_pinned: false,
+        }],
+        "the toggle must survive the capture"
+    );
+}
+
+/// F9 twice before a drain: one coalesced raw entry keeps the FIRST press's
+/// pre-change pins (the burst's rollback baseline), and because the pins end
+/// exactly where they started, the drain-time no-op filter drops it — the
+/// write would be byte-identical to its own rollback.
+#[test]
+fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
+    let mut state = create_test_input_state();
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+
+    state.handle_action(Action::ToggleToolbar); // hide
+    state.handle_action(Action::ToggleToolbar); // show: pins back where they started
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+
+    assert!(
+        state.has_pending_toolbar_persistence(),
+        "the burst coalesces to one raw entry, it is not dropped at queue time"
+    );
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![],
+        "a burst that lands where it started has nothing durable to write"
+    );
+}
+
+/// The backend drains this queue once more at teardown; nothing on the input
+/// side may drop a queued entry when the same batch also requests an exit.
+#[test]
+fn an_exit_request_does_not_clear_queued_toolbar_persistence() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(Action::ToggleToolbar); // F9 hide
+    state.handle_action(Action::Exit);
+    assert!(state.should_exit, "the exit request must have landed");
+
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![PendingToolbarPersistence::Visibility {
+            previous_top_pinned: true,
+            previous_side_pinned: true,
+        }],
+        "the toggle must still be waiting for the teardown drain"
+    );
 }
 
 #[test]

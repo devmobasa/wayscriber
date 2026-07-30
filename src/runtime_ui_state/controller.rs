@@ -389,6 +389,18 @@ impl RuntimeUiStateController {
         self.active_barrier.as_ref()
     }
 
+    /// Whether writer work is queued or in flight that can advance the
+    /// active barrier: a pipeline source mutation, or an active recovery
+    /// attempt (whose current command is queued in the recovery outbox or
+    /// already with the writer). False for resting states that only a
+    /// controller-side decision can advance — an unhealthy incident with
+    /// no attempt running waits on the user, not the writer.
+    pub(crate) fn barrier_settling_work_in_flight(&self) -> bool {
+        self.pipeline.has_source_mutation_in_flight()
+            || !self.recovery_outbox.is_empty()
+            || self.active_recovery.is_some()
+    }
+
     pub(crate) fn take_preview_resolutions(&mut self) -> Vec<AbandonedPreviewResolution> {
         std::mem::take(&mut self.preview_resolution_outbox)
     }
