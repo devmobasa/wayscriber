@@ -130,13 +130,15 @@ pub(super) fn run_event_loop(
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
         let capture_timeout = capture::capture_timeout(state, now);
         let durable_action_timeout = durable_action_retry_timeout(state, now);
-        // Backend output actions are drained one at a time. If one remains,
-        // loop immediately even when VSync is disabled and the preceding
-        // action's redraw cleared `needs_redraw`.
-        let pending_backend_action_timeout = state
-            .input_state
-            .has_pending_backend_actions()
-            .then_some(Duration::ZERO);
+        // Backend output actions are drained one at a time, and the toolbar
+        // persistence queue drains on the same pass. If either holds
+        // drainable work, loop immediately even when VSync is disabled and
+        // the preceding action's redraw cleared `needs_redraw`. Entries
+        // deferred behind a runtime-state barrier are not drainable — the
+        // writer completion that resolves the barrier wakes the loop.
+        let pending_backend_action_timeout = (state.input_state.has_pending_backend_actions()
+            || state.toolbar_persistence_drain_ready())
+        .then_some(Duration::ZERO);
         let timeout = if should_block {
             min_timeout(autosave_timeout, focus_exit_timeout)
         } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -329,6 +331,14 @@ pub(super) fn run_event_loop(
                 warn!("Failed to save session state: {}", err);
                 session_save::notify_session_failure(state, &err);
             }
+            // Every exit path funnels here, including the post-dispatch break
+            // that runs before the in-loop drain, so a toolbar toggle pressed
+            // in the same batch as the exit request is still queued. The
+            // teardown variant also settles an in-flight reset/recovery
+            // barrier first — its resolving completion was going to be waited
+            // for below anyway — so exiting mid-reset cannot cost a deferred
+            // toggle its write; the writer flush then carries it to disk.
+            state.drain_toolbar_persistence_for_teardown();
             state.shutdown_runtime_ui();
             // An edit made a moment before quitting still has to reach the file,
             // so teardown waits — briefly — for the worker's queue to drain.

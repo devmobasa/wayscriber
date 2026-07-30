@@ -1,7 +1,7 @@
 use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputState, KeybindingEditRequest,
-    OutputFocusAction, PendingBackendAction, PendingSelectionClipboardPublish, PresetAction,
-    QuickColorEdit, SelectionPublishState, ZoomAction,
+    OutputFocusAction, PendingBackendAction, PendingSelectionClipboardPublish,
+    PendingToolbarPersistence, PresetAction, QuickColorEdit, SelectionPublishState, ZoomAction,
 };
 use crate::input::boards::PendingBoardRuntimeUiAction;
 
@@ -18,9 +18,56 @@ impl InputState {
     }
 
     /// Stores backend output work for retrieval by the backend, with
-    /// last-action semantics.
+    /// last-action semantics. Durable toolbar chrome changes do not use this
+    /// slot (see [`Self::queue_toolbar_persistence`]) because last-action
+    /// semantics would let a capture cost a toggle its persistence.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
         self.pending_backend_action = Some(action);
+    }
+
+    /// Queues a durable toolbar chrome change, oldest first.
+    ///
+    /// Coalesced per kind: the eventual write reads live state at drain time,
+    /// so a second change of the same kind needs no second entry, and the
+    /// FIRST entry's previous values remain the rollback baseline — they
+    /// describe the state before the whole burst.
+    pub(crate) fn queue_toolbar_persistence(&mut self, entry: PendingToolbarPersistence) {
+        let already_queued = self
+            .pending_toolbar_persistence
+            .iter()
+            .any(|queued| std::mem::discriminant(queued) == std::mem::discriminant(&entry));
+        if already_queued {
+            return;
+        }
+        self.pending_toolbar_persistence.push(entry);
+    }
+
+    /// Takes every due toolbar persistence entry, oldest first.
+    ///
+    /// A burst that lands exactly where it started (F9 pressed twice, a
+    /// display cycle walked full circle) is dropped here: nothing durable
+    /// changed, the write would be byte-identical to its own rollback, and
+    /// the only observable effect of writing it would be a bad rollback.
+    pub(crate) fn take_pending_toolbar_persistence(&mut self) -> Vec<PendingToolbarPersistence> {
+        let mut entries = std::mem::take(&mut self.pending_toolbar_persistence);
+        entries.retain(|entry| match *entry {
+            PendingToolbarPersistence::DisplayMode { previous } => {
+                previous != self.toolbar_top_display_mode
+            }
+            PendingToolbarPersistence::Visibility {
+                previous_top_pinned,
+                previous_side_pinned,
+            } => {
+                previous_top_pinned != self.toolbar_top_pinned
+                    || previous_side_pinned != self.toolbar_side_pinned
+            }
+        });
+        entries
+    }
+
+    /// Whether durable toolbar work is waiting to be drained.
+    pub(crate) fn has_pending_toolbar_persistence(&self) -> bool {
+        !self.pending_toolbar_persistence.is_empty()
     }
 
     /// Takes every shortcut edit recorded since the last drain, oldest first.

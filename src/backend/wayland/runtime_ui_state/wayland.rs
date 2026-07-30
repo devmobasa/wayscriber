@@ -174,6 +174,71 @@ impl WaylandState {
         self.apply_toolbar_runtime_finish(finish);
     }
 
+    /// Drains every queued durable toolbar change into the runtime-ui
+    /// writer, oldest first. Called on every event-loop pass and once more
+    /// at teardown before the writer shuts down, so a toggle pressed in the
+    /// same input batch as an exit request still reaches the file.
+    ///
+    /// While a reset/recovery barrier is active the queue is left intact:
+    /// `begin` would refuse each entry with `ControllerBusy`, silently
+    /// losing it. Entries wait for the barrier to resolve instead — the
+    /// take's no-op filter then discards any the resolution made moot. At
+    /// exit, `drain_toolbar_persistence_for_teardown` settles a settleable
+    /// barrier first; only one that cannot settle (a persistence incident,
+    /// which no write can land under) still costs the entries their write.
+    pub(in crate::backend::wayland) fn drain_pending_toolbar_persistence(&mut self) {
+        use crate::input::state::PendingToolbarPersistence;
+
+        match self.runtime_ui.as_ref() {
+            // Degraded mode is run-only: consume the entries so the queue
+            // cannot wake the loop for writes that have nowhere to land.
+            None => {
+                self.input_state.take_pending_toolbar_persistence();
+                return;
+            }
+            Some(runtime) if runtime.mutation_barrier_active() => return,
+            Some(_) => {}
+        }
+        for entry in self.input_state.take_pending_toolbar_persistence() {
+            match entry {
+                PendingToolbarPersistence::DisplayMode { previous } => {
+                    self.persist_toolbar_display_mode(previous)
+                }
+                PendingToolbarPersistence::Visibility {
+                    previous_top_pinned,
+                    previous_side_pinned,
+                } => self.persist_toolbar_visibility(previous_top_pinned, previous_side_pinned),
+            }
+        }
+    }
+
+    /// Teardown-time drain: settle any barrier whose resolution is already
+    /// on the writer channel — exiting mid-reset must not cost a queued
+    /// toggle its write — apply that resolution to live state so the
+    /// drain's no-op filter judges against the post-barrier screen, then
+    /// drain. The caller's writer shutdown flushes the writes to disk.
+    pub(in crate::backend::wayland) fn drain_toolbar_persistence_for_teardown(&mut self) {
+        if let Some(runtime) = self.runtime_ui.as_mut() {
+            runtime.settle_barrier_for_teardown();
+        }
+        self.drain_runtime_ui_completions();
+        self.drain_pending_toolbar_persistence();
+    }
+
+    /// Whether the toolbar persistence drain could make progress this pass.
+    ///
+    /// Gates the zero-timeout wake: entries deferred behind a barrier must
+    /// not busy-spin the loop — the writer completion that resolves the
+    /// barrier wakes it instead. A missing runtime store still reports
+    /// ready so the drain can consume the entries it will never write.
+    pub(in crate::backend::wayland) fn toolbar_persistence_drain_ready(&self) -> bool {
+        self.input_state.has_pending_toolbar_persistence()
+            && self
+                .runtime_ui
+                .as_ref()
+                .is_none_or(|runtime| !runtime.mutation_barrier_active())
+    }
+
     /// Reconcile runtime overrides and active previews after an authored
     /// config reload. The product's current reload path may still restart the
     /// daemon, but keeping this boundary complete prevents a future

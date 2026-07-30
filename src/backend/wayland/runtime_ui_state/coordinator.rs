@@ -89,6 +89,16 @@ impl ToolbarRuntimeState {
         apply_live_board_state(input, self.controller.live_state(), |_| true);
     }
 
+    /// Whether a reset/recovery barrier currently rejects new mutations.
+    ///
+    /// The toolbar persistence drain checks this before taking queued
+    /// entries: `begin` would refuse them with `ControllerBusy`, and an
+    /// entry taken-then-refused is silently lost instead of retried after
+    /// the barrier resolves.
+    pub(in crate::backend::wayland) fn mutation_barrier_active(&self) -> bool {
+        self.controller.active_barrier().is_some()
+    }
+
     pub(in crate::backend::wayland) fn begin_toolbar_mutation(
         &self,
         target: ToolbarRuntimeUiPersistenceTarget,
@@ -372,6 +382,47 @@ impl ToolbarRuntimeState {
                     drain.rebuild_live = true;
                 }
             }
+        }
+    }
+
+    /// Blockingly settle an active barrier whose resolution is writer work
+    /// away, integrating completions exactly as the event loop would have.
+    /// Called at teardown BEFORE the toolbar persistence drain: exiting
+    /// mid-reset (or mid-recovery — a `RetryPending` inspection counts,
+    /// which is why the recovery outbox and active attempt gate the loop
+    /// alongside the pipeline) must not cost a queued toggle its write
+    /// when the resolving completions are ones `shutdown_blocking` was
+    /// going to wait for anyway. The predicate re-evaluates after every
+    /// completion and goes false on resting states only a controller-side
+    /// decision can advance — an unhealthy incident with no attempt
+    /// running — so those cannot hang exit; no write can land under them
+    /// anyway.
+    pub(in crate::backend::wayland) fn settle_barrier_for_teardown(&mut self) {
+        while self.controller.active_barrier().is_some()
+            && (self.controller.barrier_settling_work_in_flight()
+                || self.pending_writer_command.is_some())
+        {
+            if self.writer.is_none() {
+                return;
+            }
+            // The command owning the barrier may still be sitting in an
+            // outbox (pipeline or recovery); the writer only answers what
+            // it was sent.
+            self.dispatch_writer_command();
+            let Some(writer) = self.writer.as_ref() else {
+                return;
+            };
+            let completion = match writer.recv() {
+                Ok(completion) => completion,
+                Err(error) => {
+                    log::error!(
+                        "Runtime UI writer stopped while settling a barrier for teardown: {error}"
+                    );
+                    return;
+                }
+            };
+            self.integrate_writer_completion(completion);
+            self.poll_recovery_completion();
         }
     }
 

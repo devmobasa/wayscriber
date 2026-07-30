@@ -212,6 +212,7 @@ impl InputState {
             action_map,
             action_bindings: HashMap::new(),
             pending_backend_action: None,
+            pending_toolbar_persistence: Vec::new(),
             pending_keybinding_edits: Vec::new(),
             process_only_preference_notice_shown: false,
             pending_output_focus_action: None,

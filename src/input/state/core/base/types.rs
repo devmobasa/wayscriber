@@ -446,16 +446,30 @@ pub enum PendingBackendAction {
     CanvasExport(Action),
     BoardPdfExport(Action),
     ClearSavedToolState,
-    /// Persist the top-display preference changed by its keyboard action.
-    /// The cycle already applied, so the payload carries the pre-cycle mode
-    /// for the runtime-UI preview's rollback; toolbar-event paths persist via
+}
+
+/// Durable toolbar chrome changes awaiting their runtime-ui.toml write.
+///
+/// Deliberately not part of [`PendingBackendAction`]: that slot has
+/// last-action semantics, so sharing it would let a screenshot (or a second
+/// toolbar change) silently cost an earlier change its persistence — or vice
+/// versa. These are ordered, coalesced per kind, and drained once more at
+/// teardown, so a change made in the same input batch as an exit request
+/// still reaches the file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PendingToolbarPersistence {
+    /// The top-display preference changed by its keyboard cycle (F2). The
+    /// cycle already applied, so the payload carries the pre-cycle mode for
+    /// the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
-    PersistToolbarDisplayMode(crate::config::TopDisplayMode),
-    /// Persist both pin flags driven by the keyboard visibility toggle.
-    /// The toggle already applied, so the payload carries the pre-change pins
-    /// for the runtime-UI preview's rollback; the pin buttons persist via
-    /// their exact event-policy targets instead.
-    PersistToolbarVisibility {
+    DisplayMode {
+        previous: crate::config::TopDisplayMode,
+    },
+    /// Both pin flags driven by the keyboard visibility toggle (F9). The
+    /// toggle already applied, so the payload carries the pre-change pins for
+    /// the runtime-UI preview's rollback; the pin buttons persist via their
+    /// exact event-policy targets instead.
+    Visibility {
         previous_top_pinned: bool,
         previous_side_pinned: bool,
     },
