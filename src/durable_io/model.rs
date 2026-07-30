@@ -1,12 +1,17 @@
 use std::fmt;
+use std::fs;
 use std::io;
 use std::path::PathBuf;
+
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DurableIoOperation {
     InspectDestination,
     ReadLink,
     OpenTemporary,
+    InspectTemporary,
     WriteTemporary,
     SetPermissions,
     SyncTemporary,
@@ -87,6 +92,62 @@ impl std::error::Error for DurableIoError {
 pub enum OverwriteMode {
     Replace,
     CreateNew,
+}
+
+/// Which file a path named, as far as the platform can tell one file from
+/// another.
+///
+/// On Unix that is the device and inode pair, and it is what makes a file
+/// renamed away and replaced at the same path a *different* file even when the
+/// replacement holds identical bytes. Elsewhere there is nothing to compare, so
+/// every file has the same empty identity and a caller that needs the
+/// distinction has to carry it another way — the config save compares the bytes
+/// it read.
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(not(unix))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileIdentity;
+
+impl FileIdentity {
+    #[cfg(unix)]
+    pub fn of(metadata: &fs::Metadata) -> Self {
+        Self {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        }
+    }
+
+    #[cfg(not(unix))]
+    pub fn of(_metadata: &fs::Metadata) -> Self {
+        Self
+    }
+}
+
+/// What the caller last saw at the destination, to be confirmed immediately
+/// before the rename.
+///
+/// The write already refuses a destination that changed since *it* looked, but
+/// its own look happens after the caller's — so a file changed between the two
+/// is one this writer has no reason to doubt, and the rename replaces bytes
+/// nothing ever checked. Identity catches an atomic replacement; exact contents
+/// catch an editor that truncates and rewrites the same file in place. Carrying
+/// both makes the rename conditional on the complete revision the caller read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DestinationExpectation<'a> {
+    /// The path named nothing when the caller looked. Anything there now was
+    /// put there by somebody else, and creating over it would discard it.
+    Absent,
+    /// It named this regular file with exactly these contents.
+    Present {
+        identity: FileIdentity,
+        contents: &'a [u8],
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

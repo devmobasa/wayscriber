@@ -4,8 +4,9 @@ use crate::{
     input::{InputState, Key},
 };
 
-/// Runtime presentation-aid preferences that persist when the user changes
-/// them directly, but not when a mode transition flips them transiently.
+/// Runtime presentation-aid preferences the effective config follows when the
+/// user changes them directly, but not when a mode transition flips them
+/// transiently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct InputPreferenceSnapshot {
     click_highlight_enabled: bool,
@@ -32,13 +33,13 @@ impl InputPreferenceSnapshot {
         self.presenter_mode == after.presenter_mode && self.light_mode == after.light_mode
     }
 
-    fn click_highlight_needs_persistence_after(self, after: Self) -> bool {
+    fn click_highlight_changed_by_user_after(self, after: Self) -> bool {
         self.same_modes_as(after)
             && (self.click_highlight_enabled != after.click_highlight_enabled
                 || self.tool_ring_enabled != after.tool_ring_enabled)
     }
 
-    fn input_hud_needs_persistence_after(self, after: Self) -> bool {
+    fn input_hud_changed_by_user_after(self, after: Self) -> bool {
         self.same_modes_as(after) && self.input_hud_enabled != after.input_hud_enabled
     }
 }
@@ -62,15 +63,16 @@ impl WaylandState {
         self.sync_overlay_interactivity();
 
         let preferences_after = InputPreferenceSnapshot::from_input_state(&self.input_state);
-        if preferences_before.click_highlight_needs_persistence_after(preferences_after) {
-            self.save_click_highlight_preferences();
+        if preferences_before.click_highlight_changed_by_user_after(preferences_after) {
+            self.apply_click_highlight_preferences();
         }
-        if preferences_before.input_hud_needs_persistence_after(preferences_after) {
-            self.save_input_hud_preferences();
+        if preferences_before.input_hud_changed_by_user_after(preferences_after) {
+            self.apply_input_hud_preferences();
         }
         if preferences_before.input_hud_enabled != preferences_after.input_hud_enabled {
-            // A mode transition can flip the HUD without persisting it, but the
-            // reader thread must follow the live state either way.
+            // A mode transition can flip the HUD without changing the user's
+            // preference, but the reader thread must follow the live state
+            // either way.
             self.sync_input_monitor();
         }
 
@@ -140,45 +142,43 @@ mod tests {
     }
 
     #[test]
-    fn click_highlight_snapshot_persists_direct_preference_changes() {
+    fn click_highlight_snapshot_follows_direct_preference_changes() {
         let before = snapshot(false, false, false, false, false);
 
         assert!(
-            before.click_highlight_needs_persistence_after(snapshot(
-                true, false, false, false, false
-            ))
+            before
+                .click_highlight_changed_by_user_after(snapshot(true, false, false, false, false))
         );
         assert!(
-            before.click_highlight_needs_persistence_after(snapshot(
-                false, true, false, false, false
-            ))
+            before
+                .click_highlight_changed_by_user_after(snapshot(false, true, false, false, false))
         );
     }
 
+    /// Presenter and light mode own the flip they caused, so their
+    /// enter/exit transitions never overwrite the user's own value.
     #[test]
     fn click_highlight_snapshot_ignores_mode_transitions() {
         let before = snapshot(false, false, false, false, false);
 
         assert!(
             !before
-                .click_highlight_needs_persistence_after(snapshot(true, false, false, true, false))
+                .click_highlight_changed_by_user_after(snapshot(true, false, false, true, false))
         );
         assert!(
             !before
-                .click_highlight_needs_persistence_after(snapshot(true, false, false, false, true))
+                .click_highlight_changed_by_user_after(snapshot(true, false, false, false, true))
         );
     }
 
     #[test]
-    fn input_hud_snapshot_persists_direct_preference_changes() {
+    fn input_hud_snapshot_follows_direct_preference_changes() {
         let before = snapshot(false, false, false, false, false);
 
+        assert!(before.input_hud_changed_by_user_after(snapshot(false, false, true, false, false)));
         assert!(
-            before.input_hud_needs_persistence_after(snapshot(false, false, true, false, false))
-        );
-        assert!(
-            !before.input_hud_needs_persistence_after(snapshot(true, true, false, false, false)),
-            "a click-highlight-only change must not queue an input HUD write"
+            !before.input_hud_changed_by_user_after(snapshot(true, true, false, false, false)),
+            "a click-highlight-only change must not update the input HUD preference"
         );
     }
 
@@ -186,11 +186,7 @@ mod tests {
     fn input_hud_snapshot_ignores_mode_transitions() {
         let before = snapshot(false, false, false, false, false);
 
-        assert!(
-            !before.input_hud_needs_persistence_after(snapshot(false, false, true, true, false))
-        );
-        assert!(
-            !before.input_hud_needs_persistence_after(snapshot(false, false, true, false, true))
-        );
+        assert!(!before.input_hud_changed_by_user_after(snapshot(false, false, true, true, false)));
+        assert!(!before.input_hud_changed_by_user_after(snapshot(false, false, true, false, true)));
     }
 }

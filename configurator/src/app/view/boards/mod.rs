@@ -45,12 +45,22 @@ impl ConfiguratorApp {
             ToggleField::BoardsShowBadge,
         );
 
+        // Kept visible rather than hidden: the key is still in existing files,
+        // and a control that quietly disappears leaves the user to work out on
+        // their own why a setting they wrote stopped doing anything. Shown with
+        // the reason attached is the honest version, and the row still edits
+        // the value so the file's own text stays reachable.
         let persist_customizations = toggle_row(
-            "Persist runtime customizations",
+            "Persist runtime customizations (deprecated)",
             boards.persist_customizations,
             defaults.persist_customizations,
             ToggleField::BoardsPersistCustomizations,
         );
+        let persist_customizations_note = text(
+            "No effect: board renames, recolors, additions, and deletions belong to the running session, and nothing but Save writes config.toml. This setting is still parsed so older files load cleanly, and will be removed.",
+        )
+        .size(12)
+        .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6)));
 
         let board_ids = boards.effective_ids();
         let selection = if board_ids.contains(&boards.default_board) {
@@ -79,7 +89,16 @@ impl ConfiguratorApp {
 
         let add_button = button("Add board").on_press(Message::BoardsAddItem);
 
-        let mut column = column![text("Boards").size(20)].spacing(12);
+        // The list below is the seed, not the running session: the overlay's
+        // add/rename/recolor act on live boards and stop when it exits, so the
+        // heading has to say which of the two this screen edits.
+        let mut column = column![
+            text("Boards").size(20),
+            text("Templates used to seed a new session. Boards you add or rename in the overlay belong to that session, not to this list.")
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+        ]
+        .spacing(12);
 
         if show_general || show_all {
             column = column
@@ -87,6 +106,7 @@ impl ConfiguratorApp {
                 .push(auto_create)
                 .push(show_badge)
                 .push(persist_customizations)
+                .push(persist_customizations_note)
                 .push(default_board_control)
                 .push(row![add_button].spacing(8));
         }

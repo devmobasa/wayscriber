@@ -2,12 +2,15 @@ use std::collections::{HashMap, HashSet};
 use std::{path::PathBuf, sync::Arc};
 
 use iced::Task;
-use wayscriber::config::{Config, ConfigDocument, PRESET_SLOTS_MAX};
+use wayscriber::config::{
+    Config, ConfigDocument, ConfigValidationReport, MigrationPreview, PRESET_SLOTS_MAX,
+};
 
 use crate::messages::Message;
 use crate::models::{
     ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingsTabId, SearchQuery, SessionCatalogState, TabId, ToolbarLayoutModeOption, UiTabId,
+    KeybindingsTabId, SearchQuery, SessionCatalogState, StartupRequest, TabId,
+    ToolbarLayoutModeOption, UiTabId,
 };
 
 use super::daemon_setup::load_daemon_runtime_status;
@@ -36,6 +39,21 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) is_saving: bool,
     pub(crate) is_dirty: bool,
     pub(crate) defaults_reset_pending: bool,
+    /// What an accepted migration would change in the loaded configuration.
+    /// Held here rather than in `status` so an expired or replaced status
+    /// message cannot take the offer away with it.
+    pub(crate) migration_preview: Option<MigrationPreview>,
+    /// The document whose migration offer the user dismissed, named by the file
+    /// the config path resolved to rather than by the path itself. `None` while
+    /// no offer has been dismissed.
+    pub(crate) migration_dismissed: Option<PathBuf>,
+    /// What validating the configuration the running Save is writing had to
+    /// change in `[keybindings]`, held until that write reports back.
+    ///
+    /// The resolution reaches the file, so the reloaded document cannot show
+    /// it: this is the only carrier from the moment the config is built to the
+    /// status the finished save renders.
+    pub(crate) pending_save_validation: ConfigValidationReport,
     pub(crate) last_backup_path: Option<PathBuf>,
     pub(crate) daemon_status: Option<DaemonRuntimeStatus>,
     pub(crate) daemon_shortcut_input: String,
@@ -48,6 +66,9 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) search_query: SearchQuery,
     pub(crate) search_input_focus_hint: bool,
     pub(crate) startup_search_focus_pending: bool,
+    /// What the launching process asked to open, taken by the first config
+    /// load and empty from then on.
+    pub(crate) startup_request: StartupRequest,
 }
 
 #[derive(Debug, Clone)]
@@ -79,10 +100,34 @@ impl StatusMessage {
     pub(crate) fn warning(message: impl Into<String>) -> Self {
         StatusMessage::Warning(message.into())
     }
+
+    /// Adds a sentence without discarding what is already there.
+    ///
+    /// The load status can be carrying this file's diagnostics, and a note
+    /// about a startup argument is not worth losing them over.
+    pub(crate) fn with_note(self, note: &str) -> Self {
+        match self {
+            StatusMessage::Idle => StatusMessage::warning(note),
+            StatusMessage::Info(text)
+            | StatusMessage::Success(text)
+            | StatusMessage::Warning(text) => StatusMessage::warning(format!("{text}\n{note}")),
+            // A failed load is the more urgent of the two; keep its styling.
+            StatusMessage::Error(text) => StatusMessage::error(format!("{text}\n{note}")),
+        }
+    }
 }
 
 impl ConfiguratorApp {
+    /// The app as a launch with no destination.
+    ///
+    /// Test-only: the binary always has a parsed launch request to pass, even
+    /// when it is the empty one.
+    #[cfg(test)]
     pub(crate) fn new_app() -> (Self, Task<Message>) {
+        Self::new_app_with_startup(StartupRequest::default())
+    }
+
+    pub(crate) fn new_app_with_startup(startup: StartupRequest) -> (Self, Task<Message>) {
         let default_config = Config::default();
         let defaults = ConfigDraft::from_config(&default_config);
         let baseline = defaults.clone();
@@ -110,6 +155,9 @@ impl ConfiguratorApp {
             is_saving: false,
             is_dirty: false,
             defaults_reset_pending: false,
+            migration_preview: None,
+            migration_dismissed: None,
+            pending_save_validation: ConfigValidationReport::default(),
             last_backup_path: None,
             daemon_status: None,
             daemon_shortcut_input: desktop.default_shortcut_input().to_string(),
@@ -122,6 +170,7 @@ impl ConfiguratorApp {
             search_query: SearchQuery::default(),
             search_input_focus_hint: true,
             startup_search_focus_pending: true,
+            startup_request: startup,
         };
         app.sync_all_color_picker_hex();
 
@@ -140,6 +189,26 @@ impl ConfiguratorApp {
     pub(super) fn refresh_dirty_flag(&mut self) {
         self.defaults_reset_pending = false;
         self.is_dirty = self.draft != self.baseline;
+    }
+
+    /// The migration offer to show, if there is one to show.
+    ///
+    /// Dismissing hides the offer for the rest of this app run, including
+    /// across reloads of the same file: the user answered the question about
+    /// this configuration, and pressing Reload is not them asking it again. The
+    /// next launch offers it afresh, because the file still has the old
+    /// revision.
+    ///
+    /// The answer is about the file, not the path that reached it. A reload
+    /// that lands on a different file — `config.toml` retargeted to another
+    /// profile between the two — is a configuration the user has not been asked
+    /// about, so refreshing the preview clears the dismissal and its offer
+    /// shows.
+    pub(crate) fn pending_migration(&self) -> Option<&MigrationPreview> {
+        if self.migration_dismissed.is_some() {
+            return None;
+        }
+        self.migration_preview.as_ref()
     }
 }
 

@@ -10,39 +10,68 @@ fn toggle_floating_badge_action_flips_runtime_visibility() {
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
     assert!(!state.show_floating_badge);
     assert!(state.needs_redraw);
-    // The explicit toggle persists the preference across restarts.
-    assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(false))
-    );
+    // The badge preference is authored input: the toggle owns this run and
+    // queues no durable work for the backend.
+    assert!(!state.has_pending_backend_actions());
+    assert!(state.take_pending_backend_action().is_none());
 
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
     assert!(state.show_floating_badge);
 }
 
+/// The chrome toggles are current-run changes, so the run says so once and
+/// then stops repeating itself.
 #[test]
-fn chrome_visibility_persistence_actions_are_queued_without_loss() {
+fn chrome_visibility_toggles_announce_their_scope_once() {
     let mut state = create_test_input_state();
 
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    let toast = state
+        .ui_toast
+        .as_ref()
+        .expect("first toggle explains its scope");
+    // The hint is the user's own binding for the configurator, not a
+    // hard-coded key.
+    assert_eq!(
+        toast.message,
+        "Applies to this run — edit defaults in the configurator (F11)."
+    );
+    state.ui_toast = None;
+
     state.handle_action(crate::config::Action::ToggleZoomChip);
-    assert!(state.has_pending_backend_actions());
+    assert!(!state.show_zoom_chip);
+    assert!(
+        state.ui_toast.is_none(),
+        "the scope is said once per run, not per toggle"
+    );
+}
+
+/// With the configurator unbound there is no shortcut to name, so the notice
+/// says where the default lives without inventing a key.
+#[test]
+fn process_only_notice_drops_the_hint_when_the_configurator_is_unbound() {
+    let mut state = create_test_input_state();
+    // Explicitly bound to nothing, which is not the same as absent: an absent
+    // action falls back to scanning the keymap.
+    state.set_action_bindings(std::collections::HashMap::from([(
+        crate::config::Action::OpenConfigurator,
+        Vec::new(),
+    )]));
+
+    state.handle_action(crate::config::Action::ToggleZoomChip);
 
     assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(false))
+        state
+            .ui_toast
+            .as_ref()
+            .map(|toast| toast.message.as_str())
+            .unwrap_or_default(),
+        "Applies to this run — edit defaults in the configurator."
     );
-    assert!(state.has_pending_backend_actions());
-    assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(false))
-    );
-    assert!(!state.has_pending_backend_actions());
-    assert!(state.take_pending_backend_action().is_none());
 }
 
 #[test]
-fn repeated_visibility_saves_coalesce_to_the_latest_authored_value() {
+fn repeated_chrome_visibility_toggles_stay_process_only() {
     let mut state = create_test_input_state();
 
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
@@ -50,14 +79,8 @@ fn repeated_visibility_saves_coalesce_to_the_latest_authored_value() {
     state.handle_action(crate::config::Action::ToggleZoomChip);
     state.handle_action(crate::config::Action::ToggleZoomChip);
 
-    assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(true))
-    );
-    assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(true))
-    );
+    assert!(state.show_floating_badge);
+    assert!(state.show_zoom_chip);
     assert!(state.take_pending_backend_action().is_none());
 }
 

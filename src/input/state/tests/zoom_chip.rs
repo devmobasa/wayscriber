@@ -65,16 +65,13 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_some());
 
-    // The palette/keybinding toggle hides the chip without
-    // touching the `show_zoom_actions` toolbar preference, and persists
-    // its own preference across restarts.
+    // The palette/keybinding toggle hides the chip for this run without
+    // touching the `show_zoom_actions` toolbar preference or queueing any
+    // durable work.
     input.handle_action(crate::config::Action::ToggleZoomChip);
     assert!(!input.zoom_chip_enabled());
     assert!(input.show_zoom_actions, "toolbar preference untouched");
-    assert_eq!(
-        input.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(false))
-    );
+    assert!(input.take_pending_backend_action().is_none());
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_none());
     assert!(!input.zoom_chip_contains(1270, 710));

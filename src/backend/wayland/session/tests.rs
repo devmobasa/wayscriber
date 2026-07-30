@@ -231,7 +231,6 @@ fn sample_tool_state() -> stored_session::ToolStateSnapshot {
         arrow_label_enabled: Some(false),
         polygon_sides: REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
-        show_status_bar: true,
         tool_settings: None,
     }
 }
@@ -696,7 +695,10 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     );
     assert_eq!(input.thickness_for_active_tool(), 7.0);
     assert!(input.arrow_head_at_end);
-    assert!(input.show_status_bar);
+    assert!(
+        !input.show_status_bar,
+        "chrome is a process preference, not saved tool state: resetting tools leaves the run's own status-bar choice alone"
+    );
     assert!(input.is_session_dirty());
     assert!(session_state.is_dirty());
 
@@ -1718,6 +1720,35 @@ fn protected_session_path_blocks_save_until_session_is_dirty() {
 
     state.record_input_dirty(Instant::now(), true);
     assert!(!state.should_skip_save_for_protected_path(&path, false));
+}
+
+/// The protection an oversized session gets is exactly "nothing persisted
+/// changed", so anything that marks the input dirty lifts it. Status-bar
+/// visibility never reaches the session file, so toggling it must leave the
+/// skip standing — with the mark this toggle used to make, the very next
+/// autosave or final save would replace the session that failed to restore.
+#[test]
+fn protected_session_path_survives_a_run_only_status_bar_toggle() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+    options.autosave_enabled = true;
+    options.persist_transparent = true;
+    let path = options.session_file_path();
+    let mut state = SessionState::new(Some(options));
+    state.protect_session_path(path.clone());
+
+    let mut input = test_input_state();
+    input.handle_action(Action::ToggleStatusBar);
+
+    assert!(!input.show_status_bar, "the toggle still moves the bar");
+    assert!(!input.is_session_dirty());
+    assert!(state.should_skip_save_for_protected_path(&path, input.is_session_dirty()));
+
+    // Control: a change the session file does carry lifts the protection, so
+    // the skip above is about what the toggle persists and not about a
+    // protection nothing can lift.
+    assert!(input.set_tool_override(Some(Tool::Line)));
+    assert!(input.is_session_dirty());
+    assert!(!state.should_skip_save_for_protected_path(&path, input.is_session_dirty()));
 }
 
 #[test]

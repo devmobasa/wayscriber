@@ -335,9 +335,8 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
 
 #[test]
 fn focus_mode_never_enqueues_persistence() {
-    // Focus mode's hide/restore is transient by contract: only the explicit
-    // ToggleFloatingBadge/ToggleZoomChip actions write the master
-    // visibility prefs to config.
+    // Focus mode's hide/restore is transient by contract, and so is every
+    // explicit ToggleFloatingBadge/ToggleZoomChip: neither reaches the disk.
     let mut state = create_test_input_state();
     let _ = state.take_pending_backend_action();
 
@@ -348,8 +347,10 @@ fn focus_mode_never_enqueues_persistence() {
     assert!(state.take_pending_backend_action().is_none());
 }
 
+/// The explicit toggles own the live flags; focus mode's later suppression is
+/// transient and neither of them queues durable work.
 #[test]
-fn queued_visibility_saves_keep_the_user_authored_values_during_focus_mode() {
+fn visibility_toggles_stay_process_only_across_focus_mode() {
     let mut state = create_test_input_state();
     state.show_floating_badge = false;
     state.show_zoom_chip = false;
@@ -359,19 +360,16 @@ fn queued_visibility_saves_keep_the_user_authored_values_during_focus_mode() {
     assert!(state.show_floating_badge);
     assert!(state.show_zoom_chip);
 
-    // Suppress both live flags before the backend drains their save actions.
+    // Suppress both live flags; focus mode owns them until it restores.
     state.handle_action(Action::ToggleFocusMode);
     assert!(!state.show_floating_badge);
     assert!(!state.show_zoom_chip);
+    assert!(state.take_pending_backend_action().is_none());
 
-    assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistFloatingBadgeConfig(true))
-    );
-    assert_eq!(
-        state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::PersistZoomChipConfig(true))
-    );
+    state.handle_action(Action::ToggleFocusMode);
+    assert!(state.show_floating_badge);
+    assert!(state.show_zoom_chip);
+    assert!(state.take_pending_backend_action().is_none());
 }
 
 #[test]

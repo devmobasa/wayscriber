@@ -65,7 +65,6 @@ fn sample_tool_state() -> ToolStateSnapshot {
         arrow_label_enabled: Some(false),
         polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
-        show_status_bar: true,
         tool_settings: None,
     }
 }

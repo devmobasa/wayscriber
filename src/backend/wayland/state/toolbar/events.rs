@@ -4,23 +4,27 @@ use crate::{
     input::InputState,
     onboarding::OnboardingState,
     ui::toolbar::model::{
-        ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPersistenceTarget,
-        ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget,
+        ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPreApplyEffect,
+        ToolbarRuntimeUiPersistenceTarget,
     },
 };
 use wayland_client::{Connection, QueueHandle};
 
 mod feedback;
-mod persistence;
+mod preferences;
+mod presets;
+pub(in crate::backend::wayland) use presets::queue_preset_action;
+mod quick_colors;
+pub(in crate::backend::wayland) use quick_colors::queue_quick_color_edit;
 mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
-#[cfg(test)]
-use crate::ui::toolbar::model::{ToolbarConfigPersistenceTarget, ToolbarUiPersistenceTarget};
 use feedback::{ToolbarPinChange, pin_durability};
+use preferences::{ToolbarPreference, preference_for_event};
 #[cfg(test)]
-use persistence::{
-    apply_toolbar_config_target, apply_toolbar_ui_config_target, persisted_tool_preview_value,
+use preferences::{
+    ToolbarPreferenceField, UiPreferenceField, apply_toolbar_preference,
+    effective_tool_preview_value,
 };
 use session::populate_session_snapshot;
 
@@ -445,8 +449,11 @@ impl WaylandState {
         }
         let runtime_target = match policy.persistence {
             ToolbarPersistence::RuntimeUi(target) => Some(target),
-            ToolbarPersistence::Ephemeral | ToolbarPersistence::Config(_) => None,
+            ToolbarPersistence::Ephemeral => None,
         };
+        // Classified before the apply consumes the event; the effective config
+        // is updated from the runtime state the apply leaves behind.
+        let preference = preference_for_event(&event);
         if starts_item_drag {
             let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
                 unreachable!("item drag start must carry its order-group runtime target");
@@ -488,22 +495,9 @@ impl WaylandState {
                 }
             }
 
-            match policy.persistence {
-                ToolbarPersistence::Ephemeral | ToolbarPersistence::RuntimeUi(_) => {}
-                ToolbarPersistence::Config(ToolbarPersistenceTarget::Toolbar(target)) => {
-                    self.save_toolbar_config(target);
-                }
-                ToolbarPersistence::Config(ToolbarPersistenceTarget::Ui(target)) => {
-                    self.save_toolbar_ui_config(target);
-                }
-                ToolbarPersistence::Config(ToolbarPersistenceTarget::History) => {
-                    self.save_toolbar_history_config();
-                }
-                ToolbarPersistence::Config(ToolbarPersistenceTarget::ClickHighlight) => {
-                    self.save_click_highlight_preferences();
-                }
-                ToolbarPersistence::Config(ToolbarPersistenceTarget::InputHud) => {
-                    self.save_input_hud_preferences();
+            if let Some(preference) = preference {
+                self.apply_effective_toolbar_preference(preference);
+                if matches!(preference, ToolbarPreference::InputHud) {
                     self.sync_input_monitor();
                 }
             }

@@ -135,6 +135,159 @@ fn toggle_toolbar_restores_a_cycle_hidden_strip_under_pill_layout() {
 }
 
 #[test]
+fn toggle_toolbar_drives_both_pins_and_queues_their_persistence() {
+    let mut state = create_test_input_state();
+    assert!(state.toolbar_visible());
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+
+    // F9 hide: the durable form of the toggle unpins both surfaces, and the
+    // pending action carries the pre-change pins for the preview's rollback.
+    state.handle_action(Action::ToggleToolbar);
+    assert!(!state.toolbar_visible());
+    assert!(!state.toolbar_top_pinned);
+    assert!(!state.toolbar_side_pinned);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::PersistToolbarVisibility {
+            previous_top_pinned: true,
+            previous_side_pinned: true,
+        }),
+        "the keyboard toggle persists like the toolbar-event paths"
+    );
+
+    // F9 show: both pins come back on, with the hidden state as rollback.
+    state.handle_action(Action::ToggleToolbar);
+    assert!(state.toolbar_visible());
+    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_side_pinned);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::PersistToolbarVisibility {
+            previous_top_pinned: false,
+            previous_side_pinned: false,
+        })
+    );
+}
+
+/// F9 is WYSIWYG, not a pin round-trip: an asymmetric pin start (top pinned,
+/// side not) ends symmetric after off + on, because the second press must
+/// restore exactly the all-visible state the user was looking at.
+#[test]
+fn toggle_toolbar_resolves_asymmetric_pins_to_what_is_on_screen() {
+    let mut state = create_test_input_state();
+    state.toolbar_side_pinned = false;
+    assert!(state.toolbar_visible());
+
+    state.handle_action(Action::ToggleToolbar); // off
+    assert!(!state.toolbar_top_pinned && !state.toolbar_side_pinned);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::PersistToolbarVisibility {
+            previous_top_pinned: true,
+            previous_side_pinned: false,
+        })
+    );
+
+    state.handle_action(Action::ToggleToolbar); // on
+    assert!(state.toolbar_visible());
+    assert!(
+        state.toolbar_top_pinned && state.toolbar_side_pinned,
+        "showing pins both surfaces so the next start matches the screen"
+    );
+}
+
+/// Under the shipping pill layout a cycle-hidden strip leaves no visible
+/// surface while both pins stay true, so F9 there is a SHOW whose pin values
+/// do not change. Nothing may be queued for persistence: the write would be
+/// byte-identical, and its rollback would re-derive pin-true visibility for
+/// a screen that was effectively hidden before the press. The unfold stays
+/// runtime-only, exactly like F2's hidden rung.
+#[test]
+fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
+    let mut state = create_test_input_state();
+    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
+    state.handle_action(Action::CycleToolbarDisplay); // micro
+    state.handle_action(Action::CycleToolbarDisplay); // hidden
+    assert!(!state.toolbar_visible());
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    state.take_pending_backend_action(); // drain the cycle's display-mode write
+
+    state.handle_action(Action::ToggleToolbar); // show: unfolds Hidden → Full
+    assert!(state.toolbar_visible());
+    assert_eq!(state.top_display_state(), TopDisplayMode::Full);
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        None,
+        "a toggle that moves no pin has nothing to persist"
+    );
+}
+
+/// The hide-side twin: both surfaces already unpinned via the pin buttons
+/// while still visible, then F9. The hide moves no pin — the false pins
+/// already persist the hidden restart state — so the toggle needs no
+/// additional persistence and queues nothing.
+#[test]
+fn hide_with_already_unpinned_surfaces_queues_no_persistence() {
+    let mut state = create_test_input_state();
+    state.toolbar_top_pinned = false;
+    state.toolbar_side_pinned = false;
+    assert!(state.toolbar_visible());
+
+    state.handle_action(Action::ToggleToolbar); // hide
+    assert!(!state.toolbar_visible());
+    assert!(!state.toolbar_top_pinned && !state.toolbar_side_pinned);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        None,
+        "a toggle that moves no pin has nothing to persist"
+    );
+}
+
+#[test]
+fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
+    let mut state = create_test_input_state();
+    state.presenter_mode_config.hide_toolbars = true;
+    state.toggle_presenter_mode();
+    assert!(!state.toolbar_visible());
+
+    state.handle_action(Action::ToggleToolbar);
+    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        None,
+        "a swallowed toggle must not persist anything"
+    );
+}
+
+/// Focus and presenter mode hide chrome implicitly and restore it on exit;
+/// both stay run-only on purpose, so neither transition may reach the pin
+/// flags or queue the visibility persistence the explicit toggle uses.
+#[test]
+fn focus_and_presenter_transitions_never_queue_pin_persistence() {
+    let mut state = create_test_input_state();
+    state.presenter_mode_config.hide_toolbars = true;
+
+    for action in [
+        Action::ToggleFocusMode,
+        Action::ToggleFocusMode,
+        Action::TogglePresenterMode,
+        Action::TogglePresenterMode,
+    ] {
+        state.handle_action(action);
+        assert!(
+            state.toolbar_top_pinned && state.toolbar_side_pinned,
+            "{action:?} must not touch the pin overrides"
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            None,
+            "{action:?} must not queue visibility persistence"
+        );
+    }
+}
+
+#[test]
 fn micro_form_survives_a_visibility_toggle() {
     let mut state = create_test_input_state();
     state.handle_action(Action::CycleToolbarDisplay); // micro
@@ -529,6 +682,199 @@ fn display_mode_init_sanitizes_hidden_to_full() {
     assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Micro);
     state.init_toolbar_display_mode_from_config(TopDisplayMode::Hidden);
     assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+}
+
+/// `ToolStateSnapshot` leaves chrome visibility out on purpose, so a toggle
+/// that moves it has nothing for a save to carry. These actions are
+/// session-INDEPENDENT, not run-only: F9 and F2 are durable through
+/// `runtime-ui.toml`, they are just never part of the session file, so they
+/// must never mark it dirty. Marking the session dirty anyway is not merely
+/// redundant — a session that failed to restore is protected from
+/// replacement by exactly "nothing persisted changed"
+/// (`should_skip_save_for_protected_path`), so a false dirty is what lets
+/// autosave clobber it.
+#[test]
+fn session_independent_chrome_actions_never_mark_the_session_dirty() {
+    let mut state = create_test_input_state();
+    // Chrome only: with the tool behavior left at its default, presenter mode
+    // would also take the tool override, which *is* session content.
+    state.presenter_mode_config.hide_status_bar = true;
+    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config.tool_behavior = crate::config::PresenterToolBehavior::Keep;
+    state.presenter_mode_config.enable_click_highlight = false;
+    state.presenter_mode_config.enable_input_hud = false;
+
+    for action in [
+        Action::ToggleStatusBar,
+        Action::ToggleStatusBar,
+        Action::ToggleFloatingBadge,
+        Action::ToggleZoomChip,
+        Action::ToggleToolbar,
+        Action::CycleToolbarDisplay,
+        Action::ToggleClickHighlight,
+        Action::ToggleInputHud,
+        // Enter, leave, and — with everything already hidden — the rescue arm
+        // that shows every surface again.
+        Action::ToggleFocusMode,
+        Action::ToggleFocusMode,
+        Action::TogglePresenterMode,
+        Action::TogglePresenterMode,
+    ] {
+        state.handle_action(action);
+        assert!(
+            !state.is_session_dirty(),
+            "{action:?} moves chrome the session file does not carry"
+        );
+    }
+
+    hide_all_chrome(&mut state);
+    state.handle_action(Action::ToggleFocusMode); // rescue arm
+    assert!(state.show_status_bar);
+    assert!(
+        !state.is_session_dirty(),
+        "the rescue arm restores chrome only"
+    );
+
+    // Control: a change the snapshot does carry still marks the session dirty,
+    // so the assertions above are about the toggles and not about a dirty flag
+    // that stopped working.
+    assert!(state.set_tool_override(Some(crate::input::Tool::Line)));
+    assert!(state.is_session_dirty());
+}
+
+/// The toolbar-side half of the same audit: every event the policy classifies
+/// as an authored preference changes the effective config for this run and
+/// nothing in the session file, so none of them may mark the session dirty.
+///
+/// `SelectTool(Highlight)` and `ToggleAllHighlight` are deliberately absent:
+/// both move the tool override, which the snapshot does persist.
+#[test]
+fn run_only_toolbar_preference_events_never_mark_the_session_dirty() {
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
+    use crate::ui::toolbar::ToolbarEvent;
+
+    let mut state = create_test_input_state();
+    let presets_item = ToolbarSectionFlag::Presets.item_id();
+
+    for [first, second] in [
+        [
+            ToolbarEvent::ToggleIconMode(true),
+            ToolbarEvent::ToggleIconMode(false),
+        ],
+        [
+            ToolbarEvent::ToggleMoreColors(true),
+            ToolbarEvent::ToggleMoreColors(false),
+        ],
+        [
+            ToolbarEvent::ToggleActionsSection(false),
+            ToolbarEvent::ToggleActionsSection(true),
+        ],
+        [
+            ToolbarEvent::ToggleActionsAdvanced(false),
+            ToolbarEvent::ToggleActionsAdvanced(true),
+        ],
+        [
+            ToolbarEvent::ToggleZoomActions(false),
+            ToolbarEvent::ToggleZoomActions(true),
+        ],
+        [
+            ToolbarEvent::TogglePagesSection(false),
+            ToolbarEvent::TogglePagesSection(true),
+        ],
+        [
+            ToolbarEvent::ToggleBoardsSection(false),
+            ToolbarEvent::ToggleBoardsSection(true),
+        ],
+        [
+            ToolbarEvent::TogglePresets(false),
+            ToolbarEvent::TogglePresets(true),
+        ],
+        [
+            ToolbarEvent::ToggleStepSection(false),
+            ToolbarEvent::ToggleStepSection(true),
+        ],
+        [
+            ToolbarEvent::ToggleTextControls(false),
+            ToolbarEvent::ToggleTextControls(true),
+        ],
+        // A section row in the customization list: the one item id whose
+        // visibility is an authored preference rather than runtime-UI state.
+        [
+            ToolbarEvent::SetToolbarItemHidden(presets_item, true),
+            ToolbarEvent::SetToolbarItemHidden(presets_item, false),
+        ],
+        [
+            ToolbarEvent::ToggleContextAwareUi(false),
+            ToolbarEvent::ToggleContextAwareUi(true),
+        ],
+        [
+            ToolbarEvent::TogglePresetToasts(false),
+            ToolbarEvent::TogglePresetToasts(true),
+        ],
+        [
+            ToolbarEvent::ToggleToolPreview(false),
+            ToolbarEvent::ToggleToolPreview(true),
+        ],
+        [
+            ToolbarEvent::ToggleDelaySliders(true),
+            ToolbarEvent::ToggleDelaySliders(false),
+        ],
+        [
+            ToolbarEvent::ToggleCustomSection(true),
+            ToolbarEvent::ToggleCustomSection(false),
+        ],
+        [
+            ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Simple),
+            ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
+        ],
+        [
+            ToolbarEvent::ToggleStatusBar(false),
+            ToolbarEvent::ToggleStatusBar(true),
+        ],
+        [
+            ToolbarEvent::SetStatusBarInteractive(false),
+            ToolbarEvent::SetStatusBarInteractive(true),
+        ],
+        [
+            ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Color, false),
+            ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Color, true),
+        ],
+        [
+            ToolbarEvent::ToggleStatusBoardBadge(false),
+            ToolbarEvent::ToggleStatusBoardBadge(true),
+        ],
+        [
+            ToolbarEvent::ToggleStatusPageBadge(false),
+            ToolbarEvent::ToggleStatusPageBadge(true),
+        ],
+        [
+            ToolbarEvent::ToggleFloatingBadgeAlways(true),
+            ToolbarEvent::ToggleFloatingBadgeAlways(false),
+        ],
+        [
+            ToolbarEvent::ToggleHighlightToolRing(true),
+            ToolbarEvent::ToggleHighlightToolRing(false),
+        ],
+        [
+            ToolbarEvent::ToggleInputHud(true),
+            ToolbarEvent::ToggleInputHud(false),
+        ],
+    ] {
+        let mut changed = state.apply_toolbar_event(first.clone());
+        assert!(
+            !state.is_session_dirty(),
+            "{first:?} changes the effective config for this run, not the session"
+        );
+        changed |= state.apply_toolbar_event(second.clone());
+        assert!(
+            !state.is_session_dirty(),
+            "{second:?} changes the effective config for this run, not the session"
+        );
+        assert!(
+            changed,
+            "{first:?} and {second:?} both no-opped, so neither assertion above tested anything"
+        );
+    }
 }
 
 #[test]

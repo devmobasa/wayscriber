@@ -28,10 +28,10 @@ pub(crate) use control::{
 };
 #[allow(unused_imports)]
 pub(crate) use event_policy::{
-    ToolbarBackendRoute, ToolbarConfigPersistenceTarget, ToolbarEventPolicy, ToolbarPersistence,
-    ToolbarPersistenceTarget, ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget,
-    ToolbarUiPersistenceTarget, action_for_apply_preset, action_for_clear_preset, action_for_event,
-    action_for_save_preset, action_for_tool, short_label_for_event, tooltip_label_for_event,
+    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPreApplyEffect,
+    ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset, action_for_clear_preset,
+    action_for_event, action_for_save_preset, action_for_tool, short_label_for_event,
+    tooltip_label_for_event,
 };
 #[allow(unused_imports)]
 pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
@@ -512,15 +512,14 @@ mod tests {
 
     #[test]
     fn event_policy_classifies_persistence_and_pre_apply_effects() {
+        // Authored preferences apply to this run; nothing routes them to disk.
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleStatusBar(false)).persistence,
-            ToolbarPersistence::Config(ToolbarPersistenceTarget::Ui(
-                ToolbarUiPersistenceTarget::StatusBar
-            ))
+            ToolbarPersistence::Ephemeral
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleCustomSection(true)).persistence,
-            ToolbarPersistence::Config(ToolbarPersistenceTarget::History)
+            ToolbarPersistence::Ephemeral
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetThickness(2.0)).persistence,

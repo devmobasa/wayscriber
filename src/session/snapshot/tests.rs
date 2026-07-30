@@ -84,7 +84,6 @@ fn sample_tool_state() -> ToolStateSnapshot {
         arrow_label_enabled: Some(false),
         polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
-        show_status_bar: true,
         tool_settings: None,
     }
 }
@@ -179,6 +178,78 @@ fn assert_no_candidate_sidecars(options: &SessionOptions) {
             path.display()
         );
     }
+}
+
+/// Status-bar visibility left the tool-state snapshot, and sessions written
+/// before that still carry the key. It has to deserialize as an unknown field
+/// and be dropped: failing the tool-state parse would cost the user every
+/// saved tool setting in the file, and honouring it would put a this-run-only
+/// chrome toggle back in charge of a configured preference.
+#[test]
+fn a_legacy_session_payload_ignores_its_status_bar_visibility() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "legacy-status-bar");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    let payload = format!(
+        concat!(
+            "{{\n",
+            "  \"version\": {version},\n",
+            "  \"last_modified\": \"2026-01-01T00:00:00Z\",\n",
+            "  \"active_board_id\": \"transparent\",\n",
+            "  \"boards\": [],\n",
+            "  \"tool_state\": {{\n",
+            "    \"current_color\": {{ \"r\": 1.0, \"g\": 0.0, \"b\": 0.0, \"a\": 1.0 }},\n",
+            "    \"current_thickness\": 7.0,\n",
+            "    \"current_font_size\": 24.0,\n",
+            "    \"text_background_enabled\": false,\n",
+            "    \"arrow_length\": 20.0,\n",
+            "    \"arrow_angle\": 30.0,\n",
+            "    \"board_previous_color\": null,\n",
+            "    \"show_status_bar\": false\n",
+            "  }}\n",
+            "}}\n"
+        ),
+        version = CURRENT_VERSION
+    );
+    std::fs::write(options.session_file_path(), payload).expect("write legacy session");
+
+    let outcome =
+        load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("legacy session should load");
+
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        panic!("expected the legacy session to load, got {outcome:?}");
+    };
+    let tool_state = snapshot.tool_state.expect("tool state present");
+    assert_eq!(
+        tool_state.current_thickness, 7.0,
+        "the tool settings around the retired key still restore"
+    );
+}
+
+/// The other half of the same contract: nothing writes the key any more, so a
+/// session saved today cannot revive the behaviour on a build that still read
+/// it.
+#[test]
+fn a_saved_session_no_longer_records_status_bar_visibility() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "status-bar-absent");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    options.compression = CompressionMode::Off;
+    let snapshot = SessionSnapshot {
+        tool_state: Some(sample_tool_state()),
+        ..sample_snapshot()
+    };
+
+    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+    let written =
+        std::fs::read_to_string(options.session_file_path()).expect("saved session should be text");
+    assert!(
+        !written.contains("show_status_bar"),
+        "chrome visibility must not reach the session file: {written}"
+    );
 }
 
 #[test]

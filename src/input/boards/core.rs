@@ -106,10 +106,6 @@ impl BoardManager {
         self.max_count
     }
 
-    pub fn persist_customizations(&self) -> bool {
-        self.persist_customizations
-    }
-
     #[allow(dead_code)]
     pub fn default_board_id(&self) -> &str {
         &self.default_board_id

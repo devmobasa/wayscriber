@@ -103,6 +103,8 @@ mod tests {
         state
     }
 
+    /// The capture modal reads one chord and hands it to the backend, which
+    /// owns the keymap; the modal closes itself in the same step.
     #[test]
     fn shortcut_capture_emits_a_replace_request() {
         let mut state = make_state();
@@ -111,17 +113,153 @@ mod tests {
         assert!(state.handle_command_palette_key(crate::input::Key::Char('p')));
 
         assert_eq!(
-            state.take_pending_backend_action(),
-            Some(crate::input::state::PendingBackendAction::EditKeybinding(
+            state.take_pending_keybinding_edits(),
+            vec![crate::input::state::KeybindingEditRequest {
+                action: Action::SelectPenTool,
+                operation: crate::input::state::KeybindingEditOperation::Replace(vec![
+                    "Ctrl+P".to_string()
+                ]),
+            }]
+        );
+        assert_eq!(state.keybinding_capture_action, None);
+    }
+
+    /// Two chords captured before the backend drains are two edits, not one.
+    ///
+    /// A single batch of input events can carry both — the user corrects a chord
+    /// straight after typing it, or rebinds two actions in a row — and each is
+    /// its own write to `config.toml` with its own answer and its own toast.
+    /// Recording them in a slot dropped the first with nothing said about it.
+    #[test]
+    fn two_chords_captured_before_a_drain_both_survive_in_order() {
+        let mut state = make_state();
+
+        assert!(state.begin_keybinding_capture(Action::SelectPenTool));
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Alt));
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('p')));
+
+        assert!(state.begin_keybinding_capture(Action::SelectMarkerTool));
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('m')));
+
+        assert_eq!(
+            state.take_pending_keybinding_edits(),
+            vec![
                 crate::input::state::KeybindingEditRequest {
                     action: Action::SelectPenTool,
                     operation: crate::input::state::KeybindingEditOperation::Replace(vec![
-                        "Ctrl+P".to_string()
+                        "Ctrl+Alt+P".to_string()
                     ]),
-                }
-            ))
+                },
+                crate::input::state::KeybindingEditRequest {
+                    action: Action::SelectMarkerTool,
+                    operation: crate::input::state::KeybindingEditOperation::Replace(vec![
+                        "Ctrl+Alt+M".to_string()
+                    ]),
+                },
+            ],
+            "both captures must reach the backend, oldest first"
         );
+        assert!(
+            state.take_pending_keybinding_edits().is_empty(),
+            "and the queue is emptied by the drain"
+        );
+    }
+
+    /// Escape leaves the modal without queueing anything.
+    #[test]
+    fn shortcut_capture_is_cancelled_by_escape() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        assert!(state.begin_keybinding_capture(Action::SelectPenTool));
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Escape));
+
         assert_eq!(state.keybinding_capture_action, None);
+        assert!(state.take_pending_keybinding_edits().is_empty());
+        assert!(state.command_palette_open, "the list is still behind it");
+    }
+
+    /// Ctrl+E arms the capture modal for the selected row rather than running
+    /// the command.
+    #[test]
+    fn ctrl_e_starts_capture_for_the_selected_row() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+        let action = state.selected_command().expect("selected command").action;
+        assert_eq!(action, Action::SelectPenTool);
+
+        state.modifiers.ctrl = true;
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+
+        assert_eq!(state.keybinding_capture_action, Some(action));
+        assert!(state.take_pending_keybinding_edits().is_empty());
+    }
+
+    /// The two Ctrl+E arms are told apart by a Shift the palette has to have
+    /// tracked itself, so this drives the real key sequence instead of setting
+    /// the modifier flags directly.
+    #[test]
+    fn shift_held_through_the_palette_turns_ctrl_e_into_the_configurator_route() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Shift));
+        assert!(state.modifiers.shift, "the palette must track Shift itself");
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('E')));
+
+        assert_eq!(
+            state.keybinding_capture_action, None,
+            "Ctrl+Shift+E is the durable route, not a capture"
+        );
+        assert!(state.take_pending_keybinding_edits().is_empty());
+        assert!(!state.command_palette_open, "launching closes the overlay");
+
+        // Releasing puts the plain Ctrl+E arm back in charge.
+        state.on_key_release(crate::input::Key::Shift);
+        assert!(!state.modifiers.shift);
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
+    }
+
+    /// A modifier held before the modal opened is still part of the chord the
+    /// user is typing, so the palette has to have tracked it on the way in.
+    /// Alt is the one the list itself never reads, which is exactly why it is
+    /// driven here as a real press instead of a flag.
+    #[test]
+    fn alt_held_through_the_palette_reaches_the_captured_chord() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+
+        // Alt goes down while the list, not the modal, owns the keyboard.
+        assert!(state.handle_command_palette_key(crate::input::Key::Alt));
+        assert!(state.modifiers.alt, "the palette must track Alt itself");
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
+
+        // Still held when the modal reads the chord.
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('k')));
+
+        assert_eq!(
+            state.take_pending_keybinding_edits(),
+            vec![crate::input::state::KeybindingEditRequest {
+                action: Action::SelectPenTool,
+                operation: crate::input::state::KeybindingEditOperation::Replace(vec![
+                    "Ctrl+Alt+K".to_string()
+                ]),
+            }]
+        );
+
+        // Release clears it again, so the next chord starts from nothing.
+        state.on_key_release(crate::input::Key::Alt);
+        assert!(!state.modifiers.alt);
     }
 
     #[test]
@@ -134,24 +272,20 @@ mod tests {
         state.modifiers.ctrl = true;
         assert!(state.handle_command_palette_key(crate::input::Key::Delete));
         assert_eq!(
-            state.take_pending_backend_action(),
-            Some(crate::input::state::PendingBackendAction::EditKeybinding(
-                crate::input::state::KeybindingEditRequest {
-                    action,
-                    operation: crate::input::state::KeybindingEditOperation::Delete,
-                }
-            ))
+            state.take_pending_keybinding_edits(),
+            vec![crate::input::state::KeybindingEditRequest {
+                action,
+                operation: crate::input::state::KeybindingEditOperation::Delete,
+            }]
         );
 
         assert!(state.handle_command_palette_key(crate::input::Key::Char('r')));
         assert_eq!(
-            state.take_pending_backend_action(),
-            Some(crate::input::state::PendingBackendAction::EditKeybinding(
-                crate::input::state::KeybindingEditRequest {
-                    action,
-                    operation: crate::input::state::KeybindingEditOperation::Reset,
-                }
-            ))
+            state.take_pending_keybinding_edits(),
+            vec![crate::input::state::KeybindingEditRequest {
+                action,
+                operation: crate::input::state::KeybindingEditOperation::Reset,
+            }]
         );
     }
 
@@ -173,7 +307,7 @@ mod tests {
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
         assert_eq!(state.keybinding_capture_action, Some(action));
         assert!(state.command_palette_open);
-        assert!(state.take_pending_backend_action().is_none());
+        assert!(state.take_pending_keybinding_edits().is_empty());
     }
 
     #[test]
@@ -213,6 +347,123 @@ mod tests {
         assert!(visual_width > geometry.width + 4.0);
     }
 
+    /// An action with no `[keybindings]` field cannot be rebound and has no row
+    /// to open, so both affordances say so and change nothing.
+    #[test]
+    fn a_runtime_only_action_is_refused_by_both_shortcut_affordances() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+
+        assert!(!state.begin_keybinding_capture(Action::ReplayTour));
+        assert_eq!(state.keybinding_capture_action, None);
+        assert!(state.take_pending_keybinding_edits().is_empty());
+        assert_eq!(
+            state
+                .ui_toast
+                .as_ref()
+                .map(|toast| toast.message.as_str())
+                .unwrap_or_default(),
+            "Replay Tour has no configurable keyboard shortcut."
+        );
+
+        assert!(!state.request_keybinding_edit(
+            Action::ReplayTour,
+            crate::input::state::KeybindingEditOperation::Delete
+        ));
+        assert!(state.take_pending_keybinding_edits().is_empty());
+
+        assert!(!state.open_configurator_for_shortcut(Action::ReplayTour));
+        assert!(state.command_palette_open);
+    }
+
+    /// Where the configurator affordance sends the user is the whole of what it
+    /// does, so the test watches the launch itself: a stand-in configurator
+    /// writes down the arguments the palette handed it.
+    #[test]
+    fn ctrl_shift_e_launches_the_configurator_at_the_rows_keybindings_section() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _environment = crate::test_env::lock();
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let recorded = temp.path().join("arguments");
+        let recorder = temp.path().join("recording-configurator");
+        std::fs::write(
+            &recorder,
+            // Written under a scratch name and renamed so a read either sees
+            // the whole argument list or no file at all.
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}.part'\nmv '{0}.part' '{0}'\n",
+                recorded.display()
+            ),
+        )
+        .expect("the recording configurator should be written");
+        let mut permissions = std::fs::metadata(&recorder)
+            .expect("the recording configurator should exist")
+            .permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&recorder, permissions)
+            .expect("the recording configurator should be executable");
+
+        let previous_configurator = std::env::var_os(crate::env_vars::CONFIGURATOR_ENV);
+        let previous_config_home = std::env::var_os(crate::env_vars::XDG_CONFIG_HOME_ENV);
+        // SAFETY: access to the process environment is serialized by test_env.
+        // The configurator override makes the broker accept the stand-in; the
+        // config home keeps a launch failure away from the developer's file.
+        unsafe {
+            std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, &recorder);
+            std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, temp.path());
+        }
+
+        let launched = record_shortcut_launch(&recorded);
+
+        // SAFETY: as above; restored before the assertion so a failure cannot
+        // leak this test's environment into the next one.
+        unsafe {
+            match previous_configurator {
+                Some(value) => std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, value),
+                None => std::env::remove_var(crate::env_vars::CONFIGURATOR_ENV),
+            }
+            match previous_config_home {
+                Some(value) => std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, value),
+                None => std::env::remove_var(crate::env_vars::XDG_CONFIG_HOME_ENV),
+            }
+        }
+
+        assert_eq!(
+            launched.as_deref(),
+            Some("--open\nkeybindings/tools?search=select pen tool\n"),
+            "Ctrl+Shift+E must open the section that holds the row's shortcut"
+        );
+    }
+
+    /// Press Ctrl+Shift+E and wait for the stand-in configurator to record its
+    /// arguments.
+    ///
+    /// The launch goes through the process broker's active-instance slot, which
+    /// a broker test running in parallel can replace and then clear.
+    /// Re-establishing the broker and pressing again keeps that race out of the
+    /// assertion.
+    fn record_shortcut_launch(recorded: &std::path::Path) -> Option<String> {
+        for _ in 0..3 {
+            let _broker = crate::process_broker::start_for_runtime().ok()?;
+            let mut state = make_state();
+            state.toggle_command_palette();
+            state.command_palette_query = "pen tool".to_string();
+            state.modifiers.ctrl = true;
+            state.modifiers.shift = true;
+            assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while std::time::Instant::now() < deadline {
+                if let Ok(arguments) = std::fs::read_to_string(recorded) {
+                    return Some(arguments);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        None
+    }
+
     fn assert_palette_finds(query: &str, action: Action) {
         let mut state = make_state();
         state.command_palette_query = query.to_string();
@@ -223,6 +474,16 @@ mod tests {
             "expected query {query:?} to find {action:?}, got {:?}",
             results.iter().map(|cmd| cmd.action).collect::<Vec<_>>()
         );
+    }
+
+    /// The routes that replaced the overlay's own editors have to be findable
+    /// where the user already looks for commands.
+    #[test]
+    fn configurator_routes_are_searchable() {
+        assert_palette_finds("edit shortcuts", Action::OpenConfiguratorKeybindings);
+        assert_palette_finds("edit presets", Action::OpenConfiguratorPresets);
+        assert_palette_finds("board defaults", Action::OpenConfiguratorBoards);
+        assert_palette_finds("quick colors", Action::OpenConfiguratorQuickColors);
     }
 
     #[test]

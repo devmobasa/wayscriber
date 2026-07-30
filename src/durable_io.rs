@@ -1,17 +1,17 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, ErrorKind, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 mod model;
 
 pub use model::{
-    AtomicWriteOptions, DurableIoError, DurableIoOperation, OverwriteMode, PermissionPolicy,
-    SymlinkPolicy,
+    AtomicWriteOptions, DestinationExpectation, DurableIoError, DurableIoOperation, FileIdentity,
+    OverwriteMode, PermissionPolicy, SymlinkPolicy,
 };
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -24,17 +24,6 @@ struct Destination {
     existing_identity: Option<FileIdentity>,
     existed_at_inspect: bool,
 }
-
-#[cfg(unix)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct FileIdentity {
-    device: u64,
-    inode: u64,
-}
-
-#[cfg(not(unix))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct FileIdentity;
 
 pub fn write_text_atomic(
     path: &Path,
@@ -49,6 +38,32 @@ pub fn write_atomic(
     bytes: &[u8],
     options: AtomicWriteOptions,
 ) -> Result<(), DurableIoError> {
+    write_atomic_reporting_identity(path, bytes, options, None).map(|_| ())
+}
+
+/// [`write_atomic`], made conditional on what is at the destination, and
+/// reporting which file the rename left there.
+///
+/// `expected` is what the caller already established the destination is, if it
+/// looked; `None` is the ordinary write, which takes the path as it finds it.
+/// A parameter rather than one of [`AtomicWriteOptions`]' fields because it is
+/// not a policy: those say how any write to this kind of file behaves, and this
+/// is an observation one caller made at one moment, which goes stale the
+/// instant it is taken.
+///
+/// The identity is the temporary file's, read while this write still holds it
+/// open, so it names the file these bytes are in rather than whatever is at the
+/// path once the call returns: `rename` keeps the inode it moves, and a later
+/// writer replacing the destination cannot retroactively change which file this
+/// one wrote. A caller that has to recognise its own write afterwards — the
+/// config save, which pins the file it loaded — needs exactly that and cannot
+/// get it from a `stat` of the destination, which would name whoever wrote last.
+pub fn write_atomic_reporting_identity(
+    path: &Path,
+    bytes: &[u8],
+    options: AtomicWriteOptions,
+    expected: Option<DestinationExpectation<'_>>,
+) -> Result<FileIdentity, DurableIoError> {
     let destination = inspect_destination(path, options)?;
     let parent = destination
         .final_path
@@ -75,17 +90,26 @@ pub fn write_atomic(
                 io_error(DurableIoOperation::SyncTemporary, &temp_path, source)
             })?;
         }
+        // Taken from the open handle, before the rename that gives this file the
+        // destination's name. It is the identity the destination will have, and
+        // reading it here rather than from the path afterwards is what keeps it
+        // about *this* write.
+        let identity = temp_file
+            .metadata()
+            .map(|metadata| FileIdentity::of(&metadata))
+            .map_err(|source| io_error(DurableIoOperation::InspectTemporary, &temp_path, source))?;
         drop(temp_file);
-        revalidate_destination(&destination, options)?;
+        revalidate_destination(&destination, options, expected)?;
         finalize_temp_file(
             &temp_path,
             &destination.final_path,
             finalize_overwrite_mode(&destination, options),
+            expected,
         )?;
         if options.sync_parent {
             sync_parent_dir(&destination.final_path)?;
         }
-        Ok(())
+        Ok(identity)
     })();
 
     if result.is_err() {
@@ -118,7 +142,7 @@ fn inspect_follow_destination(path: &Path) -> Result<Destination, DurableIoError
             final_path: current,
             followed_links,
             existing_mode: metadata_mode(&metadata),
-            existing_identity: file_identity(&metadata),
+            existing_identity: Some(FileIdentity::of(&metadata)),
             existed_at_inspect: true,
         }),
         Ok(_) => Err(DurableIoError::UnsupportedFileType { path: current }),
@@ -182,7 +206,7 @@ fn inspect_reject_destination(path: &Path) -> Result<Destination, DurableIoError
             final_path: path.to_path_buf(),
             followed_links: Vec::new(),
             existing_mode: metadata_mode(&metadata),
-            existing_identity: file_identity(&metadata),
+            existing_identity: Some(FileIdentity::of(&metadata)),
             existed_at_inspect: true,
         }),
         Ok(_) => Err(DurableIoError::UnsupportedFileType {
@@ -206,7 +230,16 @@ fn inspect_reject_destination(path: &Path) -> Result<Destination, DurableIoError
 fn revalidate_destination(
     destination: &Destination,
     options: AtomicWriteOptions,
+    expected: Option<DestinationExpectation<'_>>,
 ) -> Result<(), DurableIoError> {
+    // The caller's expectation first, because it is the one that knows what the
+    // window was about. The mode-specific checks below describe the same
+    // situations in this function's own terms — a `CreateNew` that found
+    // something reports `AlreadyExists` — and those are answers about this
+    // write, not about a destination that moved under the caller between its
+    // last check and this one, which is a reload rather than a failure.
+    verify_expectation(&destination.final_path, expected)?;
+
     for (link, expected) in &destination.followed_links {
         let current = read_resolved_link(link).map_err(|_| DurableIoError::DestinationChanged {
             operation: DurableIoOperation::ReadLink,
@@ -257,7 +290,7 @@ fn revalidate_replace_destination(destination: &Destination) -> Result<(), Durab
                 });
             }
             if let Some(expected) = destination.existing_identity
-                && file_identity(&metadata) != Some(expected)
+                && FileIdentity::of(&metadata) != expected
             {
                 return Err(DurableIoError::DestinationChanged {
                     operation: DurableIoOperation::InspectDestination,
@@ -343,24 +376,150 @@ fn next_temp_path(parent: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
     parent.join(name)
 }
 
+/// Whether the destination is still the file the caller checked.
+///
+/// A no-op without an expectation: an ordinary write takes the path as it finds
+/// it, and only a caller that has already inspected the destination has
+/// anything to compare against.
+///
+/// `symlink_metadata`, so a symlink swapped in where a regular file was is a
+/// change rather than a file it silently follows.
+///
+/// The contents come back through a handle whose own identity is checked, not
+/// through a second lookup of the path. A `stat` followed by a read of the same
+/// name is two lookups, and a file replaced between them would leave the two
+/// halves of this condition describing two different files: the identity of the
+/// one that was there and the bytes of the one that is. Taking the identity off
+/// the open file as well is what makes both halves one observation of one file.
+fn verify_expectation(
+    path: &Path,
+    expected: Option<DestinationExpectation<'_>>,
+) -> Result<(), DurableIoError> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let changed = || DurableIoError::DestinationChanged {
+        operation: DurableIoOperation::InspectDestination,
+        path: path.to_path_buf(),
+    };
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => match expected {
+            DestinationExpectation::Present { identity, contents }
+                if metadata.is_file() && FileIdentity::of(&metadata) == identity =>
+            {
+                match read_identified_file(path, identity)? {
+                    Some(current) if current == contents => Ok(()),
+                    _ => Err(changed()),
+                }
+            }
+            _ => Err(changed()),
+        },
+        Err(source) if source.kind() == ErrorKind::NotFound => match expected {
+            DestinationExpectation::Absent => Ok(()),
+            DestinationExpectation::Present { .. } => Err(changed()),
+        },
+        Err(source) => Err(io_error(
+            DurableIoOperation::InspectDestination,
+            path,
+            source,
+        )),
+    }
+}
+
+/// The file's contents, read through a handle that is still the named file.
+///
+/// `None` says the destination moved rather than that reading failed: the name
+/// was taken over between the caller's `stat` and this open, or the open landed
+/// on some other file. A destination that vanished in that gap belongs in the
+/// same answer — it is a change with the caller's ordinary recovery, not an I/O
+/// failure to report. A file that is there and cannot be read is the other kind,
+/// and stays an error.
+fn read_identified_file(
+    path: &Path,
+    identity: FileIdentity,
+) -> Result<Option<Vec<u8>>, DurableIoError> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(source) if source.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(io_error(
+                DurableIoOperation::InspectDestination,
+                path,
+                source,
+            ));
+        }
+    };
+    let opened = file
+        .metadata()
+        .map_err(|source| io_error(DurableIoOperation::InspectDestination, path, source))?;
+    if !opened.is_file() || FileIdentity::of(&opened) != identity {
+        return Ok(None);
+    }
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)
+        .map_err(|source| io_error(DurableIoOperation::InspectDestination, path, source))?;
+    Ok(Some(contents))
+}
+
 fn finalize_temp_file(
     temp_path: &Path,
     final_path: &Path,
     overwrite: OverwriteMode,
+    expected: Option<DestinationExpectation<'_>>,
 ) -> Result<(), DurableIoError> {
+    // The last thing before the rename, on purpose. Everything else this write
+    // does — the temporary file, the permissions, the fsync, the checks above —
+    // sits before it, so the stretch a replacement has to land in to go unseen
+    // is the gap between this check and the rename below it.
+    //
+    // For a replacement the gap cannot be closed. No rename takes a condition on
+    // what the destination currently is: `RENAME_NOREPLACE` asks only whether
+    // something is there, and `RENAME_EXCHANGE` swaps whatever it finds rather
+    // than checking which file it found. What is left is one gap between
+    // adjacent steps instead of one that spans a caller's whole save, and saying
+    // so is more useful than implying it was eliminated.
+    //
+    // A creation is the exception, and only because its condition is the one a
+    // rename can express: `Absent` is exactly what `RENAME_NOREPLACE` enforces,
+    // so a name that fills up in the gap is refused by the kernel rather than
+    // merely unseen. `finalize_rename_error` reports that as the broken
+    // expectation it is.
+    verify_expectation(final_path, expected)?;
     let result = match overwrite {
         OverwriteMode::Replace => fs::rename(temp_path, final_path),
         OverwriteMode::CreateNew => rename_no_replace(temp_path, final_path),
     };
-    result.map_err(|source| {
-        if overwrite == OverwriteMode::CreateNew && source.kind() == ErrorKind::AlreadyExists {
-            DurableIoError::AlreadyExists {
-                path: final_path.to_path_buf(),
-            }
-        } else {
-            io_error(DurableIoOperation::FinalizeRename, final_path, source)
-        }
-    })
+    result.map_err(|source| finalize_rename_error(overwrite, expected, final_path, source))
+}
+
+/// What a refused rename was about.
+///
+/// `RENAME_NOREPLACE` closes the gap above for the one condition it can express,
+/// so a `CreateNew` that loses the race is refused rather than overwriting
+/// anything. Which error says so depends on who asked. A write with no
+/// expectation found a file it was never told about, and `AlreadyExists` is the
+/// answer to its own question. A write carrying one was told the name was free
+/// and is now finding out that it is not — the caller's expectation broke, the
+/// same as every other way this window ends, and only that wording sends an
+/// editor round to reload and reapply instead of reporting a failed save.
+fn finalize_rename_error(
+    overwrite: OverwriteMode,
+    expected: Option<DestinationExpectation<'_>>,
+    final_path: &Path,
+    source: io::Error,
+) -> DurableIoError {
+    if overwrite != OverwriteMode::CreateNew || source.kind() != ErrorKind::AlreadyExists {
+        return io_error(DurableIoOperation::FinalizeRename, final_path, source);
+    }
+    match expected {
+        Some(_) => DurableIoError::DestinationChanged {
+            operation: DurableIoOperation::FinalizeRename,
+            path: final_path.to_path_buf(),
+        },
+        None => DurableIoError::AlreadyExists {
+            path: final_path.to_path_buf(),
+        },
+    }
 }
 
 #[cfg(unix)]
@@ -403,19 +562,6 @@ fn metadata_mode(metadata: &fs::Metadata) -> Option<u32> {
 
 #[cfg(not(unix))]
 fn metadata_mode(_metadata: &fs::Metadata) -> Option<u32> {
-    None
-}
-
-#[cfg(unix)]
-fn file_identity(metadata: &fs::Metadata) -> Option<FileIdentity> {
-    Some(FileIdentity {
-        device: metadata.dev(),
-        inode: metadata.ino(),
-    })
-}
-
-#[cfg(not(unix))]
-fn file_identity(_metadata: &fs::Metadata) -> Option<FileIdentity> {
     None
 }
 

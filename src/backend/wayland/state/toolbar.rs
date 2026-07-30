@@ -3,6 +3,7 @@ use super::*;
 
 mod drag;
 mod events;
+pub(in crate::backend::wayland) use events::{queue_preset_action, queue_quick_color_edit};
 mod fade;
 pub(in crate::backend::wayland::state) use events::SessionFileDialogController;
 mod geometry;

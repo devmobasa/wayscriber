@@ -3,9 +3,9 @@ use super::super::base::{
 };
 use crate::domain::Action;
 use crate::input::boards::{
-    BoardConfigChange, BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest,
-    BoardDeleteTarget, BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection,
-    BoardRestoreRequest, PendingBoardRuntimeUiAction,
+    BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
+    BoardIdentityGeneration, BoardRestoreOutcome, BoardRestoreRejection, BoardRestoreRequest,
+    PendingBoardRuntimeUiAction,
 };
 use crate::input::state::{Toast, ToastPriority};
 use std::time::{Duration, Instant};
@@ -168,9 +168,6 @@ impl InputState {
                 self.queue_board_runtime_ui_action(PendingBoardRuntimeUiAction::IdentityDeleted {
                     board_id: deleted_id.clone(),
                 });
-                self.queue_board_config_save(BoardConfigChange::IdentityDeleted(
-                    deleted_id.clone(),
-                ));
                 self.deleted_boards.push((
                     BoardRestoreRequest {
                         board: deleted_board,
@@ -260,17 +257,10 @@ impl InputState {
             BoardRestoreOutcome::Restored {
                 restored_id,
                 restored_name,
-                id_changed,
                 ..
             } => {
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
                 self.queue_board_identity_available(&restored_id);
-                let change = if id_changed {
-                    BoardConfigChange::IdentitiesCreated(vec![restored_id])
-                } else {
-                    BoardConfigChange::IdentityRestored(restored_id)
-                };
-                self.queue_board_config_save(change);
                 self.finish_board_transition_from(current_spec, &current_id, false);
                 self.push_toast(
                     ToastPriority::Info,

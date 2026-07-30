@@ -1,6 +1,5 @@
 use super::super::base::{
-    InputState, KeybindingEditOperation, KeybindingEditRequest, PendingBackendAction, Toast,
-    ToastPriority,
+    InputState, KeybindingEditOperation, KeybindingEditRequest, Toast, ToastPriority,
 };
 use super::layout;
 use super::search::{CommandPaletteListRow, command_palette_display_index};
@@ -9,6 +8,7 @@ use super::{
     layout::{CommandPaletteGeometry, CommandPaletteRowAction},
 };
 use crate::config::{KeyBinding, KeybindingsConfig, action_label};
+use crate::configurator_destination::keybindings_destination_for_action;
 use crate::domain::Action;
 use crate::input::events::Key;
 use crate::input::state::actions::key_press::bindings::key_to_action_label;
@@ -18,10 +18,23 @@ const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280
 const COMMAND_PALETTE_REPEAT_INTERVAL: Duration = Duration::from_millis(55);
 
 impl InputState {
+    /// Whether the palette owns keyboard and pointer input.
+    ///
+    /// This is what the toolbar and GTK modal gates ask, which is why it keeps
+    /// its own name rather than reading the visibility flag directly: the
+    /// shortcut-capture modal is its second half, and it must swallow the same
+    /// keys and pointer events the list does.
     pub(crate) fn command_palette_is_engaged(&self) -> bool {
         self.command_palette_open || self.keybinding_capture_action.is_some()
     }
 
+    /// Arm the capture modal for one action's next keyboard chord.
+    ///
+    /// The chord it reads is durable: the backend writes that one action's
+    /// `[keybindings]` entry to `config.toml` before installing the new keymap,
+    /// and a save that fails degrades to a this-run edit whose toast says so.
+    /// An action with no `[keybindings]` field has nothing to rebind, so the
+    /// affordance explains instead of opening a modal that cannot succeed.
     pub(crate) fn begin_keybinding_capture(&mut self, action: Action) -> bool {
         if KeybindingsConfig::default()
             .bindings_for_action(action)
@@ -44,6 +57,11 @@ impl InputState {
         true
     }
 
+    /// Queue a shortcut edit for the backend, which owns the keymap.
+    ///
+    /// Queued behind whatever is already waiting: the backend drains the whole
+    /// list on its next pass, so recording a second edit before it gets there
+    /// costs the first neither its write nor its toast.
     pub(crate) fn request_keybinding_edit(
         &mut self,
         action: Action,
@@ -63,9 +81,34 @@ impl InputState {
             );
             return false;
         }
-        self.set_pending_backend_action(PendingBackendAction::EditKeybinding(
-            KeybindingEditRequest { action, operation },
-        ));
+        self.pending_keybinding_edits
+            .push(KeybindingEditRequest { action, operation });
+        true
+    }
+
+    /// Hand one action's shortcut to the configurator.
+    ///
+    /// The palette's own controls rebind one chord in place; this is the route
+    /// to the full editor, opening the Keybindings screen on the section that
+    /// holds this action with the action's own key searched. Launching closes
+    /// the overlay, so the palette closes with it.
+    pub(crate) fn open_configurator_for_shortcut(&mut self, action: Action) -> bool {
+        let Some(destination) = keybindings_destination_for_action(action) else {
+            self.push_toast(
+                ToastPriority::Info,
+                "palette.shortcut",
+                Toast::warning(format!(
+                    "{} has no configurable keyboard shortcut.",
+                    action_label(action)
+                )),
+            );
+            return false;
+        };
+        self.command_palette_open = false;
+        self.clear_command_palette_repeat();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.launch_configurator(Some(destination));
         true
     }
 
@@ -118,7 +161,15 @@ impl InputState {
         }
 
         match key {
-            Key::Ctrl => {
+            // Every modifier a `KeyBinding` can carry is tracked here, because
+            // the shortcut controls and the capture modal read all three:
+            // without this arm the palette would swallow the press, Ctrl+Shift+E
+            // could never be told apart from Ctrl+E, and an Alt already held
+            // when capture began would be missing from the chord that gets
+            // saved. `on_key_release` clears them again on the way out,
+            // whatever is open at the time. `Key::Tab` stays with the catch-all
+            // below: it is the pointer-drag modifier, not part of a chord.
+            Key::Ctrl | Key::Shift | Key::Alt => {
                 self.handle_modifier_key_press(key);
                 true
             }
@@ -188,6 +239,15 @@ impl InputState {
             }
             Key::Char('u' | 'U') if self.modifiers.ctrl => {
                 self.clear_command_palette_query();
+                true
+            }
+            // Shift is checked first: the configurator route and the in-place
+            // capture share the letter, and the plain-Ctrl arm below matches
+            // both cases.
+            Key::Char('e' | 'E') if self.modifiers.ctrl && self.modifiers.shift => {
+                if let Some(command) = self.selected_command() {
+                    self.open_configurator_for_shortcut(command.action);
+                }
                 true
             }
             Key::Char('e' | 'E') if self.modifiers.ctrl => {

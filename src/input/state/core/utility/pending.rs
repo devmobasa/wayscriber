@@ -1,50 +1,36 @@
 use super::super::base::{
-    ClipboardFingerprint, ClipboardPasteRequest, InputState, OutputFocusAction,
-    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, QuickColorEdit,
-    SelectionPublishState, ZoomAction,
+    ClipboardFingerprint, ClipboardPasteRequest, InputState, KeybindingEditRequest,
+    OutputFocusAction, PendingBackendAction, PendingSelectionClipboardPublish, PresetAction,
+    QuickColorEdit, SelectionPublishState, ZoomAction,
 };
-use crate::config::BoardsConfig;
-use crate::input::boards::{PendingBoardConfigUpdate, PendingBoardRuntimeUiAction};
+use crate::input::boards::PendingBoardRuntimeUiAction;
 
 #[allow(dead_code)]
 impl InputState {
     /// Takes and clears any pending backend output action.
     pub fn take_pending_backend_action(&mut self) -> Option<PendingBackendAction> {
-        self.pending_backend_action
-            .take()
-            .or_else(|| {
-                self.pending_floating_badge_config
-                    .take()
-                    .map(PendingBackendAction::PersistFloatingBadgeConfig)
-            })
-            .or_else(|| {
-                self.pending_zoom_chip_config
-                    .take()
-                    .map(PendingBackendAction::PersistZoomChipConfig)
-            })
+        self.pending_backend_action.take()
     }
 
     /// Whether another backend output action is waiting to be drained.
     pub(crate) fn has_pending_backend_actions(&self) -> bool {
         self.pending_backend_action.is_some()
-            || self.pending_floating_badge_config.is_some()
-            || self.pending_zoom_chip_config.is_some()
     }
 
-    /// Stores backend output work for retrieval by the backend. The two
-    /// preference saves use independent, coalescing slots so they cannot
-    /// overwrite one another or grow an unbounded queue; other actions retain
-    /// their existing last-action semantics.
+    /// Stores backend output work for retrieval by the backend, with
+    /// last-action semantics.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
-        match action {
-            PendingBackendAction::PersistFloatingBadgeConfig(visible) => {
-                self.pending_floating_badge_config = Some(visible);
-            }
-            PendingBackendAction::PersistZoomChipConfig(visible) => {
-                self.pending_zoom_chip_config = Some(visible);
-            }
-            action => self.pending_backend_action = Some(action),
-        }
+        self.pending_backend_action = Some(action);
+    }
+
+    /// Takes every shortcut edit recorded since the last drain, oldest first.
+    ///
+    /// The backend hands each one to the config-edit worker, which answers them
+    /// in the same order. They are drained together rather than one per pass
+    /// because two edits can be recorded from a single batch of input events,
+    /// and the second must not cost the first its write or its toast.
+    pub(crate) fn take_pending_keybinding_edits(&mut self) -> Vec<KeybindingEditRequest> {
+        std::mem::take(&mut self.pending_keybinding_edits)
     }
 
     /// Stores an output focus action for retrieval by the backend.
@@ -76,17 +62,6 @@ impl InputState {
     /// write. The runtime palette already shows the new color.
     pub fn take_pending_quick_color_edit(&mut self) -> Option<QuickColorEdit> {
         self.pending_quick_color_edit.take()
-    }
-
-    /// Takes and clears any pending board config update.
-    pub fn take_pending_board_config(&mut self) -> Option<BoardsConfig> {
-        self.pending_board_config
-            .take()
-            .map(PendingBoardConfigUpdate::into_snapshot)
-    }
-
-    pub(crate) fn take_pending_board_config_update(&mut self) -> Option<PendingBoardConfigUpdate> {
-        self.pending_board_config.take()
     }
 
     pub(crate) fn take_pending_board_runtime_ui_actions(
@@ -141,7 +116,6 @@ mod tests {
     use super::*;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
-    use crate::input::boards::BoardConfigChange;
     use crate::input::{ClickHighlightSettings, EraserMode};
 
     fn make_state() -> InputState {
@@ -242,23 +216,5 @@ mod tests {
             Some(PresetAction::Clear { slot: 2 })
         ));
         assert!(state.take_pending_preset_action().is_none());
-    }
-
-    #[test]
-    fn pending_board_config_is_taken_once() {
-        let mut state = make_state();
-        let config = BoardsConfig {
-            default_board: "blackboard".to_string(),
-            ..BoardsConfig::default()
-        };
-        state.pending_board_config = Some(PendingBoardConfigUpdate::new(
-            config.clone(),
-            BoardConfigChange::Structure,
-        ));
-
-        let taken = state.take_pending_board_config().expect("board config");
-        assert_eq!(taken.default_board, "blackboard");
-        assert_eq!(taken.items.len(), config.items.len());
-        assert!(state.take_pending_board_config().is_none());
     }
 }

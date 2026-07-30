@@ -256,8 +256,8 @@ pub enum PresetAction {
 }
 
 /// An accepted quick-color recolor awaiting the backend's config write. The
-/// runtime palette is already updated; this only carries what `config.toml`
-/// still needs (`drawing.quick_colors[index].color`).
+/// runtime palette is already updated; this carries what `config.toml` still
+/// needs (`drawing.quick_colors[index].color`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct QuickColorEdit {
     pub index: usize,
@@ -446,23 +446,26 @@ pub enum PendingBackendAction {
     CanvasExport(Action),
     BoardPdfExport(Action),
     ClearSavedToolState,
-    EditKeybinding(KeybindingEditRequest),
     /// Persist the top-display preference changed by its keyboard action.
     /// The cycle already applied, so the payload carries the pre-cycle mode
     /// for the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
     PersistToolbarDisplayMode(crate::config::TopDisplayMode),
-    /// Persist the floating-badge master visibility flipped by
-    /// `Action::ToggleFloatingBadge` (focus mode never enqueues this — its
-    /// hide/restore stays transient). The payload captures the authored value
-    /// so a later transient suppression cannot be mistaken for the preference.
-    PersistFloatingBadgeConfig(bool),
-    /// Persist the zoom-chip master visibility flipped by
-    /// `Action::ToggleZoomChip` (same authored-value and transient-focus-mode
-    /// contract).
-    PersistZoomChipConfig(bool),
+    /// Persist both pin flags driven by the keyboard visibility toggle.
+    /// The toggle already applied, so the payload carries the pre-change pins
+    /// for the runtime-UI preview's rollback; the pin buttons persist via
+    /// their exact event-policy targets instead.
+    PersistToolbarVisibility {
+        previous_top_pinned: bool,
+        previous_side_pinned: bool,
+    },
 }
 
+/// What a shortcut edit should do to one action's binding list.
+///
+/// `Replace` carries the chord the capture modal read; `Reset` resolves against
+/// the compiled defaults at apply time rather than storing them here, so the
+/// request stays a description of intent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeybindingEditOperation {
     Replace(Vec<String>),
@@ -470,6 +473,19 @@ pub enum KeybindingEditOperation {
     Reset,
 }
 
+/// One action's shortcut edit, for the running keymap and for `config.toml`.
+///
+/// The backend writes just this action's `[keybindings]` entry through the
+/// narrow editor in `src/config/io.rs` before installing the new keymap, so a
+/// chord the file has since given to another action is refused outright. Any
+/// other save failure degrades to a this-run edit whose toast says the file did
+/// not get it.
+///
+/// These queue rather than replace one another. Each is a separate write with
+/// its own answer and its own toast, so a request the user made cannot be
+/// dropped by the next one arriving before the backend drains — which is why
+/// they ride `InputState::pending_keybinding_edits` and not the single-slot
+/// [`PendingBackendAction`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeybindingEditRequest {
     pub action: Action,

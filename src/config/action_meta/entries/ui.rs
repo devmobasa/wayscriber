@@ -224,6 +224,61 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        OpenConfiguratorKeybindings,
+        "Edit Shortcuts\u{2026}",
+        Some("Shortcuts"),
+        "Open the configurator's Keybindings screen",
+        UI,
+        true,
+        false,
+        false,
+        &[
+            "edit shortcuts",
+            "rebind",
+            "keybindings",
+            "hotkeys",
+            "change shortcut"
+        ]
+    ),
+    meta!(
+        OpenConfiguratorPresets,
+        "Edit Presets\u{2026}",
+        Some("Presets"),
+        "Open the configurator's Presets screen",
+        UI,
+        true,
+        false,
+        false,
+        &["edit presets", "preset library", "save preset for good"]
+    ),
+    meta!(
+        OpenConfiguratorBoards,
+        "Edit Board Defaults\u{2026}",
+        Some("Board Defaults"),
+        "Open the configurator's Boards screen (templates for new sessions)",
+        UI,
+        true,
+        false,
+        false,
+        &[
+            "edit boards",
+            "board defaults",
+            "board templates",
+            "default boards"
+        ]
+    ),
+    meta!(
+        OpenConfiguratorQuickColors,
+        "Edit Quick Colors\u{2026}",
+        Some("Quick Colors"),
+        "Open the configurator's Drawing screen at the quick-color palette",
+        UI,
+        true,
+        false,
+        false,
+        &["edit quick colors", "palette", "swatches", "color library"]
+    ),
+    meta!(
         OpenAbout,
         "About Wayscriber",
         Some("About"),

@@ -11,6 +11,7 @@ bash tools/test-release-packaging.sh
 ./tools/check-nixpkgs-recipe.py
 ./tools/check-rust-source-coverage.py
 ./tools/check-process-sites.py
+./tools/check-config-writers.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo build --workspace --all-features --bins

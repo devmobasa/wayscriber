@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use crate::draw::Color;
 use crate::input::state::InputState;
-use crate::input::state::core::base::QuickColorEdit;
+use crate::input::state::QuickColorEdit;
 
 use super::{
     ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
@@ -140,6 +140,17 @@ impl InputState {
         }
     }
 
+    /// Hand an accepted recolor to the backend, which owns the config and the
+    /// file.
+    ///
+    /// Accepting is an explicit user edit action, so the slot is written to
+    /// `config.toml`. `InputState` has neither the configuration nor the
+    /// filesystem, so the accept records what it decided and the backend drains
+    /// it — and raises the toast, which depends on whether the write landed.
+    fn request_quick_color_edit(&mut self, index: usize, color: Color) {
+        self.pending_quick_color_edit = Some(QuickColorEdit { index, color });
+    }
+
     /// Show a candidate color on the popup's edit target: the swatch it
     /// recolors, or the tool's color. Live palette updates keep the toolbar
     /// swatch in step with the gradient drag; they are reverted on cancel and
@@ -227,7 +238,7 @@ impl InputState {
             self.color_picker_popup_preview(color);
             match slot {
                 Some(index) => {
-                    self.pending_quick_color_edit = Some(QuickColorEdit { index, color });
+                    self.request_quick_color_edit(index, color);
                     // The swatch the tool was already painting with follows its
                     // own recolor, so the palette's selection ring and the live
                     // color cannot disagree. Recoloring any other slot leaves

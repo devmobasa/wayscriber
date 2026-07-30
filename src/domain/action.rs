@@ -141,6 +141,15 @@ pub enum Action {
 
     // Configurator
     OpenConfigurator,
+    /// Open the configurator's Keybindings screen, which owns every shortcut.
+    OpenConfiguratorKeybindings,
+    /// Open the configurator's Presets screen, which owns the preset library.
+    OpenConfiguratorPresets,
+    /// Open the configurator's Boards screen, which owns the board templates a
+    /// new session starts from.
+    OpenConfiguratorBoards,
+    /// Open the configurator's Drawing screen at the quick-color palette.
+    OpenConfiguratorQuickColors,
     ClearSavedToolState,
     OpenAbout,
 

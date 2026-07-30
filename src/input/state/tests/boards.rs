@@ -450,19 +450,84 @@ fn pseudo_random_bytes(len: usize) -> Vec<u8> {
         .collect()
 }
 
+/// Creating a board is session work: the live set grows and the user is told,
+/// and nothing reaches `config.toml` — the board templates are the
+/// configurator's.
 #[test]
-fn create_board_adds_board_queues_config_save_and_emits_toast() {
+fn create_board_adds_board_and_emits_toast() {
     let mut state = create_test_input_state();
     let initial_count = state.boards.board_count();
 
     assert!(state.create_board());
 
     assert_eq!(state.boards.board_count(), initial_count + 1);
-    assert!(state.take_pending_board_config().is_some());
     assert!(
         state
             .ui_toast
             .as_ref()
             .is_some_and(|toast| toast.message.starts_with("Board created:"))
     );
+}
+
+/// The live board set is session state now: creating, renaming, recoloring, and
+/// reordering boards touch the running app and nothing else. `config.toml`
+/// holds the templates a new session is seeded from, and a board gesture is not
+/// one of the explicit user edit actions that may write it — the configurator's
+/// Save, and the overlay's shortcut, preset, and quick-color edits — so the file
+/// keeps its bytes, its metadata, and its neighbours through every one of them.
+#[test]
+fn live_board_edits_leave_the_config_file_untouched() {
+    crate::config::test_helpers::with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+        std::fs::create_dir_all(&config_dir).expect("test config directory");
+        let path = config_dir.join("config.toml");
+        // `persist_customizations` is still parsed, and it no longer buys the
+        // overlay permission to write anything.
+        std::fs::write(&path, "[boards]\npersist_customizations = true\n")
+            .expect("test config should be written");
+        let snapshot = crate::config::test_helpers::ConfigFileSnapshot::capture(&path);
+
+        let configured = crate::config::Config::load()
+            .expect("test config should load")
+            .config;
+        let mut state = create_test_input_state();
+        state.boards = BoardManager::from_config(configured.resolved_boards());
+        let whiteboard = board_index(&state, BOARD_ID_WHITEBOARD);
+
+        assert!(state.set_board_name(whiteboard, "Renamed this run".to_string()));
+        assert!(state.set_board_background_color(
+            whiteboard,
+            Color {
+                r: 0.2,
+                g: 0.3,
+                b: 0.4,
+                a: 1.0,
+            },
+        ));
+        assert!(state.create_board());
+        assert!(state.reorder_board(0, 1));
+
+        snapshot.assert_unchanged("renaming, recoloring, creating, and reordering boards");
+
+        // Restart semantics: the next process seeds from the authored template,
+        // not from the boards this run edited.
+        let restarted = crate::config::Config::load()
+            .expect("test config should reload")
+            .config;
+        assert_eq!(
+            restarted
+                .resolved_boards()
+                .items
+                .iter()
+                .find(|item| item.id == BOARD_ID_WHITEBOARD)
+                .map(|item| item.name.clone()),
+            configured
+                .resolved_boards()
+                .items
+                .iter()
+                .find(|item| item.id == BOARD_ID_WHITEBOARD)
+                .map(|item| item.name.clone()),
+            "a fresh load seeds from the authored template, not from this run"
+        );
+    });
 }

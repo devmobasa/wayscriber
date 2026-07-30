@@ -55,15 +55,16 @@ fn assert_page_text(
     }
 }
 
+/// A rename edits the live board only. The configured template it was seeded
+/// from is the configurator's, so nothing is queued for `config.toml`.
 #[test]
-fn set_board_name_trims_and_queues_config_save() {
+fn set_board_name_trims_the_live_board_name() {
     let mut state = create_test_input_state();
     let index = board_index(&state, BOARD_ID_BLACKBOARD);
 
     assert!(state.set_board_name(index, "  Focus Board  ".to_string()));
 
     assert_eq!(state.boards.board_states()[index].spec.name, "Focus Board");
-    assert!(state.take_pending_board_config().is_some());
 }
 
 #[test]
@@ -111,7 +112,6 @@ fn set_board_background_color_updates_active_auto_adjust_pen_color() {
         state.current_color,
         board.spec.effective_pen_color().expect("pen color")
     );
-    assert!(state.take_pending_board_config().is_some());
 }
 
 #[test]

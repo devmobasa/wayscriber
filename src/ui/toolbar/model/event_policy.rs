@@ -1,6 +1,6 @@
 use crate::config::{
-    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
-    action_label, action_short_label, section_flag_for_item,
+    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, action_label,
+    action_short_label, section_flag_for_item,
 };
 use crate::input::Tool;
 
@@ -28,11 +28,21 @@ impl ToolbarEventPolicy {
     }
 }
 
+/// Where an applied toolbar event's value survives to.
+///
+/// `config.toml` is not a destination for a preference toggle. The file is an
+/// authored input, changed only by an explicit user edit action: the
+/// configurator's Save, or one of the overlay's three scoped edits — a shortcut
+/// rebind, a preset slot, a quick-color swatch — each of which writes its own
+/// key through the audited worker path. Flipping a toolbar preference is not
+/// one of them. An event that changes an authored preference — icons, section
+/// visibility, layout mode, status bar, badges, click highlight, the input HUD
+/// — is `Ephemeral`: it changes the effective value for this run and the next
+/// start reads the configured one back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarPersistence {
     Ephemeral,
     RuntimeUi(ToolbarRuntimeUiPersistenceTarget),
-    Config(ToolbarPersistenceTarget),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,43 +62,12 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     /// Top-strip form (`full`/`micro`). The runtime-only `hidden` rung of the
     /// cycle is folded to `full` when the override is computed.
     TopDisplayMode,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ToolbarPersistenceTarget {
-    Toolbar(ToolbarConfigPersistenceTarget),
-    Ui(ToolbarUiPersistenceTarget),
-    History,
-    ClickHighlight,
-    InputHud,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ToolbarConfigPersistenceTarget {
-    LayoutMode,
-    SectionVisibility(ToolbarSectionFlag),
-    Icons,
-    MoreColors,
-    ContextAwareUi,
-    PresetToasts,
-    ToolPreview,
-    DelaySliders,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ToolbarUiPersistenceTarget {
-    StatusBar,
-    StatusBarInteractive,
-    StatusBarItem(crate::config::StatusBarItem),
-    StatusBoardBadge,
-    StatusPageBadge,
-    FloatingBadgeAlways,
-    /// Master floating-badge visibility (`ui.show_floating_badge`),
-    /// persisted by its keyboard/palette toggle action.
-    FloatingBadge,
-    /// Master zoom-chip visibility (`ui.toolbar.show_zoom_chip`),
-    /// persisted by its keyboard/palette toggle action.
-    ZoomChip,
+    /// The durable form of the keyboard visibility toggle: both pin flags
+    /// persisted as one batched mutation, so a restart shows exactly what the
+    /// toggle left on screen. No `ToolbarEvent` maps to it — the pin buttons
+    /// keep their single-flag targets; this target serves the keyboard action
+    /// path only.
+    ToolbarVisibility,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,46 +206,10 @@ pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
 }
 
 fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
-    use ToolbarConfigPersistenceTarget::*;
-    use ToolbarPersistenceTarget::*;
     use ToolbarRuntimeUiPersistenceTarget as Runtime;
-    use ToolbarUiPersistenceTarget::*;
     match event {
         ToolbarEvent::PinTopToolbar(_) => ToolbarPersistence::RuntimeUi(Runtime::TopPinned),
         ToolbarEvent::PinSideToolbar(_) => ToolbarPersistence::RuntimeUi(Runtime::SidePinned),
-        ToolbarEvent::ToggleIconMode(_) => ToolbarPersistence::Config(Toolbar(Icons)),
-        ToolbarEvent::ToggleMoreColors(_) => ToolbarPersistence::Config(Toolbar(MoreColors)),
-        ToolbarEvent::ToggleActionsSection(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Actions)))
-        }
-        ToolbarEvent::ToggleActionsAdvanced(_) => ToolbarPersistence::Config(Toolbar(
-            SectionVisibility(ToolbarSectionFlag::ActionsAdvanced),
-        )),
-        ToolbarEvent::ToggleZoomActions(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::ZoomActions)))
-        }
-        ToolbarEvent::TogglePagesSection(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Pages)))
-        }
-        ToolbarEvent::ToggleBoardsSection(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Boards)))
-        }
-        ToolbarEvent::TogglePresets(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::Presets)))
-        }
-        ToolbarEvent::ToggleStepSection(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::StepSection)))
-        }
-        ToolbarEvent::ToggleTextControls(_) => {
-            ToolbarPersistence::Config(Toolbar(SectionVisibility(ToolbarSectionFlag::TextControls)))
-        }
-        ToolbarEvent::ToggleContextAwareUi(_) => {
-            ToolbarPersistence::Config(Toolbar(ContextAwareUi))
-        }
-        ToolbarEvent::TogglePresetToasts(_) => ToolbarPersistence::Config(Toolbar(PresetToasts)),
-        ToolbarEvent::ToggleToolPreview(_) => ToolbarPersistence::Config(Toolbar(ToolPreview)),
-        ToolbarEvent::ToggleDelaySliders(_) => ToolbarPersistence::Config(Toolbar(DelaySliders)),
-        ToolbarEvent::SetToolbarLayoutMode(_) => ToolbarPersistence::Config(Toolbar(LayoutMode)),
         ToolbarEvent::SetSidePane(_) => ToolbarPersistence::RuntimeUi(Runtime::SidePane),
         ToolbarEvent::SetTopMinimized(_) | ToolbarEvent::CloseTopToolbar => {
             ToolbarPersistence::RuntimeUi(Runtime::TopMinimized)
@@ -280,9 +223,14 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::ToggleSideSectionCollapsed(section, _) => {
             ToolbarPersistence::RuntimeUi(Runtime::CollapsedSection(*section))
         }
+        // A section row is an authored preference, not runtime-UI item state:
+        // `runtime_seeds_from_config` deliberately grows no seed for it, so
+        // hiding one changes the effective config for this run and comes back
+        // from `config.toml` on the next start. Every other item keeps its
+        // runtime-UI override.
         ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
-            if let Some(flag) = section_flag_for_item(*id) {
-                ToolbarPersistence::Config(Toolbar(SectionVisibility(flag)))
+            if section_flag_for_item(*id).is_some() {
+                ToolbarPersistence::Ephemeral
             } else {
                 ToolbarPersistence::RuntimeUi(Runtime::ItemVisibility {
                     id: *id,
@@ -302,24 +250,34 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::ResetToolbarItemHiddenOverrides => {
             ToolbarPersistence::RuntimeUi(Runtime::ResetItemVisibility)
         }
-        ToolbarEvent::ToggleCustomSection(_) => ToolbarPersistence::Config(History),
-        ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::Config(Ui(StatusBar)),
-        ToolbarEvent::SetStatusBarInteractive(_) => {
-            ToolbarPersistence::Config(Ui(StatusBarInteractive))
-        }
-        ToolbarEvent::SetStatusBarItemVisible(item, _) => {
-            ToolbarPersistence::Config(Ui(StatusBarItem(*item)))
-        }
-        ToolbarEvent::ToggleStatusBoardBadge(_) => ToolbarPersistence::Config(Ui(StatusBoardBadge)),
-        ToolbarEvent::ToggleStatusPageBadge(_) => ToolbarPersistence::Config(Ui(StatusPageBadge)),
-        ToolbarEvent::ToggleFloatingBadgeAlways(_) => {
-            ToolbarPersistence::Config(Ui(FloatingBadgeAlways))
-        }
-        ToolbarEvent::SelectTool(Tool::Highlight)
+        // Authored preferences below: applying them updates the effective
+        // config for this run only (see `ToolbarPersistence`).
+        ToolbarEvent::ToggleIconMode(_)
+        | ToolbarEvent::ToggleMoreColors(_)
+        | ToolbarEvent::ToggleActionsSection(_)
+        | ToolbarEvent::ToggleActionsAdvanced(_)
+        | ToolbarEvent::ToggleZoomActions(_)
+        | ToolbarEvent::TogglePagesSection(_)
+        | ToolbarEvent::ToggleBoardsSection(_)
+        | ToolbarEvent::TogglePresets(_)
+        | ToolbarEvent::ToggleStepSection(_)
+        | ToolbarEvent::ToggleTextControls(_)
+        | ToolbarEvent::ToggleContextAwareUi(_)
+        | ToolbarEvent::TogglePresetToasts(_)
+        | ToolbarEvent::ToggleToolPreview(_)
+        | ToolbarEvent::ToggleDelaySliders(_)
+        | ToolbarEvent::SetToolbarLayoutMode(_)
+        | ToolbarEvent::ToggleCustomSection(_)
+        | ToolbarEvent::ToggleStatusBar(_)
+        | ToolbarEvent::SetStatusBarInteractive(_)
+        | ToolbarEvent::SetStatusBarItemVisible(_, _)
+        | ToolbarEvent::ToggleStatusBoardBadge(_)
+        | ToolbarEvent::ToggleStatusPageBadge(_)
+        | ToolbarEvent::ToggleFloatingBadgeAlways(_)
         | ToolbarEvent::ToggleAllHighlight(_)
-        | ToolbarEvent::ToggleHighlightToolRing(_) => ToolbarPersistence::Config(ClickHighlight),
-        ToolbarEvent::ToggleInputHud(_) => ToolbarPersistence::Config(InputHud),
-        ToolbarEvent::SelectTool(_)
+        | ToolbarEvent::ToggleHighlightToolRing(_)
+        | ToolbarEvent::ToggleInputHud(_)
+        | ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }
         // Opening the recolor popup persists nothing; accepting it writes the

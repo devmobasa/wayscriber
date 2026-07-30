@@ -65,6 +65,11 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         backend.tokio_runtime.handle(),
         &keybindings.keybinding_conflicts,
     );
+    config::notify_skipped_default_shortcuts(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        &keybindings.skipped_default_shortcuts,
+    );
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let (runtime_ui, runtime_ui_unavailable) =
         match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
@@ -162,7 +167,6 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let palette_recents_store = crate::palette_recents::PaletteRecentsStore::load();
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
     let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
-    let config_writer = crate::backend::wayland::config_writer::ConfigWriter::new();
 
     apply_initial_mode(backend, &config, &mut input_state);
 
@@ -187,7 +191,6 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let mut state = WaylandState::new(WaylandStateInit {
         globals: setup.state_globals,
         config,
-        config_writer,
         input_state,
         onboarding,
         palette_recents,

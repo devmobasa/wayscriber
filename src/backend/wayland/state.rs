@@ -95,7 +95,6 @@ use super::{
 
 mod activation;
 mod boards;
-pub(in crate::backend::wayland) use boards::apply_board_config_update_to_config;
 mod buffer_damage;
 mod canvas_layer;
 mod capture;
@@ -109,6 +108,7 @@ mod helpers;
 mod input_actions;
 mod input_hud;
 mod keybindings;
+pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
 mod onboarding;
 mod pdf_export;
 mod perf;
@@ -117,6 +117,7 @@ mod text_clipboard;
 mod toolbar;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::clamp_floating_axis_offset;
+pub(in crate::backend::wayland) use toolbar::{queue_preset_action, queue_quick_color_edit};
 mod zoom;
 
 #[cfg(test)]
@@ -152,7 +153,6 @@ pub(in crate::backend::wayland) struct WaylandGlobals {
 pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: WaylandGlobals,
     pub config: Config,
-    pub config_writer: super::config_writer::ConfigWriter,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
@@ -208,16 +208,10 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
-    /// Channel-owned writer for runtime-authored config preferences.
-    pub(super) config_writer: super::config_writer::ConfigWriter,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:
         crate::backend::wayland::runtime_ui_state::UnavailablePersistencePreviews,
-    /// Shortcut edits this session queued but the background writer may not
-    /// have flushed yet, replayed over each reload so a rapid second edit
-    /// cannot install a keymap that has forgotten the first.
-    pub(super) keybinding_session_edits: keybindings::SessionKeybindingEdits,
 
     // Input state
     pub(super) input_state: InputState,
@@ -260,6 +254,8 @@ pub(super) struct WaylandState {
     pub(super) onboarding: crate::onboarding::OnboardingStore,
     /// Background persistence worker for command-palette recents.
     pub(super) palette_recents: crate::palette_recents::PaletteRecentsWriter,
+    /// Off-dispatch writer for the three explicit `config.toml` edit gestures.
+    pub(super) config_edits: crate::backend::wayland::config_edits::ConfigEditWorker,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,
     // Animation interval; None means uncapped (render every frame while active).

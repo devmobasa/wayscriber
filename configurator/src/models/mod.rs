@@ -7,6 +7,7 @@ pub mod fields;
 pub mod keybindings;
 pub(crate) mod search;
 pub mod session;
+pub(crate) mod startup;
 pub mod tab;
 pub mod util;
 
@@ -37,4 +38,5 @@ pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOpti
 pub use keybindings::KeybindingField;
 pub(crate) use search::SearchQuery;
 pub use session::{SessionCatalogActionResult, SessionCatalogItem, SessionCatalogState};
+pub(crate) use startup::{StartupRequest, startup_usage};
 pub use tab::{KeybindingsTabId, TabId, UiTabId};

@@ -1,3 +1,6 @@
+use crate::configurator_destination::{
+    ConfiguratorDestination, ConfiguratorScreen, quick_colors_destination,
+};
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
 use log::info;
@@ -38,9 +41,14 @@ impl InputState {
                 }
                 self.break_focus_mode();
                 self.show_status_bar = !self.show_status_bar;
+                // Redraw only. Status-bar visibility is a this-run preference
+                // that no longer enters `ToolStateSnapshot`, so marking the
+                // session dirty here would claim a change the save cannot
+                // carry — and that false claim is what lets an oversized
+                // session that failed to restore be replaced, since its
+                // protection is exactly "nothing persisted changed".
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
-                self.mark_session_dirty();
                 if !self.show_status_bar {
                     self.warn_if_all_chrome_hidden();
                 }
@@ -57,11 +65,9 @@ impl InputState {
                         "hidden"
                     }
                 );
-                // Explicit toggles persist (survive restarts); focus mode's
-                // transient hide/restore deliberately does not.
-                self.set_pending_backend_action(PendingBackendAction::PersistFloatingBadgeConfig(
-                    self.show_floating_badge,
-                ));
+                // An explicit toggle owns the badge for this run; the
+                // configured default is the configurator's to change.
+                self.notify_process_only_preference();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
@@ -77,11 +83,7 @@ impl InputState {
                         "hidden"
                     }
                 );
-                // Explicit toggles persist (survive restarts); focus mode's
-                // transient hide/restore deliberately does not.
-                self.set_pending_backend_action(PendingBackendAction::PersistZoomChipConfig(
-                    self.show_zoom_chip,
-                ));
+                self.notify_process_only_preference();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
@@ -128,6 +130,31 @@ impl InputState {
                 let now_visible = !self.toolbar_visible();
                 let changed = self.set_toolbar_visible(now_visible);
                 if changed {
+                    // The toggle is durable by driving the pin overrides — the
+                    // startup source of visibility — so a restart shows
+                    // exactly what this press left on screen. Implicit hides
+                    // (focus mode, presenter mode) bypass this path on purpose
+                    // and stay run-only.
+                    let previous_top_pinned = self.toolbar_top_pinned;
+                    let previous_side_pinned = self.toolbar_side_pinned;
+                    self.toolbar_top_pinned = now_visible;
+                    self.toolbar_side_pinned = now_visible;
+                    // Persist only when a pin actually moves. A show from a
+                    // cycle-hidden strip under the pill layout (and a hide
+                    // with both surfaces already unpinned) changes no pin:
+                    // the write would be byte-identical, and its only
+                    // observable effect would be a rollback that re-derives
+                    // pin-true visibility for a screen that was effectively
+                    // hidden before the press. The unfold itself stays
+                    // runtime-only, exactly like F2's hidden rung.
+                    if previous_top_pinned != now_visible || previous_side_pinned != now_visible {
+                        self.set_pending_backend_action(
+                            PendingBackendAction::PersistToolbarVisibility {
+                                previous_top_pinned,
+                                previous_side_pinned,
+                            },
+                        );
+                    }
                     self.pending_onboarding_usage.used_toolbar_toggle = true;
                     info!(
                         "Toolbar visibility {}",
@@ -264,7 +291,29 @@ impl InputState {
                 true
             }
             Action::OpenConfigurator => {
-                self.launch_configurator();
+                self.launch_configurator(None);
+                true
+            }
+            Action::OpenConfiguratorKeybindings => {
+                self.launch_configurator(Some(ConfiguratorDestination::new(
+                    ConfiguratorScreen::Keybindings(None),
+                )));
+                true
+            }
+            Action::OpenConfiguratorPresets => {
+                self.launch_configurator(Some(ConfiguratorDestination::new(
+                    ConfiguratorScreen::Presets,
+                )));
+                true
+            }
+            Action::OpenConfiguratorBoards => {
+                self.launch_configurator(Some(ConfiguratorDestination::new(
+                    ConfiguratorScreen::Boards,
+                )));
+                true
+            }
+            Action::OpenConfiguratorQuickColors => {
+                self.launch_configurator(Some(quick_colors_destination()));
                 true
             }
             Action::OpenAbout => {

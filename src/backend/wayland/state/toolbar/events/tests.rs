@@ -4,7 +4,9 @@ use super::session::{
     session_info_summary,
 };
 use super::*;
-use crate::config::{StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag};
+use crate::config::{
+    Action, StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
+};
 use crate::draw::{Color, FontDescriptor};
 use crate::env_vars::XDG_DATA_HOME_ENV;
 use crate::input::state::test_support::make_test_input_state;
@@ -228,138 +230,200 @@ fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
     );
 }
 
-#[test]
-fn authored_toolbar_preferences_have_exact_config_targets() {
-    use ToolbarConfigPersistenceTarget::*;
+/// The authored preferences an overlay control can change. Each one applies
+/// to the current run: `persistence_for_event` classifies it `Ephemeral`, and
+/// the effective config follows through `preference_for_event`.
+fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
+    use ToolbarPreference::{ClickHighlight, HistoryCustomSection, InputHud, Toolbar, Ui};
+    use ToolbarPreferenceField as Field;
+    use UiPreferenceField as UiField;
 
-    let events = [
-        (ToolbarEvent::ToggleIconMode(true), Icons),
-        (ToolbarEvent::ToggleMoreColors(true), MoreColors),
-        (ToolbarEvent::ToggleContextAwareUi(true), ContextAwareUi),
-        (ToolbarEvent::TogglePresetToasts(true), PresetToasts),
-        (ToolbarEvent::ToggleToolPreview(true), ToolPreview),
-        (ToolbarEvent::ToggleDelaySliders(true), DelaySliders),
+    vec![
+        (ToolbarEvent::ToggleIconMode(true), Toolbar(Field::Icons)),
+        (
+            ToolbarEvent::ToggleMoreColors(true),
+            Toolbar(Field::MoreColors),
+        ),
+        (
+            ToolbarEvent::ToggleContextAwareUi(true),
+            Toolbar(Field::ContextAwareUi),
+        ),
+        (
+            ToolbarEvent::TogglePresetToasts(true),
+            Toolbar(Field::PresetToasts),
+        ),
+        (
+            ToolbarEvent::ToggleToolPreview(true),
+            Toolbar(Field::ToolPreview),
+        ),
+        (
+            ToolbarEvent::ToggleDelaySliders(true),
+            Toolbar(Field::DelaySliders),
+        ),
         (
             ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
-            LayoutMode,
+            Toolbar(Field::LayoutMode),
         ),
         (
             ToolbarEvent::ToggleActionsSection(false),
-            SectionVisibility(ToolbarSectionFlag::Actions),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Actions)),
         ),
         (
             ToolbarEvent::ToggleActionsAdvanced(false),
-            SectionVisibility(ToolbarSectionFlag::ActionsAdvanced),
+            Toolbar(Field::SectionVisibility(
+                ToolbarSectionFlag::ActionsAdvanced,
+            )),
         ),
         (
             ToolbarEvent::ToggleZoomActions(false),
-            SectionVisibility(ToolbarSectionFlag::ZoomActions),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::ZoomActions)),
         ),
         (
             ToolbarEvent::TogglePagesSection(false),
-            SectionVisibility(ToolbarSectionFlag::Pages),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Pages)),
         ),
         (
             ToolbarEvent::ToggleBoardsSection(false),
-            SectionVisibility(ToolbarSectionFlag::Boards),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Boards)),
         ),
         (
             ToolbarEvent::TogglePresets(false),
-            SectionVisibility(ToolbarSectionFlag::Presets),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Presets)),
         ),
         (
             ToolbarEvent::ToggleStepSection(false),
-            SectionVisibility(ToolbarSectionFlag::StepSection),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::StepSection)),
         ),
         (
             ToolbarEvent::ToggleTextControls(false),
-            SectionVisibility(ToolbarSectionFlag::TextControls),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::TextControls)),
         ),
         (
             ToolbarEvent::SetToolbarItemHidden(ToolbarSectionFlag::Actions.item_id(), true),
-            SectionVisibility(ToolbarSectionFlag::Actions),
+            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Actions)),
         ),
-    ];
-
-    for (event, target) in events {
-        assert_eq!(
-            persistence_for(&event),
-            ToolbarPersistence::Config(ToolbarPersistenceTarget::Toolbar(target)),
-            "{event:?} should save only its authored config target"
-        );
-    }
-}
-
-#[test]
-fn named_section_visibility_is_authored_config_not_runtime_state() {
-    let events = [
-        ToolbarEvent::ToggleActionsSection(false),
-        ToolbarEvent::ToggleActionsAdvanced(false),
-        ToolbarEvent::ToggleZoomActions(false),
-        ToolbarEvent::TogglePagesSection(false),
-        ToolbarEvent::ToggleBoardsSection(false),
-        ToolbarEvent::TogglePresets(false),
-        ToolbarEvent::ToggleStepSection(false),
-        ToolbarEvent::ToggleTextControls(false),
-        ToolbarEvent::SetToolbarItemHidden(ToolbarSectionFlag::Actions.item_id(), true),
-    ];
-
-    for event in events {
-        assert!(
-            matches!(
-                persistence_for(&event),
-                ToolbarPersistence::Config(ToolbarPersistenceTarget::Toolbar(_))
-            ),
-            "{event:?} must update its authored section setting"
-        );
-    }
-}
-
-#[test]
-fn ui_and_history_preference_events_save_their_own_config_targets() {
-    let ui_events = [
         (
-            ToolbarEvent::ToggleStatusBar(true),
-            ToolbarUiPersistenceTarget::StatusBar,
+            ToolbarEvent::ToggleCustomSection(true),
+            HistoryCustomSection,
         ),
+        (ToolbarEvent::ToggleStatusBar(true), Ui(UiField::StatusBar)),
         (
             ToolbarEvent::SetStatusBarInteractive(false),
-            ToolbarUiPersistenceTarget::StatusBarInteractive,
+            Ui(UiField::StatusBarInteractive),
         ),
         (
             ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Size, false),
-            ToolbarUiPersistenceTarget::StatusBarItem(StatusBarItem::Size),
+            Ui(UiField::StatusBarItem(StatusBarItem::Size)),
         ),
         (
             ToolbarEvent::ToggleStatusBoardBadge(true),
-            ToolbarUiPersistenceTarget::StatusBoardBadge,
+            Ui(UiField::StatusBoardBadge),
         ),
         (
             ToolbarEvent::ToggleStatusPageBadge(true),
-            ToolbarUiPersistenceTarget::StatusPageBadge,
+            Ui(UiField::StatusPageBadge),
         ),
         (
             ToolbarEvent::ToggleFloatingBadgeAlways(true),
-            ToolbarUiPersistenceTarget::FloatingBadgeAlways,
+            Ui(UiField::FloatingBadgeAlways),
         ),
-    ];
+        (ToolbarEvent::ToggleAllHighlight(true), ClickHighlight),
+        (ToolbarEvent::SelectTool(Tool::Highlight), ClickHighlight),
+        (ToolbarEvent::ToggleHighlightToolRing(true), ClickHighlight),
+        (ToolbarEvent::ToggleInputHud(true), InputHud),
+    ]
+}
 
-    for (event, target) in ui_events {
+/// `config.toml` is an authored input, so an overlay preference control is a
+/// current-run change: nothing routes it to a persistence target, and its
+/// effective-config field is named by `preference_for_event`.
+#[test]
+fn authored_toolbar_preferences_apply_to_this_run_only() {
+    for (event, preference) in authored_preference_events() {
         assert_eq!(
             persistence_for(&event),
-            ToolbarPersistence::Config(ToolbarPersistenceTarget::Ui(target)),
-            "{event:?} should save only its UI config field"
+            ToolbarPersistence::Ephemeral,
+            "{event:?} must not persist anything"
+        );
+        assert_eq!(
+            preference_for_event(&event),
+            Some(preference),
+            "{event:?} should update exactly its own authored field"
+        );
+    }
+}
+
+/// Section rows are authored config, not runtime-UI item overrides: the seed
+/// registry deliberately has no seed for them. Every other item keeps its
+/// runtime-UI override and owns no authored field.
+#[test]
+fn named_section_visibility_is_an_authored_preference_not_runtime_state() {
+    use crate::config::{ToolbarItemVisibilitySetting, toolbar_item_ids as ids};
+
+    for flag in ToolbarSectionFlag::ALL {
+        let event = ToolbarEvent::SetToolbarItemHidden(flag.item_id(), true);
+        assert_eq!(persistence_for(&event), ToolbarPersistence::Ephemeral);
+        assert_eq!(
+            preference_for_event(&event),
+            Some(ToolbarPreference::Toolbar(
+                ToolbarPreferenceField::SectionVisibility(flag)
+            )),
+            "{flag:?} must update its authored section setting"
         );
     }
 
+    let individual = ToolbarEvent::SetToolbarItemHidden(ids::TOP_TOOL_PEN, true);
     assert_eq!(
-        persistence_for(&ToolbarEvent::ToggleCustomSection(true)),
-        ToolbarPersistence::Config(ToolbarPersistenceTarget::History)
+        persistence_for(&individual),
+        ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::ItemVisibility {
+            id: ids::TOP_TOOL_PEN,
+            setting: ToolbarItemVisibilitySetting::Hidden,
+        })
     );
+    assert_eq!(preference_for_event(&individual), None);
+}
+
+/// Events that own no authored field must not drag one along.
+#[test]
+fn runtime_and_ephemeral_events_own_no_authored_preference() {
+    for event in [
+        ToolbarEvent::SelectTool(Tool::Line),
+        ToolbarEvent::Undo,
+        ToolbarEvent::SetThickness(8.0),
+        ToolbarEvent::PinTopToolbar(true),
+        ToolbarEvent::SetSidePane(crate::ui::toolbar::SidePane::Canvas),
+        ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Micro),
+        ToolbarEvent::ResetToolbarItemHiddenOverrides,
+    ] {
+        assert_eq!(
+            preference_for_event(&event),
+            None,
+            "{event:?} owns no authored preference"
+        );
+    }
+}
+
+/// Only the fields the toolbar seed derivation reads have to reseed; the rest
+/// would spend a full override reconciliation for nothing.
+#[test]
+fn only_section_and_layout_preferences_reseed_runtime_ui() {
+    for (event, preference) in authored_preference_events() {
+        let expected = matches!(
+            preference,
+            ToolbarPreference::Toolbar(
+                ToolbarPreferenceField::LayoutMode | ToolbarPreferenceField::SectionVisibility(_)
+            )
+        );
+        assert_eq!(
+            preference.affects_runtime_ui_seeds(),
+            expected,
+            "{event:?} classifies its seed effect wrongly"
+        );
+    }
 }
 
 #[test]
-fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
+fn toolbar_ui_preference_leaves_sibling_fields_unchanged() {
     let mut config = crate::config::Config::default();
     config.ui.show_status_bar = true;
     config.ui.show_status_board_badge = false;
@@ -376,11 +440,11 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
     input_state.show_floating_badge = false;
     input_state.show_zoom_chip = false;
 
-    apply_toolbar_ui_config_target(
+    assert!(apply_toolbar_preference(
         &mut config,
         &input_state,
-        ToolbarUiPersistenceTarget::StatusBoardBadge,
-    );
+        ToolbarPreference::Ui(UiPreferenceField::StatusBoardBadge),
+    ));
 
     assert!(config.ui.show_status_bar);
     assert!(config.ui.show_status_board_badge);
@@ -391,16 +455,16 @@ fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
 }
 
 #[test]
-fn status_bar_item_targets_copy_each_authored_field_independently() {
+fn status_bar_item_preferences_copy_each_authored_field_independently() {
     let mut config = crate::config::Config::default();
     let mut input_state = make_test_input_state();
 
     for item in StatusBarItem::ALL {
         input_state.set_status_bar_item_visible(item, false);
-        apply_toolbar_ui_config_target(
+        apply_toolbar_preference(
             &mut config,
             &input_state,
-            ToolbarUiPersistenceTarget::StatusBarItem(item),
+            ToolbarPreference::Ui(UiPreferenceField::StatusBarItem(item)),
         );
         assert!(!config.ui.status_bar_item_visible(item));
 
@@ -408,41 +472,43 @@ fn status_bar_item_targets_copy_each_authored_field_independently() {
             if sibling != item && input_state.status_bar_item_visible(sibling) {
                 assert!(
                     config.ui.status_bar_item_visible(sibling),
-                    "saving {item:?} changed sibling {sibling:?}"
+                    "changing {item:?} changed sibling {sibling:?}"
                 );
             }
         }
     }
 }
 
+/// The effective value moved or it did not: the report is what keeps the
+/// one-per-run "this run only" notice off unrelated interactions (selecting
+/// the highlight tool is classified `ClickHighlight` but changes no field).
 #[test]
-fn master_visibility_targets_copy_only_their_own_field() {
+fn applying_a_preference_reports_whether_the_effective_value_moved() {
     let mut config = crate::config::Config::default();
+    config.ui.show_status_bar = true;
     let mut input_state = make_test_input_state();
-    input_state.show_floating_badge = false;
-    input_state.show_zoom_chip = false;
+    input_state.show_status_bar = true;
 
-    apply_toolbar_ui_config_target(
-        &mut config,
-        &input_state,
-        ToolbarUiPersistenceTarget::FloatingBadge,
-    );
-    assert!(!config.ui.show_floating_badge);
     assert!(
-        config.ui.toolbar.show_zoom_chip,
-        "zoom chip pref untouched by the badge target"
+        !apply_toolbar_preference(
+            &mut config,
+            &input_state,
+            ToolbarPreference::Ui(UiPreferenceField::StatusBar),
+        ),
+        "an unchanged value is not a preference change"
     );
 
-    apply_toolbar_ui_config_target(
+    input_state.show_status_bar = false;
+    assert!(apply_toolbar_preference(
         &mut config,
         &input_state,
-        ToolbarUiPersistenceTarget::ZoomChip,
-    );
-    assert!(!config.ui.toolbar.show_zoom_chip);
+        ToolbarPreference::Ui(UiPreferenceField::StatusBar),
+    ));
+    assert!(!config.ui.show_status_bar);
 }
 
 #[test]
-fn toolbar_layout_target_rebaselines_only_the_mirrors_the_load_fold_reads() {
+fn toolbar_layout_preference_rebaselines_only_the_mirrors_the_load_fold_reads() {
     let mut config = crate::config::Config::default();
     config.ui.toolbar.layout_mode = ToolbarLayoutMode::Simple;
     config.ui.toolbar.top_pinned = true;
@@ -464,15 +530,16 @@ fn toolbar_layout_target_rebaselines_only_the_mirrors_the_load_fold_reads() {
     input_state.toolbar_layout_mode = ToolbarLayoutMode::Advanced;
     input_state.toolbar_top_pinned = false;
 
-    apply_toolbar_config_target(
+    assert!(apply_toolbar_preference(
         &mut config,
         &input_state,
-        ToolbarConfigPersistenceTarget::LayoutMode,
-    );
+        ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode),
+    ));
 
     assert_eq!(config.ui.toolbar.layout_mode, ToolbarLayoutMode::Advanced);
-    // Sections without an override take the new mode's baseline, so reloading
-    // cannot fold the old mode's values back as pinned sections.
+    // Sections without an override take the new mode's baseline, so the seed
+    // refresh this run performs cannot fold the old mode's values back as
+    // pinned sections.
     assert!(config.ui.toolbar.show_step_section);
     assert!(config.ui.toolbar.show_actions_advanced);
     // Everything else stays exactly as authored.
@@ -482,8 +549,84 @@ fn toolbar_layout_target_rebaselines_only_the_mirrors_the_load_fold_reads() {
     assert_eq!(config.ui.toolbar.items, original_items);
 }
 
+/// The section visibility the loader's legacy fold derives from `config`. The
+/// seed refresh reads the effective config through this same fold, so a layout
+/// switch has to leave the sections it just chose standing.
+fn folded_section_visibility(config: &crate::config::Config) -> ToolbarSectionVisibility {
+    let toolbar = &config.ui.toolbar;
+    let mut items = toolbar.items.clone();
+    let mut legacy = ToolbarSectionVisibility {
+        show_actions_section: toolbar.show_actions_section,
+        show_actions_advanced: toolbar.show_actions_advanced,
+        show_zoom_actions: toolbar.show_zoom_actions,
+        show_pages_section: toolbar.show_pages_section,
+        show_boards_section: toolbar.show_boards_section,
+        show_presets: toolbar.show_presets,
+        show_step_section: toolbar.show_step_section,
+        show_text_controls: toolbar.show_text_controls,
+        show_settings_section: toolbar.show_settings_section,
+    };
+    legacy.apply_mode_override(toolbar.mode_overrides.for_mode(toolbar.layout_mode));
+    crate::config::fold_legacy_section_flags(
+        &legacy,
+        toolbar.layout_mode,
+        &toolbar.mode_overrides,
+        &mut items,
+    );
+    crate::config::resolve_section_visibility(
+        toolbar.layout_mode,
+        &toolbar.mode_overrides,
+        &items.resolved(),
+    )
+}
+
+/// A layout switch keeps the sections the new mode implies: without the
+/// re-baseline the old mode's flags fold back into explicit overrides and the
+/// switch partly undoes itself the next time the seeds are rebuilt.
 #[test]
-fn section_visibility_target_updates_only_its_canonical_override_and_mirror() {
+fn layout_switch_keeps_the_sections_the_fold_reads_back() {
+    let mut config = crate::config::Config::default();
+    let mut input_state = make_test_input_state();
+    input_state.toolbar_layout_mode = ToolbarLayoutMode::Simple;
+
+    assert!(apply_toolbar_preference(
+        &mut config,
+        &input_state,
+        ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode),
+    ));
+
+    let sections = folded_section_visibility(&config);
+    assert!(!sections.show_presets, "Simple hides presets");
+    assert!(sections.show_zoom_actions);
+    assert!(!sections.show_step_section);
+}
+
+/// An explicitly overridden section already wins in the fold, so the switch
+/// leaves both the override and the authored flag alone.
+#[test]
+fn layout_switch_leaves_explicitly_overridden_sections_untouched() {
+    let mut config = crate::config::Config::default();
+    config
+        .ui
+        .toolbar
+        .items
+        .set_hidden(ToolbarSectionFlag::Presets.item_id(), false);
+    config.ui.toolbar.show_settings_section = false;
+    let mut input_state = make_test_input_state();
+    input_state.toolbar_layout_mode = ToolbarLayoutMode::Simple;
+
+    apply_toolbar_preference(
+        &mut config,
+        &input_state,
+        ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode),
+    );
+
+    assert!(!config.ui.toolbar.show_settings_section);
+    assert!(folded_section_visibility(&config).show_presets);
+}
+
+#[test]
+fn section_visibility_preference_updates_only_its_canonical_override_and_mirror() {
     let mut config = crate::config::Config::default();
     config.ui.toolbar.show_actions_section = true;
     config.ui.toolbar.show_presets = false;
@@ -499,11 +642,13 @@ fn section_visibility_target_updates_only_its_canonical_override_and_mirror() {
     input_state.resolved_toolbar_items = input_state.toolbar_items.resolved();
     assert!(input_state.set_toolbar_item_hidden(ToolbarSectionFlag::Actions.item_id(), true,));
 
-    apply_toolbar_config_target(
+    assert!(apply_toolbar_preference(
         &mut config,
         &input_state,
-        ToolbarConfigPersistenceTarget::SectionVisibility(ToolbarSectionFlag::Actions),
-    );
+        ToolbarPreference::Toolbar(ToolbarPreferenceField::SectionVisibility(
+            ToolbarSectionFlag::Actions
+        )),
+    ));
 
     assert!(!config.ui.toolbar.show_actions_section);
     assert!(!config.ui.toolbar.show_presets);
@@ -533,6 +678,150 @@ fn section_visibility_target_updates_only_its_canonical_override_and_mirror() {
     assert_eq!(config.ui.toolbar.items.shown, presets_before.shown);
 }
 
+/// Presenter mode owns the click highlight and the HUD while it runs, so its
+/// forced values must not overwrite the user's own in the effective config —
+/// which is what the mode restores on exit.
+#[test]
+fn presenter_mode_keeps_the_users_click_highlight_and_hud_values() {
+    let mut config = crate::config::Config::default();
+    config.ui.click_highlight.enabled = false;
+    config.ui.click_highlight.show_on_highlight_tool = false;
+    config.ui.input_hud.enabled = false;
+
+    let mut input_state = make_test_input_state();
+    input_state.presenter_mode_config.enable_click_highlight = true;
+    input_state.presenter_mode_config.enable_input_hud = true;
+    input_state.toggle_presenter_mode();
+    assert!(input_state.presenter_mode);
+    assert!(input_state.click_highlight_enabled());
+    assert!(input_state.input_hud_enabled());
+
+    apply_toolbar_preference(&mut config, &input_state, ToolbarPreference::ClickHighlight);
+    apply_toolbar_preference(&mut config, &input_state, ToolbarPreference::InputHud);
+
+    assert!(
+        !config.ui.click_highlight.enabled,
+        "presenter mode must not adopt its own forced value"
+    );
+    assert!(!config.ui.input_hud.enabled);
+
+    // Leaving presenter mode restores the user's values, and a later toggle
+    // then owns the effective config again.
+    input_state.toggle_presenter_mode();
+    assert!(!input_state.presenter_mode);
+    assert!(input_state.toggle_click_highlight());
+    apply_toolbar_preference(&mut config, &input_state, ToolbarPreference::ClickHighlight);
+    assert!(config.ui.click_highlight.enabled);
+}
+
+/// The ring is the user's either way: presenter mode never forces it, so it
+/// follows the runtime value even while the mode holds the enabled flag.
+#[test]
+fn presenter_mode_still_follows_the_highlight_ring_preference() {
+    let mut config = crate::config::Config::default();
+    config.ui.click_highlight.enabled = false;
+    config.ui.click_highlight.show_on_highlight_tool = false;
+
+    let mut input_state = make_test_input_state();
+    input_state.presenter_mode_config.enable_click_highlight = true;
+    input_state.toggle_presenter_mode();
+    assert!(input_state.set_highlight_tool_ring_enabled(true));
+
+    assert!(apply_toolbar_preference(
+        &mut config,
+        &input_state,
+        ToolbarPreference::ClickHighlight
+    ));
+    assert!(config.ui.click_highlight.show_on_highlight_tool);
+    assert!(!config.ui.click_highlight.enabled);
+}
+
+/// Nothing in this family touches `config.toml`: the effective config is a
+/// process value and the file stays exactly as the user authored it.
+#[test]
+fn authored_preference_changes_leave_config_toml_untouched() {
+    crate::config::test_helpers::with_temp_config_home(|home| {
+        let path = home.join("wayscriber").join("config.toml");
+        fs::create_dir_all(path.parent().expect("config dir")).expect("config dir");
+        fs::write(
+            &path,
+            "# authored by hand\n[ui.toolbar]\nuse_icons = true\nlayout_mode = \"regular\"\n",
+        )
+        .expect("test config should be written");
+        let snapshot = crate::config::test_helpers::ConfigFileSnapshot::capture(&path);
+
+        let mut config = crate::config::Config::default();
+        let input_state = make_test_input_state();
+        for (_, preference) in authored_preference_events() {
+            apply_toolbar_preference(&mut config, &input_state, preference);
+        }
+
+        snapshot.assert_unchanged("applying every authored preference");
+    });
+}
+
+/// The rebind gesture arms the capture modal for the control's own action, so
+/// the next chord the user presses rebinds that control and not the last row
+/// the palette happened to select.
+#[test]
+fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
+    let mut input_state = make_test_input_state();
+
+    for (event, expected) in [
+        (ToolbarEvent::SelectTool(Tool::Pen), Action::SelectPenTool),
+        (ToolbarEvent::Undo, Action::Undo),
+        (
+            ToolbarEvent::ClearCanvas { instant: false },
+            Action::ClearCanvas,
+        ),
+    ] {
+        let action = crate::ui::toolbar::model::action_for_event(&event)
+            .unwrap_or_else(|| panic!("{event:?} should name an action"));
+        assert_eq!(action, expected, "{event:?} names the wrong action");
+
+        assert!(input_state.begin_keybinding_capture(action));
+        assert_eq!(
+            input_state.keybinding_capture_action,
+            Some(expected),
+            "{event:?} should arm capture for its own action"
+        );
+        assert!(
+            input_state.take_pending_keybinding_edits().is_empty(),
+            "arming capture must not queue an edit on its own"
+        );
+        input_state.keybinding_capture_action = None;
+    }
+}
+
+/// The configurator route the palette's Ctrl+Shift+E uses: the same actions
+/// resolve to the configurator section that holds their shortcut.
+#[test]
+fn the_toolbar_controls_actions_resolve_to_their_keybindings_section() {
+    use crate::configurator_destination::keybindings_destination_for_action;
+
+    for (event, expected) in [
+        (
+            ToolbarEvent::SelectTool(Tool::Pen),
+            "keybindings/tools?search=select pen tool",
+        ),
+        (ToolbarEvent::Undo, "keybindings/history?search=undo"),
+        (
+            ToolbarEvent::ClearCanvas { instant: false },
+            "keybindings/drawing?search=clear canvas",
+        ),
+    ] {
+        let action = crate::ui::toolbar::model::action_for_event(&event)
+            .unwrap_or_else(|| panic!("{event:?} should name an action"));
+        assert_eq!(
+            keybindings_destination_for_action(action)
+                .map(|destination| destination.as_arg())
+                .as_deref(),
+            Some(expected),
+            "{event:?} would open the wrong screen"
+        );
+    }
+}
+
 #[test]
 fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     let mut input_state = make_test_input_state();
@@ -542,35 +831,8 @@ fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     assert!(toolbar_event_blocked_by_modal(&input_state));
 
     input_state.toggle_command_palette();
-    assert!(input_state.begin_keybinding_capture(crate::config::Action::Undo));
+    assert!(input_state.begin_keybinding_capture(Action::Undo));
     assert!(toolbar_event_blocked_by_modal(&input_state));
-}
-
-#[test]
-fn click_highlight_toolbar_events_are_explicit_config_exceptions() {
-    let events = vec![
-        ToolbarEvent::ToggleAllHighlight(true),
-        ToolbarEvent::SelectTool(Tool::Highlight),
-        ToolbarEvent::ToggleHighlightToolRing(true),
-    ];
-
-    for event in events {
-        assert_eq!(
-            persistence_for(&event),
-            ToolbarPersistence::Config(ToolbarPersistenceTarget::ClickHighlight),
-            "{event:?} should save click-highlight config"
-        );
-    }
-}
-
-/// The Settings checkbox writes `ui.input_hud.enabled` through its own
-/// persistence target rather than the toolbar/UI families.
-#[test]
-fn input_hud_toolbar_events_are_explicit_config_exceptions() {
-    assert_eq!(
-        persistence_for(&ToolbarEvent::ToggleInputHud(true)),
-        ToolbarPersistence::Config(ToolbarPersistenceTarget::InputHud),
-    );
 }
 
 #[test]
@@ -841,12 +1103,14 @@ fn session_info_summary_reports_backup_without_primary() {
     );
 }
 
+/// Presenter mode may force the tool preview off; the effective config keeps
+/// the value the mode is holding for the user.
 #[test]
-fn tool_preview_config_preserves_presenter_mode_restore_value() {
-    assert!(persisted_tool_preview_value(false, Some(true)));
-    assert!(!persisted_tool_preview_value(false, Some(false)));
-    assert!(persisted_tool_preview_value(true, None));
-    assert!(!persisted_tool_preview_value(false, None));
+fn tool_preview_preference_preserves_presenter_mode_restore_value() {
+    assert!(effective_tool_preview_value(false, Some(true)));
+    assert!(!effective_tool_preview_value(false, Some(false)));
+    assert!(effective_tool_preview_value(true, None));
+    assert!(!effective_tool_preview_value(false, None));
 }
 
 #[test]

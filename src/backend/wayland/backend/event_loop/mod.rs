@@ -325,18 +325,14 @@ pub(super) fn run_event_loop(
     finalize_event_loop(
         &mut loop_error,
         || {
-            // Every exit path breaks out above before the per-iteration
-            // pending-action drain, so a config edit accepted in the same
-            // dispatch cycle as the quit (an OK click followed by a tray or
-            // compositor close) would otherwise be dropped. Durable edits are
-            // flushed here, alongside the final session save.
-            state.persist_pending_config_edits();
-            state.shutdown_config_writer();
             if let Err(err) = session_save::persist_session(state) {
                 warn!("Failed to save session state: {}", err);
                 session_save::notify_session_failure(state, &err);
             }
             state.shutdown_runtime_ui();
+            // An edit made a moment before quitting still has to reach the file,
+            // so teardown waits — briefly — for the worker's queue to drain.
+            state.shutdown_config_edits();
             state.shutdown_input_monitor();
         },
         || match signals.as_mut() {

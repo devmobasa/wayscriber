@@ -88,8 +88,7 @@ pub(super) fn handle_pending_actions(
     // drained here: unlike the toolbar/key paths, that release has no other
     // drain site. An accepted quick-color recolor is queued from the same
     // release (clicking OK), so its config write belongs here too — otherwise
-    // the swatch would look saved until some later key or toolbar event, and a
-    // quit in between would drop it.
+    // the swatch would look saved until some later key or toolbar event.
     if let Some(color) = state.input_state.take_pending_copy_hex_request() {
         state.handle_copy_hex_color(color);
     }
@@ -99,6 +98,19 @@ pub(super) fn handle_pending_actions(
     if let Some(edit) = state.input_state.take_pending_quick_color_edit() {
         state.handle_quick_color_edit(edit);
     }
+    // Every shortcut edit recorded since the last pass, not just the newest.
+    // One batch of input events can produce two of them — a captured chord and
+    // then a correction — and each is its own write with its own answer, so
+    // keeping only the last would lose an edit with no save and no toast.
+    for request in state.input_state.take_pending_keybinding_edits() {
+        state.handle_keybinding_edit(request);
+    }
+    // Config writes that finished on the worker since the last pass. A finished
+    // write is what installs a shortcut edit and what decides every one of the
+    // three gestures' toasts, so it is drained on the same cadence as the
+    // requests that produced it; the worker also wakes the loop when it
+    // completes, so the answer is not left waiting for unrelated input.
+    state.drain_config_edit_completions();
     handle_frozen_toggle(state);
     state.drain_pending_board_runtime_ui_actions();
 
@@ -112,17 +124,14 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
-            PendingBackendAction::EditKeybinding(request) => {
-                state.handle_keybinding_edit(request);
-            }
             PendingBackendAction::PersistToolbarDisplayMode(previous) => {
                 state.persist_toolbar_display_mode(previous);
             }
-            PendingBackendAction::PersistFloatingBadgeConfig(visible) => {
-                state.save_floating_badge_visibility_config(visible);
-            }
-            PendingBackendAction::PersistZoomChipConfig(visible) => {
-                state.save_zoom_chip_visibility_config(visible);
+            PendingBackendAction::PersistToolbarVisibility {
+                previous_top_pinned,
+                previous_side_pinned,
+            } => {
+                state.persist_toolbar_visibility(previous_top_pinned, previous_side_pinned);
             }
         }
     }
@@ -131,9 +140,6 @@ pub(super) fn handle_pending_actions(
     }
     if let Some(action) = state.input_state.take_pending_zoom_action() {
         state.handle_zoom_action(action);
-    }
-    if let Some(update) = state.input_state.take_pending_board_config_update() {
-        state.apply_board_config_update(update);
     }
     state.sync_zoom_board_mode();
 

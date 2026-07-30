@@ -34,6 +34,10 @@ const COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT: f64 = 18.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_GAP: f64 = 12.0;
 const COMMAND_PALETTE_SHORTCUT_BADGE_RADIUS: f64 = 3.0;
 const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
+/// Kept to the width the narrowest panel can show: the hint is centred in the
+/// frame and is not part of the width calculation, so a longer line would be
+/// clipped whenever a query matches nothing. Ctrl+Shift+E — the route into the
+/// configurator's own editor — is taught by the tour and the docs instead.
 const COMMAND_PALETTE_INPUT_HINT: &str =
     "Enter run • Ctrl+E edit • Ctrl+Delete unbind • Ctrl+R reset • Esc close";
 /// Maximum extent of the frame drop shadow below/right of the palette. Also
@@ -154,10 +158,7 @@ pub fn command_palette_visual_geometry(
     }
 
     if input_state.keybinding_capture_action.is_some() {
-        let width = 520.0_f64.min(screen_width as f64 - 24.0);
-        let height = 170.0;
-        let x = (screen_width as f64 - width) / 2.0;
-        let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+        let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
         return Some((
             x,
             y,
@@ -259,6 +260,15 @@ fn draw_command_palette_action_tooltip(
     );
 }
 
+/// Frame of the shortcut-capture modal, shared by rendering and damage.
+fn keybinding_capture_geometry(screen_width: u32, screen_height: u32) -> (f64, f64, f64, f64) {
+    let width = 520.0_f64.min(screen_width as f64 - 24.0);
+    let height = 170.0;
+    let x = (screen_width as f64 - width) / 2.0;
+    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+    (x, y, width, height)
+}
+
 fn render_keybinding_capture(
     ctx: &cairo::Context,
     input_state: &InputState,
@@ -266,10 +276,7 @@ fn render_keybinding_capture(
     screen_width: u32,
     screen_height: u32,
 ) {
-    let width = 520.0_f64.min(screen_width as f64 - 24.0);
-    let height = 170.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+    let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
     draw_command_palette_frame(
         ctx,
         screen_width as f64,
@@ -323,12 +330,18 @@ fn render_keybinding_capture(
     draw_text_baseline(
         ctx,
         body_style,
-        "Escape cancels • conflicts are rejected without changing your config",
+        KEYBINDING_CAPTURE_SCOPE_NOTE,
         x + 22.0,
         y + 140.0,
         None,
     );
 }
+
+/// Says what a captured chord costs and what refuses it, at the interaction
+/// point. The edit is durable, so the line names the two things that are not
+/// obvious: backing out, and what happens to a chord that is already taken.
+const KEYBINDING_CAPTURE_SCOPE_NOTE: &str =
+    "Escape cancels • a shortcut already in use is rejected";
 
 fn command_palette_text_style(
     size: f64,

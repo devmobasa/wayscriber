@@ -60,6 +60,11 @@ pub(crate) struct CommandPaletteGeometry {
     pub visible_count: usize,
 }
 
+/// The three per-row shortcut controls, left to right.
+///
+/// Each one edits this action's `[keybindings]` entry in `config.toml` as well
+/// as the running keymap; the tooltips name the edit, and the toast the backend
+/// raises afterwards says whether the file took it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandPaletteRowAction {
     Edit,

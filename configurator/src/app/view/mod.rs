@@ -17,7 +17,7 @@ mod widgets;
 
 use iced::widget::{Column, Row, Space, button, column, container, row, rule, text, text_input};
 use iced::{Element, Length};
-use wayscriber::config::Config;
+use wayscriber::config::{Config, MigrationPreview};
 
 use crate::messages::Message;
 use crate::models::TabId;
@@ -148,7 +148,12 @@ impl ConfiguratorApp {
                 .into(),
         };
 
-        column![toolbar, banner].spacing(8).into()
+        let mut header = column![toolbar, banner].spacing(8);
+        if let Some(preview) = self.pending_migration() {
+            header = header.push(migration_view(preview));
+        }
+
+        header.into()
     }
 
     fn tab_view(&self, search: &AppSearchSummary) -> Element<'_, Message> {
@@ -243,6 +248,61 @@ fn visible_tabs(search: &AppSearchSummary) -> Vec<TabId> {
     } else {
         TabId::ALL.to_vec()
     }
+}
+
+/// The migration offer, with its whole change list in view.
+///
+/// The list is not behind a Review button: a recipe proposes at most a handful
+/// of shortcuts, and putting Apply next to something the user has not read yet
+/// is the one thing this flow exists to avoid.
+fn migration_view<'a>(preview: &'a MigrationPreview) -> Element<'a, Message> {
+    let mut body = Column::new()
+        .spacing(6)
+        .push(text("Configuration update available").size(16))
+        .push(
+            text(format!(
+                "Shortcut defaults changed since this configuration was written. Applying updates this draft only; nothing reaches the file until you press Save, which also records revision {}.",
+                preview.proposed_revision()
+            ))
+            .size(14),
+        );
+
+    for change in preview.changes() {
+        body = body.push(
+            text(format!(
+                "{} ({}): {} → {}",
+                change.action_label(),
+                change.config_key(),
+                binding_summary(change.before()),
+                binding_summary(change.after()),
+            ))
+            .size(14),
+        );
+    }
+
+    let actions = row![
+        button("Apply Update")
+            .style(theme::Button::Primary)
+            .on_press(Message::MigrationApplyRequested),
+        button("Dismiss")
+            .style(theme::Button::Subtle)
+            .on_press(Message::MigrationDismissed),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    container(body.push(actions))
+        .padding(8)
+        .width(Length::Fill)
+        .style(theme::Container::Warning)
+        .into()
+}
+
+fn binding_summary(bindings: &[String]) -> String {
+    if bindings.is_empty() {
+        return "unbound".to_string();
+    }
+    bindings.join(", ")
 }
 
 fn empty_search_view<'a>() -> Element<'a, Message> {

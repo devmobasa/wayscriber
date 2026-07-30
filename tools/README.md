@@ -26,6 +26,13 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Runs as a hard gate in local and GitHub CI
   - Usage: `./tools/check-rust-source-coverage.py`
 
+- **check-config-writers.py** - Reject config-write capability outside the configurator's Save
+  - Scans `src/` and `configurator/src/` for the `config.toml` write primitives, exempting test sources and inline `#[cfg(test)]` items
+  - Allows only `src/config/document.rs`, `src/config/io.rs`, and `configurator/src/app/io.rs`
+  - Also checks those files keep the capability narrow (one public save, `pub(super)` primitives)
+  - Runs as a hard gate in `tools/lint-and-test.sh`
+  - Usage: `./tools/check-config-writers.py`
+
 - **reload-daemon.sh** - Restart running daemon
   - Kills and restarts the daemon to pick up config/code changes
   - Usage: `./tools/reload-daemon.sh`

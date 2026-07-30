@@ -114,13 +114,14 @@ impl InputState {
         if let Some(polygon_sides) = preset.polygon_sides {
             let _ = self.set_polygon_sides(polygon_sides);
         }
+        // Redraw only: the bar's visibility is a this-run preference the
+        // session snapshot does not carry, unlike every tool value above it.
         if let Some(show_status_bar) = preset.show_status_bar
             && !(self.presenter_mode && self.presenter_mode_config.hide_status_bar)
             && self.set_status_bar_visibility_preserving_focus(show_status_bar)
         {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
-            self.mark_session_dirty();
         }
         if let Some(drag_tools) = preset.drag_tools.as_ref() {
             let left_defaults = self.drag_tool_bindings.to_config().left;

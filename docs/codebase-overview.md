@@ -184,73 +184,197 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 ## 8. Configuration
 
 - **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
-- **`ConfigDocument`** is the single edit owner every writer goes through — configurator, overlay,
-  tray, and the startup migration alike. It keeps validated `Config`, the lossless TOML source,
-  unknown-path diagnostics, source path, and exact source revision behind one interface. Guarded
-  saves merge known fields while retaining comments and unsupported settings, then reuse the normal
-  backup and durable atomic-write policy. Its editor load path can expose a backup-protected
-  defaults-based repair document for readable but invalid config, while true I/O failures leave the
-  configurator's last good document untouched.
+- **`ConfigDocument`** is the single edit owner, and it has two callers:
+  `configurator/src/app/io.rs`, reached only from the configurator's Save control, and the narrow
+  editors in `src/config/io.rs`, one per explicit overlay gesture (below). It keeps
+  validated `Config`, the authored pre-validation `Config`, the lossless TOML source, unknown-path
+  diagnostics, source path, and exact source revision behind one interface.
+  `save_with_backup` merges known fields while retaining comments and unsupported settings, copies
+  the previous contents to a timestamped `.bak`, and writes through the durable atomic-write policy.
+  Its editor load path can expose a defaults-based repair document for readable but invalid config,
+  while true I/O failures leave the configurator's last good document untouched.
 - A save records only the delta between the config the document loaded and the config its caller
   hands back. A value that loading clamped, normalized, deduplicated, or reset keeps the text the
-  user authored, so an unrelated preference toggle can never rewrite a setting nobody touched.
-- Migration results are invisible to that delta, so they get their own write:
-  `Config::persist_pending_migrations` runs once during startup and calls
-  `ConfigDocument::save_migration`, which diffs against the *unvalidated* authored config. The
-  migrated fields and the `config_revision` stamp land together, after a timestamped `.bak`, and
-  nothing else is normalized. A file that needs repair first is skipped and retried next launch.
+  user authored, so editing one preference can never rewrite a setting nobody touched.
 - The Performance section is the first bounded scalar-metadata slice: core config owns its field
   IDs, paths, labels, help/search terms, and numeric constraints while the configurator keeps typed
   draft fields and messages.
 
-### Runtime config writes
+### Only an explicit user edit writes `config.toml`
 
-- `src/backend/wayland/config_writer.rs` keeps `config.toml` off the Wayland dispatch thread.
-  `ConfigWriter` owns a `wayscriber-config-writer` worker; the dispatch thread only sends typed
-  `ConfigMutation` values over a channel, so an fsync never delays input feedback.
-- `ConfigMutation` is the complete runtime-writable vocabulary: toolbar layout mode and per-section
-  visibility; the icon, extra-colors, context-aware, preset-toast, tool-preview, and delay-slider
-  toolbar flags; status bar visibility, interactivity, and per-item flags; board/page badges; the
-  floating badge; the zoom chip; the history Step section; click highlight; the input HUD; board
-  config updates; preset slots; quick colors; and one action's `[keybindings]` entry. Each variant
-  applies itself to a loaded `Config` and reports whether its target still exists — a removed quick
-  color slot or a runtime-only action logs instead of forcing a write.
-- `ConfigMutation::affects_runtime_ui_seeds()` classifies variants against the runtime-UI seed
-  registry: layout mode, section visibility, and board config feed the resolved toolbar items and
-  board pins, so queueing one also reseeds. Every other variant is spelled out as `false`, so a new
-  mutation has to classify itself instead of inheriting a wildcard.
-- The worker batches. Each mutation restarts a 75 ms debounce, and a mutation carrying a coalescing
-  key evicts the queued mutation with the same key — keyed per toolbar item, per status-bar item,
-  per preset slot, per quick-color index, and per action, so re-editing one shortcut replaces its
-  pending value while a different action keeps its own entry. Click highlight and board config have
-  no key on purpose: the first can leave a field deliberately untouched, the second carries ordered
-  merge metadata.
-- One write reloads the document, applies the whole batch, and saves once. A batch whose applied
-  result equals the config the document loaded is a completed no-op: it neither rewrites the file
-  nor spends the process's backup snapshot, and its shortcut receipts settle exactly as a written
-  batch's do. A failure keeps the batch
-  and retries with exponential backoff from 250 ms to a 30 s cap, resetting on success. A revision
-  conflict (the configurator or the tray wrote first) is just another failure, so the retry reloads
-  and re-applies rather than overwriting the other writer.
-- Shutdown order in `backend/event_loop/mod.rs`: every exit path breaks out before the
-  per-iteration pending-action drain, so `persist_pending_config_edits()` runs first to queue an
-  edit accepted in the same dispatch cycle as the quit (the color picker's OK click), then
-  `shutdown_config_writer()` sends `Shutdown` and joins the worker, which writes whatever is still
-  pending without waiting out the debounce. The session save, runtime-UI shutdown, and
-  input-monitor shutdown follow.
-- `src/config/runtime_backup.rs` is the safety net for runtime writes. The first batch that actually
-  changes something copies `config.toml` to
-  `$XDG_STATE_HOME/wayscriber/config-backups/config-<timestamp>.toml` and prunes to the five newest.
-  The snapshot is taken immediately before the write and fsynced like the save it protects, so a
-  batch that changes nothing does not spend
-  it, and `RuntimeConfigBackup` is ordinary owned state rather than a global: the writer's persist
-  closure holds the overlay's, the tray struct holds the daemon's, one attempt per process each.
-  Names are claimed with `create_new`, so concurrent processes never overwrite each other's copy,
-  and a failed snapshot is logged without blocking the save.
-- The tray writes from the daemon process and cannot use the overlay's writer. Its session-resume
-  toggle assigns only the `session.*` flags that disagree with the target, then saves through
-  `ConfigDocument` directly, retrying four times with a 150 ms backoff so an overlay write landing
-  between load and save does not silently drop the toggle.
+- The invariant: `config.toml` changes only through an explicit user edit action, never as a side
+  effect of running Wayscriber. There are exactly four such actions — the configurator's Save,
+  which writes the whole edited draft, and the overlay's three narrow editors (shortcut, preset
+  slot, quick color), which each rewrite one key. Everything else — the overlay's other controls,
+  the daemon, the tray, startup, validation, migration preview, and shutdown — reads the file and
+  leaves its bytes, mode, and mtime alone, including for a missing, read-only, or old-revision
+  file. `tools/check-config-writers.py` pins that set by name.
+- Every one of those writes goes through `ConfigDocument::save_with_backup`, which holds an
+  advisory lock on a sibling `config.toml.lock` across the whole check-copy-rename window
+  (`src/config/document/lock.rs`). The revision check and the atomic rename are separate syscalls
+  in separate processes: without the lock the configurator and an overlay editor can both find the
+  file unchanged and the second rename discards the first edit, with both reporting success and
+  both `.bak` copies holding the same pre-edit source. With it the loser sees the file change and
+  takes the reload-and-reapply path below. The wait is bounded; a lock another editor will not
+  release is reported as `ConfigWriteLockTimeout` rather than waited on forever.
+- That window is about one file, resolved once. `SourceRevision` records the symlink chain the
+  load walked, and the lock, both byte comparisons, and the atomic rename all address the file at
+  the end of it — the rename is handed that path with `SymlinkPolicy::Reject`, so nothing resolves
+  the config path a second time. A link retargeted while the window is open is therefore either
+  seen (`ensure_source_unchanged` reports a chain change as a stale source, which the editors
+  reload and reapply through) or harmless (a retarget after the last comparison writes the file the
+  window was about, leaving the new target untouched).
+- The lock binds the writers that take it, which is every writer this application has and nobody
+  else's. So `SourceRevision` also records *which file* it read — device and inode on Unix — and
+  its exact bytes. The rename is conditional on finding that complete revision at the destination
+  (`DestinationExpectation`, checked immediately before `rename`). An editor outside Wayscriber
+  that replaces the checked `config.toml`, or truncates and rewrites the same file in place, is
+  refused as a stale source rather than having its work overwritten by a merge of the old text; a
+  load that found *nothing* expects to find nothing, so a config created in the window is not
+  created over. Both halves of that check are one observation of one file — the contents are read
+  through a handle whose own identity is confirmed, not through a second lookup of the name.
+  Identity and bytes are also compared by `ensure_source_unchanged`. What remains is the gap
+  between that final check and the rename: no rename takes a condition on the destination's
+  revision, so a replacement landing there cannot be prevented — only narrowed to that gap. A
+  *creation* has no such gap, because `Absent` is the one condition a rename can carry: a name that
+  fills up is refused by `RENAME_NOREPLACE` itself, and reported in the same stale-source wording
+  so the editors reload and reapply rather than seeing a failed save.
+- Nothing writes the file on its own account. There is no automatic config writer, mutation
+  enum, retry queue, backup directory, or flush lifecycle: the overlay's `config_writer.rs`
+  worker, `ConfigMutation`, `Config::persist_pending_migrations`, `ConfigDocument::save_migration`,
+  the tray's session-resume save, and `src/config/runtime_backup.rs` were all removed;
+  `$XDG_STATE_HOME` no longer holds anything of Wayscriber's, and directories left by older
+  releases are user data. The config-edit worker described below is not a return of any of that —
+  it writes nothing of its own, and exists only to keep the three explicit gestures' writes off
+  the thread that dispatches input.
+- Incidental overlay preference controls (toolbar layout mode and section visibility, icon mode,
+  status bar and badge flags, click highlight, input HUD, Step section) mutate the
+  in-memory `Config` — the effective value — and write nothing. Restart restores the configured
+  value. Each one is classified `Ephemeral` in `src/ui/toolbar/model/event_policy.rs` and pairs with
+  honest wording plus a route into the configurator; the routes are named in
+  `src/configurator_destination.rs` and launched from
+  `src/input/state/core/utility/launcher.rs` (overlay) and `src/daemon/tray/helpers.rs` (tray).
+- Board edits are not in that list, and are not a third kind of `config.toml` write either. Board
+  contents — rename, recolor, add, delete, and everything drawn on them — belong to the session:
+  they mark the session dirty, ride the session autosave, and come back on the next start for
+  boards marked `persist`. A board *pin* is a direct UI preference and goes to `runtime-ui.toml`
+  with the rest of them. `config.toml`'s `[boards]` holds the boards a new session starts from, and
+  only the configurator writes it.
+- Three overlay gestures are deliberate edits and do write, through the narrow editors in
+  `src/config/io.rs`: `persist_keybinding_edit`, `persist_preset_slot`, and `persist_quick_color`.
+  All three share `edit_one_config_key`, which loads a `ConfigDocument`, clones
+  `document.config()`, sets exactly one value, and calls `save_with_backup`. Using the validated
+  `config()` as the base — not `authored_config()` — is what limits the write: it is the same value
+  the merge gate receives as `previous`, so the one field the closure sets is the only difference
+  the gate can see. An unparseable file is refused rather than rebuilt from defaults, a
+  changed-on-disk conflict is reloaded and reapplied once, and the value is confirmed against the
+  document parsed from the bytes the save wrote — the merge output, not a fresh read of the file —
+  so a value validation declined on the way out is reported instead of assumed durable.
+- `edit_one_config_key` also decides whether there is anything to write: it compares the validated
+  edit against the loaded config the way the merge gate does, and an edit the file already resolves
+  to returns `ConfigEditWrite::AlreadyCurrent` without a write or a `.bak`, so the three call sites
+  can say "already" instead of claiming a save. A write that lands but does not read back is a
+  distinct `ConfigEditNotReadBack`, because the file did change.
+- Two layers decide a chord. The overlay's own check runs `claimed_keys()` on this run's keymap
+  with the shortcut deltas already queued and unanswered folded in, in submission order
+  (`ConfigEditWorker::projected_shortcuts`): nothing is installed until a write reports back, so
+  the keymap alone still shows the bindings an outstanding edit has asked to move, and a gesture
+  reaching for a chord that edit gave up would be refused over a claim the file is about to drop.
+  Each projection is retired when its completion is taken, whatever the outcome, so the keymap is
+  the authority again the moment there is nothing outstanding.
+- The write is the second layer and the arbiter. The shortcut editor re-checks the requested chord
+  against the freshly loaded document's `claimed_keys()` before touching anything, because the
+  projection only knows about this run's queue and the file may have been given the chord by
+  another window, the configurator, or a hand edit. A chord another action now owns returns `ShortcutClaimedOnDisk`,
+  the write is refused, and the completion handler — the only place a keymap is installed — leaves
+  the run as it was and names the owner. The edited action's own `[keybindings]` key is then marked
+  authored (`Config::mark_keybinding_explicit`) so the omitted-default pass cannot re-classify the
+  list the editor just typed; the other keys keep the file's own presence.
+- The quick-color editor materializes the palette array only as far as the edited slot, so later
+  slots stay implied and keep tracking the shipped defaults, and `create_config_backup` claims its
+  timestamped name with `create_new`, suffixing on collision, so two edits inside one second leave
+  two backups. Alias canonicalization in `document/merge.rs` is limited to aliases the save's delta
+  actually reaches, so a narrow edit cannot respell an unrelated legacy key.
+- All three run off the dispatch thread. `src/backend/wayland/config_edits.rs` owns a lazily
+  spawned worker thread and a bounded FIFO channel; the gestures hand it a typed `ConfigEdit` and
+  the event loop drains typed completions in `event_loop/capture.rs`, woken by the same
+  `RuntimeWakeHandle` eventfd the other background workers use. Edits execute one at a time in
+  submission order and are answered in that order. Nothing is ever completed on the spot: a
+  submission joins a staging queue in front of the channel and is pumped in as the worker makes
+  room, so a burst that fills the channel cannot answer the newest gesture ahead of the older ones
+  it was made after (which would leave their completions applying on top of it). That module is the
+  only production caller of the three editors, and is what `tools/check-config-writers.py` pins.
+- Teardown is `finish_config_edits` (called by `shutdown_config_edits`, beside
+  `shutdown_runtime_ui`). It drains the edit-bearing pending slots — preset action, quick-color
+  recolor, recorded shortcut edits — one last time before stopping the worker, because a gesture
+  and the exit that follows it can arrive in the same batch of input events and the loop breaks
+  before the pass that would have queued it. Then it waits a bounded five seconds for the channel
+  *and* the staging queue, so an edit made a moment before quitting still lands. Those completions
+  are logged rather than shown: there is no overlay left to toast on, and the write is the half the
+  user cannot redo from memory. Any pending slot added later whose drain queues a `ConfigEdit`
+  belongs in that function too.
+- A bound that runs out is reported as what it is. The worker is never stopped by an answer nobody
+  can hear — it keeps writing every edit it has already accepted, for as long as the process lives
+  — and teardown names each edit it did not hear back about (by slot, swatch, or action) at warn
+  level as possibly unsaved, rather than claiming they were left to finish. `shutdown` returns that
+  same enumeration as a `ConfigEditShutdownReport`, which separates edits the worker took and never
+  answered for from edits no worker ever took. Process exit can still discard every unconfirmed edit
+  that has not finished; the one in flight lands whole or not at all because the write is a rename,
+  while edits queued behind it have not started yet.
+- The gestures are decided in `src/backend/wayland/state/keybindings.rs` (palette row controls and
+  the toolbar rebind gesture, which queue onto `InputState::pending_keybinding_edits` — a FIFO,
+  not the single-slot `PendingBackendAction`, so two edits recorded from one batch of input events
+  both reach the worker — after conflict-checking the request against `claimed_keys()` for every
+  action but the one being edited),
+  `.../toolbar/events/presets.rs`, and `.../toolbar/events/quick_colors.rs` (drained from the color
+  picker's pointer release in `event_loop/capture.rs`, which is the only drain site that release
+  reaches). The two families differ on purpose:
+  - Presets and quick colors apply in memory as the gesture completes — the live slot or swatch is
+    the feedback the gesture is for — and only the *wording* waits for the write, so a toast never
+    claims a durable change before the file has one. A failed write degrades to a this-run change
+    with a toast that says the file missed it, never to a lost edit.
+  - A shortcut installs nothing until the write reports success. `prepare_keybinding_edit` takes
+    the running keymap by shared reference and hands the write a *delta* — one action and the
+    bindings it should end up with — so the chord exists nowhere but the queued edit until the file
+    answers; `shortcut_completion` then decides from that answer whether it is folded in at all,
+    and `install_keybinding_edit` folds it into the keymap the run holds by then rather than into a
+    copy taken when the edit was accepted. A chord the file has given to another action since this
+    run read it is refused with nothing to roll back, and every other failure still installs for
+    the run with honest wording — the same four outcomes the synchronous version produced. A second
+    shortcut edit issued while the first is in flight is checked against the keymap the run still
+    holds and, if the two contest a chord, is caught by the same on-disk refusal at write time; if
+    they contest nothing, both land, because neither completion touches the other's action. The one
+    pair that reaches neither outcome is a first edit whose *write* failed and kept its chord for
+    the run: the file never got it, so a second edit onto that chord is refused by the run instead,
+    and the wording branches on what the file did with that second edit — "saved to config.toml,
+    but this run kept its own" when the file took it, and a message claiming no save at all when it
+    did not.
+- Section-visibility and layout changes still call `refresh_runtime_ui_config_seeds()` from the
+  apply path, because the runtime-UI store seeds off the effective config rather than off a write.
+- Loading is read-only including for old revisions. `Config::apply_keybinding_migrations` is
+  preview material only: `src/config/migration.rs` turns the recipes into a `MigrationPreview` the
+  configurator shows as a review banner, Apply edits the draft, and the ordinary Save persists it.
+  `validate_and_clamp` never calls it and never advances `config_revision`.
+- Omitted `[keybindings]` fields are resolved from source presence
+  (`KeybindingAuthorship`, populated by both parse paths) rather than by comparing values against
+  compiled defaults, so a shipped default is only ever installed on a key nothing authored claims;
+  a stand-down is reported as `DefaultShortcutSkipped`.
+- An editor that rebuilds `[keybindings]` from its own fields calls
+  `Config::mark_keybindings_explicit` before validating — `ConfigDraft::to_config` does — because
+  presence in the loaded file no longer describes lists the user typed. A duplicate they typed is
+  then arbitrated by traversal order instead of being filtered away as an unauthored default, and
+  the configurator's save status names which action kept the key: the resolution reaches
+  `config.toml`, so the reloaded document has nothing left to report.
+- Two guards keep it that way: `tools/check-config-writers.py` (in `tools/lint-and-test.sh`) fails
+  when any source outside `src/config/document.rs`, `src/config/io.rs`, and
+  `configurator/src/app/io.rs` names a config write primitive, when an unpinned file calls one of
+  the narrow editors, or when the editors' path-taking `_at` twins stop being `#[cfg(test)]`-gated
+  (a production build has no such function at all); it reads test-only status from the
+  `#[cfg(test)]` on the `mod` item rather than from the shape of the path, so a file under a
+  directory named `tests` is not exempt by accident. Alongside it,
+  `no_daemon_source_can_write_the_config` in `src/daemon/tests.rs` does the same for the daemon
+  subtree under `cargo test`. The behavioural proof is `src/config/tests/immutability.rs`, which
+  snapshots bytes, length, mtime, and mode around every loader.
 
 ### Runtime UI preference persistence
 
@@ -332,7 +456,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/domain/` | Stable action, tool, color, and board values with no upward runtime dependencies. |
 | `src/daemon/` | Background daemon control queue, lifecycle, overlay child, shortcuts, and tray. |
 | `src/process_broker/` | Pre-lock, bounded runtime helper creation and broker-only child reaping. |
-| `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), input/render handlers, and the background `config_writer.rs` persistence worker. |
+| `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), input/render handlers, and the `runtime_ui_state/` preference store. |
 | `src/input/` | Event/state machine, tools, board/page ownership, selection, and action routing. |
 | `src/draw/` | Vector drawing primitives, frames/pages, history, fonts, and rendering helpers. |
 | `src/ui.rs` | Status/help overlays. |

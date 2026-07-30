@@ -547,11 +547,16 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
     assert_eq!(state.quick_colors.color_for_index(1), Some(slot_color));
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
     assert!(!state.session_dirty);
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
+/// Accepting keeps the swatch and hands the slot to the backend to write.
+///
+/// `InputState` owns neither the configuration nor the filesystem, so the
+/// accept records what it decided; the toast belongs to the backend, which
+/// knows whether the write landed.
 #[test]
-fn accepting_a_recolor_keeps_the_swatch_and_queues_the_config_write() {
+fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     let mut state = create_test_input_state();
     let tool_color = state.color_for_tool(Tool::Pen);
     state.active_preset_slot = Some(1);
@@ -570,8 +575,12 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_config_write() {
         state.take_pending_quick_color_edit(),
         Some(crate::input::state::QuickColorEdit {
             index: 2,
-            color: picked,
+            color: picked
         })
+    );
+    assert!(
+        state.ui_toast.is_none(),
+        "the backend raises the toast once it knows whether the write landed"
     );
     // An unselected swatch's recolor is not a drawing change.
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
@@ -629,7 +638,7 @@ fn reopening_the_picker_abandons_an_unsaved_recolor() {
     state.open_color_picker_popup();
     assert_eq!(state.quick_colors.color_for_index(1), Some(second));
     assert_eq!(state.color_picker_popup_slot(), None);
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
 #[test]
@@ -646,7 +655,7 @@ fn a_recolor_never_survives_an_implicit_close_unsaved() {
     state.close_color_picker_popup(false);
 
     assert_eq!(state.quick_colors.color_for_index(0), Some(slot_color));
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
 #[test]
@@ -743,7 +752,7 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     assert!(state.is_color_picker_popup_open());
     assert_eq!(state.color_picker_popup_current_color(), Some(shipped));
     assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 
     state.apply_color_picker_popup();
     assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
@@ -751,7 +760,7 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
         state.take_pending_quick_color_edit(),
         Some(crate::input::state::QuickColorEdit {
             index: 1,
-            color: shipped,
+            color: shipped
         })
     );
 }
@@ -774,13 +783,13 @@ fn canceling_after_default_keeps_the_customized_color() {
     state.close_color_picker_popup(true);
 
     assert_eq!(state.quick_colors.color_for_index(2), Some(customized));
-    assert!(state.take_pending_quick_color_edit().is_none());
+    assert!(state.ui_toast.is_none());
 }
 
+/// The OK button is clicked with the pointer, so the release path must reach
+/// the same accept the keyboard path does.
 #[test]
-fn accepting_a_recolor_from_the_popup_release_queues_the_write() {
-    // The OK button is clicked with the pointer, so the release path must be
-    // the one that queues the config write (the backend drains it per loop).
+fn accepting_a_recolor_from_the_popup_release_queues_the_durable_write() {
     let mut state = create_test_input_state();
 
     assert!(state.open_color_picker_popup_for_quick_color(0));
@@ -797,11 +806,12 @@ fn accepting_a_recolor_from_the_popup_release_queues_the_write() {
     assert!(state.handle_color_picker_popup_release_at(x, y));
 
     assert!(!state.is_color_picker_popup_open());
+    assert_eq!(state.quick_colors.color_for_index(0), Some(picked));
     assert_eq!(
         state.take_pending_quick_color_edit(),
         Some(crate::input::state::QuickColorEdit {
             index: 0,
-            color: picked,
+            color: picked
         })
     );
 }
@@ -2207,4 +2217,61 @@ fn set_marker_opacity_clamps_and_reports_noop_after_reaching_target() {
     assert!(!state.set_marker_opacity(0.9));
     assert!(!state.needs_redraw);
     assert!(!state.session_dirty);
+}
+
+/// The write belongs to the backend, not to this layer.
+///
+/// Accepting a recolor updates the live palette and queues the slot; it must
+/// not reach for the file itself. The durable half is covered where it lives,
+/// beside `handle_quick_color_edit`.
+#[test]
+fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
+    crate::config::test_helpers::with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(crate::config::PRIMARY_CONFIG_DIR);
+        std::fs::create_dir_all(&config_dir).expect("test config directory");
+        let path = config_dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "[[drawing.quick_colors]]\nlabel = 'Authored'\ncolor = '#112233'\n",
+        )
+        .expect("test config should be written");
+        let snapshot = crate::config::test_helpers::ConfigFileSnapshot::capture(&path);
+
+        let configured = crate::config::Config::load()
+            .expect("test config should load")
+            .config;
+        let authored = configured.drawing.quick_colors.effective_entries()[0]
+            .color
+            .clone();
+
+        let mut state = create_test_input_state();
+        state.set_quick_colors(crate::config::QuickColorPalette::from_config(
+            &configured.drawing.quick_colors,
+        ));
+        assert!(state.open_color_picker_popup_for_quick_color(0));
+        state.color_picker_popup_set_from_gradient(0.45, 0.35);
+        let picked = state
+            .color_picker_popup_current_color()
+            .expect("picked color");
+        state.apply_color_picker_popup();
+
+        assert_eq!(state.quick_colors.color_for_index(0), Some(picked));
+        assert_eq!(
+            state.take_pending_quick_color_edit(),
+            Some(crate::input::state::QuickColorEdit {
+                index: 0,
+                color: picked
+            })
+        );
+        snapshot.assert_unchanged("accepting a quick-color recolor in InputState");
+
+        let restarted = crate::config::Config::load()
+            .expect("test config should reload")
+            .config;
+        assert_eq!(
+            restarted.drawing.quick_colors.effective_entries()[0].color,
+            authored,
+            "nothing was written, because the backend has not drained the edit"
+        );
+    });
 }

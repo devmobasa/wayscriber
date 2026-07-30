@@ -20,7 +20,11 @@ pub(super) fn merge_config_document(
     let source_was_empty = merged.as_table().is_empty();
     let empty_source_contents = source_was_empty.then(|| merged.trailing().clone());
 
-    canonicalize_aliases(&mut merged);
+    if repairing {
+        canonicalize_all_aliases(&mut merged);
+    } else {
+        canonicalize_written_aliases(&mut merged, Some(&previous), &updated);
+    }
     // Only a document this save authors from scratch records the revision.
     // Elsewhere the stamp belongs to the migration save: a merge writes just
     // the caller's delta, so stamping here would claim migrations whose values
@@ -60,7 +64,7 @@ pub(super) fn repair_source_document(
     let previous = serialize_config_document(previous)?;
     let updated = serialize_config_document(updated)?;
     let mut repair_source = source.clone();
-    canonicalize_aliases(&mut repair_source);
+    canonicalize_all_aliases(&mut repair_source);
     remove_known_content(
         repair_source.as_table_mut(),
         Some(previous.as_table()),
@@ -77,7 +81,7 @@ pub(super) fn conservative_repair_source_document(
     let previous = serialize_config_document(previous)?;
     let updated = serialize_config_document(updated)?;
     let mut repair_source = source.clone();
-    canonicalize_aliases(&mut repair_source);
+    canonicalize_all_aliases(&mut repair_source);
     for key in known_keys(Some(previous.as_table()), updated.as_table()) {
         repair_source.remove(&key);
     }
@@ -131,25 +135,98 @@ fn known_keys(previous: Option<&dyn TableLike>, updated: &dyn TableLike) -> Vec<
     keys
 }
 
-fn canonicalize_aliases(document: &mut DocumentMut) {
-    rename_key_at_path(
-        document.as_table_mut(),
-        &["ui"],
-        "show_page_badge_with_status_bar",
-        "show_floating_badge_always",
-    );
-    rename_key_at_path(
-        document.as_table_mut(),
-        &["render_profiles"],
-        "items",
-        "profiles",
-    );
-    rename_key_at_path(
-        document.as_table_mut(),
-        &["ui", "toolbar", "mode_overrides"],
-        "full",
-        "regular",
-    );
+/// A renamed setting whose old spelling a file may still use.
+struct KeyAlias {
+    /// The table holding both spellings.
+    path: &'static [&'static str],
+    alias: &'static str,
+    canonical: &'static str,
+}
+
+/// Serde accepts either spelling but not both, so a file that uses the old one
+/// has to be renamed before this save writes the new one — the alias left
+/// beside the canonical key the merge inserts would make the file unloadable.
+const KEY_ALIASES: &[KeyAlias] = &[
+    KeyAlias {
+        path: &["ui"],
+        alias: "show_page_badge_with_status_bar",
+        canonical: "show_floating_badge_always",
+    },
+    KeyAlias {
+        path: &["render_profiles"],
+        alias: "items",
+        canonical: "profiles",
+    },
+    KeyAlias {
+        path: &["ui", "toolbar", "mode_overrides"],
+        alias: "full",
+        canonical: "regular",
+    },
+];
+
+/// Renames every alias, for a save that rebuilds the whole document.
+///
+/// Repair is the only such save: its draft replaces the file, so every known
+/// key is one it writes, and an alias left behind would come back as an unknown
+/// setting beside its own canonical key.
+fn canonicalize_all_aliases(document: &mut DocumentMut) {
+    for alias in KEY_ALIASES {
+        rename_key_at_path(
+            document.as_table_mut(),
+            alias.path,
+            alias.alias,
+            alias.canonical,
+        );
+    }
+}
+
+/// Renames only the aliases this save's delta actually reaches.
+///
+/// Renaming the others would make a save rewrite settings the caller never
+/// touched — a recolored swatch respelling an unrelated `[ui]` key — which is
+/// the one thing the merge gate exists to prevent. An alias the delta does not
+/// mention is a spelling the file is entitled to keep: it still loads, and the
+/// save that does change it will rename it then.
+fn canonicalize_written_aliases(
+    document: &mut DocumentMut,
+    previous: Option<&DocumentMut>,
+    updated: &DocumentMut,
+) {
+    for alias in KEY_ALIASES {
+        if !alias_field_changed(alias, previous, updated) {
+            continue;
+        }
+        rename_key_at_path(
+            document.as_table_mut(),
+            alias.path,
+            alias.alias,
+            alias.canonical,
+        );
+    }
+}
+
+/// Whether the caller's delta covers the aliased setting. Both serialized
+/// configurations spell it canonically, which is the name the merge would write.
+fn alias_field_changed(
+    alias: &KeyAlias,
+    previous: Option<&DocumentMut>,
+    updated: &DocumentMut,
+) -> bool {
+    let previous = previous.and_then(|document| alias_field(document, alias));
+    let updated = alias_field(updated, alias);
+    match (previous, updated) {
+        (Some(previous), Some(updated)) => !items_semantically_equal(previous, updated),
+        (None, None) => false,
+        _ => true,
+    }
+}
+
+fn alias_field<'a>(document: &'a DocumentMut, alias: &KeyAlias) -> Option<&'a Item> {
+    let mut table = document.as_table() as &dyn TableLike;
+    for segment in alias.path {
+        table = table.get(segment)?.as_table_like()?;
+    }
+    table.get(alias.canonical)
 }
 
 fn rename_key_at_path(root: &mut Table, path: &[&str], alias: &str, canonical: &str) {

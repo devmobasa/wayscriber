@@ -217,6 +217,10 @@ define_action_binding_accessors! {
         ClearSavedToolState,
         ReplayTour,
         SavePendingToFile,
+        OpenConfiguratorKeybindings,
+        OpenConfiguratorPresets,
+        OpenConfiguratorBoards,
+        OpenConfiguratorQuickColors,
     ]
 }
 

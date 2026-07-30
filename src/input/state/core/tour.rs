@@ -137,6 +137,10 @@ impl InputState {
                 }
                 lines.push("Quickly search and run any action by typing.".to_string());
                 lines.push("Use the row controls to edit, unbind, or reset shortcuts.".to_string());
+                lines.push(
+                    "Press Ctrl+Shift+E on a row to change its shortcut in the configurator."
+                        .to_string(),
+                );
                 lines.join("\n")
             }
             TourStep::ContextMenu => "Right-click anywhere for quick actions.\n\
@@ -388,11 +392,20 @@ mod tests {
         assert!(toolbar.contains(&toggle), "toolbar copy: {toolbar:?}");
         assert!(toolbar.contains(&cycle), "toolbar copy: {toolbar:?}");
 
-        // The command palette step still teaches the row shortcut controls.
+        // The command palette step teaches the row shortcut controls and names
+        // the configurator route beside them.
         let palette = state.tour_step_description(TourStep::CommandPalette);
-        assert!(palette.contains("edit"));
-        assert!(palette.contains("unbind"));
-        assert!(palette.contains("reset"));
+        assert!(palette.contains("edit"), "palette copy: {palette:?}");
+        assert!(palette.contains("unbind"), "palette copy: {palette:?}");
+        assert!(palette.contains("reset"), "palette copy: {palette:?}");
+        assert!(
+            palette.contains("Ctrl+Shift+E"),
+            "palette copy: {palette:?}"
+        );
+        assert!(
+            palette.contains("configurator"),
+            "palette copy: {palette:?}"
+        );
     }
 
     #[test]

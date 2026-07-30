@@ -41,6 +41,58 @@ impl InputState {
         true
     }
 
+    /// Re-derive the three live visibility flags from the pin flags — the
+    /// same rule startup applies — and refresh the status HUD layout, which
+    /// follows toolbar visibility (see `set_toolbar_visible`). Used when a
+    /// rolled-back visibility toggle hands the pre-toggle pins back:
+    /// visibility itself is never persisted, so it must be recomputed for
+    /// the screen to match what a restart would show.
+    pub(crate) fn derive_toolbar_visibility_from_pins(&mut self) {
+        let top = self.toolbar_top_pinned;
+        let side = self.toolbar_side_pinned;
+        // A rollback can resolve long after the toggle (a failed write
+        // barrier holds it), by which time a transient chrome owner —
+        // focus mode, presenter mode with `hide_toolbars`, or light mode —
+        // may have taken toolbar visibility. Writing the live flags then
+        // would surface toolbars out from under the owner while its
+        // restore snapshot still held the post-toggle state, so exit would
+        // restore the wrong screen. Write the derived values into the
+        // owner's snapshot instead (the presenter-aware pattern of
+        // `apply_persisted_top_display_mode`): the owner keeps its screen
+        // now and hands back pin-agreeing visibility on exit. The three
+        // owners never nest — presenter entry restores focus and exits
+        // light, focus entry is presenter-gated and exits light, light
+        // entry restores focus and exits presenter — so at most one
+        // snapshot exists and there is no restore-order ambiguity.
+        if let Some(restore) = self.focus_mode_restore.as_mut() {
+            restore.toolbar_top_visible = top;
+            restore.toolbar_side_visible = side;
+            restore.toolbar_visible = top || side;
+            return;
+        }
+        // Presenter tracks toolbar visibility only when `hide_toolbars`
+        // took it (the three fields are `Some` together); otherwise the
+        // live flags are still the user's and are written below.
+        if let Some(restore) = self.presenter_restore.as_mut()
+            && restore.toolbar_visible.is_some()
+        {
+            restore.toolbar_top_visible = Some(top);
+            restore.toolbar_side_visible = Some(side);
+            restore.toolbar_visible = Some(top || side);
+            return;
+        }
+        if let Some(restore) = self.light_mode_restore.as_mut() {
+            restore.toolbar_top_visible = top;
+            restore.toolbar_side_visible = side;
+            restore.toolbar_visible = top || side;
+            return;
+        }
+        self.toolbar_top_visible = top;
+        self.toolbar_side_visible = side;
+        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+        self.refresh_status_hud_layout();
+    }
+
     /// After hiding a chrome surface: if nothing interactive remains on
     /// screen (no toolbar surface, no effective status HUD), teach the way
     /// back right now — the status-bar hint chip cannot help once the HUD

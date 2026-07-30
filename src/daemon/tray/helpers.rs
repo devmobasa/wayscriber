@@ -3,6 +3,8 @@ use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use crate::config::Config;
 #[cfg(feature = "tray")]
+use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
+#[cfg(feature = "tray")]
 use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
 #[cfg(feature = "tray")]
 use crate::env_vars::CONFIGURATOR_ENV;
@@ -57,11 +59,13 @@ fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
 
 #[cfg(feature = "tray")]
 impl WayscriberTray {
-    pub(super) fn launch_configurator(&self) {
+    /// Open the configurator, optionally at the screen for the menu item used.
+    pub(super) fn launch_configurator(&self, destination: Option<ConfiguratorDestination>) {
+        let arguments = configurator_launch_arguments(destination.as_ref());
         match spawn_detached(
             crate::process_broker::HelperKind::Configurator,
             OsStr::new(&self.configurator_binary),
-            &[],
+            &arguments,
         ) {
             Ok(child) => {
                 info!(
@@ -76,6 +80,9 @@ impl WayscriberTray {
                     self.configurator_binary
                 );
                 error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
+                // The fallback hands the file to the desktop's default editor,
+                // which has no concept of a configurator screen: the user still
+                // reaches the settings, just not the destination.
                 let opened_config = self.open_config_file();
                 #[cfg(feature = "dbus")]
                 {

@@ -1,5 +1,7 @@
 use super::super::base::InputState;
 use crate::config::Config;
+use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
+use crate::domain::Action;
 use crate::env_vars::CONFIGURATOR_ENV;
 use crate::input::state::{Toast, ToastPriority};
 use std::ffi::{OsStr, OsString};
@@ -77,14 +79,17 @@ impl InputState {
         }
     }
 
-    pub(crate) fn launch_configurator(&mut self) {
+    /// Open the configurator, optionally at the screen for the control the user
+    /// just used.
+    pub(crate) fn launch_configurator(&mut self, destination: Option<ConfiguratorDestination>) {
         let binary = std::env::var(CONFIGURATOR_ENV)
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());
+        let arguments = configurator_launch_arguments(destination.as_ref());
 
         match spawn_detached(
             crate::process_broker::HelperKind::Configurator,
             OsStr::new(&binary),
-            &[],
+            &arguments,
         ) {
             Ok(child) => {
                 log::info!(
@@ -96,6 +101,9 @@ impl InputState {
             Err(err) => {
                 log::error!("Failed to launch wayscriber-configurator using '{binary}': {err:#}");
                 log::error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
+                // The fallback hands the file to the desktop's default editor,
+                // which has no concept of a configurator screen: the user still
+                // reaches the settings, just not the destination.
                 if self.open_config_file_default() {
                     log::info!(
                         "Opened config file with default application because wayscriber-configurator was unavailable"
@@ -109,6 +117,31 @@ impl InputState {
                 }
             }
         }
+    }
+
+    /// Say once per run that an overlay preference toggle is a current-run
+    /// change and the configurator owns the configured default.
+    ///
+    /// Once, not per toggle: every authored preference the overlay exposes has
+    /// the same scope, so repeating it on each checkbox would be noise. The
+    /// hint names the shortcut the user actually has for the configurator, and
+    /// drops it when the action is unbound.
+    pub(crate) fn notify_process_only_preference(&mut self) {
+        if self.process_only_preference_notice_shown {
+            return;
+        }
+        self.process_only_preference_notice_shown = true;
+        let message = match self.action_binding_primary_label(Action::OpenConfigurator) {
+            Some(binding) => {
+                format!("Applies to this run — edit defaults in the configurator ({binding}).")
+            }
+            None => "Applies to this run — edit defaults in the configurator.".to_string(),
+        };
+        self.push_toast(
+            ToastPriority::Info,
+            "config-preference",
+            Toast::info(message),
+        );
     }
 
     /// Opens the most recent capture directory using the desktop default application.

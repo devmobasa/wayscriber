@@ -54,6 +54,18 @@ impl KeybindingsDraft {
         }
     }
 
+    /// Whether this field's text names exactly `bindings`.
+    ///
+    /// Read the way [`Self::to_config`] reads it — comma-separated and
+    /// trimmed — rather than compared byte for byte: `"A,B"` and `"A, B"` are
+    /// the same list, and a formatting difference must not be mistaken for an
+    /// edit by a caller asking whether the field still holds a known value.
+    pub fn parses_to(&self, field: KeybindingField, bindings: &[String]) -> bool {
+        self.value_for(field)
+            .and_then(|value| parse_keybinding_list(value).ok())
+            .is_some_and(|parsed| parsed == bindings)
+    }
+
     pub fn value_for(&self, field: KeybindingField) -> Option<&str> {
         self.entries
             .iter()

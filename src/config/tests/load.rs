@@ -102,8 +102,8 @@ fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
         assert_eq!(config.ui.toolbar.top_display_mode, expected);
     }
 
-    // Hidden never persists: like F9 visibility, startup is governed by
-    // `top_pinned`, so the persisted form collapses to full.
+    // Hidden never persists: startup is governed by `top_pinned` (the pins
+    // the F9 toggle records durably), so the persisted form collapses to full.
     assert_eq!(TopDisplayMode::Hidden.persisted(), TopDisplayMode::Full);
     assert_eq!(TopDisplayMode::Micro.persisted(), TopDisplayMode::Micro);
 }
@@ -241,8 +241,11 @@ fn tray_icon_style_rejects_unknown_values() {
     assert!(error.to_string().contains("unknown variant"));
 }
 
+/// The legacy `Ctrl+K` palette / `Ctrl+Shift+P` capture pair is what the file
+/// says, so it is what the session gets — and the file keeps both its text and
+/// its revision, because nothing on this path writes `config.toml`.
 #[test]
-fn load_migrates_legacy_shortcut_defaults_in_memory_without_rewriting_file() {
+fn a_legacy_shortcut_pair_is_honored_as_authored_and_the_file_is_untouched() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&primary_dir).unwrap();
@@ -254,22 +257,26 @@ fn load_migrates_legacy_shortcut_defaults_in_memory_without_rewriting_file() {
 
         assert_eq!(
             loaded.config.keybindings.ui.toggle_command_palette,
-            ["Ctrl+K", "Ctrl+Shift+P"]
+            ["Ctrl+K"]
         );
         assert_eq!(
             loaded.config.keybindings.capture.capture_full_screen,
-            ["Ctrl+Alt+F"]
+            ["Ctrl+Shift+P"]
         );
         assert_eq!(
-            loaded.config.config_revision,
-            crate::config::CURRENT_CONFIG_REVISION
+            loaded.config.config_revision, 0,
+            "loading never advances the authored revision"
         );
+        assert!(loaded.validation.is_empty());
         assert_eq!(fs::read_to_string(config_path).unwrap(), original);
     });
 }
 
+/// A pair the user restores deliberately used to need the revision stamp to
+/// protect it from the next load. Presence protects it directly now: the keys
+/// are in the file, so nothing re-derives them.
 #[test]
-fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
+fn a_deliberately_restored_legacy_pair_survives_a_save_and_reload() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&primary_dir).unwrap();
@@ -280,17 +287,13 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
         )
         .unwrap();
 
-        // Startup records the migration; that stamp is what protects a pair
-        // the user deliberately restores afterwards.
-        Config::persist_pending_migrations().expect("startup migration write succeeds");
-
-        let mut migrated = Config::load().expect("legacy load succeeds").config;
-        migrated.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
-        migrated.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
-        save_through_document(migrated);
+        let mut restored = Config::load().expect("legacy load succeeds").config;
+        restored.keybindings.ui.toggle_command_palette = vec!["Ctrl+K".to_string()];
+        restored.keybindings.capture.capture_full_screen = vec!["Ctrl+Shift+P".to_string()];
+        save_through_document(restored);
 
         let reloaded = Config::load().expect("current load succeeds").config;
-        assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert_eq!(reloaded.config_revision, 0);
         assert_eq!(reloaded.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
         assert_eq!(
             reloaded.keybindings.capture.capture_full_screen,
@@ -299,29 +302,46 @@ fn saved_migration_revision_preserves_a_later_intentional_legacy_pair() {
     });
 }
 
+/// The old `config.example.toml` shipped `toggle_toolbar = ["F2", "F9"]`
+/// verbatim, and `cycle_toolbar_display` arrived later wanting `F2`. The
+/// authored pair keeps both keys and the newcomer's default stands down — the
+/// #293 case, settled without a migration and without a write.
 #[test]
-fn load_migrates_explicit_legacy_toggle_toolbar_pair_without_rewriting_file() {
+fn an_authored_toolbar_pair_keeps_f2_from_the_newer_default() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&primary_dir).unwrap();
         let config_path = primary_dir.join("config.toml");
-        // The old config.example.toml shipped the toggle pair verbatim; a
-        // custom unrelated binding proves validation does not fall back to
-        // full defaults on the (pre-migration) F2 collision.
         let original = "[keybindings]\ntoggle_toolbar = ['F2', 'F9']\nundo = ['Ctrl+Alt+U']\n";
         fs::write(&config_path, original).unwrap();
 
-        let loaded = Config::load().expect("load succeeds").config;
+        let loaded = Config::load().expect("load succeeds");
 
-        assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F9"]);
-        assert_eq!(loaded.keybindings.ui.cycle_toolbar_display, ["F2"]);
-        assert_eq!(
-            loaded.keybindings.core.undo,
-            ["Ctrl+Alt+U"],
-            "custom bindings must survive the migration"
+        assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+        assert!(
+            loaded
+                .config
+                .keybindings
+                .ui
+                .cycle_toolbar_display
+                .is_empty()
         );
-        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
-        assert!(loaded.keybindings.build_action_map().is_ok());
+        assert_eq!(
+            loaded.config.keybindings.core.undo,
+            ["Ctrl+Alt+U"],
+            "custom bindings survive untouched"
+        );
+        assert_eq!(loaded.config.config_revision, 0);
+        assert!(loaded.config.keybindings.build_action_map().is_ok());
+        assert!(
+            loaded.validation.keybinding_conflicts.is_empty(),
+            "only one side of this is authored, so it is not the user's conflict"
+        );
+        let skipped = &loaded.validation.skipped_default_shortcuts;
+        assert_eq!(skipped.len(), 1, "unexpected report: {skipped:?}");
+        assert_eq!(skipped[0].binding(), "F2");
+        assert_eq!(skipped[0].action(), Action::CycleToolbarDisplay);
+        assert_eq!(skipped[0].claimed_by(), Action::ToggleToolbar);
         assert_eq!(fs::read_to_string(config_path).unwrap(), original);
     });
 }
@@ -348,13 +368,14 @@ fn custom_f2_toggle_toolbar_binding_keeps_f2_and_unbinds_cycle() {
             loaded.keybindings.ui.cycle_toolbar_display.is_empty(),
             "the new cycle action must not steal the user's F2"
         );
-        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
         assert!(loaded.keybindings.build_action_map().is_ok());
     });
 }
 
+/// The authored side of the #293 case survives a save of one of its own
+/// shortcuts and every load after it.
 #[test]
-fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
+fn a_deliberately_restored_f2_toggle_pair_survives_a_save_and_reload() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&primary_dir).unwrap();
@@ -365,15 +386,12 @@ fn saved_migration_revision_preserves_a_later_intentional_f2_toggle_pair() {
         )
         .unwrap();
 
-        let mut migrated = Config::load().expect("legacy load succeeds").config;
-        // Post-migration the user deliberately restores the pair and
-        // unbinds the cycle action; the saved revision protects it.
-        migrated.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
-        migrated.keybindings.ui.cycle_toolbar_display = Vec::new();
-        save_through_document(migrated);
+        let mut restored = Config::load().expect("legacy load succeeds").config;
+        restored.keybindings.ui.toggle_toolbar = vec!["F2".to_string(), "F9".to_string()];
+        restored.keybindings.ui.cycle_toolbar_display = Vec::new();
+        save_through_document(restored);
 
         let reloaded = Config::load().expect("current load succeeds").config;
-        assert_eq!(reloaded.config_revision, CURRENT_CONFIG_REVISION);
         assert_eq!(reloaded.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
         assert!(reloaded.keybindings.ui.cycle_toolbar_display.is_empty());
         assert!(reloaded.keybindings.build_action_map().is_ok());
@@ -404,13 +422,17 @@ fn a_pre_input_hud_file_that_claims_ctrl_shift_k_keeps_it_and_unbinds_the_hud() 
             loaded.keybindings.ui.toggle_input_hud.is_empty(),
             "the input HUD must not steal a shortcut the file already used"
         );
-        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert_eq!(loaded.config_revision, 2);
         assert!(loaded.keybindings.build_action_map().is_ok());
     });
 }
 
+/// Every revision reads the same way now, because nothing about resolution
+/// depends on the stamp: an old file's authored shortcuts are authored, its
+/// omitted actions are offered defaults, and the stamp stays where it is for
+/// the configurator to act on.
 #[test]
-fn revision_one_config_still_gets_the_f2_split_but_not_the_palette_heuristic() {
+fn an_old_revision_resolves_by_presence_and_keeps_its_stamp() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&primary_dir).unwrap();
@@ -422,17 +444,93 @@ fn revision_one_config_still_gets_the_f2_split_but_not_the_palette_heuristic() {
 
         let loaded = Config::load().expect("load succeeds").config;
 
-        // The F2 split (revision 2) applies...
-        assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F9"]);
-        assert_eq!(loaded.keybindings.ui.cycle_toolbar_display, ["F2"]);
-        // ...but the revision-1 heuristic must not re-run against a pair
-        // that was deliberately kept at revision 1.
+        assert_eq!(loaded.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+        assert!(loaded.keybindings.ui.cycle_toolbar_display.is_empty());
         assert_eq!(loaded.keybindings.ui.toggle_command_palette, ["Ctrl+K"]);
         assert_eq!(
             loaded.keybindings.capture.capture_full_screen,
             ["Ctrl+Shift+P"]
         );
-        assert_eq!(loaded.config_revision, CURRENT_CONFIG_REVISION);
+        assert_eq!(loaded.config_revision, 1);
+    });
+}
+
+/// Source presence decides authorship, not value comparison: a list that spells
+/// out today's default is still the user's, and it outranks a default the file
+/// never mentions. Written the other way round, this is the bug that made a
+/// shipped default look authored and take a key from a binding that was.
+#[test]
+fn an_authored_list_equal_to_a_default_still_outranks_an_omitted_one() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        // `F2` is exactly what `cycle_toolbar_display` ships with, written here
+        // under `toggle_toolbar` instead.
+        fs::write(
+            primary_dir.join("config.toml"),
+            "[keybindings]\ntoggle_toolbar = ['F2']\n",
+        )
+        .unwrap();
+
+        let report = Config::load().expect("load succeeds").validation;
+
+        assert_eq!(report.skipped_default_shortcuts.len(), 1);
+        assert_eq!(
+            report.skipped_default_shortcuts[0].action(),
+            Action::CycleToolbarDisplay
+        );
+        assert!(report.keybinding_conflicts.is_empty());
+    });
+}
+
+/// An explicit empty list means unbound, and it says so at full volume: the
+/// action is authored, so no default is ever offered to it.
+#[test]
+fn an_explicit_empty_list_stays_unbound() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::write(
+            primary_dir.join("config.toml"),
+            "[keybindings]\nundo = []\ntoggle_input_hud = []\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds");
+
+        assert!(loaded.config.keybindings.core.undo.is_empty());
+        assert!(loaded.config.keybindings.ui.toggle_input_hud.is_empty());
+        assert!(
+            loaded.validation.is_empty(),
+            "unbinding an action is not a problem to report: {:?}",
+            loaded.validation
+        );
+    });
+}
+
+/// Two spellings of one chord in two authored lists is the user's conflict, and
+/// the keymap traversal order settles it. Nothing about presence changes that.
+#[test]
+fn two_authored_actions_claiming_one_chord_are_settled_by_traversal_order() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::write(
+            primary_dir.join("config.toml"),
+            "[keybindings]\nundo = ['ctrl+alt+u']\nredo = ['Ctrl+Alt+U']\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds");
+
+        assert_eq!(loaded.config.keybindings.core.undo, ["ctrl+alt+u"]);
+        assert!(loaded.config.keybindings.core.redo.is_empty());
+        assert_eq!(loaded.validation.keybinding_conflicts.len(), 1);
+        assert_eq!(
+            loaded.validation.keybinding_conflicts[0].kept(),
+            Action::Undo
+        );
+        assert!(loaded.validation.skipped_default_shortcuts.is_empty());
     });
 }
 
