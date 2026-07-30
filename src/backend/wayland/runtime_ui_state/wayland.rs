@@ -136,6 +136,44 @@ impl WaylandState {
         self.apply_toolbar_runtime_finish(finish);
     }
 
+    /// Persist both pin flags reached by the keyboard visibility toggle.
+    ///
+    /// The toggle already applied in `InputState`, so the pre-change pins
+    /// travel with the pending action and supply the preview's rollback.
+    /// Without a runtime store the toggle stays run-only, like the display
+    /// cycle in the same degraded mode.
+    pub(in crate::backend::wayland) fn persist_toolbar_visibility(
+        &mut self,
+        previous_top_pinned: bool,
+        previous_side_pinned: bool,
+    ) {
+        let target = ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility;
+        let rollback = match RuntimeUiMutationValues::batch([
+            (
+                InteractionSeedTarget::TopPinned,
+                InteractionSeedValue::Bool(previous_top_pinned),
+            ),
+            (
+                InteractionSeedTarget::SidePinned,
+                InteractionSeedValue::Bool(previous_side_pinned),
+            ),
+        ]) {
+            Ok(values) => values,
+            Err(error) => {
+                log::error!("Toolbar visibility toggle has invalid rollback values: {error:?}");
+                return;
+            }
+        };
+        let Some(runtime) = self.runtime_ui.as_mut() else {
+            return;
+        };
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+            return;
+        };
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
+        self.apply_toolbar_runtime_finish(finish);
+    }
+
     /// Reconcile runtime overrides and active previews after an authored
     /// config reload. The product's current reload path may still restart the
     /// daemon, but keeping this boundary complete prevents a future

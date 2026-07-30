@@ -102,8 +102,8 @@ fn toolbar_top_display_mode_defaults_to_full_and_round_trips() {
         assert_eq!(config.ui.toolbar.top_display_mode, expected);
     }
 
-    // Hidden never persists: like F9 visibility, startup is governed by
-    // `top_pinned`, so the persisted form collapses to full.
+    // Hidden never persists: startup is governed by `top_pinned` (the pins
+    // the F9 toggle records durably), so the persisted form collapses to full.
     assert_eq!(TopDisplayMode::Hidden.persisted(), TopDisplayMode::Full);
     assert_eq!(TopDisplayMode::Micro.persisted(), TopDisplayMode::Micro);
 }

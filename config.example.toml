@@ -512,6 +512,10 @@ layout_mode = "full"
 # show_text_controls = true
 
 # Show top toolbar on startup (pinned)
+# These are the authored defaults. The pin buttons and the toolbar toggle
+# keybinding update the remembered pinned state in runtime-ui.toml, which
+# overrides these values; editing a value again takes over from that saved
+# choice
 top_pinned = true
 
 # Show side toolbar on startup (pinned)

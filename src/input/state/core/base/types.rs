@@ -451,6 +451,14 @@ pub enum PendingBackendAction {
     /// for the runtime-UI preview's rollback; toolbar-event paths persist via
     /// their exact event-policy target instead.
     PersistToolbarDisplayMode(crate::config::TopDisplayMode),
+    /// Persist both pin flags driven by the keyboard visibility toggle.
+    /// The toggle already applied, so the payload carries the pre-change pins
+    /// for the runtime-UI preview's rollback; the pin buttons persist via
+    /// their exact event-policy targets instead.
+    PersistToolbarVisibility {
+        previous_top_pinned: bool,
+        previous_side_pinned: bool,
+    },
 }
 
 /// What a shortcut edit should do to one action's binding list.

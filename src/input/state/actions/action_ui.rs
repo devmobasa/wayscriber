@@ -130,6 +130,31 @@ impl InputState {
                 let now_visible = !self.toolbar_visible();
                 let changed = self.set_toolbar_visible(now_visible);
                 if changed {
+                    // The toggle is durable by driving the pin overrides — the
+                    // startup source of visibility — so a restart shows
+                    // exactly what this press left on screen. Implicit hides
+                    // (focus mode, presenter mode) bypass this path on purpose
+                    // and stay run-only.
+                    let previous_top_pinned = self.toolbar_top_pinned;
+                    let previous_side_pinned = self.toolbar_side_pinned;
+                    self.toolbar_top_pinned = now_visible;
+                    self.toolbar_side_pinned = now_visible;
+                    // Persist only when a pin actually moves. A show from a
+                    // cycle-hidden strip under the pill layout (and a hide
+                    // with both surfaces already unpinned) changes no pin:
+                    // the write would be byte-identical, and its only
+                    // observable effect would be a rollback that re-derives
+                    // pin-true visibility for a screen that was effectively
+                    // hidden before the press. The unfold itself stays
+                    // runtime-only, exactly like F2's hidden rung.
+                    if previous_top_pinned != now_visible || previous_side_pinned != now_visible {
+                        self.set_pending_backend_action(
+                            PendingBackendAction::PersistToolbarVisibility {
+                                previous_top_pinned,
+                                previous_side_pinned,
+                            },
+                        );
+                    }
                     self.pending_onboarding_usage.used_toolbar_toggle = true;
                     info!(
                         "Toolbar visibility {}",

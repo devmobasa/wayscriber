@@ -924,9 +924,10 @@ only its own key and copies the previous file to a timestamped `.bak` first. Run
 quitting Wayscriber never changes the file on its own. An incidental preference toggle applies to
 the current run and offers a route to the configurator screen that owns its default.
 
-Toolbar pins, dragged positions, the top strip's display form, minimized/pane/collapsed state,
-individual toolbar item visibility/order, and board pins changed in the overlay are direct
-interaction state and are saved separately in the generated
+Toolbar pins (updated by the pin buttons and by the toolbar show/hide keybinding, so the next
+start matches what was on screen), dragged positions, the top strip's display form,
+minimized/pane/collapsed state, individual toolbar item visibility/order, and board pins changed
+in the overlay are direct interaction state and are saved separately in the generated
 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
 preferences from the overlay Settings panel; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
 

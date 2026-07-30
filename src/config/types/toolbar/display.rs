@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 /// `Full` and `Micro` are persisted forms of the strip; `Hidden` is the
 /// runtime-only state the cycle action (`cycle_toolbar_display`, default
 /// F2) reaches between `Micro` and `Full`. Hidden is never written back to
-/// config — like the plain visibility toggle (F9), startup visibility is
-/// governed by `top_pinned`.
+/// config — startup visibility is governed by `top_pinned`, the same pins
+/// the plain visibility toggle (F9) records durably.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]

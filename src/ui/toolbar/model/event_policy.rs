@@ -62,6 +62,12 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     /// Top-strip form (`full`/`micro`). The runtime-only `hidden` rung of the
     /// cycle is folded to `full` when the override is computed.
     TopDisplayMode,
+    /// The durable form of the keyboard visibility toggle: both pin flags
+    /// persisted as one batched mutation, so a restart shows exactly what the
+    /// toggle left on screen. No `ToolbarEvent` maps to it — the pin buttons
+    /// keep their single-flag targets; this target serves the keyboard action
+    /// path only.
+    ToolbarVisibility,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

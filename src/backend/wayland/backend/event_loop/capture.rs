@@ -127,6 +127,12 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::PersistToolbarDisplayMode(previous) => {
                 state.persist_toolbar_display_mode(previous);
             }
+            PendingBackendAction::PersistToolbarVisibility {
+                previous_top_pinned,
+                previous_side_pinned,
+            } => {
+                state.persist_toolbar_visibility(previous_top_pinned, previous_side_pinned);
+            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {
