@@ -1,3 +1,12 @@
+//! Presenter mode: a snapshot-and-restore switch over the chrome, the tool
+//! override, the click highlight, and the input HUD.
+//!
+//! Only the tool override is session content; the chrome it hides is a
+//! this-run preference that `ToolStateSnapshot` deliberately excludes, so
+//! entering and leaving redraw without marking the session dirty. The tool
+//! override marks it through `set_tool_override`, where the change actually
+//! reaches the snapshot.
+
 use super::super::base::{InputState, PresenterRestore};
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
@@ -8,12 +17,8 @@ impl InputState {
         let config = self.presenter_mode_config.clone();
         if self.presenter_mode {
             self.presenter_mode = false;
-            let mut status_changed = false;
             if let Some(restore) = self.presenter_restore.take() {
                 if let Some(value) = restore.show_status_bar {
-                    if self.show_status_bar != value {
-                        status_changed = true;
-                    }
                     self.show_status_bar = value;
                 }
                 if let Some(value) = restore.show_tool_preview {
@@ -55,9 +60,6 @@ impl InputState {
             }
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
-            if status_changed {
-                self.mark_session_dirty();
-            }
             return self.presenter_mode;
         }
 
@@ -90,12 +92,8 @@ impl InputState {
         }
 
         self.cancel_active_interaction();
-        let mut status_changed = false;
         if config.hide_status_bar {
             restore.show_status_bar = Some(self.show_status_bar);
-            if self.show_status_bar {
-                status_changed = true;
-            }
             self.show_status_bar = false;
         }
         if config.hide_tool_preview {
@@ -151,9 +149,6 @@ impl InputState {
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
-        if status_changed {
-            self.mark_session_dirty();
-        }
         self.presenter_mode
     }
 }

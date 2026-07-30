@@ -5,7 +5,10 @@
 //! Mirrors the presenter-mode snapshot pattern (`presenter_mode.rs`), but
 //! for chrome only: no tool override, no click highlight, no config
 //! involvement — a pure runtime "clean screen" switch for recording or
-//! screenshots. Manual chrome toggles while active take ownership via
+//! screenshots. Nothing it moves reaches the session file either: chrome
+//! visibility is not part of `ToolStateSnapshot`, so entering, leaving, and
+//! the rescue arm all redraw without marking the session dirty. Manual chrome
+//! toggles while active take ownership via
 //! [`InputState::break_focus_mode`], so exiting later can never stomp an
 //! explicit user choice.
 
@@ -110,7 +113,6 @@ impl InputState {
         }
         if let Some(restore) = self.focus_mode_restore.take() {
             self.clear_focus_mode_toast();
-            let status_changed = self.show_status_bar != restore.show_status_bar;
             self.show_status_bar = restore.show_status_bar;
             self.toolbar_visible = restore.toolbar_visible;
             self.toolbar_top_visible = restore.toolbar_top_visible;
@@ -118,9 +120,6 @@ impl InputState {
             self.toolbar_top_display_mode = restore.toolbar_top_display_mode;
             self.show_floating_badge = restore.show_floating_badge;
             self.show_zoom_chip = restore.show_zoom_chip;
-            if status_changed {
-                self.mark_session_dirty();
-            }
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return;
@@ -140,7 +139,6 @@ impl InputState {
             self.show_status_bar = true;
             self.show_floating_badge = true;
             self.show_zoom_chip = true;
-            self.mark_session_dirty();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return;
@@ -155,7 +153,6 @@ impl InputState {
             show_floating_badge: self.show_floating_badge,
             show_zoom_chip: self.show_zoom_chip,
         };
-        let status_changed = self.show_status_bar;
         // Raw flags only: the display mode stays untouched so a micro strip
         // comes back as micro on restore.
         self.toolbar_visible = false;
@@ -177,9 +174,6 @@ impl InputState {
             FOCUS_MODE_TOAST_KEY,
             Toast::info("Focus mode — UI hidden").action(label, Action::ToggleFocusMode),
         );
-        if status_changed {
-            self.mark_session_dirty();
-        }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }

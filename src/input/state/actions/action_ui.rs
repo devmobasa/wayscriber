@@ -41,9 +41,14 @@ impl InputState {
                 }
                 self.break_focus_mode();
                 self.show_status_bar = !self.show_status_bar;
+                // Redraw only. Status-bar visibility is a this-run preference
+                // that no longer enters `ToolStateSnapshot`, so marking the
+                // session dirty here would claim a change the save cannot
+                // carry — and that false claim is what lets an oversized
+                // session that failed to restore be replaced, since its
+                // protection is exactly "nothing persisted changed".
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
-                self.mark_session_dirty();
                 if !self.show_status_bar {
                     self.warn_if_all_chrome_hidden();
                 }
