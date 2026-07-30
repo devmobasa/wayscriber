@@ -118,8 +118,11 @@ pub(super) fn run_event_loop(
         // a fade in flight (or a pending 4s idle dim) wakes the loop, and a
         // settled fade contributes nothing.
         let animation_timeout = min_timeout(
-            state.ui_animation_timeout(now),
-            state.top_strip_fade_timeout(now),
+            min_timeout(
+                state.ui_animation_timeout(now),
+                state.top_strip_fade_timeout(now),
+            ),
+            state.inline_toolbar_tooltip_timeout(now),
         );
         let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
@@ -298,7 +301,9 @@ pub(super) fn run_event_loop(
         // Advance the top-strip idle fade before the snapshot consumers
         // (GTK bridge below, layer/inline toolbar rendering inside
         // maybe_render) read `top_fade` for this pass.
-        state.update_top_strip_fade(Instant::now());
+        let now = Instant::now();
+        state.update_top_strip_fade(now);
+        state.update_inline_toolbar_tooltip(now);
 
         state.push_gtk_toolbar_update();
 

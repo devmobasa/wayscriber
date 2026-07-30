@@ -288,6 +288,13 @@ impl WaylandState {
             },
             other => other,
         };
+        // Built-in toolbar events mutate visuals on the main surface when the
+        // toolbars are inline. Refresh every SHM slot even for early-returning
+        // event paths (popover dismissal, rebind capture, session actions) so
+        // slot rotation cannot restore stale toolbar pixels.
+        if self.inline_toolbars_active() {
+            self.mark_inline_toolbar_full_damage();
+        }
         self.handle_toolbar_event_with_rebind(event, rebind_requested, conn, qh);
     }
 

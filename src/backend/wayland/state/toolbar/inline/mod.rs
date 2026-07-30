@@ -7,6 +7,54 @@ mod input;
 mod render;
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn mark_inline_toolbar_full_damage(&mut self) {
+        self.input_state
+            .dirty_tracker
+            .mark_full_for(crate::draw::DirtyFullReason::InlineToolbar);
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+    }
+
+    pub(in crate::backend::wayland) fn inline_toolbar_tooltip_timeout(
+        &self,
+        now: Instant,
+    ) -> Option<Duration> {
+        min_inline_tooltip_timeout(
+            inline_tooltip_timeout(
+                self.data.inline_top_tooltip_pending,
+                self.data.inline_top_hover_start,
+                now,
+            ),
+            inline_tooltip_timeout(
+                self.data.inline_side_tooltip_pending,
+                self.data.inline_side_hover_start,
+                now,
+            ),
+        )
+    }
+
+    pub(in crate::backend::wayland) fn update_inline_toolbar_tooltip(&mut self, now: Instant) {
+        let top_due = inline_tooltip_due(
+            self.data.inline_top_tooltip_pending,
+            self.data.inline_top_hover_start,
+            now,
+        );
+        let side_due = inline_tooltip_due(
+            self.data.inline_side_tooltip_pending,
+            self.data.inline_side_hover_start,
+            now,
+        );
+        if top_due {
+            self.data.inline_top_tooltip_pending = false;
+        }
+        if side_due {
+            self.data.inline_side_tooltip_pending = false;
+        }
+        if top_due || side_due {
+            self.mark_inline_toolbar_full_damage();
+        }
+    }
+
     pub(super) fn clear_inline_toolbar_hits(&mut self) {
         self.data.inline_top_hits.clear();
         self.data.inline_side_hits.clear();
@@ -17,6 +65,8 @@ impl WaylandState {
     pub(super) fn clear_inline_toolbar_hover(&mut self) {
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
+        self.data.inline_top_tooltip_pending = false;
+        self.data.inline_side_tooltip_pending = false;
     }
 
     pub(super) fn clear_inline_toolbar_focus(&mut self) {
@@ -77,5 +127,63 @@ impl WaylandState {
             return Some(ToolbarCursorHint::Default);
         }
         None
+    }
+}
+
+fn inline_tooltip_timeout(
+    pending: bool,
+    hover_start: Option<Instant>,
+    now: Instant,
+) -> Option<Duration> {
+    if !pending {
+        return None;
+    }
+    hover_start.map(|start| {
+        start
+            .checked_add(crate::backend::wayland::toolbar::render::TOOLTIP_DELAY)
+            .unwrap_or(start)
+            .saturating_duration_since(now)
+    })
+}
+
+fn inline_tooltip_due(pending: bool, hover_start: Option<Instant>, now: Instant) -> bool {
+    inline_tooltip_timeout(pending, hover_start, now) == Some(Duration::ZERO)
+}
+
+fn min_inline_tooltip_timeout(top: Option<Duration>, side: Option<Duration>) -> Option<Duration> {
+    match (top, side) {
+        (Some(top), Some(side)) => Some(top.min(side)),
+        (Some(timeout), None) | (None, Some(timeout)) => Some(timeout),
+        (None, None) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{inline_tooltip_due, inline_tooltip_timeout, min_inline_tooltip_timeout};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn inline_tooltip_timeout_reaches_zero_at_the_deadline() {
+        let start = Instant::now();
+        assert_eq!(
+            inline_tooltip_timeout(true, Some(start), start),
+            Some(crate::backend::wayland::toolbar::render::TOOLTIP_DELAY)
+        );
+        let due = start + crate::backend::wayland::toolbar::render::TOOLTIP_DELAY;
+        assert!(inline_tooltip_due(true, Some(start), due));
+        assert_eq!(inline_tooltip_timeout(false, Some(start), due), None);
+        assert_eq!(inline_tooltip_timeout(true, None, due), None);
+    }
+
+    #[test]
+    fn inline_tooltip_timeout_uses_the_earliest_pending_toolbar() {
+        assert_eq!(
+            min_inline_tooltip_timeout(
+                Some(Duration::from_millis(200)),
+                Some(Duration::from_millis(50)),
+            ),
+            Some(Duration::from_millis(50))
+        );
     }
 }

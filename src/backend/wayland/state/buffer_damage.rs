@@ -40,6 +40,7 @@ pub(in crate::backend::wayland) enum FullDamageReason {
     Spotlight,
     CanvasClear,
     FirstRunOnboarding,
+    InlineToolbar,
     EmptyDamageFallback,
     DamageRegionsCoverSurface,
     DamageRegionLimit,
@@ -64,6 +65,7 @@ impl FullDamageReason {
             Self::Spotlight => "spotlight",
             Self::CanvasClear => "canvas_clear",
             Self::FirstRunOnboarding => "first_run_onboarding",
+            Self::InlineToolbar => "inline_toolbar",
             Self::EmptyDamageFallback => "empty_damage_fallback",
             Self::DamageRegionsCoverSurface => "damage_regions_cover_surface",
             Self::DamageRegionLimit => "damage_region_limit",
@@ -524,6 +526,22 @@ mod tests {
         tracker.mark_all_full(FullDamageReason::CanvasClear);
         let explicit = tracker.take_buffer_damage_report(0x1000, 800, 600, TEST_GEN, TEST_SIZE);
         assert_eq!(explicit.full_reason, Some(FullDamageReason::CanvasClear));
+    }
+
+    #[test]
+    fn inline_toolbar_change_refreshes_every_swapchain_slot() {
+        let mut tracker = BufferDamageTracker::new(3);
+        for slot in [0x1000, 0x2000, 0x3000] {
+            let _ = tracker.take_buffer_damage_report(slot, 800, 600, TEST_GEN, TEST_SIZE);
+        }
+
+        tracker.mark_all_full(FullDamageReason::InlineToolbar);
+
+        for slot in [0x1000, 0x2000, 0x3000] {
+            let report = tracker.take_buffer_damage_report(slot, 800, 600, TEST_GEN, TEST_SIZE);
+            assert_eq!(report.regions, vec![Rect::new(0, 0, 800, 600).unwrap()]);
+            assert_eq!(report.full_reason, Some(FullDamageReason::InlineToolbar));
+        }
     }
 
     #[test]
