@@ -533,6 +533,20 @@ impl ConfigDocument {
         &self.source_path
     }
 
+    /// The file this document was read from and the only file its save may
+    /// write: the end of the config path's symlink chain, resolved through the
+    /// directories on the way as well as through its final component.
+    ///
+    /// This, not [`Self::source_path`], is the document's identity. A client
+    /// holding state about the configuration it has in hand — the
+    /// configurator's dismissed migration offer — has to key it here: with
+    /// `config.toml` a link into one profile among several, the path is the
+    /// same for every file it can name, and retargeting it makes the next load
+    /// a different configuration entirely.
+    pub fn destination(&self) -> &Path {
+        self.revision.destination()
+    }
+
     pub fn diagnostics(&self) -> &[ConfigDiagnostic] {
         &self.diagnostics
     }

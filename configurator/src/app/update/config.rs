@@ -201,7 +201,18 @@ impl ConfiguratorApp {
     /// The authored values are the ones to diff: proposing a change to a
     /// binding that only exists because loading dropped a contested key would
     /// offer the user an edit their file never contained.
+    ///
+    /// A dismissal answers the question for one file, so it survives a reload
+    /// of that same file and no other. With `config.toml` a link into one
+    /// profile among several, retargeting it and pressing Reload brings up a
+    /// configuration the user has never been asked about; keeping the earlier
+    /// answer would hide its offer until the app is restarted. The document's
+    /// destination is what tells the two apart — the path is the same either
+    /// way.
     fn refresh_migration_preview(&mut self, document: &ConfigDocument) {
+        if self.migration_dismissed.as_deref() != Some(document.destination()) {
+            self.migration_dismissed = None;
+        }
         self.migration_preview = MigrationPreview::for_authored_config(document.authored_config());
     }
 
@@ -214,19 +225,31 @@ impl ConfiguratorApp {
         };
 
         let mut applied = 0usize;
+        let mut kept = Vec::new();
         for change in preview.changes() {
             // A key this build has no field for cannot be shown or edited, so
             // it is left alone rather than written blind.
             let Some(field) = KeybindingField::from_field_key(change.config_key()) else {
                 continue;
             };
-            self.draft.keybindings.set(field, change.after().join(", "));
-            applied += 1;
+            // The preview was computed when the file loaded; the draft has been
+            // editable ever since. A field that no longer reads as the "before"
+            // the proposal was built from is the user's own edit, and applying
+            // the proposal's "after" over it would silently discard what they
+            // typed — so it is kept and reported instead.
+            if self.draft.keybindings.parses_to(field, change.before()) {
+                self.draft.keybindings.set(field, change.after().join(", "));
+                applied += 1;
+            } else if !self.draft.keybindings.parses_to(field, change.after()) {
+                kept.push(change.action_label());
+            }
         }
-        // Recording the revision is what stops the same proposal from coming
-        // back, and it is a draft change in its own right: a proposal whose
-        // shortcut text already matches what the draft shows still has to be
-        // savable.
+        // Apply answers the migration question even when the user's own edits
+        // cover every proposed field. Those edits are kept above; recording the
+        // revision says this generation was reviewed, not that every shipped
+        // default was copied verbatim. Without the stamp, customized fields make
+        // the recipes decline on the next load anyway, leaving an old revision
+        // while the status incorrectly promises the offer will return.
         self.draft.config_revision = Some(preview.proposed_revision());
         self.migration_preview = None;
         let label = if applied == 1 {
@@ -234,9 +257,15 @@ impl ConfiguratorApp {
         } else {
             "shortcut updates"
         };
-        self.status = StatusMessage::info(format!(
-            "Applied {applied} {label} to the draft. Nothing is written until you press Save."
-        ));
+        let mut message = format!("Applied {applied} {label} to the draft.");
+        if !kept.is_empty() {
+            message.push_str(&format!(
+                " Kept your edit to {}.",
+                list_with_overflow(&kept, ", ")
+            ));
+        }
+        message.push_str(" Nothing is written until you press Save.");
+        self.status = StatusMessage::info(message);
         self.refresh_dirty_flag();
 
         Task::none()
@@ -246,7 +275,15 @@ impl ConfiguratorApp {
         // Left silent on purpose: the status banner may be carrying the load
         // diagnostics for this file, and hiding the offer is not worth losing
         // them over.
-        self.migration_dismissed = true;
+        //
+        // Recorded against the file the offer was about, not the path that
+        // reached it: only a reload landing on that same file is the reload
+        // this answer covers. With no document loaded there is no offer on
+        // screen and nothing to answer.
+        self.migration_dismissed = self
+            .base_document
+            .as_ref()
+            .map(|document| document.destination().to_path_buf());
 
         Task::none()
     }
@@ -1014,6 +1051,212 @@ mod tests {
         assert!(
             app.pending_migration().is_none(),
             "pressing Reload is not the user asking again"
+        );
+    }
+
+    /// The label the offer itself gives a proposed field, so the assertions on
+    /// the status text stay in step with the wording the banner shows.
+    fn change_label(app: &ConfiguratorApp, config_key: &str) -> &'static str {
+        app.pending_migration()
+            .expect("a pending migration offer")
+            .changes()
+            .iter()
+            .find(|change| change.config_key() == config_key)
+            .expect("the offer proposes this key")
+            .action_label()
+    }
+
+    /// The preview is computed when the file loads and the draft is editable
+    /// from that moment on, so Apply must not assume the fields still read the
+    /// way the proposal was built from. The one the user retyped is theirs; the
+    /// one they left alone still migrates.
+    #[test]
+    fn applying_keeps_a_field_the_user_edited_and_migrates_the_rest() {
+        let (mut app, _dir, path) = app_with_config_file(LEGACY_REVISION_ZERO_CONFIG);
+        let edited_label = change_label(&app, "toggle_command_palette");
+        app.draft
+            .keybindings
+            .set(KeybindingField::ToggleCommandPalette, "Ctrl+M".to_string());
+
+        let _ = app.handle_migration_apply_requested();
+
+        assert_eq!(
+            app.draft
+                .keybindings
+                .value_for(KeybindingField::ToggleCommandPalette),
+            Some("Ctrl+M"),
+            "the user's own edit survives the migration they accepted"
+        );
+        assert_eq!(
+            app.draft
+                .keybindings
+                .value_for(KeybindingField::CaptureFullScreen),
+            Some("Ctrl+Alt+F"),
+            "a field the user never touched still migrates"
+        );
+        assert_eq!(
+            app.draft.config_revision,
+            Some(CURRENT_CONFIG_REVISION),
+            "one applied field is a migration, so the revision is recorded"
+        );
+        assert!(status_contains(&app.status, "Applied 1 shortcut update"));
+        assert!(
+            status_contains(&app.status, &format!("Kept your edit to {edited_label}")),
+            "the status has to name what it did not apply: {:?}",
+            app.status
+        );
+
+        let _ = save_draft(&mut app);
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "toggle_command_palette").as_deref(),
+            Some("toggle_command_palette = [\"Ctrl+M\"]")
+        );
+        assert_eq!(
+            config_setting(&contents, "capture_full_screen").as_deref(),
+            Some("capture_full_screen = [\"Ctrl+Alt+F\"]")
+        );
+    }
+
+    /// Comma spacing is formatting, not an edit: the draft reads its fields as
+    /// a comma-separated list, so text that parses to the proposal's "before"
+    /// is still the value the proposal was built from, however it is written.
+    #[test]
+    fn applying_is_not_defeated_by_the_spacing_of_an_untouched_field() {
+        // Revision 1 leaves the `toggle_toolbar` F2 split to propose, which is
+        // the migration whose "before" is a list of two.
+        let (mut app, _dir, _path) = app_with_config_file(
+            "config_revision = 1\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
+        );
+        assert_eq!(
+            app.draft
+                .keybindings
+                .value_for(KeybindingField::ToggleToolbar),
+            Some("F2, F9")
+        );
+        app.draft
+            .keybindings
+            .set(KeybindingField::ToggleToolbar, "F2,F9".to_string());
+
+        let _ = app.handle_migration_apply_requested();
+
+        assert_eq!(
+            app.draft
+                .keybindings
+                .value_for(KeybindingField::ToggleToolbar),
+            Some("F9"),
+            "the same list written without a space is not an edit to keep"
+        );
+        assert!(!status_contains(&app.status, "Kept your edit"));
+        assert_eq!(app.draft.config_revision, Some(CURRENT_CONFIG_REVISION));
+    }
+
+    /// Every proposed field already reads as its proposed value — the user
+    /// typed the migration themselves. Nothing is applied, but nothing is left
+    /// behind either, so the revision that stops the offer coming back is
+    /// still recorded.
+    #[test]
+    fn applying_records_the_revision_when_every_field_already_matches() {
+        let (mut app, _dir, _path) = app_with_config_file(LEGACY_REVISION_ZERO_CONFIG);
+        app.draft.keybindings.set(
+            KeybindingField::ToggleCommandPalette,
+            "Ctrl+K, Ctrl+Shift+P".to_string(),
+        );
+        app.draft
+            .keybindings
+            .set(KeybindingField::CaptureFullScreen, "Ctrl+Alt+F".to_string());
+
+        let _ = app.handle_migration_apply_requested();
+
+        assert_eq!(app.draft.config_revision, Some(CURRENT_CONFIG_REVISION));
+        assert!(status_contains(&app.status, "Applied 0 shortcut updates"));
+        assert!(!status_contains(&app.status, "Kept your edit"));
+        assert!(status_contains(&app.status, "until you press Save"));
+    }
+
+    /// The user's own edits can answer every proposed field without taking any
+    /// of the proposal's exact values. Apply keeps those edits, but it is still
+    /// an explicit answer to the migration question, so saving records the
+    /// revision and the resolved offer does not return on the next launch.
+    #[test]
+    fn a_fully_customized_apply_records_the_revision_without_reoffering() {
+        let (mut app, _dir, path) = app_with_config_file(LEGACY_REVISION_ZERO_CONFIG);
+        let palette_label = change_label(&app, "toggle_command_palette");
+        let capture_label = change_label(&app, "capture_full_screen");
+        app.draft
+            .keybindings
+            .set(KeybindingField::ToggleCommandPalette, "Ctrl+M".to_string());
+        app.draft
+            .keybindings
+            .set(KeybindingField::CaptureFullScreen, "Ctrl+M+F".to_string());
+        let _ = app.handle_migration_apply_requested();
+
+        assert_eq!(
+            app.draft.config_revision,
+            Some(CURRENT_CONFIG_REVISION),
+            "Apply records that every proposed field was reviewed"
+        );
+        assert!(status_contains(&app.status, "Applied 0 shortcut updates"));
+        assert!(status_contains(&app.status, palette_label));
+        assert!(status_contains(&app.status, capture_label));
+        assert!(
+            status_contains(&app.status, "until you press Save"),
+            "the status has to say the acknowledged revision is still only a draft: {:?}",
+            app.status
+        );
+
+        let _ = save_draft(&mut app);
+        let contents = read_config(&path);
+        assert_eq!(
+            config_setting(&contents, "config_revision"),
+            Some(format!("config_revision = {CURRENT_CONFIG_REVISION}")),
+            "saving records the reviewed migration generation"
+        );
+
+        load_config_file(&mut app, &path);
+        assert!(
+            app.pending_migration().is_none(),
+            "the user's custom values resolved the offer, so it stays answered after reload"
+        );
+    }
+
+    /// A dismissal answers the question about one configuration. With
+    /// `config.toml` a link into one profile among several, retargeting it and
+    /// pressing Reload brings up a file the user has never been asked about —
+    /// and the earlier answer must not hide its offer until a restart.
+    #[cfg(unix)]
+    #[test]
+    fn dismissal_follows_the_file_not_the_path_across_a_retarget() {
+        use std::os::unix::fs::symlink;
+
+        let dir = crate::test_temp::tempdir().expect("temporary test directory");
+        let first = dir.path().join("profile-a.toml");
+        let second = dir.path().join("profile-b.toml");
+        std::fs::write(&first, LEGACY_REVISION_ZERO_CONFIG).expect("write the first profile");
+        std::fs::write(&second, LEGACY_REVISION_ZERO_CONFIG).expect("write the second profile");
+        let link = dir.path().join("config.toml");
+        symlink(&first, &link).expect("link the config path at the first profile");
+
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        load_config_file(&mut app, &link);
+        assert!(app.pending_migration().is_some());
+
+        let _ = app.handle_migration_dismissed();
+        assert!(app.pending_migration().is_none());
+
+        load_config_file(&mut app, &link);
+        assert!(
+            app.pending_migration().is_none(),
+            "the same file reloaded is not the user asking again"
+        );
+
+        std::fs::remove_file(&link).expect("unlink the config path");
+        symlink(&second, &link).expect("retarget the config path at the second profile");
+        load_config_file(&mut app, &link);
+
+        assert!(
+            app.pending_migration().is_some(),
+            "a different file behind the same path has never been answered"
         );
     }
 

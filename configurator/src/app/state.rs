@@ -43,7 +43,10 @@ pub(crate) struct ConfiguratorApp {
     /// Held here rather than in `status` so an expired or replaced status
     /// message cannot take the offer away with it.
     pub(crate) migration_preview: Option<MigrationPreview>,
-    pub(crate) migration_dismissed: bool,
+    /// The document whose migration offer the user dismissed, named by the file
+    /// the config path resolved to rather than by the path itself. `None` while
+    /// no offer has been dismissed.
+    pub(crate) migration_dismissed: Option<PathBuf>,
     /// What validating the configuration the running Save is writing had to
     /// change in `[keybindings]`, held until that write reports back.
     ///
@@ -153,7 +156,7 @@ impl ConfiguratorApp {
             is_dirty: false,
             defaults_reset_pending: false,
             migration_preview: None,
-            migration_dismissed: false,
+            migration_dismissed: None,
             pending_save_validation: ConfigValidationReport::default(),
             last_backup_path: None,
             daemon_status: None,
@@ -191,11 +194,18 @@ impl ConfiguratorApp {
     /// The migration offer to show, if there is one to show.
     ///
     /// Dismissing hides the offer for the rest of this app run, including
-    /// across reloads: the user answered the question about this file, and
-    /// pressing Reload is not them asking it again. The next launch offers it
-    /// afresh, because the file still has the old revision.
+    /// across reloads of the same file: the user answered the question about
+    /// this configuration, and pressing Reload is not them asking it again. The
+    /// next launch offers it afresh, because the file still has the old
+    /// revision.
+    ///
+    /// The answer is about the file, not the path that reached it. A reload
+    /// that lands on a different file — `config.toml` retargeted to another
+    /// profile between the two — is a configuration the user has not been asked
+    /// about, so refreshing the preview clears the dismissal and its offer
+    /// shows.
     pub(crate) fn pending_migration(&self) -> Option<&MigrationPreview> {
-        if self.migration_dismissed {
+        if self.migration_dismissed.is_some() {
             return None;
         }
         self.migration_preview.as_ref()

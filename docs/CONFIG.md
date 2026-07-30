@@ -1586,9 +1586,15 @@ on disk untouched.
 never advances it and never rewrites the file. Instead, opening the configurator with an older
 revision shows a **Configuration update available** banner listing every proposed shortcut change as
 before → after. **Apply Update** changes the configurator draft only; nothing reaches disk until you
-press Save, which writes the reviewed changes together with the new revision. **Dismiss** hides the
-offer for that configurator run. Saving an unrelated setting without applying leaves both your old
-bindings and your old `config_revision` on disk.
+press Save, which writes the reviewed changes together with the new revision. A proposed field you
+edited in the draft yourself since the file loaded is kept as you typed it rather than overwritten,
+and the status says which ones it kept. Apply records the proposed revision even when your own edits
+cover every field: the revision says you reviewed this generation, not that every shipped default
+was copied verbatim, and it still reaches disk only when you press Save.
+**Dismiss** hides the offer for the rest of that configurator run, including across Reload — unless
+a reload lands on a different file, as it does when `config.toml` is a symlink you retarget at
+another profile, in which case that file's offer is shown. Saving an unrelated setting without
+applying leaves both your old bindings and your old `config_revision` on disk.
 
 The revisions so far: revision 1 split the command-palette and full-screen-capture defaults
 (`Ctrl+K` / `Ctrl+Shift+P` for the palette, `Ctrl+Alt+F` for capture); revision 2 moved `F2` out of
