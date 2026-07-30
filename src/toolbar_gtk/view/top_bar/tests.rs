@@ -1541,6 +1541,25 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         return;
     }
 
+    // The size budgets below are in spec pixels, so the widgets must be
+    // measured with the shipped metrics. Production installs this stylesheet
+    // in `Windows::new`; without it — and without a neutral font DPI — GTK
+    // sizes everything from the tester's desktop theme, and a text-scaling
+    // factor alone inflates the rows past the budgets' headroom.
+    let css_provider = gtk4::CssProvider::new();
+    css_provider.load_from_string(&crate::toolbar_gtk::css::stylesheet(1.0));
+    if let Some(display) = gtk4::gdk::Display::default() {
+        gtk4::style_context_add_provider_for_display(
+            &display,
+            &css_provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
+    if let Some(settings) = gtk4::Settings::default() {
+        settings.set_gtk_font_name(Some("Sans 11"));
+        settings.set_gtk_xft_dpi(96 * 1024);
+    }
+
     let state = make_test_input_state();
     let regular = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -2205,6 +2224,9 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         model::ToolbarSettingsModel::for_popover(&settings_snapshot).expect("settings model");
     let (settings_content, settings_updaters) =
         menu_top.build_settings_popover_content(&settings_snapshot, 1.0);
+    // Production parents popover content under the classed bar; measured
+    // standalone, the scoped stylesheet would never reach it.
+    settings_content.add_css_class("wayscriber-toolbar");
     let settings_scroller = settings_content
         .clone()
         .downcast::<gtk4::ScrolledWindow>()
