@@ -63,14 +63,37 @@ pub fn render_image_shape(
     h: i32,
     data: &EmbeddedImage,
 ) {
+    render_image_shape_frame(ctx, x, y, w, h, data, 0);
+}
+
+/// Renders an image shape showing `frame_index` of its animation when the
+/// image is an animated GIF with that frame already composited. Falls back to
+/// the static first-frame path (and its placeholder) otherwise, so frame 0 and
+/// non-animated images behave exactly as before.
+pub fn render_image_shape_frame(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    data: &EmbeddedImage,
+    frame_index: usize,
+) {
     if w == 0 || h == 0 {
+        return;
+    }
+    if let Some(surface) = super::animation::peek_frame(data, frame_index) {
+        blit_scaled_surface(ctx, x, y, w, h, &surface);
         return;
     }
     let Some(surface) = cached_surface(data) else {
         render_missing_image_placeholder(ctx, x, y, w, h);
         return;
     };
+    blit_scaled_surface(ctx, x, y, w, h, &surface);
+}
 
+fn blit_scaled_surface(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32, surface: &ImageSurface) {
     let width = w.saturating_abs().max(1) as f64;
     let height = h.saturating_abs().max(1) as f64;
     let draw_x = if w < 0 { x + w } else { x };
@@ -84,7 +107,7 @@ pub fn render_image_shape(
         width / surface.width().max(1) as f64,
         height / surface.height().max(1) as f64,
     );
-    let _ = ctx.set_source_surface(surface.as_ref(), 0.0, 0.0);
+    let _ = ctx.set_source_surface(surface, 0.0, 0.0);
     let _ = ctx.paint();
     let _ = ctx.restore();
 }
@@ -112,15 +135,19 @@ fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
 fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
     let format = format_from_mime_or_bytes(&data.mime_type, &data.bytes)?;
     let image = decode_rgba(format, &data.bytes).ok()?;
-    let width = image.width;
-    let height = image.height;
+    rgba_to_cairo_surface(image.width, image.height, &image.rgba)
+}
+
+/// Converts straight-alpha RGBA pixels into a premultiplied ARgb32 Cairo
+/// surface, handling stride padding and channel order per endianness.
+pub(super) fn rgba_to_cairo_surface(width: u32, height: u32, rgba: &[u8]) -> Option<ImageSurface> {
     if width == 0 || height == 0 {
         return None;
     }
 
     let stride = Format::ARgb32.stride_for_width(width).ok()? as usize;
     let mut pixels = vec![0u8; stride * height as usize];
-    for (row, source) in image.rgba.chunks_exact(width as usize * 4).enumerate() {
+    for (row, source) in rgba.chunks_exact(width as usize * 4).enumerate() {
         let offset = row * stride;
         let row_bytes = &mut pixels[offset..offset + width as usize * 4];
         for (pixel, out) in source.chunks_exact(4).zip(row_bytes.chunks_exact_mut(4)) {
@@ -148,7 +175,7 @@ fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
     .ok()
 }
 
-fn content_hash(bytes: &[u8]) -> u64 {
+pub(super) fn content_hash(bytes: &[u8]) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);
     hasher.finish()

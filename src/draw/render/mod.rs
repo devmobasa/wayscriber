@@ -1,5 +1,6 @@
 //! Cairo-based rendering functions for shapes.
 
+pub(crate) mod animation;
 mod background;
 mod blur;
 mod highlight;
@@ -16,6 +17,7 @@ mod types;
 pub use background::{fill_transparent, render_board_background};
 pub use blur::{BlurRectParams, render_blur_rect};
 pub use highlight::render_click_highlight;
+pub use image::render_image_shape_frame;
 #[allow(unused_imports)]
 pub use pressure_strokes::render_freehand_pressure_borrowed;
 pub(crate) use pressure_strokes::render_freehand_pressure_preview_borrowed;
