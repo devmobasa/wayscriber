@@ -211,14 +211,18 @@ pub(super) fn quarantine_entry(root: &Path, source: &Path, kind: QuarantineKind)
     let control_quarantine = quarantine_dir(root).join("control");
     let count = read_dir_bounded(&queue_quarantine, MAX_COMMAND_QUARANTINE_ENTRIES + 1)?.len()
         + read_dir_bounded(&control_quarantine, MAX_COMMAND_QUARANTINE_ENTRIES + 1)?.len();
-    if count >= MAX_COMMAND_QUARANTINE_ENTRIES {
-        // Collect instead of failing: the error would propagate out of
-        // claim_next and kill a running daemon over garbage entries. The
-        // admission lock is already held.
-        if let Err(error) = gc_quarantine_subdirs(root) {
-            unlock(&admission)?;
-            return Err(error);
-        }
+    // Collect when this insertion *would* reach the cap, not once it has:
+    // the entry about to be renamed in counts too, and a quarantine sitting
+    // exactly at the cap makes `ensure_capacity` reject every client command,
+    // so nothing would ever arrive to trigger the next collection. Collecting
+    // here (rather than failing) also keeps the error out of `claim_next`,
+    // where it would kill a running daemon over garbage entries. The
+    // admission lock is already held.
+    if count.saturating_add(1) >= MAX_COMMAND_QUARANTINE_ENTRIES
+        && let Err(error) = gc_quarantine_subdirs(root)
+    {
+        unlock(&admission)?;
+        return Err(error);
     }
     let before = fs::symlink_metadata(source)
         .with_context(|| format!("failed to identify quarantine source {}", source.display()))?;

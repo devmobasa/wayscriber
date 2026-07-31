@@ -158,13 +158,17 @@ fn inode_identity(path: &Path) -> Result<InodeIdentity> {
 
 fn quarantine_action(root: &Path, path: &Path, expected: InodeIdentity) -> Result<()> {
     let quarantine = quarantine_dir(root);
+    // Collect when this insertion *would* reach the cap, not once it has: the
+    // entry about to be renamed in counts too, and a quarantine left sitting
+    // exactly at the cap fails every capacity check until the next open.
+    // Collecting here (rather than failing) also keeps the error out of the
+    // claim path, where it would kill a running daemon over garbage entries.
     if fs::read_dir(&quarantine)?
         .take(MAX_ACTION_QUARANTINE + 1)
         .count()
+        .saturating_add(1)
         >= MAX_ACTION_QUARANTINE
     {
-        // Collect instead of failing: the error would propagate out of the
-        // claim path and kill a running daemon over garbage entries.
         super::linux::gc_quarantine_tail(&quarantine, super::linux::QUARANTINE_RETAINED_ENTRIES)?;
     }
     if inode_identity(path)? != expected {
