@@ -103,7 +103,11 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn handle_save_requested(&mut self) -> Task<Message> {
-        if self.is_saving {
+        // `is_loading` counts too: a reload replaces the draft and base
+        // document when it lands, so a save started underneath it would write
+        // the pre-reload draft and then be judged against a document it never
+        // saw — leaving stale fields marked clean and the next save rejected.
+        if self.is_saving || self.is_loading {
             return Task::none();
         }
         self.defaults_reset_pending = false;
@@ -677,6 +681,9 @@ mod tests {
     #[test]
     fn handle_save_requested_blocks_without_loaded_document() {
         let (mut app, _cmd) = ConfiguratorApp::new_app();
+        // A fresh app is still running its startup load; this test is about
+        // the load having finished without producing a document.
+        app.is_loading = false;
 
         let _ = app.handle_save_requested();
 
@@ -848,6 +855,33 @@ mod tests {
         assert!(status_contains(&app.status, "Ctrl+Shift"));
         assert!(status_contains(&app.status, "Clear Canvas"));
         assert!(status_contains(&app.status, "could not be parsed"));
+    }
+
+    /// A reload replaces the draft and base document when it lands, so a save
+    /// started underneath it would write the pre-reload draft and then be
+    /// judged against a document it never saw.
+    #[test]
+    fn save_is_refused_while_a_reload_is_in_flight() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (path, document) = temp_config_document("save-during-reload", "");
+        app.base_document = Some(document);
+        app.is_loading = true;
+        app.is_dirty = true;
+        let before = app.status.clone();
+
+        let _ = app.handle_save_requested();
+
+        assert!(
+            !app.is_saving,
+            "no save may start under an in-flight reload"
+        );
+        assert!(app.is_dirty, "the draft stays dirty for the next attempt");
+        assert_eq!(
+            format!("{:?}", app.status),
+            format!("{before:?}"),
+            "a refused save must not claim it is saving"
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
