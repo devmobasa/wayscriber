@@ -23,7 +23,7 @@ pub(super) fn save_recovery_snapshot(
         &payload.bytes,
         crate::durable_io::AtomicWriteOptions {
             overwrite: crate::durable_io::OverwriteMode::Replace,
-            permissions: crate::durable_io::PermissionPolicy::PreserveExistingOrMode(0o600),
+            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
             symlink: crate::durable_io::SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
@@ -197,7 +197,7 @@ fn write_session_marker(marker_path: &Path, label: &str) -> Result<()> {
         now_rfc3339().as_bytes(),
         crate::durable_io::AtomicWriteOptions {
             overwrite: crate::durable_io::OverwriteMode::Replace,
-            permissions: crate::durable_io::PermissionPolicy::PreserveExistingOrMode(0o600),
+            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
             symlink: crate::durable_io::SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,

@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::ErrorKind;
 #[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,6 +135,26 @@ pub(crate) fn open_session_artifact_for_read(path: &Path, no_follow: bool) -> Re
         .with_context(|| format!("failed to inspect opened session file {}", path.display()))?;
     ensure_regular_session_artifact(path, metadata)?;
     Ok(file)
+}
+
+/// Restrict an existing regular session artifact to its owner without
+/// following a symlink that raced into its path.
+#[cfg(unix)]
+pub(crate) fn make_session_artifact_private(path: &Path) -> Result<()> {
+    let file = open_session_artifact_for_read(path, true)?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .with_context(|| {
+            format!(
+                "failed to restrict session file {} to its owner",
+                path.display()
+            )
+        })?;
+    file.sync_all().with_context(|| {
+        format!(
+            "failed to sync private permissions for session file {}",
+            path.display()
+        )
+    })
 }
 
 fn raw_metadata(path: &Path, no_follow: bool) -> std::io::Result<Metadata> {

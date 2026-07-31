@@ -20,7 +20,7 @@ pub(super) fn backup_corrupt_session(
         &bytes,
         crate::durable_io::AtomicWriteOptions {
             overwrite: crate::durable_io::OverwriteMode::Replace,
-            permissions: crate::durable_io::PermissionPolicy::PreserveExistingOrMode(0o600),
+            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
             symlink: crate::durable_io::SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
@@ -82,6 +82,7 @@ pub(super) fn preserve_newer_version_session(
         let preserved_path = crate::session::append_path_suffix(session_path, &suffix);
 
         if preserved_already_holds(&preserved_path, bytes) {
+            crate::session::primary::make_session_artifact_private(&preserved_path)?;
             debug!(
                 "Newer-version session {} is already preserved at {}",
                 session_path.display(),
@@ -95,7 +96,7 @@ pub(super) fn preserve_newer_version_session(
             bytes,
             crate::durable_io::AtomicWriteOptions {
                 overwrite: crate::durable_io::OverwriteMode::CreateNew,
-                permissions: crate::durable_io::PermissionPolicy::PreserveExistingOrMode(0o600),
+                permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
                 symlink: crate::durable_io::SymlinkPolicy::Reject,
                 sync_file: true,
                 sync_parent: true,
@@ -140,11 +141,13 @@ pub(super) fn preserve_newer_version_session(
         // A previous fallback may already have established the required copy.
         // Trust it only after the same exact-byte verification as copy paths.
         if preserved_already_holds(&fallback_path, bytes) {
+            crate::session::primary::make_session_artifact_private(&fallback_path)?;
             return Ok(fallback_path);
         }
 
         match crate::session::artifacts::rename_artifact_no_replace(session_path, &fallback_path) {
             Ok(()) => {
+                crate::session::primary::make_session_artifact_private(&fallback_path)?;
                 crate::durable_io::sync_parent_dir(&fallback_path).with_context(|| {
                     format!(
                         "moved newer-version session to {}, but failed to sync its directory",

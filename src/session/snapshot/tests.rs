@@ -495,6 +495,8 @@ fn load_named_primary_rejects_symlink_without_following_target() {
 
 #[test]
 fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
+    use std::os::unix::fs::PermissionsExt;
+
     let temp = tempdir().unwrap();
     let named_path = temp.path().join("corrupt.wayscriber-session");
     std::fs::write(&named_path, b"{not valid json").expect("write corrupt named primary");
@@ -502,6 +504,13 @@ fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
     let mut options = SessionOptions::new(temp.path().join("configured"), "named-corrupt");
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
+    std::fs::write(options.backup_file_path(), b"older diagnostic bytes")
+        .expect("seed legacy backup");
+    std::fs::set_permissions(
+        options.backup_file_path(),
+        std::fs::Permissions::from_mode(0o644),
+    )
+    .expect("make legacy backup public");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("corrupt named primary should be handled");
@@ -523,6 +532,15 @@ fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
         std::fs::read(options.backup_file_path()).expect("backup bytes"),
         b"{not valid json",
         "named corrupt primary should still be backed up for diagnostics"
+    );
+    assert_eq!(
+        std::fs::metadata(options.backup_file_path())
+            .expect("backup metadata")
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600,
+        "replacing a legacy backup must not preserve its public mode"
     );
 }
 
@@ -1874,6 +1892,8 @@ fn load_snapshot_inner_skips_newer_versions() {
 /// — so the load has to preserve a copy first.
 #[test]
 fn newer_version_session_survives_downgrade_saves() {
+    use std::os::unix::fs::PermissionsExt;
+
     let temp = tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "downgrade");
     options.persist_transparent = true;
@@ -1894,6 +1914,15 @@ fn newer_version_session_survives_downgrade_saves() {
         std::fs::read(&copies[0]).expect("preserved copy exists"),
         newer_bytes,
         "runtime load must preserve the exact loaded bytes"
+    );
+    assert_eq!(
+        std::fs::metadata(&copies[0])
+            .expect("preserved copy metadata")
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600,
+        "a preserved newer-version session is private too"
     );
 
     save_snapshot(&sample_snapshot(), &options).expect("first post-downgrade save");
@@ -2439,7 +2468,14 @@ fn session_artifacts_are_private_to_their_owner() {
     options.persist_transparent = true;
 
     save_snapshot(&sample_snapshot(), &options).expect("save");
-    // A second save rotates the first into the backup slot.
+    // Simulate a primary written by a release that still used the default
+    // 0644 mode. A second save rotates it into the backup slot, which must
+    // tighten the legacy permissions rather than preserve them.
+    std::fs::set_permissions(
+        options.session_file_path(),
+        std::fs::Permissions::from_mode(0o644),
+    )
+    .expect("make legacy primary public");
     save_snapshot(&sample_snapshot(), &options).expect("second save");
 
     for path in [options.session_file_path(), options.backup_file_path()] {

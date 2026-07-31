@@ -468,6 +468,11 @@ fn save_snapshot_inner(
             })?;
             should_mark_backup_recoverable = true;
         } else if options.backup_retention > 0 {
+            // A session created by an older release may still be 0644. Tighten
+            // it before rotation so the backup does not preserve that legacy
+            // exposure. Opening through the session-artifact helper also
+            // refuses a symlink instead of chmodding its target.
+            crate::session::primary::make_session_artifact_private(&session_path)?;
             // rename replaces an existing backup atomically; removing it first
             // would only open a window in which no backup exists at all.
             fs::rename(&session_path, &backup_path).with_context(|| {
