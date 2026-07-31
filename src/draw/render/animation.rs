@@ -21,13 +21,21 @@ const ANIMATION_MAX_BYTES_PER_IMAGE: usize = 128 * 1024 * 1024;
 /// canvas layer cache precedent.
 const ANIMATION_CACHE_MAX_BYTES: usize = 256 * 1024 * 1024;
 
-/// Cheap animated-candidate check: canonical GIF mime or GIF magic bytes.
-/// True does not guarantee the payload animates (it may be single-frame,
-/// malformed, or over budget) — `step_to`/`first_frame_delay` settle that.
+/// Cheap GIF-format check: canonical GIF mime or GIF magic bytes.
 pub(crate) fn is_gif(data: &EmbeddedImage) -> bool {
     data.mime_type == "image/gif"
         || data.bytes.starts_with(b"GIF87a")
         || data.bytes.starts_with(b"GIF89a")
+}
+
+/// Returns whether the payload is a validated, within-budget multi-frame GIF.
+/// The metadata verdict is shared with paste validation and playback entry
+/// creation, so static fallbacks never acquire clocks or disable layer caches.
+pub(crate) fn is_animated_gif(data: &EmbeddedImage) -> bool {
+    if !is_gif(data) {
+        return false;
+    }
+    ANIMATION_CACHE.with(|cache| cache.borrow_mut().is_animated(data))
 }
 
 /// Outcome of stepping a playback clock forward.
@@ -110,6 +118,8 @@ struct AnimatedImage {
 
 enum AnimationEntry {
     Animated(AnimatedImage),
+    /// A valid GIF with only one frame.
+    Static,
     /// Exceeded a per-animation budget: kept as a cheap negative entry so the
     /// render path settles on the static fallback without re-decoding.
     TooLarge,
@@ -120,7 +130,7 @@ impl AnimationEntry {
     fn bytes_used(&self) -> usize {
         match self {
             AnimationEntry::Animated(animated) => animated.bytes_used,
-            AnimationEntry::TooLarge | AnimationEntry::Failed => 0,
+            AnimationEntry::Static | AnimationEntry::TooLarge | AnimationEntry::Failed => 0,
         }
     }
 }
@@ -157,17 +167,36 @@ impl AnimationCache {
             }
             return;
         }
-        let entry = match GifStreamDecoder::new(&data.bytes) {
-            Ok(decoder) => AnimationEntry::Animated(AnimatedImage {
-                frames: Vec::new(),
-                decoder: Some(Box::new(decoder)),
-                loop_count: None,
-                bytes_used: 0,
-            }),
+        // The paste-time budget verdict is authoritative: an over-budget GIF
+        // is classified static and must never animate "for a while" until a
+        // runtime cache limit happens to intervene. The metadata scan reads
+        // frame headers only (no LZW), and runs once per content.
+        let entry = match crate::image_decode::gif_animation_metadata_verdict(&data.bytes) {
+            Ok(crate::image_decode::AnimationVerdict::Animate(probe)) if probe.animated => {
+                match GifStreamDecoder::new(&data.bytes) {
+                    Ok(decoder) => AnimationEntry::Animated(AnimatedImage {
+                        frames: Vec::new(),
+                        decoder: Some(Box::new(decoder)),
+                        loop_count: None,
+                        bytes_used: 0,
+                    }),
+                    Err(_) => AnimationEntry::Failed,
+                }
+            }
+            Ok(crate::image_decode::AnimationVerdict::Animate(_)) => AnimationEntry::Static,
+            Ok(crate::image_decode::AnimationVerdict::StaticFallback { .. }) => {
+                AnimationEntry::TooLarge
+            }
             Err(_) => AnimationEntry::Failed,
         };
         self.order.push_back(key.clone());
         self.entries.insert(key.clone(), entry);
+    }
+
+    fn is_animated(&mut self, data: &EmbeddedImage) -> bool {
+        let key = AnimationKey::for_image(data);
+        self.ensure_entry(&key, data);
+        matches!(self.entries.get(&key), Some(AnimationEntry::Animated(_)))
     }
 
     fn step(&mut self, data: &EmbeddedImage, next_index: usize) -> FrameStep {
@@ -185,10 +214,20 @@ impl AnimationCache {
                 })
             } else if animated.decoder.is_none() {
                 StepOutcome::Ready(wrap_step(animated))
-            } else if animated.frames.len() >= MAX_ANIMATION_FRAMES {
-                StepOutcome::MarkTooLarge
             } else {
                 match decode_next_frame(animated) {
+                    // The frame cap trips only when a frame beyond it actually
+                    // decodes: a stream that reaches EOF at exactly the cap is
+                    // within budget and must wrap, not fall back to static.
+                    DecodeStep::Frame { added, .. }
+                        if animated.frames.len() > MAX_ANIMATION_FRAMES =>
+                    {
+                        // This frame was counted into the entry but never into
+                        // the cache total; undo so the negative-entry swap
+                        // subtracts exactly what the total once gained.
+                        animated.bytes_used = animated.bytes_used.saturating_sub(added);
+                        StepOutcome::MarkTooLarge
+                    }
                     DecodeStep::Frame { added, delay } => StepOutcome::Decoded {
                         added,
                         step: FrameStep::Frame {

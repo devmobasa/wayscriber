@@ -236,15 +236,17 @@ impl GifStreamDecoder {
         )
     }
 
-    /// NETSCAPE loop semantics: `None` = loop forever; `Some(n)` = play n
-    /// loops then hold the last frame. An absent extension plays once.
-    /// Reliable only after the first frame has been decoded, since the
-    /// extension precedes the first image descriptor in the stream.
+    /// Total playthroughs before holding the last frame; `None` = loop
+    /// forever. Browser semantics: the NETSCAPE count is the number of
+    /// *repetitions after* the initial playthrough, so `Finite(n)` plays
+    /// n + 1 times, and an absent extension plays once. Reliable only after
+    /// the first frame has been decoded, since the extension precedes the
+    /// first image descriptor in the stream.
     pub(crate) fn loop_count(&self) -> Option<u32> {
         match self.decoder.repeat() {
             gif::Repeat::Infinite => None,
             gif::Repeat::Finite(0) => Some(1),
-            gif::Repeat::Finite(n) => Some(u32::from(n)),
+            gif::Repeat::Finite(n) => Some(u32::from(n).saturating_add(1)),
         }
     }
 
@@ -613,10 +615,12 @@ mod tests {
     #[test]
     fn gif_loop_count_maps_netscape_semantics() {
         let frames = || [solid_frame(2, 2, RED, 10), solid_frame(2, 2, BLUE, 10)];
+        // Finite(n) means n repetitions after the first playthrough (browser
+        // semantics), so the total playthrough count is n + 1.
         let cases = [
             (None, Some(1)),
             (Some(gif::Repeat::Infinite), None),
-            (Some(gif::Repeat::Finite(3)), Some(3)),
+            (Some(gif::Repeat::Finite(3)), Some(4)),
         ];
         for (repeat, expected) in cases {
             let bytes = tiny_gif(2, 2, &frames(), repeat);

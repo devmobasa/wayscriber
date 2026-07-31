@@ -22,10 +22,24 @@ const MAX_URL_PAYLOAD_BYTES: usize = 8 * 1024;
 /// GIF on a slow link, short enough that a dead server cannot pin a paste.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(8);
 
+/// Sent as the User-Agent: hosts like Wikimedia return 403 to anonymous
+/// clients, and their policy asks applications to identify themselves with a
+/// way to reach the project.
+const FETCH_USER_AGENT: &str = concat!(
+    "wayscriber/",
+    env!("CARGO_PKG_VERSION"),
+    " (https://wayscriber.com)"
+);
+
 /// Attempts the rescue. `Some` carries a fully validated GIF paste result;
 /// `None` means "proceed with the negotiated snapshot" for any reason
 /// (no URL offered, not a `.gif`, fetch failed, bytes not a valid GIF).
 pub(super) fn rescue_animated_gif(offered: &[String]) -> Option<ClipboardPasteResult> {
+    // Builds made with WAYSCRIBER_NO_UPDATE_CHECK=1 promise no outbound
+    // requests at all; that promise covers this fetch too.
+    if crate::update_check::compiled_out() {
+        return None;
+    }
     let url = offered
         .iter()
         .filter_map(|mime| {
@@ -40,9 +54,17 @@ pub(super) fn rescue_animated_gif(offered: &[String]) -> Option<ClipboardPasteRe
         return None;
     }
 
-    log::info!("Clipboard offers no image/gif; fetching GIF source URL {url}");
-    let bytes = match crate::update_check::fetch_bytes(&url, FETCH_TIMEOUT, MAX_CLIPBOARD_GIF_BYTES)
-    {
+    // URLs can carry signed query parameters or credentials; log the host only.
+    log::info!(
+        "Clipboard offers no image/gif; fetching GIF from {}",
+        url_host(&url)
+    );
+    let bytes = match crate::update_check::fetch_bytes(
+        &url,
+        FETCH_TIMEOUT,
+        MAX_CLIPBOARD_GIF_BYTES,
+        FETCH_USER_AGENT,
+    ) {
         Ok(bytes) => bytes,
         Err(err) => {
             log::info!("GIF source fetch failed, falling back to the snapshot: {err}");
@@ -93,6 +115,15 @@ fn looks_utf16le(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0xff, 0xfe]) || bytes.iter().skip(1).step_by(2).take(8).any(|&b| b == 0)
 }
 
+/// Host portion of an already-validated `https://` URL, for logging. Strips
+/// any `user:password@` userinfo so credentials can never reach the log.
+fn url_host(url: &str) -> &str {
+    url.get(8..)
+        .and_then(|rest| rest.split(['/', '?', '#']).next())
+        .map(|authority| authority.rsplit('@').next().unwrap_or(authority))
+        .unwrap_or("<unparseable>")
+}
+
 /// HTTPS only, and the path (query/fragment ignored) must end in `.gif`.
 fn is_fetchable_gif_url(url: &str) -> bool {
     let https = url
@@ -116,12 +147,30 @@ mod tests {
         ));
         assert!(is_fetchable_gif_url("https://example.com/a.GIF?width=200"));
         assert!(is_fetchable_gif_url("https://example.com/a.gif#frag"));
+        assert!(is_fetchable_gif_url("HTTPS://example.com/a.gif"));
         assert!(!is_fetchable_gif_url("http://example.com/a.gif"));
         assert!(!is_fetchable_gif_url("https://example.com/a.png"));
         assert!(!is_fetchable_gif_url("https://example.com/gif"));
         assert!(!is_fetchable_gif_url("https://"));
         assert!(!is_fetchable_gif_url("file:///tmp/a.gif"));
         assert!(!is_fetchable_gif_url(""));
+    }
+
+    #[test]
+    fn logged_host_never_contains_credentials() {
+        assert_eq!(url_host("https://example.com/a.gif"), "example.com");
+        assert_eq!(
+            url_host("https://example.com:8443/a.gif"),
+            "example.com:8443"
+        );
+        assert_eq!(
+            url_host("https://user:secret@example.com/a.gif"),
+            "example.com"
+        );
+        assert_eq!(
+            url_host("https://user:se@cret@example.com/a.gif?tok=n"),
+            "example.com"
+        );
     }
 
     #[test]

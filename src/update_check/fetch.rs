@@ -11,6 +11,7 @@
 //! The request is a plain GET of a static file: no query string, no headers
 //! identifying the user, no cookies.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -19,9 +20,10 @@ use super::manifest::MAX_MANIFEST_BYTES;
 /// Programs tried in order; the first one present on the system wins.
 const FETCHERS: [&str; 2] = ["curl", "wget"];
 
-/// Download `url` and return its body.
+/// Download `url` and return its body. The manifest request stays fully
+/// anonymous: no user-agent at all.
 pub(crate) fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
-    let bytes = fetch_bytes(url, timeout, MAX_MANIFEST_BYTES)?;
+    let bytes = fetch_bytes(url, timeout, MAX_MANIFEST_BYTES, "")?;
     String::from_utf8(bytes).map_err(|_| "release manifest is not valid UTF-8".to_string())
 }
 
@@ -30,13 +32,18 @@ pub(crate) fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
 /// Shared beyond the update check (the clipboard paste worker rescues animated
 /// GIFs from browser source URLs with it): same broker ownership, HTTPS
 /// pinning, size cap, and user-config suppression as the manifest fetch.
+///
+/// `user_agent` is sent verbatim; empty suppresses the header entirely. Hosts
+/// like Wikimedia refuse anonymous clients with a 403, so callers fetching
+/// third-party content should identify the application.
 pub(crate) fn fetch_bytes(
     url: &str,
     timeout: Duration,
     max_bytes: usize,
+    user_agent: &str,
 ) -> Result<Vec<u8>, String> {
     fetch_with(url, timeout, |program, url, timeout| {
-        run_fetcher(program, url, timeout, max_bytes)
+        run_fetcher(program, url, timeout, max_bytes, user_agent)
     })
 }
 
@@ -45,12 +52,22 @@ fn fetch_with(
     timeout: Duration,
     mut run: impl FnMut(&str, &str, Duration) -> Result<Vec<u8>, FetchError>,
 ) -> Result<Vec<u8>, String> {
-    if !url.starts_with("https://") {
+    let Some(scheme) = url.get(..8) else {
+        return Err("refusing to fetch a non-HTTPS URL".to_string());
+    };
+    if !scheme.eq_ignore_ascii_case("https://") {
         return Err("refusing to fetch a non-HTTPS URL".to_string());
     }
+    // Validators accept the URI scheme case-insensitively. Normalize it before
+    // invoking system clients so every accepted URL follows the same path.
+    let normalized_url = if scheme == "https://" {
+        Cow::Borrowed(url)
+    } else {
+        Cow::Owned(format!("https://{}", &url[8..]))
+    };
 
     for program in FETCHERS {
-        match run(program, url, timeout) {
+        match run(program, normalized_url.as_ref(), timeout) {
             Ok(body) => return Ok(body),
             // Not installed: fall through to the next client.
             Err(FetchError::Unavailable) => continue,
@@ -75,12 +92,13 @@ fn run_fetcher(
     url: &str,
     timeout: Duration,
     max_bytes: usize,
+    user_agent: &str,
 ) -> Result<Vec<u8>, FetchError> {
     let Some(program_path) = find_in_path(program) else {
         return Err(FetchError::Unavailable);
     };
 
-    let arguments = fetch_arguments(program, url, timeout, max_bytes);
+    let arguments = fetch_arguments(program, url, timeout, max_bytes, user_agent);
     let output = crate::process_broker::current()
         .and_then(|broker| {
             broker.run(
@@ -147,7 +165,7 @@ fn failure_detail(program: &str, stderr: &str, code: Option<i32>) -> String {
     }
     match (program, code) {
         (_, None) => "killed by a signal".to_string(),
-        ("curl", Some(6)) => "could not resolve wayscriber.com".to_string(),
+        ("curl", Some(6)) => "could not resolve host".to_string(),
         ("curl", Some(7)) => "could not connect".to_string(),
         ("curl", Some(22)) => "server returned an error response".to_string(),
         ("curl", Some(28)) => "request timed out".to_string(),
@@ -163,7 +181,13 @@ fn failure_detail(program: &str, stderr: &str, code: Option<i32>) -> String {
 /// Command line for one fetcher. HTTPS is enforced across redirects, the
 /// response is size-capped, and the whole request is time-boxed so a hung
 /// server cannot pin a thread.
-fn fetch_arguments(program: &str, url: &str, timeout: Duration, max_bytes: usize) -> Vec<String> {
+fn fetch_arguments(
+    program: &str,
+    url: &str,
+    timeout: Duration,
+    max_bytes: usize,
+    user_agent: &str,
+) -> Vec<String> {
     let seconds = timeout.as_secs().max(1).to_string();
     match program {
         "curl" => vec![
@@ -175,9 +199,10 @@ fn fetch_arguments(program: &str, url: &str, timeout: Duration, max_bytes: usize
             "--fail".into(),
             "--silent".into(),
             "--show-error".into(),
-            // Do not turn the system client's version into request metadata.
+            // Never the system client's version: either the caller's identity
+            // or nothing at all.
             "--user-agent".into(),
-            String::new(),
+            user_agent.to_string(),
             "--location".into(),
             "--proto".into(),
             "=https".into(),
@@ -201,7 +226,7 @@ fn fetch_arguments(program: &str, url: &str, timeout: Duration, max_bytes: usize
             "--no-config".into(),
             // Wget otherwise identifies itself as Wget/VERSION and can consult
             // ~/.netrc for credentials even when its config files are off.
-            "--user-agent=".into(),
+            format!("--user-agent={user_agent}"),
             "--no-netrc".into(),
             "--no-verbose".into(),
             "--output-document=-".into(),
@@ -228,12 +253,26 @@ mod tests {
     }
 
     #[test]
+    fn uppercase_https_scheme_is_normalized_before_fetching() {
+        let mut requested = None;
+        let body = fetch_with("HTTPS://example.com/a.gif", Duration::ZERO, |_, url, _| {
+            requested = Some(url.to_string());
+            Ok(b"gif".to_vec())
+        })
+        .unwrap();
+
+        assert_eq!(requested.as_deref(), Some("https://example.com/a.gif"));
+        assert_eq!(body, b"gif");
+    }
+
+    #[test]
     fn curl_arguments_pin_https_and_bound_the_request() {
         let args = fetch_arguments(
             "curl",
             "https://wayscriber.com/latest.json",
             Duration::from_secs(5),
             MAX_MANIFEST_BYTES,
+            "",
         );
 
         // User config must be ignored, and curl only honors this as arg one.
@@ -260,6 +299,7 @@ mod tests {
             "https://wayscriber.com/latest.json",
             Duration::from_secs(7),
             MAX_MANIFEST_BYTES,
+            "",
         );
 
         assert!(args.contains(&"--no-config".to_string()));
@@ -283,6 +323,10 @@ mod tests {
             "server returned an error response"
         );
         assert_eq!(failure_detail("curl", "", Some(28)), "request timed out");
+        assert_eq!(
+            failure_detail("curl", "", Some(6)),
+            "could not resolve host"
+        );
         assert_eq!(failure_detail("curl", "", Some(99)), "exit status 99");
         assert_eq!(failure_detail("curl", "", None), "killed by a signal");
     }
@@ -298,6 +342,7 @@ mod tests {
                 "https://wayscriber.com/latest.json",
                 Duration::from_secs(5),
                 MAX_MANIFEST_BYTES,
+                "",
             );
             let suppressor = if program == "curl" {
                 "--disable"
@@ -318,6 +363,7 @@ mod tests {
             "https://wayscriber.com/latest.json",
             Duration::from_secs(5),
             MAX_MANIFEST_BYTES,
+            "",
         );
         assert!(
             curl.windows(2).any(|pair| pair == ["--user-agent", ""]),
@@ -329,6 +375,7 @@ mod tests {
             "https://wayscriber.com/latest.json",
             Duration::from_secs(5),
             MAX_MANIFEST_BYTES,
+            "",
         );
         assert!(wget.contains(&"--user-agent=".to_string()));
         assert!(wget.contains(&"--no-netrc".to_string()));
@@ -341,8 +388,33 @@ mod tests {
             "https://wayscriber.com/latest.json",
             Duration::ZERO,
             MAX_MANIFEST_BYTES,
+            "",
         );
         assert!(args.windows(2).any(|pair| pair == ["--max-time", "1"]));
+    }
+
+    #[test]
+    fn a_caller_supplied_user_agent_reaches_both_clients() {
+        let curl = fetch_arguments(
+            "curl",
+            "https://example.com/a.gif",
+            Duration::from_secs(5),
+            MAX_MANIFEST_BYTES,
+            "wayscriber/1.0",
+        );
+        assert!(
+            curl.windows(2)
+                .any(|pair| pair == ["--user-agent", "wayscriber/1.0"])
+        );
+
+        let wget = fetch_arguments(
+            "wget",
+            "https://example.com/a.gif",
+            Duration::from_secs(5),
+            MAX_MANIFEST_BYTES,
+            "wayscriber/1.0",
+        );
+        assert!(wget.contains(&"--user-agent=wayscriber/1.0".to_string()));
     }
 
     #[test]
@@ -352,6 +424,7 @@ mod tests {
             "https://example.com/a.gif",
             Duration::from_secs(5),
             8 * 1024 * 1024,
+            "",
         );
         assert!(
             args.windows(2)

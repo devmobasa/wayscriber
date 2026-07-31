@@ -155,7 +155,7 @@ impl WaylandState {
         self.canvas_transform_active()
             && !self.zoom.active
             && self.frozen.image().is_none()
-            && !self.input_state.active_frame_has_gif_image()
+            && !self.input_state.active_frame_has_animated_gif()
     }
 
     /// Ensures the layer cache covers the current view with current content,

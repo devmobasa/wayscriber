@@ -205,18 +205,30 @@ fn offscreen_entries_freeze_without_deadlines() {
 }
 
 #[test]
-fn single_frame_gif_settles_as_finished_static() {
+fn single_frame_gif_never_gets_playback_or_disables_layer_caching() {
     let mut state = create_test_input_state();
     let id = add_gif_shape(&mut state, test_gif(&[0], 5, None));
-    let mut now = Instant::now();
-    state.advance_gif_animations(now, VIEW, None);
-    now += Duration::from_millis(60);
+    let now = Instant::now();
     state.advance_gif_animations(now, VIEW, None);
 
-    assert_eq!(state.gif_playback_running(id), Some(false));
+    assert_eq!(state.gif_playback_running(id), None);
+    assert!(state.gif_frame_indices().is_empty());
     assert!(
         !state.gif_frames_due(now + Duration::from_secs(1), VIEW),
-        "static GIFs stop contributing deadlines"
+        "single-frame GIFs contribute no deadlines"
+    );
+    assert!(
+        !state.active_frame_has_animated_gif(),
+        "single-frame GIFs may use the canvas layer cache"
+    );
+
+    state.open_context_menu((0, 0), vec![id], ContextMenuKind::Shape, None);
+    assert!(
+        state
+            .context_menu_entries()
+            .iter()
+            .all(|entry| !entry.label.contains("GIF")),
+        "single-frame GIFs expose no playback controls"
     );
 }
 
@@ -239,6 +251,208 @@ fn non_gif_images_get_no_playback_entries() {
     state.advance_gif_animations(now, VIEW, None);
     assert!(state.gif_frame_indices().is_empty());
     assert!(state.gif_frame_timeout(now, VIEW).is_none());
+}
+
+#[test]
+fn resuming_a_finished_finite_loop_gif_replays_from_frame_zero() {
+    let mut state = create_test_input_state();
+    // NETSCAPE Finite(1) = one repeat after the first playthrough: two plays.
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Finite(1))),
+    );
+    let mut now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+    for _ in 0..6 {
+        now += Duration::from_millis(60);
+        state.advance_gif_animations(now, VIEW, None);
+    }
+    assert_eq!(state.gif_playback_running(id), Some(false));
+    assert_eq!(state.gif_frame_indices().get(&id), Some(&1));
+
+    // A later render observes the current animation budget even though the
+    // finished clock itself has nothing to advance.
+    let floor = Some(Duration::from_millis(200));
+    state.advance_gif_animations(now, VIEW, floor);
+
+    // Play rewinds to frame 0 and holds it for its own delay: renders always
+    // advance before painting, so an immediate deadline would skip frame 0.
+    // Its 50 ms raw delay must also retain the configured 200 ms floor.
+    assert_eq!(state.toggle_gif_playback(id, now), Some(true));
+    assert_eq!(state.gif_frame_indices().get(&id), Some(&0));
+    assert!(
+        !state.gif_frames_due(now, VIEW),
+        "frame 0 must survive the render that follows the restart"
+    );
+    assert!(!state.gif_frames_due(now + Duration::from_millis(120), VIEW));
+    assert!(state.gif_frames_due(now + Duration::from_millis(210), VIEW));
+    state.advance_gif_animations(now, VIEW, floor);
+    assert_eq!(state.gif_frame_indices().get(&id), Some(&0));
+
+    // ...then the loop replays fully and finishes on the last frame again.
+    let mut steps = 0;
+    while state.gif_playback_running(id) == Some(true) && steps < 10 {
+        now += Duration::from_millis(210);
+        state.advance_gif_animations(now, VIEW, floor);
+        steps += 1;
+    }
+    assert_eq!(state.gif_playback_running(id), Some(false));
+    assert_eq!(state.gif_frame_indices().get(&id), Some(&1));
+    assert!(
+        steps >= 4,
+        "a restart replays both playthroughs, got {steps} steps"
+    );
+}
+
+#[test]
+fn page_switch_never_leaks_playback_state_to_matching_shape_ids() {
+    let mut state = create_test_input_state();
+    let first_page_id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    let mut now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+    now += Duration::from_millis(60);
+    state.advance_gif_animations(now, VIEW, None);
+    assert_eq!(state.gif_frame_indices().get(&first_page_id), Some(&1));
+    state.toggle_gif_playback(first_page_id, now);
+    assert_eq!(state.gif_playback_running(first_page_id), Some(false));
+
+    // A fresh page assigns the same frame-local id to an unrelated GIF.
+    state.boards.new_page();
+    let second_page_id = add_gif_shape(
+        &mut state,
+        test_gif(&[1, 0], 5, Some(gif::Repeat::Infinite)),
+    );
+    assert_eq!(
+        first_page_id, second_page_id,
+        "ids restart per frame; this test needs the collision"
+    );
+
+    now += Duration::from_millis(60);
+    state.advance_gif_animations(now, VIEW, None);
+    assert_eq!(
+        state.gif_playback_running(second_page_id),
+        Some(true),
+        "the new page's GIF must not inherit the old page's paused entry"
+    );
+    assert_eq!(
+        state.gif_frame_indices().get(&second_page_id),
+        Some(&0),
+        "playback starts at frame 0, not the old page's frame"
+    );
+}
+
+#[test]
+fn board_deletion_never_leaks_playback_state_to_the_replacement_board() {
+    let mut state = create_test_input_state();
+    state.switch_board(crate::input::BOARD_ID_BLACKBOARD);
+    let deleted_board_gif = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    let mut now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+    now += Duration::from_millis(60);
+    state.advance_gif_animations(now, VIEW, None);
+    state.toggle_gif_playback(deleted_board_gif, now);
+    assert_eq!(state.gif_playback_running(deleted_board_gif), Some(false));
+
+    // Deleting the active board slides another board into its place; board
+    // indices are reused, so only the board *id* in the frame key protects us.
+    state.delete_active_board();
+    state.delete_active_board();
+    assert_ne!(state.board_id(), crate::input::BOARD_ID_BLACKBOARD);
+
+    let replacement_gif = add_gif_shape(
+        &mut state,
+        test_gif(&[1, 0], 5, Some(gif::Repeat::Infinite)),
+    );
+    assert_eq!(
+        deleted_board_gif, replacement_gif,
+        "ids restart per frame; this test needs the collision"
+    );
+
+    now += Duration::from_millis(60);
+    state.advance_gif_animations(now, VIEW, None);
+    assert_eq!(
+        state.gif_playback_running(replacement_gif),
+        Some(true),
+        "the replacement board's GIF must not inherit the deleted board's paused entry"
+    );
+    assert_eq!(state.gif_frame_indices().get(&replacement_gif), Some(&0));
+}
+
+#[test]
+fn an_over_budget_gif_never_animates_at_all() {
+    let mut state = create_test_input_state();
+    // One frame past the cap: the paste-time verdict classifies this static,
+    // so playback must honor that immediately rather than animating hundreds
+    // of frames until a runtime cache limit happens to intervene.
+    let colors: Vec<u8> = (0..=crate::image_decode::MAX_ANIMATION_FRAMES)
+        .map(|i| (i % 2) as u8)
+        .collect();
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&colors, 5, Some(gif::Repeat::Infinite)),
+    );
+    let mut now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+
+    for _ in 0..5 {
+        now += Duration::from_millis(60);
+        state.advance_gif_animations(now, VIEW, None);
+    }
+
+    assert_eq!(
+        state.gif_playback_running(id),
+        None,
+        "an over-budget GIF gets no playback clock at all"
+    );
+    assert!(
+        state.gif_frame_indices().is_empty(),
+        "no frame index means the render path uses the static first frame"
+    );
+    assert!(
+        !state.gif_frames_due(now + Duration::from_secs(1), VIEW),
+        "an over-budget GIF contributes no deadlines"
+    );
+    assert!(
+        !state.active_frame_has_animated_gif(),
+        "an over-budget GIF may use the canvas layer cache"
+    );
+}
+
+#[test]
+fn a_gif_at_exactly_the_frame_cap_loops_instead_of_going_static() {
+    let mut state = create_test_input_state();
+    let colors: Vec<u8> = (0..crate::image_decode::MAX_ANIMATION_FRAMES)
+        .map(|i| (i % 2) as u8)
+        .collect();
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&colors, 5, Some(gif::Repeat::Infinite)),
+    );
+    let mut now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+
+    // Step through the entire animation and across the wrap boundary.
+    for _ in 0..colors.len() + 1 {
+        now += Duration::from_millis(60);
+        state.advance_gif_animations(now, VIEW, None);
+    }
+
+    assert_eq!(
+        state.gif_playback_running(id),
+        Some(true),
+        "an exactly-at-cap GIF is within budget and must keep playing"
+    );
+    assert_eq!(
+        state.gif_frame_indices().get(&id),
+        Some(&1),
+        "playback wrapped through frame 0 back to frame 1"
+    );
 }
 
 #[test]
@@ -286,15 +500,15 @@ fn context_menu_offers_playback_toggle_for_animated_gifs_only() {
 }
 
 #[test]
-fn presence_check_tracks_content_changes() {
+fn animated_gif_presence_check_tracks_content_changes() {
     let mut state = create_test_input_state();
-    assert!(!state.active_frame_has_gif_image());
+    assert!(!state.active_frame_has_animated_gif());
 
     let id = add_gif_shape(&mut state, test_gif(&[0, 1], 5, None));
     state.invalidate_hit_cache();
-    assert!(state.active_frame_has_gif_image());
+    assert!(state.active_frame_has_animated_gif());
 
     state.boards.active_frame_mut().remove_shape_by_id(id);
     state.invalidate_hit_cache();
-    assert!(!state.active_frame_has_gif_image());
+    assert!(!state.active_frame_has_animated_gif());
 }
