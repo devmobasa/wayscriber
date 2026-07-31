@@ -5,6 +5,7 @@ pub(crate) mod color_picker_popup;
 mod command_palette;
 mod dirty;
 mod eyedropper;
+mod gif_playback;
 mod highlight_controls;
 mod history;
 mod ime;

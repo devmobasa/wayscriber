@@ -53,6 +53,14 @@ impl Rect {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 
+    /// Returns true if the rectangles overlap by at least one pixel.
+    pub fn intersects(&self, other: &Rect) -> bool {
+        self.x < other.x.saturating_add(other.width)
+            && other.x < self.x.saturating_add(self.width)
+            && self.y < other.y.saturating_add(other.height)
+            && other.y < self.y.saturating_add(self.height)
+    }
+
     /// Returns a new rectangle inflated by `amount` in all directions.
     pub fn inflated(&self, amount: i32) -> Option<Self> {
         if amount == 0 {

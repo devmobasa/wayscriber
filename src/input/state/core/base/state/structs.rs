@@ -33,6 +33,7 @@ use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest, PendingBoardRuntimeUiAction};
+use crate::input::state::core::gif_playback::GifPlaybackRegistry;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::state::input_hud::InputHudState;
 use crate::input::{
@@ -435,6 +436,8 @@ pub struct InputState {
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
     pub(crate) click_highlight: ClickHighlightState,
+    /// Runtime playback clocks for animated GIF shapes on the active frame
+    pub(in crate::input::state::core) gif_playback: GifPlaybackRegistry,
     /// On-screen input HUD (keystroke/click chips) state
     pub(crate) input_hud: InputHudState,
     /// Optional tool override independent of modifier keys

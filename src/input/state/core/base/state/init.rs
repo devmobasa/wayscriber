@@ -224,6 +224,7 @@ impl InputState {
             pending_text_paste: Default::default(),
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
+            gif_playback: Default::default(),
             input_hud: InputHudState::new(InputHudSettings::default()),
             tool_override: None,
             selection_state: SelectionState::None,
