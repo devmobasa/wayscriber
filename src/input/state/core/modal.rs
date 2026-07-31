@@ -40,12 +40,13 @@ impl ModalSurface {
 
     /// Whether opening `self` leaves an open `other` in place. Exclusion is
     /// the default; every entry here is a deliberate pairing.
+    ///
+    /// The tour is deliberately *not* an exception: it consumes every key
+    /// (`tour.rs` swallows the unmatched arm) and covers the overlay, so a
+    /// surface opened underneath it — a toolbar click during the tour reaches
+    /// the openers — would receive neither keyboard nor pointer input.
     fn keeps_open(self, other: ModalSurface) -> bool {
         match (self, other) {
-            // The tour guides the user into opening other surfaces, so an
-            // opener must not end it. The palette is the historical
-            // exception: opening it has always dismissed the tour.
-            (opening, ModalSurface::Tour) => opening != ModalSurface::CommandPalette,
             // The board picker's page rows have their own context menus, so a
             // context menu opening over the picker is part of using it. The
             // picker still closes any context menu when *it* opens.
@@ -94,14 +95,11 @@ impl InputState {
     /// drops them.
     pub(crate) fn close_modal(&mut self, surface: ModalSurface) {
         match surface {
-            ModalSurface::Tour => {
-                // The palette has always dismissed the tour by clearing the
-                // flag rather than routing through end_tour's bookkeeping;
-                // keep that until the tour interplay is redesigned.
-                self.tour_active = false;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
+            // Through end_tour, not a bare flag clear: the tour hides pinned
+            // toolbar chrome and end_tour is what restores it. The palette's
+            // old shortcut cleared the flag directly and left the toolbars
+            // hidden.
+            ModalSurface::Tour => self.end_tour(),
             ModalSurface::CommandPalette => {
                 self.command_palette_open = false;
                 self.clear_command_palette_repeat();

@@ -3,7 +3,7 @@
 //! Before the registry, each opener hand-wrote the surfaces it closes and the
 //! lists disagreed — a surface opened from a pointer path could land on top
 //! of another and starve it in the key-routing chain. These tests pin the
-//! rule (open closes everything else) and its two deliberate exceptions.
+//! rule (open closes everything else) and its one deliberate exception.
 
 use super::helpers::create_test_input_state;
 use crate::input::state::core::modal::ModalSurface;
@@ -52,24 +52,52 @@ fn a_context_menu_keeps_the_board_picker_open() {
     );
 }
 
-/// The tour guides the user into opening other surfaces, so openers must not
-/// end it — except the palette, which has always dismissed it.
+/// The tour consumes every key and covers the overlay, so a surface opened
+/// underneath it would get no input at all. A toolbar click during the tour
+/// reaches these openers, so every one of them has to end the tour.
 #[test]
-fn the_tour_survives_every_opener_except_the_palette() {
+fn every_opener_ends_the_tour() {
+    for (name, open) in [
+        (
+            "help",
+            (|state: &mut crate::input::InputState| state.toggle_help_overlay())
+                as fn(&mut crate::input::InputState),
+        ),
+        ("board picker", |state| state.open_board_picker()),
+        ("palette", |state| state.toggle_command_palette()),
+        ("color picker", |state| state.open_color_picker_popup()),
+        ("radial", |state| state.toggle_radial_menu(100.0, 100.0)),
+    ] {
+        let mut state = create_test_input_state();
+        state.start_tour();
+        assert!(state.tour_active);
+
+        open(&mut state);
+
+        assert!(!state.tour_active, "opening the {name} must end the tour");
+    }
+}
+
+/// The tour hides pinned toolbar chrome and `end_tour` is what restores it,
+/// so an opener that ends the tour must route through it rather than clearing
+/// the flag — the palette's old shortcut left the toolbars hidden.
+#[test]
+fn an_opener_that_ends_the_tour_restores_pinned_chrome() {
     let mut state = create_test_input_state();
+    state.toolbar_top_pinned = true;
+    state.toolbar_side_pinned = true;
     state.start_tour();
-    assert!(state.tour_active);
-
-    state.toggle_help_overlay();
-    assert!(state.tour_active, "help must not end the tour");
-    state.close_help_overlay();
-
-    state.open_board_picker();
-    assert!(state.tour_active, "the board picker must not end the tour");
-    state.close_board_picker();
+    state.toolbar_top_visible = false;
+    state.toolbar_side_visible = false;
+    state.toolbar_visible = false;
 
     state.toggle_command_palette();
-    assert!(!state.tour_active, "the palette dismisses the tour");
+
+    assert!(!state.tour_active);
+    assert!(
+        state.toolbar_visible,
+        "ending the tour must restore pinned toolbar chrome"
+    );
 }
 
 /// The registry invariant: after opening any surface, no other surface it
