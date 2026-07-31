@@ -31,6 +31,15 @@ impl ImageOperationKind {
         }
     }
 
+    pub fn save_failure_title(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Screenshot File Not Saved",
+            Self::CanvasExport => "Canvas file not saved",
+            Self::BoardPdfExport => "Board PDF not saved",
+            Self::AllBoardsPdfExport => "All boards PDF not saved",
+        }
+    }
+
     pub fn clipboard_failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot Clipboard Failed",
@@ -378,6 +387,11 @@ pub struct CaptureResult {
     /// Whether the image was copied to clipboard.
     #[allow(dead_code)] // Will be used in Phase 2 for status notifications
     pub copied_to_clipboard: bool,
+    /// Why a requested file save produced no file, when the operation still
+    /// succeeded through another destination. A successful clipboard copy must
+    /// not silence this: the caller has to tell the user their file was not
+    /// written.
+    pub save_error: Option<String>,
 }
 
 /// Outcome of a capture request (success or failure).

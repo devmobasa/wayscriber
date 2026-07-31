@@ -286,6 +286,46 @@ fn handle_capture_results(state: &mut WaylandState) {
                     Some("dialog-warning".to_string()),
                 );
                 // Don't set should_exit - keep overlay open for fallback action
+            } else if let Some(save_err) = result.save_error.as_deref() {
+                // The clipboard copy succeeded but the requested file was not
+                // written. Announcing success would hide exactly the loss the
+                // user asked to be protected from, so this reports the failure
+                // and keeps the overlay open with the same save-to-file
+                // fallback the clipboard-failure path offers.
+                warn!(
+                    "{} copied to clipboard but the file save failed: {}",
+                    result.operation.saved_log_label(),
+                    save_err
+                );
+
+                let mut save_config = FileSaveConfig {
+                    save_directory: expand_tilde(&state.config.capture.save_directory),
+                    filename_template: state.config.capture.filename_template.clone(),
+                    format: state.config.capture.format.clone(),
+                };
+                if let Some(format) = result.fallback_format_override.as_ref() {
+                    save_config.format = format.extension.clone();
+                }
+                state.input_state.set_clipboard_fallback(
+                    result.image_data.clone(),
+                    save_config,
+                    result.operation,
+                    exit_after_capture,
+                );
+                state.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture",
+                    Toast::warning("Copied to clipboard, but the file was not saved".to_string())
+                        .action("Save to file", Action::SavePendingToFile),
+                );
+
+                notification::send_notification_async(
+                    &state.tokio_handle,
+                    result.operation.save_failure_title().to_string(),
+                    format!("Copied to clipboard, but the file was not saved: {save_err}"),
+                    Some("dialog-warning".to_string()),
+                );
+                // Don't set should_exit - keep overlay open for fallback action
             } else {
                 // Send normal notification.
                 let notification_body = if message_parts.is_empty() {

@@ -173,12 +173,14 @@ pub(crate) async fn perform_capture(
         }
     };
 
-    if matches!(request.destination, CaptureDestination::ClipboardAndFile)
-        && !copied_to_clipboard
-        && let Some(save_error) = save_error
-    {
-        return Err(save_error);
-    }
+    let save_error = match save_error {
+        // Neither destination delivered anything: the whole capture failed.
+        Some(err) if !copied_to_clipboard => return Err(err),
+        // The clipboard copy stands, but the caller must still learn the
+        // requested file was not written.
+        Some(err) => Some(err.to_string()),
+        None => None,
+    };
 
     Ok(CaptureResult {
         image_data,
@@ -186,6 +188,7 @@ pub(crate) async fn perform_capture(
         fallback_format_override: None,
         saved_path,
         copied_to_clipboard,
+        save_error,
     })
 }
 
@@ -249,12 +252,14 @@ pub(crate) async fn deliver_image(
         CaptureDestination::FileOnly => false,
     };
 
-    if matches!(request.destination, CaptureDestination::ClipboardAndFile)
-        && !copied_to_clipboard
-        && let Some(save_error) = save_error
-    {
-        return Err(save_error);
-    }
+    let save_error = match save_error {
+        // Neither destination delivered anything: the whole delivery failed.
+        Some(err) if !copied_to_clipboard => return Err(err),
+        // The clipboard copy stands, but the caller must still learn the
+        // requested file was not written.
+        Some(err) => Some(err.to_string()),
+        None => None,
+    };
 
     Ok(CaptureResult {
         image_data,
@@ -262,6 +267,7 @@ pub(crate) async fn deliver_image(
         fallback_format_override: request.fallback_format_override,
         saved_path,
         copied_to_clipboard,
+        save_error,
     })
 }
 
@@ -309,6 +315,7 @@ pub(crate) async fn deliver_document(
         fallback_format_override: None,
         saved_path: Some(saved_path),
         copied_to_clipboard: false,
+        save_error: None,
     })
 }
 
