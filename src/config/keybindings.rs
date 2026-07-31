@@ -10,7 +10,7 @@ mod defaults;
 
 pub use crate::domain::Action;
 pub use authorship::KeybindingAuthorship;
-pub use binding::KeyBinding;
+pub use binding::{KeyBinding, NAMED_KEYS, is_deliverable_key_name, suggest_key_name};
 pub use config::{KeybindingConflict, KeybindingsConfig};
 
 /// The compiled-in default keymap, built once per process.

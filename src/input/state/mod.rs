@@ -9,6 +9,8 @@ mod spotlight;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use actions::key_press::bindings::key_to_action_label_for_test;
 pub(crate) use core::board_picker::BoardPickerEditMode;
 pub(crate) use core::board_picker::BoardPickerFocus;
 pub(crate) use core::board_picker::{

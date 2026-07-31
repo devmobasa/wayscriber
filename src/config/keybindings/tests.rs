@@ -740,3 +740,110 @@ fn default_bindings_match_the_checked_in_snapshot() {
         "the snapshot lists an action twice"
     );
 }
+
+/// The recognized-key vocabulary is only meaningful if it matches what the
+/// input layer actually produces, so pin it against that mapping. A new key
+/// the backend learns to deliver fails here until `NAMED_KEYS` records it.
+#[test]
+fn every_name_the_input_layer_produces_is_deliverable() {
+    use crate::config::keybindings::is_deliverable_key_name;
+    use crate::input::events::Key;
+
+    let keys = [
+        Key::Escape,
+        Key::Return,
+        Key::Backspace,
+        Key::Space,
+        Key::Menu,
+        Key::Delete,
+        Key::Home,
+        Key::End,
+        Key::PageUp,
+        Key::PageDown,
+        Key::Up,
+        Key::Down,
+        Key::Left,
+        Key::Right,
+        Key::F1,
+        Key::F2,
+        Key::F3,
+        Key::F4,
+        Key::F5,
+        Key::F6,
+        Key::F7,
+        Key::F8,
+        Key::F9,
+        Key::F10,
+        Key::F11,
+        Key::F12,
+        Key::Char('a'),
+        Key::Char('7'),
+        Key::Char('/'),
+    ];
+    for key in keys {
+        let name = crate::input::state::key_to_action_label_for_test(key)
+            .unwrap_or_else(|| panic!("{key:?} produces no binding name"));
+        assert!(
+            is_deliverable_key_name(&name),
+            "the input layer produces {name:?}, which NAMED_KEYS does not list"
+        );
+    }
+}
+
+#[test]
+fn a_misspelled_modifier_is_reported_with_a_suggestion() {
+    use crate::config::keybindings::{is_deliverable_key_name, suggest_key_name};
+
+    let parsed = KeyBinding::parse("Ctlr+Z").expect("the string still parses");
+    assert!(
+        !is_deliverable_key_name(&parsed.key),
+        "no key event carries {:?}",
+        parsed.key
+    );
+    assert_eq!(suggest_key_name(&parsed.key).as_deref(), Some("Ctrl+Z"));
+}
+
+#[test]
+fn a_near_miss_on_a_named_key_is_reported_with_a_suggestion() {
+    use crate::config::keybindings::{is_deliverable_key_name, suggest_key_name};
+
+    for (typo, expected) in [
+        ("Escpae", "Escape"),
+        ("Retrun", "Return"),
+        ("PageUP", "PageUp"),
+        ("ArrowLef", "ArrowLeft"),
+    ] {
+        if typo.eq_ignore_ascii_case(expected) {
+            // Case alone is fine: matching ignores it.
+            assert!(is_deliverable_key_name(typo));
+            continue;
+        }
+        assert!(!is_deliverable_key_name(typo), "{typo} should be unknown");
+        assert_eq!(
+            suggest_key_name(typo).as_deref(),
+            Some(expected),
+            "for {typo}"
+        );
+    }
+}
+
+#[test]
+fn ordinary_bindings_are_not_flagged() {
+    use crate::config::keybindings::is_deliverable_key_name;
+
+    for binding in [
+        "Ctrl+Z",
+        "Escape",
+        "F10",
+        "Ctrl+Shift+P",
+        "a",
+        "/",
+        "PageUp",
+    ] {
+        let parsed = KeyBinding::parse(binding).expect("valid binding");
+        assert!(
+            is_deliverable_key_name(&parsed.key),
+            "{binding} should be recognized"
+        );
+    }
+}

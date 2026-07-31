@@ -821,9 +821,10 @@ mod tests {
     /// validating an already-validated configuration is a no-op: if some future
     /// pass clamped, resolved, or dropped something on the second run, every
     /// narrow write would carry that change into the file alongside the user's
-    /// edit. This fixture is deliberately full of things the loader repairs in
-    /// memory — a contested shortcut pair, unparseable binding text, an
-    /// out-of-range number — so the second pass has something to get wrong.
+    /// edit. This fixture is deliberately full of things the loader repairs or
+    /// reports in memory — a contested shortcut pair, a binding that parses but
+    /// names no deliverable key, an out-of-range number — so the second pass
+    /// has something to get wrong.
     #[test]
     fn document_config_is_a_fixed_point_of_validation() {
         let temp = crate::test_temp::tempdir().expect("tempdir");

@@ -1,5 +1,13 @@
 use crate::input::events::Key;
 
+/// Test-only view of [`key_to_action_label`], so the config layer's
+/// recognized-key vocabulary can be pinned against the names this actually
+/// produces.
+#[cfg(test)]
+pub(crate) fn key_to_action_label_for_test(key: Key) -> Option<String> {
+    key_to_action_label(key)
+}
+
 pub(in crate::input::state) fn key_to_action_label(key: Key) -> Option<String> {
     match key {
         Key::Char(c) => Some(c.to_string()),

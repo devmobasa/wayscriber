@@ -64,10 +64,36 @@ fn binding_claimed_by_another_action(
 pub struct InvalidKeybinding {
     action: Action,
     binding: String,
-    error: String,
+    problem: KeybindingProblem,
+}
+
+/// Why a binding string will not work.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeybindingProblem {
+    /// The parser rejected it outright; it is dropped from this session's
+    /// keymap because there is nothing to match against.
+    Unparseable { error: String },
+    /// It parsed, but names a key no input event carries, so pressing it can
+    /// never fire the action. The binding is *kept*: a future build may learn
+    /// to deliver that name, and dropping it would silently edit the meaning
+    /// of a file this load never writes.
+    UnknownKey {
+        key: String,
+        suggestion: Option<String>,
+    },
 }
 
 impl InvalidKeybinding {
+    /// Whether this binding was dropped from the session keymap.
+    pub fn was_dropped(&self) -> bool {
+        matches!(self.problem, KeybindingProblem::Unparseable { .. })
+    }
+
+    /// The problem this binding has.
+    pub fn problem(&self) -> &KeybindingProblem {
+        &self.problem
+    }
+
     /// The rejected string exactly as the file spells it.
     pub fn binding(&self) -> &str {
         &self.binding
@@ -80,23 +106,51 @@ impl InvalidKeybinding {
 
     /// Toast-sized wording; [`fmt::Display`] carries the long form.
     pub fn summary(&self) -> String {
-        format!(
-            "{} is not a valid shortcut for {}.",
-            self.binding,
-            action_label(self.action)
-        )
+        match &self.problem {
+            KeybindingProblem::Unparseable { .. } => format!(
+                "{} is not a valid shortcut for {}.",
+                self.binding,
+                action_label(self.action)
+            ),
+            KeybindingProblem::UnknownKey { suggestion, .. } => {
+                let action = action_label(self.action);
+                match suggestion {
+                    Some(suggestion) => format!(
+                        "{} for {action} names no key on your keyboard — did you mean {suggestion}?",
+                        self.binding
+                    ),
+                    None => format!(
+                        "{} for {action} names no key on your keyboard, so it never fires.",
+                        self.binding
+                    ),
+                }
+            }
+        }
     }
 }
 
 impl fmt::Display for InvalidKeybinding {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "`{}` for {} could not be parsed: {} — it is ignored for this session",
-            self.binding,
-            action_label(self.action),
-            self.error
-        )
+        match &self.problem {
+            KeybindingProblem::Unparseable { error } => write!(
+                formatter,
+                "`{}` for {} could not be parsed: {error} — it is ignored for this session",
+                self.binding,
+                action_label(self.action),
+            ),
+            KeybindingProblem::UnknownKey { key, suggestion } => {
+                write!(
+                    formatter,
+                    "`{}` for {} names the key `{key}`, which no key event carries, so it never fires",
+                    self.binding,
+                    action_label(self.action),
+                )?;
+                match suggestion {
+                    Some(suggestion) => write!(formatter, " — did you mean `{suggestion}`?"),
+                    None => Ok(()),
+                }
+            }
+        }
     }
 }
 
@@ -352,13 +406,32 @@ impl Config {
             let mut dropped = false;
             for binding in current {
                 match KeyBinding::parse(binding) {
-                    Ok(_) => kept.push(binding.clone()),
+                    Ok(parsed)
+                        if crate::config::keybindings::is_deliverable_key_name(&parsed.key) =>
+                    {
+                        kept.push(binding.clone())
+                    }
+                    Ok(parsed) => {
+                        // Reported but kept: the string is well formed, and a
+                        // future build may learn to deliver this name.
+                        kept.push(binding.clone());
+                        invalid.push(InvalidKeybinding {
+                            action: *action,
+                            binding: binding.clone(),
+                            problem: KeybindingProblem::UnknownKey {
+                                suggestion: crate::config::keybindings::suggest_key_name(
+                                    &parsed.key,
+                                ),
+                                key: parsed.key,
+                            },
+                        });
+                    }
                     Err(error) => {
                         dropped = true;
                         invalid.push(InvalidKeybinding {
                             action: *action,
                             binding: binding.clone(),
-                            error,
+                            problem: KeybindingProblem::Unparseable { error },
                         });
                     }
                 }
