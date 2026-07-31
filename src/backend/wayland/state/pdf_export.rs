@@ -139,6 +139,8 @@ fn build_board_pdf_export_snapshot(
                     origin_x,
                     origin_y,
                     spotlight,
+                    // PDF pages are deterministic: GIFs export frame 0.
+                    animation_frames: Default::default(),
                 },
                 metadata: PdfPageMetadata::new(
                     app_board_index,
@@ -169,6 +171,7 @@ fn build_board_pdf_export_snapshot(
                 origin_x: 0,
                 origin_y: 0,
                 spotlight,
+                animation_frames: Default::default(),
             },
             metadata: PdfPageMetadata::new(
                 0,

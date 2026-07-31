@@ -89,14 +89,24 @@ impl CanvasLayerCache {
 
 /// Renders one committed shape with the standard eraser/blur replay handling.
 /// Shared between the direct canvas render path and the layer-cache bake.
+/// `gif_frames` selects the animation frame per image shape (absent id or
+/// `None` = frame 0, the static behavior).
 pub(in crate::backend::wayland) fn render_committed_shape(
     ctx: &cairo::Context,
     drawn_shape: &crate::draw::DrawnShape,
     replay_ctx: &crate::draw::EraserReplayContext<'_>,
+    gif_frames: Option<&std::collections::HashMap<crate::draw::ShapeId, usize>>,
 ) {
     match &drawn_shape.shape {
         crate::draw::Shape::EraserStroke { points, brush } => {
             crate::draw::render_eraser_stroke(ctx, points, brush, replay_ctx);
+        }
+        crate::draw::Shape::Image { x, y, w, h, data } => {
+            let frame_index = gif_frames
+                .and_then(|frames| frames.get(&drawn_shape.id))
+                .copied()
+                .unwrap_or(0);
+            crate::draw::render_image_shape_frame(ctx, *x, *y, *w, *h, data, frame_index);
         }
         crate::draw::Shape::BlurRect {
             x,
@@ -137,9 +147,15 @@ fn rects_intersect(a: Rect, b: Rect) -> bool {
 impl WaylandState {
     /// True when committed canvas content may be served from the layer cache:
     /// a board pan transform without zoom or a frozen backdrop image (whose
-    /// screen-anchored transforms make world-space baking unsound).
-    pub(in crate::backend::wayland) fn canvas_layer_cache_usable(&self) -> bool {
-        self.canvas_transform_active() && !self.zoom.active && self.frozen.image().is_none()
+    /// screen-anchored transforms make world-space baking unsound). Frames
+    /// containing an animated GIF also bypass the cache — its validity key is
+    /// content-based, so a baked GIF would freeze on whichever frame was baked
+    /// (pan offsets persist, making that freeze permanent, not transient).
+    pub(in crate::backend::wayland) fn canvas_layer_cache_usable(&mut self) -> bool {
+        self.canvas_transform_active()
+            && !self.zoom.active
+            && self.frozen.image().is_none()
+            && !self.input_state.active_frame_has_gif_image()
     }
 
     /// Ensures the layer cache covers the current view with current content,
@@ -259,12 +275,13 @@ impl WaylandState {
                 width: bake_w,
                 height: bake_h,
             };
+            let gif_frames = self.input_state.gif_frame_indices();
             let frame = self.input_state.boards.active_frame();
             for drawn_shape in &frame.shapes {
                 if let Some(bbox) = drawn_shape.bounding_box()
                     && rects_intersect(bbox, bake_bounds)
                 {
-                    render_committed_shape(&bake_ctx, drawn_shape, &replay_ctx);
+                    render_committed_shape(&bake_ctx, drawn_shape, &replay_ctx, Some(gif_frames));
                 }
             }
         }

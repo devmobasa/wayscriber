@@ -84,8 +84,14 @@ impl WaylandState {
             // Cairo's internal clipping is efficient for rasterization, but sending
             // thousands of shapes to Cairo still incurs overhead for geometry processing.
             // A simple bounding box check here eliminates that overhead.
+            let gif_frames = self.input_state.gif_frame_indices();
             let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| {
-                super::super::canvas_layer::render_committed_shape(ctx, drawn_shape, &replay_ctx)
+                super::super::canvas_layer::render_committed_shape(
+                    ctx,
+                    drawn_shape,
+                    &replay_ctx,
+                    Some(gif_frames),
+                )
             };
 
             // Compute bounding box of all damage regions for fast rejection

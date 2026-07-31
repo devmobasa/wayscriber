@@ -276,6 +276,7 @@ impl WaylandState {
                     .clone_without_history(),
             },
             render_profile: self.input_state.export_render_profile(),
+            animation_frames: self.input_state.gif_frame_indices().clone(),
         }
     }
 

@@ -214,10 +214,15 @@ impl AnimationCache {
                 return None;
             };
             let mut added = 0;
-            if animated.frames.is_empty() {
+            // Decode forward to the requested frame so cold caches (an export
+            // running on a thread that never played this GIF) still resolve
+            // it; the live render thread is warm and skips this entirely.
+            while animated.frames.len() <= index.min(MAX_ANIMATION_FRAMES.saturating_sub(1))
+                && animated.decoder.is_some()
+            {
                 match decode_next_frame(animated) {
-                    DecodeStep::Frame { added: bytes, .. } => added = bytes,
-                    DecodeStep::EndOfStream => return None,
+                    DecodeStep::Frame { added: bytes, .. } => added += bytes,
+                    DecodeStep::EndOfStream => break,
                     DecodeStep::OverBudget => {
                         self.apply(&key, StepOutcome::MarkTooLarge);
                         return None;

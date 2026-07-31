@@ -176,6 +176,7 @@ fn pdf_page(
             origin_x: 0,
             origin_y: 0,
             spotlight: Default::default(),
+            animation_frames: Default::default(),
         },
         metadata: PdfPageMetadata::new(
             0,

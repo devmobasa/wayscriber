@@ -15,6 +15,9 @@ pub struct CanvasExportSnapshot {
     pub render_profile: Option<RenderColorProfile>,
     /// Spotlight appearance, mirrored from the live overlay.
     pub spotlight: SpotlightPassSnapshot,
+    /// Currently displayed animation frame per GIF shape (WYSIWYG
+    /// screenshots); empty = every GIF exports its first frame.
+    pub animation_frames: std::collections::HashMap<crate::draw::ShapeId, usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,5 +120,6 @@ fn canvas_page_from_snapshot(snapshot: &CanvasExportSnapshot) -> CanvasPageExpor
         origin_x: snapshot.viewport.origin_x,
         origin_y: snapshot.viewport.origin_y,
         spotlight: snapshot.spotlight,
+        animation_frames: snapshot.animation_frames.clone(),
     }
 }

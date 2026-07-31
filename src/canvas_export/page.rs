@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::capture::CaptureError;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, render_blur_rect,
-    render_eraser_stroke, render_shape, render_spotlight_pass, spotlight_regions_for_frame,
+    BlurRectParams, Color, EraserReplayContext, Frame, Shape, ShapeId, SpotlightPass,
+    render_blur_rect, render_eraser_stroke, render_image_shape_frame, render_shape,
+    render_spotlight_pass, spotlight_regions_for_frame,
 };
 
 #[derive(Debug, Clone)]
@@ -16,6 +18,10 @@ pub struct CanvasPageExportSnapshot {
     pub origin_y: i32,
     /// Dim/feather settings for the spotlight pass, mirroring the live overlay.
     pub spotlight: SpotlightPassSnapshot,
+    /// Currently displayed animation frame per GIF shape, so screenshots stay
+    /// WYSIWYG. Absent ids (and batch exports that leave this empty) render
+    /// frame 0.
+    pub animation_frames: HashMap<ShapeId, usize>,
 }
 
 /// Spotlight appearance carried into an export.
@@ -285,6 +291,14 @@ fn draw_canvas_page_contents(
                 },
                 &replay_ctx,
             ),
+            Shape::Image { x, y, w, h, data } => {
+                let frame_index = page
+                    .animation_frames
+                    .get(&drawn_shape.id)
+                    .copied()
+                    .unwrap_or(0);
+                render_image_shape_frame(ctx, *x, *y, *w, *h, data, frame_index);
+            }
             other => render_shape(ctx, other),
         }
     }

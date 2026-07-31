@@ -31,6 +31,7 @@ mod tests {
             board: BoardExportSnapshot { frame },
             render_profile: None,
             spotlight: Default::default(),
+            animation_frames: Default::default(),
         }
     }
 
@@ -43,6 +44,7 @@ mod tests {
             origin_x: 0,
             origin_y: 0,
             spotlight: Default::default(),
+            animation_frames: Default::default(),
         }
     }
 
@@ -65,6 +67,60 @@ mod tests {
         let data = surface.data().expect("surface data");
         let offset = y as usize * stride + x as usize * 4;
         u32::from_ne_bytes(data[offset..offset + 4].try_into().expect("pixel"))
+    }
+
+    /// 2x2 animated GIF: frame 0 solid red, frame 1 solid blue.
+    fn red_blue_gif() -> Vec<u8> {
+        let palette = [255, 0, 0, 0, 0, 255];
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = gif::Encoder::new(&mut bytes, 2, 2, &palette).unwrap();
+            for color in [0u8, 1u8] {
+                let mut gif_frame = gif::Frame::default();
+                gif_frame.width = 2;
+                gif_frame.height = 2;
+                gif_frame.buffer = vec![color; 4].into();
+                gif_frame.delay = 10;
+                encoder.write_frame(&gif_frame).unwrap();
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn export_renders_the_requested_gif_frame() {
+        let mut frame = Frame::new();
+        let id = frame.add_shape(Shape::Image {
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 2,
+            data: crate::draw::EmbeddedImage {
+                mime_type: "image/gif".to_string(),
+                width: 2,
+                height: 2,
+                bytes: red_blue_gif(),
+            },
+        });
+        let viewport = CanvasExportViewport {
+            logical_width: 4,
+            logical_height: 4,
+            scale: 1,
+            origin_x: 0,
+            origin_y: 0,
+        };
+
+        let mut export = snapshot(frame, viewport);
+        let mut first = render_canvas_surface(&export).expect("surface");
+        assert_eq!(pixel(&mut first, 1, 1), 0xffff_0000, "empty map = frame 0");
+
+        export.animation_frames.insert(id, 1);
+        let mut second = render_canvas_surface(&export).expect("surface");
+        assert_eq!(
+            pixel(&mut second, 1, 1),
+            0xff00_00ff,
+            "mapped index picks the composited frame"
+        );
     }
 
     #[test]
