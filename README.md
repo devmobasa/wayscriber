@@ -830,7 +830,7 @@ pick_screen_color = ["I"]
 |--------|-----|
 | Duplicate selection | <kbd>Ctrl+D</kbd> |
 | Copy selection | <kbd>Ctrl+Alt+C</kbd> |
-| Paste selection or copied PNG/JPEG/GIF image (animated GIFs play; right-click to pause) | <kbd>Ctrl+Alt+V</kbd> |
+| Paste selection or copied PNG/JPEG/GIF image (animated GIFs play; GIFs at least 64 px wide and tall get on-canvas play/pause controls, while smaller GIFs use the context menu) | <kbd>Ctrl+Alt+V</kbd> |
 | Delete selection | <kbd>Delete</kbd> |
 | Bring to front/back | <kbd>]</kbd> / <kbd>[</kbd> |
 | Nudge selection | Arrow keys (large: <kbd>PageUp</kbd>/<kbd>PageDown</kbd>) |
