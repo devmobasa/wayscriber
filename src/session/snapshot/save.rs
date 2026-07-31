@@ -9,6 +9,7 @@ use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -278,6 +279,44 @@ fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
     Ok(())
 }
 
+/// Removes a temporary file unless it was defused by a successful rename.
+///
+/// The main save cannot use `durable_io::write_atomic` wholesale: it writes the
+/// payload *before* rotating the previous session into the backup slot, so a
+/// failure to write leaves the original untouched. That ordering means the
+/// temp file outlives its own statement, and every early return between here
+/// and the rename used to leak it - `temp_path` then stepped to `.tmp1`,
+/// `.tmp2`, and nothing ever collected the strays.
+struct TempFileGuard {
+    path: Option<PathBuf>,
+}
+
+impl TempFileGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    /// The temp file has been renamed into place; there is nothing to remove.
+    fn defuse(&mut self) {
+        self.path = None;
+    }
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take()
+            && let Err(err) = fs::remove_file(&path)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            warn!(
+                "Failed to remove temporary session file {}: {}",
+                path.display(),
+                err
+            );
+        }
+    }
+}
+
 fn save_snapshot_inner(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
@@ -376,11 +415,16 @@ fn save_snapshot_inner(
     let final_size = payload_bytes.len();
 
     let tmp_path = temp_path(&session_path)?;
+    let mut temp_guard = TempFileGuard::new(tmp_path.clone());
     let write_started = Instant::now();
     {
         let mut tmp_file = OpenOptions::new()
             .write(true)
             .create_new(true)
+            // Session files hold the user's drawings, the most sensitive thing
+            // this app persists; the umask default of 0644 made them
+            // world-readable.
+            .mode(0o600)
             .open(&tmp_path)
             .with_context(|| {
                 format!(
@@ -457,6 +501,7 @@ fn save_snapshot_inner(
             session_path.display()
         )
     })?;
+    temp_guard.defuse();
     sync_session_parent_dir(&session_path, "session file")?;
     let replace_elapsed = replace_started.elapsed();
     info!(

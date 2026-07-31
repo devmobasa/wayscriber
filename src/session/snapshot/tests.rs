@@ -2426,3 +2426,58 @@ fn load_snapshot_inner_normalizes_empty_legacy_page_lists() {
     assert_eq!(pages.pages.pages.len(), 1);
     assert_eq!(pages.pages.active, 0);
 }
+
+/// Session artifacts hold the user's drawings, the most sensitive thing this
+/// app persists. Created under the default umask they were world-readable.
+#[cfg(unix)]
+#[test]
+fn session_artifacts_are_private_to_their_owner() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "perms");
+    options.persist_transparent = true;
+
+    save_snapshot(&sample_snapshot(), &options).expect("save");
+    // A second save rotates the first into the backup slot.
+    save_snapshot(&sample_snapshot(), &options).expect("second save");
+
+    for path in [options.session_file_path(), options.backup_file_path()] {
+        let mode = std::fs::metadata(&path)
+            .unwrap_or_else(|err| panic!("stat {}: {err}", path.display()))
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(
+            mode,
+            0o600,
+            "{} is readable beyond its owner (mode {mode:o})",
+            path.display()
+        );
+    }
+}
+
+/// A save that fails after creating its temporary file used to leave it
+/// behind; `temp_path` then stepped to `.tmp1`, `.tmp2`, and nothing ever
+/// collected the strays.
+#[test]
+fn a_failed_save_leaves_no_temporary_file_behind() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "temp-leak");
+    options.persist_transparent = true;
+    // Refuse every payload, so the save fails after the temp file exists.
+    options.max_file_size_bytes = 1;
+
+    let _ = save_snapshot(&sample_snapshot(), &options);
+
+    let strays: Vec<_> = std::fs::read_dir(temp.path())
+        .expect("scan session dir")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".tmp"))
+        .collect();
+    assert!(
+        strays.is_empty(),
+        "temporary files were left behind: {strays:?}"
+    );
+}
