@@ -58,6 +58,8 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
         setting: ToolbarItemVisibilitySetting,
     },
     ItemOrder(ToolbarItemOrderGroup),
+    StatusBarInteractive,
+    StatusBarItem(crate::config::StatusBarItem),
     ResetItemVisibility,
     /// Top-strip form (`full`/`micro`). The runtime-only `hidden` rung of the
     /// cycle is folded to `full` when the override is computed.
@@ -217,6 +219,15 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SetTopDisplayMode(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::TopDisplayMode)
         }
+        // Status-bar content is chrome the user arranges from the overlay, so
+        // it persists the same way the toolbars do: as a runtime override
+        // layered over the configured value, never by writing config.toml.
+        ToolbarEvent::SetStatusBarInteractive(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::StatusBarInteractive)
+        }
+        ToolbarEvent::SetStatusBarItemVisible(item, _) => {
+            ToolbarPersistence::RuntimeUi(Runtime::StatusBarItem(*item))
+        }
         ToolbarEvent::SetSideMinimized(_) | ToolbarEvent::CloseSideToolbar => {
             ToolbarPersistence::RuntimeUi(Runtime::SideMinimized)
         }
@@ -269,8 +280,6 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::SetToolbarLayoutMode(_)
         | ToolbarEvent::ToggleCustomSection(_)
         | ToolbarEvent::ToggleStatusBar(_)
-        | ToolbarEvent::SetStatusBarInteractive(_)
-        | ToolbarEvent::SetStatusBarItemVisible(_, _)
         | ToolbarEvent::ToggleStatusBoardBadge(_)
         | ToolbarEvent::ToggleStatusPageBadge(_)
         | ToolbarEvent::ToggleFloatingBadgeAlways(_)

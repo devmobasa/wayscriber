@@ -118,6 +118,10 @@ pub(crate) enum InteractionSeedTarget {
     TopPosition,
     SidePosition,
     TopDisplayMode,
+    /// Whether status-bar segments respond to clicks.
+    StatusBarInteractive,
+    /// Whether one status-bar segment is shown.
+    StatusBarItem(crate::config::StatusBarItem),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,7 +145,9 @@ impl InteractionSeedValue {
                     | Target::TopMinimized
                     | Target::SideMinimized
                     | Target::CollapsedSection(_)
-                    | Target::BoardPin(_),
+                    | Target::BoardPin(_)
+                    | Target::StatusBarInteractive
+                    | Target::StatusBarItem(_),
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
                 | (Target::ItemVisibility(_), Self::Visibility(_))

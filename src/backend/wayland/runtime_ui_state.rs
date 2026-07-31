@@ -195,6 +195,12 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             (InteractionSeedTarget::SidePinned, InteractionSeedValue::Bool(value)) => {
                 input.toolbar_side_pinned = *value;
             }
+            (InteractionSeedTarget::StatusBarInteractive, InteractionSeedValue::Bool(value)) => {
+                input.status_bar_interactive = *value;
+            }
+            (InteractionSeedTarget::StatusBarItem(item), InteractionSeedValue::Bool(value)) => {
+                input.set_status_bar_item_visible(*item, *value);
+            }
             (InteractionSeedTarget::TopMinimized, InteractionSeedValue::Bool(value)) => {
                 input.apply_toolbar_set_top_minimized(*value);
             }
@@ -290,6 +296,16 @@ fn runtime_seeds_from_config(
         InteractionSeedTarget::SideMinimized,
         InteractionSeedValue::Bool(config.ui.toolbar.side_minimized),
     )?;
+    insert(
+        InteractionSeedTarget::StatusBarInteractive,
+        InteractionSeedValue::Bool(config.ui.status_bar_interactive),
+    )?;
+    for item in crate::config::StatusBarItem::ALL {
+        insert(
+            InteractionSeedTarget::StatusBarItem(item),
+            InteractionSeedValue::Bool(config.ui.status_bar_item_visible(item)),
+        )?;
+    }
     insert(
         InteractionSeedTarget::SidePane,
         InteractionSeedValue::SidePane(
@@ -432,6 +448,14 @@ fn toolbar_values(
             InteractionSeedValue::SidePane(input.toolbar_side_pane),
         ),
         Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode, input),
+        Target::StatusBarInteractive => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::StatusBarInteractive,
+            InteractionSeedValue::Bool(input.status_bar_interactive),
+        ),
+        Target::StatusBarItem(item) => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::StatusBarItem(item),
+            InteractionSeedValue::Bool(input.status_bar_item_visible(item)),
+        ),
         Target::CollapsedSection(section) => RuntimeUiMutationValues::one(
             InteractionSeedTarget::CollapsedSection(section),
             InteractionSeedValue::Bool(input.toolbar_collapsed_side_sections.contains(&section)),
@@ -541,6 +565,18 @@ fn apply_live_toolbar_state(
             live.get(&InteractionSeedTarget::TopDisplayMode)
     {
         apply_persisted_top_display_mode(input, *mode);
+    }
+    if include(&InteractionSeedTarget::StatusBarInteractive)
+        && let Some(value) = bool_value(InteractionSeedTarget::StatusBarInteractive)
+    {
+        input.status_bar_interactive = value;
+    }
+    for item in crate::config::StatusBarItem::ALL {
+        if include(&InteractionSeedTarget::StatusBarItem(item))
+            && let Some(value) = bool_value(InteractionSeedTarget::StatusBarItem(item))
+        {
+            input.set_status_bar_item_visible(item, value);
+        }
     }
     if include(&InteractionSeedTarget::TopPinned)
         && let Some(value) = bool_value(InteractionSeedTarget::TopPinned)

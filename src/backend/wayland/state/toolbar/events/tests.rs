@@ -308,14 +308,6 @@ fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
         ),
         (ToolbarEvent::ToggleStatusBar(true), Ui(UiField::StatusBar)),
         (
-            ToolbarEvent::SetStatusBarInteractive(false),
-            Ui(UiField::StatusBarInteractive),
-        ),
-        (
-            ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Size, false),
-            Ui(UiField::StatusBarItem(StatusBarItem::Size)),
-        ),
-        (
             ToolbarEvent::ToggleStatusBoardBadge(true),
             Ui(UiField::StatusBoardBadge),
         ),
@@ -349,6 +341,40 @@ fn authored_toolbar_preferences_apply_to_this_run_only() {
             preference_for_event(&event),
             Some(preference),
             "{event:?} should update exactly its own authored field"
+        );
+    }
+}
+
+/// Status-bar content is chrome the user arranges from the overlay, so - like
+/// the toolbars themselves - it survives a restart as a runtime override
+/// layered over the configured value. It still names its authored field, so a
+/// later configurator edit reseeds it.
+#[test]
+fn status_bar_content_persists_as_runtime_ui_state() {
+    use ToolbarPreference::Ui;
+    use ToolbarRuntimeUiPersistenceTarget as Runtime;
+    use UiPreferenceField as UiField;
+
+    assert_eq!(
+        persistence_for(&ToolbarEvent::SetStatusBarInteractive(false)),
+        ToolbarPersistence::RuntimeUi(Runtime::StatusBarInteractive),
+    );
+    assert_eq!(
+        preference_for_event(&ToolbarEvent::SetStatusBarInteractive(false)),
+        Some(Ui(UiField::StatusBarInteractive)),
+    );
+
+    for item in StatusBarItem::ALL {
+        let event = ToolbarEvent::SetStatusBarItemVisible(item, false);
+        assert_eq!(
+            persistence_for(&event),
+            ToolbarPersistence::RuntimeUi(Runtime::StatusBarItem(item)),
+            "{item:?} must survive a restart"
+        );
+        assert_eq!(
+            preference_for_event(&event),
+            Some(Ui(UiField::StatusBarItem(item))),
+            "{item:?} still names its authored field"
         );
     }
 }

@@ -175,8 +175,6 @@ fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
 /// only the neutral half is asserted here.
 #[test]
 fn no_undeclared_authored_preference_moves_a_runtime_seed() {
-    use crate::config::StatusBarItem;
-
     /// One authored preference field, changed away from the shipped default.
     type PreferenceProbe = (&'static str, fn(&mut Config));
 
@@ -207,21 +205,6 @@ fn no_undeclared_authored_preference_moves_a_runtime_seed() {
         }),
         ("status bar", |config| {
             config.ui.show_status_bar = !config.ui.show_status_bar;
-        }),
-        ("status bar interactivity", |config| {
-            config.ui.status_bar_interactive = !config.ui.status_bar_interactive;
-        }),
-        ("status bar item", |config| {
-            let visible = config.ui.status_bar_item_visible(StatusBarItem::Tool);
-            config
-                .ui
-                .set_status_bar_item_visible(StatusBarItem::Tool, !visible);
-        }),
-        ("status board badge", |config| {
-            config.ui.show_status_board_badge = !config.ui.show_status_board_badge;
-        }),
-        ("status page badge", |config| {
-            config.ui.show_status_page_badge = !config.ui.show_status_page_badge;
         }),
         ("floating badge always", |config| {
             config.ui.show_floating_badge_always = !config.ui.show_floating_badge_always;
@@ -2864,4 +2847,65 @@ fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
     );
     assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Micro);
     runtime.shutdown_blocking();
+}
+
+/// Status-bar content is chrome the user arranges from the overlay's settings
+/// popover. It used to apply to the current run only, so every toggle came
+/// back on the next launch; it now survives a restart the way the toolbars do,
+/// as a runtime override layered over the configured value, with `config.toml`
+/// still untouched.
+#[test]
+fn status_bar_content_survives_restart_without_touching_config() {
+    use crate::config::StatusBarItem;
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    assert!(input.status_bar_interactive, "shipped default");
+    assert!(input.status_bar_item_visible(StatusBarItem::Size));
+
+    let target = ToolbarRuntimeUiPersistenceTarget::StatusBarInteractive;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("interactivity permit");
+    input.status_bar_interactive = false;
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+
+    let target = ToolbarRuntimeUiPersistenceTarget::StatusBarItem(StatusBarItem::Size);
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("item permit");
+    input.set_status_bar_item_visible(StatusBarItem::Size, false);
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert!(
+        !restarted_input.status_bar_interactive,
+        "clickable-segments stays off across a restart"
+    );
+    assert!(
+        !restarted_input.status_bar_item_visible(StatusBarItem::Size),
+        "a hidden segment stays hidden across a restart"
+    );
+    assert!(
+        restarted_input.status_bar_item_visible(StatusBarItem::Tool),
+        "segments the user did not touch keep their configured value"
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
 }
