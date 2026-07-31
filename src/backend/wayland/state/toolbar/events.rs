@@ -22,10 +22,7 @@ pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 use feedback::{ToolbarPinChange, pin_durability};
 use preferences::{ToolbarPreference, preference_for_event};
 #[cfg(test)]
-use preferences::{
-    ToolbarPreferenceField, UiPreferenceField, apply_toolbar_preference,
-    effective_tool_preview_value,
-};
+use preferences::{UiPreferenceField, apply_toolbar_preference, effective_tool_preview_value};
 use session::populate_session_snapshot;
 
 fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {

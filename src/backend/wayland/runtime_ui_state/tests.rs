@@ -3079,3 +3079,72 @@ fn section_toggle(flag: crate::config::ToolbarSectionFlag, show: bool) -> Toolba
         Flag::TextControls => ToolbarEvent::ToggleTextControls(show),
     }
 }
+
+/// Switching the toolbar layout preset is a durable choice. It restores
+/// before the section settings do, so a section the user pinned keeps its own
+/// visibility while every untouched section follows the restored preset.
+#[test]
+fn toolbar_layout_mode_survives_restart_without_touching_config() {
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag, resolve_section_visibility};
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let mut config = Config::default();
+    config.ui.toolbar.layout_mode = ToolbarLayoutMode::Regular;
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let pinned = ToolbarSectionFlag::Presets;
+    let prepared = runtime
+        .begin_toolbar_mutation(
+            ToolbarRuntimeUiPersistenceTarget::NamedSection(pinned),
+            &input,
+        )
+        .expect("section permit");
+    assert!(input.apply_toolbar_event(section_toggle(pinned, false)));
+    runtime.finish_toolbar_mutation(prepared, true, &input);
+
+    let prepared = runtime
+        .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::LayoutMode, &input)
+        .expect("layout mode permit");
+    assert!(
+        input.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced
+        ))
+    );
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(
+        restarted_input.toolbar_layout_mode,
+        ToolbarLayoutMode::Advanced
+    );
+    let sections = resolve_section_visibility(
+        restarted_input.toolbar_layout_mode,
+        &restarted_input.toolbar_mode_overrides,
+        &restarted_input.resolved_toolbar_items,
+    );
+    assert!(!sections.get(pinned), "the pinned section stays hidden");
+    let baseline = ToolbarLayoutMode::Advanced;
+    for flag in ToolbarSectionFlag::ALL {
+        if flag == pinned {
+            continue;
+        }
+        assert_eq!(
+            sections.get(flag),
+            flag.baseline(baseline, &restarted_input.toolbar_mode_overrides),
+            "{flag:?} must follow the restored preset"
+        );
+    }
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}

@@ -77,6 +77,7 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     SidePane,
     CollapsedSection(ToolbarSideSection),
     NamedSection(crate::config::ToolbarSectionFlag),
+    LayoutMode,
     ItemVisibility {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
@@ -484,10 +485,12 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::ResetToolbarItemHiddenOverrides => {
             ToolbarPersistence::RuntimeUi(Runtime::ResetItemVisibility)
         }
+        ToolbarEvent::SetToolbarLayoutMode(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::LayoutMode)
+        }
         // Authored preferences below: applying them updates the effective
         // config for this run only (see `ToolbarPersistence`).
-        ToolbarEvent::SetToolbarLayoutMode(_)
-        | ToolbarEvent::ToggleAllHighlight(_)
+        ToolbarEvent::ToggleAllHighlight(_)
         | ToolbarEvent::ToggleHighlightToolRing(_)
         | ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)

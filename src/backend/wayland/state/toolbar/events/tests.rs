@@ -27,9 +27,7 @@ fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
 fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
     event_dismisses_popover(event, ToolbarPopover::Settings)
 }
-use crate::config::{
-    Action, StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
-};
+use crate::config::{Action, StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag};
 use crate::draw::{Color, FontDescriptor};
 use crate::env_vars::XDG_DATA_HOME_ENV;
 use crate::input::state::test_support::make_test_input_state;
@@ -257,14 +255,9 @@ fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
 /// to the current run: `persistence_for_event` classifies it `Ephemeral`, and
 /// the effective config follows through `preference_for_event`.
 fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
-    use ToolbarPreference::{ClickHighlight, Toolbar};
-    use ToolbarPreferenceField as Field;
+    use ToolbarPreference::ClickHighlight;
 
     vec![
-        (
-            ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
-            Toolbar(Field::LayoutMode),
-        ),
         (ToolbarEvent::ToggleAllHighlight(true), ClickHighlight),
         (ToolbarEvent::SelectTool(Tool::Highlight), ClickHighlight),
         (ToolbarEvent::ToggleHighlightToolRing(true), ClickHighlight),
@@ -382,23 +375,6 @@ fn runtime_and_ephemeral_events_own_no_authored_preference() {
     }
 }
 
-/// Only the fields the toolbar seed derivation reads have to reseed; the rest
-/// would spend a full override reconciliation for nothing.
-#[test]
-fn only_the_layout_preference_reseeds_runtime_ui() {
-    for (event, preference) in authored_preference_events() {
-        let expected = matches!(
-            preference,
-            ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode)
-        );
-        assert_eq!(
-            preference.affects_runtime_ui_seeds(),
-            expected,
-            "{event:?} classifies its seed effect wrongly"
-        );
-    }
-}
-
 #[test]
 fn toolbar_ui_preference_leaves_sibling_fields_unchanged() {
     let mut config = crate::config::Config::default();
@@ -482,124 +458,6 @@ fn applying_a_preference_reports_whether_the_effective_value_moved() {
         ToolbarPreference::Ui(UiPreferenceField::StatusBar),
     ));
     assert!(!config.ui.show_status_bar);
-}
-
-#[test]
-fn toolbar_layout_preference_rebaselines_only_the_mirrors_the_load_fold_reads() {
-    let mut config = crate::config::Config::default();
-    config.ui.toolbar.layout_mode = ToolbarLayoutMode::Simple;
-    config.ui.toolbar.top_pinned = true;
-    config.ui.toolbar.items.hidden = vec!["future-hidden".to_string()];
-    config
-        .ui
-        .toolbar
-        .items
-        .set_hidden(ToolbarSectionFlag::Presets.item_id(), true);
-    // Presets already carry an explicit override the load fold skips, and the
-    // settings flag is authored-only input the resolver ignores; a layout
-    // switch owns neither.
-    config.ui.toolbar.show_presets = true;
-    config.ui.toolbar.show_settings_section = false;
-    config.ui.toolbar.show_step_section = false;
-    let original_items = config.ui.toolbar.items.clone();
-
-    let mut input_state = make_test_input_state();
-    input_state.toolbar_layout_mode = ToolbarLayoutMode::Advanced;
-    input_state.toolbar_top_pinned = false;
-
-    assert!(apply_toolbar_preference(
-        &mut config,
-        &input_state,
-        ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode),
-    ));
-
-    assert_eq!(config.ui.toolbar.layout_mode, ToolbarLayoutMode::Advanced);
-    // Sections without an override take the new mode's baseline, so the seed
-    // refresh this run performs cannot fold the old mode's values back as
-    // pinned sections.
-    assert!(config.ui.toolbar.show_step_section);
-    assert!(config.ui.toolbar.show_actions_advanced);
-    // Everything else stays exactly as authored.
-    assert!(config.ui.toolbar.show_presets);
-    assert!(!config.ui.toolbar.show_settings_section);
-    assert!(config.ui.toolbar.top_pinned);
-    assert_eq!(config.ui.toolbar.items, original_items);
-}
-
-/// The section visibility the loader's legacy fold derives from `config`. The
-/// seed refresh reads the effective config through this same fold, so a layout
-/// switch has to leave the sections it just chose standing.
-fn folded_section_visibility(config: &crate::config::Config) -> ToolbarSectionVisibility {
-    let toolbar = &config.ui.toolbar;
-    let mut items = toolbar.items.clone();
-    let mut legacy = ToolbarSectionVisibility {
-        show_actions_section: toolbar.show_actions_section,
-        show_actions_advanced: toolbar.show_actions_advanced,
-        show_zoom_actions: toolbar.show_zoom_actions,
-        show_pages_section: toolbar.show_pages_section,
-        show_boards_section: toolbar.show_boards_section,
-        show_presets: toolbar.show_presets,
-        show_step_section: toolbar.show_step_section,
-        show_text_controls: toolbar.show_text_controls,
-        show_settings_section: toolbar.show_settings_section,
-    };
-    legacy.apply_mode_override(toolbar.mode_overrides.for_mode(toolbar.layout_mode));
-    crate::config::fold_legacy_section_flags(
-        &legacy,
-        toolbar.layout_mode,
-        &toolbar.mode_overrides,
-        &mut items,
-    );
-    crate::config::resolve_section_visibility(
-        toolbar.layout_mode,
-        &toolbar.mode_overrides,
-        &items.resolved(),
-    )
-}
-
-/// A layout switch keeps the sections the new mode implies: without the
-/// re-baseline the old mode's flags fold back into explicit overrides and the
-/// switch partly undoes itself the next time the seeds are rebuilt.
-#[test]
-fn layout_switch_keeps_the_sections_the_fold_reads_back() {
-    let mut config = crate::config::Config::default();
-    let mut input_state = make_test_input_state();
-    input_state.toolbar_layout_mode = ToolbarLayoutMode::Simple;
-
-    assert!(apply_toolbar_preference(
-        &mut config,
-        &input_state,
-        ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode),
-    ));
-
-    let sections = folded_section_visibility(&config);
-    assert!(!sections.show_presets, "Simple hides presets");
-    assert!(sections.show_zoom_actions);
-    assert!(!sections.show_step_section);
-}
-
-/// An explicitly overridden section already wins in the fold, so the switch
-/// leaves both the override and the authored flag alone.
-#[test]
-fn layout_switch_leaves_explicitly_overridden_sections_untouched() {
-    let mut config = crate::config::Config::default();
-    config
-        .ui
-        .toolbar
-        .items
-        .set_hidden(ToolbarSectionFlag::Presets.item_id(), false);
-    config.ui.toolbar.show_settings_section = false;
-    let mut input_state = make_test_input_state();
-    input_state.toolbar_layout_mode = ToolbarLayoutMode::Simple;
-
-    apply_toolbar_preference(
-        &mut config,
-        &input_state,
-        ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode),
-    );
-
-    assert!(!config.ui.toolbar.show_settings_section);
-    assert!(folded_section_visibility(&config).show_presets);
 }
 
 /// Presenter mode owns the click highlight and the HUD while it runs, so its

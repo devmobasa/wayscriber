@@ -144,6 +144,8 @@ pub(crate) enum InteractionSeedTarget {
     /// a legacy mirror behind it, so it is seeded and restored as its own
     /// value rather than as an individual item override.
     SectionVisibility(crate::config::ToolbarSectionFlag),
+    /// The toolbar layout preset the strip's layout button cycles through.
+    ToolbarLayoutMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,6 +156,7 @@ pub(crate) enum InteractionSeedValue {
     ItemOrder(Vec<ToolbarItemId>),
     Position(ToolbarPositionSeed),
     TopDisplayMode(PersistedTopDisplayMode),
+    LayoutMode(crate::config::ToolbarLayoutMode),
 }
 
 impl InteractionSeedValue {
@@ -194,6 +197,7 @@ impl InteractionSeedValue {
                     Self::Position(_)
                 )
                 | (Target::TopDisplayMode, Self::TopDisplayMode(_))
+                | (Target::ToolbarLayoutMode, Self::LayoutMode(_))
         )
     }
 }

@@ -9,10 +9,7 @@
 //! value back.
 
 use super::*;
-use crate::config::{
-    Config, StatusBarItem, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
-    item_visibility_setting,
-};
+use crate::config::{Config, StatusBarItem};
 
 /// One authored preference reachable from an overlay control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +23,6 @@ pub(super) enum ToolbarPreference {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolbarPreferenceField {
-    LayoutMode,
     Icons,
     MoreColors,
     ContextAwareUi,
@@ -43,33 +39,6 @@ pub(super) enum UiPreferenceField {
     StatusBoardBadge,
     StatusPageBadge,
     FloatingBadgeAlways,
-}
-
-impl ToolbarPreference {
-    /// Whether changing this preference also moves a runtime-UI seed.
-    ///
-    /// `runtime_seeds_from_config` derives its seeds from the toolbar item
-    /// resolution, which folds `layout_mode`, the legacy section flags, and
-    /// `ui.toolbar.items`. Changing any of those has to refresh the seed
-    /// registry, or override reconciliation keeps comparing against the
-    /// pre-toggle baseline until an unrelated event refreshes it.
-    ///
-    /// This is deliberately the same superset the write path declared: the
-    /// seed registry excludes named section rows today
-    /// (`toolbar_section_visibility_is_not_seeded_into_runtime_state`), so
-    /// these two only reach the fold's inputs. A redundant reseed is
-    /// idempotent; a missing one is not, and the fields feeding the fold are
-    /// exactly these.
-    pub(super) fn affects_runtime_ui_seeds(self) -> bool {
-        match self {
-            Self::Toolbar(ToolbarPreferenceField::LayoutMode) => true,
-            Self::Toolbar(_)
-            | Self::Ui(_)
-            | Self::HistoryCustomSection
-            | Self::ClickHighlight
-            | Self::InputHud => false,
-        }
-    }
 }
 
 /// The authored preference a toolbar event changes, if any.
@@ -89,7 +58,6 @@ pub(super) fn preference_for_event(event: &ToolbarEvent) -> Option<ToolbarPrefer
         ToolbarEvent::TogglePresetToasts(_) => Toolbar(PresetToasts),
         ToolbarEvent::ToggleToolPreview(_) => Toolbar(ToolPreview),
         ToolbarEvent::ToggleDelaySliders(_) => Toolbar(DelaySliders),
-        ToolbarEvent::SetToolbarLayoutMode(_) => Toolbar(LayoutMode),
         ToolbarEvent::ToggleCustomSection(_) => HistoryCustomSection,
         ToolbarEvent::ToggleStatusBar(_) => Ui(UiField::StatusBar),
         ToolbarEvent::SetStatusBarInteractive(_) => Ui(UiField::StatusBarInteractive),
@@ -139,14 +107,6 @@ fn apply_toolbar_field(
     use ToolbarPreferenceField::*;
 
     match field {
-        LayoutMode => {
-            let mode_changed = store(
-                &mut config.ui.toolbar.layout_mode,
-                input_state.toolbar_layout_mode,
-            );
-            let mirrors_changed = rebaseline_legacy_section_flags(config);
-            mode_changed || mirrors_changed
-        }
         Icons => store(
             &mut config.ui.toolbar.use_icons,
             input_state.toolbar_use_icons,
@@ -245,86 +205,12 @@ fn store<T: PartialEq>(field: &mut T, value: T) -> bool {
     changed
 }
 
-/// Re-baseline the legacy `show_*` mirrors a layout switch leaves behind.
-///
-/// Loading folds a legacy flag into an explicit item override wherever it
-/// disagrees with the active mode's baseline, so a switch that left the old
-/// mode's values in place would come back as sections pinned to the mode the
-/// user just left — and the seed refresh this run performs reads through that
-/// same fold. Only sections without an explicit override need the mirror: the
-/// fold skips the rest, and `show_settings_section` is authored-only input the
-/// resolver ignores.
-///
-/// Returns whether any mirror moved, so a switch that only re-baselines is
-/// still reported as an effective-config change.
-fn rebaseline_legacy_section_flags(config: &mut Config) -> bool {
-    let toolbar = &config.ui.toolbar;
-    let mode = toolbar.layout_mode;
-    let resolved = toolbar.items.resolved();
-    let mirrors = ToolbarSectionFlag::ALL.map(|flag| {
-        let baseline = matches!(
-            item_visibility_setting(&resolved, flag.item_id()),
-            ToolbarItemVisibilitySetting::Default
-        )
-        .then(|| flag.baseline(mode, &toolbar.mode_overrides));
-        (flag, baseline)
-    });
-    let mut changed = false;
-    for (flag, baseline) in mirrors {
-        if let Some(visible) = baseline {
-            changed |= section_compatibility_mirror(config, flag) != visible;
-            apply_section_compatibility_mirror(config, flag, visible);
-        }
-    }
-    changed
-}
-
-fn section_compatibility_mirror(config: &Config, flag: ToolbarSectionFlag) -> bool {
-    let toolbar = &config.ui.toolbar;
-    match flag {
-        ToolbarSectionFlag::Actions => toolbar.show_actions_section,
-        ToolbarSectionFlag::ActionsAdvanced => toolbar.show_actions_advanced,
-        ToolbarSectionFlag::ZoomActions => toolbar.show_zoom_actions,
-        ToolbarSectionFlag::Pages => toolbar.show_pages_section,
-        ToolbarSectionFlag::Boards => toolbar.show_boards_section,
-        ToolbarSectionFlag::Presets => toolbar.show_presets,
-        ToolbarSectionFlag::StepSection => toolbar.show_step_section,
-        ToolbarSectionFlag::TextControls => toolbar.show_text_controls,
-    }
-}
-
-fn apply_section_compatibility_mirror(
-    config: &mut Config,
-    flag: ToolbarSectionFlag,
-    visible: bool,
-) {
-    match flag {
-        ToolbarSectionFlag::Actions => config.ui.toolbar.show_actions_section = visible,
-        ToolbarSectionFlag::ActionsAdvanced => {
-            config.ui.toolbar.show_actions_advanced = visible;
-        }
-        ToolbarSectionFlag::ZoomActions => config.ui.toolbar.show_zoom_actions = visible,
-        ToolbarSectionFlag::Pages => config.ui.toolbar.show_pages_section = visible,
-        ToolbarSectionFlag::Boards => config.ui.toolbar.show_boards_section = visible,
-        ToolbarSectionFlag::Presets => config.ui.toolbar.show_presets = visible,
-        ToolbarSectionFlag::StepSection => config.ui.toolbar.show_step_section = visible,
-        ToolbarSectionFlag::TextControls => config.ui.toolbar.show_text_controls = visible,
-    }
-}
-
 impl WaylandState {
     /// Apply one authored preference to the effective config for this run and
     /// announce, once per session, that it is not a durable edit.
     pub(super) fn apply_effective_toolbar_preference(&mut self, preference: ToolbarPreference) {
         if !apply_toolbar_preference(&mut self.config, &self.input_state, preference) {
             return;
-        }
-        // Seeds derive from the effective config this toggle just changed, so
-        // reseed here rather than waiting for an unrelated session, board, or
-        // keybinding event: until then, override reconciliation and redundant
-        // override deletion would key off the pre-toggle baseline.
-        if preference.affects_runtime_ui_seeds() {
-            self.refresh_runtime_ui_config_seeds();
         }
         self.input_state.notify_process_only_preference();
     }

@@ -374,6 +374,10 @@ fn runtime_seeds_from_config(
         )?;
     }
     let resolved_items = resolved_toolbar_item_seeds(config);
+    insert(
+        InteractionSeedTarget::ToolbarLayoutMode,
+        InteractionSeedValue::LayoutMode(config.ui.toolbar.layout_mode),
+    )?;
     for flag in crate::config::ToolbarSectionFlag::ALL {
         insert(
             InteractionSeedTarget::SectionVisibility(flag),
@@ -552,6 +556,10 @@ fn toolbar_values(
         Target::InputHud => RuntimeUiMutationValues::one(
             InteractionSeedTarget::InputHud,
             InteractionSeedValue::Bool(input.input_hud_enabled()),
+        ),
+        Target::LayoutMode => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarLayoutMode,
+            InteractionSeedValue::LayoutMode(input.toolbar_layout_mode),
         ),
         Target::NamedSection(flag) => RuntimeUiMutationValues::one(
             InteractionSeedTarget::SectionVisibility(flag),
@@ -737,6 +745,12 @@ fn apply_live_toolbar_state(
         && let Some(value) = bool_value(InteractionSeedTarget::InputHud)
     {
         input.set_input_hud_enabled(value);
+    }
+    if include(&InteractionSeedTarget::ToolbarLayoutMode)
+        && let Some(InteractionSeedValue::LayoutMode(mode)) =
+            live.get(&InteractionSeedTarget::ToolbarLayoutMode)
+    {
+        input.apply_toolbar_layout_mode_runtime(*mode);
     }
     for flag in crate::config::ToolbarSectionFlag::ALL {
         let target = InteractionSeedTarget::SectionVisibility(flag);

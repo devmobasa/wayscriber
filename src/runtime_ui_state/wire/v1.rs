@@ -18,7 +18,7 @@ use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 /// V1 shipped. They stay in V1 because an older build decodes them as unknown
 /// keys and preserves them verbatim through `WirePassthrough`, whereas a
 /// version bump would make that build treat the whole file as read-only.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 21] = [
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 22] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
@@ -27,6 +27,7 @@ const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 21] = [
     ("top_position", InteractionSeedTarget::TopPosition),
     ("side_position", InteractionSeedTarget::SidePosition),
     ("top_display_mode", InteractionSeedTarget::TopDisplayMode),
+    ("layout_mode", InteractionSeedTarget::ToolbarLayoutMode),
     (
         "status_bar_interactive",
         InteractionSeedTarget::StatusBarInteractive,
@@ -247,6 +248,13 @@ fn decode_value(
         },
         Target::ItemOrder(group) => decode_order(*group, value),
         Target::TopPosition | Target::SidePosition => decode_position(value),
+        Target::ToolbarLayoutMode => value
+            .as_str()
+            .and_then(layout_mode_from_wire_id)
+            .map(InteractionSeedValue::LayoutMode)
+            .ok_or_else(|| {
+                RuntimeUiWireError::new("toolbar layout mode override has an unknown value")
+            }),
         Target::TopDisplayMode => value
             .as_str()
             .and_then(PersistedTopDisplayMode::from_wire_id)
@@ -362,6 +370,9 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             }
             InteractionSeedTarget::SidePosition => {
                 insert_recognized(&mut toolbar, "side_position", entry)
+            }
+            InteractionSeedTarget::ToolbarLayoutMode => {
+                insert_recognized(&mut toolbar, "layout_mode", entry)
             }
             InteractionSeedTarget::TopDisplayMode => {
                 insert_recognized(&mut toolbar, "top_display_mode", entry)
@@ -521,6 +532,9 @@ fn encode_value(
             table.insert("y".to_string(), Value::Float(position.y.get()));
             Ok(Value::Table(table))
         }
+        (InteractionSeedTarget::ToolbarLayoutMode, InteractionSeedValue::LayoutMode(mode)) => {
+            Ok(Value::String(layout_mode_wire_id(*mode).to_string()))
+        }
         (InteractionSeedTarget::TopDisplayMode, InteractionSeedValue::TopDisplayMode(mode)) => {
             Ok(Value::String(mode.wire_id().to_string()))
         }
@@ -610,4 +624,25 @@ fn item_belongs_to_group(id: ToolbarItemId, group: ToolbarItemOrderGroup) -> boo
         .find(|definition| definition.id == id)
         .and_then(toolbar_item_order_group)
         == Some(group)
+}
+
+/// The wire spelling of a layout preset. Independent of the config's serde
+/// naming so a rename there cannot silently reinterpret a stored value.
+fn layout_mode_wire_id(mode: crate::config::ToolbarLayoutMode) -> &'static str {
+    use crate::config::ToolbarLayoutMode as Mode;
+    match mode {
+        Mode::Simple => "simple",
+        Mode::Regular => "regular",
+        Mode::Advanced => "advanced",
+    }
+}
+
+fn layout_mode_from_wire_id(value: &str) -> Option<crate::config::ToolbarLayoutMode> {
+    use crate::config::ToolbarLayoutMode as Mode;
+    match value {
+        "simple" => Some(Mode::Simple),
+        "regular" => Some(Mode::Regular),
+        "advanced" => Some(Mode::Advanced),
+        _ => None,
+    }
 }
