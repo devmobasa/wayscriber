@@ -10,5 +10,6 @@ impl ConfigDraft {
         config.capture.format = self.capture_format.clone();
         config.capture.copy_to_clipboard = self.capture_copy_to_clipboard;
         config.capture.exit_after_capture = self.capture_exit_after;
+        config.clipboard.fetch_gif_from_url = self.clipboard_fetch_gif_from_url;
     }
 }

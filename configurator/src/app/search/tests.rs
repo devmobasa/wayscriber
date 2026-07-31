@@ -731,6 +731,23 @@ fn exact_capture_file_labels_match_capture_file_section() {
 }
 
 #[test]
+fn gif_url_fetch_toggle_is_discoverable_by_its_visible_terms() {
+    for query in ["gif", "gifs", "network", "paste", "fetch", "image links"] {
+        let (mut app, _task) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let capture = summary
+            .tab(TabId::Capture)
+            .unwrap_or_else(|| panic!("query {query:?} should reach the capture tab"));
+        assert!(
+            capture.area_matches(SearchArea::CaptureFiles),
+            "query {query:?} should surface the clipboard GIF fetch toggle"
+        );
+    }
+}
+
+#[test]
 fn exact_capture_filename_labels_match_capture_sections() {
     let cases = [
         (

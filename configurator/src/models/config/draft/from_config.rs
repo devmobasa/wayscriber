@@ -255,6 +255,7 @@ impl ConfigDraft {
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
             capture_exit_after: config.capture.exit_after_capture,
+            clipboard_fetch_gif_from_url: config.clipboard.fetch_gif_from_url,
             export_pdf_filename_template: config
                 .export
                 .pdf

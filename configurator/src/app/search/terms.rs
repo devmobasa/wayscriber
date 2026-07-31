@@ -370,6 +370,12 @@ pub(super) const CAPTURE_FILE_TERMS: &[&str] = &[
     "copy to clipboard",
     "always exit overlay after capture",
     "format",
+    "paste",
+    "gif",
+    "gifs",
+    "network",
+    "fetch",
+    "image links",
 ];
 pub(super) const CAPTURE_PDF_TERMS: &[&str] = &[
     "pdf",

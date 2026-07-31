@@ -55,6 +55,12 @@ impl ConfiguratorApp {
                     ToggleField::CaptureCopyToClipboard,
                 ))
                 .push(toggle_row(
+                    "Paste fetches GIFs from copied image links (network)",
+                    self.draft.clipboard_fetch_gif_from_url,
+                    self.defaults.clipboard_fetch_gif_from_url,
+                    ToggleField::ClipboardFetchGifFromUrl,
+                ))
+                .push(toggle_row(
                     "Always exit overlay after capture",
                     self.draft.capture_exit_after,
                     self.defaults.capture_exit_after,
