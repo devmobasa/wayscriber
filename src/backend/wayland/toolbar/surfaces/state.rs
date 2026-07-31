@@ -20,6 +20,29 @@ impl ToolbarSurface {
         self.dirty = true;
     }
 
+    /// Reports a failed render without flooding the log.
+    ///
+    /// A surface that cannot draw stays dirty and retries every frame, so an
+    /// unconditional warning would repeat at frame rate. The first failure of
+    /// a streak is always reported, then every 300th - roughly every few
+    /// seconds - so a persistent problem stays visible and a transient one
+    /// costs a single line.
+    pub fn report_render_failure(&mut self, err: &anyhow::Error) {
+        const REPEAT_EVERY: u32 = 300;
+        let streak = self.render_failures.saturating_add(1);
+        self.render_failures = streak;
+        if streak == 1 {
+            log::warn!("Failed to render the {} toolbar: {err:#}", self.name);
+        } else if streak.is_multiple_of(REPEAT_EVERY) {
+            log::warn!(
+                "Still failing to render the {} toolbar after {streak} attempts: {err:#}",
+                self.name
+            );
+        } else {
+            log::debug!("Failed to render the {} toolbar: {err:#}", self.name);
+        }
+    }
+
     pub fn clear_focus(&mut self) {
         if self.focus_index.is_some() || self.focus_id.is_some() {
             self.focus_index = None;
@@ -200,5 +223,31 @@ impl ToolbarSurface {
         if output.is_some() {
             self.set_scale(scale);
         }
+    }
+}
+
+#[cfg(test)]
+mod render_failure_tests {
+    use super::super::structs::ToolbarSurface;
+    use smithay_client_toolkit::shell::wlr_layer::Anchor;
+
+    fn surface() -> ToolbarSurface {
+        ToolbarSurface::new("top", Anchor::TOP, (0, 0, 0, 0))
+    }
+
+    /// A surface that cannot draw stays dirty and retries every frame, so the
+    /// report has to be rate limited or it repeats at frame rate.
+    #[test]
+    fn repeated_render_failures_are_counted_for_rate_limiting() {
+        let mut surface = surface();
+        let err = anyhow::anyhow!("no buffer");
+
+        surface.report_render_failure(&err);
+        assert_eq!(surface.render_failures, 1, "the first failure is reported");
+
+        for _ in 0..5 {
+            surface.report_render_failure(&err);
+        }
+        assert_eq!(surface.render_failures, 6);
     }
 }

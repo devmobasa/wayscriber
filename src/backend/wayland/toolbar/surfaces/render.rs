@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use anyhow::Result;
-use log::{debug, warn};
+use anyhow::{Result, anyhow};
+use log::debug;
 use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{Shm, slot::SlotPool},
@@ -47,30 +47,35 @@ impl ToolbarSurface {
             self.height.saturating_mul(self.scale as u32),
         );
 
+        // Every failure below leaves `dirty` set so the next frame retries, and
+        // is reported rather than swallowed: returning Ok here used to leave
+        // the toolbar permanently blank with nothing in the log to say why.
         if self.pool.is_none() {
             let buffer_size = (phys_w * phys_h * 4) as usize;
-            if let Ok(pool) = SlotPool::new(buffer_size, shm) {
-                self.pool = Some(pool);
-            } else {
-                return Ok(());
+            match SlotPool::new(buffer_size, shm) {
+                Ok(pool) => self.pool = Some(pool),
+                Err(err) => {
+                    return Err(anyhow!(
+                        "failed to create a {buffer_size}-byte shm pool: {err}"
+                    ));
+                }
             }
         }
 
         let pool = match self.pool.as_mut() {
             Some(p) => p,
-            None => return Ok(()),
+            None => return Err(anyhow!("shm pool is missing after creation")),
         };
-        let (buffer, canvas) = match pool.create_buffer(
-            phys_w as i32,
-            phys_h as i32,
-            (phys_w * 4) as i32,
-            wayland_client::protocol::wl_shm::Format::Argb8888,
-        ) {
-            Ok(buf) => buf,
-            Err(_) => return Ok(()),
-        };
+        let (buffer, canvas) = pool
+            .create_buffer(
+                phys_w as i32,
+                phys_h as i32,
+                (phys_w * 4) as i32,
+                wayland_client::protocol::wl_shm::Format::Argb8888,
+            )
+            .map_err(|err| anyhow!("failed to create a {phys_w}x{phys_h} buffer: {err}"))?;
 
-        let surface = match unsafe {
+        let surface = unsafe {
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),
                 cairo::Format::ARgb32,
@@ -78,14 +83,10 @@ impl ToolbarSurface {
                 phys_h as i32,
                 (phys_w * 4) as i32,
             )
-        } {
-            Ok(s) => s,
-            Err(_) => return Ok(()),
-        };
-        let ctx = match cairo::Context::new(&surface) {
-            Ok(c) => c,
-            Err(_) => return Ok(()),
-        };
+        }
+        .map_err(|err| anyhow!("failed to wrap the buffer in a cairo surface: {err}"))?;
+        let ctx = cairo::Context::new(&surface)
+            .map_err(|err| anyhow!("failed to create a cairo context: {err}"))?;
 
         ctx.set_operator(cairo::Operator::Clear);
         let _ = ctx.paint();
@@ -147,17 +148,14 @@ impl ToolbarSurface {
             let wl_surface = layer.wl_surface();
             wl_surface.set_buffer_scale(self.scale);
             if let Err(err) = buffer.attach_to(wl_surface) {
-                warn!(
-                    "Failed to attach toolbar buffer for '{}': {}",
-                    self.name, err
-                );
-                return Ok(());
+                return Err(anyhow!("failed to attach the toolbar buffer: {err}"));
             }
             wl_surface.damage_buffer(0, 0, phys_w as i32, phys_h as i32);
             wl_surface.commit();
         }
 
         self.dirty = false;
+        self.render_failures = 0;
         Ok(())
     }
 }

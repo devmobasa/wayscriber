@@ -29,7 +29,7 @@ impl ToolbarSurfaceManager {
                     )
                 },
             ) {
-                log::warn!("Failed to render top toolbar: {}", err);
+                self.top.report_render_failure(&err);
             }
             self.top.sync_top_input_region(snapshot);
         }
@@ -51,7 +51,7 @@ impl ToolbarSurfaceManager {
                     )
                 },
             ) {
-                log::warn!("Failed to render side toolbar: {}", err);
+                self.side.report_render_failure(&err);
             }
         }
     }
