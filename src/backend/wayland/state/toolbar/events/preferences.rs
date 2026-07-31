@@ -193,9 +193,4 @@ impl WaylandState {
         }
         self.input_state.notify_process_only_preference();
     }
-
-    /// Follow an input-HUD change the user made outside the toolbar.
-    pub(in crate::backend::wayland) fn apply_input_hud_preferences(&mut self) {
-        self.apply_effective_toolbar_preference(ToolbarPreference::InputHud);
-    }
 }

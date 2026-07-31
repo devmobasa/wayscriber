@@ -154,52 +154,6 @@ fn commit_board_pin_toggle(
     runtime.finish_board_pin_toggle(prepared, true)
 }
 
-/// The seed inputs assembled the way `refresh_runtime_ui_config_seeds` does:
-/// board pins are synced from the config first, then folded into the registry.
-fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
-    let mut input = input_from_config(config);
-    input
-        .boards
-        .sync_pin_seeds_from_config(&config.resolved_boards());
-    runtime_seeds_from_config(config, &board_pin_seeds_from_input(&input))
-        .expect("probe config should produce valid seeds")
-}
-
-/// The same rule for the authored preferences that no longer travel through
-/// the writer. `ToolbarPreference::affects_runtime_ui_seeds` declares the
-/// layout mode and the section fields, because those are exactly the fields
-/// `resolved_toolbar_item_seeds` reads through the legacy fold; every other
-/// authored preference is declared seed-neutral and has to stay that way. The
-/// declared pair is a deliberate superset — a redundant reseed is idempotent,
-/// a missing one leaves overrides reconciling against a stale baseline — so
-/// only the neutral half is asserted here.
-#[test]
-fn no_undeclared_authored_preference_moves_a_runtime_seed() {
-    /// One authored preference field, changed away from the shipped default.
-    type PreferenceProbe = (&'static str, fn(&mut Config));
-
-    let baseline = Config::default();
-    let baseline_seeds = seeds_for_config(&baseline);
-
-    let seed_neutral: Vec<PreferenceProbe> = vec![
-        ("zoom chip", |config| {
-            config.ui.toolbar.show_zoom_chip = !config.ui.toolbar.show_zoom_chip;
-        }),
-        ("floating badge", |config| {
-            config.ui.show_floating_badge = !config.ui.show_floating_badge;
-        }),
-    ];
-    for (label, change) in seed_neutral {
-        let mut config = baseline.clone();
-        change(&mut config);
-        assert_eq!(
-            seeds_for_config(&config),
-            baseline_seeds,
-            "{label} moves a runtime seed without being declared seed-moving"
-        );
-    }
-}
-
 #[test]
 fn toolbar_seed_registry_covers_every_runtime_routed_target() {
     let config = Config::default();
@@ -215,8 +169,21 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
         InteractionSeedTarget::TopPosition,
         InteractionSeedTarget::SidePosition,
         InteractionSeedTarget::TopDisplayMode,
+        InteractionSeedTarget::ToolbarLayoutMode,
+        InteractionSeedTarget::ClickHighlight,
+        InteractionSeedTarget::ClickHighlightToolRing,
+        InteractionSeedTarget::FloatingBadge,
+        InteractionSeedTarget::ZoomChip,
     ] {
         assert!(seeds.get(&target).is_some(), "missing seed for {target:?}");
+    }
+    for flag in crate::config::ToolbarSectionFlag::ALL {
+        assert!(
+            seeds
+                .get(&InteractionSeedTarget::SectionVisibility(flag))
+                .is_some(),
+            "missing section seed for {flag:?}"
+        );
     }
     for section in ToolbarSideSection::ALL {
         assert!(
@@ -237,7 +204,7 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
             seeds
                 .get(&InteractionSeedTarget::ItemVisibility(flag.item_id()))
                 .is_none(),
-            "authored section {flag:?} must not become a runtime seed"
+            "a section persists under its own target, not as an item override"
         );
     }
     for group in ToolbarItemOrderGroup::ALL {
@@ -3189,6 +3156,82 @@ fn click_highlight_survives_restart_from_either_path() {
 
     assert_eq!(restarted_input.click_highlight_enabled(), enabled);
     assert_eq!(restarted_input.highlight_tool_ring_enabled(), ring);
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// The status bar, the floating badge and the zoom chip are reachable only
+/// from the keyboard, which applies inside `InputState` before the backend
+/// sees the change. They still persist, through the same targets and the same
+/// pre-change rollback the toolbar controls use.
+#[test]
+fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    // Each entry reads its own live value, flips it, and returns both -- the
+    // shape the keyboard path has, where the change lands before the persist.
+    type Flip = (
+        ToolbarRuntimeUiPersistenceTarget,
+        fn(&mut InputState) -> (bool, bool),
+    );
+    let flips: Vec<Flip> = vec![
+        (ToolbarRuntimeUiPersistenceTarget::StatusBar, |input| {
+            let previous = input.show_status_bar;
+            input.show_status_bar = !previous;
+            (previous, input.show_status_bar)
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::FloatingBadge, |input| {
+            let previous = input.show_floating_badge;
+            input.show_floating_badge = !previous;
+            (previous, input.show_floating_badge)
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::ZoomChip, |input| {
+            let previous = input.show_zoom_chip;
+            input.show_zoom_chip = !previous;
+            (previous, input.show_zoom_chip)
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::InputHud, |input| {
+            let previous = input.input_hud_enabled();
+            input.set_input_hud_enabled(!previous);
+            (previous, input.input_hud_enabled())
+        }),
+    ];
+
+    let mut expected = Vec::new();
+    for (target, flip) in flips {
+        let seed =
+            single_bool_seed_target(target).unwrap_or_else(|| panic!("{target:?} is a bool"));
+        let (previous, now) = flip(&mut input);
+        let rollback = RuntimeUiMutationValues::one(seed, InteractionSeedValue::Bool(previous))
+            .expect("valid rollback");
+        let prepared = runtime
+            .begin_toolbar_mutation_with_rollback(target, rollback)
+            .unwrap_or_else(|| panic!("{target:?} permit"));
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+        assert!(
+            matches!(finish, ToolbarRuntimeFinish::KeepPreview),
+            "{target:?}"
+        );
+        expected.push(now);
+    }
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(restarted_input.show_status_bar, expected[0]);
+    assert_eq!(restarted_input.show_floating_badge, expected[1]);
+    assert_eq!(restarted_input.show_zoom_chip, expected[2]);
+    assert_eq!(restarted_input.input_hud_enabled(), expected[3]);
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
 }

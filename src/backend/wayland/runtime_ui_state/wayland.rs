@@ -201,6 +201,48 @@ impl WaylandState {
         self.apply_toolbar_runtime_finish(finish);
     }
 
+    /// Persists an input-HUD change the user made outside the toolbar.
+    pub(in crate::backend::wayland) fn persist_input_hud(&mut self, previous_enabled: bool) {
+        self.persist_keyboard_chrome_toggle(
+            ToolbarRuntimeUiPersistenceTarget::InputHud,
+            previous_enabled,
+        );
+    }
+
+    /// Persists one boolean chrome toggle the user made outside the toolbar.
+    ///
+    /// Keyboard and command-palette changes apply inside `InputState` before
+    /// the backend sees them, so the caller supplies the pre-change value as
+    /// the rollback rather than letting it be read back off the live state.
+    pub(in crate::backend::wayland) fn persist_keyboard_chrome_toggle(
+        &mut self,
+        target: ToolbarRuntimeUiPersistenceTarget,
+        rollback_value: bool,
+    ) {
+        let Some(seed_target) = super::single_bool_seed_target(target) else {
+            log::error!("{target:?} is not a single boolean chrome toggle");
+            return;
+        };
+        let rollback = match RuntimeUiMutationValues::one(
+            seed_target,
+            InteractionSeedValue::Bool(rollback_value),
+        ) {
+            Ok(values) => values,
+            Err(error) => {
+                log::error!("{target:?} has an invalid rollback value: {error:?}");
+                return;
+            }
+        };
+        let Some(runtime) = self.runtime_ui.as_mut() else {
+            return;
+        };
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+            return;
+        };
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
+        self.apply_toolbar_runtime_finish(finish);
+    }
+
     /// Drains every queued durable toolbar change into the runtime-ui
     /// writer, oldest first. Called on every event-loop pass and once more
     /// at teardown before the writer shuts down, so a toggle pressed in the

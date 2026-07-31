@@ -18,7 +18,7 @@ use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 /// V1 shipped. They stay in V1 because an older build decodes them as unknown
 /// keys and preserves them verbatim through `WirePassthrough`, whereas a
 /// version bump would make that build treat the whole file as read-only.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 24] = [
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 26] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
@@ -29,6 +29,8 @@ const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 24] = [
     ("top_display_mode", InteractionSeedTarget::TopDisplayMode),
     ("layout_mode", InteractionSeedTarget::ToolbarLayoutMode),
     ("click_highlight", InteractionSeedTarget::ClickHighlight),
+    ("floating_badge", InteractionSeedTarget::FloatingBadge),
+    ("zoom_chip", InteractionSeedTarget::ZoomChip),
     (
         "click_highlight_tool_ring",
         InteractionSeedTarget::ClickHighlightToolRing,
@@ -230,7 +232,9 @@ fn decode_value(
         | Target::HistoryCustomSection
         | Target::InputHud
         | Target::ClickHighlight
-        | Target::ClickHighlightToolRing => value
+        | Target::ClickHighlightToolRing
+        | Target::FloatingBadge
+        | Target::ZoomChip => value
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
@@ -433,6 +437,10 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::ClickHighlightToolRing => {
                 insert_recognized(&mut toolbar, "click_highlight_tool_ring", entry)
             }
+            InteractionSeedTarget::FloatingBadge => {
+                insert_recognized(&mut toolbar, "floating_badge", entry)
+            }
+            InteractionSeedTarget::ZoomChip => insert_recognized(&mut toolbar, "zoom_chip", entry),
         }
     }
     insert_recognized(&mut toolbar, "collapsed_sections", Value::Table(collapsed));
@@ -505,7 +513,9 @@ fn encode_value(
             | InteractionSeedTarget::HistoryCustomSection
             | InteractionSeedTarget::InputHud
             | InteractionSeedTarget::ClickHighlight
-            | InteractionSeedTarget::ClickHighlightToolRing,
+            | InteractionSeedTarget::ClickHighlightToolRing
+            | InteractionSeedTarget::FloatingBadge
+            | InteractionSeedTarget::ZoomChip,
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
         (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {

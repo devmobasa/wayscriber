@@ -375,6 +375,14 @@ fn runtime_seeds_from_config(
     }
     let resolved_items = resolved_toolbar_item_seeds(config);
     insert(
+        InteractionSeedTarget::FloatingBadge,
+        InteractionSeedValue::Bool(config.ui.show_floating_badge),
+    )?;
+    insert(
+        InteractionSeedTarget::ZoomChip,
+        InteractionSeedValue::Bool(config.ui.toolbar.show_zoom_chip),
+    )?;
+    insert(
         InteractionSeedTarget::ClickHighlight,
         InteractionSeedValue::Bool(config.ui.click_highlight.enabled),
     )?;
@@ -565,6 +573,14 @@ fn toolbar_values(
             InteractionSeedTarget::InputHud,
             InteractionSeedValue::Bool(input.input_hud_enabled()),
         ),
+        Target::FloatingBadge => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::FloatingBadge,
+            InteractionSeedValue::Bool(input.show_floating_badge),
+        ),
+        Target::ZoomChip => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ZoomChip,
+            InteractionSeedValue::Bool(input.show_zoom_chip),
+        ),
         Target::ClickHighlight => click_highlight_values(
             user_click_highlight_enabled(input),
             input.highlight_tool_ring_enabled(),
@@ -638,6 +654,23 @@ fn toolbar_values(
 
 /// The persisted form of a live top-display mode.
 ///
+/// The seed a single-boolean chrome target persists under, if it is one.
+///
+/// Keyboard-driven toggles build their own rollback and so need the seed the
+/// target maps to without a live `InputState` to read it from.
+pub(in crate::backend::wayland) fn single_bool_seed_target(
+    target: ToolbarRuntimeUiPersistenceTarget,
+) -> Option<InteractionSeedTarget> {
+    use ToolbarRuntimeUiPersistenceTarget as Target;
+    match target {
+        Target::StatusBar => Some(InteractionSeedTarget::StatusBar),
+        Target::FloatingBadge => Some(InteractionSeedTarget::FloatingBadge),
+        Target::ZoomChip => Some(InteractionSeedTarget::ZoomChip),
+        Target::InputHud => Some(InteractionSeedTarget::InputHud),
+        _ => None,
+    }
+}
+
 /// The click-highlight values as one batch: `ToggleAllHighlight` can move the
 /// ring's companion, and the keyboard path persists both from a single
 /// pre-change snapshot.
@@ -786,6 +819,16 @@ fn apply_live_toolbar_state(
         && let Some(value) = bool_value(InteractionSeedTarget::InputHud)
     {
         input.set_input_hud_enabled(value);
+    }
+    if include(&InteractionSeedTarget::FloatingBadge)
+        && let Some(value) = bool_value(InteractionSeedTarget::FloatingBadge)
+    {
+        input.show_floating_badge = value;
+    }
+    if include(&InteractionSeedTarget::ZoomChip)
+        && let Some(value) = bool_value(InteractionSeedTarget::ZoomChip)
+    {
+        input.show_zoom_chip = value;
     }
     if include(&InteractionSeedTarget::ClickHighlight)
         && let Some(value) = bool_value(InteractionSeedTarget::ClickHighlight)

@@ -2,6 +2,7 @@ use super::WaylandState;
 use crate::{
     config::Action,
     input::{InputState, Key},
+    ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget as Target,
 };
 
 /// Runtime presentation-aid preferences that persist when the user changes
@@ -15,8 +16,12 @@ struct InputPreferenceSnapshot {
     click_highlight_enabled: bool,
     tool_ring_enabled: bool,
     input_hud_enabled: bool,
+    show_status_bar: bool,
+    show_floating_badge: bool,
+    show_zoom_chip: bool,
     presenter_mode: bool,
     light_mode: bool,
+    focus_mode: bool,
 }
 
 impl InputPreferenceSnapshot {
@@ -25,15 +30,23 @@ impl InputPreferenceSnapshot {
             click_highlight_enabled: input_state.click_highlight_enabled(),
             tool_ring_enabled: input_state.highlight_tool_ring_enabled(),
             input_hud_enabled: input_state.input_hud_enabled(),
+            show_status_bar: input_state.show_status_bar,
+            show_floating_badge: input_state.show_floating_badge,
+            show_zoom_chip: input_state.show_zoom_chip,
             presenter_mode: input_state.presenter_mode,
             light_mode: input_state.light_mode,
+            focus_mode: input_state.focus_mode_active(),
         }
     }
 
     /// A mode transition owns the flip it caused, so only same-mode changes
-    /// are the user's own preference.
+    /// are the user's own preference. Focus mode counts: it hides the status
+    /// bar on the way in and puts it back on the way out, and neither is the
+    /// user choosing to live without a status bar.
     fn same_modes_as(self, after: Self) -> bool {
-        self.presenter_mode == after.presenter_mode && self.light_mode == after.light_mode
+        self.presenter_mode == after.presenter_mode
+            && self.light_mode == after.light_mode
+            && self.focus_mode == after.focus_mode
     }
 
     fn click_highlight_changed_by_user_after(self, after: Self) -> bool {
@@ -44,6 +57,31 @@ impl InputPreferenceSnapshot {
 
     fn input_hud_changed_by_user_after(self, after: Self) -> bool {
         self.same_modes_as(after) && self.input_hud_enabled != after.input_hud_enabled
+    }
+
+    /// The chrome toggles the keyboard owns alone, each paired with the target
+    /// it persists under and the value to roll back to.
+    fn chrome_changed_by_user_after(self, after: Self) -> Vec<(Target, bool)> {
+        if !self.same_modes_as(after) {
+            return Vec::new();
+        }
+        [
+            (
+                Target::StatusBar,
+                self.show_status_bar,
+                after.show_status_bar,
+            ),
+            (
+                Target::FloatingBadge,
+                self.show_floating_badge,
+                after.show_floating_badge,
+            ),
+            (Target::ZoomChip, self.show_zoom_chip, after.show_zoom_chip),
+        ]
+        .into_iter()
+        .filter(|(_, before, now)| before != now)
+        .map(|(target, before, _)| (target, before))
+        .collect()
     }
 }
 
@@ -73,7 +111,11 @@ impl WaylandState {
             );
         }
         if preferences_before.input_hud_changed_by_user_after(preferences_after) {
-            self.apply_input_hud_preferences();
+            self.persist_input_hud(preferences_before.input_hud_enabled);
+        }
+        for (target, rollback) in preferences_before.chrome_changed_by_user_after(preferences_after)
+        {
+            self.persist_keyboard_chrome_toggle(target, rollback);
         }
         if preferences_before.input_hud_enabled != preferences_after.input_hud_enabled {
             // A mode transition can flip the HUD without changing the user's
@@ -131,6 +173,8 @@ impl WaylandState {
 mod tests {
     use super::InputPreferenceSnapshot;
 
+    use super::Target;
+
     fn snapshot(
         click_highlight_enabled: bool,
         tool_ring_enabled: bool,
@@ -142,9 +186,46 @@ mod tests {
             click_highlight_enabled,
             tool_ring_enabled,
             input_hud_enabled,
+            show_status_bar: true,
+            show_floating_badge: true,
+            show_zoom_chip: true,
             presenter_mode,
             light_mode,
+            focus_mode: false,
         }
+    }
+
+    /// The chrome toggles the keyboard owns are read the same way: a direct
+    /// flip persists, a mode transition that moved them does not.
+    #[test]
+    fn chrome_snapshot_ignores_changes_a_mode_transition_caused() {
+        let before = snapshot(false, false, false, false, false);
+
+        let mut after = before;
+        after.show_status_bar = false;
+        assert_eq!(
+            before.chrome_changed_by_user_after(after),
+            vec![(Target::StatusBar, true)]
+        );
+
+        let mut with_badge_and_chip = after;
+        with_badge_and_chip.show_floating_badge = false;
+        with_badge_and_chip.show_zoom_chip = false;
+        assert_eq!(
+            before.chrome_changed_by_user_after(with_badge_and_chip),
+            vec![
+                (Target::StatusBar, true),
+                (Target::FloatingBadge, true),
+                (Target::ZoomChip, true),
+            ]
+        );
+
+        // Focus mode hides the status bar on its own; that is not a choice.
+        let mut focus = after;
+        focus.focus_mode = true;
+        assert!(before.chrome_changed_by_user_after(focus).is_empty());
+
+        assert!(before.chrome_changed_by_user_after(before).is_empty());
     }
 
     #[test]

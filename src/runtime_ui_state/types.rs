@@ -149,6 +149,9 @@ pub(crate) enum InteractionSeedTarget {
     /// The click highlight, and the ring the highlight tool keeps on screen.
     ClickHighlight,
     ClickHighlightToolRing,
+    /// The floating board/page badge, and the zoom chip beside it.
+    FloatingBadge,
+    ZoomChip,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -189,7 +192,9 @@ impl InteractionSeedValue {
                     | Target::HistoryCustomSection
                     | Target::InputHud
                     | Target::ClickHighlight
-                    | Target::ClickHighlightToolRing,
+                    | Target::ClickHighlightToolRing
+                    | Target::FloatingBadge
+                    | Target::ZoomChip,
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
                 | (

@@ -79,6 +79,10 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     NamedSection(crate::config::ToolbarSectionFlag),
     LayoutMode,
     ClickHighlight,
+    /// Keyboard-only chrome: no toolbar control routes to these, but they
+    /// persist through the same targets so a restart restores them alike.
+    FloatingBadge,
+    ZoomChip,
     ItemVisibility {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
