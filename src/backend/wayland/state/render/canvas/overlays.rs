@@ -27,6 +27,19 @@ impl WaylandState {
             crate::draw::render_selection_handles(ctx, &bounds);
         }
 
+        // GIF play/pause buttons. Drawn in the overlay pass, so the control
+        // never reaches exports or board-picker thumbnails, and outside the
+        // selection block, so a stopped GIF keeps its resume affordance after
+        // the selection is cleared.
+        if matches!(
+            self.input_state.state,
+            DrawingState::Idle | DrawingState::ResizingText { .. }
+        ) {
+            for (_, gif_bounds, playing) in self.input_state.gif_playback_buttons() {
+                crate::draw::render_gif_playback_button(ctx, &gif_bounds, playing);
+            }
+        }
+
         if matches!(
             self.input_state.state,
             DrawingState::Idle | DrawingState::ResizingText { .. }

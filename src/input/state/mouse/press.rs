@@ -407,6 +407,16 @@ impl InputState {
             }
         }
 
+        // The playback button sits inside the shape and overlaps neither the
+        // handles nor a drag that should move the GIF, so it is resolved
+        // first — otherwise the press would start a move instead.
+        if button == MouseButton::Left
+            && let Some(gif_id) = self.hit_gif_playback_button(x, y)
+        {
+            self.toggle_gif_playback(gif_id, std::time::Instant::now());
+            return;
+        }
+
         if let Some(handle) = self.hit_selection_handle(x, y)
             && let Some(original_bounds) = self.selection_bounds()
         {

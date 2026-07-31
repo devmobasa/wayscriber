@@ -12,6 +12,17 @@ const HANDLE_SIZE: f64 = 8.0;
 /// Selection handle border width
 const HANDLE_BORDER: f64 = 1.5;
 
+/// Radius of the on-canvas GIF play/pause button.
+const GIF_BUTTON_RADIUS: i32 = 11;
+/// Distance from the top-right corner to the button's center. Large enough
+/// that the button clears the corner handle's hit zone (half the handle plus
+/// its 4 px tolerance), so pressing play never steals a resize drag.
+const GIF_BUTTON_INSET: i32 = 22;
+/// Smallest selection that hosts the button. Below this the button would cover
+/// the image or collide with the edge-midpoint handles, so the context menu
+/// stays the only control.
+const GIF_BUTTON_MIN_EXTENT: i32 = 64;
+
 /// Selection accent color (blue)
 const SELECTION_COLOR: Color = Color {
     r: 0.3,
@@ -203,6 +214,79 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
     let _ = ctx.restore();
 }
 
+/// Square occupied by the on-canvas GIF play/pause button for a selection, or
+/// `None` when the selection is too small to host one. Shared by the overlay
+/// renderer and the pointer hit test so both always agree.
+pub fn gif_playback_button_rect(bounds: &Rect) -> Option<Rect> {
+    if bounds.width < GIF_BUTTON_MIN_EXTENT || bounds.height < GIF_BUTTON_MIN_EXTENT {
+        return None;
+    }
+    let center_x = bounds.x + bounds.width - GIF_BUTTON_INSET;
+    let center_y = bounds.y + GIF_BUTTON_INSET;
+    Rect::new(
+        center_x - GIF_BUTTON_RADIUS,
+        center_y - GIF_BUTTON_RADIUS,
+        GIF_BUTTON_RADIUS * 2,
+        GIF_BUTTON_RADIUS * 2,
+    )
+}
+
+/// Renders the play/pause button inside a selected animated GIF's top-right
+/// corner. Overlay-pass only: exports and thumbnails never draw selection
+/// chrome, so the control cannot leak into saved images.
+pub fn render_gif_playback_button(ctx: &cairo::Context, bounds: &Rect, playing: bool) {
+    let Some(rect) = gif_playback_button_rect(bounds) else {
+        return;
+    };
+    let radius = rect.width as f64 / 2.0;
+    let center_x = rect.x as f64 + radius;
+    let center_y = rect.y as f64 + radius;
+
+    let _ = ctx.save();
+    // Dark disc first: the glyph has to stay legible over whichever frame the
+    // GIF happens to be showing.
+    ctx.arc(center_x, center_y, radius, 0.0, std::f64::consts::TAU);
+    ctx.set_source_rgba(0.08, 0.09, 0.11, 0.78);
+    let _ = ctx.fill_preserve();
+    ctx.set_source_rgba(
+        SELECTION_COLOR.r,
+        SELECTION_COLOR.g,
+        SELECTION_COLOR.b,
+        SELECTION_COLOR.a,
+    );
+    ctx.set_line_width(HANDLE_BORDER);
+    let _ = ctx.stroke();
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    if playing {
+        let bar_width = radius * 0.24;
+        let bar_height = radius * 0.92;
+        let gap = radius * 0.20;
+        ctx.rectangle(
+            center_x - gap - bar_width,
+            center_y - bar_height / 2.0,
+            bar_width,
+            bar_height,
+        );
+        ctx.rectangle(
+            center_x + gap,
+            center_y - bar_height / 2.0,
+            bar_width,
+            bar_height,
+        );
+    } else {
+        // Nudged right of center so the triangle reads as optically centered.
+        let size = radius * 0.86;
+        let left = center_x - size * 0.34;
+        ctx.move_to(left, center_y - size / 2.0);
+        ctx.line_to(left + size * 0.82, center_y);
+        ctx.line_to(left, center_y + size / 2.0);
+        ctx.close_path();
+    }
+    let _ = ctx.fill();
+    let _ = ctx.restore();
+}
+
 /// Renders selection handles (corner resize handles) for a bounding box.
 pub fn render_selection_handles(ctx: &cairo::Context, bounds: &Rect) {
     let _ = ctx.save();
@@ -366,6 +450,51 @@ pub fn selection_handle_rects(bounds: &Rect) -> [Rect; 8] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The button lives inside the shape, where a press would otherwise start
+    /// a resize (corner/edge handles) or a move. Its square must clear every
+    /// handle hit zone, or play/pause would steal those drags.
+    #[test]
+    fn gif_playback_button_clears_every_selection_handle_hit_zone() {
+        // Handle hit radii from selection_actions::resize (size 8, tol 4).
+        const CORNER_RADIUS: i32 = 8 / 2 + 4;
+        const EDGE_RADIUS: i32 = (8 * 3 / 4) / 2 + 4;
+
+        for (w, h) in [(64, 64), (100, 80), (400, 400), (1920, 1080)] {
+            let bounds = Rect::new(12, 34, w, h).unwrap();
+            let button = gif_playback_button_rect(&bounds).expect("button fits");
+
+            let probes = [
+                (bounds.x, bounds.y, CORNER_RADIUS),
+                (bounds.x + w, bounds.y, CORNER_RADIUS),
+                (bounds.x, bounds.y + h, CORNER_RADIUS),
+                (bounds.x + w, bounds.y + h, CORNER_RADIUS),
+                (bounds.x + w / 2, bounds.y, EDGE_RADIUS),
+                (bounds.x + w / 2, bounds.y + h, EDGE_RADIUS),
+                (bounds.x, bounds.y + h / 2, EDGE_RADIUS),
+                (bounds.x + w, bounds.y + h / 2, EDGE_RADIUS),
+            ];
+            for (px, py, radius) in probes {
+                let zone = Rect::new(px - radius, py - radius, radius * 2, radius * 2).unwrap();
+                assert!(
+                    !button.intersects(&zone),
+                    "button {button:?} overlaps handle zone {zone:?} for {w}x{h}"
+                );
+            }
+
+            // And it stays inside the shape it belongs to.
+            assert!(button.x >= bounds.x && button.y >= bounds.y);
+            assert!(button.x + button.width <= bounds.x + w);
+            assert!(button.y + button.height <= bounds.y + h);
+        }
+    }
+
+    #[test]
+    fn gif_playback_button_is_suppressed_on_small_selections() {
+        assert!(gif_playback_button_rect(&Rect::new(0, 0, 63, 200).unwrap()).is_none());
+        assert!(gif_playback_button_rect(&Rect::new(0, 0, 200, 63).unwrap()).is_none());
+        assert!(gif_playback_button_rect(&Rect::new(0, 0, 64, 64).unwrap()).is_some());
+    }
 
     #[test]
     fn selection_handle_rects_cover_all_corners() {

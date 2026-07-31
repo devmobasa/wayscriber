@@ -1,5 +1,6 @@
 use super::*;
 use crate::draw::{EmbeddedImage, ShapeId};
+use crate::input::{DragBinding, DragToolBindings};
 use crate::util::Rect;
 use std::time::{Duration, Instant};
 
@@ -33,6 +34,22 @@ fn test_gif(frame_colors: &[u8], delay: u16, repeat: Option<gif::Repeat>) -> Vec
         }
     }
     bytes
+}
+
+/// Adds a GIF large enough to host the on-canvas playback button.
+fn add_large_gif_shape(state: &mut InputState, bytes: Vec<u8>) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Image {
+        x: 10,
+        y: 10,
+        w: 200,
+        h: 200,
+        data: EmbeddedImage {
+            mime_type: "image/gif".to_string(),
+            width: 2,
+            height: 2,
+            bytes,
+        },
+    })
 }
 
 fn add_gif_shape(state: &mut InputState, bytes: Vec<u8>) -> ShapeId {
@@ -494,8 +511,14 @@ fn context_menu_offers_playback_toggle_for_animated_gifs_only() {
     );
 
     state.set_selection(vec![gif_id]);
+    let _ = state.dirty_tracker.take_region_report(2000, 2000);
     state.execute_menu_command(MenuCommand::ToggleGifPlayback);
     assert_eq!(state.gif_playback_running(gif_id), Some(false));
+    let report = state.dirty_tracker.take_region_report(2000, 2000);
+    assert!(
+        report.regions.iter().any(|rect| rect.contains(15, 15)),
+        "context-menu playback changes must damage the GIF bbox; got {report:?}"
+    );
     assert!(labels(&mut state, gif_id).iter().any(|l| l == "Play GIF"));
 }
 
@@ -511,4 +534,217 @@ fn animated_gif_presence_check_tracks_content_changes() {
     state.boards.active_frame_mut().remove_shape_by_id(id);
     state.invalidate_hit_cache();
     assert!(!state.active_frame_has_animated_gif());
+}
+
+/// The button sits inside the shape, on pixels that would otherwise start a
+/// move drag, so pressing it must toggle playback and consume the press.
+#[test]
+fn pressing_the_on_canvas_button_toggles_playback_without_dragging() {
+    let mut state = create_test_input_state();
+    let id = add_large_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    state.advance_gif_animations(Instant::now(), VIEW, None);
+    state.set_selection(vec![id]);
+
+    let bounds = state.selection_bounds().expect("selection bounds");
+    let button = crate::draw::gif_playback_button_rect(&bounds).expect("button fits");
+    let (cx, cy) = (button.x + button.width / 2, button.y + button.height / 2);
+    assert_eq!(state.hit_gif_playback_button(cx, cy), Some(id));
+
+    state.on_mouse_press(MouseButton::Left, cx, cy);
+    assert_eq!(
+        state.gif_playback_running(id),
+        Some(false),
+        "the press pauses playback"
+    );
+    assert!(
+        matches!(state.state, DrawingState::Idle),
+        "the press must not begin a move or resize; got {:?}",
+        state.state
+    );
+
+    state.on_mouse_release(MouseButton::Left, cx, cy);
+    state.on_mouse_press(MouseButton::Left, cx, cy);
+    assert_eq!(
+        state.gif_playback_running(id),
+        Some(true),
+        "a second press resumes playback"
+    );
+}
+
+#[test]
+fn non_primary_drag_binding_does_not_activate_the_on_canvas_button() {
+    let mut state = create_test_input_state();
+    let id = add_large_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    state.advance_gif_animations(Instant::now(), VIEW, None);
+    state.set_selection(vec![id]);
+    let mut bindings = DragToolBindings::default();
+    bindings.right.drag = DragBinding::from_tool(Tool::Line);
+    assert!(state.set_drag_tool_bindings(bindings));
+
+    let bounds = state.selection_bounds().expect("selection bounds");
+    let button = crate::draw::gif_playback_button_rect(&bounds).expect("button fits");
+    let (cx, cy) = (button.x + button.width / 2, button.y + button.height / 2);
+    state.on_mouse_press(MouseButton::Right, cx, cy);
+
+    assert_eq!(
+        state.gif_playback_running(id),
+        Some(true),
+        "only the primary button may toggle the playback control"
+    );
+    assert!(
+        matches!(
+            state.state,
+            DrawingState::Drawing {
+                tool: Tool::Line,
+                ..
+            }
+        ),
+        "the configured right-button drag must retain its tool behavior; got {:?}",
+        state.state
+    );
+}
+
+#[test]
+fn the_on_canvas_button_appears_only_for_a_single_animated_gif() {
+    let mut state = create_test_input_state();
+    let gif = add_large_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    let small_gif = add_gif_shape(
+        &mut state,
+        test_gif(&[1, 0], 5, Some(gif::Repeat::Infinite)),
+    );
+    let png = state.boards.active_frame_mut().add_shape(Shape::Image {
+        x: 400,
+        y: 400,
+        w: 200,
+        h: 200,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 1,
+            height: 1,
+            bytes: vec![1, 2, 3, 4],
+        },
+    });
+    state.advance_gif_animations(Instant::now(), VIEW, None);
+
+    let ids = |state: &InputState| -> Vec<ShapeId> {
+        state
+            .gif_playback_buttons()
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect()
+    };
+
+    state.set_selection(vec![gif]);
+    assert_eq!(ids(&state), vec![gif]);
+
+    state.set_selection(vec![small_gif]);
+    assert!(
+        ids(&state).is_empty(),
+        "a GIF smaller than the button gets none"
+    );
+
+    state.set_selection(vec![png]);
+    assert!(ids(&state).is_empty(), "static images get none");
+
+    state.set_selection(vec![gif, png]);
+    assert!(
+        ids(&state).is_empty(),
+        "a playing GIF shows its button only while solely selected"
+    );
+}
+
+/// A stopped GIF looks exactly like a static image, so its resume affordance
+/// has to survive losing the selection — otherwise the only way back is a
+/// context-menu entry the user has no reason to look for.
+#[test]
+fn a_stopped_gif_keeps_its_button_after_the_selection_is_cleared() {
+    let mut state = create_test_input_state();
+    let id = add_large_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    let now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+    state.set_selection(vec![id]);
+
+    let buttons = |state: &InputState| -> Vec<(ShapeId, bool)> {
+        state
+            .gif_playback_buttons()
+            .into_iter()
+            .map(|(id, _, playing)| (id, playing))
+            .collect()
+    };
+    assert_eq!(buttons(&state), vec![(id, true)], "playing, selected");
+
+    state.clear_selection();
+    assert!(
+        buttons(&state).is_empty(),
+        "a playing GIF keeps the canvas clean once deselected"
+    );
+
+    // Pause it, then walk away from the selection.
+    state.set_selection(vec![id]);
+    state.toggle_gif_playback(id, now);
+    state.clear_selection();
+    assert_eq!(
+        buttons(&state),
+        vec![(id, false)],
+        "a paused GIF keeps its play button with nothing selected"
+    );
+
+    // And it remains clickable without re-selecting first.
+    let bounds = state
+        .boards
+        .active_frame()
+        .shape(id)
+        .and_then(|shape| shape.bounding_box())
+        .expect("bounds");
+    let rect = crate::draw::gif_playback_button_rect(&bounds).expect("button");
+    let (cx, cy) = (rect.x + rect.width / 2, rect.y + rect.height / 2);
+    assert_eq!(state.hit_gif_playback_button(cx, cy), Some(id));
+    state.on_mouse_press(MouseButton::Left, cx, cy);
+    assert_eq!(state.gif_playback_running(id), Some(true));
+}
+
+/// A GIF that runs out of loops is stopped for the same reason a paused one
+/// is, so it earns the same affordance and the same repaint.
+#[test]
+fn a_finished_gif_shows_its_button_and_damages_itself() {
+    let mut state = create_test_input_state();
+    let id = add_large_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Finite(1))),
+    );
+    let mut now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+    state.clear_selection();
+    let _ = state.dirty_tracker.take_region_report(2000, 2000);
+
+    while state.gif_playback_running(id) == Some(true) {
+        now += Duration::from_millis(60);
+        state.advance_gif_animations(now, VIEW, None);
+    }
+
+    let report = state.dirty_tracker.take_region_report(2000, 2000);
+    assert!(
+        report.regions.iter().any(|rect| rect.contains(100, 100)),
+        "finishing must repaint the GIF so its play button appears; got {report:?}"
+    );
+    assert_eq!(
+        state
+            .gif_playback_buttons()
+            .into_iter()
+            .map(|(id, _, playing)| (id, playing))
+            .collect::<Vec<_>>(),
+        vec![(id, false)]
+    );
 }

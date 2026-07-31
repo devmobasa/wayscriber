@@ -22,7 +22,10 @@ pub use image::render_image_shape_frame;
 pub use pressure_strokes::render_freehand_pressure_borrowed;
 pub(crate) use pressure_strokes::render_freehand_pressure_preview_borrowed;
 pub(crate) use primitives::render_polygon_preview;
-pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
+pub use selection::{
+    gif_playback_button_rect, render_gif_playback_button, render_selection_halo,
+    render_selection_handles, selection_handle_rects,
+};
 pub use shapes::render_shape;
 pub use spotlight::{
     SpotlightPass, SpotlightRegion, render_spotlight_outline, render_spotlight_pass,

@@ -213,6 +213,15 @@ impl WaylandState {
 
         // Check if hovering over selection handles
         let (canvas_x, canvas_y) = self.input_state.canvas_pointer_position();
+        // Matches the press order: the GIF playback button outranks the
+        // handles and the move-drag it sits on top of.
+        if self
+            .input_state
+            .hit_gif_playback_button(canvas_x, canvas_y)
+            .is_some()
+        {
+            return CursorIcon::Pointer;
+        }
         if let Some(handle) = self.input_state.hit_selection_handle(canvas_x, canvas_y) {
             return match handle {
                 SelectionHandle::TopLeft | SelectionHandle::BottomRight => CursorIcon::NwseResize,

@@ -177,8 +177,12 @@ impl InputState {
                 FrameStep::Wrapped { delay, loop_count } => {
                     entry.loops_done += 1;
                     if loop_count.is_some_and(|limit| entry.loops_done >= limit) {
-                        // Hold the last frame, like browsers do.
+                        // Hold the last frame, like browsers do. Damage once so
+                        // the resume affordance appears on the stopped GIF.
                         entry.finished = true;
+                        if let Some(bbox) = bbox {
+                            dirty.mark_rect(bbox);
+                        }
                         continue;
                     }
                     entry.frame_index = 0;
@@ -250,6 +254,59 @@ impl InputState {
         self.gif_earliest_due(view).is_some_and(|due| due <= now)
     }
 
+    /// On-canvas playback buttons for the active frame, as
+    /// (shape id, shape bounds, currently playing).
+    ///
+    /// A button is shown when the GIF is **stopped** — paused by hand or out
+    /// of loops — regardless of selection, because a stopped GIF is otherwise
+    /// indistinguishable from a static image and would have no visible way
+    /// back. A *playing* GIF only shows its button while it is the sole
+    /// selection, so ordinary playback keeps the canvas clean. GIFs too small
+    /// to host the control without covering themselves show none, and fall
+    /// back to the context menu.
+    pub fn gif_playback_buttons(&self) -> Vec<(ShapeId, Rect, bool)> {
+        if self.gif_playback.entries.is_empty() {
+            return Vec::new();
+        }
+        let single_selection = match self.selected_shape_ids() {
+            [id] => Some(*id),
+            _ => None,
+        };
+        let frame = self.boards.active_frame();
+        let mut buttons = Vec::new();
+        for drawn in &frame.shapes {
+            let Some(entry) = self.gif_playback.entries.get(&drawn.id) else {
+                continue;
+            };
+            let playing = entry.playing && !entry.finished;
+            if playing && single_selection != Some(drawn.id) {
+                continue;
+            }
+            let Some(bounds) = drawn.bounding_box() else {
+                continue;
+            };
+            if crate::draw::gif_playback_button_rect(&bounds).is_none() {
+                continue;
+            }
+            buttons.push((drawn.id, bounds, playing));
+        }
+        buttons
+    }
+
+    /// Shape whose playback button covers this canvas point, if any. Pointer
+    /// handling tests this before resize handles and shape drags. Topmost
+    /// shape wins, matching paint order.
+    pub fn hit_gif_playback_button(&self, x: i32, y: i32) -> Option<ShapeId> {
+        self.gif_playback_buttons()
+            .into_iter()
+            .rev()
+            .find(|(_, bounds, _)| {
+                crate::draw::gif_playback_button_rect(bounds)
+                    .is_some_and(|rect| rect.contains(x, y))
+            })
+            .map(|(id, _, _)| id)
+    }
+
     /// Per-shape frame selection for render paths (absent id = frame 0).
     pub fn gif_frame_indices(&self) -> &HashMap<ShapeId, usize> {
         &self.gif_playback.frame_indices
@@ -271,28 +328,35 @@ impl InputState {
         // Every render advances GIFs before painting, so a restart must hold
         // frame 0 for its own delay — a `now` deadline would step straight to
         // frame 1 in the same render and frame 0 would never appear.
-        let entry = self.gif_playback.entries.get_mut(&id)?;
-        if entry.playing && !entry.finished {
-            entry.playing = false;
-        } else {
-            entry.playing = true;
-            entry.next_due = now;
-            if entry.finished {
-                // Without rewinding, the very next tick would wrap, exhaust
-                // the same finite-loop budget, and finish again on the held
-                // last frame without ever replaying.
-                entry.finished = false;
-                entry.loops_done = 0;
-                entry.frame_index = 0;
-                entry.next_due =
-                    now + effective_delay(entry.first_frame_delay, entry.interval_floor);
-                self.gif_playback.frame_indices.insert(id, 0);
-                if let Some(bbox) = entry.last_bbox {
-                    self.dirty_tracker.mark_rect(bbox);
+        let (playing, bbox) = {
+            let entry = self.gif_playback.entries.get_mut(&id)?;
+            if entry.playing && !entry.finished {
+                entry.playing = false;
+            } else {
+                entry.playing = true;
+                entry.next_due = now;
+                if entry.finished {
+                    // Without rewinding, the very next tick would wrap, exhaust
+                    // the same finite-loop budget, and finish again on the held
+                    // last frame without ever replaying.
+                    entry.finished = false;
+                    entry.loops_done = 0;
+                    entry.frame_index = 0;
+                    entry.next_due =
+                        now + effective_delay(entry.first_frame_delay, entry.interval_floor);
+                    self.gif_playback.frame_indices.insert(id, 0);
                 }
             }
+            (entry.playing, entry.last_bbox)
+        };
+        // The frame and the on-canvas glyph both change on every transition.
+        // Own their damage here so context-menu and future callers cannot leave
+        // stale pixels behind when they request only a partial repaint.
+        if let Some(bbox) = bbox {
+            self.dirty_tracker.mark_rect(bbox);
         }
-        Some(entry.playing)
+        self.needs_redraw = true;
+        Some(playing)
     }
 
     /// O(1)-amortized "does the active frame contain an animated GIF", used

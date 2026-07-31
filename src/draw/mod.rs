@@ -27,11 +27,12 @@ pub(crate) use render::render_sticky_note_preview;
 #[allow(unused_imports)]
 pub use render::{
     BlurRectParams, EraserReplayContext, SpotlightPass, SpotlightRegion, caret_line_width,
-    caret_outline_width, render_blur_rect, render_board_background, render_click_highlight,
-    render_freehand_borrowed, render_image_shape_frame, render_marker_stroke_borrowed,
-    render_selection_halo, render_selection_handles, render_shape, render_spotlight_pass,
-    render_sticky_note, render_text, selection_handle_rects, spotlight_regions_for_frame,
-    sticky_note_foreground, text_outline_color,
+    caret_outline_width, gif_playback_button_rect, render_blur_rect, render_board_background,
+    render_click_highlight, render_freehand_borrowed, render_gif_playback_button,
+    render_image_shape_frame, render_marker_stroke_borrowed, render_selection_halo,
+    render_selection_handles, render_shape, render_spotlight_pass, render_sticky_note, render_text,
+    selection_handle_rects, spotlight_regions_for_frame, sticky_note_foreground,
+    text_outline_color,
 };
 #[allow(unused_imports)]
 pub use shape::{
