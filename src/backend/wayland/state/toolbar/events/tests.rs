@@ -27,6 +27,7 @@ fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
 fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
     event_dismisses_popover(event, ToolbarPopover::Settings)
 }
+use crate::backend::wayland::runtime_ui_state::user_click_highlight_enabled;
 use crate::config::{Action, StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag};
 use crate::draw::{Color, FontDescriptor};
 use crate::env_vars::XDG_DATA_HOME_ENV;
@@ -251,30 +252,70 @@ fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
     );
 }
 
-/// The authored preferences an overlay control can change. Each one applies
-/// to the current run: `persistence_for_event` classifies it `Ephemeral`, and
-/// the effective config follows through `preference_for_event`.
+/// Every event that still names an authored field, paired with it.
 fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
-    use ToolbarPreference::ClickHighlight;
+    use super::preferences::ToolbarPreferenceField as Field;
+    use ToolbarPreference::{HistoryCustomSection, InputHud, Toolbar, Ui};
+    use UiPreferenceField as UiField;
 
-    vec![
-        (ToolbarEvent::ToggleAllHighlight(true), ClickHighlight),
-        (ToolbarEvent::SelectTool(Tool::Highlight), ClickHighlight),
-        (ToolbarEvent::ToggleHighlightToolRing(true), ClickHighlight),
-    ]
+    let mut events = vec![
+        (ToolbarEvent::ToggleIconMode(false), Toolbar(Field::Icons)),
+        (
+            ToolbarEvent::ToggleMoreColors(false),
+            Toolbar(Field::MoreColors),
+        ),
+        (
+            ToolbarEvent::ToggleContextAwareUi(false),
+            Toolbar(Field::ContextAwareUi),
+        ),
+        (
+            ToolbarEvent::TogglePresetToasts(false),
+            Toolbar(Field::PresetToasts),
+        ),
+        (
+            ToolbarEvent::ToggleToolPreview(false),
+            Toolbar(Field::ToolPreview),
+        ),
+        (
+            ToolbarEvent::ToggleDelaySliders(false),
+            Toolbar(Field::DelaySliders),
+        ),
+        (
+            ToolbarEvent::ToggleCustomSection(false),
+            HistoryCustomSection,
+        ),
+        (ToolbarEvent::ToggleInputHud(false), InputHud),
+        (ToolbarEvent::ToggleStatusBar(false), Ui(UiField::StatusBar)),
+        (
+            ToolbarEvent::SetStatusBarInteractive(false),
+            Ui(UiField::StatusBarInteractive),
+        ),
+        (
+            ToolbarEvent::ToggleStatusBoardBadge(false),
+            Ui(UiField::StatusBoardBadge),
+        ),
+        (
+            ToolbarEvent::ToggleStatusPageBadge(false),
+            Ui(UiField::StatusPageBadge),
+        ),
+        (
+            ToolbarEvent::ToggleFloatingBadgeAlways(false),
+            Ui(UiField::FloatingBadgeAlways),
+        ),
+    ];
+    events.extend(StatusBarItem::ALL.map(|item| {
+        (
+            ToolbarEvent::SetStatusBarItemVisible(item, false),
+            Ui(UiField::StatusBarItem(item)),
+        )
+    }));
+    events
 }
 
-/// `config.toml` is an authored input, so an overlay preference control is a
-/// current-run change: nothing routes it to a persistence target, and its
-/// effective-config field is named by `preference_for_event`.
+/// Each control in this family names the effective-config field it moves.
 #[test]
-fn authored_toolbar_preferences_apply_to_this_run_only() {
+fn authored_toolbar_preferences_name_their_field() {
     for (event, preference) in authored_preference_events() {
-        assert_eq!(
-            persistence_for(&event),
-            ToolbarPersistence::Ephemeral,
-            "{event:?} must not persist anything"
-        );
         assert_eq!(
             preference_for_event(&event),
             Some(preference),
@@ -478,44 +519,33 @@ fn presenter_mode_keeps_the_users_click_highlight_and_hud_values() {
     assert!(input_state.click_highlight_enabled());
     assert!(input_state.input_hud_enabled());
 
-    apply_toolbar_preference(&mut config, &input_state, ToolbarPreference::ClickHighlight);
     apply_toolbar_preference(&mut config, &input_state, ToolbarPreference::InputHud);
 
     assert!(
-        !config.ui.click_highlight.enabled,
-        "presenter mode must not adopt its own forced value"
+        !user_click_highlight_enabled(&input_state),
+        "presenter mode must not persist its own forced value"
     );
     assert!(!config.ui.input_hud.enabled);
 
     // Leaving presenter mode restores the user's values, and a later toggle
-    // then owns the effective config again.
+    // is the user's own again.
     input_state.toggle_presenter_mode();
     assert!(!input_state.presenter_mode);
     assert!(input_state.toggle_click_highlight());
-    apply_toolbar_preference(&mut config, &input_state, ToolbarPreference::ClickHighlight);
-    assert!(config.ui.click_highlight.enabled);
+    assert!(user_click_highlight_enabled(&input_state));
 }
 
 /// The ring is the user's either way: presenter mode never forces it, so it
-/// follows the runtime value even while the mode holds the enabled flag.
+/// persists its runtime value even while the mode holds the enabled flag.
 #[test]
 fn presenter_mode_still_follows_the_highlight_ring_preference() {
-    let mut config = crate::config::Config::default();
-    config.ui.click_highlight.enabled = false;
-    config.ui.click_highlight.show_on_highlight_tool = false;
-
     let mut input_state = make_test_input_state();
     input_state.presenter_mode_config.enable_click_highlight = true;
     input_state.toggle_presenter_mode();
     assert!(input_state.set_highlight_tool_ring_enabled(true));
 
-    assert!(apply_toolbar_preference(
-        &mut config,
-        &input_state,
-        ToolbarPreference::ClickHighlight
-    ));
-    assert!(config.ui.click_highlight.show_on_highlight_tool);
-    assert!(!config.ui.click_highlight.enabled);
+    assert!(input_state.highlight_tool_ring_enabled());
+    assert!(!user_click_highlight_enabled(&input_state));
 }
 
 /// Nothing in this family touches `config.toml`: the effective config is a

@@ -188,11 +188,6 @@ fn no_undeclared_authored_preference_moves_a_runtime_seed() {
         ("floating badge", |config| {
             config.ui.show_floating_badge = !config.ui.show_floating_badge;
         }),
-        ("click highlight", |config| {
-            config.ui.click_highlight.enabled = !config.ui.click_highlight.enabled;
-            config.ui.click_highlight.show_on_highlight_tool =
-                !config.ui.click_highlight.show_on_highlight_tool;
-        }),
     ];
     for (label, change) in seed_neutral {
         let mut config = baseline.clone();
@@ -3145,6 +3140,55 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
             "{flag:?} must follow the restored preset"
         );
     }
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// The click highlight and its tool ring persist together, from the toolbar
+/// and from the keyboard alike. The keyboard path applies inside `InputState`
+/// before the backend sees it, so it hands its own pre-change values in as the
+/// rollback rather than reading them back off the live state.
+#[test]
+fn click_highlight_survives_restart_from_either_path() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    // The toolbar path: begin from the live state, then apply.
+    let target = ToolbarRuntimeUiPersistenceTarget::ClickHighlight;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("click highlight permit");
+    let ring = !input.highlight_tool_ring_enabled();
+    assert!(input.apply_toolbar_event(ToolbarEvent::ToggleHighlightToolRing(ring)));
+    runtime.finish_toolbar_mutation(prepared, true, &input);
+
+    // The keyboard path: apply first, then persist from the snapshot taken
+    // before the change.
+    let previous_enabled = input.click_highlight_enabled();
+    let previous_ring = input.highlight_tool_ring_enabled();
+    let enabled = !previous_enabled;
+    assert!(input.set_click_highlight_enabled(enabled));
+    let rollback = click_highlight_values(previous_enabled, previous_ring).expect("valid rollback");
+    let prepared = runtime
+        .begin_toolbar_mutation_with_rollback(target, rollback)
+        .expect("keyboard permit");
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(restarted_input.click_highlight_enabled(), enabled);
+    assert_eq!(restarted_input.highlight_tool_ring_enabled(), ring);
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
 }

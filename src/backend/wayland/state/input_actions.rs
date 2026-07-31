@@ -4,9 +4,12 @@ use crate::{
     input::{InputState, Key},
 };
 
-/// Runtime presentation-aid preferences the effective config follows when the
-/// user changes them directly, but not when a mode transition flips them
-/// transiently.
+/// Runtime presentation-aid preferences that persist when the user changes
+/// them directly, but not when a mode transition flips them transiently.
+///
+/// The keyboard and the command palette reach `InputState` before the backend
+/// sees the change, so the pre-change snapshot is also the rollback the
+/// runtime-UI mutation needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct InputPreferenceSnapshot {
     click_highlight_enabled: bool,
@@ -64,7 +67,10 @@ impl WaylandState {
 
         let preferences_after = InputPreferenceSnapshot::from_input_state(&self.input_state);
         if preferences_before.click_highlight_changed_by_user_after(preferences_after) {
-            self.apply_click_highlight_preferences();
+            self.persist_click_highlight(
+                preferences_before.click_highlight_enabled,
+                preferences_before.tool_ring_enabled,
+            );
         }
         if preferences_before.input_hud_changed_by_user_after(preferences_after) {
             self.apply_input_hud_preferences();

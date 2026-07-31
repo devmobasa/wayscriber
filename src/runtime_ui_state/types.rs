@@ -146,6 +146,9 @@ pub(crate) enum InteractionSeedTarget {
     SectionVisibility(crate::config::ToolbarSectionFlag),
     /// The toolbar layout preset the strip's layout button cycles through.
     ToolbarLayoutMode,
+    /// The click highlight, and the ring the highlight tool keeps on screen.
+    ClickHighlight,
+    ClickHighlightToolRing,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,7 +187,9 @@ impl InteractionSeedValue {
                     | Target::ToolbarToolPreview
                     | Target::ToolbarDelaySliders
                     | Target::HistoryCustomSection
-                    | Target::InputHud,
+                    | Target::InputHud
+                    | Target::ClickHighlight
+                    | Target::ClickHighlightToolRing,
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
                 | (

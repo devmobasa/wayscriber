@@ -174,6 +174,33 @@ impl WaylandState {
         self.apply_toolbar_runtime_finish(finish);
     }
 
+    /// Persists a click-highlight change the user made outside the toolbar --
+    /// a keyboard action or the command palette. Those apply inside
+    /// `InputState` before the backend sees them, so the caller supplies the
+    /// pre-change values as the rollback.
+    pub(in crate::backend::wayland) fn persist_click_highlight(
+        &mut self,
+        previous_enabled: bool,
+        previous_tool_ring: bool,
+    ) {
+        let target = ToolbarRuntimeUiPersistenceTarget::ClickHighlight;
+        let rollback = match super::click_highlight_values(previous_enabled, previous_tool_ring) {
+            Ok(values) => values,
+            Err(error) => {
+                log::error!("Click highlight toggle has invalid rollback values: {error:?}");
+                return;
+            }
+        };
+        let Some(runtime) = self.runtime_ui.as_mut() else {
+            return;
+        };
+        let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
+            return;
+        };
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &self.input_state);
+        self.apply_toolbar_runtime_finish(finish);
+    }
+
     /// Drains every queued durable toolbar change into the runtime-ui
     /// writer, oldest first. Called on every event-loop pass and once more
     /// at teardown before the writer shuts down, so a toggle pressed in the

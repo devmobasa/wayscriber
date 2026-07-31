@@ -78,6 +78,7 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     CollapsedSection(ToolbarSideSection),
     NamedSection(crate::config::ToolbarSectionFlag),
     LayoutMode,
+    ClickHighlight,
     ItemVisibility {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
@@ -488,11 +489,16 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SetToolbarLayoutMode(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::LayoutMode)
         }
+        // Picking the highlight tool switches the click highlight on as a
+        // side effect, so it persists the same choice the explicit toggles do.
+        ToolbarEvent::SelectTool(Tool::Highlight)
+        | ToolbarEvent::ToggleAllHighlight(_)
+        | ToolbarEvent::ToggleHighlightToolRing(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ClickHighlight)
+        }
         // Authored preferences below: applying them updates the effective
         // config for this run only (see `ToolbarPersistence`).
-        ToolbarEvent::ToggleAllHighlight(_)
-        | ToolbarEvent::ToggleHighlightToolRing(_)
-        | ToolbarEvent::SelectTool(_)
+        ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }
         // Opening the recolor popup persists nothing; accepting it writes the

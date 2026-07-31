@@ -18,7 +18,7 @@ use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 /// V1 shipped. They stay in V1 because an older build decodes them as unknown
 /// keys and preserves them verbatim through `WirePassthrough`, whereas a
 /// version bump would make that build treat the whole file as read-only.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 22] = [
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 24] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
@@ -28,6 +28,11 @@ const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 22] = [
     ("side_position", InteractionSeedTarget::SidePosition),
     ("top_display_mode", InteractionSeedTarget::TopDisplayMode),
     ("layout_mode", InteractionSeedTarget::ToolbarLayoutMode),
+    ("click_highlight", InteractionSeedTarget::ClickHighlight),
+    (
+        "click_highlight_tool_ring",
+        InteractionSeedTarget::ClickHighlightToolRing,
+    ),
     (
         "status_bar_interactive",
         InteractionSeedTarget::StatusBarInteractive,
@@ -223,7 +228,9 @@ fn decode_value(
         | Target::ToolbarToolPreview
         | Target::ToolbarDelaySliders
         | Target::HistoryCustomSection
-        | Target::InputHud => value
+        | Target::InputHud
+        | Target::ClickHighlight
+        | Target::ClickHighlightToolRing => value
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
@@ -420,6 +427,12 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
                 insert_recognized(&mut toolbar, "history_custom_section", entry)
             }
             InteractionSeedTarget::InputHud => insert_recognized(&mut toolbar, "input_hud", entry),
+            InteractionSeedTarget::ClickHighlight => {
+                insert_recognized(&mut toolbar, "click_highlight", entry)
+            }
+            InteractionSeedTarget::ClickHighlightToolRing => {
+                insert_recognized(&mut toolbar, "click_highlight_tool_ring", entry)
+            }
         }
     }
     insert_recognized(&mut toolbar, "collapsed_sections", Value::Table(collapsed));
@@ -490,7 +503,9 @@ fn encode_value(
             | InteractionSeedTarget::ToolbarToolPreview
             | InteractionSeedTarget::ToolbarDelaySliders
             | InteractionSeedTarget::HistoryCustomSection
-            | InteractionSeedTarget::InputHud,
+            | InteractionSeedTarget::InputHud
+            | InteractionSeedTarget::ClickHighlight
+            | InteractionSeedTarget::ClickHighlightToolRing,
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
         (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {

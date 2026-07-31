@@ -17,7 +17,6 @@ pub(super) enum ToolbarPreference {
     Toolbar(ToolbarPreferenceField),
     Ui(UiPreferenceField),
     HistoryCustomSection,
-    ClickHighlight,
     InputHud,
 }
 
@@ -47,7 +46,7 @@ pub(super) enum UiPreferenceField {
 /// classification of what an event persists lives in `persistence_for_event`,
 /// where every one of these is `Ephemeral`.
 pub(super) fn preference_for_event(event: &ToolbarEvent) -> Option<ToolbarPreference> {
-    use ToolbarPreference::{ClickHighlight, HistoryCustomSection, InputHud, Toolbar, Ui};
+    use ToolbarPreference::{HistoryCustomSection, InputHud, Toolbar, Ui};
     use ToolbarPreferenceField::*;
     use UiPreferenceField as UiField;
 
@@ -65,9 +64,6 @@ pub(super) fn preference_for_event(event: &ToolbarEvent) -> Option<ToolbarPrefer
         ToolbarEvent::ToggleStatusBoardBadge(_) => Ui(UiField::StatusBoardBadge),
         ToolbarEvent::ToggleStatusPageBadge(_) => Ui(UiField::StatusPageBadge),
         ToolbarEvent::ToggleFloatingBadgeAlways(_) => Ui(UiField::FloatingBadgeAlways),
-        ToolbarEvent::SelectTool(crate::input::Tool::Highlight)
-        | ToolbarEvent::ToggleAllHighlight(_)
-        | ToolbarEvent::ToggleHighlightToolRing(_) => ClickHighlight,
         ToolbarEvent::ToggleInputHud(_) => InputHud,
         _ => return None,
     };
@@ -94,7 +90,6 @@ pub(super) fn apply_toolbar_preference(
             &mut config.history.custom_section_enabled,
             input_state.custom_section_enabled,
         ),
-        ToolbarPreference::ClickHighlight => apply_click_highlight(config, input_state),
         ToolbarPreference::InputHud => apply_input_hud(config, input_state),
     }
 }
@@ -170,22 +165,6 @@ fn apply_ui_field(config: &mut Config, input_state: &InputState, field: UiPrefer
     }
 }
 
-/// Presenter mode forces the click highlight on while it runs, so the value
-/// the effective config keeps is the user's own, not the mode's.
-fn apply_click_highlight(config: &mut Config, input_state: &InputState) -> bool {
-    let mut changed = store(
-        &mut config.ui.click_highlight.show_on_highlight_tool,
-        input_state.highlight_tool_ring_enabled(),
-    );
-    if !(input_state.presenter_mode && input_state.presenter_mode_config.enable_click_highlight) {
-        changed |= store(
-            &mut config.ui.click_highlight.enabled,
-            input_state.click_highlight_enabled(),
-        );
-    }
-    changed
-}
-
 /// While presenter mode forces the HUD on, the runtime value is the mode's,
 /// not the user's, so the effective config keeps the user's until the mode
 /// releases it (the same contract `apply_click_highlight` follows).
@@ -213,12 +192,6 @@ impl WaylandState {
             return;
         }
         self.input_state.notify_process_only_preference();
-    }
-
-    /// Follow a click-highlight change the user made outside the toolbar
-    /// (keyboard action or command palette).
-    pub(in crate::backend::wayland) fn apply_click_highlight_preferences(&mut self) {
-        self.apply_effective_toolbar_preference(ToolbarPreference::ClickHighlight);
     }
 
     /// Follow an input-HUD change the user made outside the toolbar.

@@ -375,6 +375,14 @@ fn runtime_seeds_from_config(
     }
     let resolved_items = resolved_toolbar_item_seeds(config);
     insert(
+        InteractionSeedTarget::ClickHighlight,
+        InteractionSeedValue::Bool(config.ui.click_highlight.enabled),
+    )?;
+    insert(
+        InteractionSeedTarget::ClickHighlightToolRing,
+        InteractionSeedValue::Bool(config.ui.click_highlight.show_on_highlight_tool),
+    )?;
+    insert(
         InteractionSeedTarget::ToolbarLayoutMode,
         InteractionSeedValue::LayoutMode(config.ui.toolbar.layout_mode),
     )?;
@@ -557,6 +565,10 @@ fn toolbar_values(
             InteractionSeedTarget::InputHud,
             InteractionSeedValue::Bool(input.input_hud_enabled()),
         ),
+        Target::ClickHighlight => click_highlight_values(
+            user_click_highlight_enabled(input),
+            input.highlight_tool_ring_enabled(),
+        ),
         Target::LayoutMode => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarLayoutMode,
             InteractionSeedValue::LayoutMode(input.toolbar_layout_mode),
@@ -626,6 +638,35 @@ fn toolbar_values(
 
 /// The persisted form of a live top-display mode.
 ///
+/// The click-highlight values as one batch: `ToggleAllHighlight` can move the
+/// ring's companion, and the keyboard path persists both from a single
+/// pre-change snapshot.
+pub(in crate::backend::wayland) fn click_highlight_values(
+    enabled: bool,
+    tool_ring: bool,
+) -> std::result::Result<RuntimeUiMutationValues, MutationShapeError> {
+    RuntimeUiMutationValues::batch([
+        (
+            InteractionSeedTarget::ClickHighlight,
+            InteractionSeedValue::Bool(enabled),
+        ),
+        (
+            InteractionSeedTarget::ClickHighlightToolRing,
+            InteractionSeedValue::Bool(tool_ring),
+        ),
+    ])
+}
+
+/// Presenter mode forces the click highlight on while it runs, so what
+/// persists is the value presenter will restore -- the user's own.
+pub(in crate::backend::wayland) fn user_click_highlight_enabled(input: &InputState) -> bool {
+    input
+        .presenter_restore
+        .as_ref()
+        .and_then(|restore| restore.click_highlight_enabled)
+        .unwrap_or_else(|| input.click_highlight_enabled())
+}
+
 /// While presenter mode owns the top strip, the saved pre-presenter mode wins
 /// over the temporary live mapping; `Hidden` always folds to `Full` because a
 /// hidden strip is runtime-only and `top_pinned` governs startup.
@@ -745,6 +786,16 @@ fn apply_live_toolbar_state(
         && let Some(value) = bool_value(InteractionSeedTarget::InputHud)
     {
         input.set_input_hud_enabled(value);
+    }
+    if include(&InteractionSeedTarget::ClickHighlight)
+        && let Some(value) = bool_value(InteractionSeedTarget::ClickHighlight)
+    {
+        input.set_click_highlight_enabled(value);
+    }
+    if include(&InteractionSeedTarget::ClickHighlightToolRing)
+        && let Some(value) = bool_value(InteractionSeedTarget::ClickHighlightToolRing)
+    {
+        input.set_highlight_tool_ring_enabled(value);
     }
     if include(&InteractionSeedTarget::ToolbarLayoutMode)
         && let Some(InteractionSeedValue::LayoutMode(mode)) =
