@@ -124,7 +124,21 @@ fn watch(
 /// parses again.
 fn load_updates_config() -> UpdatesConfig {
     match Config::load() {
-        Ok(loaded) => loaded.config.updates,
+        // A salvaged load with an unreadable [updates] section is the same
+        // case as an unparseable file: a `check = false` the user wrote may
+        // be sitting behind the bad value, so the policy still fails closed.
+        Ok(loaded) if !loaded.section_failed("updates") => loaded.config.updates,
+        Ok(_) => {
+            warn!(
+                "Skipping update checks until [updates] parses \
+                 (cannot confirm the check/notify settings)"
+            );
+            UpdatesConfig {
+                check: false,
+                notify: false,
+                ..UpdatesConfig::default()
+            }
+        }
         Err(err) => {
             warn!(
                 "Skipping update checks until the config file parses \

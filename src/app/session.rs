@@ -3,6 +3,16 @@ use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     let loaded = crate::config::Config::load()?;
+    // [session] configures which files these commands act on. A load that
+    // fell back to defaults for that section would silently retarget a
+    // destructive command - a custom storage path becomes `storage = auto` -
+    // so refuse instead of clearing the wrong artifacts.
+    if (cli.clear_session || cli.clear_tool_state) && loaded.section_failed("session") {
+        anyhow::bail!(
+            "config.toml [session] could not be read; refusing to clear session data that \
+             default settings may mistarget - fix the section and retry"
+        );
+    }
     let config_dir = crate::config::Config::config_directory_from_source(&loaded.source)?;
     let display_env = std::env::var(WAYLAND_DISPLAY_ENV).ok();
 

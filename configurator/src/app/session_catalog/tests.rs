@@ -188,3 +188,20 @@ fn session_artifact_status_label_reports_size_when_present() {
 
     assert_eq!(session_artifact_status_label(&item), "primary · 4.0 KiB");
 }
+
+#[test]
+fn clear_tool_state_rejects_defaulted_session_config() {
+    let loaded = wayscriber::config::LoadedConfig {
+        config: wayscriber::config::Config::default(),
+        source: wayscriber::config::ConfigSource::Primary,
+        validation: wayscriber::config::ConfigValidationReport::default(),
+        section_errors: vec![wayscriber::config::ConfigSectionError {
+            section: "session".to_string(),
+            error: "invalid value".to_string(),
+        }],
+    };
+
+    let err = ensure_session_config_available_for_destructive_action(&loaded)
+        .expect_err("a defaulted session section must block destructive catalog edits");
+    assert!(err.contains("[session] could not be read"));
+}

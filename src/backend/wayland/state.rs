@@ -157,6 +157,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
+    pub session_config_failed: bool,
     pub persistence: crate::backend::wayland::session::PersistenceController,
     pub runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
@@ -207,6 +208,9 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
+    /// Authored `[session]` settings were unavailable and the live options are
+    /// defaults. Destructive session actions must refuse to use those options.
+    pub(super) session_config_failed: bool,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:

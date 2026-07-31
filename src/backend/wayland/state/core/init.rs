@@ -12,6 +12,7 @@ impl WaylandState {
             palette_recents,
             capture_manager,
             session_options,
+            session_config_failed,
             persistence,
             runtime_ui,
             runtime_ui_unavailable,
@@ -234,6 +235,7 @@ impl WaylandState {
             #[cfg(feature = "tablet-input")]
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
+            session_config_failed,
             persistence,
             #[cfg(feature = "input-monitor")]
             input_monitor_wake: runtime_wake.clone(),

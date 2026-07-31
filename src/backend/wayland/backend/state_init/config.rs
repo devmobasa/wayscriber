@@ -39,6 +39,17 @@ pub(super) enum ConfigLoadFailure {
     Sections(Vec<ConfigSectionError>),
 }
 
+impl ConfigLoadFailure {
+    /// Whether `section` is running on defaults because authored config could
+    /// not be read. A whole-file failure necessarily includes every section.
+    pub(super) fn section_failed(&self, section: &str) -> bool {
+        match self {
+            Self::File { .. } => true,
+            Self::Sections(sections) => sections.iter().any(|entry| entry.section == section),
+        }
+    }
+}
+
 /// Reads the configuration. Nothing here writes it: `config.toml` is an
 /// authored input for the life of this process, so an old `config_revision`, a
 /// mistyped shortcut, or a contested key is reported to the user instead of
@@ -648,6 +659,13 @@ mod tests {
                 matches!(loaded.load_failure, Some(ConfigLoadFailure::File { .. })),
                 "a total fallback must be reported, not only logged"
             );
+            assert!(
+                loaded
+                    .load_failure
+                    .as_ref()
+                    .is_some_and(|failure| failure.section_failed("session")),
+                "a whole-file fallback must fail closed for session mutations"
+            );
         });
     }
 
@@ -676,6 +694,9 @@ mod tests {
             };
             assert_eq!(sections.len(), 1);
             assert_eq!(sections[0].section, "ui");
+            let failure = loaded.load_failure.as_ref().expect("section failure");
+            assert!(failure.section_failed("ui"));
+            assert!(!failure.section_failed("session"));
             assert_eq!(
                 fs::read_to_string(&path).expect("read config"),
                 original,

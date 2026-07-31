@@ -57,6 +57,19 @@ pub struct LoadedConfig {
     pub section_errors: Vec<ConfigSectionError>,
 }
 
+impl LoadedConfig {
+    /// Whether this top-level entry failed to deserialize and is running on
+    /// defaults. Consumers whose behavior must not silently degrade when
+    /// their section is unreadable — destructive commands that would act on
+    /// default paths, or policies that fail closed — check this instead of
+    /// trusting the defaulted value.
+    pub fn section_failed(&self, section: &str) -> bool {
+        self.section_errors
+            .iter()
+            .any(|entry| entry.section == section)
+    }
+}
+
 impl Config {
     /// Returns the path to the configuration file.
     ///

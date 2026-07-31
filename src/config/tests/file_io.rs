@@ -558,23 +558,37 @@ fn config_example_values_equal_the_compiled_defaults() {
 
     let mut drifts = Vec::new();
     collect_value_drifts("", &example, &defaults, &mut drifts);
-    drifts.retain(|entry| {
+    // Match the allowlist against whole path segments: a bare `starts_with`
+    // over `presets.slot_1` would also exempt a future `presets.slot_10`.
+    drifts.retain(|drift| {
         !ALLOWED_DRIFT
             .iter()
-            .any(|allowed| entry.starts_with(allowed))
+            .any(|allowed| drift.path == *allowed || drift.path.starts_with(&format!("{allowed}.")))
     });
     assert!(
         drifts.is_empty(),
         "config.example.toml drifted from Config::default():\n{}",
-        drifts.join("\n")
+        drifts
+            .iter()
+            .map(|drift| format!("{}: {}", drift.path, drift.detail))
+            .collect::<Vec<_>>()
+            .join("\n")
     );
+}
+
+/// One disagreement between the example and the compiled defaults. The path
+/// is kept separate from the prose so the allowlist can match path segments
+/// rather than message prefixes.
+struct ValueDrift {
+    path: String,
+    detail: String,
 }
 
 fn collect_value_drifts(
     path: &str,
     example: &toml::Value,
     defaults: &toml::Value,
-    drifts: &mut Vec<String>,
+    drifts: &mut Vec<ValueDrift>,
 ) {
     match (example, defaults) {
         (toml::Value::Table(example), toml::Value::Table(defaults)) => {
@@ -589,20 +603,23 @@ fn collect_value_drifts(
                     (Some(example), Some(defaults)) => {
                         collect_value_drifts(&child, example, defaults, drifts)
                     }
-                    (Some(example), None) => {
-                        drifts.push(format!("{child}: example has {example}, defaults omit it"))
-                    }
-                    (None, Some(defaults)) => drifts.push(format!(
-                        "{child}: defaults have {defaults}, example omits it"
-                    )),
+                    (Some(example), None) => drifts.push(ValueDrift {
+                        path: child,
+                        detail: format!("example has {example}, defaults omit it"),
+                    }),
+                    (None, Some(defaults)) => drifts.push(ValueDrift {
+                        path: child,
+                        detail: format!("defaults have {defaults}, example omits it"),
+                    }),
                     (None, None) => unreachable!(),
                 }
             }
         }
         (example, defaults) if example == defaults => {}
-        (example, defaults) => {
-            drifts.push(format!("{path}: example {example} vs default {defaults}"))
-        }
+        (example, defaults) => drifts.push(ValueDrift {
+            path: path.to_string(),
+            detail: format!("example {example} vs default {defaults}"),
+        }),
     }
 }
 
