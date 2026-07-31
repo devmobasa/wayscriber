@@ -136,13 +136,55 @@ pub(super) fn side_row_button_rects(
             btn_h,
             btn_gap,
             btn_gap,
-            buttons.len(),
             text_columns,
+            buttons.len(),
         )
         .items
         .iter()
         .map(|item| (item.x, item.y, item.w, item.h))
         .collect()
+    }
+}
+
+#[cfg(test)]
+mod side_row_tests {
+    use super::*;
+    use crate::ui::toolbar::ToolbarEvent;
+
+    /// Callers zip these rects with the button list, so a short result
+    /// silently drops trailing buttons from paint and hit testing. With more
+    /// buttons than text columns (the capped-columns case a sixth boards
+    /// button produces), every button must still get a rect, wrapped onto a
+    /// second row.
+    #[test]
+    fn text_grid_produces_a_rect_for_every_button_beyond_the_column_cap() {
+        let buttons = vec![model::ToolbarButtonModel::new(ToolbarEvent::Undo, true); 6];
+        let rects = side_row_button_rects(
+            SideRowLayout {
+                x: 0.0,
+                row_y: 0.0,
+                content_width: 200.0,
+                btn_h: 24.0,
+                btn_gap: 4.0,
+                use_icons: false,
+                text_columns: 5,
+            },
+            &buttons,
+        );
+        assert_eq!(rects.len(), buttons.len());
+        let first_row_y = rects[0].1;
+        assert!(
+            rects[5].1 > first_row_y,
+            "the sixth button must wrap onto a second row, got {rects:?}"
+        );
+        assert_eq!(
+            rects
+                .iter()
+                .filter(|(_, y, _, _)| *y == first_row_y)
+                .count(),
+            5,
+            "the first row must hold exactly the column cap"
+        );
     }
 }
 
