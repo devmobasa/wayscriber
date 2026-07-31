@@ -5,6 +5,7 @@ mod board;
 mod boards;
 mod capture;
 mod click_highlight;
+mod clipboard;
 mod context_menu;
 mod drawing;
 mod export;
@@ -30,6 +31,7 @@ pub use board::BoardConfig;
 pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig};
 pub use capture::CaptureConfig;
 pub use click_highlight::ClickHighlightConfig;
+pub use clipboard::ClipboardConfig;
 pub use context_menu::ContextMenuUiConfig;
 pub use drawing::{
     DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,

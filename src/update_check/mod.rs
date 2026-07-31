@@ -17,6 +17,8 @@ mod fetch;
 mod manifest;
 mod version;
 
+pub(crate) use fetch::fetch_bytes;
+
 use std::time::Duration;
 
 use log::debug;

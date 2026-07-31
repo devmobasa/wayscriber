@@ -13,6 +13,7 @@ pub(in crate::backend::wayland) use transfer::{
 
 mod completion;
 mod file_list;
+mod gif_url;
 mod image;
 mod system;
 pub(in crate::backend::wayland) mod transfer;

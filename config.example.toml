@@ -359,6 +359,18 @@ notify = true
 interval_hours = 24
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CLIPBOARD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[clipboard]
+# Browsers turn "Copy image" on an animated GIF into a static PNG snapshot, but
+# also put the image's source URL on the clipboard. With this on, pasting such
+# a copy downloads the .gif from that URL (HTTPS only, capped at 8 MiB, via the
+# system curl/wget) so the animation survives; any failure quietly pastes the
+# snapshot instead. Set to false to keep pasting fully offline.
+fetch_gif_from_url = true
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # UI SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 

@@ -2,9 +2,9 @@ use super::keybindings::{Action, KeybindingAuthorship, KeybindingsConfig};
 #[cfg(feature = "tablet-input")]
 use super::types::TabletInputConfig;
 use super::types::{
-    ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, ExportConfig,
-    HistoryConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig,
-    SessionConfig, SpotlightConfig, TrayConfig, UiConfig, UpdatesConfig,
+    ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, ClipboardConfig, DrawingConfig,
+    ExportConfig, HistoryConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig,
+    RenderProfilesConfig, SessionConfig, SpotlightConfig, TrayConfig, UiConfig, UpdatesConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -116,6 +116,10 @@ pub struct Config {
     #[serde(default)]
     pub updates: UpdatesConfig,
 
+    /// Clipboard paste behavior
+    #[serde(default)]
+    pub clipboard: ClipboardConfig,
+
     /// Presenter mode behavior overrides
     #[serde(default)]
     pub presenter_mode: PresenterModeConfig,
@@ -168,6 +172,7 @@ impl Default for Config {
             ui: UiConfig::default(),
             tray: TrayConfig::default(),
             updates: UpdatesConfig::default(),
+            clipboard: ClipboardConfig::default(),
             presenter_mode: PresenterModeConfig::default(),
             render_profiles: RenderProfilesConfig::default(),
             boards: Some(BoardsConfig::default()),

@@ -21,16 +21,32 @@ const FETCHERS: [&str; 2] = ["curl", "wget"];
 
 /// Download `url` and return its body.
 pub(crate) fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
-    fetch_with(url, timeout, run_fetcher)
+    let bytes = fetch_bytes(url, timeout, MAX_MANIFEST_BYTES)?;
+    String::from_utf8(bytes).map_err(|_| "release manifest is not valid UTF-8".to_string())
+}
+
+/// Download `url` and return its raw body, capped at `max_bytes`.
+///
+/// Shared beyond the update check (the clipboard paste worker rescues animated
+/// GIFs from browser source URLs with it): same broker ownership, HTTPS
+/// pinning, size cap, and user-config suppression as the manifest fetch.
+pub(crate) fn fetch_bytes(
+    url: &str,
+    timeout: Duration,
+    max_bytes: usize,
+) -> Result<Vec<u8>, String> {
+    fetch_with(url, timeout, |program, url, timeout| {
+        run_fetcher(program, url, timeout, max_bytes)
+    })
 }
 
 fn fetch_with(
     url: &str,
     timeout: Duration,
-    mut run: impl FnMut(&str, &str, Duration) -> Result<String, FetchError>,
-) -> Result<String, String> {
+    mut run: impl FnMut(&str, &str, Duration) -> Result<Vec<u8>, FetchError>,
+) -> Result<Vec<u8>, String> {
     if !url.starts_with("https://") {
-        return Err("refusing to fetch a non-HTTPS update manifest".to_string());
+        return Err("refusing to fetch a non-HTTPS URL".to_string());
     }
 
     for program in FETCHERS {
@@ -54,12 +70,17 @@ enum FetchError {
     Failed(String),
 }
 
-fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, FetchError> {
+fn run_fetcher(
+    program: &str,
+    url: &str,
+    timeout: Duration,
+    max_bytes: usize,
+) -> Result<Vec<u8>, FetchError> {
     let Some(program_path) = find_in_path(program) else {
         return Err(FetchError::Unavailable);
     };
 
-    let arguments = fetch_arguments(program, url, timeout);
+    let arguments = fetch_arguments(program, url, timeout, max_bytes);
     let output = crate::process_broker::current()
         .and_then(|broker| {
             broker.run(
@@ -68,7 +89,7 @@ fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, Fe
                 &arguments,
                 Vec::new(),
                 timeout.max(Duration::from_secs(1)),
-                MAX_MANIFEST_BYTES + 1,
+                max_bytes + 1,
             )
         })
         .map_err(|err| {
@@ -91,7 +112,10 @@ fn run_fetcher(program: &str, url: &str, timeout: Duration) -> Result<String, Fe
         )));
     }
 
-    validate_body(&output.stdout).map_err(FetchError::Failed)
+    if output.stdout.len() > max_bytes {
+        return Err(FetchError::Failed(OVERSIZED.to_string()));
+    }
+    Ok(output.stdout)
 }
 
 fn find_in_path(program: &str) -> Option<PathBuf> {
@@ -139,7 +163,7 @@ fn failure_detail(program: &str, stderr: &str, code: Option<i32>) -> String {
 /// Command line for one fetcher. HTTPS is enforced across redirects, the
 /// response is size-capped, and the whole request is time-boxed so a hung
 /// server cannot pin a thread.
-fn fetch_arguments(program: &str, url: &str, timeout: Duration) -> Vec<String> {
+fn fetch_arguments(program: &str, url: &str, timeout: Duration, max_bytes: usize) -> Vec<String> {
     let seconds = timeout.as_secs().max(1).to_string();
     match program {
         "curl" => vec![
@@ -165,7 +189,7 @@ fn fetch_arguments(program: &str, url: &str, timeout: Duration) -> Vec<String> {
             "--max-time".into(),
             seconds,
             "--max-filesize".into(),
-            MAX_MANIFEST_BYTES.to_string(),
+            max_bytes.to_string(),
             url.to_string(),
         ],
         // `--no-verbose` rather than `--quiet`: progress noise is gone either
@@ -191,15 +215,7 @@ fn fetch_arguments(program: &str, url: &str, timeout: Duration) -> Vec<String> {
 }
 
 /// What an over-cap response reports, whichever client produced it.
-const OVERSIZED: &str = "release manifest is implausibly large";
-
-/// Reject oversized or non-UTF-8 bodies before they reach the JSON parser.
-fn validate_body(bytes: &[u8]) -> Result<String, String> {
-    if bytes.len() > MAX_MANIFEST_BYTES {
-        return Err(OVERSIZED.to_string());
-    }
-    String::from_utf8(bytes.to_vec()).map_err(|_| "release manifest is not valid UTF-8".to_string())
-}
+const OVERSIZED: &str = "response larger than the configured limit";
 
 #[cfg(test)]
 mod tests {
@@ -217,6 +233,7 @@ mod tests {
             "curl",
             "https://wayscriber.com/latest.json",
             Duration::from_secs(5),
+            MAX_MANIFEST_BYTES,
         );
 
         // User config must be ignored, and curl only honors this as arg one.
@@ -242,6 +259,7 @@ mod tests {
             "wget",
             "https://wayscriber.com/latest.json",
             Duration::from_secs(7),
+            MAX_MANIFEST_BYTES,
         );
 
         assert!(args.contains(&"--no-config".to_string()));
@@ -279,6 +297,7 @@ mod tests {
                 program,
                 "https://wayscriber.com/latest.json",
                 Duration::from_secs(5),
+                MAX_MANIFEST_BYTES,
             );
             let suppressor = if program == "curl" {
                 "--disable"
@@ -298,6 +317,7 @@ mod tests {
             "curl",
             "https://wayscriber.com/latest.json",
             Duration::from_secs(5),
+            MAX_MANIFEST_BYTES,
         );
         assert!(
             curl.windows(2).any(|pair| pair == ["--user-agent", ""]),
@@ -308,6 +328,7 @@ mod tests {
             "wget",
             "https://wayscriber.com/latest.json",
             Duration::from_secs(5),
+            MAX_MANIFEST_BYTES,
         );
         assert!(wget.contains(&"--user-agent=".to_string()));
         assert!(wget.contains(&"--no-netrc".to_string()));
@@ -315,15 +336,27 @@ mod tests {
 
     #[test]
     fn timeout_never_degenerates_to_zero() {
-        let args = fetch_arguments("curl", "https://wayscriber.com/latest.json", Duration::ZERO);
+        let args = fetch_arguments(
+            "curl",
+            "https://wayscriber.com/latest.json",
+            Duration::ZERO,
+            MAX_MANIFEST_BYTES,
+        );
         assert!(args.windows(2).any(|pair| pair == ["--max-time", "1"]));
     }
 
     #[test]
-    fn body_validation_guards_size_and_encoding() {
-        assert_eq!(validate_body(b"{}").unwrap(), "{}");
-        assert!(validate_body(&vec![b'x'; MAX_MANIFEST_BYTES + 1]).is_err());
-        assert!(validate_body(&[0xff, 0xfe]).is_err());
+    fn max_filesize_follows_the_caller_cap() {
+        let args = fetch_arguments(
+            "curl",
+            "https://example.com/a.gif",
+            Duration::from_secs(5),
+            8 * 1024 * 1024,
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--max-filesize" && pair[1] == "8388608")
+        );
     }
 
     #[test]
@@ -353,12 +386,12 @@ mod tests {
                 if program == "curl" {
                     Err(FetchError::Unavailable)
                 } else {
-                    Ok("{}".to_string())
+                    Ok(b"{}".to_vec())
                 }
             },
         )
         .unwrap();
-        assert_eq!(body, "{}");
+        assert_eq!(body, b"{}");
         assert_eq!(calls, ["curl", "wget"]);
     }
 }

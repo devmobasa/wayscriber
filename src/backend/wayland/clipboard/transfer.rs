@@ -132,7 +132,9 @@ pub(in crate::backend::wayland) fn resolve_selection_clipboard_publish(
     }
 }
 
-pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteResult {
+pub(in crate::backend::wayland) fn resolve_system_clipboard(
+    fetch_gif_from_url: bool,
+) -> ClipboardPasteResult {
     let offered = match system::list_mime_types() {
         Ok(types) if types.is_empty() => return ClipboardPasteResult::ClipboardEmpty,
         Ok(types) => types,
@@ -151,6 +153,15 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
         mime_type,
         offered
     );
+
+    // Browser "Copy image" of a GIF offers only a static raster snapshot;
+    // when a source URL points at the actual .gif, prefer fetching that.
+    if fetch_gif_from_url
+        && matches!(mime_type.as_str(), "image/png" | "image/jpeg" | "image/jpg")
+        && let Some(result) = super::gif_url::rescue_animated_gif(&offered)
+    {
+        return result;
+    }
     let limit = if mime_type == WAYSCRIBER_SELECTION_MIME {
         MAX_CLIPBOARD_SELECTION_BYTES
     } else if mime_type == "image/gif" {

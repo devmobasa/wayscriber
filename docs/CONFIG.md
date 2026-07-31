@@ -1955,6 +1955,9 @@ Defaults match the original hardcoded keybindings where possible. Copy/paste sel
 defaults to <kbd>Ctrl+Shift+C</kbd> to avoid conflicts. The paste action also accepts PNG/JPEG/GIF
 image data and local image files copied from a file manager. Animated GIFs play on the canvas
 (pause/resume from the right-click menu); `[ui] reduced_motion` keeps them on their first frame.
+Browsers copy GIFs as static PNG snapshots; with `[clipboard] fetch_gif_from_url = true` (the
+default) the paste fetches the `.gif` from the copied source URL instead — HTTPS only, capped at
+8 MiB, using the system `curl`/`wget` — and falls back to the snapshot on any failure.
 
 ## Creating Your Configuration
 

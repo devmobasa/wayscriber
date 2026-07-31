@@ -346,11 +346,12 @@ impl WaylandState {
     fn start_system_clipboard_read(&mut self, request: ClipboardPasteRequest) {
         log::info!("Reading system clipboard for paste request {}", request.id);
         let context = request.clone();
+        let fetch_gif_from_url = self.config.clipboard.fetch_gif_from_url;
         if let Err(failure) =
             self.clipboard_paste
                 .try_submit(context, "clipboard-paste", move || {
                     let started = Instant::now();
-                    let result = transfer::resolve_system_clipboard();
+                    let result = transfer::resolve_system_clipboard(fetch_gif_from_url);
                     log::info!(
                         "System clipboard read for paste request {} completed in {:?}: {}",
                         request.id,
