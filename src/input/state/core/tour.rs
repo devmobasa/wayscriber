@@ -252,19 +252,9 @@ impl InputState {
             // that transient snapshot owner.
             self.toggle_focus_mode();
         }
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::Tour);
         self.tour_active = true;
         self.tour_step = 0;
-        // Close other overlays. Route help through the canonical closer so the
-        // cached pointer hit map is dropped; setting `show_help = false` alone
-        // would leave the previous layout hittable until the next render.
-        if self.show_help {
-            self.close_help_overlay();
-        }
-        if self.command_palette_open {
-            self.command_palette_open = false;
-        }
-        self.close_context_menu();
-        self.close_properties_panel();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }

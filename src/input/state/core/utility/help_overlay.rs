@@ -58,7 +58,7 @@ pub enum HelpOverlayReleaseOutcome {
 
 impl InputState {
     fn open_help_overlay_internal(&mut self, quick_mode: bool, track_usage: bool) {
-        self.close_radial_menu();
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::HelpOverlay);
         self.show_help = true;
         self.help_overlay_quick_mode = quick_mode;
         self.help_overlay_scroll = 0.0;

@@ -22,6 +22,7 @@ mod focus_mode;
 mod input_hud;
 mod light_mode;
 mod menus;
+mod modal;
 mod pages;
 mod presenter_mode;
 mod pressure_modes;

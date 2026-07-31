@@ -200,34 +200,6 @@ impl InputState {
         ))
     }
 
-    /// True when another interaction captures keyboard input ahead of the
-    /// canvas editor. While one is active the canvas IME must stay disabled:
-    /// composed text bypasses normal key routing and would otherwise leak
-    /// straight into the hidden canvas buffer.
-    pub fn modal_owns_text_input(&self) -> bool {
-        self.tour_active
-            || self.command_palette_is_engaged()
-            || self.show_help
-            || self.is_radial_menu_open()
-            || self.is_color_picker_popup_open()
-            || self.is_precision_entry_open()
-            || self.is_context_menu_open()
-            || self.is_board_picker_open()
-            || self.is_properties_panel_open()
-            || self.eyedropper_is_engaged()
-    }
-
-    /// Modal paths whose editing/repeat behavior must not be driven by the
-    /// backend's canvas-oriented manual repeat timer. Kept narrower than
-    /// [`Self::modal_owns_text_input`]: Help and board-picker search still use
-    /// the normal routed repeat path even though they must disable the canvas
-    /// IME.
-    pub fn modal_blocks_canvas_key_repeat(&self) -> bool {
-        self.command_palette_is_engaged()
-            || self.is_color_picker_popup_open()
-            || self.is_precision_entry_open()
-    }
-
     /// The active preedit run (byte-cursor included) for the renderer.
     pub fn ime_preedit(&self) -> Option<&ImePreedit> {
         self.ime.preedit()

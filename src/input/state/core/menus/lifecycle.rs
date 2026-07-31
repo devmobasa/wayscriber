@@ -30,8 +30,7 @@ impl InputState {
         if !self.context_menu_enabled {
             return;
         }
-        self.close_radial_menu();
-        self.close_properties_panel();
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ContextMenu);
         self.context_menu_page_target = None;
         if let Some(layout) = self.context_menu_layout.take() {
             self.mark_context_menu_region(layout);

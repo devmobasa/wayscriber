@@ -107,7 +107,7 @@ impl InputState {
     }
 
     fn open_command_palette_internal(&mut self, track_usage: bool) {
-        self.close_radial_menu();
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::CommandPalette);
         self.command_palette_open = true;
         self.clear_command_palette_repeat();
         if track_usage {
@@ -116,17 +116,6 @@ impl InputState {
         self.command_palette_query.clear();
         self.command_palette_selected = 0;
         self.command_palette_scroll = 0;
-        // Close other overlays. Route help through the canonical closer so the
-        // cached pointer hit map is dropped; setting `show_help = false` alone
-        // would leave the previous layout hittable until the next render.
-        if self.show_help {
-            self.close_help_overlay();
-        }
-        if self.tour_active {
-            self.tour_active = false;
-        }
-        self.close_context_menu();
-        self.close_properties_panel();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
