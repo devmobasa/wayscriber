@@ -52,6 +52,47 @@ future_boards = "kept"
     assert_eq!(reparsed.supported_wire, Some(wire));
 }
 
+/// A build that does not know a key preserves it verbatim. If a later build
+/// learns to manage that key, the preserved copy and the managed value collide
+/// while encoding. Failing there made the whole file unencodable, and because
+/// the conflict lives in memory rather than on disk the persistence incident
+/// recurred on every retry - no toolbar state could ever be saved again. The
+/// managed value has to win instead.
+#[test]
+fn a_preserved_key_this_build_now_manages_loses_to_the_managed_value() {
+    let decoded = decode_runtime_ui_file(
+        br#"
+version = 1
+
+[toolbar.top_pinned]
+seed = false
+value = true
+"#,
+    );
+    let mut wire = decoded.supported_wire.expect("supported wire");
+
+    // Simulate the upgrade: a preserved copy of a key this build manages,
+    // as if an older build had carried it forward before the key was known.
+    wire.passthrough.toolbar.insert(
+        "top_pinned".to_string(),
+        "preserved = \"stale\"\n".to_string(),
+    );
+
+    let encoded = encode_runtime_ui_file(&wire).expect("a collision must not fail the encode");
+    let reparsed = decode_runtime_ui_file(&encoded);
+    assert_eq!(reparsed.status, RuntimeUiFileStatus::Supported);
+    assert_eq!(
+        reparsed
+            .supported_wire
+            .expect("supported wire")
+            .model
+            .get(&InteractionSeedTarget::TopPinned)
+            .map(|entry| &entry.value),
+        Some(&InteractionSeedValue::Bool(true)),
+        "the managed value survives, not the stale preserved copy"
+    );
+}
+
 #[test]
 fn unknown_ids_and_unknown_order_items_are_pruned() {
     let source = br#"

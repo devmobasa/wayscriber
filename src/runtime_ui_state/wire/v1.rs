@@ -261,44 +261,48 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             wire.passthrough.entries.get(target),
         )?;
         match target {
-            InteractionSeedTarget::TopPinned => insert_unique(&mut toolbar, "top_pinned", entry)?,
-            InteractionSeedTarget::SidePinned => insert_unique(&mut toolbar, "side_pinned", entry)?,
+            InteractionSeedTarget::TopPinned => {
+                insert_recognized(&mut toolbar, "top_pinned", entry)
+            }
+            InteractionSeedTarget::SidePinned => {
+                insert_recognized(&mut toolbar, "side_pinned", entry)
+            }
             InteractionSeedTarget::TopMinimized => {
-                insert_unique(&mut toolbar, "top_minimized", entry)?
+                insert_recognized(&mut toolbar, "top_minimized", entry)
             }
             InteractionSeedTarget::SideMinimized => {
-                insert_unique(&mut toolbar, "side_minimized", entry)?
+                insert_recognized(&mut toolbar, "side_minimized", entry)
             }
-            InteractionSeedTarget::SidePane => insert_unique(&mut toolbar, "side_pane", entry)?,
+            InteractionSeedTarget::SidePane => insert_recognized(&mut toolbar, "side_pane", entry),
             InteractionSeedTarget::CollapsedSection(section) => {
-                insert_unique(&mut collapsed, section.config_id(), entry)?
+                insert_recognized(&mut collapsed, section.config_id(), entry)
             }
             InteractionSeedTarget::ItemVisibility(item) => {
-                insert_unique(&mut visibility, item.as_str(), entry)?
+                insert_recognized(&mut visibility, item.as_str(), entry)
             }
             InteractionSeedTarget::ItemOrder(group) => {
-                insert_unique(&mut order, order_group_wire_id(*group), entry)?
+                insert_recognized(&mut order, order_group_wire_id(*group), entry)
             }
-            InteractionSeedTarget::BoardPin(id) => insert_unique(&mut boards_pinned, id, entry)?,
+            InteractionSeedTarget::BoardPin(id) => insert_recognized(&mut boards_pinned, id, entry),
             InteractionSeedTarget::TopPosition => {
-                insert_unique(&mut toolbar, "top_position", entry)?
+                insert_recognized(&mut toolbar, "top_position", entry)
             }
             InteractionSeedTarget::SidePosition => {
-                insert_unique(&mut toolbar, "side_position", entry)?
+                insert_recognized(&mut toolbar, "side_position", entry)
             }
             InteractionSeedTarget::TopDisplayMode => {
-                insert_unique(&mut toolbar, "top_display_mode", entry)?
+                insert_recognized(&mut toolbar, "top_display_mode", entry)
             }
         }
     }
-    insert_unique(&mut toolbar, "collapsed_sections", Value::Table(collapsed))?;
-    insert_unique(&mut toolbar, "item_visibility", Value::Table(visibility))?;
-    insert_unique(&mut toolbar, "item_order", Value::Table(order))?;
+    insert_recognized(&mut toolbar, "collapsed_sections", Value::Table(collapsed));
+    insert_recognized(&mut toolbar, "item_visibility", Value::Table(visibility));
+    insert_recognized(&mut toolbar, "item_order", Value::Table(order));
 
     let mut boards = restore_table(&wire.passthrough.boards)?;
-    insert_unique(&mut boards, "pinned", Value::Table(boards_pinned))?;
-    insert_unique(&mut root, "toolbar", Value::Table(toolbar))?;
-    insert_unique(&mut root, "boards", Value::Table(boards))?;
+    insert_recognized(&mut boards, "pinned", Value::Table(boards_pinned));
+    insert_recognized(&mut root, "toolbar", Value::Table(toolbar));
+    insert_recognized(&mut root, "boards", Value::Table(boards));
     Ok(Value::Table(root))
 }
 
@@ -315,16 +319,16 @@ fn encode_override(
         ));
     }
     let mut entry = extra.map_or_else(|| Ok(Table::new()), restore_table)?;
-    insert_unique(
+    insert_recognized(
         &mut entry,
         "seed",
         encode_value(target, &runtime_override.seed)?,
-    )?;
-    insert_unique(
+    );
+    insert_recognized(
         &mut entry,
         "value",
         encode_value(target, &runtime_override.value)?,
-    )?;
+    );
     Ok(Value::Table(entry))
 }
 
@@ -414,18 +418,24 @@ fn restore_table(source: &BTreeMap<String, String>) -> Result<Table, RuntimeUiWi
         .collect()
 }
 
-fn insert_unique(
-    table: &mut Table,
-    key: impl Into<String>,
-    value: Value,
-) -> Result<(), RuntimeUiWireError> {
+/// Writes a field this build owns, displacing any preserved copy of the same
+/// key.
+///
+/// Preserved (passthrough) keys are values written by some other build that
+/// this one did not understand, so they are re-emitted verbatim. If this build
+/// *does* understand the key, its own value is authoritative by construction
+/// and the preserved copy is stale. Failing here instead - as this used to -
+/// made the whole file unencodable, and because the conflict lives in the
+/// in-memory wire state rather than on disk, the resulting persistence
+/// incident recurred on every retry and no toolbar state could be saved again.
+fn insert_recognized(table: &mut Table, key: impl Into<String>, value: Value) {
     let key = key.into();
     if table.insert(key.clone(), value).is_some() {
-        return Err(RuntimeUiWireError::new(format!(
-            "passthrough conflicts with recognized V1 field {key}"
-        )));
+        log::warn!(
+            "Dropping the preserved runtime-UI value for `{key}`: this build manages that key, \
+             so its own value wins"
+        );
     }
-    Ok(())
 }
 
 fn order_group_wire_id(group: ToolbarItemOrderGroup) -> &'static str {
