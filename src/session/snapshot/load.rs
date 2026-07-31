@@ -1,5 +1,6 @@
 use super::compression::{
-    DEFAULT_MAX_EXPANDED_SESSION_BYTES, ExpandedSessionTooLarge, maybe_decompress_with_limit,
+    DEFAULT_MAX_EXPANDED_SESSION_BYTES, ExpandedSessionTooLarge, is_gzip,
+    maybe_decompress_with_limit,
 };
 use super::history::{
     apply_history_policies, enforce_shape_limits, max_history_depth, strip_history_fields,
@@ -20,6 +21,7 @@ use crate::session::primary::{
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use serde_json::Value;
+use std::fmt;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -63,6 +65,31 @@ pub(crate) enum LoadSnapshotOutcome {
         max_expanded_size: u64,
     },
 }
+
+/// A too-new session could be read, but no durable copy could be established.
+///
+/// This is deliberately distinct from a malformed session: the generic load
+/// error path backs malformed files up and then continues with an empty
+/// session, which would expose this valid newer file to the save/rotation cycle
+/// preservation exists to prevent.
+#[derive(Debug)]
+struct NewerVersionPreservationFailed {
+    path: PathBuf,
+    details: String,
+}
+
+impl fmt::Display for NewerVersionPreservationFailed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "could not durably preserve newer-version session {}: {}",
+            self.path.display(),
+            self.details
+        )
+    }
+}
+
+impl std::error::Error for NewerVersionPreservationFailed {}
 
 impl LoadSnapshotOutcome {
     #[allow(dead_code)]
@@ -422,6 +449,16 @@ fn load_snapshot_path_with_outcome(
             Ok(LoadSnapshotOutcome::NonRegularArtifact {
                 path: session_path.to_path_buf(),
             })
+        }
+        Err(err)
+            if err
+                .downcast_ref::<NewerVersionPreservationFailed>()
+                .is_some() =>
+        {
+            // Fail closed. Treating this as corruption would back it up and
+            // then continue with an empty, saveable session — exactly the
+            // destructive downgrade path this error reports.
+            Err(err)
         }
         Err(err) => {
             warn!(

@@ -11,6 +11,13 @@ fn move_named_session_non_lock_artifacts_moves_primary_and_sidecars_without_lock
     let rotated_recovery = PathBuf::from(format!("{}.old", source_artifacts.recovery.display()));
     let target_rotated_recovery =
         PathBuf::from(format!("{}.old", target_artifacts.recovery.display()));
+    let preserved_suffix = ".v2-preserved-0123456789abcdef";
+    let preserved_moved_suffix = ".v3-preserved-fedcba9876543210-moved-1";
+    let preserved = crate::session::append_path_suffix(&source, preserved_suffix);
+    let preserved_moved = crate::session::append_path_suffix(&source, preserved_moved_suffix);
+    let target_preserved = crate::session::append_path_suffix(&target, preserved_suffix);
+    let target_preserved_moved =
+        crate::session::append_path_suffix(&target, preserved_moved_suffix);
 
     std::fs::write(&source_artifacts.primary, b"primary").unwrap();
     std::fs::write(&source_artifacts.backup, b"backup").unwrap();
@@ -18,13 +25,15 @@ fn move_named_session_non_lock_artifacts_moves_primary_and_sidecars_without_lock
     std::fs::write(&source_artifacts.clear_marker, b"cleared").unwrap();
     std::fs::write(&rotated_recovery, b"rotated").unwrap();
     std::fs::write(&source_artifacts.lock, b"source lock").unwrap();
+    std::fs::write(&preserved, b"newer").unwrap();
+    std::fs::write(&preserved_moved, b"newer moved").unwrap();
 
     let outcome = move_named_session_non_lock_artifacts(&source, &target).unwrap();
 
     assert_eq!(outcome.source, source);
     assert_eq!(outcome.target, target);
-    assert_eq!(outcome.moved_artifacts, 5);
-    assert_eq!(outcome.moved_artifact_paths.len(), 5);
+    assert_eq!(outcome.moved_artifacts, 7);
+    assert_eq!(outcome.moved_artifact_paths.len(), 7);
     assert_eq!(
         std::fs::read(&target_artifacts.primary).unwrap(),
         b"primary"
@@ -39,11 +48,18 @@ fn move_named_session_non_lock_artifacts_moves_primary_and_sidecars_without_lock
         b"cleared"
     );
     assert_eq!(std::fs::read(&target_rotated_recovery).unwrap(), b"rotated");
+    assert_eq!(std::fs::read(&target_preserved).unwrap(), b"newer");
+    assert_eq!(
+        std::fs::read(&target_preserved_moved).unwrap(),
+        b"newer moved"
+    );
     assert!(!source_artifacts.primary.exists());
     assert!(!source_artifacts.backup.exists());
     assert!(!source_artifacts.recovery.exists());
     assert!(!source_artifacts.clear_marker.exists());
     assert!(!rotated_recovery.exists());
+    assert!(!preserved.exists());
+    assert!(!preserved_moved.exists());
     assert_eq!(
         std::fs::read(&source_artifacts.lock).unwrap(),
         b"source lock",

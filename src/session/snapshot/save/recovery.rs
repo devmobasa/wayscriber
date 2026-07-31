@@ -44,7 +44,7 @@ pub(super) fn save_recovery_snapshot(
             recovery_path.display()
         )
     })?;
-    sync_session_parent_dir(&recovery_path, "recovery file");
+    sync_session_parent_dir(&recovery_path, "recovery file")?;
     info!(
         "Session recovery file replace completed for {}: write_and_sync={:?}, rename={:?}, final_size={} bytes",
         recovery_path.display(),
@@ -225,7 +225,7 @@ pub(super) fn write_backup_recovery_marker(options: &SessionOptions) -> Result<(
             marker_path.display()
         )
     })?;
-    sync_session_parent_dir(&marker_path, "backup recovery marker");
+    sync_session_parent_dir(&marker_path, "backup recovery marker")?;
     info!(
         "Wrote backup recovery marker {} for contentless non-clear session save",
         marker_path.display()
@@ -261,7 +261,7 @@ pub(super) fn write_recovery_recoverable_marker(options: &SessionOptions) -> Res
             marker_path.display()
         )
     })?;
-    sync_session_parent_dir(&marker_path, "recovery recoverable marker");
+    sync_session_parent_dir(&marker_path, "recovery recoverable marker")?;
     info!(
         "Wrote recovery recoverable marker {} for contentless non-clear session save",
         marker_path.display()
@@ -297,7 +297,7 @@ pub(super) fn write_clear_marker(options: &SessionOptions) -> Result<()> {
             marker_path.display()
         )
     })?;
-    sync_session_parent_dir(&marker_path, "session clear marker");
+    sync_session_parent_dir(&marker_path, "session clear marker")?;
     info!(
         "Wrote session clear marker {} for empty saved session",
         marker_path.display()

@@ -1,4 +1,4 @@
-use super::compression::is_gzip;
+use super::compression::{compress_bytes, is_gzip};
 use super::load::{
     LoadSnapshotOutcome, load_named_session_candidate,
     load_named_session_candidate_with_expanded_limit, load_snapshot_inner,
@@ -950,15 +950,52 @@ fn load_named_candidate_newer_version_does_not_create_sidecars() {
 
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
     assert_no_candidate_sidecars(&options);
-    let preserved_path = crate::session::append_path_suffix(
-        &options.session_file_path(),
-        &format!(".v{}-preserved", CURRENT_VERSION + 1),
-    );
     assert!(
-        !preserved_path.exists(),
-        "candidate load must not create a preserved copy {}",
-        preserved_path.display()
+        preserved_copies_in(temp.path()).is_empty(),
+        "candidate load must not create a preserved copy"
     );
+}
+
+/// Paths of `.vN-preserved-*` copies under `dir`, sorted for stable asserts.
+fn preserved_copies_in(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut copies: Vec<_> = std::fs::read_dir(dir)
+        .expect("scan for preserved copies")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.contains("-preserved"))
+        })
+        .collect();
+    copies.sort();
+    copies
+}
+
+fn occupy_copy_preservation_candidates(base: &Path) {
+    std::fs::write(base, b"foreign preservation").expect("occupy base preservation name");
+    for attempt in 1..16 {
+        std::fs::write(
+            std::path::PathBuf::from(format!("{}-{attempt}", base.display())),
+            b"foreign preservation",
+        )
+        .expect("occupy numbered preservation name");
+    }
+}
+
+fn occupy_move_preservation_candidates(base: &Path) -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::new();
+    for attempt in 0..16 {
+        let suffix = if attempt == 0 {
+            "-moved".to_string()
+        } else {
+            format!("-moved-{attempt}")
+        };
+        let path = std::path::PathBuf::from(format!("{}{suffix}", base.display()));
+        std::fs::write(&path, b"previous preservation").expect("occupy moved preservation name");
+        paths.push(path);
+    }
+    paths
 }
 
 #[cfg(unix)]
@@ -1844,42 +1881,210 @@ fn newer_version_session_survives_downgrade_saves() {
         .expect("newer-version session load is handled");
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
 
-    let preserved_path = crate::session::append_path_suffix(
-        &session_path,
-        &format!(".v{}-preserved", CURRENT_VERSION + 1),
-    );
+    let copies = preserved_copies_in(temp.path());
+    assert_eq!(copies.len(), 1, "one preserved copy after first load");
     assert_eq!(
-        std::fs::read(&preserved_path).expect("preserved copy exists"),
+        std::fs::read(&copies[0]).expect("preserved copy exists"),
         newer_bytes,
-        "runtime load must preserve the newer-version bytes verbatim"
+        "runtime load must preserve the exact loaded bytes"
     );
 
     save_snapshot(&sample_snapshot(), &options).expect("first post-downgrade save");
     save_snapshot(&sample_snapshot(), &options).expect("second post-downgrade save");
 
     assert_eq!(
-        std::fs::read(&preserved_path).expect("preserved copy survives rotation"),
+        std::fs::read(&copies[0]).expect("preserved copy survives rotation"),
         newer_bytes,
         "save rotation must not touch the preserved newer-version copy"
     );
 
-    // A repeated load of another too-new file must not overwrite the copy
-    // already preserved for this version.
+    // A *different* session from the same newer version gets its own copy:
+    // a fixed per-version name preserved only the first one and let rotation
+    // destroy any later ones.
     let mut changed = sample_session_file();
     changed.version = CURRENT_VERSION + 1;
     changed.active_board_id = Some("whiteboard".to_string());
-    std::fs::write(
-        &session_path,
-        serde_json::to_vec_pretty(&changed).expect("changed newer session json"),
-    )
-    .expect("write changed newer session");
+    let changed_bytes = serde_json::to_vec_pretty(&changed).expect("changed newer session json");
+    std::fs::write(&session_path, &changed_bytes).expect("write changed newer session");
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("repeated newer-version load is handled");
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    let copies = preserved_copies_in(temp.path());
+    assert_eq!(copies.len(), 2, "each distinct newer session is preserved");
+    let mut contents: Vec<Vec<u8>> = copies
+        .iter()
+        .map(|path| std::fs::read(path).expect("read preserved copy"))
+        .collect();
+    contents.sort();
+    let mut expected = vec![newer_bytes, changed_bytes];
+    expected.sort();
+    assert_eq!(contents, expected);
+}
+
+#[test]
+fn compressed_newer_version_session_is_preserved_byte_for_byte() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "compressed-downgrade");
+    options.persist_transparent = true;
+    let session_path = options.session_file_path();
+
+    let mut file = sample_session_file();
+    file.version = CURRENT_VERSION + 1;
+    let json = serde_json::to_vec_pretty(&file).expect("newer session json");
+    let encoded = compress_bytes(&json).expect("compress newer session");
+    assert!(is_gzip(&encoded));
+    std::fs::write(&session_path, &encoded).expect("write compressed newer session");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("compressed newer-version session load is handled");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+
+    let copies = preserved_copies_in(temp.path());
+    assert_eq!(copies.len(), 1);
     assert_eq!(
-        std::fs::read(&preserved_path).expect("preserved copy remains"),
-        newer_bytes,
-        "the first preserved copy wins"
+        std::fs::read(&copies[0]).expect("read preserved compressed session"),
+        encoded,
+        "preservation must retain the original encoded bytes"
+    );
+}
+
+#[test]
+fn exhausted_copy_names_move_newer_primary_without_replacing_anything() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "move-fallback");
+    options.persist_transparent = true;
+    let session_path = options.session_file_path();
+    let mut file = sample_session_file();
+    file.version = CURRENT_VERSION + 1;
+    let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
+
+    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+    load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("establish base copy");
+    let base = preserved_copies_in(temp.path()).remove(0);
+    occupy_copy_preservation_candidates(&base);
+    std::fs::write(&session_path, &newer_bytes).expect("restore newer primary");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("free moved candidate should preserve the primary");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert!(
+        !session_path.exists(),
+        "fallback must move the exposed primary"
+    );
+    let moved = std::path::PathBuf::from(format!("{}-moved", base.display()));
+    assert_eq!(
+        std::fs::read(moved).expect("read moved preservation"),
+        newer_bytes
+    );
+}
+
+#[test]
+fn preservation_exhaustion_fails_closed_without_backing_up_or_replacing_files() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "fail-closed");
+    options.persist_transparent = true;
+    let session_path = options.session_file_path();
+    let mut file = sample_session_file();
+    file.version = CURRENT_VERSION + 1;
+    let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
+
+    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+    load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("establish base copy");
+    let base = preserved_copies_in(temp.path()).remove(0);
+    occupy_copy_preservation_candidates(&base);
+    let moved_candidates = occupy_move_preservation_candidates(&base);
+    std::fs::write(&session_path, &newer_bytes).expect("restore newer primary");
+
+    let err = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect_err("no durable preservation target must abort the load");
+    assert!(format!("{err:#}").contains("could not durably preserve"));
+    assert_eq!(
+        std::fs::read(&session_path).expect("primary remains untouched"),
+        newer_bytes
+    );
+    assert!(
+        !options.backup_file_path().exists(),
+        "preservation failure is not corruption and must not rotate a backup"
+    );
+    for path in moved_candidates {
+        assert_eq!(
+            std::fs::read(path).expect("existing moved candidate remains"),
+            b"previous preservation"
+        );
+    }
+}
+
+/// A file already sitting at the preserved name is only trusted when it holds
+/// exactly these bytes. A truncated earlier attempt, a foreign entry, or a
+/// digest collision must not be mistaken for a completed preservation.
+#[test]
+fn a_mismatched_preserved_file_is_stepped_over_not_trusted() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "preserve-clash");
+    options.persist_transparent = true;
+    let session_path = options.session_file_path();
+
+    let mut file = sample_session_file();
+    file.version = CURRENT_VERSION + 1;
+    let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
+    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+
+    // First load establishes the content-addressed name, which is then
+    // clobbered with content that is not the session.
+    load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("first load");
+    let copies = preserved_copies_in(temp.path());
+    assert_eq!(copies.len(), 1);
+    std::fs::write(&copies[0], b"not the session").expect("clobber preserved copy");
+
+    // Re-write the primary (the first load left it in place) and load again.
+    std::fs::write(&session_path, &newer_bytes).expect("rewrite newer session");
+    load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("second load");
+
+    assert_eq!(
+        std::fs::read(&copies[0]).expect("clobbered file remains"),
+        b"not the session",
+        "a non-matching file at the preserved name must not be overwritten"
+    );
+    let copies = preserved_copies_in(temp.path());
+    assert!(
+        copies
+            .iter()
+            .any(|path| std::fs::read(path).is_ok_and(|bytes| bytes == newer_bytes)),
+        "the real bytes must be preserved under some name"
+    );
+}
+
+/// A newer release may change an existing field incompatibly, so the version
+/// gate must run on the raw document: if schema deserialization ran first,
+/// its failure would send the file down the corrupt-backup path, whose backup
+/// slot rotation eventually replaces.
+#[test]
+fn forward_incompatible_newer_session_is_preserved_not_treated_as_corrupt() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "fwd-incompat");
+    options.persist_transparent = true;
+    let session_path = options.session_file_path();
+
+    let newer_bytes = format!(
+        "{{\n  \"version\": {},\n  \"boards\": 42\n}}\n",
+        CURRENT_VERSION + 1
+    )
+    .into_bytes();
+    std::fs::write(&session_path, &newer_bytes).expect("write incompatible newer session");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("incompatible newer-version load is handled");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+
+    assert!(
+        session_path.exists(),
+        "the too-new primary must not be removed as corrupt"
+    );
+    let copies = preserved_copies_in(temp.path());
+    assert_eq!(copies.len(), 1, "the incompatible session is preserved");
+    assert_eq!(
+        std::fs::read(&copies[0]).expect("preserved copy exists"),
+        newer_bytes
     );
 }
 
