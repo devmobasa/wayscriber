@@ -121,6 +121,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
 - Spotlight tool: dims everything except the regions you draw
 - Multiline text and sticky notes with smoothing
+- Paste images from the clipboard or file manager (PNG/JPEG/GIF); animated GIFs play on the canvas with play/pause in the context menu
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
@@ -829,7 +830,7 @@ pick_screen_color = ["I"]
 |--------|-----|
 | Duplicate selection | <kbd>Ctrl+D</kbd> |
 | Copy selection | <kbd>Ctrl+Alt+C</kbd> |
-| Paste selection or copied PNG/JPEG image | <kbd>Ctrl+Alt+V</kbd> |
+| Paste selection or copied PNG/JPEG/GIF image (animated GIFs play; right-click to pause) | <kbd>Ctrl+Alt+V</kbd> |
 | Delete selection | <kbd>Delete</kbd> |
 | Bring to front/back | <kbd>]</kbd> / <kbd>[</kbd> |
 | Nudge selection | Arrow keys (large: <kbd>PageUp</kbd>/<kbd>PageDown</kbd>) |

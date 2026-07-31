@@ -11,8 +11,8 @@
 //! is revisited.
 
 use super::base::InputState;
-use crate::draw::ShapeId;
 use crate::draw::Shape;
+use crate::draw::ShapeId;
 use crate::draw::render::animation::{self, FrameStep};
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -217,8 +217,7 @@ impl InputState {
     /// The wake-check twin of [`Self::advance_gif_animations`]'s gate: true
     /// when at least one visible, playing entry is due.
     pub fn gif_frames_due(&self, now: Instant, view: Option<Rect>) -> bool {
-        self.gif_earliest_due(view)
-            .is_some_and(|due| due <= now)
+        self.gif_earliest_due(view).is_some_and(|due| due <= now)
     }
 
     /// Per-shape frame selection for render paths (absent id = frame 0).
@@ -261,17 +260,14 @@ impl InputState {
             board: self.boards.active_index(),
             page: self.boards.active_page_index(),
         };
-        if let Some((memo_key, has_gif)) = self.gif_playback.presence_memo {
-            if memo_key == key {
-                return has_gif;
-            }
+        if let Some((memo_key, has_gif)) = self.gif_playback.presence_memo
+            && memo_key == key
+        {
+            return has_gif;
         }
-        let has_gif = self
-            .boards
-            .active_frame()
-            .shapes
-            .iter()
-            .any(|shape| matches!(&shape.shape, Shape::Image { data, .. } if animation::is_gif(data)));
+        let has_gif = self.boards.active_frame().shapes.iter().any(
+            |shape| matches!(&shape.shape, Shape::Image { data, .. } if animation::is_gif(data)),
+        );
         self.gif_playback.presence_memo = Some((key, has_gif));
         has_gif
     }

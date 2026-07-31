@@ -109,6 +109,15 @@ impl InputState {
                     self.close_context_menu();
                 }
             }
+            MenuCommand::ToggleGifPlayback => {
+                if let Some(id) = self.selected_shape_ids().first().copied()
+                    && let Some(playing) = self.toggle_gif_playback(id, std::time::Instant::now())
+                {
+                    info!("Toggled GIF playback for shape {id}: playing={playing}");
+                    self.needs_redraw = true;
+                }
+                self.close_context_menu();
+            }
             MenuCommand::ClearAll => {
                 self.clear_all();
                 self.close_context_menu();

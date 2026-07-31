@@ -131,6 +131,19 @@ impl InputState {
                         Some(MenuCommand::EditText),
                     ));
                 }
+                // Only animatable GIFs have a playback entry; static images,
+                // over-budget GIFs, and failed decodes get nothing.
+                if matches!(drawn.shape, Shape::Image { .. })
+                    && let Some(playing) = self.gif_playback_running(shape_id)
+                {
+                    entries.push(ContextMenuEntry::new(
+                        if playing { "Pause GIF" } else { "Play GIF" },
+                        None::<String>,
+                        false,
+                        false,
+                        Some(MenuCommand::ToggleGifPlayback),
+                    ));
+                }
             }
         }
 

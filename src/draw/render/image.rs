@@ -93,7 +93,14 @@ pub fn render_image_shape_frame(
     blit_scaled_surface(ctx, x, y, w, h, &surface);
 }
 
-fn blit_scaled_surface(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32, surface: &ImageSurface) {
+fn blit_scaled_surface(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    surface: &ImageSurface,
+) {
     let width = w.saturating_abs().max(1) as f64;
     let height = h.saturating_abs().max(1) as f64;
     let draw_x = if w < 0 { x + w } else { x };

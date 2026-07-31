@@ -76,11 +76,13 @@ mod tests {
         {
             let mut encoder = gif::Encoder::new(&mut bytes, 2, 2, &palette).unwrap();
             for color in [0u8, 1u8] {
-                let mut gif_frame = gif::Frame::default();
-                gif_frame.width = 2;
-                gif_frame.height = 2;
-                gif_frame.buffer = vec![color; 4].into();
-                gif_frame.delay = 10;
+                let gif_frame = gif::Frame {
+                    width: 2,
+                    height: 2,
+                    buffer: vec![color; 4].into(),
+                    delay: 10,
+                    ..Default::default()
+                };
                 encoder.write_frame(&gif_frame).unwrap();
             }
         }

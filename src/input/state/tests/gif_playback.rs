@@ -21,12 +21,14 @@ fn test_gif(frame_colors: &[u8], delay: u16, repeat: Option<gif::Repeat>) -> Vec
             encoder.set_repeat(repeat).unwrap();
         }
         for &color in frame_colors {
-            let mut frame = gif::Frame::default();
-            frame.width = 2;
-            frame.height = 2;
-            frame.buffer = vec![color; 4].into();
-            frame.delay = delay;
-            frame.dispose = gif::DisposalMethod::Keep;
+            let frame = gif::Frame {
+                width: 2,
+                height: 2,
+                buffer: vec![color; 4].into(),
+                delay,
+                dispose: gif::DisposalMethod::Keep,
+                ..Default::default()
+            };
             encoder.write_frame(&frame).unwrap();
         }
     }
@@ -51,13 +53,19 @@ fn add_gif_shape(state: &mut InputState, bytes: Vec<u8>) -> ShapeId {
 #[test]
 fn advance_creates_entries_lazily_and_steps_when_due() {
     let mut state = create_test_input_state();
-    let id = add_gif_shape(&mut state, test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)));
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
     let t0 = Instant::now();
 
     assert!(state.gif_frame_indices().is_empty());
     assert!(!state.advance_gif_animations(t0, VIEW, None));
     assert_eq!(state.gif_frame_indices().get(&id), Some(&0));
-    assert!(!state.gif_frames_due(t0, VIEW), "fresh entry is not yet due");
+    assert!(
+        !state.gif_frames_due(t0, VIEW),
+        "fresh entry is not yet due"
+    );
 
     let t1 = t0 + Duration::from_millis(60);
     assert!(state.gif_frames_due(t1, VIEW));
@@ -74,7 +82,10 @@ fn advance_creates_entries_lazily_and_steps_when_due() {
 #[test]
 fn interval_floor_clamps_fast_gif_delays() {
     let mut state = create_test_input_state();
-    add_gif_shape(&mut state, test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)));
+    add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
     let t0 = Instant::now();
     let floor = Some(Duration::from_millis(200));
     state.advance_gif_animations(t0, VIEW, floor);
@@ -87,7 +98,10 @@ fn interval_floor_clamps_fast_gif_delays() {
 #[test]
 fn sweep_drops_entries_whose_shapes_are_gone() {
     let mut state = create_test_input_state();
-    let id = add_gif_shape(&mut state, test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)));
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
     let t0 = Instant::now();
     state.advance_gif_animations(t0, VIEW, None);
     assert_eq!(state.gif_frame_indices().get(&id), Some(&0));
@@ -95,14 +109,21 @@ fn sweep_drops_entries_whose_shapes_are_gone() {
     state.boards.active_frame_mut().remove_shape_by_id(id);
     state.advance_gif_animations(t0 + Duration::from_millis(60), VIEW, None);
     assert!(state.gif_frame_indices().is_empty());
-    assert!(state.gif_frame_timeout(t0 + Duration::from_millis(120), VIEW).is_none());
+    assert!(
+        state
+            .gif_frame_timeout(t0 + Duration::from_millis(120), VIEW)
+            .is_none()
+    );
 }
 
 #[test]
 fn finite_loop_count_finishes_and_holds_the_last_frame() {
     let mut state = create_test_input_state();
     // Two frames, one loop: F0 -> F1 -> wrap exhausts the loop budget.
-    let id = add_gif_shape(&mut state, test_gif(&[0, 1], 5, Some(gif::Repeat::Finite(1))));
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Finite(1))),
+    );
     let mut now = Instant::now();
     state.advance_gif_animations(now, VIEW, None);
 
@@ -127,7 +148,10 @@ fn finite_loop_count_finishes_and_holds_the_last_frame() {
 #[test]
 fn toggle_pauses_resumes_and_restarts_finished_playback() {
     let mut state = create_test_input_state();
-    let id = add_gif_shape(&mut state, test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)));
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
     let t0 = Instant::now();
     state.advance_gif_animations(t0, VIEW, None);
     assert_eq!(state.gif_playback_running(id), Some(true));
@@ -151,7 +175,10 @@ fn toggle_pauses_resumes_and_restarts_finished_playback() {
 #[test]
 fn offscreen_entries_freeze_without_deadlines() {
     let mut state = create_test_input_state();
-    let id = add_gif_shape(&mut state, test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)));
+    let id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
     let t0 = Instant::now();
     state.advance_gif_animations(t0, VIEW, None);
 
@@ -212,6 +239,50 @@ fn non_gif_images_get_no_playback_entries() {
     state.advance_gif_animations(now, VIEW, None);
     assert!(state.gif_frame_indices().is_empty());
     assert!(state.gif_frame_timeout(now, VIEW).is_none());
+}
+
+#[test]
+fn context_menu_offers_playback_toggle_for_animated_gifs_only() {
+    let mut state = create_test_input_state();
+    let gif_id = add_gif_shape(
+        &mut state,
+        test_gif(&[0, 1], 5, Some(gif::Repeat::Infinite)),
+    );
+    let png_id = state.boards.active_frame_mut().add_shape(Shape::Image {
+        x: 50,
+        y: 50,
+        w: 4,
+        h: 4,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 1,
+            height: 1,
+            bytes: vec![1, 2, 3, 4],
+        },
+    });
+    let now = Instant::now();
+    state.advance_gif_animations(now, VIEW, None);
+
+    let labels = |state: &mut InputState, id: ShapeId| -> Vec<String> {
+        state.open_context_menu((0, 0), vec![id], ContextMenuKind::Shape, None);
+        let labels = state
+            .context_menu_entries()
+            .iter()
+            .map(|entry| entry.label.clone())
+            .collect();
+        state.close_context_menu();
+        labels
+    };
+    assert!(labels(&mut state, gif_id).iter().any(|l| l == "Pause GIF"));
+    assert!(
+        !labels(&mut state, png_id).iter().any(|l| l.contains("GIF")),
+        "static images get no playback entry"
+    );
+
+    state.set_selection(vec![gif_id]);
+    state.execute_menu_command(MenuCommand::ToggleGifPlayback);
+    assert_eq!(state.gif_playback_running(gif_id), Some(false));
+    assert!(labels(&mut state, gif_id).iter().any(|l| l == "Play GIF"));
 }
 
 #[test]

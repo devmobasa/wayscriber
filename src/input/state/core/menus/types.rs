@@ -40,6 +40,7 @@ pub enum MenuCommand {
     Unlock,
     Properties,
     EditText,
+    ToggleGifPlayback,
     ClearAll,
     ResetCanvasPosition,
     OpenZoomMenu,

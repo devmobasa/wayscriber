@@ -250,7 +250,11 @@ impl GifStreamDecoder {
 
     /// Decodes and composites the next frame. `Ok(None)` = end of stream.
     pub(crate) fn next_frame(&mut self) -> Result<Option<GifFrameRgba>, String> {
-        let Some(frame) = self.decoder.read_next_frame().map_err(|err| err.to_string())? else {
+        let Some(frame) = self
+            .decoder
+            .read_next_frame()
+            .map_err(|err| err.to_string())?
+        else {
             return Ok(None);
         };
         let delay = normalize_gif_delay(frame.delay);
@@ -490,15 +494,17 @@ mod tests {
                 encoder.set_repeat(repeat).unwrap();
             }
             for frame in frames {
-                let mut encoded = gif::Frame::default();
-                encoded.width = frame.width;
-                encoded.height = frame.height;
-                encoded.left = frame.left;
-                encoded.top = frame.top;
-                encoded.buffer = frame.pixels.clone().into();
-                encoded.delay = frame.delay;
-                encoded.dispose = frame.dispose;
-                encoded.transparent = frame.transparent;
+                let encoded = gif::Frame {
+                    width: frame.width,
+                    height: frame.height,
+                    left: frame.left,
+                    top: frame.top,
+                    buffer: frame.pixels.clone().into(),
+                    delay: frame.delay,
+                    dispose: frame.dispose,
+                    transparent: frame.transparent,
+                    ..Default::default()
+                };
                 encoder.write_frame(&encoded).unwrap();
             }
         }
@@ -522,7 +528,10 @@ mod tests {
     #[test]
     fn gif_dimensions_read_the_logical_screen_descriptor() {
         let bytes = tiny_gif(3, 2, &[solid_frame(3, 2, RED, 10)], None);
-        assert_eq!(image_dimensions(EncodedImageFormat::Gif, &bytes), Ok((3, 2)));
+        assert_eq!(
+            image_dimensions(EncodedImageFormat::Gif, &bytes),
+            Ok((3, 2))
+        );
         assert!(image_dimensions(EncodedImageFormat::Gif, b"GIF89a").is_err());
     }
 
@@ -666,7 +675,10 @@ mod tests {
     fn gif_animation_verdict_trips_the_pixel_budget() {
         // Two 4100x4100 frames total ~33.6 Mpx, just over the 32 Mpx cap.
         let side = 4100u16;
-        let frames = [solid_frame(side, side, RED, 10), solid_frame(side, side, BLUE, 10)];
+        let frames = [
+            solid_frame(side, side, RED, 10),
+            solid_frame(side, side, BLUE, 10),
+        ];
         let bytes = tiny_gif(side, side, &frames, None);
         for verdict in [
             gif_animation_verdict(&bytes).unwrap(),
@@ -676,7 +688,10 @@ mod tests {
                 panic!("expected StaticFallback, got {verdict:?}");
             };
             assert_eq!(probe.frame_count, 2);
-            assert!(matches!(reason, AnimationLimit::TooManyDecodedPixels { .. }));
+            assert!(matches!(
+                reason,
+                AnimationLimit::TooManyDecodedPixels { .. }
+            ));
         }
     }
 
