@@ -52,12 +52,23 @@ pub(super) fn rect_outline_hit(
 ) -> bool {
     let tolerance = tolerance.max(thickness / 2.0);
     let (px, py) = (point.0 as f64, point.1 as f64);
-    let left = x as f64;
-    let right = (x + w) as f64;
-    let top = y as f64;
-    let bottom = (y + h) as f64;
+    // Normalized like `render_rect` and `rect_fill_hit`: a stored rectangle
+    // can carry negative extents, and it paints normalized — hit testing it
+    // as a bare point instead made such a shape visible but unselectable.
+    let (left, right) = if w >= 0 {
+        (x as f64, (x + w) as f64)
+    } else {
+        ((x + w) as f64, x as f64)
+    };
+    let (top, bottom) = if h >= 0 {
+        (y as f64, (y + h) as f64)
+    } else {
+        ((y + h) as f64, y as f64)
+    };
 
-    if w <= 0 || h <= 0 {
+    // Only a rectangle with no extent at all is a point. One collapsed axis
+    // still paints as a line, which the edge tests below handle.
+    if w == 0 && h == 0 {
         let dx = (px - left).abs();
         let dy = (py - top).abs();
         return dx <= tolerance && dy <= tolerance;
