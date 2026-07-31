@@ -667,9 +667,34 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
 ///
 /// The action list comes from the same macro the `[keybindings]` fields do, so
 /// a new configurable action shows up here without anyone remembering to add it.
+/// The GNOME/Ubuntu branch of the page-navigation defaults, which the snapshot
+/// cannot record because it pins the other one.
+#[test]
+fn gnome_sessions_get_the_unprefixed_page_navigation_defaults() {
+    let _guard = crate::test_env::lock();
+    let saved = std::env::var_os(crate::env_vars::XDG_CURRENT_DESKTOP_ENV);
+    // SAFETY: serialized by the test environment mutex.
+    unsafe { std::env::set_var(crate::env_vars::XDG_CURRENT_DESKTOP_ENV, "GNOME") };
+
+    let defaults = KeybindingsConfig::default();
+    let prev = defaults.board.page_prev.clone();
+    let next = defaults.board.page_next.clone();
+
+    // SAFETY: serialized by the test environment mutex.
+    unsafe {
+        match saved {
+            Some(value) => std::env::set_var(crate::env_vars::XDG_CURRENT_DESKTOP_ENV, value),
+            None => std::env::remove_var(crate::env_vars::XDG_CURRENT_DESKTOP_ENV),
+        }
+    }
+
+    assert_eq!(prev, ["Ctrl+ArrowLeft", "Ctrl+PageUp"]);
+    assert_eq!(next, ["Ctrl+ArrowRight", "Ctrl+PageDown"]);
+}
+
 #[test]
 fn default_bindings_match_the_checked_in_snapshot() {
-    let defaults = KeybindingsConfig::default();
+    let defaults = crate::test_env::with_scrubbed_desktop_env(KeybindingsConfig::default);
     let actual = KeybindingsConfig::configurable_actions()
         .iter()
         .map(|action| {

@@ -532,9 +532,9 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
 /// updating the example (or vice versa) fails here instead of drifting.
 #[test]
 fn config_example_values_equal_the_compiled_defaults() {
-    // Values with a documented reason to differ:
-    // - page navigation consults the desktop environment at call time; the
-    //   example documents the non-GNOME variant.
+    // Values with a documented reason to differ. Page navigation used to be
+    // listed here too; the comparison now scrubs the desktop environment
+    // instead, so the example's non-GNOME variant is checked everywhere.
     // - boards.items, drawing.quick_colors, presets.slot_1, and the toolbar
     //   order lists spell out effective built-in defaults for fields whose
     //   compiled default is "unset" (or, for boards, author colors in the
@@ -543,18 +543,24 @@ fn config_example_values_equal_the_compiled_defaults() {
     //   field default for auto_adjust_pen is true while the hand-built
     //   transparent default is false.
     const ALLOWED_DRIFT: &[&str] = &[
-        "keybindings.page_prev",
-        "keybindings.page_next",
         "boards.items",
         "drawing.quick_colors",
         "presets.slot_1",
         "ui.toolbar.items.order",
     ];
 
-    let example = include_str!("../../../config.example.toml");
-    let example: Config = toml::from_str(example).expect("config.example.toml should parse");
-    let example = toml::Value::try_from(example).expect("serialize example config");
-    let defaults = toml::Value::try_from(Config::default()).expect("serialize default config");
+    // Both sides are built under the same scrubbed environment: parsing the
+    // example runs serde's default functions for every key it omits, and some
+    // of those consult the desktop environment, so computing one side under
+    // GNOME and the other without it compares two different machines.
+    let (example, defaults) = crate::test_env::with_scrubbed_desktop_env(|| {
+        let example = include_str!("../../../config.example.toml");
+        let example: Config = toml::from_str(example).expect("config.example.toml should parse");
+        (
+            toml::Value::try_from(example).expect("serialize example config"),
+            toml::Value::try_from(Config::default()).expect("serialize default config"),
+        )
+    });
 
     let mut drifts = Vec::new();
     collect_value_drifts("", &example, &defaults, &mut drifts);
