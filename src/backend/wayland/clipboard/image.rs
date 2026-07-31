@@ -66,6 +66,7 @@ fn canonical_image_mime_type(format: EncodedImageFormat) -> &'static str {
     match format {
         EncodedImageFormat::Png => "image/png",
         EncodedImageFormat::Jpeg => "image/jpeg",
+        EncodedImageFormat::Gif => "image/gif",
     }
 }
 
