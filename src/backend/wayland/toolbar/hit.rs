@@ -107,31 +107,26 @@ pub fn clip_hit_regions_to_bounds(
     }
 }
 
-pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent, bool)> {
-    if !hit.contains(x, y) {
-        return None;
-    }
+/// Which half of a pointer interaction is asking for an event.
+///
+/// Every hit kind maps the same way in both, except the two that are
+/// inherently phase-sensitive: a plain click has no drag meaning, and a
+/// toolbar-item drag starts one gesture and then reports movement within it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HitPhase {
+    /// The initial press.
+    Press,
+    /// Pointer motion while the press is held.
+    Drag,
+}
 
-    let start_drag = matches!(
-        hit.kind,
-        HitKind::DragSetThickness { .. }
-            | HitKind::DragSetMarkerOpacity { .. }
-            | HitKind::DragSetFontSize
-            | HitKind::PickSatVal { .. }
-            | HitKind::PickHue { .. }
-            | HitKind::DragUndoDelay
-            | HitKind::DragRedoDelay
-            | HitKind::DragCustomUndoDelay
-            | HitKind::DragCustomRedoDelay
-            | HitKind::DragMoveTop
-            | HitKind::DragMoveSide
-            | HitKind::DragScrollSide { .. }
-            | HitKind::DragScrollTopPopover { .. }
-            | HitKind::DragToolbarItem { .. }
-    );
-
+/// The event one hit produces in one phase.
+///
+/// Both entry points below share this: keeping two copies meant every slider
+/// spec and every new hit kind had to be written twice, in step, forever.
+fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<ToolbarEvent> {
     use crate::backend::wayland::toolbar::events::HitKind::*;
-    use crate::ui::toolbar::ToolbarEvent;
+
     let event = match hit.kind {
         DragSetThickness { min, max } => slider_event_for_hit(
             ToolbarSliderTarget::Thickness,
@@ -189,10 +184,37 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         DragMoveSide => ToolbarEvent::MoveSideToolbar { x, y },
         DragScrollSide { max_scroll } => scroll_event_for_hit(max_scroll, hit, y),
         DragScrollTopPopover { max_scroll } => popover_scroll_event_for_hit(max_scroll, hit, y),
-        DragToolbarItem { group, id, .. } => ToolbarEvent::StartToolbarItemDrag { group, id },
-        crate::backend::wayland::toolbar::events::HitKind::Click => hit.event.clone(),
+        // Phase-sensitive: the press opens the gesture, motion reports where
+        // it is now.
+        DragToolbarItem {
+            group,
+            id,
+            target_index,
+        } => match phase {
+            HitPhase::Press => ToolbarEvent::StartToolbarItemDrag { group, id },
+            HitPhase::Drag => ToolbarEvent::DragToolbarItemOver {
+                group,
+                target_index,
+            },
+        },
+        // Phase-sensitive: a click has no meaning while dragging.
+        Click => match phase {
+            HitPhase::Press => hit.event.clone(),
+            HitPhase::Drag => return None,
+        },
     };
+    Some(event)
+}
 
+pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent, bool)> {
+    if !hit.contains(x, y) {
+        return None;
+    }
+
+    // Every hit kind but a plain click opens a drag, so this follows the enum
+    // rather than a hand-maintained list that had to be extended in step.
+    let start_drag = !matches!(hit.kind, HitKind::Click);
+    let event = event_for_hit(hit, x, y, HitPhase::Press)?;
     Some((ToolbarIntent(event), start_drag))
 }
 
@@ -213,80 +235,7 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
     if !hit.contains(x, y) {
         return None;
     }
-
-    use crate::backend::wayland::toolbar::events::HitKind::*;
-    use crate::ui::toolbar::ToolbarEvent;
-    match hit.kind {
-        DragSetThickness { min, max } => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::Thickness,
-            ToolbarSliderSpec {
-                min,
-                max,
-                step: ToolbarSliderSpec::THICKNESS.step,
-            },
-            hit,
-            x,
-        ))),
-        DragSetMarkerOpacity { min, max } => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::MarkerOpacity,
-            ToolbarSliderSpec {
-                min,
-                max,
-                step: ToolbarSliderSpec::MARKER_OPACITY.step,
-            },
-            hit,
-            x,
-        ))),
-        DragSetFontSize => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::FontSize,
-            ToolbarSliderSpec::FONT_SIZE,
-            hit,
-            x,
-        ))),
-        PickSatVal { hue } => Some(ToolbarIntent(sat_val_event_for_hit(hue, hit, x, y))),
-        PickHue { sat, val } => Some(ToolbarIntent(hue_event_for_hit(sat, val, hit, x))),
-        DragUndoDelay => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::UndoDelay,
-            ToolbarSliderSpec::DELAY_SECONDS,
-            hit,
-            x,
-        ))),
-        DragRedoDelay => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::RedoDelay,
-            ToolbarSliderSpec::DELAY_SECONDS,
-            hit,
-            x,
-        ))),
-        DragCustomUndoDelay => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::CustomUndoDelay,
-            ToolbarSliderSpec::DELAY_SECONDS,
-            hit,
-            x,
-        ))),
-        DragCustomRedoDelay => Some(ToolbarIntent(slider_event_for_hit(
-            ToolbarSliderTarget::CustomRedoDelay,
-            ToolbarSliderSpec::DELAY_SECONDS,
-            hit,
-            x,
-        ))),
-        DragMoveTop => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
-        DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
-        DragScrollSide { max_scroll } => {
-            Some(ToolbarIntent(scroll_event_for_hit(max_scroll, hit, y)))
-        }
-        DragScrollTopPopover { max_scroll } => Some(ToolbarIntent(popover_scroll_event_for_hit(
-            max_scroll, hit, y,
-        ))),
-        DragToolbarItem {
-            group,
-            target_index,
-            ..
-        } => Some(ToolbarIntent(ToolbarEvent::DragToolbarItemOver {
-            group,
-            target_index,
-        })),
-        _ => None,
-    }
+    event_for_hit(hit, x, y, HitPhase::Drag).map(ToolbarIntent)
 }
 
 /// Map a pointer position inside the saturation/value area to a full HSV
@@ -552,6 +501,57 @@ mod tests {
         assert!(start_drag);
         assert_set_thickness(press.0, 15.0);
         assert_set_thickness(drag.0, 15.0);
+    }
+
+    /// The only two phase-sensitive kinds, pinned so the shared mapper cannot
+    /// quietly start treating one like the other.
+    #[test]
+    fn only_clicks_and_item_drags_depend_on_the_phase() {
+        use crate::config::{ToolbarItemId, ToolbarItemOrderGroup};
+
+        let click = HitRegion {
+            focus_id: None,
+            rect: (0.0, 0.0, 20.0, 20.0),
+            event: ToolbarEvent::Undo,
+            kind: HitKind::Click,
+            tooltip: None,
+        };
+        let (press, start_drag) = intent_for_hit(&click, 5.0, 5.0).expect("press intent");
+        assert!(matches!(press.0, ToolbarEvent::Undo));
+        assert!(!start_drag, "a click opens no drag");
+        assert!(
+            drag_intent_for_hit(&click, 5.0, 5.0).is_none(),
+            "a click has no meaning while dragging"
+        );
+
+        let item = HitRegion {
+            focus_id: None,
+            rect: (0.0, 0.0, 20.0, 20.0),
+            event: ToolbarEvent::Undo,
+            kind: HitKind::DragToolbarItem {
+                group: ToolbarItemOrderGroup::TopTools,
+                id: "top.tool.pen".parse::<ToolbarItemId>().expect("item id"),
+                target_index: 3,
+            },
+            tooltip: None,
+        };
+        let (press, start_drag) = intent_for_hit(&item, 5.0, 5.0).expect("press intent");
+        assert!(start_drag);
+        assert!(
+            matches!(press.0, ToolbarEvent::StartToolbarItemDrag { .. }),
+            "the press opens the gesture"
+        );
+        let drag = drag_intent_for_hit(&item, 5.0, 5.0).expect("drag intent");
+        assert!(
+            matches!(
+                drag.0,
+                ToolbarEvent::DragToolbarItemOver {
+                    target_index: 3,
+                    ..
+                }
+            ),
+            "motion reports where the gesture is now"
+        );
     }
 
     #[test]
