@@ -136,6 +136,7 @@ pub(crate) fn save_snapshot_as_with_report(
             };
             return Err(err).with_context(|| context);
         }
+        sync_session_parent_dir(&session_path, "Save Session As file");
         Ok::<(), anyhow::Error>(())
     })();
 

@@ -181,6 +181,7 @@ fn load_named_candidate_artifact(
         file,
         max_expanded_size,
         max_encoded_size,
+        NewerVersionAction::LeaveUntouched,
     ) {
         Ok(Some(loaded)) => Ok(LoadSnapshotOutcome::Loaded(Box::new(loaded.snapshot))),
         Ok(None) => Ok(LoadSnapshotOutcome::Empty),
@@ -386,5 +387,6 @@ fn load_named_candidate_primary(
         file,
         max_expanded_size,
         Some(options.max_file_size_bytes),
+        NewerVersionAction::LeaveUntouched,
     )
 }

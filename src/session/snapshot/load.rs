@@ -30,7 +30,7 @@ mod markers;
 mod named_candidate;
 mod payload;
 
-use corrupt::backup_corrupt_session;
+use corrupt::{backup_corrupt_session, preserve_newer_version_session};
 use fallback::load_normal_session_or_empty;
 use markers::{
     backup_is_newer_than_primary, clear_marker_metadata, clear_marker_suppresses_artifact,
@@ -476,6 +476,18 @@ enum CorruptLoadAction {
     Preserve,
 }
 
+/// What to do with a session file written by a newer wayscriber than this one.
+#[derive(Clone, Copy)]
+enum NewerVersionAction {
+    /// Runtime load of the active session: preserve a copy under a versioned
+    /// side name first, because the empty session this load returns will be
+    /// saved over the file — and with `backup_retention: 1` the second rotation
+    /// destroys the newer-version data for good.
+    Preserve,
+    /// Read-only candidate inspection: must not create or mutate any artifact.
+    LeaveUntouched,
+}
+
 pub(crate) fn load_snapshot_inner(
     session_path: &Path,
     options: &SessionOptions,
@@ -494,5 +506,12 @@ pub(super) fn load_snapshot_inner_with_expanded_limit(
 ) -> Result<Option<LoadedSnapshot>> {
     let no_follow = is_named_primary_path(session_path, options);
     let file = open_session_artifact_for_read(session_path, no_follow)?;
-    load_snapshot_opened_with_expanded_limit(session_path, options, file, max_expanded_size, None)
+    load_snapshot_opened_with_expanded_limit(
+        session_path,
+        options,
+        file,
+        max_expanded_size,
+        None,
+        NewerVersionAction::Preserve,
+    )
 }

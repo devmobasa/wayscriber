@@ -248,6 +248,22 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     result
 }
 
+/// Persist a rename by syncing the containing directory, so that a crash after
+/// a reported-successful save cannot roll the replacement back. The load-side
+/// marker logic decides from the presence of files this module renames into
+/// place, so rename durability is part of the save contract. Failure is
+/// warn-only: the payload bytes themselves are already fsynced.
+pub(super) fn sync_session_parent_dir(path: &Path, label: &str) {
+    if let Err(err) = crate::durable_io::sync_parent_dir(path) {
+        warn!(
+            "Failed to sync session directory after replacing {} {}: {}",
+            label,
+            path.display(),
+            err
+        );
+    }
+}
+
 fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
     if options.is_named_file() {
         crate::session::validate_named_session_file_for_foreground(&options.session_file_path())?;
@@ -409,9 +425,8 @@ fn save_snapshot_inner(
             })?;
             should_mark_backup_recoverable = true;
         } else if options.backup_retention > 0 {
-            if backup_path.exists() {
-                fs::remove_file(&backup_path).ok();
-            }
+            // rename replaces an existing backup atomically; removing it first
+            // would only open a window in which no backup exists at all.
             fs::rename(&session_path, &backup_path).with_context(|| {
                 format!(
                     "failed to rotate previous session file {} -> {}",
@@ -443,6 +458,7 @@ fn save_snapshot_inner(
             session_path.display()
         )
     })?;
+    sync_session_parent_dir(&session_path, "session file");
     let replace_elapsed = replace_started.elapsed();
     info!(
         "Session file replace completed for {}: write_and_sync={:?}, rotate_and_rename={:?}, final_size={} bytes",

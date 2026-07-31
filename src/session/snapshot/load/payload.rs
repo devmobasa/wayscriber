@@ -6,6 +6,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     mut file: fs::File,
     max_expanded_size: u64,
     max_encoded_size: Option<u64>,
+    newer_version_action: NewerVersionAction,
 ) -> Result<Option<LoadedSnapshot>> {
     let mut file_bytes = Vec::new();
     if let Some(max_encoded_size) = max_encoded_size {
@@ -56,9 +57,25 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
 
     if session_file.version > CURRENT_VERSION {
         warn!(
-            "Session file version {} is newer than supported version {}; skipping load",
-            session_file.version, CURRENT_VERSION
+            "Session file {} was written by a newer wayscriber (version {}, supported {}); continuing with an empty session",
+            session_path.display(),
+            session_file.version,
+            CURRENT_VERSION
         );
+        if matches!(newer_version_action, NewerVersionAction::Preserve) {
+            match preserve_newer_version_session(session_path, options, session_file.version) {
+                Ok(Some(preserved_path)) => warn!(
+                    "Preserved a copy of the newer-version session at {}; a newer wayscriber can restore it",
+                    preserved_path.display()
+                ),
+                Ok(None) => {}
+                Err(err) => warn!(
+                    "Failed to preserve a copy of newer-version session {}: {:#}",
+                    session_path.display(),
+                    err
+                ),
+            }
+        }
         return Ok(None);
     }
 

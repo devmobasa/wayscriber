@@ -950,6 +950,15 @@ fn load_named_candidate_newer_version_does_not_create_sidecars() {
 
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
     assert_no_candidate_sidecars(&options);
+    let preserved_path = crate::session::append_path_suffix(
+        &options.session_file_path(),
+        &format!(".v{}-preserved", CURRENT_VERSION + 1),
+    );
+    assert!(
+        !preserved_path.exists(),
+        "candidate load must not create a preserved copy {}",
+        preserved_path.display()
+    );
 }
 
 #[cfg(unix)]
@@ -1813,6 +1822,65 @@ fn load_snapshot_inner_skips_newer_versions() {
     let loaded =
         load_snapshot_inner(&session_path, &options).expect("load_snapshot_inner should work");
     assert!(loaded.is_none());
+}
+
+/// Running a previous release against a session written by a newer one must
+/// not destroy the newer file: the load returns an empty session, save #1
+/// rotates the newer file to the backup slot, and save #2 replaces that backup
+/// — so the load has to preserve a copy first.
+#[test]
+fn newer_version_session_survives_downgrade_saves() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "downgrade");
+    options.persist_transparent = true;
+    let session_path = options.session_file_path();
+
+    let mut file = sample_session_file();
+    file.version = CURRENT_VERSION + 1;
+    let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
+    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("newer-version session load is handled");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+
+    let preserved_path = crate::session::append_path_suffix(
+        &session_path,
+        &format!(".v{}-preserved", CURRENT_VERSION + 1),
+    );
+    assert_eq!(
+        std::fs::read(&preserved_path).expect("preserved copy exists"),
+        newer_bytes,
+        "runtime load must preserve the newer-version bytes verbatim"
+    );
+
+    save_snapshot(&sample_snapshot(), &options).expect("first post-downgrade save");
+    save_snapshot(&sample_snapshot(), &options).expect("second post-downgrade save");
+
+    assert_eq!(
+        std::fs::read(&preserved_path).expect("preserved copy survives rotation"),
+        newer_bytes,
+        "save rotation must not touch the preserved newer-version copy"
+    );
+
+    // A repeated load of another too-new file must not overwrite the copy
+    // already preserved for this version.
+    let mut changed = sample_session_file();
+    changed.version = CURRENT_VERSION + 1;
+    changed.active_board_id = Some("whiteboard".to_string());
+    std::fs::write(
+        &session_path,
+        serde_json::to_vec_pretty(&changed).expect("changed newer session json"),
+    )
+    .expect("write changed newer session");
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("repeated newer-version load is handled");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert_eq!(
+        std::fs::read(&preserved_path).expect("preserved copy remains"),
+        newer_bytes,
+        "the first preserved copy wins"
+    );
 }
 
 #[test]
