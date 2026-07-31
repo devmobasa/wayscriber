@@ -4,6 +4,29 @@ use super::session::{
     session_info_summary,
 };
 use super::*;
+
+// Readability aliases for the tests below: each popover's dismissal rule is
+// now derived from one ownership table, and these keep the assertions phrased
+// per popover.
+fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
+    event_dismisses_popover(event, ToolbarPopover::TopOverflow)
+}
+
+fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
+    event_dismisses_popover(event, ToolbarPopover::ShapePicker)
+}
+
+fn event_dismisses_precision_entry(event: &ToolbarEvent) -> bool {
+    event_dismisses_popover(event, ToolbarPopover::PrecisionEntry)
+}
+
+fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
+    event_dismisses_popover(event, ToolbarPopover::Session)
+}
+
+fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
+    event_dismisses_popover(event, ToolbarPopover::Settings)
+}
 use crate::config::{
     Action, StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag, ToolbarSectionVisibility,
 };

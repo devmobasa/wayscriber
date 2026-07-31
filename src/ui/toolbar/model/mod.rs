@@ -28,10 +28,10 @@ pub(crate) use control::{
 };
 #[allow(unused_imports)]
 pub(crate) use event_policy::{
-    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPreApplyEffect,
-    ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset, action_for_clear_preset,
-    action_for_event, action_for_save_preset, action_for_tool, short_label_for_event,
-    tooltip_label_for_event,
+    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
+    ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset,
+    action_for_clear_preset, action_for_event, action_for_save_preset, action_for_tool,
+    popovers_for_event, short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
 pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
