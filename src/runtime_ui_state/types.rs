@@ -181,11 +181,13 @@ impl InteractionSeedValue {
                     | Target::ToolbarToolPreview
                     | Target::ToolbarDelaySliders
                     | Target::HistoryCustomSection
-                    | Target::InputHud
-                    | Target::SectionVisibility(_),
+                    | Target::InputHud,
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
-                | (Target::ItemVisibility(_), Self::Visibility(_))
+                | (
+                    Target::ItemVisibility(_) | Target::SectionVisibility(_),
+                    Self::Visibility(_)
+                )
                 | (Target::ItemOrder(_), Self::ItemOrder(_))
                 | (
                     Target::TopPosition | Target::SidePosition,

@@ -344,17 +344,6 @@ fn runtime_seeds_from_config(
         InteractionSeedTarget::InputHud,
         InteractionSeedValue::Bool(config.ui.input_hud.enabled),
     )?;
-    let configured_sections = crate::config::resolve_section_visibility(
-        config.ui.toolbar.layout_mode,
-        &config.ui.toolbar.mode_overrides,
-        &config.ui.toolbar.items.resolved(),
-    );
-    for flag in crate::config::ToolbarSectionFlag::ALL {
-        insert(
-            InteractionSeedTarget::SectionVisibility(flag),
-            InteractionSeedValue::Bool(configured_sections.get(flag)),
-        )?;
-    }
     insert(
         InteractionSeedTarget::StatusBarInteractive,
         InteractionSeedValue::Bool(config.ui.status_bar_interactive),
@@ -385,6 +374,15 @@ fn runtime_seeds_from_config(
         )?;
     }
     let resolved_items = resolved_toolbar_item_seeds(config);
+    for flag in crate::config::ToolbarSectionFlag::ALL {
+        insert(
+            InteractionSeedTarget::SectionVisibility(flag),
+            InteractionSeedValue::Visibility(item_visibility_setting(
+                &resolved_items,
+                flag.item_id(),
+            )),
+        )?;
+    }
     for id in resettable_individual_toolbar_item_ids() {
         insert(
             InteractionSeedTarget::ItemVisibility(id),
@@ -557,14 +555,10 @@ fn toolbar_values(
         ),
         Target::NamedSection(flag) => RuntimeUiMutationValues::one(
             InteractionSeedTarget::SectionVisibility(flag),
-            InteractionSeedValue::Bool(
-                crate::config::resolve_section_visibility(
-                    input.toolbar_layout_mode,
-                    &input.toolbar_mode_overrides,
-                    &input.resolved_toolbar_items,
-                )
-                .get(flag),
-            ),
+            InteractionSeedValue::Visibility(item_visibility_setting(
+                &input.resolved_toolbar_items,
+                flag.item_id(),
+            )),
         ),
         Target::StatusBarInteractive => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBarInteractive,
@@ -745,10 +739,11 @@ fn apply_live_toolbar_state(
         input.set_input_hud_enabled(value);
     }
     for flag in crate::config::ToolbarSectionFlag::ALL {
-        if include(&InteractionSeedTarget::SectionVisibility(flag))
-            && let Some(value) = bool_value(InteractionSeedTarget::SectionVisibility(flag))
+        let target = InteractionSeedTarget::SectionVisibility(flag);
+        if include(&target)
+            && let Some(InteractionSeedValue::Visibility(setting)) = live.get(&target)
         {
-            input.apply_section_visibility_runtime(flag, value);
+            input.apply_section_visibility_runtime(flag, *setting);
         }
     }
     if include(&InteractionSeedTarget::StatusBarInteractive)

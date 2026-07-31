@@ -176,22 +176,16 @@ impl InputState {
 
     /// Applies a section's visibility restored from runtime-UI state.
     ///
-    /// A restore that already agrees with the configured layout is not a
-    /// choice, and pinning an override for it would stop the section from
-    /// following a later layout-mode switch. Only a genuine disagreement --
-    /// the user having toggled this section -- records one.
+    /// What persists is the explicit setting, not the visibility it resolves
+    /// to, so `Default` restores a section to following the layout mode rather
+    /// than pinning it to whatever that mode happened to show.
     pub(crate) fn apply_section_visibility_runtime(
         &mut self,
         flag: crate::config::ToolbarSectionFlag,
-        visible: bool,
-    ) -> bool {
-        let current = crate::config::resolve_section_visibility(
-            self.toolbar_layout_mode,
-            &self.toolbar_mode_overrides,
-            &self.resolved_toolbar_items,
-        )
-        .get(flag);
-        current != visible && self.apply_section_flag(flag, visible)
+        setting: crate::config::ToolbarItemVisibilitySetting,
+    ) {
+        self.set_toolbar_item_visibility_setting(flag.item_id(), setting);
+        self.refresh_section_visibility();
     }
 
     /// Section toggles record an explicit override in the item store (the

@@ -222,8 +222,7 @@ fn decode_value(
         | Target::ToolbarToolPreview
         | Target::ToolbarDelaySliders
         | Target::HistoryCustomSection
-        | Target::InputHud
-        | Target::SectionVisibility(_) => value
+        | Target::InputHud => value
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
@@ -232,7 +231,7 @@ fn decode_value(
             .and_then(SidePane::from_config_id)
             .map(InteractionSeedValue::SidePane)
             .ok_or_else(|| RuntimeUiWireError::new("side pane override has an unknown value")),
-        Target::ItemVisibility(_) => match value.as_str() {
+        Target::ItemVisibility(_) | Target::SectionVisibility(_) => match value.as_str() {
             Some("default") => Ok(InteractionSeedValue::Visibility(
                 ItemVisibilitySetting::Default,
             )),
@@ -480,23 +479,23 @@ fn encode_value(
             | InteractionSeedTarget::ToolbarToolPreview
             | InteractionSeedTarget::ToolbarDelaySliders
             | InteractionSeedTarget::HistoryCustomSection
-            | InteractionSeedTarget::InputHud
-            | InteractionSeedTarget::SectionVisibility(_),
+            | InteractionSeedTarget::InputHud,
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
         (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {
             Ok(Value::String(value.config_id().to_string()))
         }
-        (InteractionSeedTarget::ItemVisibility(_), InteractionSeedValue::Visibility(value)) => {
-            Ok(Value::String(
-                match value {
-                    ItemVisibilitySetting::Default => "default",
-                    ItemVisibilitySetting::Hidden => "hidden",
-                    ItemVisibilitySetting::Shown => "shown",
-                }
-                .to_string(),
-            ))
-        }
+        (
+            InteractionSeedTarget::ItemVisibility(_) | InteractionSeedTarget::SectionVisibility(_),
+            InteractionSeedValue::Visibility(value),
+        ) => Ok(Value::String(
+            match value {
+                ItemVisibilitySetting::Default => "default",
+                ItemVisibilitySetting::Hidden => "hidden",
+                ItemVisibilitySetting::Shown => "shown",
+            }
+            .to_string(),
+        )),
         (InteractionSeedTarget::ItemOrder(group), InteractionSeedValue::ItemOrder(items)) => {
             if items
                 .iter()
