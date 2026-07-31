@@ -257,32 +257,10 @@ fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
 /// to the current run: `persistence_for_event` classifies it `Ephemeral`, and
 /// the effective config follows through `preference_for_event`.
 fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
-    use ToolbarPreference::{ClickHighlight, HistoryCustomSection, InputHud, Toolbar, Ui};
+    use ToolbarPreference::{ClickHighlight, Toolbar};
     use ToolbarPreferenceField as Field;
-    use UiPreferenceField as UiField;
 
     vec![
-        (ToolbarEvent::ToggleIconMode(true), Toolbar(Field::Icons)),
-        (
-            ToolbarEvent::ToggleMoreColors(true),
-            Toolbar(Field::MoreColors),
-        ),
-        (
-            ToolbarEvent::ToggleContextAwareUi(true),
-            Toolbar(Field::ContextAwareUi),
-        ),
-        (
-            ToolbarEvent::TogglePresetToasts(true),
-            Toolbar(Field::PresetToasts),
-        ),
-        (
-            ToolbarEvent::ToggleToolPreview(true),
-            Toolbar(Field::ToolPreview),
-        ),
-        (
-            ToolbarEvent::ToggleDelaySliders(true),
-            Toolbar(Field::DelaySliders),
-        ),
         (
             ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
             Toolbar(Field::LayoutMode),
@@ -325,27 +303,9 @@ fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
             ToolbarEvent::SetToolbarItemHidden(ToolbarSectionFlag::Actions.item_id(), true),
             Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Actions)),
         ),
-        (
-            ToolbarEvent::ToggleCustomSection(true),
-            HistoryCustomSection,
-        ),
-        (ToolbarEvent::ToggleStatusBar(true), Ui(UiField::StatusBar)),
-        (
-            ToolbarEvent::ToggleStatusBoardBadge(true),
-            Ui(UiField::StatusBoardBadge),
-        ),
-        (
-            ToolbarEvent::ToggleStatusPageBadge(true),
-            Ui(UiField::StatusPageBadge),
-        ),
-        (
-            ToolbarEvent::ToggleFloatingBadgeAlways(true),
-            Ui(UiField::FloatingBadgeAlways),
-        ),
         (ToolbarEvent::ToggleAllHighlight(true), ClickHighlight),
         (ToolbarEvent::SelectTool(Tool::Highlight), ClickHighlight),
         (ToolbarEvent::ToggleHighlightToolRing(true), ClickHighlight),
-        (ToolbarEvent::ToggleInputHud(true), InputHud),
     ]
 }
 

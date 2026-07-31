@@ -83,6 +83,18 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     ItemOrder(ToolbarItemOrderGroup),
     StatusBarInteractive,
     StatusBarItem(crate::config::StatusBarItem),
+    StatusBar,
+    StatusBoardBadge,
+    StatusPageBadge,
+    FloatingBadgeAlways,
+    ToolbarIcons,
+    ToolbarMoreColors,
+    ToolbarContextAwareUi,
+    ToolbarPresetToasts,
+    ToolbarToolPreview,
+    ToolbarDelaySliders,
+    HistoryCustomSection,
+    InputHud,
     ResetItemVisibility,
     /// Top-strip form (`full`/`micro`). The runtime-only `hidden` rung of the
     /// cycle is folded to `full` when the override is computed.
@@ -371,6 +383,36 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         // Status-bar content is chrome the user arranges from the overlay, so
         // it persists the same way the toolbars do: as a runtime override
         // layered over the configured value, never by writing config.toml.
+        ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::RuntimeUi(Runtime::StatusBar),
+        ToolbarEvent::ToggleStatusBoardBadge(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::StatusBoardBadge)
+        }
+        ToolbarEvent::ToggleStatusPageBadge(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::StatusPageBadge)
+        }
+        ToolbarEvent::ToggleFloatingBadgeAlways(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::FloatingBadgeAlways)
+        }
+        ToolbarEvent::ToggleIconMode(_) => ToolbarPersistence::RuntimeUi(Runtime::ToolbarIcons),
+        ToolbarEvent::ToggleMoreColors(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ToolbarMoreColors)
+        }
+        ToolbarEvent::ToggleContextAwareUi(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ToolbarContextAwareUi)
+        }
+        ToolbarEvent::TogglePresetToasts(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ToolbarPresetToasts)
+        }
+        ToolbarEvent::ToggleToolPreview(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ToolbarToolPreview)
+        }
+        ToolbarEvent::ToggleDelaySliders(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ToolbarDelaySliders)
+        }
+        ToolbarEvent::ToggleCustomSection(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::HistoryCustomSection)
+        }
+        ToolbarEvent::ToggleInputHud(_) => ToolbarPersistence::RuntimeUi(Runtime::InputHud),
         ToolbarEvent::SetStatusBarInteractive(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::StatusBarInteractive)
         }
@@ -412,9 +454,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         }
         // Authored preferences below: applying them updates the effective
         // config for this run only (see `ToolbarPersistence`).
-        ToolbarEvent::ToggleIconMode(_)
-        | ToolbarEvent::ToggleMoreColors(_)
-        | ToolbarEvent::ToggleActionsSection(_)
+        ToolbarEvent::ToggleActionsSection(_)
         | ToolbarEvent::ToggleActionsAdvanced(_)
         | ToolbarEvent::ToggleZoomActions(_)
         | ToolbarEvent::TogglePagesSection(_)
@@ -422,19 +462,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::TogglePresets(_)
         | ToolbarEvent::ToggleStepSection(_)
         | ToolbarEvent::ToggleTextControls(_)
-        | ToolbarEvent::ToggleContextAwareUi(_)
-        | ToolbarEvent::TogglePresetToasts(_)
-        | ToolbarEvent::ToggleToolPreview(_)
-        | ToolbarEvent::ToggleDelaySliders(_)
         | ToolbarEvent::SetToolbarLayoutMode(_)
-        | ToolbarEvent::ToggleCustomSection(_)
-        | ToolbarEvent::ToggleStatusBar(_)
-        | ToolbarEvent::ToggleStatusBoardBadge(_)
-        | ToolbarEvent::ToggleStatusPageBadge(_)
-        | ToolbarEvent::ToggleFloatingBadgeAlways(_)
         | ToolbarEvent::ToggleAllHighlight(_)
         | ToolbarEvent::ToggleHighlightToolRing(_)
-        | ToolbarEvent::ToggleInputHud(_)
         | ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }

@@ -182,46 +182,16 @@ fn no_undeclared_authored_preference_moves_a_runtime_seed() {
     let baseline_seeds = seeds_for_config(&baseline);
 
     let seed_neutral: Vec<PreferenceProbe> = vec![
-        ("icons", |config| {
-            config.ui.toolbar.use_icons = !config.ui.toolbar.use_icons;
-        }),
-        ("more colors", |config| {
-            config.ui.toolbar.show_more_colors = !config.ui.toolbar.show_more_colors;
-        }),
-        ("context-aware UI", |config| {
-            config.ui.toolbar.context_aware_ui = !config.ui.toolbar.context_aware_ui;
-        }),
-        ("preset toasts", |config| {
-            config.ui.toolbar.show_preset_toasts = !config.ui.toolbar.show_preset_toasts;
-        }),
-        ("tool preview", |config| {
-            config.ui.toolbar.show_tool_preview = !config.ui.toolbar.show_tool_preview;
-        }),
-        ("delay sliders", |config| {
-            config.ui.toolbar.show_delay_sliders = !config.ui.toolbar.show_delay_sliders;
-        }),
         ("zoom chip", |config| {
             config.ui.toolbar.show_zoom_chip = !config.ui.toolbar.show_zoom_chip;
         }),
-        ("status bar", |config| {
-            config.ui.show_status_bar = !config.ui.show_status_bar;
-        }),
-        ("floating badge always", |config| {
-            config.ui.show_floating_badge_always = !config.ui.show_floating_badge_always;
-        }),
         ("floating badge", |config| {
             config.ui.show_floating_badge = !config.ui.show_floating_badge;
-        }),
-        ("history custom section", |config| {
-            config.history.custom_section_enabled = !config.history.custom_section_enabled;
         }),
         ("click highlight", |config| {
             config.ui.click_highlight.enabled = !config.ui.click_highlight.enabled;
             config.ui.click_highlight.show_on_highlight_tool =
                 !config.ui.click_highlight.show_on_highlight_tool;
-        }),
-        ("input HUD", |config| {
-            config.ui.input_hud.enabled = !config.ui.input_hud.enabled;
         }),
     ];
     for (label, change) in seed_neutral {
@@ -2906,6 +2876,83 @@ fn status_bar_content_survives_restart_without_touching_config() {
         restarted_input.status_bar_item_visible(StatusBarItem::Tool),
         "segments the user did not touch keep their configured value"
     );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// The toolbar and status-bar preference toggles the overlay exposes are
+/// chrome the user arranges, and they used to reset on every launch. Each now
+/// survives a restart as a runtime override, with `config.toml` untouched.
+#[test]
+fn toolbar_preference_toggles_survive_restart_without_touching_config() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    // Flip each away from its configured value.
+    type Flip = (ToolbarRuntimeUiPersistenceTarget, fn(&mut InputState));
+    let flips: Vec<Flip> = vec![
+        (ToolbarRuntimeUiPersistenceTarget::StatusBar, |input| {
+            input.show_status_bar = !input.show_status_bar;
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::ToolbarIcons, |input| {
+            input.toolbar_use_icons = !input.toolbar_use_icons;
+        }),
+        (
+            ToolbarRuntimeUiPersistenceTarget::ToolbarContextAwareUi,
+            |input| input.context_aware_ui = !input.context_aware_ui,
+        ),
+        (
+            ToolbarRuntimeUiPersistenceTarget::ToolbarDelaySliders,
+            |input| input.show_delay_sliders = !input.show_delay_sliders,
+        ),
+        (
+            ToolbarRuntimeUiPersistenceTarget::HistoryCustomSection,
+            |input| input.custom_section_enabled = !input.custom_section_enabled,
+        ),
+        (
+            ToolbarRuntimeUiPersistenceTarget::FloatingBadgeAlways,
+            |input| input.show_floating_badge_always = !input.show_floating_badge_always,
+        ),
+    ];
+
+    for (target, flip) in &flips {
+        let prepared = runtime
+            .begin_toolbar_mutation(*target, &input)
+            .unwrap_or_else(|| panic!("{target:?} permit"));
+        flip(&mut input);
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+        assert!(
+            matches!(finish, ToolbarRuntimeFinish::KeepPreview),
+            "{target:?}"
+        );
+    }
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+
+    let expected_status_bar = input.show_status_bar;
+    let expected_icons = input.toolbar_use_icons;
+    let expected_context = input.context_aware_ui;
+    let expected_sliders = input.show_delay_sliders;
+    let expected_custom = input.custom_section_enabled;
+    let expected_badge = input.show_floating_badge_always;
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(restarted_input.show_status_bar, expected_status_bar);
+    assert_eq!(restarted_input.toolbar_use_icons, expected_icons);
+    assert_eq!(restarted_input.context_aware_ui, expected_context);
+    assert_eq!(restarted_input.show_delay_sliders, expected_sliders);
+    assert_eq!(restarted_input.custom_section_enabled, expected_custom);
+    assert_eq!(restarted_input.show_floating_badge_always, expected_badge);
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
 }

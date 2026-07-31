@@ -122,6 +122,23 @@ pub(crate) enum InteractionSeedTarget {
     StatusBarInteractive,
     /// Whether one status-bar segment is shown.
     StatusBarItem(crate::config::StatusBarItem),
+    /// The status bar as a whole.
+    StatusBar,
+    /// The board and page badges that float over the canvas.
+    StatusBoardBadge,
+    StatusPageBadge,
+    FloatingBadgeAlways,
+    /// Toolbar appearance and behaviour toggles.
+    ToolbarIcons,
+    ToolbarMoreColors,
+    ToolbarContextAwareUi,
+    ToolbarPresetToasts,
+    ToolbarToolPreview,
+    ToolbarDelaySliders,
+    /// The history pane's custom-step section.
+    HistoryCustomSection,
+    /// The input HUD.
+    InputHud,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,7 +164,19 @@ impl InteractionSeedValue {
                     | Target::CollapsedSection(_)
                     | Target::BoardPin(_)
                     | Target::StatusBarInteractive
-                    | Target::StatusBarItem(_),
+                    | Target::StatusBarItem(_)
+                    | Target::StatusBar
+                    | Target::StatusBoardBadge
+                    | Target::StatusPageBadge
+                    | Target::FloatingBadgeAlways
+                    | Target::ToolbarIcons
+                    | Target::ToolbarMoreColors
+                    | Target::ToolbarContextAwareUi
+                    | Target::ToolbarPresetToasts
+                    | Target::ToolbarToolPreview
+                    | Target::ToolbarDelaySliders
+                    | Target::HistoryCustomSection
+                    | Target::InputHud,
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
                 | (Target::ItemVisibility(_), Self::Visibility(_))

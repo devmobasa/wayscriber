@@ -297,6 +297,54 @@ fn runtime_seeds_from_config(
         InteractionSeedValue::Bool(config.ui.toolbar.side_minimized),
     )?;
     insert(
+        InteractionSeedTarget::StatusBar,
+        InteractionSeedValue::Bool(config.ui.show_status_bar),
+    )?;
+    insert(
+        InteractionSeedTarget::StatusBoardBadge,
+        InteractionSeedValue::Bool(config.ui.show_status_board_badge),
+    )?;
+    insert(
+        InteractionSeedTarget::StatusPageBadge,
+        InteractionSeedValue::Bool(config.ui.show_status_page_badge),
+    )?;
+    insert(
+        InteractionSeedTarget::FloatingBadgeAlways,
+        InteractionSeedValue::Bool(config.ui.show_floating_badge_always),
+    )?;
+    insert(
+        InteractionSeedTarget::ToolbarIcons,
+        InteractionSeedValue::Bool(config.ui.toolbar.use_icons),
+    )?;
+    insert(
+        InteractionSeedTarget::ToolbarMoreColors,
+        InteractionSeedValue::Bool(config.ui.toolbar.show_more_colors),
+    )?;
+    insert(
+        InteractionSeedTarget::ToolbarContextAwareUi,
+        InteractionSeedValue::Bool(config.ui.toolbar.context_aware_ui),
+    )?;
+    insert(
+        InteractionSeedTarget::ToolbarPresetToasts,
+        InteractionSeedValue::Bool(config.ui.toolbar.show_preset_toasts),
+    )?;
+    insert(
+        InteractionSeedTarget::ToolbarToolPreview,
+        InteractionSeedValue::Bool(config.ui.toolbar.show_tool_preview),
+    )?;
+    insert(
+        InteractionSeedTarget::ToolbarDelaySliders,
+        InteractionSeedValue::Bool(config.ui.toolbar.show_delay_sliders),
+    )?;
+    insert(
+        InteractionSeedTarget::HistoryCustomSection,
+        InteractionSeedValue::Bool(config.history.custom_section_enabled),
+    )?;
+    insert(
+        InteractionSeedTarget::InputHud,
+        InteractionSeedValue::Bool(config.ui.input_hud.enabled),
+    )?;
+    insert(
         InteractionSeedTarget::StatusBarInteractive,
         InteractionSeedValue::Bool(config.ui.status_bar_interactive),
     )?;
@@ -448,6 +496,54 @@ fn toolbar_values(
             InteractionSeedValue::SidePane(input.toolbar_side_pane),
         ),
         Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode, input),
+        Target::StatusBar => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::StatusBar,
+            InteractionSeedValue::Bool(input.show_status_bar),
+        ),
+        Target::StatusBoardBadge => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::StatusBoardBadge,
+            InteractionSeedValue::Bool(input.show_status_board_badge),
+        ),
+        Target::StatusPageBadge => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::StatusPageBadge,
+            InteractionSeedValue::Bool(input.show_status_page_badge),
+        ),
+        Target::FloatingBadgeAlways => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::FloatingBadgeAlways,
+            InteractionSeedValue::Bool(input.show_floating_badge_always),
+        ),
+        Target::ToolbarIcons => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarIcons,
+            InteractionSeedValue::Bool(input.toolbar_use_icons),
+        ),
+        Target::ToolbarMoreColors => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarMoreColors,
+            InteractionSeedValue::Bool(input.show_more_colors),
+        ),
+        Target::ToolbarContextAwareUi => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarContextAwareUi,
+            InteractionSeedValue::Bool(input.context_aware_ui),
+        ),
+        Target::ToolbarPresetToasts => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarPresetToasts,
+            InteractionSeedValue::Bool(input.show_preset_toasts),
+        ),
+        Target::ToolbarToolPreview => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarToolPreview,
+            InteractionSeedValue::Bool(input.show_tool_preview),
+        ),
+        Target::ToolbarDelaySliders => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarDelaySliders,
+            InteractionSeedValue::Bool(input.show_delay_sliders),
+        ),
+        Target::HistoryCustomSection => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::HistoryCustomSection,
+            InteractionSeedValue::Bool(input.custom_section_enabled),
+        ),
+        Target::InputHud => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::InputHud,
+            InteractionSeedValue::Bool(input.input_hud_enabled()),
+        ),
         Target::StatusBarInteractive => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBarInteractive,
             InteractionSeedValue::Bool(input.status_bar_interactive),
@@ -565,6 +661,66 @@ fn apply_live_toolbar_state(
             live.get(&InteractionSeedTarget::TopDisplayMode)
     {
         apply_persisted_top_display_mode(input, *mode);
+    }
+    if include(&InteractionSeedTarget::StatusBar)
+        && let Some(value) = bool_value(InteractionSeedTarget::StatusBar)
+    {
+        input.show_status_bar = value;
+    }
+    if include(&InteractionSeedTarget::StatusBoardBadge)
+        && let Some(value) = bool_value(InteractionSeedTarget::StatusBoardBadge)
+    {
+        input.show_status_board_badge = value;
+    }
+    if include(&InteractionSeedTarget::StatusPageBadge)
+        && let Some(value) = bool_value(InteractionSeedTarget::StatusPageBadge)
+    {
+        input.show_status_page_badge = value;
+    }
+    if include(&InteractionSeedTarget::FloatingBadgeAlways)
+        && let Some(value) = bool_value(InteractionSeedTarget::FloatingBadgeAlways)
+    {
+        input.show_floating_badge_always = value;
+    }
+    if include(&InteractionSeedTarget::ToolbarIcons)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarIcons)
+    {
+        input.toolbar_use_icons = value;
+    }
+    if include(&InteractionSeedTarget::ToolbarMoreColors)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarMoreColors)
+    {
+        input.show_more_colors = value;
+    }
+    if include(&InteractionSeedTarget::ToolbarContextAwareUi)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarContextAwareUi)
+    {
+        input.context_aware_ui = value;
+    }
+    if include(&InteractionSeedTarget::ToolbarPresetToasts)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarPresetToasts)
+    {
+        input.show_preset_toasts = value;
+    }
+    if include(&InteractionSeedTarget::ToolbarToolPreview)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarToolPreview)
+    {
+        input.show_tool_preview = value;
+    }
+    if include(&InteractionSeedTarget::ToolbarDelaySliders)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarDelaySliders)
+    {
+        input.show_delay_sliders = value;
+    }
+    if include(&InteractionSeedTarget::HistoryCustomSection)
+        && let Some(value) = bool_value(InteractionSeedTarget::HistoryCustomSection)
+    {
+        input.custom_section_enabled = value;
+    }
+    if include(&InteractionSeedTarget::InputHud)
+        && let Some(value) = bool_value(InteractionSeedTarget::InputHud)
+    {
+        input.set_input_hud_enabled(value);
     }
     if include(&InteractionSeedTarget::StatusBarInteractive)
         && let Some(value) = bool_value(InteractionSeedTarget::StatusBarInteractive)

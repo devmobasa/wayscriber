@@ -512,15 +512,17 @@ mod tests {
 
     #[test]
     fn event_policy_classifies_persistence_and_pre_apply_effects() {
-        // Authored preferences apply to this run; nothing routes them to disk.
+        // Chrome the user arranges from the overlay survives a restart as a
+        // runtime override.
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleStatusBar(false)).persistence,
-            ToolbarPersistence::Ephemeral
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::StatusBar)
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleCustomSection(true)).persistence,
-            ToolbarPersistence::Ephemeral
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::HistoryCustomSection)
         );
+        // Drawing state is not chrome: a thickness change is this run's.
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetThickness(2.0)).persistence,
             ToolbarPersistence::Ephemeral

@@ -18,7 +18,7 @@ use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 /// V1 shipped. They stay in V1 because an older build decodes them as unknown
 /// keys and preserves them verbatim through `WirePassthrough`, whereas a
 /// version bump would make that build treat the whole file as read-only.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 9] = [
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 21] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
@@ -31,6 +31,39 @@ const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 9] = [
         "status_bar_interactive",
         InteractionSeedTarget::StatusBarInteractive,
     ),
+    ("status_bar", InteractionSeedTarget::StatusBar),
+    (
+        "status_board_badge",
+        InteractionSeedTarget::StatusBoardBadge,
+    ),
+    ("status_page_badge", InteractionSeedTarget::StatusPageBadge),
+    (
+        "floating_badge_always",
+        InteractionSeedTarget::FloatingBadgeAlways,
+    ),
+    ("use_icons", InteractionSeedTarget::ToolbarIcons),
+    ("show_more_colors", InteractionSeedTarget::ToolbarMoreColors),
+    (
+        "context_aware_ui",
+        InteractionSeedTarget::ToolbarContextAwareUi,
+    ),
+    (
+        "show_preset_toasts",
+        InteractionSeedTarget::ToolbarPresetToasts,
+    ),
+    (
+        "show_tool_preview",
+        InteractionSeedTarget::ToolbarToolPreview,
+    ),
+    (
+        "show_delay_sliders",
+        InteractionSeedTarget::ToolbarDelaySliders,
+    ),
+    (
+        "history_custom_section",
+        InteractionSeedTarget::HistoryCustomSection,
+    ),
+    ("input_hud", InteractionSeedTarget::InputHud),
 ];
 
 pub(super) fn decode(root: &mut Table) -> Result<RuntimeUiWireState, RuntimeUiWireError> {
@@ -166,7 +199,19 @@ fn decode_value(
         | Target::CollapsedSection(_)
         | Target::BoardPin(_)
         | Target::StatusBarInteractive
-        | Target::StatusBarItem(_) => value
+        | Target::StatusBarItem(_)
+        | Target::StatusBar
+        | Target::StatusBoardBadge
+        | Target::StatusPageBadge
+        | Target::FloatingBadgeAlways
+        | Target::ToolbarIcons
+        | Target::ToolbarMoreColors
+        | Target::ToolbarContextAwareUi
+        | Target::ToolbarPresetToasts
+        | Target::ToolbarToolPreview
+        | Target::ToolbarDelaySliders
+        | Target::HistoryCustomSection
+        | Target::InputHud => value
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
@@ -315,6 +360,40 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::StatusBarItem(item) => {
                 insert_recognized(&mut status_bar_items, item.config_id(), entry)
             }
+            InteractionSeedTarget::StatusBar => {
+                insert_recognized(&mut toolbar, "status_bar", entry)
+            }
+            InteractionSeedTarget::StatusBoardBadge => {
+                insert_recognized(&mut toolbar, "status_board_badge", entry)
+            }
+            InteractionSeedTarget::StatusPageBadge => {
+                insert_recognized(&mut toolbar, "status_page_badge", entry)
+            }
+            InteractionSeedTarget::FloatingBadgeAlways => {
+                insert_recognized(&mut toolbar, "floating_badge_always", entry)
+            }
+            InteractionSeedTarget::ToolbarIcons => {
+                insert_recognized(&mut toolbar, "use_icons", entry)
+            }
+            InteractionSeedTarget::ToolbarMoreColors => {
+                insert_recognized(&mut toolbar, "show_more_colors", entry)
+            }
+            InteractionSeedTarget::ToolbarContextAwareUi => {
+                insert_recognized(&mut toolbar, "context_aware_ui", entry)
+            }
+            InteractionSeedTarget::ToolbarPresetToasts => {
+                insert_recognized(&mut toolbar, "show_preset_toasts", entry)
+            }
+            InteractionSeedTarget::ToolbarToolPreview => {
+                insert_recognized(&mut toolbar, "show_tool_preview", entry)
+            }
+            InteractionSeedTarget::ToolbarDelaySliders => {
+                insert_recognized(&mut toolbar, "show_delay_sliders", entry)
+            }
+            InteractionSeedTarget::HistoryCustomSection => {
+                insert_recognized(&mut toolbar, "history_custom_section", entry)
+            }
+            InteractionSeedTarget::InputHud => insert_recognized(&mut toolbar, "input_hud", entry),
         }
     }
     insert_recognized(&mut toolbar, "collapsed_sections", Value::Table(collapsed));
@@ -372,7 +451,19 @@ fn encode_value(
             | InteractionSeedTarget::CollapsedSection(_)
             | InteractionSeedTarget::BoardPin(_)
             | InteractionSeedTarget::StatusBarInteractive
-            | InteractionSeedTarget::StatusBarItem(_),
+            | InteractionSeedTarget::StatusBarItem(_)
+            | InteractionSeedTarget::StatusBar
+            | InteractionSeedTarget::StatusBoardBadge
+            | InteractionSeedTarget::StatusPageBadge
+            | InteractionSeedTarget::FloatingBadgeAlways
+            | InteractionSeedTarget::ToolbarIcons
+            | InteractionSeedTarget::ToolbarMoreColors
+            | InteractionSeedTarget::ToolbarContextAwareUi
+            | InteractionSeedTarget::ToolbarPresetToasts
+            | InteractionSeedTarget::ToolbarToolPreview
+            | InteractionSeedTarget::ToolbarDelaySliders
+            | InteractionSeedTarget::HistoryCustomSection
+            | InteractionSeedTarget::InputHud,
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
         (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {
