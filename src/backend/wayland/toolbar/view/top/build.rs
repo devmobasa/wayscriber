@@ -179,6 +179,7 @@ pub(super) fn build_top_view_planned(
                 | model::TopToolbarControl::Pin
                 | model::TopToolbarControl::Minimize
                 | model::TopToolbarControl::About
+                | model::TopToolbarControl::LayoutMode
                 | model::TopToolbarControl::ClearCanvas
                 | model::TopToolbarControl::CanvasMenu
                 | model::TopToolbarControl::SessionMenu
@@ -312,9 +313,12 @@ pub(super) fn build_top_view_planned(
     for control in spec.chrome().iter().copied() {
         let rect = (chrome_x, chrome_y, chrome_size, chrome_size);
         chrome_x += chrome_size + chrome_gap;
-        // About is an ordinary icon button in chrome styling; pin and minimize
-        // keep their bespoke glyph widgets.
-        if control == model::TopToolbarControl::About {
+        // About and the layout cycle are ordinary icon buttons in chrome
+        // styling; pin and minimize keep their bespoke glyph widgets.
+        if matches!(
+            control,
+            model::TopToolbarControl::About | model::TopToolbarControl::LayoutMode
+        ) {
             tree.push(control_button_node(
                 snapshot,
                 control,

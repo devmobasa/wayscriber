@@ -7,7 +7,8 @@
 //! style pill). The Presets island: the saved tool+color slots. The History
 //! island: Undo/Redo plus the overflow toggle whose menu anchors the
 //! destructive Clear (red on hover) and any width-dropped items. The Chrome
-//! island: the quieter right-aligned pin and minimize buttons. Under the band,
+//! island: the quieter right-aligned layout cycle, About, pin, and minimize
+//! buttons. Under the band,
 //! the style pill carries the active tool's contextual properties (colors, the
 //! color chip, sizes; `model::StylePillSpec`). Blue is reserved for the active
 //! tool; disabled history buttons are dimmed and not interactive.

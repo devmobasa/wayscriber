@@ -1,6 +1,7 @@
 use super::items::ToolbarItemId;
 
 pub const TOP_CHROME_DRAG: ToolbarItemId = ToolbarItemId::from_known("top.chrome.drag");
+pub const TOP_CHROME_LAYOUT: ToolbarItemId = ToolbarItemId::from_known("top.chrome.layout");
 pub const TOP_CHROME_ABOUT: ToolbarItemId = ToolbarItemId::from_known("top.chrome.about");
 pub const TOP_CHROME_PIN: ToolbarItemId = ToolbarItemId::from_known("top.chrome.pin");
 pub const TOP_CHROME_CLOSE: ToolbarItemId = ToolbarItemId::from_known("top.chrome.close");

@@ -13,6 +13,16 @@ pub enum ToolbarLayoutMode {
 }
 
 impl ToolbarLayoutMode {
+    /// The next preset in the cycle the strip's layout button advances
+    /// through; wraps from Advanced back to Simple.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Simple => Self::Regular,
+            Self::Regular => Self::Advanced,
+            Self::Advanced => Self::Simple,
+        }
+    }
+
     pub fn section_defaults(self) -> ToolbarSectionDefaults {
         match self {
             Self::Simple => ToolbarSectionDefaults {
@@ -59,4 +69,24 @@ pub struct ToolbarSectionDefaults {
     pub show_presets: bool,
     pub show_step_section: bool,
     pub show_text_controls: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolbarLayoutMode;
+
+    /// The layout cycle visits all three presets and wraps from Advanced
+    /// back to Simple.
+    #[test]
+    fn next_cycles_through_every_preset_and_wraps() {
+        assert_eq!(ToolbarLayoutMode::Simple.next(), ToolbarLayoutMode::Regular);
+        assert_eq!(
+            ToolbarLayoutMode::Regular.next(),
+            ToolbarLayoutMode::Advanced
+        );
+        assert_eq!(
+            ToolbarLayoutMode::Advanced.next(),
+            ToolbarLayoutMode::Simple
+        );
+    }
 }

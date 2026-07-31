@@ -6,6 +6,7 @@ pub fn toolbar_item_definitions() -> &'static [ToolbarItemDefinition] {
 
 const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
     item(ids::TOP_CHROME_DRAG, "Move top toolbar", Top, Chrome, None),
+    item(ids::TOP_CHROME_LAYOUT, "Layout preset", Top, Chrome, None),
     item(ids::TOP_CHROME_ABOUT, "About Wayscriber", Top, Chrome, None),
     item(ids::TOP_CHROME_PIN, "Pin top toolbar", Top, Chrome, None),
     item(

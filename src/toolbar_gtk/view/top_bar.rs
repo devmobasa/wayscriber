@@ -3,7 +3,8 @@
 //! Adapts the shared `TopToolbarSpec` into four detached pill islands —
 //! tools (drag grip | pens | shapes | shapes-picker | annotations | quick
 //! colors + chip), history (undo/redo + the overflow toggle anchoring Clear
-//! and width-dropped items), chrome (pin/minimize), and the contextual
+//! and width-dropped items), chrome (layout cycle, About, pin, minimize),
+//! and the contextual
 //! style pill (island D, `style_pill` module, from `StylePillSpec`) — as
 //! GTK widgets. Width degradation uses the same shared plan as the
 //! built-in frontend.
