@@ -379,6 +379,7 @@ impl TopBar {
                     | model::TopToolbarControl::Pin
                     | model::TopToolbarControl::Minimize
                     | model::TopToolbarControl::About
+                    | model::TopToolbarControl::LayoutMode
                     | model::TopToolbarControl::ClearCanvas
                     | model::TopToolbarControl::CanvasMenu
                     | model::TopToolbarControl::SessionMenu
@@ -406,6 +407,13 @@ impl TopBar {
                 }
                 model::TopToolbarControl::About => {
                     island_chrome.append(&self.about_button(snapshot, control, sz(chrome_size)));
+                }
+                model::TopToolbarControl::LayoutMode => {
+                    island_chrome.append(&self.layout_mode_button(
+                        snapshot,
+                        control,
+                        sz(chrome_size),
+                    ));
                 }
                 _ => unreachable!("non-chrome control in chrome specification"),
             }

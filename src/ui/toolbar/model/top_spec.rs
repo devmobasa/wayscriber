@@ -224,11 +224,16 @@ impl TopToolbarSpec {
         Self::overflow_controls(Self::clear_canvas_in_overflow(snapshot), plan).count()
     }
 
-    /// Chrome island content, in reading order: About, then pin, then
-    /// minimize. About leads because it is the only entry that leaves the
-    /// overlay, and all three are hideable through toolbar customization.
-    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 3] {
+    /// Chrome island content, in reading order: layout cycle, then About,
+    /// then pin, then minimize. The layout cycle sits on the content-adjacent
+    /// edge because it reshapes the strip's content, while the window-chrome
+    /// trio (About leading among them because it is the only entry that
+    /// leaves the overlay) stays against the window edge. All four are
+    /// hideable through toolbar customization.
+    fn chrome_controls(snapshot: &ToolbarSnapshot) -> [Option<TopToolbarControl>; 4] {
         [
+            toolbar_item_visible(snapshot, ids::TOP_CHROME_LAYOUT)
+                .then_some(TopToolbarControl::LayoutMode),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_ABOUT)
                 .then_some(TopToolbarControl::About),
             toolbar_item_visible(snapshot, ids::TOP_CHROME_PIN).then_some(TopToolbarControl::Pin),
@@ -302,7 +307,8 @@ impl TopToolbarNode {
 
 /// The detached pill islands of the top strip, in reading order: tools
 /// (drag grip through annotations), presets (saved tool+color slots),
-/// history (undo/redo/overflow), chrome (pin/minimize). Both frontends and
+/// history (undo/redo/overflow), chrome (layout cycle/About/pin/minimize).
+/// Both frontends and
 /// the contract tests derive island membership from this one accessor; the
 /// `Ord` derive fixes the reading order the strip walk relies on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -367,6 +373,10 @@ pub(crate) enum TopToolbarControl {
     /// leaves the overlay, since About is a normal window and the overlay
     /// renders above those.
     About,
+    /// Chrome-island entry cycling the layout preset Simple → Regular →
+    /// Advanced → Simple. A cycle rather than a toggle, so it never reads
+    /// as active; the icon shows the current mode.
+    LayoutMode,
     HighlightRing,
     /// Overflow menu entry opening the Canvas popover (boards, pages, zoom,
     /// history/advanced actions, step undo/redo).
@@ -403,6 +413,7 @@ impl TopToolbarControl {
             Self::Overflow => ids::TOP_CHROME_OVERFLOW,
             Self::Minimize => ids::TOP_CHROME_CLOSE,
             Self::About => ids::TOP_CHROME_ABOUT,
+            Self::LayoutMode => ids::TOP_CHROME_LAYOUT,
             Self::HighlightRing => ids::TOP_UTILITY_HIGHLIGHT_RING,
         };
         TopToolbarControlId::Item(id)
@@ -440,6 +451,7 @@ impl TopToolbarControl {
             }
             Self::Minimize => ToolbarEvent::SetTopMinimized(true),
             Self::About => ToolbarEvent::OpenAbout,
+            Self::LayoutMode => ToolbarEvent::SetToolbarLayoutMode(snapshot.layout_mode.next()),
             Self::HighlightRing => {
                 ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled)
             }
@@ -497,9 +509,12 @@ impl TopToolbarControl {
             | Self::SessionMenu
             | Self::SettingsMenu
             | Self::HighlightRing => TopToolbarControlRole::Toggle,
-            // The chrome island (pin, minimize) renders quieter than the
-            // content islands; both frontends key that styling off this role.
-            Self::Pin | Self::Minimize | Self::About => TopToolbarControlRole::Chrome,
+            // The chrome island (layout cycle, About, pin, minimize) renders
+            // quieter than the content islands; both frontends key that
+            // styling off this role.
+            Self::Pin | Self::Minimize | Self::About | Self::LayoutMode => {
+                TopToolbarControlRole::Chrome
+            }
             _ => TopToolbarControlRole::Button,
         }
     }
@@ -515,9 +530,12 @@ impl TopToolbarControl {
             | Self::CanvasMenu
             | Self::SessionMenu
             | Self::SettingsMenu => TopToolbarIsland::History,
-            Self::Pin | Self::Minimize | Self::About | Self::Restore | Self::MicroChip => {
-                TopToolbarIsland::Chrome
-            }
+            Self::Pin
+            | Self::Minimize
+            | Self::About
+            | Self::LayoutMode
+            | Self::Restore
+            | Self::MicroChip => TopToolbarIsland::Chrome,
             Self::Preset(_) => TopToolbarIsland::Presets,
             _ => TopToolbarIsland::Tools,
         }
@@ -541,6 +559,8 @@ impl TopToolbarControl {
             Self::Redo => TopToolbarIcon::Redo,
             Self::Pin if snapshot.top_pinned => TopToolbarIcon::Pin,
             Self::Pin => TopToolbarIcon::Unpin,
+            // The glyph shows the CURRENT mode; the click advances to the next.
+            Self::LayoutMode => TopToolbarIcon::for_layout_mode(snapshot.layout_mode),
             Self::Overflow => TopToolbarIcon::Overflow,
             Self::CanvasMenu => TopToolbarIcon::Canvas,
             Self::SessionMenu => TopToolbarIcon::Session,
@@ -580,6 +600,7 @@ impl TopToolbarControl {
             Self::SettingsMenu => Cow::Borrowed("Settings..."),
             Self::Minimize => Cow::Borrowed("Minimize top toolbar"),
             Self::About => Cow::Borrowed(action_short_label(Action::OpenAbout)),
+            Self::LayoutMode => Cow::Borrowed("Cycle toolbar layout"),
             Self::HighlightRing => Cow::Borrowed("Ring"),
         }
     }
@@ -612,6 +633,13 @@ impl TopToolbarControl {
                 "Pinned: opens at startup (click to disable)".to_string()
             }
             Self::Pin => "Pin: click to open at startup".to_string(),
+            // Current mode first, then where the click lands, so hovering
+            // reads the cycle without pressing it.
+            Self::LayoutMode => match snapshot.layout_mode {
+                ToolbarLayoutMode::Simple => "Layout: Simple (click for Regular)".to_string(),
+                ToolbarLayoutMode::Regular => "Layout: Regular (click for Advanced)".to_string(),
+                ToolbarLayoutMode::Advanced => "Layout: Advanced (click for Simple)".to_string(),
+            },
             Self::Minimize => "Minimize (leaves a restore tab)".to_string(),
             Self::MicroChip => "Micro toolbar (click to show the full toolbar)".to_string(),
             Self::CanvasMenu => "Canvas: boards, pages, zoom, history, steps".to_string(),
@@ -726,6 +754,25 @@ pub(crate) enum TopToolbarIcon {
     Settings,
     /// About entry (circled information glyph).
     About,
+    /// Layout cycle showing Simple (one density bar).
+    LayoutSimple,
+    /// Layout cycle showing Regular (two density bars).
+    LayoutRegular,
+    /// Layout cycle showing Advanced (three density bars).
+    LayoutAdvanced,
+}
+
+impl TopToolbarIcon {
+    /// The density glyph for a layout preset. Total on purpose: the GTK
+    /// factory renders the layout button from the mode alone, and this
+    /// mapping spares it unwrapping the generic `icon()` Option.
+    pub(crate) fn for_layout_mode(mode: crate::config::ToolbarLayoutMode) -> Self {
+        match mode {
+            crate::config::ToolbarLayoutMode::Simple => Self::LayoutSimple,
+            crate::config::ToolbarLayoutMode::Regular => Self::LayoutRegular,
+            crate::config::ToolbarLayoutMode::Advanced => Self::LayoutAdvanced,
+        }
+    }
 }
 
 fn utility_event(utility: TopToolbarUtility, snapshot: &ToolbarSnapshot) -> ToolbarEvent {
@@ -936,8 +983,13 @@ mod tests {
 
         assert_eq!(
             chrome_ids(&spec),
-            ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
-            "the chrome island reads About, pin, minimize"
+            [
+                "top.chrome.layout",
+                "top.chrome.about",
+                "top.chrome.pin",
+                "top.chrome.close",
+            ],
+            "the chrome island reads layout cycle, About, pin, minimize"
         );
         let pen = spec
             .strip()
@@ -1116,8 +1168,13 @@ mod tests {
         );
         assert_eq!(
             chrome_ids(&spec),
-            ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
-            "the chrome island reads About, pin, minimize"
+            [
+                "top.chrome.layout",
+                "top.chrome.about",
+                "top.chrome.pin",
+                "top.chrome.close",
+            ],
+            "the chrome island reads layout cycle, About, pin, minimize"
         );
         assert_eq!(
             spec.overflow()[0].event(&snapshot),
@@ -1370,9 +1427,9 @@ mod tests {
         let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
 
         assert_eq!(
-            spec.chrome().first().copied(),
+            spec.chrome().get(1).copied(),
             Some(TopToolbarControl::About),
-            "About leads the chrome island"
+            "About leads the window-chrome trio, after the layout cycle"
         );
         assert_eq!(TopToolbarControl::About.island(), TopToolbarIsland::Chrome);
         assert_eq!(
@@ -1401,8 +1458,98 @@ mod tests {
 
         assert_eq!(
             chrome_ids(&spec),
-            ["top.chrome.pin", "top.chrome.close"],
+            ["top.chrome.layout", "top.chrome.pin", "top.chrome.close"],
             "hiding the item leaves the rest of the chrome island intact"
+        );
+    }
+
+    /// The layout cycle advances Simple → Regular → Advanced → Simple while
+    /// its glyph names the mode currently on screen, so the icon is the
+    /// state and the click is the transition.
+    #[test]
+    fn layout_cycle_control_maps_each_mode_to_its_next_event_and_current_icon() {
+        let control = TopToolbarControl::LayoutMode;
+        for (mode, next, icon) in [
+            (
+                ToolbarLayoutMode::Simple,
+                ToolbarLayoutMode::Regular,
+                TopToolbarIcon::LayoutSimple,
+            ),
+            (
+                ToolbarLayoutMode::Regular,
+                ToolbarLayoutMode::Advanced,
+                TopToolbarIcon::LayoutRegular,
+            ),
+            (
+                ToolbarLayoutMode::Advanced,
+                ToolbarLayoutMode::Simple,
+                TopToolbarIcon::LayoutAdvanced,
+            ),
+        ] {
+            let mut snapshot = snapshot();
+            snapshot.layout_mode = mode;
+            assert_eq!(
+                control.event(&snapshot),
+                ToolbarEvent::SetToolbarLayoutMode(next),
+                "{mode:?} advances to {next:?}"
+            );
+            assert_eq!(
+                control.icon(&snapshot),
+                Some(icon),
+                "{mode:?} shows the current mode's glyph"
+            );
+            // A cycle, not a toggle: it never reads as active.
+            assert!(!control.active(&snapshot));
+        }
+        let snapshot = snapshot();
+        assert_eq!(control.role(), TopToolbarControlRole::Chrome);
+        assert_eq!(control.island(), TopToolbarIsland::Chrome);
+        assert_eq!(
+            control.id(),
+            TopToolbarControlId::Item(ids::TOP_CHROME_LAYOUT)
+        );
+        assert_eq!(control.accessible_label(&snapshot), "Cycle toolbar layout");
+    }
+
+    /// The tooltip names the current mode and where the click lands, for all
+    /// three presets.
+    #[test]
+    fn layout_cycle_tooltip_names_current_and_next_mode() {
+        let control = TopToolbarControl::LayoutMode;
+        for (mode, tooltip) in [
+            (
+                ToolbarLayoutMode::Simple,
+                "Layout: Simple (click for Regular)",
+            ),
+            (
+                ToolbarLayoutMode::Regular,
+                "Layout: Regular (click for Advanced)",
+            ),
+            (
+                ToolbarLayoutMode::Advanced,
+                "Layout: Advanced (click for Simple)",
+            ),
+        ] {
+            let mut snapshot = snapshot();
+            snapshot.layout_mode = mode;
+            assert_eq!(control.tooltip(&snapshot), tooltip);
+        }
+    }
+
+    /// Like the other chrome entries, the layout cycle is hideable; hiding
+    /// it leaves the window-chrome trio in reading order.
+    #[test]
+    fn hiding_the_layout_cycle_leaves_the_chrome_trio_in_order() {
+        let mut hidden = snapshot();
+        let mut items = ToolbarItemsConfig::default();
+        items.set_hidden(ids::TOP_CHROME_LAYOUT, true);
+        hidden.resolved_toolbar_items = items.resolved();
+
+        let spec = TopToolbarSpec::build(&hidden, &TopStripPlan::unconstrained());
+        assert_eq!(
+            chrome_ids(&spec),
+            ["top.chrome.about", "top.chrome.pin", "top.chrome.close"],
+            "hiding the layout cycle leaves About, pin, minimize in order"
         );
     }
 

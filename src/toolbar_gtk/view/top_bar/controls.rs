@@ -496,6 +496,37 @@ impl TopBar {
         button
     }
 
+    /// The chrome island's layout-cycle entry. A plain icon button like
+    /// About: `layout_mode` is part of the bar's structure key, so any mode
+    /// change rebuilds this button — the glyph, tooltip, and captured event
+    /// always describe the mode on screen without an updater.
+    pub(super) fn layout_mode_button(
+        &mut self,
+        snapshot: &ToolbarSnapshot,
+        control: model::TopToolbarControl,
+        size: f64,
+    ) -> gtk4::Button {
+        assert_eq!(control, model::TopToolbarControl::LayoutMode);
+        let button = sized_button(size, size);
+        set_control_widget_id(&button, control);
+        button.add_css_class("chrome");
+        button.add_css_class("layout");
+        let accessible_label = control.accessible_label(snapshot);
+        button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        button.set_tooltip_text(Some(&control.tooltip(snapshot)));
+        let icon = IconWidget::new(
+            top_toolbar_icon_painter(model::TopToolbarIcon::for_layout_mode(snapshot.layout_mode)),
+            size * 0.6,
+        );
+        button.set_child(Some(&icon.area));
+        let sender = self.feedback.clone();
+        let event = control.event(snapshot);
+        button.connect_clicked(move |_| {
+            send_event(&sender, event.clone());
+        });
+        button
+    }
+
     pub(super) fn minimize_button(
         &mut self,
         snapshot: &ToolbarSnapshot,

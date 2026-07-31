@@ -158,7 +158,7 @@ Both `config.toml` mechanisms leave a timestamped `.bak` beside the file.
 | Switch the side pane or collapse a side section | `runtime-ui.toml` | Runtime-UI writer |
 | Hide, show, or reorder an individual toolbar item | `runtime-ui.toml` | Runtime-UI writer |
 | Pin a board | `runtime-ui.toml` | Runtime-UI writer |
-| Switch layout mode (Simple/Full) in the overlay | Nothing — this run only | Configurator → UI → Toolbar for the default |
+| Switch layout mode (Simple/Regular/Advanced) in the overlay — the Settings segments or the strip's layout button | Nothing — this run only | Configurator → UI → Toolbar for the default |
 | Toggle a toolbar section from Settings | Nothing — this run only | Configurator → UI → Toolbar Visibility for the default |
 | Switch icons ⇄ text labels | Nothing — this run only | Configurator → UI → Toolbar for the default |
 | Toggle the status bar, its interactivity, or one of its items; the board/page badges, floating badge, or zoom chip | Nothing — this run only | Configurator → UI → Status Bar for the default |
@@ -978,9 +978,9 @@ Controls the top and side toolbars (<kbd>F9</kbd> toggles both; <kbd>F2</kbd> cy
 # layer-shell toolbars, built-in bars elsewhere), "gtk", or "builtin"
 backend = "auto"
 
-# Toolbar layout preset: "simple" or "full"
-# Legacy values: "regular" and "advanced" (both map to Full UI label)
-layout_mode = "full"
+# Toolbar layout preset: "simple", "regular" (the default), or "advanced"
+# "full" is accepted as a legacy alias for "regular"
+layout_mode = "regular"
 
 # Optional per-mode overrides for toolbar sections
 # Use true/false to override a section; omit to use the mode default.
@@ -1202,7 +1202,7 @@ side_sections = [
 - **Session/Settings popovers**: under the default pill layout the top strip's overflow menu always carries "Session..." and "Settings..." entries (they also appear under the legacy panel layout — the popovers are transient quick surfaces, not a second pinned pane). Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
-- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane, and the top strip's chrome-island layout button cycles Simple → Regular → Advanced one click at a time. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
 - **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
 - **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
 - **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings surface (the side palette's Settings pane under the legacy panel layout, the Settings popover under pill).

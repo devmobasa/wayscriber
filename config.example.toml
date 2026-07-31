@@ -474,9 +474,9 @@ radial_menu_mouse_binding = "middle"
 # Env override: WAYSCRIBER_TOOLBAR_BACKEND
 backend = "auto"
 
-# Toolbar layout preset (simple / full)
-# Legacy values: regular / advanced
-layout_mode = "full"
+# Toolbar layout preset: "simple", "regular" (the default), or "advanced"
+# "full" is accepted as a legacy alias for "regular"
+layout_mode = "regular"
 
 # Optional per-mode overrides for toolbar sections
 # Use true/false to override a section; omit to use the mode default.

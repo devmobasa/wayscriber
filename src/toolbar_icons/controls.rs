@@ -177,6 +177,40 @@ pub fn draw_icon_dash(ctx: &Context, x: f64, y: f64, size: f64) {
     draw_icon_minimize(ctx, x, y, size);
 }
 
+/// Draw `count` centered horizontal density bars, the layout-cycle glyph
+/// family's shared geometry. The stroke is thinner than the lone minus so
+/// the three-bar variant still reads at the 18px compact chrome size.
+fn draw_layout_density_bars(ctx: &Context, x: f64, y: f64, size: f64, count: usize) {
+    let s = size;
+    let stroke = (s * 0.12).max(1.6);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    let spacing = s * 0.22;
+    for index in 0..count {
+        let offset = index as f64 - (count as f64 - 1.0) / 2.0;
+        let bar_y = y + s * 0.5 + offset * spacing;
+        ctx.move_to(x + s * 0.25, bar_y);
+        ctx.line_to(x + s * 0.75, bar_y);
+        let _ = ctx.stroke();
+    }
+}
+
+/// Draw the layout-cycle glyph for the Simple preset (one density bar).
+pub fn draw_icon_layout_simple(ctx: &Context, x: f64, y: f64, size: f64) {
+    draw_layout_density_bars(ctx, x, y, size, 1);
+}
+
+/// Draw the layout-cycle glyph for the Regular preset (two density bars).
+pub fn draw_icon_layout_regular(ctx: &Context, x: f64, y: f64, size: f64) {
+    draw_layout_density_bars(ctx, x, y, size, 2);
+}
+
+/// Draw the layout-cycle glyph for the Advanced preset (three density bars).
+pub fn draw_icon_layout_advanced(ctx: &Context, x: f64, y: f64, size: f64) {
+    draw_layout_density_bars(ctx, x, y, size, 3);
+}
+
 /// Draw a pushpin glyph ("keep open at startup"): outline when unpinned,
 /// filled when pinned. Geometry mirrors the built-in pin chrome button.
 #[allow(dead_code)] // referenced by the toolbar-gtk frontend only
